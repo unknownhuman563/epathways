@@ -36,10 +36,8 @@ export default function Footer() {
           <div className="space-y-6">
             <h3 className="text-lg font-bold">Education</h3>
             <ul className="space-y-4 text-gray-500 text-sm font-medium">
-              <li><a href="#" className="hover:text-green-600 transition-colors">Program and Levels</a></li>
-              <li><a href="#" className="hover:text-green-600 transition-colors">Requirement</a></li>
-              <li><a href="#" className="hover:text-green-600 transition-colors">Benefits</a></li>
-              <li><a href="#" className="hover:text-green-600 transition-colors">Pricelist</a></li>
+              <li><a href="/programs-levels" className="hover:text-green-600 transition-colors">Program and Levels</a></li>
+              <li><a href="/fee-guide" className="hover:text-green-600 transition-colors">Fee Guide</a></li>
             </ul>
           </div>
 

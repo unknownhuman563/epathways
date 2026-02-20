@@ -1,9 +1,11 @@
 import React from 'react';
-import { Star, ArrowUpRight } from 'lucide-react';
+import testi1 from "@assets/Testimonies/testi1.png";
+import testi2 from "@assets/Testimonies/testi2.png";
+import testi3 from "@assets/Testimonies/testi3.png";
 
 export default function HeroSection({ backgroundVideo }) {
     return (
-        <div className="relative h-screen w-full overflow-hidden font-urbanist">
+        <div className="relative h-screen w-full overflow-hidden">
             {/* Background Video with Overlay */}
             <video
                 autoPlay
@@ -14,23 +16,44 @@ export default function HeroSection({ backgroundVideo }) {
             >
                 <source src={backgroundVideo} type="video/mp4" />
             </video>
-            {/* Elegant light overlay with subtle blur */}
-            <div className="absolute inset-0 bg-white/30 backdrop-blur-[2px]"></div>
+            {/* Elegant dark overlay with subtle blur */}
+            <div className="absolute inset-0 bg-black/30 backdrop-blur-[2px]"></div>
 
-            <div className="relative z-10 flex h-full items-center justify-center px-4 container mx-auto">
-                <div className="max-w-5xl text-[#282728] font-ubuntu text-center flex flex-col items-center">
-                    <h1 className="text-5xl md:text-[85px] font-medium mb-12 leading-[1.3] tracking-tight">
-                        Let's Create Your<br />
-                        <span className="font-light italic text-[#436235] block mt-4">Dream Future</span>
+            <div className="relative z-10 flex h-full items-center justify-start px-6 sm:px-12 lg:px-24 container mx-auto">
+                <div className="max-w-4xl text-white text-left flex flex-col items-start -mt-32">
+
+                    {/* Social Proof / Reviews */}
+                    <div className="flex items-center gap-4 mb-10">
+                        <div className="flex -space-x-3">
+                            <img src={testi1} alt="Client 1" className="w-10 h-10 md:w-14 md:h-14 rounded-full object-cover" />
+                            <img src={testi2} alt="Client 2" className="w-10 h-10 md:w-14 md:h-14 rounded-full object-cover" />
+                            <img src={testi3} alt="Client 3" className="w-10 h-10 md:w-14 md:h-14 rounded-full object-cover" />
+                            <div className="relative w-10 h-10 md:w-14 md:h-14 rounded-full overflow-hidden flex items-center justify-center">
+                                <img src={testi1} alt="Client 4" className="absolute inset-0 w-full h-full object-cover opacity-30 mix-blend-multiply" />
+                                <div className="absolute inset-0 bg-[#e8ecf1]/80"></div>
+                                <span className="relative z-10 text-xs md:text-sm font-semibold text-[#4a5568]">+97</span>
+                            </div>
+                        </div>
+                        <div className="flex flex-col justify-center leading-tight">
+                            <span className="text-xs md:text-sm text-white/90 font-normal">Trusted by 500+ Successful</span>
+                            <span className="text-xs md:text-sm text-white/90 font-normal">Visa Applicants</span>
+                        </div>
+                    </div>
+
+                    <h1 className="text-6xl md:text-8xl lg:text-[100px] font-bold mb-6 leading-none tracking-tight text-white">
+                        Paving the Path <br />Towards <span className="text-[#436235]">New Zealand Future</span>
                     </h1>
-                    <p className="text-lg md:text-2xl mb-20 opacity-75 max-w-2xl font-light leading-relaxed tracking-widest uppercase text-xs sm:text-sm">
-                        The world needs innovators and problem solvers who turn challenges into greater opportunities.
+
+                    <p className="text-sm md:text-lg mb-20 text-white/90 max-w-3xl font-light leading-snug tracking-wide">
+                        Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore.
                     </p>
-                    <div className="flex flex-wrap justify-center gap-8">
-                        <button className="bg-[#282728] text-white px-8 py-2.5 rounded-full text-sm font-light tracking-[0.2em] uppercase hover:bg-black transition-all duration-700 shadow-xl hover:shadow-[#282728]/20">
+
+                    {/* Action Buttons */}
+                    <div className="flex flex-wrap items-center gap-6 mt-4">
+                        <button className="bg-[#000000] text-white px-8 py-3.5 rounded-[5px] text-sm font-semibold tracking-wide hover:bg-black/90 transition-all duration-700 shadow-xl uppercase">
                             Book Consultation
                         </button>
-                        <button className="border-2 border-[#436235] text-[#436235] px-8 py-2.5 rounded-full text-sm font-light tracking-[0.2em] uppercase hover:bg-[#436235] hover:text-white transition-all duration-700 shadow-lg">
+                        <button className="bg-[#4a6b38] text-white px-8 py-3.5 rounded-[5px] text-sm font-semibold tracking-wide hover:bg-[#3d592e] transition-all duration-700 shadow-lg uppercase">
                             Book Webinar
                         </button>
                     </div>

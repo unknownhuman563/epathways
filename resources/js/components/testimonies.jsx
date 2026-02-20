@@ -48,10 +48,10 @@ const TestimonialSlider = () => {
         <section className="py-16 bg-gray-50 overflow-hidden">
             <div className="max-w-7xl mx-auto px-4">
                 <div className="text-center mb-16">
-                    <h2 className="text-2xl md:text-3xl font-bold text-[#282728] uppercase tracking-widest mb-4">
+                    <p className="text-sm font-semibold tracking-widest text-gray-400 uppercase mb-2">Testimonials</p>
+                    <h2 className="text-3xl md:text-4xl font-black text-[#282728] mb-4">
                         What They Say
                     </h2>
-                    <div className="w-20 h-1 bg-green-700 mx-auto"></div>
                 </div>
 
                 <div className="relative">

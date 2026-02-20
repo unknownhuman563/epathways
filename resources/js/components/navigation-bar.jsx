@@ -49,7 +49,7 @@ const Navbar = () => {
                                     </a>
                                 </li>
                                 <li>
-                                    <a href="#fee-guide" className="block px-6 py-3 text-sm text-gray-700 hover:bg-gray-50 hover:text-[#436235] transition-colors">
+                                    <a href="/fee-guide" className="block px-6 py-3 text-sm text-gray-700 hover:bg-gray-50 hover:text-[#436235] transition-colors">
                                         Estimated Cost / Fee Guide
                                     </a>
                                 </li>
@@ -59,7 +59,7 @@ const Navbar = () => {
 
                     <li><a href="#accommodation" className="hover:text-[#436235] transition-colors">Accommodation</a></li>
                     <li><a href="#immigration" className="hover:text-[#436235] transition-colors">Immigration</a></li>
-                    <li><a href="#about" className="hover:text-[#436235] transition-colors">About Us</a></li>
+                    <li><a href="/about-us" className="hover:text-[#436235] transition-colors">About Us</a></li>
                 </ul>
 
                 {/* Button - Right */}
@@ -105,11 +105,11 @@ const Navbar = () => {
             {/* Mobile Dropdown Menu */}
             {isOpen && (
                 <ul className="md:hidden bg-white px-4 pb-4 space-y-2">
-                    <li><a href="/" className="hover:text-[#436235]">Home</a></li>
-                    <li><a href="/education-journey" className="hover:text-[#436235]">Education</a></li>
+                    <li><a href="/programs-levels" className="hover:text-[#436235]">Programs & Levels</a></li>
+                    <li><a href="/fee-guide" className="hover:text-[#436235]">Fee Guide</a></li>
                     <li><a href="#accommodation" className="hover:text-[#436235]">Accommodation</a></li>
                     <li><a href="#immigration" className="hover:text-green-600">Immigration</a></li>
-                    <li><a href="#about" className="hover:text-green-600">About Us</a></li>
+                    <li><a href="/about-us" className="hover:text-green-600">About Us</a></li>
                     {isShowingGetStarted && (
                         <div className="text-center">
                             <a href="https://forms.clickup.com/9003110473/f/8ca1429-27476/ZFL0N95I6L0K6QEPTD" className="hover:bg-gray-700 bg-[#282728] text-white px-3 py-2 rounded text-sm">Start your journey with us now</a>

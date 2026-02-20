@@ -30,63 +30,87 @@ export default function ProgramDetails() {
             {/* Main Content Container */}
             <div className="container mx-auto px-4 py-16 max-w-7xl">
 
-                {/* About This Program Section */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 mb-16">
-                    {/* Left: Text Content */}
-                    <div>
-                        <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">About This Program</h4>
-                        <h1 className="text-4xl md:text-5xl font-bold text-[#282728] mb-2 leading-tight">
-                            NZ Diploma in Enrolled Nursing
-                        </h1>
-                        <h2 className="text-2xl font-normal text-[#436235] italic mb-8">Auckland</h2>
+                {/* About This Program Section - Card Style */}
+                <div className="mb-16">
+                    <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-6">About This Program</h4>
 
-                        <div className="prose prose-lg text-gray-600 leading-relaxed space-y-4">
-                            <p>
-                                This program is for those who want to work in clinical settings as an enrolled nurse and a valued member of the health team. Students will gain knowledge in nursing, social science, and the structure and function of the human body.
-                            </p>
-                            <p>
-                                They will learn skills in simulated learning environments which can then be applied on placements in clinical practice. A range of clinical courses in different health care settings will prepare students to practice in areas including rehabilitation, acute care and mental health.
-                            </p>
-                            <p>
-                                After completing this program students will be able to apply to the Nursing Council of New Zealand to sit an exam to be registered as an Enrolled Nurse; this means they will be able to practice under the direction of a Registered Nurse.
-                            </p>
+                    <div className="bg-white shadow-[0_8px_30px_rgb(0,0,0,0.04)] rounded-3xl overflow-hidden border border-gray-100">
+                        <div className="grid grid-cols-1 lg:grid-cols-2">
+                            {/* Left: Text Content */}
+                            <div className="p-4 lg:p-3 flex flex-col justify-center">
+                                <h1 className="text-4xl md:text-5xl font-bold text-[#282728] mb-2 leading-tight">
+                                    NZ Diploma in Enrolled Nursing
+                                </h1>
+                                <h2 className="text-2xl font-normal text-[#436235] mb-8">Auckland</h2>
+
+                                <div className="prose prose-lg text-gray-600 leading-relaxed space-y-4">
+                                    <p>
+                                        This program is for those who want to work in clinical settings as an enrolled nurse and a valued member of the health team. Students will gain knowledge in nursing, social science, and the structure and function of the human body.
+                                    </p>
+                                    <p>
+                                        They will learn skills in simulated learning environments which can then be applied on placements in clinical practice. A range of clinical courses in different health care settings will prepare students to practice in areas including rehabilitation, acute care and mental health.
+                                    </p>
+                                    <p>
+                                        After completing this program students will be able to apply to the Nursing Council of New Zealand to sit an exam to be registered as an Enrolled Nurse; this means they will be able to practice under the direction of a Registered Nurse.
+                                    </p>
+                                </div>
+                            </div>
+
+                            {/* Right: Image */}
+                            <div className="p-4 lg:p-3 h-full min-h-[400px]">
+                                <div className="relative h-full w-full rounded-[5px] overflow-hidden shadow-lg">
+                                    <img
+                                        src={programImg}
+                                        alt="Nursing Student"
+                                        className="absolute inset-0 w-full h-full object-cover"
+                                    />
+                                    <div className="absolute top-6 right-6 bg-[#1a1a1a]/80 backdrop-blur-sm text-white px-4 py-2 rounded-lg text-sm font-medium uppercase tracking-wide">
+                                        February, July
+                                    </div>
+                                </div>
+                            </div>
                         </div>
-                    </div>
 
-                    {/* Right: Image */}
-                    <div className="relative h-[400px] rounded-2xl overflow-hidden shadow-2xl">
-                        <img
-                            src={programImg}
-                            alt="Nursing Student"
-                            className="w-full h-full object-cover"
-                        />
-                        <div className="absolute top-6 right-6 bg-[#1a1a1a]/80 backdrop-blur-sm text-white px-4 py-2 rounded-lg text-sm font-medium uppercase tracking-wide">
-                            February, July
+                        {/* Stats Bar - Elegant Footer of the Card */}
+                        <div className="bg-[#1a1a1a] text-white py-10 px-6">
+                            <div className="grid grid-cols-5 items-center">
+                                {/* Level */}
+                                <div className="flex flex-col items-center border-r border-white/10 last:border-r-0">
+                                    <span className="text-3xl font-bold mb-1.5 tabular-nums">5</span>
+                                    <span className="text-[10px] text-gray-400 font-medium uppercase tracking-[0.2em]">Level</span>
+                                </div>
+
+                                {/* Duration */}
+                                <div className="flex flex-col items-center border-r border-white/10 last:border-r-0">
+                                    <span className="text-3xl font-bold mb-1.5 tabular-nums">18</span>
+                                    <div className="text-[10px] text-gray-400 font-medium uppercase tracking-[0.2em] text-center leading-relaxed">
+                                        Months<br />(Duration)
+                                    </div>
+                                </div>
+
+                                {/* Credits */}
+                                <div className="flex flex-col items-center border-r border-white/10 last:border-r-0">
+                                    <span className="text-3xl font-bold mb-1.5 tabular-nums">180</span>
+                                    <span className="text-[10px] text-gray-400 font-medium uppercase tracking-[0.2em]">Credits</span>
+                                </div>
+
+                                {/* Residency */}
+                                <div className="flex flex-col items-center border-r border-white/10 last:border-r-0">
+                                    <span className="text-3xl font-bold mb-1.5 tabular-nums">3</span>
+                                    <div className="text-[10px] text-gray-400 font-medium uppercase tracking-[0.2em] text-center leading-relaxed px-2">
+                                        Points of Residency
+                                    </div>
+                                </div>
+
+                                {/* Hours */}
+                                <div className="flex flex-col items-center border-r border-white/10 last:border-r-0">
+                                    <span className="text-3xl font-bold mb-1.5 tabular-nums">25</span>
+                                    <div className="text-[10px] text-gray-400 font-medium uppercase tracking-[0.2em] text-center leading-relaxed">
+                                        Hours per Week<br />(Works Right)
+                                    </div>
+                                </div>
+                            </div>
                         </div>
-                    </div>
-                </div>
-
-                {/* Stats Bar */}
-                <div className="bg-[#1a1a1a] rounded-2xl shadow-xl p-8 mb-16 text-white grid grid-cols-2 md:grid-cols-5 gap-8 text-center border-t-4 border-[#436235]">
-                    <div className="flex flex-col items-center">
-                        <span className="text-3xl font-bold mb-1">5</span>
-                        <span className="text-[10px] uppercase tracking-widest text-gray-400">Level</span>
-                    </div>
-                    <div className="flex flex-col items-center">
-                        <span className="text-3xl font-bold mb-1">18</span>
-                        <span className="text-[10px] uppercase tracking-widest text-gray-400">Months<br />(Duration)</span>
-                    </div>
-                    <div className="flex flex-col items-center">
-                        <span className="text-3xl font-bold mb-1">180</span>
-                        <span className="text-[10px] uppercase tracking-widest text-gray-400">Credits</span>
-                    </div>
-                    <div className="flex flex-col items-center">
-                        <span className="text-3xl font-bold mb-1">3</span>
-                        <span className="text-[10px] uppercase tracking-widest text-gray-400">Points of Residency</span>
-                    </div>
-                    <div className="flex flex-col items-center">
-                        <span className="text-3xl font-bold mb-1">25</span>
-                        <span className="text-[10px] uppercase tracking-widest text-gray-400">Hours per Week<br />(Alpha light)</span>
                     </div>
                 </div>
 

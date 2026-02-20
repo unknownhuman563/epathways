@@ -34,9 +34,12 @@ const PartnerLogos = () => {
     return (
         <section className="bg-gray-100 py-8 relative overflow-hidden">
             <div className="max-w-full mx-auto px-4">
-                <h2 className="text-center text-xl font-semibold text-gray-700 mb-8">
-                    Our Trusted Partners
-                </h2>
+                <div className="text-center mb-12">
+                    <p className="text-sm font-semibold tracking-widest text-gray-400 uppercase mb-2">Our Trusted Partners</p>
+                    {/* <h2 className="text-3xl md:text-4xl font-black text-[#282728]">
+                        Our Trusted Partners
+                    </h2> */}
+                </div>
 
                 <div className="relative w-full overflow-hidden">
                     <motion.div

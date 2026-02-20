@@ -22,6 +22,14 @@ Route::get("/program-details", function (){
    return inertia('ProgramDetails'); 
 });
 
+Route::get("/fee-guide", function (){
+   return inertia('FeeGuide'); 
+});
+
+Route::get("/about-us", function (){
+   return inertia('AboutUs'); 
+});
+
 Route::redirect('/education journey', '/education-journey');
 
 

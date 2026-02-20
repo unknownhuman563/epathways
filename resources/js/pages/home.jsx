@@ -48,23 +48,20 @@ export default function Home() {
         {/* 3 Pillars Section */}
         <ThreePillars />
 
-        {/* How It Helps Section */}
-        <HowItHelps />
-
         {/* In-Demand Programs Section */}
         <InDemandPrograms />
 
         {/* Visa Process Steps Section */}
         <VisaProcessSteps />
 
-        {/* Events and Announcements Section */}
-        <EventsAnnouncements />
-
         {/* Success Stories Section */}
         <SuccessStories />
 
         {/* Learn About Section */}
         <LearnAbout />
+
+        {/* Events and Announcements Section */}
+        <EventsAnnouncements />
 
         <ScrollToTop />
 

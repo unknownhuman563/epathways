@@ -10,8 +10,9 @@ export default function SuccessStories() {
             <div className="max-w-7xl mx-auto px-4">
                 {/* Section Header */}
                 <div className="text-center mb-12">
-                    <h2 className="text-sm md:text-base font-bold text-gray-500 uppercase tracking-[0.2em] mb-4">
-                        TESTIMONIALS
+                    <p className="text-sm font-semibold tracking-widest text-gray-400 uppercase mb-2">Testimonials</p>
+                    <h2 className="text-3xl md:text-4xl font-black text-[#282728]">
+                        Success Stories
                     </h2>
                 </div>
 
@@ -20,13 +21,13 @@ export default function SuccessStories() {
                     initial={{ opacity: 0, scale: 0.98 }}
                     whileInView={{ opacity: 1, scale: 1 }}
                     viewport={{ once: true }}
-                    className="relative max-w-5xl mx-auto aspect-[21/9] md:aspect-[16/7] rounded-3xl overflow-hidden shadow-2xl group"
+                    className="relative max-w-5xl mx-auto aspect-[16/9] rounded-3xl overflow-hidden shadow-2xl group"
                 >
                     {/* Background Image */}
                     <img
                         src={arrivalImage}
                         alt="Franz & Juniven Arrival"
-                        className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105"
+                        className="w-full h-full object-cover object-top transition-transform duration-1000 group-hover:scale-105"
                     />
 
                     {/* Gradient Overlay */}

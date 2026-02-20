@@ -2,25 +2,33 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import { MapPin } from 'lucide-react';
 
+const images = import.meta.glob("/resources/Assets/Services/*", { eager: true, import: "default" });
+
+const imageMap = Object.keys(images).reduce((acc, key) => {
+    const filename = key.split("/").pop();
+    acc[filename] = images[key];
+    return acc;
+}, {});
+
 export default function InDemandPrograms() {
     const programs = [
         {
             title: "Master in Science in Information Technology",
             location: "Whitecliffe",
             level: "Level 9",
-            image: "https://images.unsplash.com/photo-1550751827-4bd374c3f58b?auto=format&fit=crop&q=80&w=800",
+            image: imageMap['education.png'], // Local asset
         },
         {
             title: "NZ Diploma in Enrolled Nursing",
             location: "Southern Institute of Tech",
             level: "Level 5",
-            image: "https://images.unsplash.com/photo-1576091160550-217359f42f8c?auto=format&fit=crop&q=80&w=800",
+            image: imageMap['job.png'], // Local asset
         },
         {
             title: "Master in Science in Information Technology",
             location: "Auckland Institute of Studies",
             level: "Level 9",
-            image: "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&q=80&w=800",
+            image: imageMap['pathways.png'], // Local asset
         }
     ];
 
@@ -28,11 +36,10 @@ export default function InDemandPrograms() {
         <section className="py-20 bg-white font-urbanist">
             <div className="max-w-7xl mx-auto px-4">
                 <div className="text-center mb-16">
-                    <span className="text-gray-500 text-sm tracking-widest uppercase mb-2 block">Find a Program</span>
-                    <h2 className="text-3xl md:text-4xl font-bold text-[#282728] tracking-tight">
-                        TOP IN-DEMAND BACHELOR PROGRAMS
+                    <p className="text-sm font-semibold tracking-widest text-gray-400 uppercase mb-2">Find a Program</p>
+                    <h2 className="text-3xl md:text-4xl font-black text-[#282728]">
+                        Top In-Demand Programs
                     </h2>
-                    <div className="w-24 h-1 bg-[#436235] mx-auto mt-4 rounded-full opacity-20"></div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
@@ -43,7 +50,7 @@ export default function InDemandPrograms() {
                             whileInView={{ opacity: 1, y: 0 }}
                             viewport={{ once: true }}
                             transition={{ delay: index * 0.2, duration: 0.6 }}
-                            className="bg-[#282728] rounded-2xl overflow-hidden shadow-2xl group flex flex-col h-full hover:scale-[1.02] transition-transform duration-500"
+                            className="bg-white rounded-2xl overflow-hidden shadow-[0_8px_30px_rgb(0,0,0,0.08)] border border-gray-100 group flex flex-col h-full hover:scale-[1.02] hover:shadow-[0_8px_30px_rgb(0,0,0,0.12)] transition-all duration-500"
                         >
                             <div className="relative h-64 overflow-hidden">
                                 <img
@@ -56,10 +63,10 @@ export default function InDemandPrograms() {
                                 </div>
                             </div>
                             <div className="p-8 flex flex-col flex-grow">
-                                <h3 className="text-xl font-bold text-white mb-4 leading-tight">
+                                <h3 className="text-xl font-bold text-[#282728] mb-4 leading-tight group-hover:text-[#436235] transition-colors">
                                     {program.title}
                                 </h3>
-                                <div className="mt-auto flex items-center text-gray-400 text-sm group-hover:text-gray-300 transition-colors">
+                                <div className="mt-auto flex items-center text-gray-500 text-sm group-hover:text-gray-700 transition-colors">
                                     <MapPin className="w-4 h-4 mr-2 text-[#436235]" />
                                     {program.location}
                                 </div>
