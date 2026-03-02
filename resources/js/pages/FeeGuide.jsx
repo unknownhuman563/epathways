@@ -5,6 +5,11 @@ import Navbar from "@/components/navigation-bar";
 import Footer from "@/components/footer";
 import ScrollToTop from "@/components/scrolltotop";
 
+// Assets
+import educationImg from "@assets/Services/education.png";
+import pathwaysImg from "@assets/Services/pathways.png";
+import agentsImg from "@assets/Services/agents.png";
+
 // Mock data for the accordion - in a real app, this might come from a prop or API
 const programs = [
     {
@@ -13,7 +18,7 @@ const programs = [
         institution: "Southern Institure of Tech",
         level: 5,
         type: 'diploma',
-        image: "https://images.unsplash.com/photo-1576091160550-217359f42f8c?auto=format&fit=crop&q=80&w=300&h=200",
+        image: educationImg,
         baseFee: "31,200",
         fees: {
             "India & Subcontinent": "31,200.00",
@@ -34,7 +39,7 @@ const programs = [
         institution: "Wintec",
         level: 5,
         type: 'diploma',
-        image: "https://images.unsplash.com/photo-1581056771107-24ca5f033842?auto=format&fit=crop&q=80&w=300&h=200",
+        image: pathwaysImg,
         baseFee: "26,600",
         fees: {
             "India & Subcontinent": "26,600.00",
@@ -55,7 +60,7 @@ const programs = [
         institution: "NZTC",
         level: 5,
         type: 'diploma',
-        image: "https://images.unsplash.com/photo-1503676260728-1c00da094a0b?auto=format&fit=crop&q=80&w=300&h=200",
+        image: educationImg,
         baseFee: "28,000",
         fees: {
             "India & Subcontinent": "28,000.00",
@@ -76,7 +81,7 @@ const programs = [
         institution: "NZSE",
         level: 5,
         type: 'diploma',
-        image: "https://images.unsplash.com/photo-1517694712202-14dd9538aa97?auto=format&fit=crop&q=80&w=300&h=200",
+        image: pathwaysImg,
         baseFee: "20,900",
         fees: {
             "India & Subcontinent": "20,900.00",
@@ -97,7 +102,7 @@ const programs = [
         institution: "Wintec",
         level: 7,
         type: 'bachelor',
-        image: "https://images.unsplash.com/photo-1554224155-6726b3ff858f?auto=format&fit=crop&q=80&w=300&h=200",
+        image: educationImg,
         baseFee: "26,600",
         fees: {
             "India & Subcontinent": "26,600.00/year",
@@ -118,7 +123,7 @@ const programs = [
         institution: "Wintec",
         level: 7,
         type: 'bachelor',
-        image: "https://images.unsplash.com/photo-1576091160550-217359f42f8c?auto=format&fit=crop&q=80&w=300&h=200",
+        image: pathwaysImg,
         baseFee: "29,800",
         fees: {
             "India & Subcontinent": "29,800.00/year",
@@ -139,7 +144,7 @@ const programs = [
         institution: "ICL Graduate Business School",
         level: 9,
         type: 'masters',
-        image: "https://images.unsplash.com/photo-1507146426996-ef05306b995a?auto=format&fit=crop&q=80&w=300&h=200",
+        image: educationImg,
         baseFee: "30,460",
         fees: {
             "India & Subcontinent": "30,460.00",
@@ -160,7 +165,7 @@ const programs = [
         institution: "ICL Graduate Business School",
         level: 9,
         type: 'masters',
-        image: "https://images.unsplash.com/photo-1542744173-8e7e53415bb0?auto=format&fit=crop&q=80&w=300&h=200",
+        image: pathwaysImg,
         baseFee: "32,460",
         fees: {
             "India & Subcontinent": "32,460.00",
@@ -195,7 +200,7 @@ export default function FeeGuide() {
             {/* Hero Section */}
             <div className="relative h-[40vh] min-h-[350px] w-full overflow-hidden">
                 <img
-                    src="https://images.unsplash.com/photo-1523050335192-ce11558cd97d?auto=format&fit=crop&q=80&w=1920"
+                    src={educationImg}
                     alt="University Campus"
                     className="absolute inset-0 w-full h-full object-cover"
                 />

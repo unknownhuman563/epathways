@@ -22,7 +22,7 @@ export default function InDemandPrograms() {
             title: "NZ Diploma in Enrolled Nursing",
             location: "Southern Institute of Tech",
             level: "Level 5",
-            image: imageMap['job.png'], // Local asset
+            image: imageMap['education.png'], // Local asset
         },
         {
             title: "Master in Science in Information Technology",

@@ -65,7 +65,7 @@ const Navbar = () => {
                 {/* Button - Right */}
                 <div className="hidden md:block flex-shrink-0">
                     {isShowingGetStarted && (
-                        <a href="https://forms.clickup.com/9003110473/f/8ca1429-27476/ZFL0N95I6L0K6QEPTD" className="hover:bg-gray-700 bg-[#282728] text-white px-4 py-2 rounded text-sm font-medium">Start your journey with us now</a>
+                        <a href="/booking" className="hover:bg-gray-700 bg-[#282728] text-white px-4 py-2 rounded text-sm font-medium">Book Consultation</a>
                     )}
                 </div>
 
@@ -112,7 +112,7 @@ const Navbar = () => {
                     <li><a href="/about-us" className="hover:text-green-600">About Us</a></li>
                     {isShowingGetStarted && (
                         <div className="text-center">
-                            <a href="https://forms.clickup.com/9003110473/f/8ca1429-27476/ZFL0N95I6L0K6QEPTD" className="hover:bg-gray-700 bg-[#282728] text-white px-3 py-2 rounded text-sm">Start your journey with us now</a>
+                            <a href="/booking" className="hover:bg-gray-700 bg-[#282728] text-white px-3 py-2 rounded text-sm">Book Consultation</a>
                         </div>
                     )}
                 </ul>

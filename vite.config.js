@@ -15,12 +15,15 @@ export default defineConfig({
         react(),
         tailwindcss(),
     ],
+    // REMOVE OR COMMENT OUT THE SERVER BLOCK BELOW
+    /* 
     server: {
         host: '0.0.0.0',
         hmr: {
             host: '192.168.1.22',
         },
-    },
+    }, 
+    */
     resolve: {
         alias: {
             "@": "/resources/js",

@@ -50,9 +50,9 @@ export default function HeroSection({ backgroundVideo }) {
 
                     {/* Action Buttons */}
                     <div className="flex flex-wrap items-center gap-6 mt-4">
-                        <button className="bg-[#000000] text-white px-8 py-3.5 rounded-[5px] text-sm font-semibold tracking-wide hover:bg-black/90 transition-all duration-700 shadow-xl uppercase">
+                        <a href="/booking" className="bg-[#000000] text-white px-8 py-3.5 rounded-[5px] text-sm font-semibold tracking-wide hover:bg-black/90 transition-all duration-700 shadow-xl uppercase">
                             Book Consultation
-                        </button>
+                        </a>
                         <button className="bg-[#4a6b38] text-white px-8 py-3.5 rounded-[5px] text-sm font-semibold tracking-wide hover:bg-[#3d592e] transition-all duration-700 shadow-lg uppercase">
                             Book Webinar
                         </button>

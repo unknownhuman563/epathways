@@ -7,7 +7,7 @@ import ScrollToTop from "@/components/scrolltotop";
 
 // Assets (Using placeholders if exact ones not available, standardizing)
 import heroBg from "@assets/Services/education.png";
-import programImg from "@assets/Testimonies/testi1.png"; // Or a specific nursing image if available
+import programImg from "@assets/Services/pathways.png"; // Changed from Testimonies/testi1.png to a more relevant education asset
 
 export default function ProgramDetails() {
     return (

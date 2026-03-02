@@ -20,7 +20,7 @@ export default function VisaProcessSteps() {
     const prev = () => setActiveIndex((prev) => (prev - 1 + steps.length) % steps.length);
 
     return (
-        <section className="py-24 bg-[#1a1a1a] font-urbanist overflow-hidden">
+        <section className="py-24 bg-gray-100 font-urbanist overflow-hidden">
             <div className="max-w-7xl mx-auto px-4">
                 {/* Section Header */}
                 <div className="text-center mb-16">
@@ -28,7 +28,7 @@ export default function VisaProcessSteps() {
                         initial={{ opacity: 0, y: -10 }}
                         whileInView={{ opacity: 1, y: 0 }}
                         viewport={{ once: true }}
-                        className="text-sm font-semibold tracking-widest text-gray-400 uppercase mb-2"
+                        className="text-sm font-semibold tracking-widest text-gray-500 uppercase mb-2"
                     >
                         Student Visa
                     </motion.p>
@@ -37,7 +37,7 @@ export default function VisaProcessSteps() {
                         whileInView={{ opacity: 1, y: 0 }}
                         viewport={{ once: true }}
                         transition={{ delay: 0.1 }}
-                        className="text-3xl md:text-5xl font-black text-white"
+                        className="text-3xl md:text-5xl font-black text-[#282728]"
                     >
                         Steps of Application
                     </motion.h2>
@@ -45,7 +45,7 @@ export default function VisaProcessSteps() {
 
                 {/* Elegant Stepper Timeline */}
                 <div className="relative mb-20 max-w-5xl mx-auto px-10">
-                    <div className="absolute top-1/2 left-0 w-full h-0.5 bg-white/10 -translate-y-1/2"></div>
+                    <div className="absolute top-1/2 left-0 w-full h-0.5 bg-gray-200 -translate-y-1/2"></div>
                     <motion.div
                         className="absolute top-1/2 left-0 h-0.5 bg-[#436235] -translate-y-1/2 transition-all duration-500"
                         style={{ width: `${(activeIndex / (steps.length - 1)) * 100}%` }}
@@ -62,14 +62,14 @@ export default function VisaProcessSteps() {
                                     animate={{
                                         scale: activeIndex === idx ? 1.2 : 1,
                                         backgroundColor: activeIndex === idx ? "#436235" : "#ffffff",
-                                        borderColor: activeIndex === idx ? "#436235" : "rgba(255,255,255,0.2)"
+                                        borderColor: activeIndex === idx ? "#436235" : "rgba(0,0,0,0.1)"
                                     }}
-                                    className={`w-10 h-10 rounded-full flex items-center justify-center border-4 text-sm font-bold transition-all duration-300 ${activeIndex === idx ? "text-white shadow-[0_0_20px_rgba(67,98,53,0.5)]" : "text-[#282728]"
+                                    className={`w-10 h-10 rounded-full flex items-center justify-center border-4 text-sm font-bold shadow-sm transition-all duration-300 ${activeIndex === idx ? "text-white shadow-[0_0_20px_rgba(67,98,53,0.3)]" : "text-[#282728]"
                                         }`}
                                 >
                                     {step.id}
                                 </motion.div>
-                                <span className={`absolute -bottom-8 text-[10px] font-bold tracking-tighter transition-opacity duration-300 ${activeIndex === idx ? "text-[#436235] opacity-100" : "text-gray-500 opacity-60"
+                                <span className={`absolute -bottom-8 text-[10px] font-bold tracking-tighter transition-opacity duration-300 ${activeIndex === idx ? "text-[#436235] opacity-100" : "text-gray-400 opacity-60"
                                     }`}>
                                     DAY {step.id}
                                 </span>
@@ -83,7 +83,7 @@ export default function VisaProcessSteps() {
                     {/* Prev Button */}
                     <button
                         onClick={prev}
-                        className="hidden md:flex w-14 h-14 items-center justify-center rounded-full bg-white/5 border border-white/10 text-white hover:bg-[#436235] hover:border-[#436235] transition-all duration-300 group"
+                        className="hidden md:flex w-14 h-14 items-center justify-center rounded-full bg-white border border-gray-200 text-[#282728] shadow-md hover:bg-[#436235] hover:text-white hover:border-[#436235] transition-all duration-300 group"
                     >
                         <ChevronLeft className="w-6 h-6 group-hover:-translate-x-1 transition-transform" />
                     </button>
@@ -150,7 +150,7 @@ export default function VisaProcessSteps() {
                     {/* Next Button */}
                     <button
                         onClick={next}
-                        className="hidden md:flex w-14 h-14 items-center justify-center rounded-full bg-white/5 border border-white/10 text-white hover:bg-[#436235] hover:border-[#436235] transition-all duration-300 group"
+                        className="hidden md:flex w-14 h-14 items-center justify-center rounded-full bg-white border border-gray-200 text-[#282728] shadow-md hover:bg-[#436235] hover:text-white hover:border-[#436235] transition-all duration-300 group"
                     >
                         <ChevronRight className="w-6 h-6 group-hover:translate-x-1 transition-transform" />
                     </button>
@@ -161,7 +161,7 @@ export default function VisaProcessSteps() {
                     {steps.map((_, i) => (
                         <div
                             key={i}
-                            className={`h-1.5 rounded-full transition-all duration-500 ${i === activeIndex ? "w-8 bg-[#436235]" : "w-2 bg-white/20"
+                            className={`h-1.5 rounded-full transition-all duration-500 ${i === activeIndex ? "w-8 bg-[#436235]" : "w-2 bg-gray-300"
                                 }`}
                         ></div>
                     ))}

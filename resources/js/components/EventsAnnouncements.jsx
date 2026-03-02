@@ -91,7 +91,7 @@ export default function EventsAnnouncements() {
     const visible = articles.slice(page * CARDS_PER_PAGE, page * CARDS_PER_PAGE + CARDS_PER_PAGE);
 
     return (
-        <section className="py-20 bg-white font-urbanist">
+        <section className="py-20 bg-gray-100 font-urbanist">
             <div className="max-w-7xl mx-auto px-6">
                 {/* Section Header */}
                 <div className="text-center mb-12">

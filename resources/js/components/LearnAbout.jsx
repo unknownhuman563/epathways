@@ -10,7 +10,8 @@ export default function LearnAbout() {
             <div className="max-w-7xl mx-auto px-4">
                 {/* Section Header */}
                 <div className="text-center mb-16">
-                    <h2 className="text-xl md:text-2xl font-bold text-white mb-4">
+                    <p className="text-sm font-semibold tracking-widest text-gray-400 uppercase mb-2">Overview</p>
+                    <h2 className="text-3xl md:text-5xl font-black text-white mb-4">
                         Learn About <span className="text-[#436235]">e</span>Pathways
                     </h2>
                     <p className="text-gray-400 max-w-3xl mx-auto text-sm md:text-base leading-relaxed px-4">
