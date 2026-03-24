@@ -45,6 +45,22 @@ body {
     animation: zoomInOut 1.5s infinite ease-in-out;
 }
 
+@keyframes heartbeat {
+
+    0%,
+    100% {
+        transform: scale(1);
+    }
+
+    50% {
+        transform: scale(1.06);
+    }
+}
+
+.animate-heartbeat {
+    animation: heartbeat 2s infinite ease-in-out;
+}
+
 .scrollbar-hide::-webkit-scrollbar {
     display: none;
 }
