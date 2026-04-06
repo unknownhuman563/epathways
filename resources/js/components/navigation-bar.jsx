@@ -22,9 +22,9 @@ const Navbar = () => {
                     </a>
                 </div>
 
-                {/* Desktop Menu - Center */}
                 <ul className="hidden md:flex space-x-8 items-center font-medium absolute left-1/2 transform -translate-x-1/2">
                     <li><a href="/" className="hover:text-[#436235] transition-colors">Home</a></li>
+                    <li><a href="/activities" className="hover:text-[#436235] transition-colors">Activities</a></li>
 
                     {/* Education Dropdown */}
                     <li className="relative group py-5">
@@ -65,7 +65,7 @@ const Navbar = () => {
                 {/* Button - Right */}
                 <div className="hidden md:block flex-shrink-0">
                     {isShowingGetStarted && (
-                        <a href="/booking" className="hover:bg-gray-700 bg-[#282728] text-white px-4 py-2 rounded text-sm font-medium">Book Consultation</a>
+                        <a href="/booking" className="hover:bg-gray-700 bg-[#282728] text-white px-4 py-2 rounded text-sm font-medium">Book Free Consultation</a>
                     )}
                 </div>
 
@@ -104,15 +104,17 @@ const Navbar = () => {
 
             {/* Mobile Dropdown Menu */}
             {isOpen && (
-                <ul className="md:hidden bg-white px-4 pb-4 space-y-2">
-                    <li><a href="/programs-levels" className="hover:text-[#436235]">Programs & Levels</a></li>
-                    <li><a href="/fee-guide" className="hover:text-[#436235]">Fee Guide</a></li>
-                    <li><a href="#accommodation" className="hover:text-[#436235]">Accommodation</a></li>
-                    <li><a href="#immigration" className="hover:text-green-600">Immigration</a></li>
-                    <li><a href="/about-us" className="hover:text-green-600">About Us</a></li>
+                <ul className="md:hidden bg-white px-4 pb-4 space-y-2 text-sm font-medium">
+                    <li><a href="/" className="block py-2 hover:text-[#436235]">Home</a></li>
+                    <li><a href="/activities" className="block py-2 hover:text-[#436235]">Activities</a></li>
+                    <li><a href="/programs-levels" className="block py-2 hover:text-[#436235]">Programs & Levels</a></li>
+                    <li><a href="/fee-guide" className="block py-2 hover:text-[#436235]">Fee Guide</a></li>
+                    <li><a href="#accommodation" className="block py-2 hover:text-[#436235]">Accommodation</a></li>
+                    <li><a href="#immigration" className="block py-2 hover:text-[#436235]">Immigration</a></li>
+                    <li><a href="/about-us" className="block py-2 hover:text-[#436235]">About Us</a></li>
                     {isShowingGetStarted && (
                         <div className="text-center">
-                            <a href="/booking" className="hover:bg-gray-700 bg-[#282728] text-white px-3 py-2 rounded text-sm">Book Consultation</a>
+                            <a href="/booking" className="hover:bg-gray-700 bg-[#282728] text-white px-3 py-2 rounded text-sm">Book Free Consultation</a>
                         </div>
                     )}
                 </ul>

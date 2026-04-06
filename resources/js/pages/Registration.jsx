@@ -1,231 +1,66 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Head, useForm } from '@inertiajs/react';
-import { CheckCircle, AlertCircle, ChevronRight, Lock, Calendar } from 'lucide-react';
+import { CheckCircle, AlertCircle, ChevronRight, Lock, Calendar, MapPin, Mail, Phone, Clock, FileText } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 
-/* ─── COLOR TOKENS ──────────────────────────────────────────────────────────
-   Primary dark  : #282728
-   Accent        : #282728 (same dark – used for badges, pills, buttons)
-   Accent light  : rgba(40,39,40,.08)
-   Gold          : #c9a84c  (kept for the second sidebar card)
-   Cream bg      : #f9f6f1
-   Border        : #e4e0d8
-   Text muted    : #888
-──────────────────────────────────────────────────────────────────────────── */
-
-const C = {
-    dark:   '#282728',
-    darkL:  'rgba(40,39,40,.08)',
-    darkM:  'rgba(40,39,40,.14)',
-    gold:   '#c9a84c',
-    goldL:  '#fdf3dc',
-    cream:  '#f9f6f1',
-    cream2: '#eee9e0',
-    white:  '#ffffff',
-    border: '#e4e0d8',
-    text2:  '#4a4a4a',
-    text3:  '#888',
-    err:    '#c0392b',
-    errBg:  '#fef2f2',
-};
-
-/* Shared field wrapper */
-function Field({ label, required, children }) {
+// --- Shared Field Component ---
+function Field({ label, error, children }) {
+    const hasError = !!error;
     return (
-        <div style={{ display:'flex', flexDirection:'column', gap:5 }}>
-            <label style={{ fontSize:'0.66rem', fontWeight:700, letterSpacing:'1.3px', textTransform:'uppercase', color: C.text2 }}>
-                {label} {required && <span style={{ color: C.err }}>*</span>}
-            </label>
-            {children}
-        </div>
-    );
-}
-
-/* Shared input style */
-const inputSx = (hasErr) => ({
-    width:'100%', border:`1.5px solid ${hasErr ? C.err : C.border}`,
-    borderRadius:9, padding:'10px 13px',
-    fontFamily:"'Plus Jakarta Sans', sans-serif", fontSize:'0.87rem',
-    color: C.dark, background: hasErr ? '#fff8f8' : C.cream,
-    outline:'none', transition:'border-color .18s,background .18s,box-shadow .18s',
-    WebkitAppearance:'none', appearance:'none',
-});
-
-/* Pill radio group */
-function Pills({ name, options, value, onChange, hasErr }) {
-    return (
-        <div style={{ display:'flex', flexWrap:'wrap', gap:7 }}>
-            {options.map(opt => (
-                <React.Fragment key={opt.value}>
-                    <input
-                        type="radio" id={`${name}-${opt.value}`}
-                        name={name} value={opt.value}
-                        checked={value === opt.value}
-                        onChange={() => onChange(opt.value)}
-                        style={{ display:'none' }}
-                    />
-                    <label
-                        htmlFor={`${name}-${opt.value}`}
-                        style={{
-                            padding:'7px 14px',
-                            border:`1.5px solid ${value === opt.value ? C.dark : (hasErr ? C.err : C.border)}`,
-                            borderRadius:100, fontSize:'0.78rem', fontWeight:500,
-                            color: value === opt.value ? C.white : C.text2,
-                            background: value === opt.value ? C.dark : 'transparent',
-                            cursor:'pointer', transition:'all .16s',
-                        }}
-                    >
-                        {opt.label}
-                    </label>
-                </React.Fragment>
-            ))}
-        </div>
-    );
-}
-
-/* Section divider label */
-function Sec({ children }) {
-    return (
-        <div style={{
-            display:'flex', alignItems:'center', gap:8,
-            fontSize:'0.67rem', fontWeight:700, letterSpacing:'2px',
-            textTransform:'uppercase', color: C.dark, marginBottom:16,
-        }}>
-            {children}
-            <span style={{ flex:1, height:1, background: C.border }} />
-        </div>
-    );
-}
-
-/* ─── SIDEBAR CARDS ─────────────────────────────────────────────────────── */
-function FreeCard({ accent, tag, tagStyle, icon, title, desc, items, btnLabel, onBtn }) {
-    return (
-        <div style={{
-            background: C.white, borderRadius:18,
-            boxShadow:'0 2px 20px rgba(0,0,0,.06)', overflow:'hidden',
-        }}>
-            <div style={{ height:4, background: accent }} />
-            <div style={{ padding:'22px 22px 20px' }}>
-                <span style={{ ...tagStyle, display:'inline-flex', alignItems:'center', gap:5, fontSize:'0.62rem', fontWeight:700, letterSpacing:'1.8px', textTransform:'uppercase', padding:'3px 10px', borderRadius:100, marginBottom:14 }}>
-                    ✓ {tag}
-                </span>
-                <div style={{ fontSize:28, marginBottom:12 }}>{icon}</div>
-                <h3 style={{ fontFamily:"'Cormorant Garamond', serif", fontSize:'1.25rem', fontWeight:600, marginBottom:6, color: C.dark }}>{title}</h3>
-                <p style={{ fontSize:'0.8rem', color: C.text2, lineHeight:1.55, marginBottom:16 }}>{desc}</p>
-                <hr style={{ border:'none', borderTop:`1px solid ${C.border}`, margin:'4px 0 16px' }} />
-                <ul style={{ listStyle:'none', marginBottom:18 }}>
-                    {items.map((item, i) => (
-                        <li key={i} style={{ fontSize:'0.77rem', color: C.text2, padding:'4px 0', display:'flex', alignItems:'flex-start', gap:8 }}>
-                            <span style={{ color: C.dark, fontWeight:700, fontSize:'0.8rem', flexShrink:0 }}>✓</span>
-                            {item}
-                        </li>
-                    ))}
-                </ul>
-                <button
-                    onClick={onBtn}
-                    style={{
-                        display:'flex', alignItems:'center', justifyContent:'center', gap:7,
-                        width:'100%', padding:'11px', borderRadius:10, border:'none',
-                        fontFamily:"'Plus Jakarta Sans', sans-serif", fontSize:'0.75rem',
-                        fontWeight:700, letterSpacing:'1.5px', textTransform:'uppercase',
-                        cursor:'pointer', transition:'opacity .18s,transform .18s',
-                        background: accent, color: C.white,
-                    }}
-                    onMouseEnter={e => { e.currentTarget.style.opacity = '0.88'; e.currentTarget.style.transform = 'translateY(-1px)'; }}
-                    onMouseLeave={e => { e.currentTarget.style.opacity = '1';    e.currentTarget.style.transform = 'translateY(0)'; }}
-                >
-                    {btnLabel} ↗
-                </button>
+        <div className="space-y-3">
+            <div className="flex justify-between items-end px-1">
+                <label className={`text-[9px] font-black uppercase tracking-[0.3em] transition-colors ${hasError ? 'text-red-500' : 'text-[#282728] opacity-60'}`}>
+                    {label}
+                </label>
+                {hasError && <span className="text-[9px] font-black text-red-500 uppercase tracking-widest leading-none">Field Required</span>}
+            </div>
+            <div className={`transition-all duration-300 ${hasError ? 'scale-[1.01]' : ''}`}>
+                <div className={hasError ? 'p-[1px] bg-red-500 rounded-xl overflow-hidden ring-4 ring-red-500/10' : ''}>
+                    {children}
+                </div>
             </div>
         </div>
     );
 }
 
-function ContactCard() {
-    const items = [
-        { ico:'📍', icoStyle:{ background:'#f0efef' }, label:'Office',       val:<>2F Landco Corporate Center,<br />Davao City, Philippines</> },
-        { ico:'📞', icoStyle:{ background:'#e6f1fb' }, label:'Phone',        val:<a href="tel:+63822975000" style={{ color: C.dark, textDecoration:'none' }}>+63 (82) 297-5000</a> },
-        { ico:'✉️', icoStyle:{ background:'#f5f3e8' }, label:'Email',        val:<a href="mailto:hello@epathways.com.ph" style={{ color: C.dark, textDecoration:'none' }}>hello@epathways.com.ph</a> },
-        { ico:'💬', icoStyle:{ background:'#efefef' }, label:'Facebook',     val:<a href="#" style={{ color: C.dark, textDecoration:'none' }}>facebook.com/epathwaysph</a> },
-        { ico:'🕐', icoStyle:{ background:'#eef1f5' }, label:'Office Hours', val:<>Mon–Fri, 8:00 AM – 6:00 PM<br /><span style={{ color: C.text3, fontSize:'0.75rem' }}>Sat 9:00 AM – 1:00 PM</span></> },
-    ];
-    return (
-        <div style={{ background: C.white, borderRadius:18, boxShadow:'0 2px 20px rgba(0,0,0,.06)', overflow:'hidden' }}>
-            <div style={{ height:4, background: `linear-gradient(90deg, ${C.dark}, #444)` }} />
-            <div style={{ padding:'22px 22px 20px' }}>
-                <h3 style={{ fontFamily:"'Cormorant Garamond', serif", fontSize:'1.15rem', fontWeight:600, marginBottom:16, color: C.dark }}>Get in Touch</h3>
-                {items.map((item, i) => (
-                    <div key={i} style={{
-                        display:'flex', alignItems:'flex-start', gap:12,
-                        padding:'10px 0', borderBottom: i < items.length - 1 ? `1px solid ${C.border}` : 'none',
-                    }}>
-                        <div style={{ width:34, height:34, borderRadius:9, flexShrink:0, display:'flex', alignItems:'center', justifyContent:'center', fontSize:15, ...item.icoStyle }}>
-                            {item.ico}
-                        </div>
-                        <div>
-                            <div style={{ fontSize:'0.65rem', fontWeight:700, letterSpacing:'1.2px', textTransform:'uppercase', color: C.text3, marginBottom:2 }}>{item.label}</div>
-                            <div style={{ fontSize:'0.82rem', color: C.dark, fontWeight:500 }}>{item.val}</div>
-                        </div>
-                    </div>
-                ))}
-            </div>
-        </div>
-    );
-}
-
-/* ─── SUCCESS SCREEN ────────────────────────────────────────────────────── */
+// --- Success Component ---
 function SuccessScreen({ eventName }) {
     return (
-        <div style={{ minHeight:'100vh', background: C.cream, display:'flex', alignItems:'center', justifyContent:'center', padding:24 }}>
-            <div style={{
-                maxWidth:460, width:'100%', background: C.white,
-                borderRadius:28, boxShadow:'0 4px 40px rgba(0,0,0,.10)',
-                padding:'56px 36px', textAlign:'center',
-            }}>
-                <div style={{
-                    width:72, height:72, borderRadius:'50%',
-                    background: C.dark, display:'flex', alignItems:'center',
-                    justifyContent:'center', margin:'0 auto 24px',
-                    boxShadow:`0 6px 28px ${C.darkM}`,
-                    animation:'pop .5s cubic-bezier(.34,1.56,.64,1) both',
-                }}>
-                    <CheckCircle size={36} color="#fff" strokeWidth={2} />
-                </div>
-                <h2 style={{ fontFamily:"'Cormorant Garamond', serif", fontSize:'2rem', fontWeight:700, marginBottom:8, color: C.dark }}>
-                    You're Registered!
-                </h2>
-                <p style={{ color: C.text3, fontSize:'0.9rem', lineHeight:1.6, marginBottom:32 }}>
-                    Thank you for registering for <strong style={{ color: C.dark }}>{eventName}</strong>.<br />
-                    We look forward to your participation.<br />
-                    Further updates and event details will be shared with you soon.
-                </p>
-                <button
-                    onClick={() => window.location.href = '/'}
-                    style={{
-                        width:'100%', padding:'14px 28px',
-                        background: C.dark, color: '#fff',
-                        border:'none', borderRadius:12, cursor:'pointer',
-                        fontFamily:"'Plus Jakarta Sans', sans-serif",
-                        fontSize:'0.82rem', fontWeight:700, letterSpacing:'2px',
-                        textTransform:'uppercase', transition:'background .18s',
-                    }}
+        <div className="min-h-screen bg-white flex items-center justify-center p-6 font-urbanist">
+            <div className="max-w-[480px] w-full bg-white rounded-[3rem] shadow-[0_64px_128px_-24px_rgba(40,39,40,0.08)] p-16 text-center border border-[#282728]/5">
+                <motion.div 
+                    initial={{ scale: 0.8, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    className="w-24 h-24 bg-[#282728] rounded-[2.5rem] flex items-center justify-center text-white mx-auto mb-10 shadow-2xl shadow-[#282728]/20"
                 >
-                    Back to Home
-                </button>
+                    <CheckCircle size={48} />
+                </motion.div>
+                <h2 className="text-3xl font-black text-[#282728] uppercase tracking-tighter mb-6">Registered</h2>
+                <p className="text-gray-400 text-sm leading-[2] mb-12 font-medium px-4">
+                    Your seat for <strong className="text-[#282728]">{eventName}</strong> is confirmed. We look forward to seeing you there.
+                </p>
+                <div className="bg-gray-50/50 rounded-2xl p-8 mb-12 border border-gray-100/50">
+                    <p className="text-[9px] font-black text-gray-300 uppercase tracking-[0.4em] mb-3 text-center">Registration ID</p>
+                    <p className="text-lg font-mono font-black text-[#282728]">EV-{Math.floor(Math.random() * 90000) + 10000}</p>
+                </div>
+                <a href="/" className="inline-block w-full bg-[#282728] text-white py-6 rounded-2xl text-[10px] font-black uppercase tracking-[0.4em] shadow-2xl shadow-[#282728]/10 hover:bg-black transition-all active:scale-95">
+                    Return to Portal
+                </a>
             </div>
-            <style>{`@keyframes pop{from{transform:scale(0);opacity:0}to{transform:scale(1);opacity:1}}`}</style>
         </div>
     );
 }
 
-/* ─── MAIN COMPONENT ────────────────────────────────────────────────────── */
+// --- Main Registration Component ---
 export default function Registration({ event }) {
-    console.log('Registration props:', { event });
-    if (!event) return <div style={{ padding:40, textAlign:'center', color: C.text3, fontWeight:700 }}>Error: Event data missing.</div>;
+    if (!event) return <div className="p-20 text-center font-bold text-gray-400 uppercase tracking-widest text-xs font-urbanist">Error: Event data missing.</div>;
 
     const [success, setSuccess] = useState(false);
+    const [modal, setModal] = useState({ show: false, message: '' });
+    const formRef = useRef(null);
 
     const { data, setData, post, processing, errors } = useForm({
-        first_name: '', last_name: '', email: '', phone: '', city: '',
+        first_name: '', last_name: '', email: '', phone: '', city: '', country: '',
         employment_status: '', interest: '', education_level: '',
         field_of_study: '', planning_timeline: '', funding_source: '',
         event_session_id: '', remarks: '',
@@ -233,352 +68,403 @@ export default function Registration({ event }) {
 
     const handleSubmit = (e) => {
         e.preventDefault();
+        
+        if (formRef.current && !formRef.current.reportValidity()) {
+            return;
+        }
+
         post(`/register/${event.event_code}`, {
             onSuccess: () => setSuccess(true),
             preserveScroll: true,
+            onError: (errs) => {
+                const message = Object.values(errs).join('\n');
+                setModal({ 
+                    show: true, 
+                    message: "There is some missing or invalid information. Please review the highlighted fields.\n" + message,
+                });
+            }
         });
     };
 
-    const focusFirst = () => document.getElementById('reg-first-name')?.focus();
-
     if (success) return <SuccessScreen eventName={event.name} />;
 
-    const hasErrors = Object.keys(errors).length > 0;
+    const inputClass = "w-full px-5 py-3.5 bg-white border border-[#282728] rounded-xl focus:ring-2 focus:ring-[#282728]/10 focus:border-[#282728] transition-all outline-none font-medium text-sm";
+    const selectClass = "w-full px-5 py-3.5 bg-white border border-[#282728] rounded-xl focus:ring-2 focus:ring-[#282728]/10 focus:border-[#282728] transition-all outline-none font-medium text-sm";
+
+    const PillGroup = ({ options, value, onChange }) => (
+        <div className="flex flex-wrap gap-3 mt-2">
+            {options.map(opt => {
+                const isSelected = value === opt;
+                return (
+                    <button
+                        key={opt}
+                        type="button"
+                        onClick={() => onChange(opt)}
+                        className={`px-6 py-3 rounded-xl text-[10px] font-bold uppercase tracking-widest border transition-all text-center ${isSelected ? 'bg-[#282728] text-white border-[#282728]' : 'bg-white text-gray-400 border-gray-200 hover:border-[#282728]'}`}
+                    >
+                        {opt}
+                    </button>
+                )
+            })}
+        </div>
+    );
 
     return (
-        <div style={{ fontFamily:"'Plus Jakarta Sans', sans-serif", background: C.cream, minHeight:'100vh', color: C.dark }}>
+        <div className="min-h-screen bg-gray-50/40 font-urbanist text-[#212121]">
             <Head title={`Register – ${event.name}`} />
 
-            {/* ── HERO ─────────────────────────────────────────────────── */}
-            <div style={{
-                background: C.dark,
-                backgroundImage:`radial-gradient(ellipse 60% 80% at 10% 60%,rgba(255,255,255,.06) 0%,transparent 70%),
-                                  radial-gradient(ellipse 40% 60% at 90% 10%,rgba(201,168,76,.09) 0%,transparent 60%)`,
-                padding:'60px 24px 52px', textAlign:'center',
-                position:'relative', overflow:'hidden',
-            }}>
-                <div style={{
-                    content:'', position:'absolute', bottom:0, left:0, right:0, height:40,
-                    background: C.cream, clipPath:'ellipse(55% 100% at 50% 100%)',
-                }} />
-                {/* Badge */}
-                <span style={{
-                    display:'inline-flex', alignItems:'center', gap:7,
-                    background: C.gold, color: C.dark,
-                    fontSize:'0.62rem', fontWeight:700, letterSpacing:'2.5px', textTransform:'uppercase',
-                    padding:'5px 16px', borderRadius:100, marginBottom:22,
-                }}>
-                    <Calendar size={11} /> {event.type || 'Webinar Event'}
-                </span>
-                <h1 style={{
-                    fontFamily:"'Cormorant Garamond', serif",
-                    fontSize:'clamp(2.2rem, 5.5vw, 3.6rem)',
-                    fontWeight:700, color: C.white, lineHeight:1.1, margin:0,
-                }}>
-                    Register Now with<br /><em style={{ fontStyle:'italic', color: C.gold }}>{event.name || 'ePathways'}</em>
-                </h1>
-                <p style={{ marginTop:10, color:'rgba(255,255,255,.7)', fontSize:'0.95rem' }}>
-                    Your New Zealand journey starts with one form
-                </p>
-            </div>
+            {/* HERO SECTION - Event Image Banner */}
+            <div className="relative pt-40 pb-32 overflow-hidden flex flex-col items-center justify-center text-center border-b border-gray-100">
+                {/* Background Image securely loaded with fallback */}
+                <img 
+                    src={
+                        event.banner_image && event.banner_image.trim() !== ''
+                            ? (event.banner_image.startsWith('http') ? event.banner_image : `/storage/${event.banner_image}`)
+                            : 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?q=80&w=2070&auto=format&fit=crop'
+                    }
+                    onError={(e) => { e.target.onerror = null; e.target.src = 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?q=80&w=2070&auto=format&fit=crop'; }}
+                    className="absolute inset-0 w-full h-full object-cover z-0"
+                    alt="Event Banner"
+                />
+                {/* Subtle dark tint to ensure white text remains readable */}
+                <div className="absolute inset-0 bg-black/40 z-0"></div>
+                <div className="absolute inset-0 bg-gradient-to-t from-[#282728]/80 to-transparent z-0"></div>
 
-            {/* ── TWO-COLUMN OUTER ─────────────────────────────────────── */}
-            <div style={{
-                maxWidth:1060, margin:'0 auto', padding:'40px 20px 60px',
-                display:'grid', gridTemplateColumns:'1fr 320px', gap:24, alignItems:'start',
-            }}
-                className="reg-outer"
-            >
-                {/* ── LEFT: FORM CARD ──────────────────────────────────── */}
-                <div style={{ background: C.white, borderRadius:20, boxShadow:'0 2px 24px rgba(0,0,0,.06)', overflow:'hidden' }}>
-                    <div style={{ height:5, background: `linear-gradient(90deg,${C.dark},#555)` }} />
+                <div className="container mx-auto px-6 relative z-10 max-w-4xl flex flex-col items-center">
+                    <motion.div
+                        initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}
+                        className="inline-flex items-center gap-3 px-6 py-3 rounded-full bg-white/10 backdrop-blur-md border border-white/10 text-white text-[9px] font-black uppercase tracking-[0.3em] mb-8"
+                    >
+                        <Calendar size={12} /> {event.type || 'Webinar Event'}
+                    </motion.div>
+                    
+                    <motion.h1 
+                        initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
+                        className="text-6xl md:text-8xl lg:text-[7rem] lg:leading-[0.9] font-black text-white uppercase tracking-tighter leading-[1] mb-8 drop-shadow-2xl"
+                    >
+                        {event.name || 'ePathways Registration'}
+                    </motion.h1>
+                    
+                    {event.description && (
+                        <motion.p 
+                            initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
+                            className="text-sm md:text-base text-gray-300 font-medium leading-relaxed max-w-2xl mb-12"
+                        >
+                            {event.description}
+                        </motion.p>
+                    )}
 
-                    <div style={{ padding:'32px 32px 28px' }} id="formContent">
-
-                        {/* Error box */}
-                        {hasErrors && (
-                            <div style={{
-                                display:'flex', alignItems:'flex-start', gap:10,
-                                background: C.errBg, border:`1.5px solid #fca5a5`,
-                                borderRadius:9, padding:'14px 18px', marginBottom:28,
-                            }}>
-                                <AlertCircle size={18} color={C.err} style={{ flexShrink:0, marginTop:2 }} />
-                                <div>
-                                    <strong style={{ display:'block', color: C.err, fontSize:'0.85rem', marginBottom:6 }}>Please fix the following errors:</strong>
-                                    <ul style={{ listStyle:'none' }}>
-                                        {Object.values(errors).map((err, i) => (
-                                            <li key={i} style={{ fontSize:'0.78rem', color:'#7f1d1d', padding:'2px 0', display:'flex', alignItems:'center', gap:5 }}>
-                                                <span style={{ color: C.err }}>•</span> {err}
-                                            </li>
-                                        ))}
-                                    </ul>
-                                </div>
+                    <motion.div 
+                        initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}
+                        className="flex flex-wrap items-center justify-center gap-4 text-[10px] font-black uppercase tracking-widest text-[#282728]"
+                    >
+                        <div className="flex items-center gap-2 px-6 py-4 rounded-2xl bg-white shadow-2xl shadow-black/20">
+                            <Calendar size={14} className="text-gray-400" /> 
+                            {event.date_from ? new Date(event.date_from).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) : 'Date TBA'}
+                        </div>
+                        {event.mode && (
+                            <div className="flex items-center gap-2 px-6 py-4 rounded-2xl bg-white shadow-2xl shadow-black/20">
+                                <MapPin size={14} className="text-gray-400" /> 
+                                {event.mode}
                             </div>
                         )}
+                        <div className="flex items-center gap-2 px-6 py-4 rounded-2xl bg-[#282728] text-white shadow-2xl shadow-[#282728]/30">
+                            <Clock size={14} className="opacity-50" /> 
+                            Registration Open
+                        </div>
+                    </motion.div>
+                </div>
+            </div>
 
-                        <form onSubmit={handleSubmit}>
+            <div className="container mx-auto px-6 py-20">
+                <div className="max-w-[1100px] mx-auto flex flex-col md:flex-row gap-8 lg:gap-12 items-start">
+                    
+                    {/* LEFT COLUMN: FORM */}
+                    <div className="w-full md:flex-1 bg-white rounded-[2.5rem] shadow-[0_32px_64px_-16px_rgba(40,39,40,0.06)] border border-[#282728]/5 overflow-hidden">
+                        <div className="p-8 md:p-14">
+                            <form ref={formRef} onSubmit={handleSubmit} className="space-y-16">
+                                
+                                {/* 1. SECTION: Personal Details */}
+                                <div className="space-y-8">
+                                    <h3 className="text-sm font-bold uppercase tracking-[0.3em] text-[#282728] pb-6 border-b border-gray-50 flex items-center gap-4">
+                                        <span className="w-6 h-6 rounded-full bg-gray-50 flex items-center justify-center text-[9px]">01</span>
+                                        Personal Information
+                                    </h3>
+                                    
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        <Field label="First Name *" error={errors.first_name}>
+                                            <input required type="text" className={inputClass} value={data.first_name} onChange={e => setData('first_name', e.target.value)} />
+                                        </Field>
+                                        <Field label="Last Name *" error={errors.last_name}>
+                                            <input required type="text" className={inputClass} value={data.last_name} onChange={e => setData('last_name', e.target.value)} />
+                                        </Field>
+                                        <Field label="Email Address *" error={errors.email}>
+                                            <input required type="email" className={inputClass} value={data.email} onChange={e => setData('email', e.target.value)} />
+                                        </Field>
+                                        <Field label="Phone Number *" error={errors.phone}>
+                                            <input required type="tel" className={inputClass} value={data.phone} onChange={e => setData('phone', e.target.value)} />
+                                        </Field>
+                                        <Field label="City *">
+                                            <input required type="text" className={inputClass} value={data.city} onChange={e => setData('city', e.target.value)} />
+                                        </Field>
+                                        <Field label="Current Country *">
+                                            <input required type="text" className={inputClass} value={data.country} onChange={e => setData('country', e.target.value)} />
+                                        </Field>
+                                        
+                                        {event.sessions && event.sessions.length > 0 && (
+                                            <div className="md:col-span-2">
+                                                <Field label="Preferred Session Time" error={errors.event_session_id}>
+                                                    <div className="relative">
+                                                        <select className={selectClass} value={data.event_session_id} onChange={e => setData('event_session_id', e.target.value)}>
+                                                            <option value="">Select session (optional)</option>
+                                                            {event.sessions.map(s => (
+                                                                <option key={s.id} value={s.id}>{s.venue_name || s.city} – {s.time_start?.slice(0,5)}</option>
+                                                            ))}
+                                                        </select>
+                                                    </div>
+                                                </Field>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
 
-                            {/* PERSONAL ─────────────────────────────────── */}
-                            <div style={{ marginBottom:28 }}>
-                                <Sec>Personal Information</Sec>
-                                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14, marginBottom:13 }}>
-                                    <Field label="First Name" required>
-                                        <input id="reg-first-name" required type="text" placeholder="e.g. Maria"
-                                            style={inputSx(!!errors.first_name)} value={data.first_name}
-                                            onChange={e => setData('first_name', e.target.value)}
-                                            onFocus={e => { e.target.style.borderColor='#282728'; e.target.style.background=C.white; e.target.style.boxShadow=`0 0 0 3px ${C.darkM}`; }}
-                                            onBlur={e  => { e.target.style.borderColor=C.border;  e.target.style.background=C.cream; e.target.style.boxShadow='none'; }} />
-                                    </Field>
-                                    <Field label="Last Name" required>
-                                        <input required type="text" placeholder="e.g. Santos"
-                                            style={inputSx(!!errors.last_name)} value={data.last_name}
-                                            onChange={e => setData('last_name', e.target.value)}
-                                            onFocus={e => { e.target.style.borderColor='#282728'; e.target.style.background=C.white; e.target.style.boxShadow=`0 0 0 3px ${C.darkM}`; }}
-                                            onBlur={e  => { e.target.style.borderColor=C.border;  e.target.style.background=C.cream; e.target.style.boxShadow='none'; }} />
-                                    </Field>
-                                </div>
-                                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14, marginBottom:13 }}>
-                                    <Field label="Email Address" required>
-                                        <input required type="email" placeholder="you@email.com"
-                                            style={inputSx(!!errors.email)} value={data.email}
-                                            onChange={e => setData('email', e.target.value)}
-                                            onFocus={e => { e.target.style.borderColor='#282728'; e.target.style.background=C.white; e.target.style.boxShadow=`0 0 0 3px ${C.darkM}`; }}
-                                            onBlur={e  => { e.target.style.borderColor=C.border;  e.target.style.background=C.cream; e.target.style.boxShadow='none'; }} />
-                                    </Field>
-                                    <Field label="Phone Number" required>
-                                        <input required type="tel" placeholder="+63 9XX XXX XXXX"
-                                            style={inputSx(!!errors.phone)} value={data.phone}
-                                            onChange={e => setData('phone', e.target.value)}
-                                            onFocus={e => { e.target.style.borderColor='#282728'; e.target.style.background=C.white; e.target.style.boxShadow=`0 0 0 3px ${C.darkM}`; }}
-                                            onBlur={e  => { e.target.style.borderColor=C.border;  e.target.style.background=C.cream; e.target.style.boxShadow='none'; }} />
-                                    </Field>
-                                </div>
-                                <div style={{ display:'grid', gridTemplateColumns: event.sessions?.length ? '1fr 1fr' : '1fr', gap:14 }}>
-                                    <Field label="City" required>
-                                        <input required type="text" placeholder="e.g. Davao City"
-                                            style={inputSx(!!errors.city)} value={data.city}
-                                            onChange={e => setData('city', e.target.value)}
-                                            onFocus={e => { e.target.style.borderColor='#282728'; e.target.style.background=C.white; e.target.style.boxShadow=`0 0 0 3px ${C.darkM}`; }}
-                                            onBlur={e  => { e.target.style.borderColor=C.border;  e.target.style.background=C.cream; e.target.style.boxShadow='none'; }} />
-                                    </Field>
-                                    {event.sessions?.length > 0 && (
-                                        <Field label="Event Session">
-                                            <div style={{ position:'relative' }}>
-                                                <select style={{ ...inputSx(false), paddingRight:32 }}
-                                                    value={data.event_session_id}
-                                                    onChange={e => setData('event_session_id', e.target.value)}
-                                                    onFocus={e => { e.target.style.borderColor='#282728'; e.target.style.background=C.white; }}
-                                                    onBlur={e  => { e.target.style.borderColor=C.border;  e.target.style.background=C.cream; }}
-                                                >
-                                                    <option value="">Select session (optional)</option>
-                                                    {event.sessions.map(s => (
-                                                        <option key={s.id} value={s.id}>
-                                                            {s.venue_name || s.city} – {s.time_start?.slice(0,5)}
-                                                        </option>
-                                                    ))}
+                                {/* 2. SECTION: Background */}
+                                <div className="space-y-8">
+                                    <h3 className="text-sm font-bold uppercase tracking-[0.3em] text-[#282728] pb-6 border-b border-gray-50 flex items-center gap-4">
+                                        <span className="w-6 h-6 rounded-full bg-gray-50 flex items-center justify-center text-[9px]">02</span>
+                                        Background & Edu
+                                    </h3>
+                                    
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        <Field label="Highest Education Level *" error={errors.education_level}>
+                                            <div className="relative">
+                                                <select required className={selectClass} value={data.education_level} onChange={e => setData('education_level', e.target.value)}>
+                                                    <option value="">Select level</option>
+                                                    <option>High School Graduate</option>
+                                                    <option>Associate / Vocational</option>
+                                                    <option>Bachelor's Degree</option>
+                                                    <option>Master's Degree</option>
+                                                    <option>Doctorate / PhD</option>
                                                 </select>
-                                                <span style={{ position:'absolute', right:13, top:'50%', transform:'translateY(-50%)', border:'5px solid transparent', borderTopColor: C.text3, pointerEvents:'none' }} />
                                             </div>
                                         </Field>
-                                    )}
-                                </div>
-                            </div>
-
-                            {/* BACKGROUND ─────────────────────────────────── */}
-                            <div style={{ marginBottom:28 }}>
-                                <Sec>Background &amp; Education</Sec>
-                                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14, marginBottom:13 }}>
-                                    <Field label="Highest Educational Attainment" required>
-                                        <div style={{ position:'relative' }}>
-                                            <select required style={{ ...inputSx(!!errors.education_level), paddingRight:32 }}
-                                                value={data.education_level}
-                                                onChange={e => setData('education_level', e.target.value)}
-                                                onFocus={e => { e.target.style.borderColor='#282728'; e.target.style.background=C.white; }}
-                                                onBlur={e  => { e.target.style.borderColor=C.border;  e.target.style.background=C.cream; }}
-                                            >
-                                                <option value="">Select level</option>
-                                                <option>High School Graduate</option>
-                                                <option>Associate / Vocational</option>
-                                                <option>Bachelor's Degree</option>
-                                                <option>Master's Degree</option>
-                                                <option>Doctorate / PhD</option>
-                                            </select>
-                                            <span style={{ position:'absolute', right:13, top:'50%', transform:'translateY(-50%)', border:'5px solid transparent', borderTopColor: C.text3, pointerEvents:'none' }} />
+                                        <Field label="Field of Study / Profession *" error={errors.field_of_study}>
+                                            <input required type="text" className={inputClass} value={data.field_of_study} onChange={e => setData('field_of_study', e.target.value)} />
+                                        </Field>
+                                        <div className="md:col-span-2">
+                                            <Field label="Employment Status *" error={errors.employment_status}>
+                                                <PillGroup 
+                                                    options={['Employed','Self-Employed','Unemployed','Student','OFW']} 
+                                                    value={data.employment_status} 
+                                                    onChange={v => setData('employment_status', v)} 
+                                                />
+                                                {!data.employment_status && <input type="text" required style={{ opacity:0, height:0, padding:0, border:'none', position:'absolute', zIndex:-1 }} />}
+                                            </Field>
                                         </div>
-                                    </Field>
-                                    <Field label="Field of Study / Profession" required>
-                                        <input required type="text" placeholder="e.g. Nursing, IT, Business"
-                                            style={inputSx(!!errors.field_of_study)} value={data.field_of_study}
-                                            onChange={e => setData('field_of_study', e.target.value)}
-                                            onFocus={e => { e.target.style.borderColor='#282728'; e.target.style.background=C.white; e.target.style.boxShadow=`0 0 0 3px ${C.darkM}`; }}
-                                            onBlur={e  => { e.target.style.borderColor=C.border;  e.target.style.background=C.cream; e.target.style.boxShadow='none'; }} />
-                                    </Field>
+                                    </div>
                                 </div>
-                                <Field label="Employment Status" required>
-                                    <Pills name="emp"
-                                        options={['Employed','Self-Employed','Unemployed','Student','OFW'].map(v=>({value:v,label:v}))}
-                                        value={data.employment_status}
-                                        onChange={v => setData('employment_status', v)}
-                                        hasErr={!!errors.employment_status}
-                                    />
-                                </Field>
-                            </div>
 
-                            {/* NZ PLANS ─────────────────────────────────── */}
-                            <div style={{ marginBottom:28 }}>
-                                <Sec>New Zealand Plans</Sec>
-                                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14, marginBottom:13 }}>
-                                    <Field label="Pathway of Interest" required>
-                                        <div style={{ position:'relative' }}>
-                                            <select required style={{ ...inputSx(!!errors.interest), paddingRight:32 }}
-                                                value={data.interest}
-                                                onChange={e => setData('interest', e.target.value)}
-                                                onFocus={e => { e.target.style.borderColor='#282728'; e.target.style.background=C.white; }}
-                                                onBlur={e  => { e.target.style.borderColor=C.border;  e.target.style.background=C.cream; }}
-                                            >
-                                                <option value="">Select pathway</option>
-                                                <option value="Work Visa / Job Support">Work Visa / Job Support</option>
-                                                <option value="Student Visa">Student Visa</option>
-                                                <option value="Skilled Migrant">Skilled Migrant</option>
-                                                <option value="Partner / Family Visa">Partner / Family Visa</option>
-                                                <option value="Investor Visa">Investor Visa</option>
-                                                <option value="Not sure yet">Not sure yet</option>
-                                            </select>
-                                            <span style={{ position:'absolute', right:13, top:'50%', transform:'translateY(-50%)', border:'5px solid transparent', borderTopColor: C.text3, pointerEvents:'none' }} />
+                                {/* 3. SECTION: Pathway */}
+                                <div className="space-y-8">
+                                    <h3 className="text-sm font-bold uppercase tracking-[0.3em] text-[#282728] pb-6 border-b border-gray-50 flex items-center gap-4">
+                                        <span className="w-6 h-6 rounded-full bg-gray-50 flex items-center justify-center text-[9px]">03</span>
+                                        NZ Pathway
+                                    </h3>
+                                    
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        <Field label="Pathway of Interest *" error={errors.interest}>
+                                            <div className="relative">
+                                                <select required className={selectClass} value={data.interest} onChange={e => setData('interest', e.target.value)}>
+                                                    <option value="">Select pathway</option>
+                                                    <option value="Work Visa / Job Support">Work Visa / Job Support</option>
+                                                    <option value="Student Visa">Student Visa</option>
+                                                    <option value="Skilled Migrant">Skilled Migrant</option>
+                                                    <option value="Partner / Family Visa">Partner / Family Visa</option>
+                                                    <option value="Investor Visa">Investor Visa</option>
+                                                    <option value="Not sure yet">Not sure yet</option>
+                                                </select>
+                                            </div>
+                                        </Field>
+                                        <Field label="Planning Timeline *" error={errors.planning_timeline}>
+                                            <div className="relative">
+                                                <select required className={selectClass} value={data.planning_timeline} onChange={e => setData('planning_timeline', e.target.value)}>
+                                                    <option value="">When are you planning?</option>
+                                                    <option>Within 3 months</option>
+                                                    <option>3–6 months</option>
+                                                    <option>6–12 months</option>
+                                                    <option>1–2 years</option>
+                                                    <option>Just exploring</option>
+                                                </select>
+                                            </div>
+                                        </Field>
+                                        <div className="md:col-span-2">
+                                            <Field label="How Will You Fund Your Move? *" error={errors.funding_source}>
+                                                <PillGroup 
+                                                    options={['Personal Savings','Family Support','Scholarship','Student Loan','Employer-Sponsored','Not yet decided']} 
+                                                    value={data.funding_source} 
+                                                    onChange={v => setData('funding_source', v)} 
+                                                />
+                                                {!data.funding_source && <input type="text" required style={{ opacity:0, height:0, padding:0, border:'none', position:'absolute', zIndex:-1 }} />}
+                                            </Field>
                                         </div>
-                                    </Field>
-                                    <Field label="Planning Timeline" required>
-                                        <div style={{ position:'relative' }}>
-                                            <select required style={{ ...inputSx(!!errors.planning_timeline), paddingRight:32 }}
-                                                value={data.planning_timeline}
-                                                onChange={e => setData('planning_timeline', e.target.value)}
-                                                onFocus={e => { e.target.style.borderColor='#282728'; e.target.style.background=C.white; }}
-                                                onBlur={e  => { e.target.style.borderColor=C.border;  e.target.style.background=C.cream; }}
-                                            >
-                                                <option value="">When are you planning?</option>
-                                                <option>Within 3 months</option>
-                                                <option>3–6 months</option>
-                                                <option>6–12 months</option>
-                                                <option>1–2 years</option>
-                                                <option>Just exploring</option>
-                                            </select>
-                                            <span style={{ position:'absolute', right:13, top:'50%', transform:'translateY(-50%)', border:'5px solid transparent', borderTopColor: C.text3, pointerEvents:'none' }} />
-                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* 4. SECTION: Remarks */}
+                                <div className="space-y-8">
+                                    <h3 className="text-sm font-bold uppercase tracking-[0.3em] text-[#282728] pb-6 border-b border-gray-50 flex items-center gap-4">
+                                        <span className="w-6 h-6 rounded-full bg-gray-50 flex items-center justify-center text-[9px]">04</span>
+                                        Final Remarks
+                                    </h3>
+                                    <Field label="Questions or Goals?">
+                                        <textarea 
+                                            placeholder="Share your specific concerns..." 
+                                            className={`${inputClass} min-h-[140px] resize-y`} 
+                                            value={data.remarks} 
+                                            onChange={e => setData('remarks', e.target.value)} 
+                                        />
                                     </Field>
                                 </div>
-                                <Field label="How Will You Fund Your Move / Education?" required>
-                                    <Pills name="fund"
-                                        options={['Personal Savings','Family Support','Scholarship','Student Loan','Employer-Sponsored','Not yet decided'].map(v=>({value:v,label:v}))}
-                                        value={data.funding_source}
-                                        onChange={v => setData('funding_source', v)}
-                                        hasErr={!!errors.funding_source}
-                                    />
-                                </Field>
-                            </div>
 
-                            {/* REMARKS ─────────────────────────────────── */}
-                            <div style={{ marginBottom:0 }}>
-                                <Sec>Additional Remarks</Sec>
-                                <Field label="Any questions or goals?">
-                                    <textarea rows={4}
-                                        placeholder="Share your questions, goals, or specific concerns..."
-                                        style={{ ...inputSx(false), resize:'vertical', minHeight:80 }}
-                                        value={data.remarks}
-                                        onChange={e => setData('remarks', e.target.value)}
-                                        onFocus={e => { e.target.style.borderColor='#282728'; e.target.style.background=C.white; e.target.style.boxShadow=`0 0 0 3px ${C.darkM}`; }}
-                                        onBlur={e  => { e.target.style.borderColor=C.border;  e.target.style.background=C.cream; e.target.style.boxShadow='none'; }}
-                                    />
-                                </Field>
-                            </div>
-
-                            {/* SUBMIT ───────────────────────────────────── */}
-                            <div style={{
-                                margin:'0 -32px -28px', padding:'20px 32px 28px',
-                                background: C.cream, borderTop:`1px solid ${C.border}`,
-                                marginTop:28, display:'flex', flexDirection:'column', alignItems:'center', gap:10,
-                            }}>
-                                <button
-                                    type="submit"
-                                    disabled={processing}
-                                    style={{
-                                        width:'100%', maxWidth:380,
-                                        background: C.dark,
-                                        color:'#fff', border:'none', borderRadius:14,
-                                        padding:'15px 28px', fontFamily:"'Plus Jakarta Sans', sans-serif",
-                                        fontSize:'0.82rem', fontWeight:700, letterSpacing:'2px',
-                                        textTransform:'uppercase', cursor: processing ? 'not-allowed' : 'pointer',
-                                        display:'flex', alignItems:'center', justifyContent:'center', gap:9,
-                                        transition:'transform .18s,box-shadow .18s',
-                                        boxShadow:`0 4px 18px rgba(40,39,40,.28)`,
-                                        opacity: processing ? 0.6 : 1,
-                                    }}
-                                    onMouseEnter={e => { if(!processing){ e.currentTarget.style.transform='translateY(-2px)'; e.currentTarget.style.boxShadow=`0 8px 26px rgba(40,39,40,.36)`; } }}
-                                    onMouseLeave={e => { e.currentTarget.style.transform='translateY(0)'; e.currentTarget.style.boxShadow=`0 4px 18px rgba(40,39,40,.28)`; }}
-                                >
-                                    {processing
-                                        ? <div style={{ width:20, height:20, border:`2px solid rgba(255,255,255,.2)`, borderTopColor:'#fff', borderRadius:'50%', animation:'spin .7s linear infinite' }} />
-                                        : <>Submit Registration <ChevronRight size={14} /></>
-                                    }
-                                </button>
-                                <div style={{ fontSize:'0.7rem', color: C.text3, display:'flex', alignItems:'center', gap:5 }}>
-                                    <Lock size={11} /> Secure Registration · © {new Date().getFullYear()} ePathways CRM
+                                {/* FOOTER SUBMIT */}
+                                <div className="pt-10 border-t border-gray-50 flex flex-col items-center">
+                                    <button
+                                        type="submit"
+                                        disabled={processing}
+                                        className="w-full md:w-auto px-16 py-6 bg-[#282728] text-white rounded-2xl text-[11px] font-black uppercase tracking-[0.3em] hover:bg-black transition-all shadow-2xl shadow-[#282728]/15 active:scale-95 flex items-center justify-center gap-4 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                        {processing ? 'Processing...' : 'Confirm Registration'}
+                                        {!processing && <ChevronRight className="w-4 h-4" />}
+                                    </button>
+                                    <div className="mt-8 flex items-center gap-2 text-[9px] font-bold uppercase tracking-widest text-gray-400">
+                                        <Lock size={12} /> Secure Registration • © {new Date().getFullYear()} ePathways
+                                    </div>
                                 </div>
-                            </div>
-
-                        </form>
+                            </form>
+                        </div>
                     </div>
-                </div>
 
-                {/* ── RIGHT SIDEBAR ─────────────────────────────────────── */}
-                <div style={{ display:'flex', flexDirection:'column', gap:20 }}>
+                    {/* RIGHT COLUMN: SIDEBAR */}
+                    <div className="w-full md:w-[300px] lg:w-[360px] shrink-0 space-y-6 max-w-[400px] mx-auto md:max-w-none">
+                        {/* Free Assessment Card */}
+                        <div className="bg-white rounded-[2rem] p-8 shadow-[0_16px_32px_-12px_rgba(40,39,40,0.06)] border border-gray-50 relative overflow-hidden group">
+                            <div className="absolute top-0 right-0 p-8 opacity-[0.03] group-hover:scale-110 transition-transform duration-500 pointer-events-none">
+                                <FileText size={80} />
+                            </div>
+                            <div className="flex items-start justify-between mb-8 relative z-10">
+                                <div className="w-14 h-14 bg-gray-50 rounded-[1rem] flex items-center justify-center text-[#282728] border border-gray-100 transition-transform group-hover:-translate-y-1 hover:bg-[#282728] hover:text-white">
+                                    <FileText size={20} />
+                                </div>
+                                <span className="inline-block px-3 py-1.5 bg-gray-50 text-[#282728] text-[7px] font-black uppercase tracking-[0.2em] rounded-full border border-gray-100">Complimentary</span>
+                            </div>
+                            
+                            <h3 className="text-xl font-black text-[#282728] uppercase tracking-tighter mb-3 relative z-10">Free Assessment</h3>
+                            <p className="text-xs text-gray-400 font-medium leading-relaxed mb-6 relative z-10">Get a personalized eligibility evaluation for your pathway at absolutely no cost.</p>
+                            
+                            <ul className="mb-8 space-y-3 relative z-10">
+                                {['Visa eligibility mapping', 'Qualification recognition', 'Step-by-step action plan'].map((txt, i) => (
+                                    <li key={i} className="flex items-start gap-3 text-[11px] font-bold text-[#282728]">
+                                        <CheckCircle size={14} className="text-[#436235] shrink-0" />
+                                        <span className="leading-tight">{txt}</span>
+                                    </li>
+                                ))}
+                            </ul>
 
-                    <FreeCard
-                        accent={C.dark}
-                        tag="Complimentary"
-                        tagStyle={{ background:'#eeeeed', color: C.dark }}
-                        icon="📋"
-                        title="Free Assessment"
-                        desc="Get a personalized eligibility evaluation for your New Zealand pathway — absolutely no cost, no obligation."
-                        items={['Visa eligibility check','Pathway recommendation','Qualification recognition review','Points-based assessment (if applicable)','Written summary report']}
-                        btnLabel="Claim Free Assessment"
-                        onBtn={focusFirst}
-                    />
+                            <a href="/free-assessment" className="inline-flex items-center justify-between w-full p-4 pl-6 bg-white border-2 border-[#282728] text-[#282728] rounded-xl text-[10px] font-black uppercase tracking-[0.2em] hover:bg-[#282728] hover:text-white transition-colors active:scale-95 relative z-10 group-hover:border-transparent">
+                                Claim Assessment
+                                <ChevronRight size={14} />
+                            </a>
+                        </div>
 
-                    <FreeCard
-                        accent={C.gold}
-                        tag="No Charge"
-                        tagStyle={{ background: C.goldL, color:'#7a4f00' }}
-                        icon="📅"
-                        title="Free Consultation Booking"
-                        desc="Book a dedicated 1-on-1 session with a certified ePathways advisor at zero cost."
-                        items={['30-min private session','Online via Zoom / in-person','Discuss your specific situation','Get a step-by-step action plan','No sales pressure, ever']}
-                        btnLabel="Book Free Consultation"
-                        onBtn={focusFirst}
-                    />
+                        {/* Consultation Card */}
+                        <div className="bg-[#282728] rounded-[2rem] p-8 shadow-[0_16px_32px_-12px_rgba(40,39,40,0.4)] relative overflow-hidden group">
+                            <div className="absolute -bottom-8 -right-8 opacity-[0.05] group-hover:scale-110 transition-transform duration-500 pointer-events-none">
+                                <Calendar size={120} />
+                            </div>
+                            
+                            <div className="flex items-start justify-between mb-8 relative z-10">
+                                <div className="w-14 h-14 bg-white/5 backdrop-blur-md rounded-[1rem] flex items-center justify-center text-white border border-white/10 transition-transform group-hover:-translate-y-1 hover:bg-white hover:text-[#282728]">
+                                    <Calendar size={20} />
+                                </div>
+                                <span className="inline-block px-3 py-1.5 bg-white/10 text-white text-[7px] font-black uppercase tracking-widest rounded-full backdrop-blur-md border border-white/5">Zero Cost</span>
+                            </div>
 
-                    <ContactCard />
+                            <h3 className="text-xl font-black text-white uppercase tracking-tighter mb-3 relative z-10">Consultation</h3>
+                            <p className="text-xs text-gray-300 font-medium leading-relaxed mb-6 relative z-10">Book a dedicated 1-on-1 private session with a certified ePathways advisor.</p>
+                            
+                            <ul className="mb-8 space-y-3 relative z-10">
+                                {['30-min private session', 'Discuss specific situations', 'No sales pressure, ever'].map((txt, i) => (
+                                    <li key={i} className="flex items-start gap-3 text-[11px] font-bold text-white/90">
+                                        <CheckCircle size={14} className="text-[#a0c88f] shrink-0" />
+                                        <span className="leading-tight">{txt}</span>
+                                    </li>
+                                ))}
+                            </ul>
+
+                            <a href="/booking" className="inline-flex items-center justify-between w-full p-4 pl-6 bg-white text-[#282728] rounded-xl text-[10px] font-black uppercase tracking-[0.2em] shadow-xl hover:shadow-white/20 transition-all active:scale-95 relative z-10">
+                                View Schedule
+                                <ChevronRight size={14} />
+                            </a>
+                        </div>
+
+                        {/* Contact Card */}
+                        <div className="bg-white rounded-[2rem] p-8 shadow-[0_16px_32px_-12px_rgba(40,39,40,0.06)] border border-gray-50">
+                            <h3 className="text-sm font-black text-[#282728] uppercase tracking-[0.2em] mb-8 text-center pb-6 border-b border-gray-50">Connect</h3>
+                            <div className="space-y-6">
+                                <div className="flex items-start gap-4">
+                                    <div className="w-10 h-10 rounded-[1.2rem] bg-gray-50 flex items-center justify-center text-gray-400 shrink-0 border border-gray-100 transition-colors hover:text-[#282728]"><MapPin size={16} /></div>
+                                    <div>
+                                        <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Location</p>
+                                        <p className="text-xs font-bold text-[#282728]">2F Landco Center<br/>Davao City, PH</p>
+                                    </div>
+                                </div>
+                                <div className="flex items-start gap-4">
+                                    <div className="w-10 h-10 rounded-[1.2rem] bg-gray-50 flex items-center justify-center text-gray-400 shrink-0 border border-gray-100 transition-colors hover:text-[#282728]"><Phone size={16} /></div>
+                                    <div>
+                                        <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Telephone</p>
+                                        <p className="text-xs font-bold text-[#282728]">+63 (82) 297-5000</p>
+                                    </div>
+                                </div>
+                                <div className="flex items-start gap-4">
+                                    <div className="w-10 h-10 rounded-[1.2rem] bg-gray-50 flex items-center justify-center text-gray-400 shrink-0 border border-gray-100 transition-colors hover:text-[#282728]"><Mail size={16} /></div>
+                                    <div>
+                                        <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Email</p>
+                                        <p className="text-xs font-bold text-[#282728]">hello@epathways.com.ph</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
 
                 </div>
             </div>
 
-            <div style={{ textAlign:'center', padding:18, fontSize:'0.7rem', color: C.text3, letterSpacing:'.5px' }}>
-                ePathways · Helping Filipinos Build Their Future in New Zealand
-            </div>
-
-            <style>{`
-                @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400;1,600&display=swap');
-                * { box-sizing: border-box; margin:0; padding:0; }
-                body { font-family: 'Plus Jakarta Sans', sans-serif; }
-                @keyframes spin { to { transform: rotate(360deg); } }
-                @keyframes pop  { from{transform:scale(0);opacity:0} to{transform:scale(1);opacity:1} }
-                .reg-outer { grid-template-columns: 1fr 320px; }
-                @media (max-width: 820px) { .reg-outer { grid-template-columns: 1fr !important; } }
-                @media (max-width: 560px) {
-                    .reg-outer > div:first-child div[style*="grid-template-columns: 1fr 1fr"] {
-                        grid-template-columns: 1fr !important;
-                    }
-                }
-            `}</style>
+            {/* Validation Modal */}
+            <AnimatePresence>
+                {modal.show && (
+                    <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-[#282728]/40 backdrop-blur-sm">
+                        <motion.div 
+                            initial={{ scale: 0.9, opacity: 0, y: 20 }}
+                            animate={{ scale: 1, opacity: 1, y: 0 }}
+                            exit={{ scale: 0.9, opacity: 0, y: 20 }}
+                            className="bg-white w-full max-w-[400px] rounded-[2.5rem] shadow-[0_64px_128px_-24px_rgba(40,39,40,0.15)] p-12 text-center"
+                        >
+                            <div className="w-16 h-16 bg-[#282728]/5 rounded-[1.5rem] flex items-center justify-center text-[#282728] mx-auto mb-8">
+                                <AlertCircle size={32} />
+                            </div>
+                            <h3 className="text-xl font-black text-[#282728] uppercase tracking-tighter mb-4">Action Required</h3>
+                            <p className="text-gray-400 text-sm leading-relaxed mb-10 font-medium px-4 whitespace-pre-wrap">{modal.message}</p>
+                            <button 
+                                type="button"
+                                onClick={() => setModal({ show: false, message: '' })}
+                                className="w-full bg-[#282728] text-white py-5 rounded-2xl text-[10px] font-black uppercase tracking-[0.4em] shadow-xl hover:bg-black transition-all active:scale-95"
+                            >
+                                Acknowledge
+                            </button>
+                        </motion.div>
+                    </div>
+                )}
+            </AnimatePresence>
         </div>
     );
 }

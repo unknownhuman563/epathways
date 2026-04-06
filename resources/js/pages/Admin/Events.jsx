@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Head, useForm } from '@inertiajs/react';
+import { Head, useForm, Link } from '@inertiajs/react';
 import {
     Search, Plus, Eye, Edit2, Trash2, ChevronDown, Clock,
     Calendar, MapPin, Users, Globe, XCircle, Tag,
@@ -584,7 +584,7 @@ export default function Events({ events: backendEvents }) {
                                 <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Event</th>
                                 <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Date & Time</th>
                                 <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Location</th>
-                                <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Capacity</th>
+                                <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">No. of Registrants</th>
                                 <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
                                 <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider text-right pr-8">Actions</th>
                             </tr>
@@ -659,9 +659,11 @@ export default function Events({ events: backendEvents }) {
                                             </div>
                                         </div>
                                     </td>
-                                    <td className="px-6 py-4 min-w-[150px]">
-                                        <CapacityBar registered={event.registered} capacity={event.capacity} />
-                                        {event.capacity && <span className="text-[10px] text-gray-400 mt-1.5 block">of {event.capacity} seats</span>}
+                                    <td className="px-6 py-4">
+                                        <div className="flex items-center gap-2">
+                                            <Users size={16} className="text-gray-400" />
+                                            <span className="text-sm font-bold text-gray-900">{event.leads_count || 0}</span>
+                                        </div>
                                     </td>
                                     <td className="px-6 py-4">
                                         <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-bold border capitalize ${getStatusStyle(event.status)}`}>{event.status}</span>
@@ -686,7 +688,7 @@ export default function Events({ events: backendEvents }) {
                                                         >
                                                             <Copy size={16} /> Copy Registration Link
                                                         </button>
-                                                        <button className="flex w-full items-center gap-3 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"><Eye size={16} className="text-gray-400" /> View Details</button>
+                                                        <Link href={`/admin/events/${event.id}`} className="flex w-full items-center gap-3 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"><Eye size={16} className="text-gray-400" /> View Details</Link>
                                                         <button className="flex w-full items-center gap-3 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"><Edit2 size={16} className="text-gray-400" /> Edit Event</button>
                                                     </div>
                                                     <div className="px-1 py-1">

@@ -6,90 +6,29 @@ import {
     ChevronDown, Star, Clock, CheckSquare, FileSpreadsheet
 } from 'lucide-react';
 
-export default function Leads() {
-    // Mock Data for Leads
-    const [leads, setLeads] = useState([
-        {
-            id: 'LP-1042',
-            name: 'Juan Dela Cruz',
-            phone: '+63 912 123 4567',
-            email: 'juan@example.com',
-            country: 'Canada',
-            program: 'Student Visa',
-            source: 'Facebook Ads',
-            status: 'New',
-            stage: 'Sales / Follow Up',
-            branch: 'Philippines',
-            assigned: 'Maria',
-            createdAt: 'Mar 24, 2026',
-            priority: 'High',
-            recentActivity: '2 hours ago'
-        },
-        {
-            id: 'LP-1043',
-            name: 'Sarah Jenkins',
-            phone: '+44 7911 123456',
-            email: 'sarah.j@gmail.com',
-            country: 'Australia',
-            program: 'Work Visa',
-            source: 'Referral',
-            status: 'Processing',
-            stage: 'Goal Settings',
-            branch: 'Malaysia',
-            assigned: 'David',
-            createdAt: 'Mar 22, 2026',
-            priority: 'Medium',
-            recentActivity: '1 day ago'
-        },
-        {
-            id: 'LP-1044',
-            name: 'Ahmed Hassan',
-            phone: '+971 50 123 4567',
-            email: 'ahmed@company.ae',
-            country: 'UK',
-            program: 'Tourist Visa',
-            source: 'Website Form',
-            status: 'Qualified',
-            stage: 'Sales / Follow Up',
-            branch: 'India',
-            assigned: 'Sarah',
-            createdAt: 'Mar 20, 2026',
-            priority: 'High',
-            recentActivity: 'Just now'
-        },
-        {
-            id: 'LP-1045',
-            name: 'Mei Lin',
-            phone: '+65 9123 4567',
-            email: 'mei.lin@yahoo.com',
-            country: 'Canada',
-            program: 'Student Visa',
-            source: 'Walk-in',
-            status: 'Contacted',
-            stage: 'Sales / Follow Up',
-            branch: 'Malaysia',
-            assigned: 'Maria',
-            createdAt: 'Mar 18, 2026',
-            priority: 'Low',
-            recentActivity: '3 days ago'
-        },
-        {
-            id: 'LP-1046',
-            name: 'Carlos Rodriguez',
-            phone: '+34 612 345 678',
-            email: 'carlos.r@outlook.com',
-            country: 'Australia',
-            program: 'Tourist Visa',
-            source: 'Facebook Ads',
-            status: 'Closed',
-            stage: 'Goal Settings',
-            branch: 'Philippines',
-            assigned: 'David',
-            createdAt: 'Mar 15, 2026',
-            priority: 'Medium',
-            recentActivity: '1 week ago'
+export default function Leads({ leads: backendLeads }) {
+    // Initialize leads from backend
+    const [leads, setLeads] = useState(() => {
+        if (backendLeads && backendLeads.length > 0) {
+            return backendLeads.map(lead => ({
+                id: lead.lead_id || lead.id,
+                name: `${lead.first_name || ''} ${lead.last_name || ''}`.trim() || 'Unknown Lead',
+                phone: lead.phone || '—',
+                email: lead.email || '—',
+                country: lead.country || lead.work_info?.city || '—',
+                program: lead.study_plans?.[0]?.preferred_course || lead.stage || '—',
+                source: lead.event ? `Event: ${lead.event.name}` : (lead.branch || 'Online Form'),
+                status: lead.status || 'New',
+                stage: lead.stage || 'N/A',
+                branch: lead.branch || 'Main',
+                assigned: 'System', // Since we don't have assigned_to yet
+                createdAt: new Date(lead.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+                priority: 'Medium',
+                recentActivity: 'Recently'
+            }));
         }
-    ]);
+        return [];
+    });
 
     const [selectedLeads, setSelectedLeads] = useState([]);
     const [activeDropdown, setActiveDropdown] = useState(null);
@@ -252,6 +191,7 @@ export default function Leads() {
                                 <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Lead Info</th>
                                 <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Contact</th>
                                 <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Interest</th>
+                                <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Country</th>
                                 <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Source & Assignment</th>
                                 <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
                                 <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider text-right pr-8">Actions</th>
@@ -276,7 +216,6 @@ export default function Leads() {
                                         <div className="flex flex-col gap-1">
                                             <div className="flex items-center gap-2">
                                                 <Link href={`/admin/leads/${lead.id}`} className="font-bold text-gray-900 text-sm hover:text-blue-600 transition-colors">{lead.name}</Link>
-                                                {getPriorityIcon(lead.priority)}
                                             </div>
                                             <div className="flex items-center gap-2">
                                                 <Link href={`/admin/leads/${lead.id}`} className="text-[10px] font-bold text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded w-max hover:bg-gray-200 transition-colors">{lead.id}</Link>
@@ -297,8 +236,13 @@ export default function Leads() {
                                     
                                     <td className="px-6 py-4">
                                         <div className="flex flex-col gap-1">
+                                            <span className="text-sm font-semibold text-gray-900">{lead.program}</span>
+                                        </div>
+                                    </td>
+
+                                    <td className="px-6 py-4">
+                                        <div className="flex flex-col gap-1">
                                             <span className="text-sm font-semibold text-gray-900">{lead.country}</span>
-                                            <span className="text-xs text-gray-500">{lead.program}</span>
                                         </div>
                                     </td>
                                     
@@ -403,7 +347,7 @@ export default function Leads() {
                     {/* Pagination - Mocked */}
                     <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100 bg-white">
                         <div className="text-sm text-gray-500">
-                            Showing <span className="font-semibold text-gray-900">1</span> to <span className="font-semibold text-gray-900">5</span> of <span className="font-semibold text-gray-900">1,204</span> Leads
+                            Showing <span className="font-semibold text-gray-900">1</span> to <span className="font-semibold text-gray-900">{leads.length}</span> of <span className="font-semibold text-gray-900">{leads.length}</span> Leads
                         </div>
                         <div className="flex gap-1">
                             <button className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50" disabled>Previous</button>

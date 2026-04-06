@@ -20,4 +20,9 @@ class Event extends Model
     {
         return $this->hasMany(EventSession::class);
     }
+
+    public function leads()
+    {
+        return $this->hasMany(Lead::class);
+    }
 }

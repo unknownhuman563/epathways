@@ -21,6 +21,11 @@ export default function AdminLayout({ children }) {
         router.post(route('logout'));
     };
 
+    const getPageTitle = () => {
+        const activeItem = navItems.find(item => url.startsWith(item.href));
+        return activeItem ? activeItem.name : "Dashboard";
+    };
+
     const SidebarContent = () => (
         <>
             <div className="flex items-center justify-between px-6 py-6 border-b border-gray-50/50 lg:border-none">
@@ -51,16 +56,6 @@ export default function AdminLayout({ children }) {
                     );
                 })}
 
-                <div className="mt-8 mb-4">
-                    <div className="bg-gray-900 rounded-2xl p-5 text-center relative overflow-hidden group shadow-lg">
-                        <div className="absolute top-0 right-0 w-24 h-24 bg-white/10 rounded-full blur-2xl -mr-10 -mt-10 transition-transform group-hover:scale-150 duration-500"></div>
-                        <h3 className="text-white font-bold text-sm mb-1 relative z-10">Upgrade To Pro</h3>
-                        <p className="text-gray-400 text-xs mb-4 leading-relaxed relative z-10">Get access to additional features and content</p>
-                        <button className="bg-white/20 hover:bg-white/30 text-white text-xs font-semibold py-2 px-4 rounded-lg w-full transition-colors relative z-10 backdrop-blur-sm shadow-sm ring-1 ring-white/10">
-                            Upgrade
-                        </button>
-                    </div>
-                </div>
             </div>
 
             <div className="px-4 py-4 mt-auto border-t border-gray-50 flex flex-col gap-1">
@@ -68,10 +63,7 @@ export default function AdminLayout({ children }) {
                     <Settings size={20} className="text-gray-400" />
                     Settings
                 </Link>
-                <Link href="/admin/help" className="flex items-center gap-3 px-4 py-3 text-sm font-medium text-gray-500 hover:text-gray-900 hover:bg-gray-50 rounded-xl transition-colors">
-                    <HelpCircle size={20} className="text-gray-400" />
-                    Help Center
-                </Link>
+
                 <button 
                     onClick={handleLogout}
                     className="flex items-center gap-3 px-4 py-3 text-sm font-medium text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors w-full text-left group"
@@ -117,7 +109,7 @@ export default function AdminLayout({ children }) {
                             <Menu className="w-5 h-5" />
                         </button>
                         <h1 className="text-2xl font-bold text-gray-900 hidden lg:block tracking-tight">
-                            Dashboard
+                            {getPageTitle()}
                         </h1>
                     </div>
                     
@@ -145,7 +137,7 @@ export default function AdminLayout({ children }) {
                 {/* Content */}
                 <main className="flex-1 overflow-y-auto px-4 md:px-8 pb-8 pt-2">
                     <h1 className="text-2xl font-bold text-gray-900 lg:hidden mb-6 tracking-tight">
-                        Dashboard
+                        {getPageTitle()}
                     </h1>
                     {children}
                 </main>

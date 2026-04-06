@@ -109,7 +109,8 @@ const consultants = {
             sessionLength: '60 min, Video or Phone',
             sessionFormat: 'Video Call or Phone',
             institutions: 'UoA, AUT, Massey +14 more',
-            specialisesIn: ['University Admissions', 'Student Visa', 'Scholarship Guidance', 'English Pathways', 'Course Matching']
+            specialisesIn: ['University Admissions', 'Student Visa', 'Scholarship Guidance', 'English Pathways', 'Course Matching'],
+            bookingUrl: 'https://calendar.google.com/calendar/appointments/schedules/AcZssZ0A25brqHYLx6o-iqanRiIG-jugrE62FGo4ryI_dQyPsPl8N1m3dr1VcP5rla8l8b-n3SEBy8r4?gv=true'
         },
         {
             id: 2,
@@ -123,7 +124,8 @@ const consultants = {
             sessionLength: '60 – 90 min, Video or Phone',
             sessionFormat: 'Video Call or Phone',
             institutions: 'UoA, Victoria, Otago +20 more',
-            specialisesIn: ['Postgraduate Pathways', 'Research Programmes', 'Academic Transfers', 'PhD Applications', 'Work-Study Visas']
+            specialisesIn: ['Postgraduate Pathways', 'Research Programmes', 'Academic Transfers', 'PhD Applications', 'Work-Study Visas'],
+            bookingUrl: 'https://calendar.google.com/calendar/appointments/schedules/AcZssZ0A25brqHYLx6o-iqanRiIG-jugrE62FGo4ryI_dQyPsPl8N1m3dr1VcP5rla8l8b-n3SEBy8r4?gv=true'
         }
     ],
     immigration: [
@@ -139,7 +141,8 @@ const consultants = {
             sessionLength: '45 – 60 min, Video',
             sessionFormat: 'Video Call',
             institutions: 'All Major Districts',
-            specialisesIn: ['Skilled Migrant', 'Work Visas', 'Residency', 'Employer Accreditation']
+            specialisesIn: ['Skilled Migrant', 'Work Visas', 'Residency', 'Employer Accreditation'],
+            bookingUrl: 'https://calendar.google.com/calendar/appointments/schedules/AcZssZ0A25brqHYLx6o-iqanRiIG-jugrE62FGo4ryI_dQyPsPl8N1m3dr1VcP5rla8l8b-n3SEBy8r4?gv=true'
         },
         {
             id: 4,
@@ -153,7 +156,8 @@ const consultants = {
             sessionLength: '60 min, Call',
             sessionFormat: 'Video Call or Phone',
             institutions: 'All Major Districts',
-            specialisesIn: ['Partner Visas', 'Family Visas', 'Compliance', 'Appeals']
+            specialisesIn: ['Partner Visas', 'Family Visas', 'Compliance', 'Appeals'],
+            bookingUrl: 'https://calendar.google.com/calendar/appointments/schedules/AcZssZ0A25brqHYLx6o-iqanRiIG-jugrE62FGo4ryI_dQyPsPl8N1m3dr1VcP5rla8l8b-n3SEBy8r4?gv=true'
         }
     ],
     accommodation: [
@@ -169,7 +173,8 @@ const consultants = {
             sessionLength: '30 – 45 min, Video',
             sessionFormat: 'Video Call or Phone',
             institutions: 'Nationwide Support',
-            specialisesIn: ['Homestays', 'Rental Market', 'Settlement', 'Insurance']
+            specialisesIn: ['Homestays', 'Rental Markets', 'Settling In', 'Student Accommodation'],
+            bookingUrl: 'https://calendar.google.com/calendar/appointments/schedules/AcZssZ0A25brqHYLx6o-iqanRiIG-jugrE62FGo4ryI_dQyPsPl8N1m3dr1VcP5rla8l8b-n3SEBy8r4?gv=true'
         }
     ]
 };
@@ -180,8 +185,17 @@ export default function BookingPage() {
     const [selection, setSelection] = useState({
         category: null,
         consultant: null,
-        info: {}
+        info: {
+            firstName: '',
+            lastName: '',
+            email: '',
+            currentCountry: '',
+            message: ''
+        }
     });
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [bookingSuccess, setBookingSuccess] = useState(false);
+    const [error, setError] = useState(null);
 
     const nextStep = () => setStep(s => s + 1);
     const prevStep = () => setStep(s => s - 1);
@@ -194,6 +208,52 @@ export default function BookingPage() {
     const handleConsultantSelect = (con) => {
         setSelection(prev => ({ ...prev, consultant: con }));
         nextStep();
+    };
+
+    const handleInputChange = (e) => {
+        const { name, value } = e.target;
+        setSelection(prev => ({
+            ...prev,
+            info: { ...prev.info, [name]: value }
+        }));
+    };
+
+    const handleBookingSubmit = async (e) => {
+        if (e) e.preventDefault();
+        setIsSubmitting(true);
+        setError(null);
+
+        try {
+            const response = await fetch('/bookings', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content'),
+                },
+                body: JSON.stringify({
+                    first_name: selection.info.firstName,
+                    last_name: selection.info.lastName,
+                    email: selection.info.email,
+                    current_country: selection.info.currentCountry,
+                    service_type: selection.category.title,
+                    consultant_name: selection.consultant.name,
+                    message: selection.info.message,
+                    platform: 'Google Calendar'
+                })
+            });
+
+            if (response.ok) {
+                setBookingSuccess(true);
+            } else {
+                const data = await response.json();
+                setError(data.message || "Something went wrong. Please try again.");
+            }
+        } catch (error) {
+            console.error("Booking failed:", error);
+            setError("Network error. Please check your connection.");
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
     return (
@@ -533,42 +593,123 @@ export default function BookingPage() {
 
                                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-12">
                                         <div className="lg:col-span-2">
-                                            <form className="space-y-6">
+                                            <form className="space-y-6" onSubmit={handleBookingSubmit}>
                                                 <div className="grid grid-cols-2 gap-6">
                                                     <div>
                                                         <label className="block text-sm font-bold text-gray-700 mb-2 uppercase tracking-wide">First Name</label>
-                                                        <input type="text" className="w-full bg-white border-none py-3 px-4 rounded-lg focus:ring-2 focus:ring-[#436235] shadow-sm" placeholder="John" />
+                                                        <input 
+                                                            type="text" 
+                                                            name="firstName"
+                                                            value={selection.info.firstName}
+                                                            onChange={handleInputChange}
+                                                            required
+                                                            className="w-full bg-white border-none py-3 px-4 rounded-lg focus:ring-2 focus:ring-[#436235] shadow-sm" 
+                                                            placeholder="John" 
+                                                        />
                                                     </div>
                                                     <div>
                                                         <label className="block text-sm font-bold text-gray-700 mb-2 uppercase tracking-wide">Last Name</label>
-                                                        <input type="text" className="w-full bg-white border-none py-3 px-4 rounded-lg focus:ring-2 focus:ring-[#436235] shadow-sm" placeholder="Doe" />
+                                                        <input 
+                                                            type="text" 
+                                                            name="lastName"
+                                                            value={selection.info.lastName}
+                                                            onChange={handleInputChange}
+                                                            required
+                                                            className="w-full bg-white border-none py-3 px-4 rounded-lg focus:ring-2 focus:ring-[#436235] shadow-sm" 
+                                                            placeholder="Doe" 
+                                                        />
                                                     </div>
                                                 </div>
                                                 <div>
                                                     <label className="block text-sm font-bold text-gray-700 mb-2 uppercase tracking-wide">Email Address</label>
-                                                    <input type="email" className="w-full bg-white border-none py-3 px-4 rounded-lg focus:ring-2 focus:ring-[#436235] shadow-sm" placeholder="john@example.com" />
+                                                    <input 
+                                                        type="email" 
+                                                        name="email"
+                                                        value={selection.info.email}
+                                                        onChange={handleInputChange}
+                                                        required
+                                                        className="w-full bg-white border-none py-3 px-4 rounded-lg focus:ring-2 focus:ring-[#436235] shadow-sm" 
+                                                        placeholder="john@example.com" 
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="block text-sm font-bold text-gray-700 mb-2 uppercase tracking-wide">Where are you currently located?</label>
+                                                    <input 
+                                                        type="text" 
+                                                        name="currentCountry"
+                                                        value={selection.info.currentCountry}
+                                                        onChange={handleInputChange}
+                                                        required
+                                                        className="w-full bg-white border-none py-3 px-4 rounded-lg focus:ring-2 focus:ring-[#436235] shadow-sm" 
+                                                        placeholder="e.g. Philippines, India, UAE" 
+                                                    />
                                                 </div>
                                                 <div>
                                                     <label className="block text-sm font-bold text-gray-700 mb-2 uppercase tracking-wide">Additional Message</label>
-                                                    <textarea rows="4" className="w-full bg-white border-none py-3 px-4 rounded-lg focus:ring-2 focus:ring-[#436235] shadow-sm" placeholder="Tell us more about your inquiry..."></textarea>
+                                                    <textarea 
+                                                        rows="4" 
+                                                        name="message"
+                                                        value={selection.info.message}
+                                                        onChange={handleInputChange}
+                                                        className="w-full bg-white border-none py-3 px-4 rounded-lg focus:ring-2 focus:ring-[#436235] shadow-sm" 
+                                                        placeholder="Tell us more about your inquiry..."
+                                                    ></textarea>
                                                 </div>
+                                                
+                                                {!bookingSuccess ? (
+                                                    <div className="pt-6 border-t border-gray-200">
+                                                        <h4 className="text-lg font-bold text-gray-800 mb-6 flex items-center gap-2">
+                                                            <Calendar className="w-5 h-5 text-[#436235]" /> Schedule with Google Calendar
+                                                        </h4>
+                                                        
+                                                        {error && (
+                                                            <div className="mb-6 bg-red-50 border border-red-100 text-red-600 px-4 py-3 rounded-xl text-sm font-medium animate-fade-in">
+                                                                {error}
+                                                            </div>
+                                                        )}
 
-                                                <div className="pt-6 border-t border-gray-200">
-                                                    <h4 className="text-lg font-bold text-gray-800 mb-6 flex items-center gap-2">
-                                                        <Calendar className="w-5 h-5 text-[#436235]" /> Schedule with Google Calendar
-                                                    </h4>
-                                                    <p className="text-gray-500 text-sm mb-6">Clicking below will open {selection.consultant?.name}'s calendar where you can choose a convenient time slot.</p>
+                                                        <p className="text-gray-500 text-sm mb-6">Clicking below will save your details and open {selection.consultant?.name}'s calendar.</p>
 
-                                                    <a
-                                                        href="https://calendar.google.com"
-                                                        target="_blank"
-                                                        rel="noopener noreferrer"
-                                                        className="w-full bg-[#436235] text-white py-4 rounded-lg font-bold shadow-xl hover:bg-black transition-all flex items-center justify-center gap-3 group"
-                                                    >
-                                                        Book Appointment Time
-                                                        <ChevronRight className="w-5 h-5 transition-transform group-hover:translate-x-1" />
-                                                    </a>
-                                                </div>
+                                                        <button
+                                                            type="submit"
+                                                            disabled={isSubmitting}
+                                                            className="w-full bg-[#436235] text-white py-4 rounded-lg font-bold shadow-xl hover:bg-black transition-all flex items-center justify-center gap-3 group disabled:opacity-50 disabled:cursor-not-allowed"
+                                                        >
+                                                            {isSubmitting ? 'Processing...' : 'Book Appointment Time'}
+                                                            <ChevronRight className="w-5 h-5 transition-transform group-hover:translate-x-1" />
+                                                        </button>
+                                                    </div>
+                                                ) : (
+                                                    <div className="pt-6 border-t border-gray-200 animate-fade-in">
+                                                        <div className="text-center mb-8">
+                                                            <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                                                                <CheckCircle size={32} />
+                                                            </div>
+                                                            <h3 className="text-2xl font-bold text-gray-900 mb-2">Details Saved Successfully!</h3>
+                                                            <p className="text-gray-500">Pick your preferred time slot below to finalize your consultation with {selection.consultant?.name}.</p>
+                                                        </div>
+
+                                                        <div className="rounded-3xl overflow-hidden border border-gray-100 shadow-2xl bg-white min-h-[600px] relative">
+                                                            <iframe 
+                                                                src={`${selection.consultant?.bookingUrl}&name=${encodeURIComponent(selection.info.firstName + ' ' + selection.info.lastName)}&email=${encodeURIComponent(selection.info.email)}`} 
+                                                                style={{ border: 0 }} 
+                                                                width="100%" 
+                                                                height="700" 
+                                                                frameBorder="0"
+                                                                className="w-full"
+                                                            ></iframe>
+                                                        </div>
+                                                        
+                                                        <div className="mt-8 text-center">
+                                                            <button 
+                                                                onClick={() => window.location.reload()}
+                                                                className="text-gray-500 hover:text-gray-800 text-sm font-medium transition-colors"
+                                                            >
+                                                                Need to make another booking? Click here to restart.
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                )}
                                             </form>
                                         </div>
 

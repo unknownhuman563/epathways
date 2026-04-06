@@ -1,5 +1,6 @@
 import React from 'react';
 import { useForm, Head } from '@inertiajs/react';
+import Logo from "@assets/newlogosite.png";
 
 export default function Login() {
     const { data, setData, post, processing, errors } = useForm({
@@ -14,102 +15,95 @@ export default function Login() {
     };
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-gray-900 px-4">
+        <div className="min-h-screen flex items-center justify-center bg-white px-4 font-urbanist relative overflow-hidden">
             <Head title="Login" />
             
-            <div className="max-w-md w-full space-y-8 bg-gray-800 p-10 rounded-2xl shadow-2xl border border-gray-700">
-                <div className="text-center">
-                    <h2 className="mt-6 text-3xl font-extrabold text-white tracking-tight">
-                        Welcome Back
+            {/* Background Decorations - Very Subtle */}
+            <div className="absolute top-0 right-0 w-1/3 h-screen bg-[#282728]/[0.02] -skew-x-12 transform origin-top translate-x-1/2" />
+            <div className="absolute bottom-0 left-0 w-1/4 h-64 bg-[#282728]/[0.01] rounded-full blur-3xl" />
+
+            <div className="max-w-[440px] w-full relative z-10">
+                <div className="mb-12 text-center">
+                    <a href="/" className="inline-block mb-10 hover:scale-105 transition-transform duration-300">
+                        <img src={Logo} alt="ePathways" className="h-16 w-auto mx-auto" />
+                    </a>
+                    <h2 className="text-[11px] font-black text-[#436235] uppercase tracking-[0.4em] mb-3">
+                        Nexus Administration
                     </h2>
-                    <p className="mt-2 text-sm text-gray-400">
-                        Please sign in to your account
-                    </p>
+                    <h1 className="text-3xl font-black text-[#282728] uppercase tracking-tighter">
+                        Log in to Dashboard
+                    </h1>
                 </div>
 
-                <form className="mt-8 space-y-6" onSubmit={submit}>
-                    <div className="rounded-md shadow-sm -space-y-px">
-                        <div className="mb-4">
-                            <label htmlFor="email-address" className="block text-sm font-medium text-gray-300 mb-1">
-                                Email / Username
+                <div className="bg-white p-10 lg:p-12 rounded-[2.5rem] shadow-[0_32px_64px_-16px_rgba(40,39,40,0.1)] border border-[#282728]/5">
+                    <form onSubmit={submit} className="space-y-7">
+                        <div>
+                            <label className="text-[10px] font-black text-[#282728] uppercase tracking-[0.2em] mb-2.5 block ml-1">
+                                Email Address
                             </label>
                             <input
-                                id="email-address"
-                                name="email"
                                 type="text"
-                                autoComplete="email"
-                                required
-                                className="appearance-none relative block w-full px-3 py-3 border border-gray-600 placeholder-gray-500 text-white rounded-lg bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm transition-all duration-200"
-                                placeholder="name@company.com"
                                 value={data.email}
                                 onChange={(e) => setData('email', e.target.value)}
+                                className="w-full px-5 py-4 bg-white border border-[#282728] rounded-2xl text-sm font-bold text-[#282728] outline-none focus:ring-4 focus:ring-[#282728]/5 transition-all placeholder:text-gray-300"
+                                placeholder="name@e-pathways.co.nz"
                             />
                             {errors.email && (
-                                <p className="mt-2 text-sm text-red-500">{errors.email}</p>
+                                <p className="mt-2 text-[10px] font-bold text-red-500 uppercase tracking-widest ml-1">{errors.email}</p>
                             )}
                         </div>
-                        
-                        <div className="mb-6">
-                            <label htmlFor="password" className="block text-sm font-medium text-gray-300 mb-1">
-                                Password
-                            </label>
+
+                        <div>
+                            <div className="flex items-center justify-between mb-2.5 ml-1">
+                                <label className="text-[10px] font-black text-[#282728] uppercase tracking-[0.2em] block">
+                                    Secret Password
+                                </label>
+                                <a href="#" className="text-[9px] font-bold text-gray-400 uppercase tracking-widest hover:text-[#282728] transition-colors">
+                                    Forgot?
+                                </a>
+                            </div>
                             <input
-                                id="password"
-                                name="password"
                                 type="password"
-                                autoComplete="current-password"
-                                required
-                                className="appearance-none relative block w-full px-3 py-3 border border-gray-600 placeholder-gray-500 text-white rounded-lg bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm transition-all duration-200"
-                                placeholder="••••••••"
                                 value={data.password}
                                 onChange={(e) => setData('password', e.target.value)}
+                                className="w-full px-5 py-4 bg-white border border-[#282728] rounded-2xl text-sm font-bold text-[#282728] outline-none focus:ring-4 focus:ring-[#282728]/5 transition-all placeholder:text-gray-300"
+                                placeholder="••••••••"
                             />
                             {errors.password && (
-                                <p className="mt-2 text-sm text-red-500">{errors.password}</p>
+                                <p className="mt-2 text-[10px] font-bold text-red-500 uppercase tracking-widest ml-1">{errors.password}</p>
                             )}
                         </div>
-                    </div>
 
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center">
-                            <input
-                                id="remember-me"
-                                name="remember-me"
-                                type="checkbox"
-                                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-600 rounded bg-gray-700"
-                                checked={data.remember}
-                                onChange={(e) => setData('remember', e.target.checked)}
-                            />
-                            <label htmlFor="remember-me" className="ml-2 block text-sm text-gray-300">
-                                Remember me
+                        <div className="flex items-center gap-3 ml-1">
+                            <label className="relative flex items-center cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    className="peer sr-only"
+                                    checked={data.remember}
+                                    onChange={(e) => setData('remember', e.target.checked)}
+                                />
+                                <div className="w-5 h-5 bg-white border border-[#282728] rounded-md peer-checked:bg-[#282728] transition-all flex items-center justify-center">
+                                    <div className="w-1.5 h-1.5 bg-white rounded-full opacity-0 peer-checked:opacity-100 transition-opacity" />
+                                </div>
+                                <span className="ml-3 text-[10px] font-bold text-gray-500 uppercase tracking-widest">Keep me logged in</span>
                             </label>
                         </div>
 
-                        <div className="text-sm">
-                            <a href="#" className="font-medium text-blue-500 hover:text-blue-400">
-                                Forgot password?
-                            </a>
-                        </div>
-                    </div>
-
-                    <div>
                         <button
                             type="submit"
                             disabled={processing}
-                            className={`group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-semibold rounded-lg text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200 ${
-                                processing ? 'opacity-50 cursor-not-allowed' : ''
-                            }`}
+                            className={`w-full bg-[#282728] text-white py-5 rounded-2xl text-[11px] font-black uppercase tracking-[0.3em] shadow-2xl shadow-[#282728]/20 hover:bg-black transition-all active:scale-95 disabled:opacity-50 mt-4 flex items-center justify-center gap-2`}
                         >
-                            {processing ? 'Signing in...' : 'Sign in'}
+                            {processing ? 'Authorizing...' : 'Enter Dashboard'}
                         </button>
-                    </div>
-                </form>
-            </div>
-            
-            {/* Background Decorations */}
-            <div className="fixed inset-0 -z-10 overflow-hidden pointer-events-none">
-                <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] rounded-full bg-blue-900/20 blur-[100px]" />
-                <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] rounded-full bg-indigo-900/20 blur-[100px]" />
+                    </form>
+                </div>
+
+                <div className="mt-12 text-center">
+                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.2em]">
+                        &copy; {new Date().getFullYear()} ePathways Education Specialists
+                    </p>
+                </div>
             </div>
         </div>
     );

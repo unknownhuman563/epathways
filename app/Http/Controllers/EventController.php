@@ -17,7 +17,7 @@ class EventController extends Controller
      */
     public function index(Request $request)
     {
-        $events = Event::with('sessions')->withCount('sessions')->latest()->get();
+        $events = Event::with('sessions')->withCount(['sessions', 'leads'])->latest()->get();
 
         // Append the registration URL to each event
         $events->each(function ($event) {
@@ -26,6 +26,27 @@ class EventController extends Controller
 
         return inertia('Admin/Events', [
             'events' => $events
+        ]);
+    }
+
+    /**
+     * Show the detailed view for a single event (including leads).
+     */
+    public function show($id)
+    {
+        $event = Event::with('sessions')->findOrFail($id);
+        
+        // Optionally append the public URL for the banner image to be displayed in the overview
+        if ($event->banner_image) {
+            $event->banner_image_url = Storage::disk('public')->url($event->banner_image);
+        }
+
+        // Fetch leads that registered for this specific event
+        $leads = $event->leads()->with(['studyPlans', 'educationExps', 'eventSession'])->latest()->get();
+
+        return inertia('Admin/EventDetails', [
+            'event' => $event,
+            'leads' => $leads
         ]);
     }
 
@@ -137,6 +158,7 @@ class EventController extends Controller
             'email' => 'required|email|max:255',
             'phone' => 'required|string|max:20',
             'city' => 'required|string|max:100',
+            'country' => 'required|string|max:100',
             'employment_status' => 'required|string',
             'interest' => 'required|string',
             'education_level' => 'required|string',
@@ -156,6 +178,7 @@ class EventController extends Controller
                 'first_name' => $validated['first_name'],
                 'last_name' => $validated['last_name'],
                 'email' => $validated['email'],
+                'country' => $validated['country'],
                 'phone' => $validated['phone'],
                 'branch' => 'Online Registration',
                 'status' => 'New',
@@ -211,5 +234,25 @@ class EventController extends Controller
                 'message' => 'Registration failed. Please try again later.'
             ], 500);
         }
+    }
+
+    /**
+     * Publicly list all upcoming and ongoing events.
+     */
+    public function activities()
+    {
+        $events = Event::with('sessions')
+            ->whereIn('status', ['upcoming', 'ongoing'])
+            ->latest()
+            ->get();
+
+        // Append the registration URL to each event
+        $events->each(function ($event) {
+            $event->registration_url = url('/register/' . $event->event_code);
+        });
+
+        return inertia('Activities', [
+            'events' => $events
+        ]);
     }
 }

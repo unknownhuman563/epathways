@@ -6,84 +6,138 @@ import {
     CheckCircle2, XCircle, FileQuestion, Calendar
 } from 'lucide-react';
 
-export default function LeadDetails({ leadId }) {
-    // Mock Data based heavily on the user's form requirements
+export default function LeadDetails({ lead: backendLead }) {
+    // If no lead data is passed, show a loading or error state
+    if (!backendLead) {
+        return (
+            <div className="flex flex-col items-center justify-center min-h-[400px] space-y-4">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+                <p className="text-gray-500 font-medium font-inter">Loading lead details...</p>
+                <Link href="/admin/leads" className="text-blue-600 hover:underline text-sm font-semibold">Back to Leads</Link>
+            </div>
+        );
+    }
+
+    // Helper to format dates for display
+    const formatDate = (dateStr) => {
+        if (!dateStr) return null;
+        try {
+            const date = new Date(dateStr);
+            if (isNaN(date.getTime())) return dateStr;
+            return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+        } catch (e) {
+            return dateStr;
+        }
+    };
+
+    // Extracting nested JSON data safely
+    const workInfo = backendLead.work_info || {};
+    const financialInfo = backendLead.financial_info || {};
+    const studyPlan = backendLead.study_plans?.[0] || {};
+    
+    // Categorize education experiences
+    const highSchool = backendLead.education_exps?.find(e => 
+        e.level?.toLowerCase().includes('high') || 
+        e.level?.toLowerCase().includes('secondary') || 
+        ['10', '11', '12'].some(l => e.level?.includes(l))
+    ) || {};
+    
+    const tertiary = backendLead.education_exps?.find(e => 
+        e.level?.toLowerCase().includes('bachelor') || 
+        e.level?.toLowerCase().includes('university') || 
+        e.level?.toLowerCase().includes('college') ||
+        e.level?.toLowerCase().includes('tertiary')
+    ) || {};
+
+    // Aggregate all education documents into one list
+    const allDocuments = backendLead.education_exps?.reduce((acc, exp) => {
+        if (exp.documents && Array.isArray(exp.documents)) {
+            return [...acc, ...exp.documents];
+        }
+        return acc;
+    }, []) || [];
+
+    // Find any gap explanation in education history
+    const gapExp = backendLead.education_exps?.find(e => e.gap_explanation)?.gap_explanation;
+
+    // Map Backend Data to the Frontend Display Object (Maintaining original UI structure)
     const lead = {
-        id: leadId || 'LP-1042',
-        status: 'Processing',
-        stage: 'Goal Settings',
-        branch: 'Philippines',
-        submittedAt: 'Mar 24, 2026',
+        id: backendLead.lead_id || `LP-${backendLead.id}`,
+        status: backendLead.status || 'New',
+        stage: backendLead.stage || 'N/A',
+        branch: backendLead.branch || 'Main',
+        country: backendLead.country || '—',
+        submittedAt: formatDate(backendLead.created_at),
         
         // 1. Personal Information
         personal: {
-            surname: 'Dela Cruz',
-            firstName: 'Juan',
-            otherNames: 'None',
-            gender: 'Male',
-            phone: '+63 912 123 4567',
-            email: 'juan.delacruz@example.com',
-            maritalStatus: 'Single',
-            dob: '15/08/1998',
-            countryOfBirth: 'Philippines',
-            placeOfBirth: 'Manila',
-            citizenship: 'Philippines',
-            residence: 'Quezon City, Metro Manila, Philippines',
-            hasPassport: true,
-            passportExpiry: '10/12/2030',
-            passportFile: 'juan_passport.pdf'
+            surname: backendLead.last_name || '—',
+            firstName: backendLead.first_name || '—',
+            otherNames: workInfo.other_names || 'None',
+            gender: backendLead.gender || '—',
+            phone: backendLead.phone || '—',
+            email: backendLead.email || '—',
+            maritalStatus: backendLead.marital_status || '—',
+            dob: workInfo.dob || '—',
+            countryOfBirth: workInfo.country_of_birth || '—',
+            placeOfBirth: workInfo.place_of_birth || '—',
+            citizenship: workInfo.citizenship || '—',
+            residence: workInfo.city || workInfo.residence || '—',
+            hasPassport: !!workInfo.passport || (workInfo.passport_expiry && workInfo.passport_expiry !== '—'),
+            passportExpiry: workInfo.passport_expiry || '—',
+            passportFile: workInfo.passport_file || 'No file uploaded'
         },
 
         // 2. Study Plans in New Zealand
         studyPlans: {
-            preferredCourse: 'Information Technology',
-            qualificationLevel: 'Postgraduate Diploma (Level 8)',
-            preferredCity: 'Auckland',
-            preferredIntake: 'February 2027',
+            preferredCourse: studyPlan.preferred_course || '—',
+            qualificationLevel: studyPlan.qualification_level || '—',
+            preferredCity: studyPlan.preferred_city || '—',
+            preferredIntake: studyPlan.preferred_intake || '—',
             englishTest: {
-                taken: true,
-                type: 'IELTS Academic',
-                date: '02/01/2026',
-                overall: '7.5',
-                reading: '7.5',
-                writing: '7.0',
-                listening: '8.0',
-                speaking: '7.0'
+                taken: !!studyPlan.english_test_taken,
+                type: studyPlan.english_test_type || '—',
+                date: formatDate(studyPlan.english_test_date),
+                overall: studyPlan.score_overall || '—',
+                reading: studyPlan.score_reading || '—',
+                writing: studyPlan.score_writing || '—',
+                listening: studyPlan.score_listening || '—',
+                speaking: studyPlan.score_speaking || '—'
             }
         },
 
         // 3. Financial Information
         financial: {
-            hasTuitionFunds: true,
-            hasLivingExpenses: true, // NZ$ 20,000 requirement
-            notes: 'Funds verified via family sponsorship bank statements.'
+            hasTuitionFunds: !!financialInfo.tuition_funds,
+            hasLivingExpenses: !!financialInfo.living_expenses,
+            notes: financialInfo.notes || 'No additional notes provided.'
         },
 
         // 4. Education Background
         education: {
             highSchool: {
-                completed: true,
-                level: '12th',
-                institution: 'Manila Science High School',
-                dateStarted: '06/2012',
-                dateCompleted: '04/2016',
-                averageMarks: '92%'
+                completed: !!highSchool.id,
+                level: highSchool.level || '—',
+                institution: highSchool.institution || '—',
+                dateStarted: formatDate(highSchool.start_date),
+                dateCompleted: formatDate(highSchool.end_date),
+                averageMarks: highSchool.average_marks || '—'
             },
             tertiary: {
-                completed: true,
+                completed: !!tertiary.id,
                 bachelors: {
-                    field: 'Computer Science',
-                    institution: 'University of the Philippines',
-                    dateStarted: '08/2016',
-                    dateCompleted: '07/2020',
-                    averageMarks: '1.5 GPA'
+                    field: tertiary.field_of_study || '—',
+                    institution: tertiary.institution || '—',
+                    dateStarted: formatDate(tertiary.start_date),
+                    dateCompleted: formatDate(tertiary.end_date),
+                    averageMarks: tertiary.average_marks || '—'
                 }
             },
-            documents: ['10th certificate', '12th certificate', 'Bachelor\'s certificate', 'Academic transcripts'],
+            documents: allDocuments.length > 0 ? allDocuments : ['No documents listed'],
             gap: {
-                hasGap: true,
-                length: '5 Years',
-                activity: 'Working in Software Development field'
+                hasGap: !!gapExp,
+                length: '—', 
+                activity: gapExp || '—'
             }
         }
     };
@@ -181,7 +235,7 @@ export default function LeadDetails({ leadId }) {
                     </div>
                     <div className="min-w-0">
                         <p className="text-xs text-gray-500 font-medium">Location</p>
-                        <p className="text-sm font-semibold text-gray-900 truncate">{lead.personal.citizenship}</p>
+                        <p className="text-sm font-semibold text-gray-900 truncate">{lead.country}</p>
                     </div>
                 </div>
                 <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-4">
@@ -209,6 +263,7 @@ export default function LeadDetails({ leadId }) {
                         <DataRow label="Country of Birth" value={lead.personal.countryOfBirth} />
                         <DataRow label="Place of Birth" value={lead.personal.placeOfBirth} />
                         <DataRow label="Country of Citizenship" value={lead.personal.citizenship} />
+                        <DataRow label="Current Country" value={lead.country} />
                         <DataRow label="Current Residence" value={lead.personal.residence} fullWidth />
                         
                         <div className="col-span-1 md:col-span-2 pt-4 border-t border-gray-100 mt-2">
