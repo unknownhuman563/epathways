@@ -94,12 +94,21 @@ class LeadController extends Controller
             'phone' => 'nullable|string|max:25',
             'terms_accepted' => 'required|accepted',
             'passport_pdf' => 'nullable|file|mimes:pdf|max:10240',
-            
-            // Nested validation could be more granular, but for now we validate structure
+
+            // Nested validation - validate structure
             'study_plans' => 'nullable|array',
             'financial_info' => 'nullable|array',
             'education_background' => 'nullable|array',
-            'work_experience' => 'nullable|array'
+            'work_experience' => 'nullable|array',
+            'immigration_info' => 'nullable|array',
+            'character_info' => 'nullable|array',
+            'health_info' => 'nullable|array',
+            'family_info' => 'nullable|array',
+            'nz_contacts_info' => 'nullable|array',
+            'military_info' => 'nullable|array',
+            'source_of_funds_info' => 'nullable|array',
+            'home_ties_info' => 'nullable|array',
+            'declaration_accepted' => 'nullable|accepted',
         ]);
 
         try {
@@ -144,7 +153,29 @@ class LeadController extends Controller
                 'financial_info'    => $data['financial_info'] ?? null,
                 'work_info'         => $data['work_experience'] ?? null,
                 'gap_explanation'   => $data['gap_explanation'] ?? null,
-                'education_notes'   => $data['education_notes'] ?? null,
+                'education_notes'   => [
+                    'high_school_completed' => $data['high_school_completed'] ?? 'No',
+                    'high_school_level'     => $data['high_school_level'] ?? null,
+                    'high_school_institution' => $data['high_school_institution'] ?? null,
+                    'high_school_start'     => $data['high_school_start'] ?? null,
+                    'high_school_end'       => $data['high_school_end'] ?? null,
+                    'high_school_marks'     => $data['high_school_marks'] ?? null,
+                    'education_docs'        => $data['education_docs'] ?? [],
+                    'has_gap'               => $data['has_gap'] ?? 'No',
+                    'gap_length'            => $data['gap_length'] ?? null,
+                    'gap_activities'        => $data['gap_activities'] ?? [],
+                ],
+
+                // New assessment sections
+                'immigration_info'      => $data['immigration_info'] ?? null,
+                'character_info'        => $data['character_info'] ?? null,
+                'health_info'           => $data['health_info'] ?? null,
+                'family_info'           => $data['family_info'] ?? null,
+                'nz_contacts_info'      => $data['nz_contacts_info'] ?? null,
+                'military_info'         => $data['military_info'] ?? null,
+                'source_of_funds_info'  => $data['source_of_funds_info'] ?? null,
+                'home_ties_info'        => $data['home_ties_info'] ?? null,
+                'declaration_accepted'  => $request->boolean('declaration_accepted'),
 
                 'status' => 'New',
                 'stage'  => 'Evaluation',
@@ -169,15 +200,19 @@ class LeadController extends Controller
                 ]);
             }
 
-            // 5. Relational Data Mapping: Education Background
+            // 5. Relational Data Mapping: Education Background (only completed entries)
             if (!empty($data['education_background'])) {
                 foreach ($data['education_background'] as $edu) {
+                    if (empty($edu['completed'])) {
+                        continue;
+                    }
                     $lead->educationExps()->create([
                         'level'         => $edu['level'] ?? null,
+                        'field_of_study' => $edu['field_of_study'] ?? null,
                         'institution'   => $edu['institution'] ?? null,
                         'start_date'    => $edu['start_date'] ?? null,
                         'end_date'      => $edu['end_date'] ?? null,
-                        'average_marks' => $edu['marks'] ?? null,
+                        'average_marks' => $edu['marks_percentage'] ?? null,
                     ]);
                 }
             }
