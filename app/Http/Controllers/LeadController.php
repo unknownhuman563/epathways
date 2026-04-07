@@ -108,7 +108,7 @@ class LeadController extends Controller
             'military_info' => 'nullable|array',
             'source_of_funds_info' => 'nullable|array',
             'home_ties_info' => 'nullable|array',
-            'declaration_accepted' => 'nullable|accepted',
+            'declaration_accepted' => 'nullable',
         ]);
 
         try {
