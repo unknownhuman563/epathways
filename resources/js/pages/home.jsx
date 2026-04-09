@@ -26,7 +26,7 @@ export default function Home() {
 
   return (
     <>
-      <div className="overflow-x-hidden bg-white">
+      <div className="bg-white" style={{ overflowX: 'clip' }}>
         <Navbar />
 
         {/* Hero Section */}
