@@ -230,21 +230,127 @@ export default function FreeAssessment() {
 
     const formRef = useRef(null);
 
+    const validateStep = (stepNum) => {
+        const errs = {};
+
+        switch (stepNum) {
+            case 1:
+                if (!data.terms_accepted) errs.terms_accepted = 'You must accept the terms and conditions';
+                break;
+            case 2:
+                if (!data.first_name.trim()) errs.first_name = 'First name is required';
+                if (!data.last_name.trim()) errs.last_name = 'Surname is required';
+                if (!data.email.trim()) errs.email = 'Email is required';
+                else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email)) errs.email = 'Please enter a valid email address';
+                if (!data.phone.trim()) errs.phone = 'Phone number is required';
+                if (!data.gender) errs.gender = 'Gender is required';
+                if (!data.dob) errs.dob = 'Date of birth is required';
+                if (!data.country_of_birth.trim()) errs.country_of_birth = 'Country of birth is required';
+                if (!data.citizenship.trim()) errs.citizenship = 'Citizenship is required';
+                if (!data.residence_country.trim()) errs.residence_country = 'Country of residence is required';
+                if (data.has_other_names === 'Yes' && !data.other_names.trim()) errs.other_names = 'Please provide your other name(s)';
+                if (data.has_passport === 'Yes') {
+                    if (!data.passport_number.trim()) errs.passport_number = 'Passport number is required';
+                    if (!data.passport_expiry) errs.passport_expiry = 'Passport expiry date is required';
+                }
+                break;
+            case 3:
+                if (!data.study_plans.preferred_course.trim()) errs['study_plans.preferred_course'] = 'Preferred course is required';
+                if (!data.study_plans.qualification_level) errs['study_plans.qualification_level'] = 'Qualification level is required';
+                if (data.study_plans.has_english_test === 'Yes') {
+                    if (!data.study_plans.english_test_type) errs['study_plans.english_test_type'] = 'Test type is required';
+                    if (!data.study_plans.test_score_overall.trim()) errs['study_plans.test_score_overall'] = 'Overall score is required';
+                }
+                break;
+            case 4:
+                if (data.has_gap === 'Yes') {
+                    if (!data.gap_length.trim()) errs.gap_length = 'Gap length is required';
+                    if (!data.gap_activities || !data.gap_activities.length) errs.gap_activities = 'Please select at least one activity';
+                }
+                break;
+            case 5:
+                if (!data.work_experience[0].company_name.trim()) errs['work_experience.company_name'] = 'Company name is required';
+                if (!data.work_experience[0].job_title.trim()) errs['work_experience.job_title'] = 'Job title is required';
+                break;
+            case 6:
+                if (!data.financial_info.funding_source.length) errs['financial_info.funding_source'] = 'Please select at least one funding source';
+                if (!data.financial_info.estimated_budget.trim()) errs['financial_info.estimated_budget'] = 'Estimated budget is required';
+                break;
+            case 7:
+                if (!data.source_of_funds_info.sources.length) errs['source_of_funds_info.sources'] = 'Please select at least one source of funds';
+                if (data.source_of_funds_info.will_use_sponsor === 'Yes') {
+                    if (!data.source_of_funds_info.sponsor_relation) errs['source_of_funds_info.sponsor_relation'] = 'Sponsor relation is required';
+                    if (!data.source_of_funds_info.sponsor_occupation.trim()) errs['source_of_funds_info.sponsor_occupation'] = 'Sponsor occupation is required';
+                    if (!data.source_of_funds_info.sponsor_annual_income.trim()) errs['source_of_funds_info.sponsor_annual_income'] = 'Sponsor annual income is required';
+                }
+                break;
+            case 8:
+                if (!data.immigration_info.submission_country.trim()) errs['immigration_info.submission_country'] = 'Submission country is required';
+                if (data.immigration_info.has_travelled_overseas === 'Yes' && !data.immigration_info.overseas_travel_details.trim()) {
+                    errs['immigration_info.overseas_travel_details'] = 'Please provide travel details';
+                }
+                if (data.immigration_info.has_applied_nz_visa === 'Yes' && !data.immigration_info.nz_visa_details.trim()) {
+                    errs['immigration_info.nz_visa_details'] = 'Please provide NZ visa details';
+                }
+                if (data.immigration_info.has_applied_other_visa === 'Yes' && !data.immigration_info.other_visa_details.trim()) {
+                    errs['immigration_info.other_visa_details'] = 'Please provide visa details';
+                }
+                if (data.immigration_info.has_visa_refusal === 'Yes' && !data.immigration_info.visa_refusal_details.trim()) {
+                    errs['immigration_info.visa_refusal_details'] = 'Please provide visa refusal details';
+                }
+                break;
+            case 9:
+                break;
+            case 10:
+                break;
+            case 11:
+                if (data.nz_contacts_info.has_nz_contacts === 'Yes') {
+                    if (!data.nz_contacts_info.contact_first_name.trim()) errs['nz_contacts_info.contact_first_name'] = 'Contact first name is required';
+                    if (!data.nz_contacts_info.contact_family_name.trim()) errs['nz_contacts_info.contact_family_name'] = 'Contact family name is required';
+                }
+                break;
+            case 12:
+                if (!data.declaration_accepted) errs.declaration_accepted = 'You must accept the declaration';
+                break;
+        }
+
+        return errs;
+    };
+
     const nextStep = () => {
-        if (formRef.current && !formRef.current.reportValidity()) {
+        const errs = validateStep(step);
+        if (Object.keys(errs).length > 0) {
+            setLocalErrors(errs);
+            setModal({
+                show: true,
+                message: 'Please complete all required fields before proceeding.',
+            });
             return;
         }
+        setLocalErrors({});
         setStep(s => Math.min(s + 1, 12));
     };
 
-    const prevStep = () => setStep(s => Math.max(s - 1, 1));
+    const prevStep = () => {
+        setLocalErrors({});
+        setStep(s => Math.max(s - 1, 1));
+    };
+
+    const allErrors = { ...localErrors, ...errors };
 
     const handleSubmit = (e) => {
         e.preventDefault();
 
-        if (formRef.current && !formRef.current.reportValidity()) {
+        const errs = validateStep(step);
+        if (Object.keys(errs).length > 0) {
+            setLocalErrors(errs);
+            setModal({
+                show: true,
+                message: 'Please complete all required fields before submitting.',
+            });
             return;
         }
+        setLocalErrors({});
 
         if (step !== 12) {
             setStep(s => Math.min(s + 1, 12));
@@ -382,18 +488,18 @@ export default function FreeAssessment() {
                                             exit={{ opacity: 0, y: -10 }}
                                             transition={{ duration: 0.3 }}
                                         >
-                                            {step === 1 && <StepTerms data={data} setData={setData} />}
-                                            {step === 2 && <StepPersonal data={data} setData={setData} errors={errors} />}
-                                            {step === 3 && <StepStudyPlans data={data} setData={setData} errors={errors} />}
-                                            {step === 4 && <StepEducation data={data} setData={setData} errors={errors} />}
-                                            {step === 5 && <StepWork data={data} setData={setData} errors={errors} />}
-                                            {step === 6 && <StepFinancial data={data} setData={setData} errors={errors} />}
-                                            {step === 7 && <StepSourceOfFunds data={data} setData={setData} errors={errors} />}
-                                            {step === 8 && <StepImmigration data={data} setData={setData} errors={errors} />}
-                                            {step === 9 && <StepCharacterHealth data={data} setData={setData} errors={errors} />}
-                                            {step === 10 && <StepFamily data={data} setData={setData} errors={errors} />}
-                                            {step === 11 && <StepAdditional data={data} setData={setData} errors={errors} />}
-                                            {step === 12 && <StepDeclaration data={data} setData={setData} errors={errors} />}
+                                            {step === 1 && <StepTerms data={data} setData={setData} errors={allErrors} />}
+                                            {step === 2 && <StepPersonal data={data} setData={setData} errors={allErrors} />}
+                                            {step === 3 && <StepStudyPlans data={data} setData={setData} errors={allErrors} />}
+                                            {step === 4 && <StepEducation data={data} setData={setData} errors={allErrors} />}
+                                            {step === 5 && <StepWork data={data} setData={setData} errors={allErrors} />}
+                                            {step === 6 && <StepFinancial data={data} setData={setData} errors={allErrors} />}
+                                            {step === 7 && <StepSourceOfFunds data={data} setData={setData} errors={allErrors} />}
+                                            {step === 8 && <StepImmigration data={data} setData={setData} errors={allErrors} />}
+                                            {step === 9 && <StepCharacterHealth data={data} setData={setData} errors={allErrors} />}
+                                            {step === 10 && <StepFamily data={data} setData={setData} errors={allErrors} />}
+                                            {step === 11 && <StepAdditional data={data} setData={setData} errors={allErrors} />}
+                                            {step === 12 && <StepDeclaration data={data} setData={setData} errors={allErrors} />}
                                         </motion.div>
                                     </AnimatePresence>
                                 </div>
@@ -470,7 +576,7 @@ export default function FreeAssessment() {
 
 {/* --- STEP COMPONENTS --- */}
 
-function StepTerms({ data, setData }) {
+function StepTerms({ data, setData, errors }) {
     return (
         <div className="space-y-12">
             <h2 className="text-3xl font-black text-[#282728] uppercase tracking-tighter mb-8 leading-tight">Privacy & Terms</h2>
@@ -480,18 +586,20 @@ function StepTerms({ data, setData }) {
                 <p>We are committed to protecting your privacy. All data submitted is encrypted and handled with the highest level of security. Please ensure that all information provided is accurate and complete to receive the most reliable evaluation.</p>
                 <p>ePathways facilitates the connection between potential students and educational institutions. We do not guarantee visa approval, as final decisions rest with the respective immigration authorities.</p>
             </div>
-            <label className="flex items-center gap-5 p-2 cursor-pointer group rounded-2xl transition-all">
-                <input
-                    type="checkbox"
-                    required
-                    className="w-6 h-6 rounded border-gray-300 text-[#436235] focus:ring-[#436235] cursor-pointer transition-colors"
-                    checked={data.terms_accepted}
-                    onChange={e => setData('terms_accepted', e.target.checked)}
-                />
-                <span className="text-[11px] font-black uppercase tracking-[0.15em] transition-colors text-[#282728]">
-                    I have read and agree to the terms and conditions *
-                </span>
-            </label>
+            <div>
+                <label className={`flex items-center gap-5 p-4 cursor-pointer group rounded-2xl transition-all ${errors.terms_accepted ? 'bg-red-50 ring-2 ring-red-500/20' : ''}`}>
+                    <input
+                        type="checkbox"
+                        className={`w-6 h-6 rounded ${errors.terms_accepted ? 'border-red-500' : 'border-gray-300'} text-[#436235] focus:ring-[#436235] cursor-pointer transition-colors`}
+                        checked={data.terms_accepted}
+                        onChange={e => setData('terms_accepted', e.target.checked)}
+                    />
+                    <span className={`text-[11px] font-black uppercase tracking-[0.15em] transition-colors ${errors.terms_accepted ? 'text-red-500' : 'text-[#282728]'}`}>
+                        I have read and agree to the terms and conditions *
+                    </span>
+                </label>
+                {errors.terms_accepted && <p className="text-[9px] font-black text-red-500 uppercase tracking-widest mt-2 pl-4">{errors.terms_accepted}</p>}
+            </div>
         </div>
     );
 }
@@ -505,7 +613,6 @@ function StepPersonal({ data, setData, errors }) {
                 <Field label="First Name *" error={errors.first_name}>
                     <input
                         type="text"
-                        required
                         className="w-full px-5 py-3.5 bg-white border border-[#282728] rounded-xl focus:ring-2 focus:ring-[#436235]/20 focus:border-[#436235] transition-all outline-none"
                         value={data.first_name}
                         onChange={e => setData('first_name', e.target.value)}
@@ -514,7 +621,6 @@ function StepPersonal({ data, setData, errors }) {
                 <Field label="Surname *" error={errors.last_name}>
                     <input
                         type="text"
-                        required
                         className="w-full px-5 py-3.5 bg-white border border-[#282728] rounded-xl focus:ring-2 focus:ring-[#436235]/20 focus:border-[#436235] transition-all outline-none"
                         value={data.last_name}
                         onChange={e => setData('last_name', e.target.value)}
@@ -538,7 +644,7 @@ function StepPersonal({ data, setData, errors }) {
                     </Field>
                     {data.has_other_names === 'Yes' && (
                         <div className="mt-4">
-                            <Field label="Full Other Name">
+                            <Field label="Full Other Name *" error={errors.other_names}>
                                 <input
                                     type="text"
                                     className="w-full px-5 py-3.5 bg-gray-50 border border-gray-100 rounded-xl outline-none"
@@ -550,7 +656,7 @@ function StepPersonal({ data, setData, errors }) {
                     )}
                 </div>
 
-                <Field label="Gender">
+                <Field label="Gender *" error={errors.gender}>
                     <select
                         className="w-full px-5 py-3.5 bg-white border border-[#282728] rounded-xl outline-none"
                         value={data.gender}
@@ -580,7 +686,6 @@ function StepPersonal({ data, setData, errors }) {
                 <Field label="Phone Number *" error={errors.phone}>
                     <input
                         type="tel"
-                        required
                         className="w-full px-5 py-3.5 bg-white border border-[#282728] rounded-xl outline-none"
                         value={data.phone}
                         onChange={e => setData('phone', e.target.value)}
@@ -590,14 +695,13 @@ function StepPersonal({ data, setData, errors }) {
                 <Field label="Email Address *" error={errors.email}>
                     <input
                         type="email"
-                        required
                         className="w-full px-5 py-3.5 bg-white border border-[#282728] rounded-xl outline-none"
                         value={data.email}
                         onChange={e => setData('email', e.target.value)}
                     />
                 </Field>
 
-                <Field label="Date of Birth">
+                <Field label="Date of Birth *" error={errors.dob}>
                     <input
                         type="date"
                         className="w-full px-5 py-3.5 bg-white border border-[#282728] rounded-xl outline-none"
@@ -606,7 +710,7 @@ function StepPersonal({ data, setData, errors }) {
                     />
                 </Field>
 
-                <Field label="Country of Birth">
+                <Field label="Country of Birth *" error={errors.country_of_birth}>
                     <input
                         type="text"
                         className="w-full px-5 py-3.5 bg-white border border-[#282728] rounded-xl outline-none"
@@ -625,7 +729,7 @@ function StepPersonal({ data, setData, errors }) {
                     />
                 </Field>
 
-                <Field label="Citizenship">
+                <Field label="Citizenship *" error={errors.citizenship}>
                     <input
                         type="text"
                         className="w-full px-5 py-3.5 bg-white border border-[#282728] rounded-xl outline-none"
@@ -643,7 +747,7 @@ function StepPersonal({ data, setData, errors }) {
                         <Field label="State/Province">
                             <input type="text" className="w-full px-5 py-3 bg-white border border-[#282728] rounded-xl" value={data.residence_state} onChange={e => setData('residence_state', e.target.value)} />
                         </Field>
-                        <Field label="Country">
+                        <Field label="Country *" error={errors.residence_country}>
                             <input type="text" className="w-full px-5 py-3 bg-white border border-[#282728] rounded-xl" value={data.residence_country} onChange={e => setData('residence_country', e.target.value)} />
                         </Field>
                     </div>
@@ -661,10 +765,10 @@ function StepPersonal({ data, setData, errors }) {
                         </Field>
                         {data.has_passport === 'Yes' && (
                             <>
-                                <Field label="Passport Number">
+                                <Field label="Passport Number *" error={errors.passport_number}>
                                     <input type="text" className="w-full px-5 py-3 bg-white border border-[#282728] rounded-xl" value={data.passport_number} onChange={e => setData('passport_number', e.target.value)} />
                                 </Field>
-                                <Field label="Expiry Date">
+                                <Field label="Expiry Date *" error={errors.passport_expiry}>
                                     <input type="date" className="w-full px-5 py-3 bg-white border border-[#282728] rounded-xl" value={data.passport_expiry} onChange={e => setData('passport_expiry', e.target.value)} />
                                 </Field>
                                 <div className="col-span-full">
@@ -699,10 +803,10 @@ function StepStudyPlans({ data, setData, errors }) {
             <h2 className="text-3xl font-black text-[#282728] uppercase tracking-tighter mb-10">Study Aspirations</h2>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <Field label="Preferred Course/Program">
+                <Field label="Preferred Course/Program *" error={errors['study_plans.preferred_course']}>
                     <input type="text" className="w-full px-5 py-3 bg-white border border-[#282728] rounded-xl" value={data.study_plans.preferred_course} onChange={e => updateNested('preferred_course', e.target.value)} />
                 </Field>
-                <Field label="Qualification Level">
+                <Field label="Qualification Level *" error={errors['study_plans.qualification_level']}>
                     <select className="w-full px-5 py-3 bg-white border border-[#282728] rounded-xl" value={data.study_plans.qualification_level} onChange={e => updateNested('qualification_level', e.target.value)}>
                         <option value="">Select Level</option>
                         {levels.map(l => <option key={l}>{l}</option>)}
@@ -728,7 +832,7 @@ function StepStudyPlans({ data, setData, errors }) {
                     {data.study_plans.has_english_test === 'Yes' && (
                         <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4 mt-8 bg-gray-50/50 p-6 rounded-3xl border border-gray-100">
                             <div className="md:col-span-3 lg:col-span-2">
-                                <Field label="Test Type">
+                                <Field label="Test Type *" error={errors['study_plans.english_test_type']}>
                                     <select className="w-full px-4 py-2 bg-white border border-[#282728] rounded-lg" value={data.study_plans.english_test_type} onChange={e => updateNested('english_test_type', e.target.value)}>
                                         <option value="">Select Test</option>
                                         <option>IELTS Academic</option>
@@ -738,7 +842,7 @@ function StepStudyPlans({ data, setData, errors }) {
                                     </select>
                                 </Field>
                             </div>
-                            <Field label="Overall">
+                            <Field label="Overall *" error={errors['study_plans.test_score_overall']}>
                                 <input type="text" className="w-full px-4 py-2 bg-white border border-[#282728] rounded-lg" value={data.study_plans.test_score_overall} onChange={e => updateNested('test_score_overall', e.target.value)} />
                             </Field>
                             <Field label="Reading">
@@ -865,10 +969,10 @@ function StepEducation({ data, setData, errors }) {
                 </Field>
                 {data.has_gap === 'Yes' && (
                     <div className="mt-6 space-y-6">
-                        <Field label="How long was the gap?">
+                        <Field label="How long was the gap? *" error={errors.gap_length}>
                             <input type="text" placeholder="e.g. 2 years" className="w-full px-5 py-3 bg-white border border-[#282728] rounded-xl" value={data.gap_length} onChange={e => setData('gap_length', e.target.value)} />
                         </Field>
-                        <Field label="What were you doing during this time?">
+                        <Field label="What were you doing during this time? *" error={errors.gap_activities}>
                             <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mt-2">
                                 {gapActivities.map(activity => (
                                     <button
@@ -975,11 +1079,11 @@ function StepWork({ data, setData, errors }) {
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <Field label="Current Company / Organization *">
-                        <input type="text" required className="w-full px-5 py-3.5 bg-white border border-[#282728] rounded-xl outline-none" value={data.work_experience[0].company_name} onChange={e => updateWork('company_name', e.target.value)} />
+                    <Field label="Current Company / Organization *" error={errors['work_experience.company_name']}>
+                        <input type="text" className="w-full px-5 py-3.5 bg-white border border-[#282728] rounded-xl outline-none" value={data.work_experience[0].company_name} onChange={e => updateWork('company_name', e.target.value)} />
                     </Field>
-                    <Field label="Job Title / Role *">
-                        <input type="text" required className="w-full px-5 py-3.5 bg-white border border-[#282728] rounded-xl outline-none" value={data.work_experience[0].job_title} onChange={e => updateWork('job_title', e.target.value)} />
+                    <Field label="Job Title / Role *" error={errors['work_experience.job_title']}>
+                        <input type="text" className="w-full px-5 py-3.5 bg-white border border-[#282728] rounded-xl outline-none" value={data.work_experience[0].job_title} onChange={e => updateWork('job_title', e.target.value)} />
                     </Field>
                     <Field label="Start Date">
                         <input type="date" className="w-full px-5 py-3.5 bg-white border border-[#282728] rounded-xl outline-none" value={data.work_experience[0].start_date} onChange={e => updateWork('start_date', e.target.value)} />
@@ -1069,7 +1173,7 @@ function StepFinancial({ data, setData, errors }) {
                     </div>
                 </Field>
 
-                <Field label="How will you fund your studies and living costs?">
+                <Field label="How will you fund your studies and living costs? *" error={errors['financial_info.funding_source']}>
                     <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                         {sources.map(s => (
                             <button
@@ -1084,7 +1188,7 @@ function StepFinancial({ data, setData, errors }) {
                     </div>
                 </Field>
 
-                <Field label="Estimated Available Funds (in PHP or NZD)">
+                <Field label="Estimated Available Funds (in PHP or NZD) *" error={errors['financial_info.estimated_budget']}>
                     <input
                         type="text"
                         placeholder="e.g. 2,000,000 PHP"
@@ -1143,7 +1247,7 @@ function StepSourceOfFunds({ data, setData, errors }) {
             <h2 className="text-3xl font-black text-[#282728] uppercase tracking-tighter mb-10">Source of Funds & Sponsors</h2>
 
             <div className="space-y-8">
-                <Field label="Source of Funds">
+                <Field label="Source of Funds *" error={errors['source_of_funds_info.sources']}>
                     <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mt-2">
                         {fundSources.map(s => (
                             <button
@@ -1191,7 +1295,7 @@ function StepSourceOfFunds({ data, setData, errors }) {
                         <div className="mt-8 space-y-8 bg-gray-50/50 p-8 rounded-3xl border border-gray-100">
                             <h4 className="text-sm font-bold uppercase tracking-widest text-[#436235]">Sponsor Details</h4>
 
-                            <Field label="Relation to Sponsor">
+                            <Field label="Relation to Sponsor *" error={errors['source_of_funds_info.sponsor_relation']}>
                                 <select className="w-full px-5 py-3 bg-white border border-[#282728] rounded-xl" value={data.source_of_funds_info.sponsor_relation} onChange={e => update('sponsor_relation', e.target.value)}>
                                     <option value="">Select Relation</option>
                                     {sponsorRelations.map(r => <option key={r}>{r}</option>)}
@@ -1216,13 +1320,13 @@ function StepSourceOfFunds({ data, setData, errors }) {
                             </div>
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <Field label="Sponsor Occupation">
+                                <Field label="Sponsor Occupation *" error={errors['source_of_funds_info.sponsor_occupation']}>
                                     <input type="text" className="w-full px-5 py-3 bg-white border border-[#282728] rounded-xl" value={data.source_of_funds_info.sponsor_occupation} onChange={e => update('sponsor_occupation', e.target.value)} />
                                 </Field>
                                 <Field label="Employer / Business Name">
                                     <input type="text" className="w-full px-5 py-3 bg-white border border-[#282728] rounded-xl" value={data.source_of_funds_info.sponsor_employer} onChange={e => update('sponsor_employer', e.target.value)} />
                                 </Field>
-                                <Field label="Estimated Annual Income">
+                                <Field label="Estimated Annual Income *" error={errors['source_of_funds_info.sponsor_annual_income']}>
                                     <input type="text" placeholder="e.g. NZ$80,000" className="w-full px-5 py-3 bg-white border border-[#282728] rounded-xl" value={data.source_of_funds_info.sponsor_annual_income} onChange={e => update('sponsor_annual_income', e.target.value)} />
                                 </Field>
                             </div>
@@ -1289,7 +1393,7 @@ function StepImmigration({ data, setData, errors }) {
                     </div>
                 </Field>
                 {data.immigration_info.has_travelled_overseas === 'Yes' && (
-                    <Field label="Please provide details (country, visa type, result, dates)">
+                    <Field label="Please provide details (country, visa type, result, dates) *" error={errors['immigration_info.overseas_travel_details']}>
                         <textarea className="w-full px-5 py-4 bg-white border border-[#282728] rounded-2xl min-h-[100px]" placeholder="e.g. Australia, Tourist Visa, Approved, Jan 2023 - Feb 2023" value={data.immigration_info.overseas_travel_details} onChange={e => update('overseas_travel_details', e.target.value)} />
                     </Field>
                 )}
@@ -1304,7 +1408,7 @@ function StepImmigration({ data, setData, errors }) {
                     </Field>
                     {data.immigration_info.has_applied_nz_visa === 'Yes' && (
                         <div className="mt-4">
-                            <Field label="Please provide details">
+                            <Field label="Please provide details *" error={errors['immigration_info.nz_visa_details']}>
                                 <textarea className="w-full px-5 py-4 bg-white border border-[#282728] rounded-2xl min-h-[100px]" placeholder="Type of visa, date, outcome..." value={data.immigration_info.nz_visa_details} onChange={e => update('nz_visa_details', e.target.value)} />
                             </Field>
                         </div>
@@ -1331,7 +1435,7 @@ function StepImmigration({ data, setData, errors }) {
                     </Field>
                     {data.immigration_info.has_applied_other_visa === 'Yes' && (
                         <div className="mt-4">
-                            <Field label="Please provide details">
+                            <Field label="Please provide details *" error={errors['immigration_info.other_visa_details']}>
                                 <textarea className="w-full px-5 py-4 bg-white border border-[#282728] rounded-2xl min-h-[100px]" placeholder="Country, type, date, outcome..." value={data.immigration_info.other_visa_details} onChange={e => update('other_visa_details', e.target.value)} />
                             </Field>
                         </div>
@@ -1348,7 +1452,7 @@ function StepImmigration({ data, setData, errors }) {
                     </Field>
                     {data.immigration_info.has_visa_refusal === 'Yes' && (
                         <div className="mt-4">
-                            <Field label="Please provide details (country, type, reason)">
+                            <Field label="Please provide details (country, type, reason) *" error={errors['immigration_info.visa_refusal_details']}>
                                 <textarea className="w-full px-5 py-4 bg-white border border-[#282728] rounded-2xl min-h-[100px]" placeholder="Country, visa type, reason for refusal..." value={data.immigration_info.visa_refusal_details} onChange={e => update('visa_refusal_details', e.target.value)} />
                             </Field>
                         </div>
@@ -1356,7 +1460,7 @@ function StepImmigration({ data, setData, errors }) {
                 </div>
 
                 <div className="border-t border-gray-50 pt-8">
-                    <Field label="What country will you be in when this application is submitted?">
+                    <Field label="What country will you be in when this application is submitted? *" error={errors['immigration_info.submission_country']}>
                         <input type="text" className="w-full px-5 py-3.5 bg-white border border-[#282728] rounded-xl outline-none" value={data.immigration_info.submission_country} onChange={e => update('submission_country', e.target.value)} />
                     </Field>
                 </div>
@@ -1517,10 +1621,10 @@ function StepAdditional({ data, setData, errors }) {
                 </Field>
                 {data.nz_contacts_info.has_nz_contacts === 'Yes' && (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-gray-50/50 p-8 rounded-3xl border border-gray-100">
-                        <Field label="First Name">
+                        <Field label="First Name *" error={errors['nz_contacts_info.contact_first_name']}>
                             <input type="text" className="w-full px-5 py-3 bg-white border border-[#282728] rounded-xl" value={data.nz_contacts_info.contact_first_name} onChange={e => updateNzContacts('contact_first_name', e.target.value)} />
                         </Field>
-                        <Field label="Family Name">
+                        <Field label="Family Name *" error={errors['nz_contacts_info.contact_family_name']}>
                             <input type="text" className="w-full px-5 py-3 bg-white border border-[#282728] rounded-xl" value={data.nz_contacts_info.contact_family_name} onChange={e => updateNzContacts('contact_family_name', e.target.value)} />
                         </Field>
                         <Field label="Relationship">
@@ -1640,18 +1744,20 @@ function StepDeclaration({ data, setData, errors }) {
                 <p className="mb-4"><strong className="text-[#282728]">Warning:</strong> It is an offense to provide false or misleading information to INZ. Providing false or misleading information may result in the decline of your application, the revocation of any visa granted, deportation from New Zealand, and/or criminal prosecution.</p>
                 <p>I acknowledge that ePathways acts as a facilitator and that the final decision on any visa application rests with Immigration New Zealand or the relevant immigration authority.</p>
             </div>
-            <label className="flex items-center gap-5 p-2 cursor-pointer group rounded-2xl transition-all">
-                <input
-                    type="checkbox"
-                    required
-                    className="w-6 h-6 rounded border-gray-300 text-[#436235] focus:ring-[#436235] cursor-pointer transition-colors"
-                    checked={data.declaration_accepted}
-                    onChange={e => setData('declaration_accepted', e.target.checked)}
-                />
-                <span className="text-[11px] font-black uppercase tracking-[0.15em] transition-colors text-[#282728]">
-                    I have read, understood and agree to the declaration above *
-                </span>
-            </label>
+            <div>
+                <label className={`flex items-center gap-5 p-4 cursor-pointer group rounded-2xl transition-all ${errors.declaration_accepted ? 'bg-red-50 ring-2 ring-red-500/20' : ''}`}>
+                    <input
+                        type="checkbox"
+                        className={`w-6 h-6 rounded ${errors.declaration_accepted ? 'border-red-500' : 'border-gray-300'} text-[#436235] focus:ring-[#436235] cursor-pointer transition-colors`}
+                        checked={data.declaration_accepted}
+                        onChange={e => setData('declaration_accepted', e.target.checked)}
+                    />
+                    <span className={`text-[11px] font-black uppercase tracking-[0.15em] transition-colors ${errors.declaration_accepted ? 'text-red-500' : 'text-[#282728]'}`}>
+                        I have read, understood and agree to the declaration above *
+                    </span>
+                </label>
+                {errors.declaration_accepted && <p className="text-[9px] font-black text-red-500 uppercase tracking-widest mt-2 pl-4">{errors.declaration_accepted}</p>}
+            </div>
         </div>
     );
 }
