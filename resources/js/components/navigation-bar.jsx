@@ -52,13 +52,13 @@ const Navbar = () => {
                                     <a href="/fee-guide" className="block px-6 py-3 text-sm text-gray-700 hover:bg-gray-50 hover:text-[#436235] transition-colors">
                                         Estimated Cost / Fee Guide
                                     </a>
-                                </li>
+                                </li>   
                             </ul>
                         </div>
                     </li>
 
                     <li><a href="#accommodation" className="hover:text-[#436235] transition-colors">Accommodation</a></li>
-                    <li><a href="#immigration" className="hover:text-[#436235] transition-colors">Immigration</a></li>
+                    <li><a href="/immigration" className="hover:text-[#436235] transition-colors">Immigration</a></li>
                     <li><a href="/about-us" className="hover:text-[#436235] transition-colors">About Us</a></li>
                 </ul>
 
@@ -110,7 +110,7 @@ const Navbar = () => {
                     <li><a href="/programs-levels" className="block py-2 hover:text-[#436235]">Programs & Levels</a></li>
                     <li><a href="/fee-guide" className="block py-2 hover:text-[#436235]">Fee Guide</a></li>
                     <li><a href="#accommodation" className="block py-2 hover:text-[#436235]">Accommodation</a></li>
-                    <li><a href="#immigration" className="block py-2 hover:text-[#436235]">Immigration</a></li>
+                    <li><a href="/immigration" className="block py-2 hover:text-[#436235]">Immigration</a></li>
                     <li><a href="/about-us" className="block py-2 hover:text-[#436235]">About Us</a></li>
                     {isShowingGetStarted && (
                         <div className="text-center">

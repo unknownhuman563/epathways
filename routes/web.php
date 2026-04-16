@@ -35,6 +35,10 @@ Route::get("/about-us", function (){
    return inertia('AboutUs'); 
 });
 
+Route::get("/immigration", function (){
+   return inertia('Immigration'); 
+});
+
 Route::get('/activities', [EventController::class, 'activities']);
 
 // Public Registration & Assessment Routes
