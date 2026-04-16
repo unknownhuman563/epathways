@@ -62,7 +62,7 @@ const PartnerLogos = () => {
                                 <img
                                     src={imageMap[partner.logo]}
                                     alt={partner.name}
-                                    className="h-20 object-contain transition-all duration-300"
+                                    className="h-12 md:h-20 object-contain transition-all duration-300"
                                 />
                             </a>
                         ))}

@@ -69,7 +69,7 @@ export default function HowItHelps() {
                     whileInView={{ opacity: 1, y: 0 }}
                     viewport={{ once: true }}
                     transition={{ duration: 0.8 }}
-                    className="text-center mb-24"
+                    className="text-center mb-12 md:mb-24"
                 >
                     <h2 className="text-2xl md:text-3xl font-bold text-[#282728] uppercase tracking-widest mb-6">
                         HOW EPATHWAYS HELPS YOU ?

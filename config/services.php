@@ -35,4 +35,10 @@ return [
         ],
     ],
 
+    'cerebras' => [
+        'api_key' => env('CEREBRAS_API_KEY'),
+        'base_url' => env('CEREBRAS_BASE_URL', 'https://api.cerebras.ai/v1'),
+        'model' => env('CEREBRAS_MODEL', 'gpt-oss-120b'),
+    ],
+
 ];

@@ -32,9 +32,9 @@ export default function WelcomeModal() {
           ✕
         </button>
 
-        <div className="bg-white rounded-lg shadow-2xl overflow-hidden w-full flex flex-col md:flex-row min-h-[380px]">
+        <div className="bg-white rounded-lg shadow-2xl overflow-hidden w-full flex flex-col md:flex-row min-h-0 md:min-h-[380px] max-h-[90vh] overflow-y-auto">
           {/* ── Left Image Section (50%) ── */}
-          <div className="relative w-full md:w-1/2 min-h-[300px] md:min-h-0 bg-gray-100">
+          <div className="relative w-full md:w-1/2 min-h-[200px] sm:min-h-[300px] md:min-h-0 bg-gray-100">
             <img
               src={PopUpImage}
               alt="Students"
@@ -43,7 +43,7 @@ export default function WelcomeModal() {
           </div>
 
           {/* ── Right Content Section (50%) ── */}
-          <div className="w-full md:w-1/2 flex flex-col items-center text-center px-12 py-12 bg-white justify-between">
+          <div className="w-full md:w-1/2 flex flex-col items-center text-center px-6 sm:px-12 py-8 sm:py-12 bg-white justify-between">
 
             {/* ── TOP: Eyebrow + Logo ── */}
             <div className="flex flex-col items-center">

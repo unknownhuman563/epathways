@@ -31,9 +31,9 @@ const ScrollToTop = () => {
             {isVisible && (
                 <div className="flex ">
                     <a
-                        href="https://forms.clickup.com/9003110473/f/8ca1429-27476/ZFL0N95I6L0K6QEPTD" 
+                        href="https://forms.clickup.com/9003110473/f/8ca1429-27476/ZFL0N95I6L0K6QEPTD"
                         target="_blank"
-                        className="animate-zoom mr-4 p-3 rounded-full bg-green-800 text-white shadow-lg hover:bg-green-700 transition-all"
+                        className="animate-zoom mr-4 p-3 rounded-full bg-green-800 text-white shadow-lg hover:bg-green-700 transition-all hidden sm:inline-block text-sm"
                     >Start your journey with us now!</a>
                     <button
                         onClick={scrollToTop}

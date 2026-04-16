@@ -46,6 +46,7 @@ Route::get('/register/{event_code}', [EventController::class, 'showRegistrationF
 Route::post('/register/{event_code}', [EventController::class, 'registerLead']);
 Route::get('/free-assessment', [LeadController::class, 'showFreeAssessment'])->name('free-assessment');
 Route::post('/free-assessment', [LeadController::class, 'storeFreeAssessment']);
+Route::get('/assessment-result/{lead_id}', [LeadController::class, 'showAssessmentResult'])->name('assessment-result');
 
 // Authentication Routes
 Route::get('/login', [AuthController::class, 'showLoginForm'])->name('login')->middleware('guest');

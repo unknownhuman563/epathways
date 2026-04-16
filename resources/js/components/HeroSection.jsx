@@ -20,7 +20,7 @@ export default function HeroSection({ backgroundVideo }) {
             <div className="absolute inset-0 bg-black/30 backdrop-blur-[2px]"></div>
 
             <div className="relative z-10 flex h-full items-center justify-start px-6 sm:px-12 lg:px-24 container mx-auto">
-                <div className="max-w-4xl text-white text-left flex flex-col items-start -mt-32">
+                <div className="max-w-4xl text-white text-left flex flex-col items-start -mt-16 md:-mt-32">
 
                     {/* Social Proof / Reviews */}
                     <div className="flex items-center gap-4 mb-10">
@@ -40,20 +40,20 @@ export default function HeroSection({ backgroundVideo }) {
                         </div>
                     </div>
 
-                    <h1 className="text-6xl md:text-8xl lg:text-[100px] font-bold mb-6 leading-none tracking-tight text-white">
+                    <h1 className="text-3xl sm:text-5xl md:text-8xl lg:text-[100px] font-bold mb-6 leading-none tracking-tight text-white">
                         Paving the Path <br />Towards <span className="text-[#436235]">New Zealand Future</span>
                     </h1>
 
-                    <p className="text-sm md:text-lg mb-20 text-white/90 max-w-3xl font-light leading-snug tracking-wide">
+                    <p className="text-sm md:text-lg mb-10 md:mb-20 text-white/90 max-w-3xl font-light leading-snug tracking-wide">
                         Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore.
                     </p>
 
                     {/* Action Buttons */}
                     <div className="flex flex-wrap items-center gap-6 mt-4">
-                        <a href="/booking" className="bg-[#000000] text-white px-8 py-3.5 rounded-[5px] text-sm font-semibold tracking-wide hover:bg-black/90 transition-all duration-700 shadow-xl uppercase">
+                        <a href="/booking" className="bg-[#000000] text-white px-5 sm:px-8 py-3 sm:py-3.5 rounded-[5px] text-xs sm:text-sm font-semibold tracking-wide hover:bg-black/90 transition-all duration-700 shadow-xl uppercase">
                             Book Free Consultation
                         </a>
-                        <a href="/free-assessment" className="bg-[#4a6b38] text-white px-8 py-3.5 rounded-[5px] text-sm font-semibold tracking-wide hover:bg-[#3d592e] transition-all duration-700 shadow-lg uppercase">
+                        <a href="/free-assessment" className="bg-[#4a6b38] text-white px-5 sm:px-8 py-3 sm:py-3.5 rounded-[5px] text-xs sm:text-sm font-semibold tracking-wide hover:bg-[#3d592e] transition-all duration-700 shadow-lg uppercase">
                             Free Assessment Eligibility
                         </a>
                     </div>

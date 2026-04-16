@@ -188,7 +188,7 @@ export default function SuccessStories() {
                         <ChevronLeft className="w-5 h-5" />
                     </button>
 
-                    <div className="flex items-center gap-6 bg-white px-8 py-4 rounded-full border border-gray-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
+                    <div className="flex items-center gap-3 sm:gap-6 bg-white px-4 sm:px-8 py-3 sm:py-4 rounded-full border border-gray-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
                         <div className="flex items-center gap-2">
                             {stories.map((_, idx) => (
                                 <button

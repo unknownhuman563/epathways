@@ -1,9 +1,10 @@
 import React from 'react';
 import { Head, Link } from '@inertiajs/react';
-import { 
-    ArrowLeft, User, BookOpen, DollarSign, GraduationCap, 
-    FileText, Download, Edit, Phone, Mail, MapPin, 
-    CheckCircle2, XCircle, FileQuestion, Calendar
+import {
+    ArrowLeft, User, BookOpen, DollarSign, GraduationCap,
+    FileText, Download, Edit, Phone, Mail, MapPin,
+    CheckCircle2, XCircle, FileQuestion, Calendar,
+    TrendingUp, AlertTriangle, Clock
 } from 'lucide-react';
 
 export default function LeadDetails({ lead: backendLead }) {
@@ -142,6 +143,10 @@ export default function LeadDetails({ lead: backendLead }) {
         }
     };
 
+    // AI Analysis data
+    const aiAnalysis = backendLead.ai_analysis;
+    const aiStatus = backendLead.ai_analysis_status || 'pending';
+
     const getStatusStyle = (status) => {
         switch(status) {
             case 'New': return 'bg-blue-100 text-blue-700 border-blue-200';
@@ -173,6 +178,52 @@ export default function LeadDetails({ lead: backendLead }) {
             </div>
         </div>
     );
+
+    const getScoreLevel = (pct) => {
+        if (pct >= 75) return { label: 'Strong', color: 'text-emerald-600', bg: 'bg-emerald-500', badge: 'bg-emerald-50 text-emerald-700 border-emerald-200' };
+        if (pct >= 50) return { label: 'Moderate', color: 'text-amber-600', bg: 'bg-amber-500', badge: 'bg-amber-50 text-amber-700 border-amber-200' };
+        if (pct >= 25) return { label: 'Low', color: 'text-orange-600', bg: 'bg-orange-500', badge: 'bg-orange-50 text-orange-700 border-orange-200' };
+        return { label: 'Critical', color: 'text-red-600', bg: 'bg-red-500', badge: 'bg-red-50 text-red-700 border-red-200' };
+    };
+
+    const ScoreCard = ({ label, score, max, summary }) => {
+        const pct = max > 0 ? Math.round((score / max) * 100) : 0;
+        const level = getScoreLevel(pct);
+        return (
+            <div className="bg-white border border-gray-100 rounded-xl p-5 hover:shadow-sm transition-shadow">
+                <div className="flex items-center justify-between mb-3">
+                    <span className="text-xs font-bold text-gray-700 uppercase tracking-wider">{label}</span>
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${level.badge}`}>{level.label}</span>
+                </div>
+                <div className="flex items-end gap-3 mb-3">
+                    <span className={`text-2xl font-black ${level.color}`}>{pct}%</span>
+                    <span className="text-xs text-gray-400 font-medium pb-1">{score} / {max} pts</span>
+                </div>
+                <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden mb-3">
+                    <div className={`h-full rounded-full ${level.bg} transition-all duration-700`} style={{ width: `${pct}%` }} />
+                </div>
+                {summary && <p className="text-xs text-gray-500 leading-relaxed">{summary}</p>}
+            </div>
+        );
+    };
+
+    const ScoreCircle = ({ score }) => {
+        const circumference = 2 * Math.PI * 40;
+        const offset = circumference - (score / 100) * circumference;
+        const level = getScoreLevel(score);
+        return (
+            <div className="relative w-28 h-28">
+                <svg className="w-28 h-28 -rotate-90" viewBox="0 0 96 96">
+                    <circle cx="48" cy="48" r="40" stroke="#f3f4f6" strokeWidth="6" fill="none" />
+                    <circle cx="48" cy="48" r="40" stroke={level.bg === 'bg-emerald-500' ? '#10b981' : level.bg === 'bg-amber-500' ? '#f59e0b' : level.bg === 'bg-orange-500' ? '#f97316' : '#ef4444'} strokeWidth="6" fill="none" strokeLinecap="round" strokeDasharray={circumference} strokeDashoffset={offset} style={{ transition: 'stroke-dashoffset 1s ease-out' }} />
+                </svg>
+                <div className="absolute inset-0 flex flex-col items-center justify-center">
+                    <span className={`text-2xl font-black ${level.color}`}>{score}</span>
+                    <span className="text-[8px] font-bold text-gray-400 uppercase tracking-wider">/100</span>
+                </div>
+            </div>
+        );
+    };
 
     return (
         <div className="space-y-6 max-w-[1200px] mx-auto pb-12">
@@ -249,8 +300,120 @@ export default function LeadDetails({ lead: backendLead }) {
                 </div>
             </div>
 
+            {/* AI Analysis Section */}
+            {aiStatus !== 'pending' && (
+                <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                    <div className="flex items-center gap-3 px-6 py-4 border-b border-gray-100 bg-gray-50/30">
+                        <div className="w-8 h-8 rounded-full bg-purple-50 text-purple-600 flex items-center justify-center">
+                            <TrendingUp size={18} />
+                        </div>
+                        <h2 className="text-lg font-bold text-gray-900">AI Eligibility Analysis</h2>
+                        {aiStatus === 'processing' && (
+                            <span className="ml-auto flex items-center gap-2 text-xs font-bold text-blue-600 bg-blue-50 px-3 py-1 rounded-full border border-blue-100">
+                                <Clock size={12} className="animate-spin" /> Processing...
+                            </span>
+                        )}
+                        {aiStatus === 'failed' && (
+                            <span className="ml-auto flex items-center gap-2 text-xs font-bold text-red-600 bg-red-50 px-3 py-1 rounded-full border border-red-100">
+                                <AlertTriangle size={12} /> Failed
+                            </span>
+                        )}
+                    </div>
+
+                    {aiStatus === 'completed' && aiAnalysis && (
+                        <div className="p-6 space-y-6">
+                            {/* Overall Score + Pathway Hero */}
+                            <div className="flex flex-col sm:flex-row items-center gap-8 p-6 bg-gray-50/50 rounded-2xl border border-gray-100">
+                                <ScoreCircle score={aiAnalysis.overall_score ?? 0} />
+                                <div className="flex-1 text-center sm:text-left">
+                                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Overall Eligibility Score</p>
+                                    <p className={`text-sm font-bold mb-3 ${getScoreLevel(aiAnalysis.overall_score ?? 0).color}`}>
+                                        {getScoreLevel(aiAnalysis.overall_score ?? 0).label} Candidate
+                                    </p>
+                                    {aiAnalysis.recommended_pathway && (
+                                        <div className="inline-flex items-center gap-2 bg-purple-50 border border-purple-200 rounded-lg px-4 py-2">
+                                            <GraduationCap size={14} className="text-purple-600" />
+                                            <span className="text-xs font-bold text-purple-800">Recommended: {aiAnalysis.recommended_pathway}</span>
+                                        </div>
+                                    )}
+                                    {aiAnalysis.pathway_reasoning && (
+                                        <p className="text-xs text-gray-500 mt-3 leading-relaxed">{aiAnalysis.pathway_reasoning}</p>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Category Score Cards */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <ScoreCard label="Financial Readiness" score={aiAnalysis.categories?.financial_readiness?.score ?? 0} max={50} summary={aiAnalysis.categories?.financial_readiness?.summary} />
+                                <ScoreCard label="Education" score={aiAnalysis.categories?.education?.score ?? 0} max={25} summary={aiAnalysis.categories?.education?.summary} />
+                                <ScoreCard label="Work Experience" score={aiAnalysis.categories?.work_experience?.score ?? 0} max={15} summary={aiAnalysis.categories?.work_experience?.summary} />
+                                <ScoreCard label="Immigration & Character" score={aiAnalysis.categories?.immigration_risk?.score ?? 0} max={10} summary={aiAnalysis.categories?.immigration_risk?.summary} />
+                            </div>
+
+                            {/* Strengths & Concerns */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                {aiAnalysis.strengths?.length > 0 && (
+                                    <div className="bg-emerald-50/50 border border-emerald-100 rounded-xl p-5">
+                                        <h4 className="text-[10px] font-bold text-emerald-700 uppercase tracking-widest mb-4 flex items-center gap-2">
+                                            <CheckCircle2 size={14} /> Strengths
+                                        </h4>
+                                        <ul className="space-y-2.5">
+                                            {aiAnalysis.strengths.map((s, i) => (
+                                                <li key={i} className="flex items-start gap-2.5 text-xs text-gray-700 leading-relaxed">
+                                                    <span className="w-1 h-1 rounded-full bg-emerald-400 mt-1.5 flex-shrink-0" />
+                                                    {s}
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                )}
+                                {aiAnalysis.concerns?.length > 0 && (
+                                    <div className="bg-amber-50/50 border border-amber-100 rounded-xl p-5">
+                                        <h4 className="text-[10px] font-bold text-amber-700 uppercase tracking-widest mb-4 flex items-center gap-2">
+                                            <AlertTriangle size={14} /> Concerns
+                                        </h4>
+                                        <ul className="space-y-2.5">
+                                            {aiAnalysis.concerns.map((c, i) => (
+                                                <li key={i} className="flex items-start gap-2.5 text-xs text-gray-700 leading-relaxed">
+                                                    <span className="w-1 h-1 rounded-full bg-amber-400 mt-1.5 flex-shrink-0" />
+                                                    {c}
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Summary */}
+                            {aiAnalysis.summary && (
+                                <div className="bg-blue-50/30 border border-blue-100 rounded-xl p-5">
+                                    <h4 className="text-[10px] font-bold text-blue-700 uppercase tracking-widest mb-3">AI Summary</h4>
+                                    <p className="text-sm text-gray-700 leading-relaxed">{aiAnalysis.summary}</p>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {aiStatus === 'processing' && (
+                        <div className="p-10 text-center">
+                            <div className="w-10 h-10 border-3 border-gray-200 border-t-purple-500 rounded-full animate-spin mx-auto mb-4" />
+                            <p className="text-sm text-gray-500 font-medium">AI analysis is currently in progress.</p>
+                            <p className="text-xs text-gray-400 mt-1">Refresh the page to check for updates.</p>
+                        </div>
+                    )}
+
+                    {aiStatus === 'failed' && (
+                        <div className="p-10 text-center">
+                            <AlertTriangle size={24} className="text-red-400 mx-auto mb-3" />
+                            <p className="text-sm text-gray-500 font-medium">The automated analysis could not be completed.</p>
+                            <p className="text-xs text-gray-400 mt-1">Please review the lead data manually.</p>
+                        </div>
+                    )}
+                </div>
+            )}
+
             <div className="grid grid-cols-1 gap-6">
-                
+
                 {/* 1. Personal Information */}
                 <SectionCard title="1. Personal Information" icon={User}>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-5">
