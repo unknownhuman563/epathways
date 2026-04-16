@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Lead;
 use App\Http\Requests\StoreLeadRequest;
+use App\Jobs\AnalyzeLeadAssessment;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -219,12 +220,32 @@ class LeadController extends Controller
 
             DB::commit();
 
-            return redirect()->back()->with('success', 'Your assessment profile has been securely analyzed.');
+            AnalyzeLeadAssessment::dispatch($lead);
+
+            return redirect()->back()->with([
+                'success' => 'Your assessment profile has been securely submitted.',
+                'lead_id' => $lead->lead_id,
+            ]);
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error('Free assessment mapping failed', ['error' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
             return redirect()->back()->withErrors(['error' => 'Submission failed. Our team has been notified.']);
         }
+    }
+
+    /**
+     * Display the public assessment result for a client.
+     */
+    public function showAssessmentResult($leadId)
+    {
+        $lead = Lead::where('lead_id', $leadId)->firstOrFail();
+
+        return inertia('AssessmentResult', [
+            'lead_id' => $lead->lead_id,
+            'first_name' => $lead->first_name,
+            'status' => $lead->ai_analysis_status,
+            'analysis' => $lead->ai_analysis_status === 'completed' ? $lead->ai_analysis : null,
+        ]);
     }
 
     /**

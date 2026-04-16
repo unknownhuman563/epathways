@@ -18,6 +18,7 @@ class Lead extends Model
         'immigration_info', 'character_info', 'health_info', 'family_info',
         'nz_contacts_info', 'military_info', 'source_of_funds_info',
         'home_ties_info', 'declaration_accepted',
+        'ai_analysis', 'ai_analysis_status',
     ];
 
     protected $casts = [
@@ -32,6 +33,7 @@ class Lead extends Model
         'military_info' => 'array',
         'source_of_funds_info' => 'array',
         'home_ties_info' => 'array',
+        'ai_analysis' => 'array',
         'age' => 'integer',
     ];
 

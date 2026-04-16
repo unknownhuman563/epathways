@@ -43,12 +43,14 @@ export default function FreeAssessment() {
     const { flash } = usePage().props;
     const [step, setStep] = useState(1);
     const [isSuccess, setIsSuccess] = useState(false);
+    const [leadId, setLeadId] = useState(null);
     const [modal, setModal] = useState({ show: false, message: '' });
     const [localErrors, setLocalErrors] = useState({});
 
     useEffect(() => {
         if (flash?.success) {
             setIsSuccess(true);
+            if (flash?.lead_id) setLeadId(flash.lead_id);
         }
     }, [flash]);
 
@@ -389,7 +391,7 @@ export default function FreeAssessment() {
         });
     };
 
-    if (isSuccess) return <SuccessMessage />;
+    if (isSuccess) return <SuccessMessage leadId={leadId} />;
 
     const stepLabel = step < 10 ? `0${step}` : `${step}`;
 
@@ -1779,7 +1781,7 @@ function Field({ label, error, children }) {
     );
 }
 
-function SuccessMessage() {
+function SuccessMessage({ leadId }) {
     return (
         <div className="min-h-screen bg-white flex items-center justify-center p-6 font-urbanist">
             <div className="max-w-[480px] w-full bg-white rounded-[3rem] shadow-[0_64px_128px_-24px_rgba(40,39,40,0.08)] p-16 text-center border border-[#282728]/5">
@@ -1792,12 +1794,20 @@ function SuccessMessage() {
                 </motion.div>
                 <h2 className="text-3xl font-black text-[#282728] uppercase tracking-tighter mb-6">Success</h2>
                 <p className="text-gray-400 text-sm leading-[2] mb-12 font-medium px-4">
-                    Your profile has been securely received. Our specialists will evaluate your pathway and reach out shortly.
+                    Your profile has been securely received. Our AI is now analyzing your eligibility. View your results using the link below.
                 </p>
-                <div className="bg-gray-50/50 rounded-2xl p-8 mb-12 border border-gray-100/50">
+                <div className="bg-gray-50/50 rounded-2xl p-8 mb-8 border border-gray-100/50">
                     <p className="text-[9px] font-black text-gray-300 uppercase tracking-[0.4em] mb-3 text-center">Protocol ID</p>
-                    <p className="text-lg font-mono font-black text-[#282728]">NZ-{Math.floor(Math.random() * 90000) + 10000}</p>
+                    <p className="text-lg font-mono font-black text-[#282728]">{leadId || '---'}</p>
                 </div>
+                {leadId && (
+                    <a
+                        href={`/assessment-result/${leadId}`}
+                        className="inline-block w-full bg-[#436235] text-white py-6 rounded-2xl text-[10px] font-black uppercase tracking-[0.4em] shadow-2xl shadow-[#436235]/10 hover:bg-[#354d2a] transition-all active:scale-95 mb-4"
+                    >
+                        View Assessment Result
+                    </a>
+                )}
                 <a href="/" className="inline-block w-full bg-[#282728] text-white py-6 rounded-2xl text-[10px] font-black uppercase tracking-[0.4em] shadow-2xl shadow-[#282728]/10 hover:bg-black transition-all active:scale-95">
                     Return to Portal
                 </a>
