@@ -7,17 +7,23 @@ use Illuminate\Database\Seeder;
 
 class AdminSeeder extends Seeder
 {
-    /**
-     * Seed the admin user.
-     */
     public function run(): void
     {
+        $password = env('ADMIN_SEED_PASSWORD');
+
+        if (!$password) {
+            $this->command->error('ADMIN_SEED_PASSWORD is not set in .env — admin user NOT created.');
+            return;
+        }
+
         User::updateOrCreate(
-            ['email' => 'admin@e-pathways.co.nz'],
+            ['email' => env('ADMIN_SEED_EMAIL', 'admin@epathways.co.nz')],
             [
                 'name' => 'Admin',
-                'password' => bcrypt('password'),
+                'password' => bcrypt($password),
             ]
         );
+
+        $this->command->info('Admin user seeded.');
     }
 }
