@@ -2,11 +2,13 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowRight, ChevronDown, ChevronUp, Star, CheckCircle, Calendar, MapPin, Phone, Mail, Shield } from 'react-feather';
 import Navbar from "@/components/navigation-bar";
+import ImmigrationServices from "@/components/ImmigrationServices";
 import Footer from "@/components/footer";
 import ScrollToTop from "@/components/scrolltotop";
 
 // Assets
 import MigrationLogo  from "@assets/Immigration/migration_logo.png";
+import HeroBg         from "@assets/NewSections/why_us_main.png";
 
 import DevImg         from "@assets/team/Dev.png";
 import DaiImg         from "@assets/team/dai.png";
@@ -29,36 +31,7 @@ const topVisas = [
     { emoji: "✈️", label: "Visitor Visa",     sub: "Visit · 1–4 wks",        img: JobImg },
 ];
 
-const services = [
-    {
-        img: AgentsImg,
-        tag: "Consultation",
-        title: "Visa Consultation",
-        desc: "Personalised review of your goals and circumstances to find the right pathway.",
-        time: "1–2 hrs",
-    },
-    {
-        img: VisaImg,
-        tag: "Application",
-        title: "Application Management",
-        desc: "Full preparation and lodgement of your visa application with INZ.",
-        time: "2–4 wks",
-    },
-    {
-        img: PathwaysImg,
-        tag: "Residence",
-        title: "Residence Planning",
-        desc: "Strategic advice on the fastest and safest route to NZ permanent residence.",
-        time: "Ongoing",
-    },
-    {
-        img: SettlementImg,
-        tag: "Post-Visa",
-        title: "Settlement Support",
-        desc: "Guidance on your rights, obligations, and next steps after your visa is granted.",
-        time: "Anytime",
-    },
-];
+const services = []; // Removed in favor of ImmigrationServices component
 
 const consultants = [
     { name: "Dev Bhageerutty",  license: "LIA 201401301", role: "Residence & Skilled Migration", img: DevImg,  rating: 4.9, clients: "150+" },
@@ -148,100 +121,71 @@ export default function Immigration() {
             {/* ══════════════════════════════════════════════════════════════
                 HERO  —  split layout: text left | person photo right
             ══════════════════════════════════════════════════════════════ */}
-            <section className="relative overflow-hidden bg-gradient-to-br from-[#f0faf9] via-white to-white min-h-[88vh] flex items-center">
-                {/* Background decorative ring */}
-                <div className="absolute right-0 top-1/2 -translate-y-1/2 w-[55vw] h-[55vw] max-w-[700px] max-h-[700px] rounded-full bg-[#00A693]/8 -mr-40 pointer-events-none" />
+            <section className="relative overflow-hidden min-h-[90vh] flex items-center justify-center py-24">
+                {/* Background Image with Blur & Dark Overlay */}
+                <div className="absolute inset-0 z-0">
+                    <img src={HeroBg} alt="Background" className="w-full h-full object-cover scale-105" />
+                    <div className="absolute inset-0 bg-slate-950/85 backdrop-blur-[3px]"></div>
+                </div>
 
-                <div className="container mx-auto px-6 md:px-12 max-w-7xl flex flex-col lg:flex-row items-center gap-10 py-20">
-                    {/* ── Left column ────────────────────────── */}
-                    <div className="flex-1 z-10">
-                        {/* pill badge */}
+                <div className="container mx-auto px-6 md:px-12 max-w-5xl relative z-10">
+                    <div className="flex flex-col items-center text-center">
+                        {/* Centered Tag */}
                         <motion.div
-                            initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}
-                            className="inline-flex items-center gap-2 bg-[#00A693]/10 text-[#00A693] text-xs font-bold uppercase tracking-widest px-4 py-2 rounded-full mb-7"
+                            initial={{ opacity: 0, y: -10 }} 
+                            animate={{ opacity: 1, y: 0 }}
+                            className="text-[#00A693] text-[10px] md:text-xs font-bold uppercase tracking-[0.4em] mb-6"
                         >
-                            🌏 Immigration Journey
+                            Relocation
                         </motion.div>
 
                         <motion.h1
-                            initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.08 }}
-                            className="text-5xl md:text-6xl lg:text-[4.2rem] font-bold text-[#282728] leading-[1.1] tracking-tight mb-6"
+                            initial={{ opacity: 0, y: 30 }} 
+                            animate={{ opacity: 1, y: 0 }} 
+                            transition={{ delay: 0.1, duration: 0.8 }}
+                            className="text-6xl md:text-8xl lg:text-[130px] font-black text-white leading-[0.85] tracking-[calc(-0.05em)] mb-10 uppercase flex flex-col items-center"
                         >
-                            Your New Life<br />
-                            Begins Here,<br />
-                            <span className="text-[#00A693]">We Got Your Back! 🇳🇿</span>
+                            <span>Move with</span>
+                            <span className="text-[#00A693]">confidence</span>
                         </motion.h1>
 
                         <motion.p
-                            initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}
-                            className="text-gray-500 text-base md:text-lg leading-relaxed max-w-lg mb-8"
+                            initial={{ opacity: 0, y: 20 }} 
+                            animate={{ opacity: 1, y: 0 }} 
+                            transition={{ delay: 0.2, duration: 0.8 }}
+                            className="text-white/60 text-sm md:text-base leading-relaxed max-w-5xl mb-12 font-light tracking-wide"
                         >
-                            Licensed immigration advisers dedicated to helping you navigate New Zealand's visa system — clearly, honestly, and stress-free.
+                            Expert guidance through every step of your immigration journey. ePathways provides clear, honest, and stress-free pathways to your new life in New Zealand.
                         </motion.p>
 
-                        {/* CTAs */}
+                        {/* Premium Hero Actions */}
                         <motion.div
-                            initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.22 }}
-                            className="flex flex-wrap gap-4 mb-10"
+                            initial={{ opacity: 0, y: 20 }} 
+                            animate={{ opacity: 1, y: 0 }} 
+                            transition={{ delay: 0.3, duration: 0.8 }}
+                            className="flex flex-col sm:flex-row items-center gap-5 w-full sm:w-auto"
                         >
-                            <a href="/free-assessment" className="flex items-center gap-2 bg-[#282728] text-white text-sm font-semibold px-7 py-3.5 rounded-full hover:bg-[#00A693] transition-colors duration-300 shadow-lg">
-                                Get Started <ArrowRight size={15} />
+                            <a 
+                                href="/free-assessment" 
+                                className="w-full sm:w-auto bg-[#00A693] text-white text-[11px] font-bold px-10 py-4 rounded-none hover:bg-[#008c7c] transition-all duration-300 uppercase tracking-[0.2em] shadow-2xl text-center"
+                            >
+                                Apply
                             </a>
-                            <a href="#top-visas" className="flex items-center gap-2 border-2 border-gray-200 text-[#282728] text-sm font-semibold px-7 py-3.5 rounded-full hover:border-[#00A693] hover:text-[#00A693] transition-colors duration-300">
-                                Explore Visas ↓
+                            <a 
+                                href="/booking" 
+                                className="w-full sm:w-auto bg-transparent border border-white/20 text-white text-[11px] font-bold px-10 py-4 rounded-none hover:bg-white/10 transition-all duration-300 uppercase tracking-[0.2em] text-center"
+                            >
+                                Consult
                             </a>
-                        </motion.div>
-
-                        {/* Happy clients badge */}
-                        <motion.div
-                            initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.35 }}
-                            className="inline-flex items-center gap-4 bg-white rounded-2xl shadow-md border border-gray-100 px-5 py-3"
-                        >
-                            {/* Avatar stack */}
-                            <div className="flex -space-x-3">
-                                {[DevImg, DaiImg, EmmaImg].map((src, i) => (
-                                    <img key={i} src={src} alt="" className="w-9 h-9 rounded-full object-cover border-2 border-white" />
-                                ))}
-                            </div>
-                            <div>
-                                <div className="flex items-center gap-1 mb-0.5">
-                                    {[...Array(5)].map((_, i) => <Star key={i} size={10} className="text-amber-400 fill-amber-400" />)}
-                                    <span className="text-xs font-bold text-[#282728] ml-1">4.9</span>
-                                </div>
-                                <div className="text-[11px] text-gray-400 font-medium">300+ Happy Clients</div>
-                            </div>
                         </motion.div>
                     </div>
-
-                    {/* ── Right column: Migration Logo ────────── */}
-                    <motion.div
-                        initial={{ opacity: 0, x: 40 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.2, duration: 0.7 }}
-                        className="flex-shrink-0 flex items-center justify-center lg:justify-end w-full lg:w-auto"
-                    >
-                        <img src={MigrationLogo} alt="ePathways Migration" className="w-56 md:w-72 lg:w-80 object-contain opacity-90 drop-shadow-xl" />
-                    </motion.div>
                 </div>
             </section>
 
-            {/* ══════════════════════════════════════════════════════════════
-                PARTNER / CREDENTIAL STRIP
-            ══════════════════════════════════════════════════════════════ */}
-            <section className="py-6 border-y border-gray-100 bg-white overflow-hidden">
-                <div className="container mx-auto px-6 md:px-12 max-w-7xl flex flex-wrap items-center justify-center md:justify-between gap-6">
-                    {partners.map((p, i) => (
-                        <motion.span
-                            key={i}
-                            initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true }} transition={{ delay: i * 0.07 }}
-                            className="text-xs font-bold uppercase tracking-widest text-gray-300 hover:text-[#00A693] transition-colors cursor-default"
-                        >
-                            {p}
-                        </motion.span>
-                    ))}
-                </div>
-            </section>
+            <ImmigrationServices />
 
             {/* ══════════════════════════════════════════════════════════════
-                TOP VISA CATEGORIES   (like "Explore Top Searched Spots")
+                TOP VISA CATEGORIES
             ══════════════════════════════════════════════════════════════ */}
             <section id="top-visas" className="py-20">
                 <div className="container mx-auto px-6 md:px-12 max-w-7xl">
@@ -289,71 +233,19 @@ export default function Immigration() {
             </section>
 
             {/* ══════════════════════════════════════════════════════════════
-                IMMIGRATION SERVICES  (like "Explore Iconic Locations")
+                PARTNER / CREDENTIAL STRIP (Moved below Top Visas)
             ══════════════════════════════════════════════════════════════ */}
-            <section className="py-20 bg-gray-50">
-                <div className="container mx-auto px-6 md:px-12 max-w-7xl">
-                    {/* Header */}
-                    <div className="flex items-start justify-between gap-6 mb-10">
-                        <div>
-                            <motion.h2
-                                initial={{ opacity: 0, y: 16 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}
-                                className="text-2xl md:text-3xl font-bold text-[#282728]"
-                            >
-                                Visa &amp; Immigration Services ✈️
-                            </motion.h2>
-                            <motion.p
-                                initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true }} transition={{ delay: 0.1 }}
-                                className="text-sm text-gray-400 mt-2 max-w-lg"
-                            >
-                                From your first consultation through to residency — we manage every step with care and expertise.
-                            </motion.p>
-                        </div>
-                        <a href="/booking" className="hidden md:flex items-center gap-2 text-sm font-semibold text-[#00A693] hover:text-[#282728] transition-colors flex-shrink-0">
-                            Book now <ArrowRight size={14} />
-                        </a>
-                    </div>
-
-                    {/* 2-col + overflow grid (like location cards) */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-                        {services.map((s, i) => (
-                            <motion.div
-                                key={i}
-                                initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: i * 0.08 }}
-                                className="group relative rounded-2xl overflow-hidden bg-white shadow-sm hover:shadow-xl transition-shadow duration-300 cursor-pointer"
-                            >
-                                {/* Image */}
-                                <div className="aspect-[4/3] overflow-hidden">
-                                    <img src={s.img} alt={s.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-                                </div>
-
-                                {/* Overlay gradient */}
-                                <div className="absolute inset-0 bg-gradient-to-t from-[#282728]/80 via-transparent to-transparent opacity-80" />
-
-                                {/* Tag badge top-left */}
-                                <div className="absolute top-3 left-3 bg-white/90 backdrop-blur-sm text-[#00A693] text-[10px] font-bold uppercase tracking-widest px-3 py-1 rounded-full">
-                                    {s.tag}
-                                </div>
-
-                                {/* Time badge top-right */}
-                                <div className="absolute top-3 right-3 bg-[#00A693] text-white text-[10px] font-bold px-3 py-1 rounded-full">
-                                    {s.time}
-                                </div>
-
-                                {/* Bottom info */}
-                                <div className="absolute bottom-0 left-0 right-0 p-4">
-                                    <h3 className="text-white font-bold text-sm mb-1">{s.title}</h3>
-                                    <p className="text-gray-300 text-xs leading-snug mb-3">{s.desc}</p>
-                                    <a
-                                        href="/booking"
-                                        className="inline-flex items-center gap-1.5 bg-white text-[#282728] text-[11px] font-bold px-4 py-1.5 rounded-full hover:bg-[#00A693] hover:text-white transition-colors duration-300"
-                                    >
-                                        Learn More <ArrowRight size={11} />
-                                    </a>
-                                </div>
-                            </motion.div>
-                        ))}
-                    </div>
+            <section className="py-12 border-y border-gray-100 bg-white overflow-hidden">
+                <div className="container mx-auto px-6 md:px-12 max-w-7xl flex flex-wrap items-center justify-center md:justify-between gap-10">
+                    {partners.map((p, i) => (
+                        <motion.span
+                            key={i}
+                            initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true }} transition={{ delay: i * 0.07 }}
+                            className="text-xs font-bold uppercase tracking-widest text-gray-300 hover:text-[#00A693] transition-colors cursor-default"
+                        >
+                            {p}
+                        </motion.span>
+                    ))}
                 </div>
             </section>
 

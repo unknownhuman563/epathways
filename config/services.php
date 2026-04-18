@@ -41,4 +41,12 @@ return [
         'model' => env('CEREBRAS_MODEL', 'gpt-oss-120b'),
     ],
 
+    'openai' => [
+        'api_key' => env('OPENAI_API_KEY'),
+    ],
+
+    'gemini' => [
+        'api_key' => env('GEMINI_API_KEY'),
+    ],
+
 ];

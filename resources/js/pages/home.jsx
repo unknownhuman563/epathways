@@ -3,14 +3,14 @@ import Navbar from "@/components/navigation-bar";
 import HeroSection from "@/components/HeroSection";
 import StatisticsBar from "@/components/StatisticsBar";
 import ServicesGrid from "@/components/ServicesGrid";
-import ThreePillars from "@/components/ThreePillars";
-import HowItHelps from "@/components/HowItHelps";
 import InDemandPrograms from "@/components/InDemandPrograms";
-import VisaProcessSteps from "@/components/VisaProcessSteps";
+import StudentVisaTimeline from "@/components/StudentVisaTimeline";
 import EventsAnnouncements from "@/components/EventsAnnouncements";
 import SuccessStories from "@/components/SuccessStories";
-import LearnAbout from "@/components/LearnAbout";
+import WhyUs from "@/components/WhyUs";
+import ProcessSteps from "@/components/ProcessSteps";
 import PartnerLogos from "@/components/partners";
+import AboutBrief from "@/components/AboutBrief";
 import ScrollToTop from "@/components/scrolltotop";
 import Modal from "@/components/modal-component";
 import Footer from "../components/footer";
@@ -40,25 +40,26 @@ export default function Home() {
           <PartnerLogos />
         </section>
 
+        {/* About Brief Section */}
+        <AboutBrief />
+
         {/* Services Section */}
         <section id="services">
           <ServicesGrid />
         </section>
 
-        {/* 3 Pillars Section */}
-        <ThreePillars />
+        <WhyUs />
+        <ProcessSteps />
 
         {/* In-Demand Programs Section */}
         <InDemandPrograms />
 
-        {/* Visa Process Steps Section */}
-        <VisaProcessSteps />
+        {/* Student Visa Timeline Section */}
+        <StudentVisaTimeline />
 
         {/* Success Stories Section */}
         <SuccessStories />
 
-        {/* Learn About Section */}
-        <LearnAbout />
 
         {/* Events and Announcements Section */}
         <EventsAnnouncements />
