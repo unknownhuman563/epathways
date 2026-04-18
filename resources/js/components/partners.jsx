@@ -1,7 +1,7 @@
 import React from "react";
 import { motion } from "framer-motion";
 
-const images = import.meta.glob("/resources/Assets/Partners/*", { eager: true, import: "default" });
+const images = import.meta.glob("/resources/assets/Partners/*", { eager: true, import: "default" });
 
 const imageMap = Object.keys(images).reduce((acc, key) => {
     const filename = key.split("/").pop();

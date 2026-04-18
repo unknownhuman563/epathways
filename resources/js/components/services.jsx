@@ -2,7 +2,7 @@ import { ArrowRight, ArrowLeft } from "react-feather";
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 
-const images = import.meta.glob("/resources/Assets/Services/*", { eager: true, import: "default" });
+const images = import.meta.glob("/resources/assets/Services/*", { eager: true, import: "default" });
 
 const imageMap = Object.keys(images).reduce((acc, key) => {
     const filename = key.split("/").pop(); // e.g. pathway.png

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Star, ChevronLeft, ChevronRight } from "react-feather"; // ✅ Import chevrons
 
-const images = import.meta.glob("/resources/Assets/Testimonies/*", { eager: true, import: "default" });
+const images = import.meta.glob("/resources/assets/Testimonies/*", { eager: true, import: "default" });
 
 const imageMap = Object.keys(images).reduce((acc, key) => {
     const filename = key.split("/").pop();

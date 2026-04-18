@@ -2,7 +2,7 @@ import React from 'react';
 
 // Using existing images as placeholders since exact matches aren't available
 // Ideally these should be replaced with the exact images from the design
-const images = import.meta.glob("/resources/Assets/Services/*", { eager: true, import: "default" });
+const images = import.meta.glob("/resources/assets/Services/*", { eager: true, import: "default" });
 
 const imageMap = Object.keys(images).reduce((acc, key) => {
     const filename = key.split("/").pop();
