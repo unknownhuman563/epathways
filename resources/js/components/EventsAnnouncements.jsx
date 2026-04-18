@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import React from 'react';
+import { motion } from 'framer-motion';
 import sb19Image from "@assets/Events/sb19.png";
 import garyVImage from "@assets/Events/garyv.jpg";
 import newRightsImage from "@assets/Events/newrights.jpg";
@@ -58,124 +58,103 @@ const articles = [
     },
 ];
 
-const CARDS_PER_PAGE = 3;
-const totalPages = Math.ceil(articles.length / CARDS_PER_PAGE);
+const containerVariants = {
+    hidden: { opacity: 0 },
+    visible: {
+        opacity: 1,
+        transition: {
+            staggerChildren: 0.1
+        }
+    }
+};
 
-const slideVariants = {
-    enter: (dir) => ({ opacity: 0, x: dir > 0 ? 60 : -60 }),
-    center: { opacity: 1, x: 0, transition: { duration: 0.45, ease: 'easeOut' } },
-    exit: (dir) => ({ opacity: 0, x: dir > 0 ? -60 : 60, transition: { duration: 0.3, ease: 'easeIn' } }),
+const cardVariants = {
+    hidden: { opacity: 0, y: 30 },
+    visible: { 
+        opacity: 1, 
+        y: 0,
+        transition: { duration: 0.5, ease: 'easeOut' }
+    }
 };
 
 export default function EventsAnnouncements() {
-    const [page, setPage] = useState(0);
-    const [direction, setDirection] = useState(1);
-
-    const goTo = (next) => {
-        setDirection(next > page ? 1 : -1);
-        setPage(next);
-    };
-
-    const prev = () => goTo((page - 1 + totalPages) % totalPages);
-    const next = () => goTo((page + 1) % totalPages);
-
-    // Auto-play: advance every 4 seconds
-    useEffect(() => {
-        const timer = setInterval(() => {
-            setDirection(1);
-            setPage((p) => (p + 1) % totalPages);
-        }, 4000);
-        return () => clearInterval(timer);
-    }, []);
-
-    const visible = articles.slice(page * CARDS_PER_PAGE, page * CARDS_PER_PAGE + CARDS_PER_PAGE);
-
     return (
-        <section className="bg-white font-urbanist">
+        <section className="py-24 bg-white font-urbanist overflow-hidden">
             <div className="max-w-7xl mx-auto px-6">
-                {/* Banner Carousel */}
-                <div className="relative group">
-                    <AnimatePresence mode="wait" custom={direction}>
+                {/* Section Header */}
+                <div className="flex flex-col md:flex-row md:items-end justify-between mb-16 gap-6">
+                    <div className="max-w-2xl">
+                        <div className="flex items-center gap-3 mb-4">
+                            <span className="text-[10px] font-bold text-[#436235] uppercase tracking-[0.3em]">Stay Informed</span>
+                            <div className="h-[1px] w-8 bg-[#436235]"></div>
+                        </div>
+                        <h2 className="text-4xl md:text-5xl font-black text-[#282728] leading-tight mb-2">
+                             News & <span className="text-[#436235]">Announcements</span>
+                        </h2>
+                        <p className="text-gray-500 text-sm md:text-base font-light max-w-xl">
+                            The latest updates on New Zealand immigration, company events, and success stories from the ePathways community.
+                        </p>
+                    </div>
+                </div>
+
+                {/* Grid Layout */}
+                <motion.div 
+                    variants={containerVariants}
+                    initial="hidden"
+                    whileInView="visible"
+                    viewport={{ once: true, margin: "-100px" }}
+                    className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8"
+                >
+                    {articles.map((article, index) => (
                         <motion.div
-                            key={page}
-                            custom={direction}
-                            variants={slideVariants}
-                            initial="enter"
-                            animate="center"
-                            exit="exit"
-                            className="bg-white rounded-[1.5rem] shadow-xl overflow-hidden border border-gray-100 flex flex-col lg:flex-row min-h-[320px]"
+                            key={index}
+                            variants={cardVariants}
+                            className="group flex flex-col bg-white rounded-3xl overflow-hidden border border-gray-100 shadow-sm hover:shadow-2xl transition-all duration-500 h-full"
                         >
-                            {/* Image Side */}
-                            <div className="lg:w-1/2 relative h-48 lg:h-auto overflow-hidden">
+                            {/* Image Container */}
+                            <div className="relative h-64 overflow-hidden">
                                 <img
-                                    src={articles[page].image}
-                                    alt={articles[page].title}
-                                    className="w-full h-full object-cover transition-transform duration-[2000ms] group-hover:scale-105"
+                                    src={article.image}
+                                    alt={article.title}
+                                    className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
                                 />
-                                <div className="absolute inset-0 bg-gradient-to-r from-white via-transparent to-transparent hidden lg:block"></div>
+                                <div className="absolute inset-0 bg-black/10 group-hover:bg-black/0 transition-colors duration-500"></div>
                                 
                                 {/* Date Badge */}
-                                <div className="absolute top-4 left-4 bg-[#282728] text-white text-[9px] font-bold px-3 py-1.5 rounded-md shadow-lg uppercase tracking-widest">
-                                    {articles[page].date}
+                                <div className="absolute top-5 left-5 bg-white/90 backdrop-blur-md text-[#282728] text-[9px] font-bold px-3 py-1.5 rounded-lg shadow-lg uppercase tracking-widest">
+                                    {article.date}
                                 </div>
                             </div>
 
                             {/* Content Side */}
-                            <div className="lg:w-1/2 p-8 lg:p-10 flex flex-col justify-center bg-white">
-                                <div className="flex items-center gap-3 mb-4">
-                                    <span className="text-[9px] font-bold text-[#436235] uppercase tracking-[0.3em]">Latest Announcement</span>
-                                    <div className="h-[1px] w-6 bg-[#436235]"></div>
-                                </div>
-                                <h3 className="text-xl lg:text-2xl font-black text-[#282728] mb-4 leading-tight hover:text-[#436235] transition-colors cursor-default">
-                                    {articles[page].title}
+                            <div className="p-8 flex flex-col flex-grow">
+                                <h3 className="text-xl font-bold text-[#282728] mb-4 leading-tight group-hover:text-[#436235] transition-colors line-clamp-2">
+                                    {article.title}
                                 </h3>
-                                <p className="text-gray-500 text-sm leading-relaxed mb-8 font-light line-clamp-2">
-                                    {articles[page].excerpt}
+                                <p className="text-gray-500 text-sm leading-relaxed mb-8 font-light line-clamp-3">
+                                    {article.excerpt}
                                 </p>
-                                <a
-                                    href={articles[page].link}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="inline-flex items-center gap-3 px-8 py-3.5 bg-[#282728] text-white text-[10px] font-bold rounded-xl hover:bg-[#436235] transition-all uppercase tracking-[0.2em] shadow-lg active:scale-95 w-fit group/btn"
-                                >
-                                    Read Story
-                                    <svg className="w-4 h-4 transition-transform group-hover/btn:translate-x-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 8l4 4m0 0l-4 4m4-4H3" />
-                                    </svg>
-                                </a>
+                                
+                                <div className="mt-auto">
+                                    <a
+                                        href={article.link}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="inline-flex items-center gap-2 text-[10px] font-bold text-[#282728] uppercase tracking-[0.2em] group/link"
+                                    >
+                                        <span className="relative">
+                                            Read Story
+                                            <span className="absolute -bottom-1 left-0 w-0 h-[2px] bg-[#436235] transition-all duration-300 group-hover/link:w-full"></span>
+                                        </span>
+                                        <svg className="w-4 h-4 transition-transform group-hover/link:translate-x-1 text-[#436235]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 8l4 4m0 0l-4 4m4-4H3" />
+                                        </svg>
+                                    </a>
+                                </div>
                             </div>
                         </motion.div>
-                    </AnimatePresence>
-
-                    {/* Navigation Controls */}
-                    <div className="absolute left-2 lg:-left-10 top-1/2 -translate-y-1/2 flex flex-col gap-4 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-300 z-10">
-                        <button
-                            onClick={prev}
-                            className="w-10 h-10 md:w-12 md:h-12 flex items-center justify-center rounded-full bg-white/90 md:bg-white shadow-xl border border-gray-100 hover:bg-[#436235] hover:text-white transition-all transform hover:scale-110 active:scale-95"
-                        >
-                            <svg className="w-5 h-5 md:w-6 md:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" /></svg>
-                        </button>
-                    </div>
-                    <div className="absolute right-2 lg:-right-10 top-1/2 -translate-y-1/2 flex flex-col gap-4 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-300 z-10">
-                        <button
-                            onClick={next}
-                            className="w-10 h-10 md:w-12 md:h-12 flex items-center justify-center rounded-full bg-white/90 md:bg-white shadow-xl border border-gray-100 hover:bg-[#436235] hover:text-white transition-all transform hover:scale-110 active:scale-95"
-                        >
-                            <svg className="w-5 h-5 md:w-6 md:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" /></svg>
-                        </button>
-                    </div>
-                </div>
-
-                {/* Progressive Indicators */}
-                <div className="flex justify-center gap-3 mt-12">
-                    {articles.map((_, i) => (
-                        <button
-                            key={i}
-                            onClick={() => goTo(i)}
-                            className={`h-1.5 rounded-full transition-all duration-500 ${i === page ? 'bg-[#436235] w-12' : 'bg-gray-200 w-4'}`}
-                        />
                     ))}
-                </div>
+                </motion.div>
             </div>
         </section>
     );

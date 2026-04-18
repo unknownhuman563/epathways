@@ -4,6 +4,8 @@ import { Check, ArrowRight } from 'react-feather';
 import Navbar from "@/components/navigation-bar";
 import Footer from "@/components/footer";
 import ScrollToTop from "@/components/scrolltotop";
+import LearnAbout from "@/components/LearnAbout";
+import ThreePillars from "@/components/ThreePillars";
 
 // Import assets
 import GroupPic from "@assets/about_us/group_pic.png";
@@ -295,6 +297,12 @@ export default function AboutUs() {
                     </div>
                 </div>
             </section>
+
+            {/* How ePathways Helps You Section */}
+            <ThreePillars />
+
+            {/* Learn About Section */}
+            <LearnAbout />
 
             <ScrollToTop />
             <Footer />
