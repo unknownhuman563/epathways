@@ -1,17 +1,27 @@
-import React from 'react';
+import React, { useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import testi1 from "@assets/Testimonies/testi1.png";
 import testi2 from "@assets/Testimonies/testi2.png";
 import testi3 from "@assets/Testimonies/testi3.png";
 
 export default function HeroSection({ backgroundVideo }) {
+    const videoRef = useRef(null);
+
+    useEffect(() => {
+        if (videoRef.current) {
+            videoRef.current.play().catch((e) => console.log("Edge Autoplay prevented", e));
+        }
+    }, []);
+
     return (
         <div className="relative h-screen w-full overflow-hidden font-urbanist">
             {/* Background Video with Overlay */}
             <video
+                ref={videoRef}
                 autoPlay
                 loop
                 muted
+                defaultMuted
                 playsInline
                 className="absolute inset-0 w-full h-full object-cover"
             >

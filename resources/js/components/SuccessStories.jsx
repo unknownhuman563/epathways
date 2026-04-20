@@ -11,25 +11,25 @@ import testi3 from "@assets/Testimonies/testi3.png";
 const stories = [
     {
         id: 1,
-        name: "Priya Sharma",
-        role: "Student, Canada",
-        quote: "ePathways made the whole process feel manageable. They answered every question and never made me feel rushed.",
+        name: "Kent Dinfer",
+        role: "Health Care Support Worker",
+        quote: "I cannot thank ePathways enough for the incredible support and guidance they provided throughout my journey. Following their advice, I pursued my studies diligently, and within just one year, I secured a full- time job in the healthcare sector. This opportunity not only kick-started my career but also allowed me to achieve a significant milestone - buying my very first car at the age of 19. It's all thanks to the expertise and dedication of ePathways that I have been able to make such remarkable progress in my life. I am truly grateful for their assistance and would highly recommend ePathways to anyone seeking to achieve their dreams.",
         image: testi1,
         rating: 5,
     },
     {
         id: 2,
-        name: "Franz & Juniven",
-        role: "Skilled Migrants, Auckland",
-        quote: "From the first consultation to our visa approval, the team guided us with honesty and care every single step.",
+        name: "Julie Ann and Dennis",
+        role: "Student and Nurse",
+        quote: "ePathways has been an invaluable guiding light in our journey to New Zealand. eP provided us with personalized support, handling all the immigration and settlement processes with expertise and efficiency. We were continually kept informed, making us feel valued as clients. Thanks to ePathways, we are now living our dream in New Zealand, and we wholeheartedly recommend their exceptional services to anyone looking to make a smooth transition to this beautiful country.",
         image: testi2,
         rating: 5,
     },
     {
         id: 3,
-        name: "Marilyn Kinto",
-        role: "Student Arrival, Gold Coast",
-        quote: "I was nervous about studying abroad, but ePathways handled everything efficiently. I could not have done it without them.",
+        name: "Mia Cristialen Boqueda",
+        role: "Student Visa - Approved in 15 days",
+        quote: "I found working with ePathways really smooth all the way from the beginning when I didn't even know what the first step should be",
         image: testi3,
         rating: 5,
     },
@@ -62,8 +62,8 @@ export default function SuccessStories() {
 
                     {/* Left — portrait photo */}
                     <div
-                        className="flex-shrink-0 bg-[#e8e8e4] overflow-hidden"
-                        style={{ width: "43%", maxHeight: "380px" }}
+                        className="flex-shrink-0 bg-transparent overflow-hidden flex items-center justify-center"
+                        style={{ width: "43%", height: "380px" }}
                     >
                         <AnimatePresence mode="wait">
                             <motion.img
@@ -74,8 +74,7 @@ export default function SuccessStories() {
                                 animate={{ opacity: 1 }}
                                 exit={{ opacity: 0 }}
                                 transition={{ duration: 0.4 }}
-                                className="w-full h-full object-cover object-top"
-                                style={{ maxHeight: "380px" }}
+                                className="w-full h-full object-contain object-center"
                             />
                         </AnimatePresence>
                     </div>
@@ -99,13 +98,13 @@ export default function SuccessStories() {
                                         <Star
                                             key={i}
                                             size={18}
-                                            className="fill-[#1a1a1a] text-[#1a1a1a]"
+                                            className="fill-green-700 text-green-700"
                                         />
                                     ))}
                                 </div>
 
                                 {/* Quote */}
-                                <p className="text-[15px] text-[#1a1a1a] leading-[1.65] mb-7 max-w-sm">
+                                <p className="text-[15px] text-[#1a1a1a] leading-[1.65] mb-7 max-w-sm text-justify">
                                     &ldquo;{story.quote}&rdquo;
                                 </p>
 
