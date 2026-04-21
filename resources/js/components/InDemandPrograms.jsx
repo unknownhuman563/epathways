@@ -1,7 +1,7 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 
-const images = import.meta.glob("/resources/assets/Services/*", { eager: true, import: "default" });
+const images = import.meta.glob("/resources/Assets/Services/*", { eager: true, import: "default" });
 
 const imageMap = Object.keys(images).reduce((acc, key) => {
     const filename = key.split("/").pop();
@@ -10,79 +10,113 @@ const imageMap = Object.keys(images).reduce((acc, key) => {
 }, {});
 
 export default function InDemandPrograms() {
-    const programs = [
-        { title: "Business administration", level: "Bachelor", location: "Australia", image: imageMap['education.png'] },
-        { title: "Computer science", level: "Master", location: "Canada", image: imageMap['pathways.png'] },
-        { title: "Engineering technology", level: "Bachelor", location: "United Kingdom", image: imageMap['education.png'] },
-        { title: "Nursing and healthcare", level: "Diploma", location: "New Zealand", image: imageMap['pathways.png'] },
-        { title: "Data analytics", level: "Master", location: "Australia", image: imageMap['education.png'] },
-        { title: "Hospitality management", level: "Bachelor", location: "Canada", image: imageMap['pathways.png'] },
-        { title: "Environmental science", level: "Bachelor", location: "United Kingdom", image: imageMap['education.png'] },
-        { title: "Finance and accounting", level: "Master", location: "Australia", image: imageMap['pathways.png'] },
-    ];
+    const scrollRef = useRef(null);
+
+    const scroll = (direction) => {
+        const el = scrollRef.current;
+        if (!el) return;
+        el.scrollBy({ left: direction === 'left' ? -680 : 680, behavior: 'smooth' });
+    };
 
     return (
         <section className="py-24 bg-[#121613] text-white font-urbanist">
             <div className="max-w-7xl mx-auto px-6">
-                
+
                 {/* Header */}
-                <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-16 gap-6">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-12 gap-6">
                     <div>
-                        <p className="text-xs font-bold uppercase tracking-widest mb-3">Programs</p>
+                        <p className="text-xs font-bold uppercase tracking-widest mb-3 text-gray-400">Programs</p>
                         <h2 className="text-4xl md:text-5xl font-medium tracking-tight mb-2">
-                            Pathways that lead somewhere
+                            Top In-Demand Programs
                         </h2>
                         <p className="text-sm md:text-base text-gray-300">
-                            Find your fit among the world's best
+                            The most sought-after qualifications for NZ immigration and career pathways
                         </p>
                     </div>
-                    <button className="border border-white/20 px-6 py-2.5 text-sm hover:bg-white/10 transition-colors">
-                        Explore all
-                    </button>
+                    <div className="flex items-center gap-3">
+                        <button
+                            onClick={() => scroll('left')}
+                            className="w-11 h-11 flex items-center justify-center rounded-full border border-white/20 hover:bg-white/10 transition-colors"
+                            aria-label="Scroll left"
+                        >
+                            <ChevronLeft size={20} />
+                        </button>
+                        <button
+                            onClick={() => scroll('right')}
+                            className="w-11 h-11 flex items-center justify-center rounded-full border border-white/20 hover:bg-white/10 transition-colors"
+                            aria-label="Scroll right"
+                        >
+                            <ChevronRight size={20} />
+                        </button>
+                        <a
+                            href="/programs-levels"
+                            className="border border-white/20 px-6 py-2.5 text-sm hover:bg-white/10 transition-colors ml-2"
+                        >
+                            Explore all
+                        </a>
+                    </div>
                 </div>
 
-                {/* Grid */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-12">
-                    {programs.map((program, index) => (
-                        <motion.div
-                            key={index}
-                            initial={{ opacity: 0, y: 20 }}
-                            whileInView={{ opacity: 1, y: 0 }}
-                            viewport={{ once: true }}
-                            transition={{ delay: index * 0.1, duration: 0.5 }}
-                            className="flex flex-col group cursor-pointer"
+                {/* Horizontal Scrollable Row */}
+                <div
+                    ref={scrollRef}
+                    className="flex gap-6 overflow-x-auto pb-4 scroll-smooth"
+                    style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+                >
+                    {categories.map((cat) => (
+                        <div
+                            key={cat.id}
+                            className="flex-shrink-0 w-[320px] bg-white text-[#1a1a1a] rounded-xl overflow-hidden flex flex-col group hover:shadow-xl transition-all duration-300"
                         >
-                            {/* Image Container */}
-                            <div className="bg-[#2a302b] aspect-[4/5] mb-5 overflow-hidden relative">
-                                {program.image ? (
-                                    <img
-                                        src={program.image}
-                                        alt={program.title}
-                                        className="w-full h-full object-cover group-hover:scale-105 transition-all duration-500"
-                                    />
-                                ) : (
-                                    /* Fallback if image not found */
-                                    <div className="w-full h-full flex items-center justify-center text-white/20">
-                                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-                                            <circle cx="8.5" cy="8.5" r="1.5"></circle>
-                                            <polyline points="21 15 16 10 5 21"></polyline>
-                                        </svg>
-                                    </div>
-                                )}
+                            {/* Image */}
+                            <div className="relative h-48 w-full overflow-hidden bg-[#2a3a2a]">
+                                <img
+                                    src={cat.image}
+                                    alt={cat.title}
+                                    className="w-full h-full object-cover opacity-70 group-hover:opacity-90 group-hover:scale-105 transition-all duration-500"
+                                />
                             </div>
-                            
-                            {/* Text Info */}
-                            <h3 className="text-sm md:text-base font-semibold mb-1 tracking-wide group-hover:text-green-400 transition-colors">
-                                {program.title}
-                            </h3>
-                            <p className="text-[12px] text-gray-400 italic mb-1">
-                                {program.level}
-                            </p>
-                            <p className="text-sm font-bold tracking-wide">
-                                {program.location}
-                            </p>
-                        </motion.div>
+
+                            {/* Card Body */}
+                            <div className="p-5 flex flex-col flex-grow">
+                                {/* Tags */}
+                                <div className="flex gap-2 mb-3">
+                                    {cat.tags.map((tag, i) => (
+                                        <span key={i} className="px-2.5 py-0.5 bg-gray-100 text-gray-700 text-[10px] font-semibold rounded">
+                                            {tag}
+                                        </span>
+                                    ))}
+                                </div>
+
+                                {/* Title */}
+                                <h3 className="text-base font-bold text-gray-800 leading-snug mb-2">
+                                    {cat.title}
+                                </h3>
+
+                                {/* Programs list */}
+                                <ul className="space-y-1 mb-4 flex-grow">
+                                    {cat.programs.map((prog, i) => (
+                                        <li key={i} className="flex items-start gap-1.5 text-xs text-gray-700 leading-relaxed">
+                                            <span className="text-gray-500 mt-0.5">›</span>
+                                            <span>{prog}</span>
+                                        </li>
+                                    ))}
+                                </ul>
+
+                                {/* Intakes */}
+                                <p className="text-[11px] text-gray-500 mb-4">
+                                    Intakes: <span className="text-gray-700 font-semibold">{cat.intakes.join(", ")}</span>
+                                </p>
+
+                                {/* Explore link */}
+                                <a
+                                    href="/programs-levels"
+                                    className="flex items-center gap-1 text-xs font-semibold text-gray-700 hover:text-gray-900 transition-colors"
+                                >
+                                    Explore all <span className="text-base leading-none">›</span>
+                                </a>
+                            </div>
+                        </div>
                     ))}
                 </div>
 

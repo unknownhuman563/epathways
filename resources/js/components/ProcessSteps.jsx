@@ -1,39 +1,31 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { ArrowRight } from 'react-feather';
-import StepOne from "@assets/NewSections/step_one.png";
-import StepTwo from "@assets/NewSections/step_two.png";
-import StepThree from "@assets/NewSections/step_three.png";
-import StepFour from "@assets/NewSections/step_four.png";
+import EducationImg from "@assets/Services/education.png";
+import VisaImg from "@assets/Services/visa.png";
+import SettlementImg from "@assets/Services/settlement.png";
 
 const steps = [
     {
-        tag: "Step one",
-        title: "Tell us what you're looking for",
-        desc: "Share your goals and circumstances with us. We listen to your vision to build the best plan.",
-        linkText: "Start",
-        image: StepOne
+        tag: "Emerge",
+        title: "Education",
+        desc: "Start your journey with confidence. We connect you to the right schools and courses, guided by ICEF-certified experts who understand your goals.",
+        linkText: "Learn More",
+        image: EducationImg
     },
     {
-        tag: "Step two",
-        title: "We map out your best options",
-        desc: "Our team assesses your eligibility and shares the courses and pathways that suit you.",
-        linkText: "Choose",
-        image: StepTwo
+        tag: "Energise",
+        title: "Immigration",
+        desc: "Move forward with ease. From Visitor to Student and Residency visas, we handle the process while keeping everything legally compliant and stress-free.",
+        linkText: "Learn More",
+        image: VisaImg
     },
     {
-        tag: "Step three",
-        title: "We handle the paperwork and filings",
-        desc: "Documents, applications, and submissions are our responsibility. We handle the complexity.",
-        linkText: "Process",
-        image: StepThree
-    },
-    {
-        tag: "Step four",
-        title: "You move forward with confidence",
-        desc: "Approval comes through, and we support your transition every step of the way.",
-        linkText: "Arrive",
-        image: StepFour
+        tag: "Evolve",
+        title: "Accommodation",
+        desc: "Settle in smoothly. We help you find safe, comfortable housing and provide essential support—from homestays to getting you oriented with daily transport.",
+        linkText: "Learn More",
+        image: SettlementImg
     }
 ];
 
@@ -43,17 +35,17 @@ export default function ProcessSteps() {
             <div className="max-w-7xl mx-auto px-6">
                 {/* Section Header */}
                 <div className="text-center mb-20 px-4">
-                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.3em] mb-4 block">Process</span>
+                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.3em] mb-4 block">Service Trifecta</span>
                     <h2 className="text-4xl md:text-5xl font-black text-[#282728] leading-tight mb-6">
-                        Your journey in four steps
+                        3 Pillars
                     </h2>
                     <p className="text-gray-500 text-sm md:text-base font-light max-w-xl mx-auto leading-relaxed">
-                        From your first question to your arrival, we handle it all.
+                        Integrated core offerings to support every step of your journey.
                     </p>
                 </div>
 
                 {/* Steps Grid */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+                <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-3 gap-8">
                     {steps.map((step, idx) => (
                         <motion.div
                             key={idx}
