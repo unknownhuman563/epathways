@@ -424,13 +424,13 @@ export default function BookingPage() {
                                                             <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-gray-400 group-hover/item:text-[#436235] group-hover/item:bg-[#436235]/10">
                                                                 <Phone size={16} />
                                                             </div>
-                                                            <span className="font-bold text-sm text-gray-200">+64 9 123 4567</span>
+                                                            <span className="font-bold text-sm text-gray-200">+64 27 777 5586</span>
                                                         </a>
                                                         <a href="mailto:hello@epathways.co.nz" className="flex items-center gap-3 group/item hover:text-[#436235] transition-colors duration-300">
                                                             <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-gray-400 group-hover/item:text-[#436235] group-hover/item:bg-[#436235]/10">
                                                                 <Mail size={16} />
                                                             </div>
-                                                            <span className="font-bold text-sm text-gray-200">hello@epathways.co.nz</span>
+                                                            <span className="font-bold text-sm text-gray-200">info@epathways.co.nz</span>
                                                         </a>
                                                         <div className="flex items-center gap-3">
                                                             <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-gray-400">
@@ -601,15 +601,15 @@ export default function BookingPage() {
                                                 <div className="space-y-6 text-gray-600">
                                                     <div className="flex items-center gap-4">
                                                         <Mail className="w-5 h-5 text-black" />
-                                                        <span>hello@epathways.com</span>
+                                                        <span>info@epathways.co.nz</span>
                                                     </div>
                                                     <div className="flex items-center gap-4">
                                                         <Phone className="w-5 h-5 text-black" />
-                                                        <span>+61 2 8000 0000</span>
+                                                        <span>+64 27 777 5586</span>
                                                     </div>
                                                     <div className="flex items-start gap-4">
                                                         <MapPin className="w-5 h-5 text-black shrink-0 mt-1" />
-                                                        <span>Level 5, 123 Pitt Street, Sydney NSW 2000</span>
+                                                        <span>Auckland, New Zealand</span>
                                                     </div>
                                                 </div>
                                             </div>
