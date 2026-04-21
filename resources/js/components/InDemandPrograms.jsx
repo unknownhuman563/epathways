@@ -1,13 +1,86 @@
-import React from 'react';
-import { motion } from 'framer-motion';
+import React, { useRef } from 'react';
+import { ChevronLeft, ChevronRight } from 'react-feather';
+import educationImg from "@assets/Services/education.png";
+import visaImg from "@assets/Services/visa.png";
+import settlementImg from "@assets/Services/settlement.png";
+import agentsImg from "@assets/Services/agents.png";
 
-const images = import.meta.glob("/resources/Assets/Services/*", { eager: true, import: "default" });
-
-const imageMap = Object.keys(images).reduce((acc, key) => {
-    const filename = key.split("/").pop();
-    acc[filename] = images[key];
-    return acc;
-}, {});
+const categories = [
+    {
+        id: 1,
+        title: "IT / Computer Science & Data",
+        description: "Degrees such as a Bachelor in Computer Science, Software Engineering or Data Science are in high demand thanks to the growth of tech, cybersecurity, and data-driven industries.",
+        programs: [
+            "Bachelor of Computer Science",
+            "Bachelor of Information Technology",
+            "Bachelor of Software Engineering",
+            "Bachelor of Data Science",
+        ],
+        intakes: ["February", "March", "May", "July"],
+        tags: ["Technology", "Bachelor"],
+        image: educationImg,
+    },
+    {
+        id: 2,
+        title: "Engineering (Civil, Electrical, Mechanical, Environmental)",
+        description: "Infrastructure growth and the shift to renewable energy are driving strong demand for engineers. Degrees in Civil, Mechanical, and Electrical Engineering open doors across NZ.",
+        programs: [
+            "Bachelor of Civil Engineering",
+            "Bachelor of Mechanical Engineering",
+            "Bachelor of Electrical Engineering",
+            "Bachelor of Computer Engineering",
+            "Bachelor of Chemical Engineering",
+        ],
+        intakes: ["February", "March", "June", "July"],
+        tags: ["Engineering", "Bachelor"],
+        image: agentsImg,
+    },
+    {
+        id: 3,
+        title: "Healthcare / Nursing / Allied Health",
+        description: "Healthcare degrees such as Bachelor of Nursing, Physiotherapy, etc, are in demand given ageing populations and ongoing shortages in key health professions.",
+        programs: [
+            "Bachelor of Nursing",
+            "Bachelor of Medicine",
+            "Bachelor of Pharmacy",
+            "Bachelor of Physiotherapy",
+            "Bachelor of Medical Laboratory Science",
+        ],
+        intakes: ["February", "March", "April", "May", "June", "July", "August"],
+        tags: ["Healthcare", "Diploma"],
+        image: settlementImg,
+    },
+    {
+        id: 4,
+        title: "Applied Management, Business Administration, Business Informatics",
+        description: "Advanced management, leadership, and analytical skills for New Zealand's business and tech sectors, preparing learners for diverse roles through strategic, industry-focused training.",
+        programs: [
+            "Bachelor of Business Administration",
+            "Bachelor of Commerce",
+            "Bachelor of Applied Management",
+            "Bachelor of Business Informatics",
+            "Bachelor of Management Studies",
+        ],
+        intakes: ["February", "March", "April", "May", "July", "August"],
+        tags: ["Business", "Bachelor"],
+        image: educationImg,
+    },
+    {
+        id: 5,
+        title: "Education / Teaching (particularly STEM-specialised teachers)",
+        description: "There is demand for teachers in certain subjects (maths, science) and regions. While a Bachelor in Education is required, emphasising STEM-teaching can strengthen the profile.",
+        programs: [
+            "Bachelor of Education",
+            "Bachelor of Early Childhood Education",
+            "Bachelor of Primary Education",
+            "Bachelor of Secondary Education",
+            "Bachelor of Special Education",
+        ],
+        intakes: ["February", "March", "April", "May", "June"],
+        tags: ["Education", "Bachelor"],
+        image: visaImg,
+    },
+];
 
 export default function InDemandPrograms() {
     const scrollRef = useRef(null);
