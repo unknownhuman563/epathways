@@ -45,7 +45,7 @@ jobs:
 
       - name: Rsync code to VPS
         run: |
-          rsync -avz --delete \
+          rsync -rlptvz --delete --no-owner --no-group \
             --exclude='.git' \
             --exclude='.github' \
             --exclude='.env' \
