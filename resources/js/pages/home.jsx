@@ -14,6 +14,7 @@ import AboutBrief from "@/components/AboutBrief";
 import ScrollToTop from "@/components/scrolltotop";
 import Modal from "@/components/modal-component";
 import Footer from "../components/footer";
+import CTASection from "@/components/CTASection";
 
 import HeroVideo from "@assets/Hero/02 - client epathway intro (1).mp4";
 
@@ -60,6 +61,8 @@ export default function Home() {
         {/* Success Stories Section */}
         <SuccessStories />
 
+        {/* CTA Section */}
+        <CTASection />
 
         {/* Events and Announcements Section */}
         <EventsAnnouncements />
