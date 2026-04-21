@@ -140,6 +140,8 @@ export default function ProcessFlow() {
                     src={videoprocess}
                     className="w-full"
                     muted
+                    defaultMuted
+                    playsInline
                     loop
                 />
 
@@ -175,6 +177,8 @@ export default function ProcessFlow() {
                         src={videoprocess}
                         className="w-full h-full object-cover"
                         muted
+                        defaultMuted
+                        playsInline
                         loop
                         autoPlay
                     />

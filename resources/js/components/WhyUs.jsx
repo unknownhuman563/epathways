@@ -1,9 +1,35 @@
-import React from 'react';
-import { motion } from 'framer-motion';
+import React, { useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import WhyUsImg from "@assets/NewSections/why_us_main.png";
 import { ArrowRight } from 'react-feather';
 
+const tabContent = [
+    {
+        title: "Expert guidance",
+        label: "Guidance",
+        heading: "We know the path ahead",
+        description: "Our team of licensed immigration advisers and education counselors has successfully navigated these exact pathways thousands of times. We provide crystal-clear, step-by-step roadmaps tailored to your unique situation, eliminating the guesswork and confusion from your journey to New Zealand. From choosing the right visa to gathering the perfect documentation, we ensure you make informed decisions every step of the way.",
+        image: WhyUsImg,
+    },
+    {
+        title: "Personalized support",
+        label: "Personalized Support",
+        heading: "Your journey, uniquely yours",
+        description: "We understand that no two migration or education stories are exactly alike. That’s why we don't offer cookie-cutter solutions. We take the time to deeply understand your personal goals, your family’s needs, and your professional aspirations. Our dedicated consultants are available to answer your questions, ease your anxieties, and adapt your strategy whenever your circumstances change.",
+        image: WhyUsImg,
+    },
+    {
+        title: "Trusted partners",
+        label: "Trusted Partners",
+        heading: "Connections that matter",
+        description: "With years of established relationships, ePathways connects you directly to New Zealand’s top educational institutions and trusted employers. Our strong partnerships mean faster application processing, exclusive scholarship opportunities, and reliable job placement assistance. When you stand with us, you stand with an entire network of experts committed to your long-term success.",
+        image: WhyUsImg,
+    }
+];
+
 export default function WhyUs() {
+    const [activeTab, setActiveTab] = useState(0);
+
     return (
         <section className="py-24 bg-white font-urbanist overflow-hidden">
             <div className="max-w-7xl mx-auto px-6">
@@ -29,15 +55,16 @@ export default function WhyUs() {
 
                 {/* Categories Tabs */}
                 <div className="flex flex-wrap justify-center gap-10 md:gap-16 border-b border-gray-100 pb-8 mb-16">
-                    {['Expert guidance', 'Personalized support', 'Trusted partners'].map((tab, idx) => (
+                    {tabContent.map((tab, idx) => (
                         <button 
                             key={idx}
-                            className={`text-[11px] font-bold uppercase tracking-[0.2em] pb-2 relative transition-colors ${idx === 0 ? 'text-[#436235]' : 'text-gray-400 hover:text-[#282728]'}`}
+                            onClick={() => setActiveTab(idx)}
+                            className={`text-[11px] font-bold uppercase tracking-[0.2em] pb-2 relative transition-colors ${idx === activeTab ? 'text-[#436235]' : 'text-gray-400 hover:text-[#282728]'}`}
                         >
-                            {tab}
-                            {idx === 0 && (
+                            {tab.title}
+                            {idx === activeTab && (
                                 <motion.div 
-                                    layoutId="activeTab"
+                                    layoutId="activeWhyUsTab"
                                     className="absolute -bottom-[2px] left-0 right-0 h-[2px] bg-[#436235]"
                                 />
                             )}
@@ -46,45 +73,53 @@ export default function WhyUs() {
                 </div>
 
                 {/* Feature Content */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
-                    <motion.div 
-                        initial={{ opacity: 0, x: -30 }}
-                        whileInView={{ opacity: 1, x: 0 }}
-                        viewport={{ once: true }}
-                        transition={{ duration: 0.6 }}
-                        className="max-w-xl"
-                    >
-                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.3em] mb-4 block">Guidance</span>
-                        <h3 className="text-3xl md:text-4xl font-black text-[#282728] leading-tight mb-6">
-                            We know the path ahead
-                        </h3>
-                        <p className="text-gray-500 text-sm md:text-base font-light leading-relaxed mb-10">
-                            Our team has walked these roads before. We understand the questions, the doubts, and the decisions that matter most. We provide the clarity you need to move forward.
-                        </p>
-                        
-                        <div className="flex items-center gap-8">
-                            <button className="px-10 py-3.5 bg-gray-100 text-[#282728] text-[11px] font-bold rounded-lg hover:bg-gray-200 transition-all uppercase tracking-[0.2em] active:scale-95">
-                                Learn
-                            </button>
-                            <button className="flex items-center gap-2 text-[#282728] text-[11px] font-bold uppercase tracking-[0.2em] hover:text-[#436235] group">
-                                More <ArrowRight size={14} className="transition-transform group-hover:translate-x-1" />
-                            </button>
-                        </div>
-                    </motion.div>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center min-h-[450px]">
+                    <AnimatePresence mode="wait">
+                        <motion.div 
+                            key={`content-${activeTab}`}
+                            initial={{ opacity: 0, x: -30 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            exit={{ opacity: 0, x: 30 }}
+                            transition={{ duration: 0.4 }}
+                            className="max-w-xl"
+                        >
+                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.3em] mb-4 block">
+                                {tabContent[activeTab].label}
+                            </span>
+                            <h3 className="text-3xl md:text-4xl font-black text-[#282728] leading-tight mb-6">
+                                {tabContent[activeTab].heading}
+                            </h3>
+                            <p className="text-gray-500 text-sm md:text-base font-light leading-relaxed mb-10 text-justify">
+                                {tabContent[activeTab].description}
+                            </p>
+                            
+                            <div className="flex items-center gap-8">
+                                <button className="px-10 py-3.5 bg-gray-100 text-[#282728] text-[11px] font-bold rounded-lg hover:bg-gray-200 transition-all uppercase tracking-[0.2em] active:scale-95">
+                                    Learn
+                                </button>
+                                <button className="flex items-center gap-2 text-[#282728] text-[11px] font-bold uppercase tracking-[0.2em] hover:text-[#436235] group">
+                                    More <ArrowRight size={14} className="transition-transform group-hover:translate-x-1" />
+                                </button>
+                            </div>
+                        </motion.div>
+                    </AnimatePresence>
 
-                    <motion.div 
-                        initial={{ opacity: 0, scale: 0.95 }}
-                        whileInView={{ opacity: 1, scale: 1 }}
-                        viewport={{ once: true }}
-                        transition={{ duration: 0.6 }}
-                        className="relative rounded-[2rem] overflow-hidden shadow-2xl aspect-[4/3] lg:aspect-auto lg:h-[450px]"
-                    >
-                        <img 
-                            src={WhyUsImg} 
-                            alt="Professional Guidance" 
-                            className="w-full h-full object-cover"
-                        />
-                    </motion.div>
+                    <AnimatePresence mode="wait">
+                        <motion.div 
+                            key={`image-${activeTab}`}
+                            initial={{ opacity: 0, scale: 0.95 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            exit={{ opacity: 0, scale: 0.95 }}
+                            transition={{ duration: 0.4 }}
+                            className="relative rounded-[2rem] overflow-hidden shadow-2xl aspect-[4/3] lg:aspect-auto lg:h-[450px]"
+                        >
+                            <img 
+                                src={tabContent[activeTab].image} 
+                                alt={tabContent[activeTab].title} 
+                                className="w-full h-full object-cover"
+                            />
+                        </motion.div>
+                    </AnimatePresence>
                 </div>
             </div>
         </section>

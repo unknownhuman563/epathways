@@ -70,7 +70,7 @@ export default function WelcomeModal() {
             {/* ── BOTTOM: CTA Button + Dismiss ── */}
             <div className="w-full flex flex-col items-center">
               <a
-                href="https://go.epathways.co.nz/widget/form/1Br8Dd3Q5wiNXjc5sCLx?notrack=true"
+                href="/booking"
                 className="w-full text-center text-white text-[11px] font-bold py-5 transition-all hover:bg-black/90 uppercase tracking-[0.2em]"
                 style={{ background: "#1a1a1a", display: "block" }}
               >

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import Navbar from "@/components/navigation-bar";
 import Footer from "@/components/footer";
@@ -16,11 +16,15 @@ import {
     Clock,
     Plus,
     MessageSquare,
-    BookOpen
+    BookOpen,
+    MapPin,
+    ArrowDown
 } from "lucide-react";
 
 // Assets
 import heroBg from "@assets/Services/education.png";
+import visaImg from "@assets/Services/visa.png";
+import settlementImg from "@assets/Services/settlement.png";
 import dinaImg from "@assets/team/dina.png";
 import devImg from "@assets/team/Dev.png";
 import daiImg from "@assets/team/dai.png";
@@ -40,7 +44,8 @@ const categories = [
         ],
         price: 'NZD $150',
         icon: GraduationCap,
-        label: 'EDUCATION'
+        label: 'EDUCATION',
+        image: heroBg
     },
     {
         id: 'immigration',
@@ -54,7 +59,8 @@ const categories = [
         ],
         price: 'NZD $200',
         icon: Globe,
-        label: 'IMMIGRATION'
+        label: 'IMMIGRATION',
+        image: visaImg
     },
     {
         id: 'accommodation',
@@ -68,7 +74,8 @@ const categories = [
         ],
         price: 'NZD $100',
         icon: Home,
-        label: 'ACCOMMODATION'
+        label: 'ACCOMMODATION',
+        image: settlementImg
     }
 ];
 
@@ -99,8 +106,8 @@ const consultants = {
     education: [
         {
             id: 1,
-            name: 'Dinah Jabone',
-            role: 'Chief Education Specialist',
+            name: 'Dinah Suarin',
+            role: 'People Engagement and Wellbeing Champion',
             image: dinaImg,
             bio: "Dinah brings 8 years of hands-on experience helping international students navigate New Zealand's tertiary education system. She has placed over 300 students in top NZ universities and polytechnics, and specialises in tailoring pathways for students from Southeast Asia and the Pacific.",
             tags: ['IAA LICENSED', '8 YRS EXP', 'EN · FIL'],
@@ -113,11 +120,26 @@ const consultants = {
             bookingUrl: 'https://calendar.google.com/calendar/appointments/schedules/AcZssZ0A25brqHYLx6o-iqanRiIG-jugrE62FGo4ryI_dQyPsPl8N1m3dr1VcP5rla8l8b-n3SEBy8r4?gv=true'
         },
         {
+            id: 6,
+            name: 'Emma Ceballo',
+            role: 'People Journey Experience Champion',
+            image: emmaImg,
+            bio: "Emma is a dedicated education consultant helping international students seamlessly transition into the New Zealand education system, with a focus on holistic student success and pathway planning.",
+            tags: ['EDUCATION SPEC', '5 YRS EXP', 'EN'],
+            status: 'available',
+            availability: 'Mon – Fri, 9am – 5pm NZST',
+            sessionLength: '45 – 60 min, Video',
+            sessionFormat: 'Video Call or Phone',
+            institutions: 'Nationwide Support',
+            specialisesIn: ['Pathway Planning', 'Course Matching', 'Student Support', 'Admissions'],
+            bookingUrl: 'https://calendar.google.com/calendar/appointments/schedules/AcZssZ0A25brqHYLx6o-iqanRiIG-jugrE62FGo4ryI_dQyPsPl8N1m3dr1VcP5rla8l8b-n3SEBy8r4?gv=true'
+        },
+        {
             id: 2,
-            name: 'Emily',
-            role: 'University Academic Advisor',
+            name: 'Emily Dela Pena',
+            role: '',
             image: emilyImg,
-            bio: "Sarah is a former academic at the University of Auckland with over 12 years in tertiary education advising. She specialises in postgraduate pathways, research programmes, and helping professionals transition into NZ academic institutions from China and East Asia.",
+            bio: "Emily is a former academic at the University of Auckland with over 12 years in tertiary education advising. She specialises in postgraduate pathways, research programmes, and helping professionals transition into NZ academic institutions from China and East Asia.",
             tags: ['IAA LICENSED', '12 YRS EXP', 'EN · ZH'],
             status: 'available',
             availability: 'Mon – Fri, 10am – 6pm NZST',
@@ -131,10 +153,10 @@ const consultants = {
     immigration: [
         {
             id: 3,
-            name: 'Mark Thompson',
+            name: 'Dev Bhageerutty',
             role: 'Licensed Immigration Adviser',
             image: devImg,
-            bio: "Mark is a senior advisor with extensive experience in NZ work and residency visas. He specialises in skilled migration and employer-assisted visa categories.",
+            bio: "Dev is a senior advisor with extensive experience in NZ work and residency visas. He specialises in skilled migration and employer-assisted visa categories.",
             tags: ['IAA LICENSED', '10 YRS EXP', 'EN'],
             status: 'available',
             availability: 'Mon – Fri, 9am – 5pm NZST',
@@ -146,10 +168,10 @@ const consultants = {
         },
         {
             id: 4,
-            name: 'Elena Rodriguez',
-            role: 'Visa Compliance Officer',
+            name: 'Hendry Dai',
+            role: 'Licensed Immigration Adviser',
             image: daiImg,
-            bio: "Elena specializes in partner and family visa categories, ensuring all documentation meets rigorous NZ immigration standards for high approval rates.",
+            bio: "Hendry specializes in partner and family visa categories, ensuring all documentation meets rigorous NZ immigration standards for high approval rates.",
             tags: ['IAA LICENSED', '7 YRS EXP', 'EN · ES'],
             status: 'available',
             availability: 'Mon – Thu, 9am – 4pm NZST',
@@ -189,10 +211,42 @@ export default function BookingPage() {
             firstName: '',
             lastName: '',
             email: '',
-            currentCountry: '',
-            message: ''
+            phoneNumber: '',
+            country: '',
+            inquiryType: '',
+            message: '',
+            agreeTerms: false
         }
     });
+
+    const scrollContainerRef = useRef(null);
+    const [canScrollLeft, setCanScrollLeft] = useState(false);
+    const [canScrollRight, setCanScrollRight] = useState(false);
+
+    const checkScroll = () => {
+        if (scrollContainerRef.current) {
+            const { scrollLeft, scrollWidth, clientWidth } = scrollContainerRef.current;
+            setCanScrollLeft(scrollLeft > 0);
+            setCanScrollRight(Math.ceil(scrollLeft) < scrollWidth - clientWidth);
+        }
+    };
+
+    useEffect(() => {
+        if (step === 2) {
+            checkScroll();
+            window.addEventListener('resize', checkScroll);
+            return () => window.removeEventListener('resize', checkScroll);
+        }
+    }, [step, selection.category]);
+
+    const scroll = (direction) => {
+        if (scrollContainerRef.current) {
+            const scrollAmount = scrollContainerRef.current.clientWidth * 0.8;
+            scrollContainerRef.current.scrollBy({ left: direction === 'left' ? -scrollAmount : scrollAmount, behavior: 'smooth' });
+            setTimeout(checkScroll, 350);
+        }
+    };
+
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [bookingSuccess, setBookingSuccess] = useState(false);
     const [error, setError] = useState(null);
@@ -211,10 +265,10 @@ export default function BookingPage() {
     };
 
     const handleInputChange = (e) => {
-        const { name, value } = e.target;
+        const { name, value, type, checked } = e.target;
         setSelection(prev => ({
             ...prev,
-            info: { ...prev.info, [name]: value }
+            info: { ...prev.info, [name]: type === 'checkbox' ? checked : value }
         }));
     };
 
@@ -234,9 +288,11 @@ export default function BookingPage() {
                     first_name: selection.info.firstName,
                     last_name: selection.info.lastName,
                     email: selection.info.email,
-                    current_country: selection.info.currentCountry,
+                    phone: selection.info.phoneNumber,
+                    current_country: selection.info.country,
                     service_type: selection.category.title,
                     consultant_name: selection.consultant.name,
+                    inquiry_type: selection.info.inquiryType,
                     message: selection.info.message,
                     platform: 'Google Calendar'
                 })
@@ -257,7 +313,7 @@ export default function BookingPage() {
     };
 
     return (
-        <div className="min-h-screen bg-[#F9F8F6] font-urbanist">
+        <div className={`min-h-screen font-urbanist transition-colors duration-500 ${step === 2 ? 'bg-[#121613]' : 'bg-[#F9F8F6]'}`}>
             <Navbar />
 
             {/* Hero Section - Matching EducationJourney */}
@@ -304,57 +360,40 @@ export default function BookingPage() {
                         >
                             {step === 1 && (
                                 <div>
-                                    <div className="mb-12">
-                                        <h2 className="text-4xl md:text-5xl font-black text-[#282728] mb-4">Choose your <br />service type</h2>
-                                        <p className="text-gray-500 max-w-lg leading-relaxed">
-                                            Select the area you need guidance in — each service is delivered by a specialist in that field.
+                                    <div className="mb-16 text-center flex flex-col items-center">
+                                        <span className="text-[11px] font-bold tracking-widest text-gray-500 uppercase mb-4 block">Step one</span>
+                                        <h2 className="text-4xl md:text-5xl font-normal text-[#282728] mb-4">Select your service type</h2>
+                                        <p className="text-gray-500 text-sm max-w-md">
+                                            Pick the path that matches your goals
                                         </p>
                                     </div>
 
-                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-24">
-                                        {categories.map((cat) => (
+                                    <div className="flex flex-col md:flex-row h-auto gap-6 mb-24 max-w-6xl mx-auto items-stretch">
+                                        {categories.map((cat, idx) => (
                                             <div
                                                 key={cat.id}
-                                                className="bg-white rounded-[24px] p-8 shadow-sm border border-gray-100 flex flex-col h-full relative group transition-all duration-500 hover:shadow-xl hover:-translate-y-1"
+                                                onClick={() => handleCategorySelect(cat)}
+                                                className="group relative flex-1 min-h-[450px] md:min-h-[500px] min-w-[200px] transition-all duration-500 ease-in-out cursor-pointer bg-white rounded-[24px] overflow-hidden shadow-sm hover:shadow-xl border border-gray-100 hover:flex-[2] md:hover:flex-[2.5]"
                                             >
-                                                {/* Icon */}
-                                                <div className="mb-8">
-                                                    <div className="w-12 h-12 bg-[#282728] rounded-xl flex items-center justify-center text-white">
-                                                        <cat.icon size={24} />
-                                                    </div>
+                                                {/* Image Wrapper */}
+                                                <div className="absolute top-0 left-0 w-full h-1/2 md:group-hover:w-1/2 md:group-hover:h-full transition-all duration-500 ease-in-out bg-gray-50 flex items-center justify-center overflow-hidden">
+                                                    <img src={cat.image} alt={cat.title} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
                                                 </div>
 
-                                                {/* Label & Title */}
-                                                <div className="mb-6">
-                                                    <span className="text-[10px] font-bold tracking-[0.2em] text-gray-400 uppercase">{cat.label}</span>
-                                                    <h3 className="text-2xl font-black text-[#282728] mt-2 leading-tight">
-                                                        {cat.title.split(' ')[0]} <br /> {cat.title.split(' ')[1]}
+                                                {/* Text Wrapper */}
+                                                <div className="absolute left-0 top-1/2 w-full h-1/2 md:group-hover:left-1/2 md:group-hover:top-0 md:group-hover:w-1/2 md:group-hover:h-full transition-all duration-500 ease-in-out p-6 md:p-8 flex flex-col justify-center bg-white">
+                                                    <span className="text-[10px] font-bold tracking-[0.2em] text-gray-400 uppercase mb-2 block">{cat.label}</span>
+                                                    <h3 className="text-xl md:text-2xl font-black text-[#282728] mb-3 leading-tight">
+                                                        {cat.title}
                                                     </h3>
-                                                </div>
-
-                                                {/* Description */}
-                                                <p className="text-gray-500 text-sm leading-relaxed mb-8">
-                                                    {cat.description}
-                                                </p>
-
-                                                {/* Features */}
-                                                <ul className="space-y-3 mb-10 flex-grow">
-                                                    {cat.features.map((feature, idx) => (
-                                                        <li key={idx} className="flex items-start gap-3 text-gray-500 text-sm">
-                                                            <div className="w-1.5 h-1.5 rounded-full bg-[#436235] mt-1.5 flex-shrink-0" />
-                                                            {feature}
-                                                        </li>
-                                                    ))}
-                                                </ul>
-
-                                                {/* Footer */}
-                                                <div className="pt-6 border-t border-gray-50 flex items-center justify-end mt-auto">
-                                                    <button
-                                                        onClick={() => handleCategorySelect(cat)}
-                                                        className="flex items-center gap-2 bg-[#282728] text-white px-5 py-2.5 rounded-xl font-bold text-xs uppercase tracking-wider transition-all duration-300 hover:bg-[#436235] hover:scale-105"
-                                                    >
-                                                        Choose <ChevronRight size={14} />
-                                                    </button>
+                                                    <p className="text-sm text-gray-500 leading-relaxed mb-6 line-clamp-3">
+                                                        {cat.description}
+                                                    </p>
+                                                    <div className="mt-auto">
+                                                        <span className="flex items-center gap-2 text-[#282728] text-sm font-bold transition-transform duration-300 md:group-hover:translate-x-2">
+                                                            Choose <ChevronRight size={16} />
+                                                        </span>
+                                                    </div>
                                                 </div>
                                             </div>
                                         ))}
@@ -447,302 +486,319 @@ export default function BookingPage() {
                             )}
 
                             {step === 2 && (
-                                <div>
-                                    <div className="flex items-center gap-4 mb-12">
-                                        <button onClick={prevStep} className="p-2 hover:bg-gray-200 rounded-full transition-colors">
+                                <div className="max-w-6xl mx-auto w-full">
+                                    <div className="relative mb-16 text-center">
+                                        <button onClick={prevStep} className="absolute left-0 top-1/2 -translate-y-1/2 p-2 text-gray-400 hover:text-white transition-colors">
                                             <ChevronLeft className="w-6 h-6" />
                                         </button>
-                                        <div>
-                                            <h2 className="text-3xl font-black text-[#282728]">Select your consultant</h2>
-                                            <p className="text-gray-500 text-sm mt-1">Choose the expert who will guide you on your journey.</p>
-                                        </div>
+                                        <span className="text-[11px] font-bold tracking-widest text-gray-400 uppercase mb-4 block">Step two</span>
+                                        <h2 className="text-4xl md:text-5xl font-normal text-white mb-4">Meet your consultant</h2>
+                                        <p className="text-gray-400 text-sm">
+                                            Connect with the right expert for your needs
+                                        </p>
                                     </div>
 
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-6xl mx-auto">
-                                        {selection.category && consultants[selection.category.id]?.map((con) => (
-                                            <div
-                                                key={con.id}
-                                                className={`bg-white rounded-[32px] overflow-hidden border-2 transition-all duration-500 flex flex-col ${selection.consultant?.id === con.id ? 'border-[#436235] ring-4 ring-[#436235]/5 shadow-2xl' : 'border-transparent shadow-sm hover:shadow-xl'
-                                                    }`}
+                                    <div className="relative w-full max-w-[1600px] mx-auto group/carousel">
+                                        {canScrollLeft && (
+                                            <button 
+                                                onClick={() => scroll('left')}
+                                                className="absolute left-0 md:left-6 xl:left-8 top-[calc(50%-24px)] -translate-y-1/2 z-10 w-12 h-12 bg-[#1A1C19]/90 hover:bg-[#282728] backdrop-blur-md rounded-full flex items-center justify-center text-white border border-gray-700 transition-all shadow-2xl"
                                             >
-                                                {/* Header Info */}
-                                                <div className="p-8 pb-0">
-                                                    <div className="flex justify-between items-start mb-6">
-                                                        <div className="relative">
-                                                            <div className="w-24 h-24 rounded-2xl overflow-hidden shadow-md ring-1 ring-gray-100">
-                                                                <img
-                                                                    src={con.image}
-                                                                    alt={con.name}
-                                                                    className="w-full h-full object-cover object-top"
-                                                                />
-                                                            </div>
-                                                            <div className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-4 border-white ${con.status === 'available' ? 'bg-green-500' : 'bg-orange-500'
-                                                                }`} />
+                                                <ChevronLeft className="w-6 h-6" />
+                                            </button>
+                                        )}
+                                        {canScrollRight && (
+                                            <button 
+                                                onClick={() => scroll('right')}
+                                                className="absolute right-0 md:right-6 xl:right-8 top-[calc(50%-24px)] -translate-y-1/2 z-10 w-12 h-12 bg-[#1A1C19]/90 hover:bg-[#282728] backdrop-blur-md rounded-full flex items-center justify-center text-white border border-gray-700 transition-all shadow-2xl"
+                                            >
+                                                <ChevronRight className="w-6 h-6" />
+                                            </button>
+                                        )}
+                                        <div 
+                                            ref={scrollContainerRef}
+                                            onScroll={checkScroll}
+                                            className="flex overflow-x-auto gap-6 w-full pb-12 snap-x snap-mandatory px-4 md:px-24 xl:px-28 [&::-webkit-scrollbar]:hidden" 
+                                            style={{ scrollbarWidth: 'none' }}
+                                        >
+                                            {selection.category && consultants[selection.category.id]?.map((con) => (
+                                                <div
+                                                    key={con.id}
+                                                    onClick={() => handleConsultantSelect(con)}
+                                                    className="group flex flex-col md:flex-row bg-[#1A1C19] border border-gray-800 rounded-2xl overflow-hidden cursor-pointer hover:border-gray-500 hover:shadow-2xl transition-all duration-300 min-h-[280px] md:min-h-0 md:h-[220px] lg:h-[240px] shrink-0 w-[85vw] md:w-[600px] lg:w-[calc(33.333%-16px)] lg:min-w-[400px] snap-start"
+                                                >
+                                                    {/* Text Wrapper */}
+                                                    <div className="w-full md:w-1/2 p-6 xl:p-8 flex flex-col justify-center order-2 md:order-1">
+                                                        {con.role && (
+                                                            <span className="text-[10px] font-bold tracking-[0.2em] text-white uppercase mb-4 block">
+                                                                {con.role}
+                                                            </span>
+                                                        )}
+                                                        <h3 className="text-xl xl:text-2xl font-normal text-white mb-8 leading-tight">
+                                                            {con.name}
+                                                        </h3>
+                                                        <div className="mt-auto">
+                                                            <span className="flex items-center gap-2 text-white text-sm font-medium transition-transform duration-300 group-hover:translate-x-2">
+                                                                Select <ChevronRight size={16} />
+                                                            </span>
                                                         </div>
-                                                        {selection.consultant?.id === con.id && (
-                                                            <div className="bg-[#436235] text-white p-1.5 rounded-full">
-                                                                <CheckCircle size={18} />
+                                                    </div>
+
+                                                    {/* Image Wrapper */}
+                                                    <div className="w-full md:w-1/2 bg-white flex items-center justify-center order-1 md:order-2 overflow-hidden">
+                                                        {con.image ? (
+                                                            <img src={con.image} alt={con.name} className="w-full h-full object-cover object-top transition-transform duration-700 group-hover:scale-105" />
+                                                        ) : (
+                                                            <div className="w-full h-full bg-[#2C3029] flex items-center justify-center">
+                                                                <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                                                                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                                                                    <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                                                                    <polyline points="21 15 16 10 5 21"></polyline>
+                                                                </svg>
                                                             </div>
                                                         )}
                                                     </div>
-
-                                                    <div className="mb-6">
-                                                        <h3 className="text-2xl font-black text-[#282728] leading-tight">{con.name}</h3>
-                                                        <p className="text-[#436235] font-bold text-sm tracking-wide mt-1">{con.role}</p>
-                                                    </div>
-
-                                                    <div className="flex flex-wrap gap-2 mb-8">
-                                                        {con.tags.map((tag, i) => (
-                                                            <span key={i} className="bg-gray-50 text-gray-500 text-[10px] font-bold px-3 py-1.5 rounded-lg tracking-wider border border-gray-100">
-                                                                {tag}
-                                                            </span>
-                                                        ))}
-                                                    </div>
-
-                                                    <p className="text-gray-500 text-sm leading-relaxed mb-8 line-clamp-4">
-                                                        {con.bio}
-                                                    </p>
-
-                                                    <div className="h-[1px] bg-gray-50 w-full mb-8" />
-
-                                                    {/* Session Details Grid */}
-                                                    <div className="grid grid-cols-2 gap-y-8 gap-x-4 mb-8">
-                                                        <div className="flex gap-3">
-                                                            <div className="w-9 h-9 rounded-xl bg-gray-50 flex items-center justify-center text-gray-400">
-                                                                <Calendar size={18} />
-                                                            </div>
-                                                            <div>
-                                                                <p className="text-[10px] font-bold text-gray-300 uppercase tracking-widest mb-1">AVAILABILITY</p>
-                                                                <p className="text-xs font-black text-[#282728] leading-snug">{con.availability.split(',')[0]} <br /> <span className="text-gray-400 font-bold">{con.availability.split(',')[1]}</span></p>
-                                                            </div>
-                                                        </div>
-                                                        <div className="flex gap-3">
-                                                            <div className="w-9 h-9 rounded-xl bg-gray-50 flex items-center justify-center text-gray-400">
-                                                                <Clock size={18} />
-                                                            </div>
-                                                            <div>
-                                                                <p className="text-[10px] font-bold text-gray-300 uppercase tracking-widest mb-1">SESSION LENGTH</p>
-                                                                <p className="text-xs font-black text-[#282728] leading-snug">{con.sessionLength.split(',')[0]} <br /> <span className="text-gray-400 font-bold">{con.sessionLength.split(',')[1]}</span></p>
-                                                            </div>
-                                                        </div>
-                                                        <div className="flex gap-3">
-                                                            <div className="w-9 h-9 rounded-xl bg-gray-50 flex items-center justify-center text-gray-400">
-                                                                <MessageSquare size={18} />
-                                                            </div>
-                                                            <div>
-                                                                <p className="text-[10px] font-bold text-gray-300 uppercase tracking-widest mb-1">SESSION FORMAT</p>
-                                                                <p className="text-xs font-black text-[#282728] leading-snug">{con.sessionFormat}</p>
-                                                            </div>
-                                                        </div>
-                                                        <div className="flex gap-3">
-                                                            <div className="w-9 h-9 rounded-xl bg-gray-50 flex items-center justify-center text-gray-400">
-                                                                <BookOpen size={18} />
-                                                            </div>
-                                                            <div>
-                                                                <p className="text-[10px] font-bold text-gray-300 uppercase tracking-widest mb-1">INSTITUTIONS</p>
-                                                                <p className="text-xs font-black text-[#282728] leading-snug">{con.institutions}</p>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-
-                                                    {/* Specialises In */}
-                                                    <div className="mb-10">
-                                                        <p className="text-[10px] font-bold text-gray-300 uppercase tracking-widest mb-4">SPECIALISES IN</p>
-                                                        <div className="flex flex-wrap gap-2">
-                                                            {con.specialisesIn.map((spec, i) => (
-                                                                <span key={i} className="bg-white border border-gray-100 text-gray-600 text-[11px] font-bold px-4 py-2 rounded-xl shadow-sm">
-                                                                    {spec}
-                                                                </span>
-                                                            ))}
-                                                        </div>
-                                                    </div>
                                                 </div>
-
-                                                {/* Bottom Action Bar */}
-                                                <div className={`mt-auto p-6 flex justify-between items-center transition-colors duration-300 ${selection.consultant?.id === con.id ? 'bg-[#436235]/5' : 'bg-gray-50/50'
-                                                    }`}>
-                                                    <div className="flex items-center gap-2">
-                                                        <div className={`w-2 h-2 rounded-full ${con.status === 'available' ? 'bg-green-500' : 'bg-orange-500'}`} />
-                                                        <span className="text-xs font-bold text-gray-500 uppercase tracking-tighter">Available Mon – Fri</span>
-                                                    </div>
-                                                    <button
-                                                        onClick={() => handleConsultantSelect(con)}
-                                                        className={`px-8 py-3 rounded-xl font-bold text-xs uppercase tracking-[0.1em] transition-all duration-300 flex items-center gap-2 ${selection.consultant?.id === con.id
-                                                            ? 'bg-[#436235] text-white shadow-lg'
-                                                            : 'bg-[#282728] text-white hover:bg-[#436235]'
-                                                            }`}
-                                                    >
-                                                        {selection.consultant?.id === con.id ? 'Selected' : 'Select'}
-                                                        {selection.consultant?.id === con.id ? <CheckCircle size={14} /> : <ChevronRight size={14} />}
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        ))}
+                                            ))}
+                                        </div>
                                     </div>
                                 </div>
                             )}
 
                             {step === 3 && (
-                                <div className="max-w-4xl mx-auto">
-                                    <div className="flex items-center gap-4 mb-12">
-                                        <button onClick={prevStep} className="p-2 hover:bg-gray-200 rounded-full transition-colors">
-                                            <ChevronLeft className="w-6 h-6" />
-                                        </button>
-                                        <h2 className="text-2xl font-bold text-gray-800">Finalize Your Booking</h2>
-                                    </div>
+                                <div className="max-w-7xl mx-auto w-full px-4 lg:px-8">
+                                    {!bookingSuccess ? (
+                                        <div className="grid grid-cols-1 lg:grid-cols-12 gap-16">
+                                        
+                                        {/* Left Column: Headings & Info */}
+                                        <div className="lg:col-span-4 flex flex-col">
+                                            <div className="mb-12">
+                                                <button onClick={prevStep} className="mb-6 p-2 -ml-2 text-gray-400 hover:text-black hover:bg-gray-100 rounded-full transition-colors flex items-center">
+                                                    <ChevronLeft className="w-5 h-5 mr-1" /> <span className="text-sm font-bold uppercase tracking-widest text-black">Finalize</span>
+                                                </button>
+                                                <h2 className="text-4xl md:text-5xl font-light text-black mb-6">Schedule your time</h2>
+                                                <p className="text-gray-600 text-lg mb-12">Pick a slot that works for you and confirm your details</p>
+                                                
+                                                {/* Selection Summary */}
+                                                <div className="bg-gray-50 border border-gray-100 p-6 rounded-2xl mb-12">
+                                                    <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-1">Service</p>
+                                                    <p className="font-bold text-gray-900 mb-6">{selection.category?.title}</p>
+                                                    
+                                                    {selection.consultant && (
+                                                        <>
+                                                            <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-1">Consultant</p>
+                                                            <div className="flex items-center gap-3 mt-2">
+                                                                <img src={selection.consultant.image} alt="" className="w-12 h-12 rounded-full object-cover object-top border border-gray-200" />
+                                                                <div>
+                                                                    <p className="font-bold text-gray-900">{selection.consultant.name}</p>
+                                                                    {selection.consultant.role && <p className="text-xs text-gray-500">{selection.consultant.role}</p>}
+                                                                </div>
+                                                            </div>
+                                                        </>
+                                                    )}
+                                                </div>
 
-                                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-12">
-                                        <div className="lg:col-span-2">
-                                            <form className="space-y-6" onSubmit={handleBookingSubmit}>
-                                                <div className="grid grid-cols-2 gap-6">
+                                                <div className="space-y-6 text-gray-600">
+                                                    <div className="flex items-center gap-4">
+                                                        <Mail className="w-5 h-5 text-black" />
+                                                        <span>hello@epathways.com</span>
+                                                    </div>
+                                                    <div className="flex items-center gap-4">
+                                                        <Phone className="w-5 h-5 text-black" />
+                                                        <span>+61 2 8000 0000</span>
+                                                    </div>
+                                                    <div className="flex items-start gap-4">
+                                                        <MapPin className="w-5 h-5 text-black shrink-0 mt-1" />
+                                                        <span>Level 5, 123 Pitt Street, Sydney NSW 2000</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Right Column: Form */}
+                                        <div className="lg:col-span-8">
+                                            <form className="space-y-8" onSubmit={handleBookingSubmit}>
+                                                
+                                                {/* Row 1 */}
+                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                                     <div>
-                                                        <label className="block text-sm font-bold text-gray-700 mb-2 uppercase tracking-wide">First Name</label>
+                                                        <label className="block text-sm font-light text-gray-800 mb-2">First name</label>
                                                         <input 
                                                             type="text" 
                                                             name="firstName"
                                                             value={selection.info.firstName}
                                                             onChange={handleInputChange}
                                                             required
-                                                            className="w-full bg-white border-none py-3 px-4 rounded-lg focus:ring-2 focus:ring-[#436235] shadow-sm" 
-                                                            placeholder="John" 
+                                                            className="w-full bg-[#F3F4F6] border-none py-3 px-4 rounded-sm focus:ring-1 focus:ring-gray-300" 
                                                         />
                                                     </div>
                                                     <div>
-                                                        <label className="block text-sm font-bold text-gray-700 mb-2 uppercase tracking-wide">Last Name</label>
+                                                        <label className="block text-sm font-light text-gray-800 mb-2">Last name</label>
                                                         <input 
                                                             type="text" 
                                                             name="lastName"
                                                             value={selection.info.lastName}
                                                             onChange={handleInputChange}
                                                             required
-                                                            className="w-full bg-white border-none py-3 px-4 rounded-lg focus:ring-2 focus:ring-[#436235] shadow-sm" 
-                                                            placeholder="Doe" 
+                                                            className="w-full bg-[#F3F4F6] border-none py-3 px-4 rounded-sm focus:ring-1 focus:ring-gray-300" 
                                                         />
                                                     </div>
                                                 </div>
+
+                                                {/* Row 2 */}
+                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                                    <div>
+                                                        <label className="block text-sm font-light text-gray-800 mb-2">Email</label>
+                                                        <input 
+                                                            type="email" 
+                                                            name="email"
+                                                            value={selection.info.email}
+                                                            onChange={handleInputChange}
+                                                            required
+                                                            className="w-full bg-[#F3F4F6] border-none py-3 px-4 rounded-sm focus:ring-1 focus:ring-gray-300" 
+                                                        />
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-sm font-light text-gray-800 mb-2">Phone number</label>
+                                                        <input 
+                                                            type="tel" 
+                                                            name="phoneNumber"
+                                                            value={selection.info.phoneNumber}
+                                                            onChange={handleInputChange}
+                                                            required
+                                                            className="w-full bg-[#F3F4F6] border-none py-3 px-4 rounded-sm focus:ring-1 focus:ring-gray-300" 
+                                                        />
+                                                    </div>
+                                                </div>
+
+                                                {/* Row 3 */}
                                                 <div>
-                                                    <label className="block text-sm font-bold text-gray-700 mb-2 uppercase tracking-wide">Email Address</label>
-                                                    <input 
-                                                        type="email" 
-                                                        name="email"
-                                                        value={selection.info.email}
+                                                    <label className="block text-sm font-light text-gray-800 mb-2">Your country of residence</label>
+                                                    <select 
+                                                        name="country"
+                                                        value={selection.info.country}
                                                         onChange={handleInputChange}
                                                         required
-                                                        className="w-full bg-white border-none py-3 px-4 rounded-lg focus:ring-2 focus:ring-[#436235] shadow-sm" 
-                                                        placeholder="john@example.com" 
-                                                    />
+                                                        className="w-full bg-[#F3F4F6] border-none py-3 px-4 rounded-sm focus:ring-1 focus:ring-gray-300 text-gray-500"
+                                                    >
+                                                        <option value="" disabled>Select your country</option>
+                                                        <option value="ph">Philippines</option>
+                                                        <option value="in">India</option>
+                                                        <option value="ae">UAE</option>
+                                                        <option value="cn">China</option>
+                                                        <option value="other">Other</option>
+                                                    </select>
                                                 </div>
+
+                                                {/* Row 4 */}
                                                 <div>
-                                                    <label className="block text-sm font-bold text-gray-700 mb-2 uppercase tracking-wide">Where are you currently located?</label>
-                                                    <input 
-                                                        type="text" 
-                                                        name="currentCountry"
-                                                        value={selection.info.currentCountry}
-                                                        onChange={handleInputChange}
-                                                        required
-                                                        className="w-full bg-white border-none py-3 px-4 rounded-lg focus:ring-2 focus:ring-[#436235] shadow-sm" 
-                                                        placeholder="e.g. Philippines, India, UAE" 
-                                                    />
+                                                    <label className="block text-sm font-light text-gray-800 mb-4">What brings you here?</label>
+                                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-4 gap-x-8">
+                                                        {['Student visa', 'Work visa', 'Permanent residency', 'Study abroad', 'Housing assistance', 'Other'].map((type) => (
+                                                            <label key={type} className="flex items-center gap-3 cursor-pointer group">
+                                                                <div className={`w-5 h-5 rounded-full border flex flex-shrink-0 items-center justify-center transition-colors ${selection.info.inquiryType === type ? 'border-[#436235]' : 'border-gray-300 group-hover:border-gray-400'}`}>
+                                                                    {selection.info.inquiryType === type && <div className="w-2.5 h-2.5 rounded-full bg-[#436235]" />}
+                                                                </div>
+                                                                <input 
+                                                                    type="radio" 
+                                                                    name="inquiryType" 
+                                                                    value={type}
+                                                                    checked={selection.info.inquiryType === type}
+                                                                    onChange={handleInputChange}
+                                                                    className="hidden"
+                                                                />
+                                                                <span className="text-sm text-gray-700">{type}</span>
+                                                            </label>
+                                                        ))}
+                                                    </div>
                                                 </div>
+
+                                                {/* Google Calendar */}
                                                 <div>
-                                                    <label className="block text-sm font-bold text-gray-700 mb-2 uppercase tracking-wide">Additional Message</label>
+                                                    <label className="block text-sm font-light text-gray-800 mb-2">Select a time for your consultation</label>
+                                                    <div className="w-full bg-white rounded-sm border border-gray-200 overflow-hidden h-[500px]">
+                                                        <iframe 
+                                                            src={selection.consultant?.bookingUrl} 
+                                                            style={{ border: 0 }} 
+                                                            width="100%" 
+                                                            height="100%" 
+                                                            frameBorder="0"
+                                                        ></iframe>
+                                                    </div>
+                                                </div>
+
+                                                {/* Row 5 */}
+                                                <div>
+                                                    <label className="block text-sm font-light text-gray-800 mb-2">Additional details</label>
                                                     <textarea 
-                                                        rows="4" 
+                                                        rows="5" 
                                                         name="message"
                                                         value={selection.info.message}
                                                         onChange={handleInputChange}
-                                                        className="w-full bg-white border-none py-3 px-4 rounded-lg focus:ring-2 focus:ring-[#436235] shadow-sm" 
-                                                        placeholder="Tell us more about your inquiry..."
+                                                        className="w-full bg-[#F3F4F6] border-none py-3 px-4 rounded-sm focus:ring-1 focus:ring-gray-300 resize-none" 
+                                                        placeholder="Tell us anything else we should know"
                                                     ></textarea>
                                                 </div>
-                                                
-                                                {!bookingSuccess ? (
-                                                    <div className="pt-6 border-t border-gray-200">
-                                                        <h4 className="text-lg font-bold text-gray-800 mb-6 flex items-center gap-2">
-                                                            <Calendar className="w-5 h-5 text-[#436235]" /> Schedule with Google Calendar
-                                                        </h4>
-                                                        
-                                                        {error && (
-                                                            <div className="mb-6 bg-red-50 border border-red-100 text-red-600 px-4 py-3 rounded-xl text-sm font-medium animate-fade-in">
-                                                                {error}
-                                                            </div>
-                                                        )}
 
-                                                        <p className="text-gray-500 text-sm mb-6">Clicking below will save your details and open {selection.consultant?.name}'s calendar.</p>
-
-                                                        <button
-                                                            type="submit"
-                                                            disabled={isSubmitting}
-                                                            className="w-full bg-[#436235] text-white py-4 rounded-lg font-bold shadow-xl hover:bg-black transition-all flex items-center justify-center gap-3 group disabled:opacity-50 disabled:cursor-not-allowed"
-                                                        >
-                                                            {isSubmitting ? 'Processing...' : 'Book Appointment Time'}
-                                                            <ChevronRight className="w-5 h-5 transition-transform group-hover:translate-x-1" />
-                                                        </button>
+                                                {/* Checkbox */}
+                                                <label className="flex items-start gap-3 cursor-pointer group pt-2">
+                                                    <div className={`w-5 h-5 mt-0.5 border flex flex-shrink-0 items-center justify-center transition-colors ${selection.info.agreeTerms ? 'bg-[#436235] border-[#436235]' : 'bg-[#F3F4F6] border-gray-300 group-hover:border-gray-400'}`}>
+                                                        {selection.info.agreeTerms && <CheckCircle className="w-3 h-3 text-white" />}
                                                     </div>
-                                                ) : (
-                                                    <div className="pt-6 border-t border-gray-200 animate-fade-in">
-                                                        <div className="text-center mb-8">
-                                                            <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4">
-                                                                <CheckCircle size={32} />
-                                                            </div>
-                                                            <h3 className="text-2xl font-bold text-gray-900 mb-2">Details Saved Successfully!</h3>
-                                                            <p className="text-gray-500">Pick your preferred time slot below to finalize your consultation with {selection.consultant?.name}.</p>
-                                                        </div>
+                                                    <input 
+                                                        type="checkbox" 
+                                                        name="agreeTerms"
+                                                        checked={selection.info.agreeTerms}
+                                                        onChange={handleInputChange}
+                                                        required
+                                                        className="hidden"
+                                                    />
+                                                    <span className="text-sm text-gray-700 font-light">I agree to the terms and conditions</span>
+                                                </label>
 
-                                                        <div className="rounded-3xl overflow-hidden border border-gray-100 shadow-2xl bg-white min-h-[600px] relative">
-                                                            <iframe 
-                                                                src={`${selection.consultant?.bookingUrl}&name=${encodeURIComponent(selection.info.firstName + ' ' + selection.info.lastName)}&email=${encodeURIComponent(selection.info.email)}`} 
-                                                                style={{ border: 0 }} 
-                                                                width="100%" 
-                                                                height="700" 
-                                                                frameBorder="0"
-                                                                className="w-full"
-                                                            ></iframe>
+                                                {/* Submit & Error */}
+                                                <div className="pt-6">
+                                                    {error && (
+                                                        <div className="mb-6 bg-red-50 border border-red-100 text-red-600 px-4 py-3 rounded-lg text-sm font-medium animate-fade-in">
+                                                            {error}
                                                         </div>
-                                                        
-                                                        <div className="mt-8 text-center">
-                                                            <button 
-                                                                onClick={() => window.location.reload()}
-                                                                className="text-gray-500 hover:text-gray-800 text-sm font-medium transition-colors"
-                                                            >
-                                                                Need to make another booking? Click here to restart.
-                                                            </button>
-                                                        </div>
-                                                    </div>
-                                                )}
+                                                    )}
+                                                    <button
+                                                        type="submit"
+                                                        disabled={isSubmitting || !selection.info.agreeTerms}
+                                                        className="bg-[#436235] text-white px-8 py-3 rounded-sm font-medium hover:bg-black transition-all flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed w-fit"
+                                                    >
+                                                        {isSubmitting ? 'Processing...' : 'Book now'}
+                                                    </button>
+                                                </div>
                                             </form>
                                         </div>
-
-                                        <div className="bg-white p-8 rounded-3xl shadow-xl h-fit border border-gray-100">
-                                            <h3 className="text-xl font-bold text-gray-800 mb-8 pb-4 border-b border-gray-50 tracking-wide uppercase">Your Selection</h3>
-
-                                            <div className="space-y-8">
-                                                <div className="flex items-start gap-4">
-                                                    <div>
-                                                        <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-1">Service</p>
-                                                        <p className="font-bold text-gray-800 line-clamp-1">{selection.category?.title}</p>
-                                                    </div>
-                                                </div>
-
-                                                {selection.consultant && (
-                                                    <div className="flex items-start gap-4">
-                                                        <div className="w-12 h-12 rounded-xl overflow-hidden shadow-sm">
-                                                            <img
-                                                                src={selection.consultant.image}
-                                                                alt=""
-                                                                className="w-full h-full object-cover object-top"
-                                                            />
-                                                        </div>
-                                                        <div>
-                                                            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-1">Consultant</p>
-                                                            <p className="font-bold text-gray-800">{selection.consultant.name}</p>
-                                                            <p className="text-[10px] text-[#436235] font-medium">{selection.consultant.role}</p>
-                                                        </div>
-                                                    </div>
-                                                )}
+                                    </div>
+                                    ) : (
+                                        <div className="max-w-4xl mx-auto animate-fade-in py-12 md:py-20 text-center">
+                                            
+                                            <div className="w-24 h-24 mx-auto bg-[#436235]/5 rounded-full flex items-center justify-center mb-8 border border-[#436235]/10 relative">
+                                                <div className="absolute inset-0 rounded-full border border-[#436235]/20 animate-ping opacity-20"></div>
+                                                <CheckCircle size={40} strokeWidth={1} className="text-[#436235]" />
+                                            </div>
+                                            
+                                            <h3 className="text-5xl md:text-6xl font-light text-black mb-6 tracking-tight">Booking Confirmed.</h3>
+                                            
+                                            <p className="text-gray-500 text-xl font-light max-w-4xl mx-auto leading-relaxed mb-16 px-4">
+                                                We've successfully saved your details. You will receive an email shortly regarding your consultation with <span className="font-medium text-black">{selection.consultant?.name}</span>.
+                                            </p>
+                                            
+                                            <div className="mt-12 text-center">
+                                                <button 
+                                                    onClick={() => window.location.reload()}
+                                                    className="inline-flex items-center gap-2 text-gray-400 hover:text-black text-sm font-bold tracking-widest uppercase transition-colors group"
+                                                >
+                                                    <ChevronLeft className="w-4 h-4 transition-transform group-hover:-translate-x-1" />
+                                                    Start a new booking
+                                                </button>
                                             </div>
                                         </div>
-                                    </div>
+                                    )}
                                 </div>
                             )}
                         </motion.div>
