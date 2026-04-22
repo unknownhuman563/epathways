@@ -60,7 +60,8 @@ const categories = [
         price: 'NZD $200',
         icon: Globe,
         label: 'IMMIGRATION',
-        image: visaImg
+        image: visaImg,
+        comingSoon: true
     },
     {
         id: 'accommodation',
@@ -75,7 +76,8 @@ const categories = [
         price: 'NZD $100',
         icon: Home,
         label: 'ACCOMMODATION',
-        image: settlementImg
+        image: settlementImg,
+        comingSoon: true
     }
 ];
 
@@ -372,16 +374,34 @@ export default function BookingPage() {
                                         {categories.map((cat, idx) => (
                                             <div
                                                 key={cat.id}
-                                                onClick={() => handleCategorySelect(cat)}
-                                                className="group relative flex-1 min-h-[450px] md:min-h-[500px] min-w-[200px] transition-all duration-500 ease-in-out cursor-pointer bg-white rounded-[24px] overflow-hidden shadow-sm hover:shadow-xl border border-gray-100 hover:flex-[2] md:hover:flex-[2.5]"
+                                                onClick={() => !cat.comingSoon && handleCategorySelect(cat)}
+                                                className={`group relative flex-1 min-h-[450px] md:min-h-[500px] min-w-[200px] transition-all duration-500 ease-in-out bg-white rounded-[24px] overflow-hidden shadow-sm border border-gray-100 ${
+                                                    cat.comingSoon
+                                                        ? 'cursor-not-allowed opacity-80'
+                                                        : 'cursor-pointer hover:shadow-xl hover:flex-[2] md:hover:flex-[2.5]'
+                                                }`}
                                             >
+                                                {/* Coming Soon Badge */}
+                                                {cat.comingSoon && (
+                                                    <div className="absolute top-4 right-4 z-20 bg-[#282728] text-white text-[10px] font-bold tracking-[0.2em] uppercase px-3 py-1.5 rounded-full shadow-lg flex items-center gap-1.5">
+                                                        <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse inline-block"></span>
+                                                        Coming Soon
+                                                    </div>
+                                                )}
+
                                                 {/* Image Wrapper */}
-                                                <div className="absolute top-0 left-0 w-full h-1/2 md:group-hover:w-1/2 md:group-hover:h-full transition-all duration-500 ease-in-out bg-gray-50 flex items-center justify-center overflow-hidden">
-                                                    <img src={cat.image} alt={cat.title} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
+                                                <div className={`absolute top-0 left-0 w-full h-1/2 transition-all duration-500 ease-in-out bg-gray-50 flex items-center justify-center overflow-hidden ${
+                                                    cat.comingSoon ? '' : 'md:group-hover:w-1/2 md:group-hover:h-full'
+                                                }`}>
+                                                    <img src={cat.image} alt={cat.title} className={`w-full h-full object-cover transition-transform duration-700 ${
+                                                        cat.comingSoon ? 'grayscale-[30%]' : 'group-hover:scale-105'
+                                                    }`} />
                                                 </div>
 
                                                 {/* Text Wrapper */}
-                                                <div className="absolute left-0 top-1/2 w-full h-1/2 md:group-hover:left-1/2 md:group-hover:top-0 md:group-hover:w-1/2 md:group-hover:h-full transition-all duration-500 ease-in-out p-6 md:p-8 flex flex-col justify-center bg-white">
+                                                <div className={`absolute left-0 top-1/2 w-full h-1/2 transition-all duration-500 ease-in-out p-6 md:p-8 flex flex-col justify-center bg-white ${
+                                                    cat.comingSoon ? '' : 'md:group-hover:left-1/2 md:group-hover:top-0 md:group-hover:w-1/2 md:group-hover:h-full'
+                                                }`}>
                                                     <span className="text-[10px] font-bold tracking-[0.2em] text-gray-400 uppercase mb-2 block">{cat.label}</span>
                                                     <h3 className="text-xl md:text-2xl font-black text-[#282728] mb-3 leading-tight">
                                                         {cat.title}
@@ -390,9 +410,15 @@ export default function BookingPage() {
                                                         {cat.description}
                                                     </p>
                                                     <div className="mt-auto">
-                                                        <span className="flex items-center gap-2 text-[#282728] text-sm font-bold transition-transform duration-300 md:group-hover:translate-x-2">
-                                                            Choose <ChevronRight size={16} />
-                                                        </span>
+                                                        {cat.comingSoon ? (
+                                                            <span className="flex items-center gap-2 text-gray-400 text-sm font-bold">
+                                                                Not available yet
+                                                            </span>
+                                                        ) : (
+                                                            <span className="flex items-center gap-2 text-[#282728] text-sm font-bold transition-transform duration-300 md:group-hover:translate-x-2">
+                                                                Choose <ChevronRight size={16} />
+                                                            </span>
+                                                        )}
                                                     </div>
                                                 </div>
                                             </div>
