@@ -1,5 +1,6 @@
 import React, { useRef } from 'react';
 import { motion, useScroll, useSpring, useTransform } from 'framer-motion';
+import { ArrowRight } from 'react-feather';
 
 // Assets
 import educationImg from "@assets/Services/education.png";
@@ -134,10 +135,9 @@ const journeySteps = [
 ];
 
 export default function JourneyExperience() {
-    const containerRef = useRef(null);
+    const scrollContainerRef = useRef(null);
     const { scrollYProgress } = useScroll({
-        target: containerRef,
-        offset: ["start end", "end end"]
+        container: scrollContainerRef
     });
 
     const scaleY = useSpring(scrollYProgress, {
@@ -147,56 +147,115 @@ export default function JourneyExperience() {
     });
 
     return (
-        <section ref={containerRef} className="py-32 bg-white font-urbanist overflow-hidden relative">
-            <div className="max-w-5xl mx-auto px-4 relative">
-                {/* Header */}
-                <div className="text-center mb-44">
-                    <motion.h2
-                        initial={{ opacity: 0, y: 20 }}
-                        whileInView={{ opacity: 1, y: 0 }}
-                        viewport={{ once: true }}
-                        className="text-2xl md:text-4xl font-black tracking-[0.4em] text-gray-400 mb-2 uppercase"
-                    >
-                        Journey Experience
-                    </motion.h2>
-                    <motion.p
-                        initial={{ opacity: 0, y: 10 }}
-                        whileInView={{ opacity: 1, y: 0 }}
-                        viewport={{ once: true }}
-                        transition={{ delay: 0.2 }}
-                        className="text-lg md:text-xl tracking-[0.3em] text-gray-500 uppercase"
-                    >
-                        New Zealand
-                    </motion.p>
-
-                    <motion.div
-                        initial={{ opacity: 0, y: 0 }}
-                        animate={{ opacity: 1, y: [0, 10, 0] }}
-                        transition={{ repeat: Infinity, duration: 2 }}
-                        className="mt-20 flex justify-center"
-                    >
-                        <div className="w-0 h-0 border-l-[12px] border-l-transparent border-r-[12px] border-r-transparent border-t-[18px] border-t-black"></div>
-                    </motion.div>
-                </div>
-
-                <div className="relative pb-40">
-                    {/* Centered Vertical Line */}
-                    <div className="absolute left-1/2 -translate-x-1/2 top-0 bottom-0 w-1 bg-gray-100" />
-                    <motion.div
-                        className="absolute left-1/2 -translate-x-1/2 top-0 w-1 bg-black origin-top h-full"
-                        style={{ scaleY }}
-                    />
-
-                    <div className="relative space-y-12">
-                        {journeySteps.map((item, index) => (
-                            <JourneyItem
-                                key={item.id}
-                                item={item}
-                                index={index}
-                            />
-                        ))}
+        <section className="bg-white font-urbanist overflow-hidden border-t border-gray-100">
+            <div className="max-w-7xl mx-auto px-6 grid grid-cols-1 lg:grid-cols-2 gap-16 h-[80vh] min-h-[600px] max-h-[900px]">
+                
+                {/* Left Column - Fixed Content vertically centered */}
+                <div className="relative flex items-center h-full bg-[#162016] p-10 lg:p-16 shadow-xl">
+                    <div className="flex flex-col">
+                        <motion.span 
+                            initial={{ opacity: 0, y: 20 }}
+                            whileInView={{ opacity: 1, y: 0 }}
+                            viewport={{ once: true }}
+                            className="text-[10px] font-bold tracking-widest uppercase text-[#436235] mb-4 block"
+                        >
+                            Progression
+                        </motion.span>
+                        <motion.h2 
+                            initial={{ opacity: 0, y: 20 }}
+                            whileInView={{ opacity: 1, y: 0 }}
+                            viewport={{ once: true }}
+                            transition={{ delay: 0.1 }}
+                            className="text-4xl md:text-5xl font-medium mb-6 leading-tight text-white"
+                        >
+                            Your education unfolds in<br/>clear stages
+                        </motion.h2>
+                        <motion.p 
+                            initial={{ opacity: 0, y: 20 }}
+                            whileInView={{ opacity: 1, y: 0 }}
+                            viewport={{ once: true }}
+                            transition={{ delay: 0.2 }}
+                            className="text-gray-400 font-light leading-relaxed mb-10 max-w-md"
+                        >
+                            We map the entire path from diploma through doctorate. Each level brings new opportunities and we're there to guide you forward.
+                        </motion.p>
+                        
+                        <motion.div 
+                            initial={{ opacity: 0, y: 20 }}
+                            whileInView={{ opacity: 1, y: 0 }}
+                            viewport={{ once: true }}
+                            transition={{ delay: 0.3 }}
+                            className="flex flex-wrap items-center gap-6"
+                        >
+                            <a 
+                                href="/programs-levels" 
+                                className="bg-[#436235] text-white px-8 py-3 rounded-sm text-[11px] font-bold tracking-widest hover:bg-[#436235]/90 transition-all duration-300 shadow-lg"
+                            >
+                                EXPLORE
+                            </a>
+                            <a href="/programs-levels" className="text-sm font-medium flex items-center gap-2 group/link text-white hover:text-[#436235] transition-colors">
+                                Learn more <ArrowRight className="w-4 h-4 transition-transform group-hover/link:translate-x-1" />
+                            </a>
+                        </motion.div>
                     </div>
                 </div>
+
+                {/* Right Column - Timeline (Scrollable internally) */}
+                <div 
+                    ref={scrollContainerRef}
+                    className="relative h-full overflow-y-auto lg:pl-10 pb-32 pt-20 [&::-webkit-scrollbar]:hidden"
+                    style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+                >
+                    {/* Header */}
+                    <div className="text-center mb-32 relative z-10">
+                        <motion.h2
+                            initial={{ opacity: 0, y: 20 }}
+                            whileInView={{ opacity: 1, y: 0 }}
+                            viewport={{ once: true }}
+                            className="text-xl md:text-3xl font-black tracking-[0.3em] md:tracking-[0.4em] text-gray-400 mb-2 uppercase"
+                        >
+                            Journey Experience
+                        </motion.h2>
+                        <motion.p
+                            initial={{ opacity: 0, y: 10 }}
+                            whileInView={{ opacity: 1, y: 0 }}
+                            viewport={{ once: true }}
+                            transition={{ delay: 0.2 }}
+                            className="text-sm md:text-lg tracking-[0.2em] md:tracking-[0.3em] text-gray-500 uppercase"
+                        >
+                            New Zealand
+                        </motion.p>
+
+                        <motion.div
+                            initial={{ opacity: 0, y: 0 }}
+                            animate={{ opacity: 1, y: [0, 10, 0] }}
+                            transition={{ repeat: Infinity, duration: 2 }}
+                            className="mt-16 flex justify-center"
+                        >
+                            <div className="w-0 h-0 border-l-[10px] border-l-transparent border-r-[10px] border-r-transparent border-t-[14px] border-t-gray-400"></div>
+                        </motion.div>
+                    </div>
+
+                    <div className="relative">
+                        {/* Centered Vertical Line */}
+                        <div className="absolute left-1/2 -translate-x-1/2 top-0 bottom-0 w-1 bg-gray-100" />
+                        <motion.div
+                            className="absolute left-1/2 -translate-x-1/2 top-0 w-1 bg-black origin-top h-full"
+                            style={{ scaleY }}
+                        />
+
+                        <div className="relative space-y-12">
+                            {journeySteps.map((item, index) => (
+                                <JourneyItem
+                                    key={item.id}
+                                    item={item}
+                                    index={index}
+                                />
+                            ))}
+                        </div>
+                    </div>
+                </div>
+
             </div>
         </section>
     );
