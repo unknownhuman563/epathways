@@ -26,36 +26,7 @@ const Navbar = () => {
                     <li><a href="/" className="hover:text-[#436235] transition-colors">Home</a></li>
                     <li><a href="/activities" className="hover:text-[#436235] transition-colors">Activities</a></li>
 
-                    {/* Education Dropdown */}
-                    <li className="relative group py-5">
-                        <button className="flex items-center gap-1 hover:text-[#436235] transition-colors group-hover:text-[#436235]">
-                            Education
-                            <svg className="w-3 h-3 transition-transform group-hover:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
-                            </svg>
-                        </button>
-
-                        {/* Dropdown Menu */}
-                        <div className="absolute top-full left-0 w-64 bg-white shadow-2xl rounded-b-lg border-t-2 border-[#436235] opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-300 transform translate-y-2 group-hover:translate-y-0">
-                            <ul className="py-2">
-                                <li>
-                                    <a href="/education-journey" className="block px-6 py-3 text-sm text-gray-700 hover:bg-gray-50 hover:text-[#436235] transition-colors">
-                                        Education Journey
-                                    </a>
-                                </li>
-                                <li>
-                                    <a href="/programs-levels" className="block px-6 py-3 text-sm text-gray-700 hover:bg-gray-50 hover:text-[#436235] transition-colors">
-                                        Programs & Levels
-                                    </a>
-                                </li>
-                                <li>
-                                    <a href="/fee-guide" className="block px-6 py-3 text-sm text-gray-700 hover:bg-gray-50 hover:text-[#436235] transition-colors">
-                                        Estimated Cost / Fee Guide
-                                    </a>
-                                </li>   
-                            </ul>
-                        </div>
-                    </li>
+                    <li><a href="/education-journey" className="hover:text-[#436235] transition-colors">Education</a></li>
 
                     <li><a href="/immigration" className="hover:text-[#436235] transition-colors">Immigration</a></li>
                     <li><a href="#accommodation" className="hover:text-[#436235] transition-colors">Accommodation</a></li>
