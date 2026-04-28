@@ -35,6 +35,7 @@
     "react-dom": "^19.1.1",
     "react-feather": "^2.0.10",
     "react-intersection-observer": "^9.16.0",
+    "sonner": "^2.0.7",
     "swiper": "^9.4.1",
     "tailwind-scrollbar-hide": "^4.0.0",
     "xlsx": "^0.18.5"
