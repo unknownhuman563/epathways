@@ -253,6 +253,39 @@ icacls "$env:USERPROFILE\.ssh\id_ed25519" /inheritance:r /grant:r "${env:USERNAM
 
 Now `ssh deploy@76.13.193.63` works from either WSL or PowerShell.
 
+### 1.11 — Add NOPASSWD sudoers rule for deploy user (REQUIRED for CI/CD perm-fix step)
+
+The CI/CD post-deploy step runs `sudo chown` / `sudo find ... -exec chmod` on `storage/` and `bootstrap/cache/` to restore permissions that rsync's `-p` flag wipes (see [Lessons Learned → rsync `-p` wipes storage perms](#rsync--p-wipes-storage-perms-on-every-deploy)). GitHub Actions runs deploys non-interactively, so sudo cannot prompt for a password — it would hang and time out.
+
+We need a narrow sudoers rule allowing **only** the three commands the workflow uses (`chown`, `find`, `chmod`) to run without password.
+
+As **root** on the VPS:
+
+```bash
+printf 'deploy ALL=(ALL) NOPASSWD: /usr/bin/chown, /usr/bin/find, /usr/bin/chmod\n' > /etc/sudoers.d/deploy-perm-fix
+chmod 440 /etc/sudoers.d/deploy-perm-fix
+visudo -c -f /etc/sudoers.d/deploy-perm-fix
+```
+
+Expected output of `visudo -c`:
+```
+/etc/sudoers.d/deploy-perm-fix: parsed OK
+```
+
+> **Why `printf` and not heredoc:** PowerShell SSH and many terminal pasters add leading whitespace, which corrupts heredoc-based file creation. `printf` is a single line with explicit `\n`, immune to paste indentation. See [Lessons Learned → PowerShell SSH paste indents pasted text](#powershell-ssh-paste-indents-pasted-text).
+
+Verify deploy can now run sudo without password:
+
+```bash
+sudo -u deploy sudo -n true
+```
+
+Expected: silent (no output). If you see `sudo: a password is required`, the sudoers file isn't being picked up — check the file exists, is mode `440`, and `visudo -c` reports `parsed OK`.
+
+> **Single VPS hosts both environments**, so this one sudoers file applies to both staging and production deploys. You don't need to repeat this for production setup.
+
+> **Security boundary unchanged:** `deploy` already has full sudo with password (per §1.5: `usermod -aG sudo deploy`). This rule just removes the password prompt for three specific tools used by the deploy script. Anyone who could already become root can still become root.
+
 ---
 
 ## Phase 2: Stack Installation
@@ -556,10 +589,23 @@ jobs:
             ./ ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/var/www/epathways-staging/
 
       - name: Run post-deploy commands on VPS
-        run: ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} 'cd /var/www/epathways-staging && php artisan migrate --force && php artisan config:cache && php artisan view:cache && php artisan queue:restart'
+        run: |
+          ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} '
+            cd /var/www/epathways-staging &&
+            sudo chown -R deploy:www-data storage bootstrap/cache &&
+            sudo find storage bootstrap/cache -type d -exec chmod 2775 {} \; &&
+            sudo find storage bootstrap/cache -type f -exec chmod 664 {} \; &&
+            php artisan storage:link &&
+            php artisan migrate --force &&
+            php artisan config:cache &&
+            php artisan view:cache &&
+            php artisan queue:restart
+          '
 ```
 
 > **CRITICAL — about the storage excludes:** `storage/app/public/*` and `storage/app/private/*` exclusions are **non-negotiable** for production safety. Without them, the `--delete` flag would attempt to remove user-uploaded files (passport PDFs, etc.) on every deploy because they don't exist in the source repo. We learned this the hard way — see [Lessons Learned](#lessons-learned).
+
+> **CRITICAL — about the post-deploy chown/chmod and storage:link:** rsync's `-p` flag preserves source-side permissions on directories. The source (GitHub Actions runner) has default `755` on `storage/app/public/`, so every deploy wipes the `2775` setgid bit and group-write that PHP-FPM (`www-data`) needs to create upload subdirectories. Symptom: 500 error on first upload after each deploy with `Unable to create a directory at storage/app/public/...`. Similarly, the gitignored `public/storage` symlink is wiped by `--delete` and must be recreated. The post-deploy step **self-heals both** on every deploy: chown + find chmod restore perms, `storage:link` is idempotent and recreates the symlink if rsync deleted it. See [Lessons Learned → rsync `-p` wipes storage perms](#rsync--p-wipes-storage-perms-on-every-deploy). The `sudo` calls require the NOPASSWD sudoers rule from §1.11.
 
 Commit and push:
 
@@ -901,8 +947,21 @@ jobs:
             ./ ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/var/www/epathways-production/
 
       - name: Run post-deploy commands on VPS
-        run: ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} 'cd /var/www/epathways-production && php artisan migrate --force && php artisan config:cache && php artisan view:cache && php artisan queue:restart'
+        run: |
+          ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} '
+            cd /var/www/epathways-production &&
+            sudo chown -R deploy:www-data storage bootstrap/cache &&
+            sudo find storage bootstrap/cache -type d -exec chmod 2775 {} \; &&
+            sudo find storage bootstrap/cache -type f -exec chmod 664 {} \; &&
+            php artisan storage:link &&
+            php artisan migrate --force &&
+            php artisan config:cache &&
+            php artisan view:cache &&
+            php artisan queue:restart
+          '
 ```
+
+> **Note:** the `sudo` calls in the post-deploy step require the NOPASSWD sudoers rule from §1.11. Single VPS hosts both environments, so the rule set up during staging covers production automatically — no additional VPS setup needed for production.
 
 Commit + push to staging first, then merge to main:
 
@@ -1039,6 +1098,15 @@ The rsync uses these `--exclude` flags:
 - `storage/logs/*`, `storage/framework/cache/*`, `storage/framework/sessions/*`, `storage/framework/views/*` — runtime state preserved
 - `storage/app/public/*`, `storage/app/private/*` — **user-uploaded files preserved** (passport PDFs, banner images, etc.). Without these excludes, `--delete` would wipe customer data on every deploy.
 - `node_modules`, `.git`, `.github` — not needed on server
+
+### What gets self-healed on every deploy
+
+The post-deploy SSH step automatically restores two things rsync would otherwise damage:
+
+- **Storage and bootstrap/cache permissions** — rsync's `-p` flag preserves source perms (`755 root:root` from the GitHub runner), wiping the `2775 deploy:www-data` setup the web server needs. Auto-restored via `sudo chown ... && sudo find ... -exec chmod 2775/664`.
+- **The `public/storage` symlink** — gitignored (so absent from source), `--delete` removes it from destination. Auto-restored via `php artisan storage:link` (idempotent).
+
+These commands run after rsync, before any other artisan commands. If they fail (e.g., NOPASSWD sudoers rule missing per §1.11), the deploy fails loudly in Actions — you'll see exactly which command hung.
 
 ### Branch flow
 
@@ -1212,13 +1280,37 @@ Prevention: **don't run commands directly on the VPS** — let CI/CD handle depl
 
 ### "Unable to create a directory at storage/app/public/..."
 
-Permission issue + the `public/` disk lacking the setgid bit. Fix:
+500 error returned to the user, log shows `League\Flysystem\UnableToCreateDirectory` from a controller's `->store('something', 'public')` call.
+
+**Root cause:** rsync's `-p` flag preserved the source's default `755` permissions on `storage/app/public/`, wiping the `2775 deploy:www-data` setup. PHP-FPM (running as `www-data`) can't create subdirectories because group-write is gone.
+
+**Immediate fix on the affected VPS:**
 
 ```bash
-sudo chown -R deploy:www-data /var/www/<site>/storage
-sudo find /var/www/<site>/storage -type d -exec chmod 2775 {} \;
-sudo find /var/www/<site>/storage -type f -exec chmod 664 {} \;
+sudo chown -R deploy:www-data /var/www/<site>/storage /var/www/<site>/bootstrap/cache
+sudo find /var/www/<site>/storage /var/www/<site>/bootstrap/cache -type d -exec chmod 2775 {} \;
+sudo find /var/www/<site>/storage /var/www/<site>/bootstrap/cache -type f -exec chmod 664 {} \;
 ```
+
+**Permanent fix:** the post-deploy step in §3.7 / §4.6 already includes these commands. If you're seeing this error, either:
+
+1. The workflow YAML wasn't updated (older deploy ran without the perm-fix). Update the workflow per §3.7 and push.
+2. The NOPASSWD sudoers rule from §1.11 isn't in place, so the workflow's sudo calls were rejected. Verify with `sudo -u deploy sudo -n true` on the VPS.
+
+### Image upload succeeds but the image displays as broken (404)
+
+The `image_url` in the database points to `/storage/programs/banners/foo.webp` but the URL returns 404 in the browser.
+
+**Root cause:** `public/storage` symlink is missing. rsync's `--delete` flag removes the symlink because it's gitignored (`/public/storage` in `.gitignore`) and therefore not in the source repo.
+
+**Immediate fix:**
+
+```bash
+cd /var/www/<site>
+sudo -u deploy php artisan storage:link
+```
+
+**Permanent fix:** the post-deploy step from §3.7 / §4.6 includes `php artisan storage:link` (idempotent — safe to run on every deploy). Update the workflow if you don't have it yet.
 
 ### AI eligibility analysis returning empty / `{"type": "object"}`
 
@@ -1442,6 +1534,40 @@ We forgot two excludes: `storage/app/public/*` and `storage/app/private/*`. Thes
 
 Hostinger's free single snapshot is one point-in-time recovery option. For production with real customer data, enable automated daily backups (`$6/month`) — they roll over so you have multiple recovery points across the past week.
 
+### rsync `-p` wipes storage perms on every deploy
+
+Sister bug to the `--delete` issue above. `rsync -rlptvz --delete` includes `-p` (preserve permissions). It preserves them **from the source side, applied onto the destination**. The source repo on a fresh GitHub Actions runner has `storage/app/public/` with default `755 root:root` (or whatever the runner's umask produces). On every deploy, rsync overwrites the destination's `2775 deploy:www-data` setup with those defaults — wiping the setgid bit and group-write.
+
+**What happens after every deploy until fixed:**
+
+1. PHP-FPM (`www-data`) tries to upload a file → calls `Storage::disk('public')->put()`
+2. Laravel attempts to `mkdir storage/app/public/programs/banners/`
+3. Parent dir is now `755 root:root` (or `755 deploy:deploy` after rsync) — `www-data` lacks write
+4. `League\Flysystem\UnableToCreateDirectory` thrown → 500 to the user
+
+**Sister symptom — symlink wipe:** the gitignored `public/storage` symlink isn't in the source, so `--delete` removes it. After every deploy, the upload-display URL `/storage/...` returns 404 even though the file uploaded successfully (when perms allow).
+
+**Fix (already integrated into §3.7 and §4.6 workflow YAML):**
+
+The post-deploy SSH step now runs:
+
+```bash
+sudo chown -R deploy:www-data storage bootstrap/cache &&
+sudo find storage bootstrap/cache -type d -exec chmod 2775 {} \; &&
+sudo find storage bootstrap/cache -type f -exec chmod 664 {} \; &&
+php artisan storage:link
+```
+
+This auto-restores perms and symlink on every deploy. The `sudo` calls require the NOPASSWD sudoers rule from §1.11.
+
+**Lesson:** when using `rsync -p` against a destination that needs custom perms (web server / setgid / mixed-ownership directories), you have three choices:
+
+1. **Don't preserve permissions** (`--no-perms`) — but then permissions across the whole tree become whatever rsync's umask produces. Often unacceptable.
+2. **Carefully match source-side perms to destination needs** — fragile, breaks when anyone touches the source.
+3. **Re-apply destination perms after rsync** in a post-deploy step ← what we do.
+
+Option 3 is the only sustainable path for this stack. The post-deploy is idempotent and adds ~1 second to deploys.
+
 ---
 
 ## Appendix: Quick Reference
@@ -1503,4 +1629,4 @@ uptime
 
 ---
 
-*Last updated: April 2026*
+*Last updated: April 2026 (added storage perm-fix and symlink self-heal in post-deploy step; added §1.11 sudoers rule)*
