@@ -134,7 +134,7 @@ const consultants = {
             sessionFormat: 'Video Call or Phone',
             institutions: 'Nationwide Support',
             specialisesIn: ['Pathway Planning', 'Course Matching', 'Student Support', 'Admissions'],
-            bookingUrl: 'https://calendar.google.com/calendar/appointments/schedules/AcZssZ0A25brqHYLx6o-iqanRiIG-jugrE62FGo4ryI_dQyPsPl8N1m3dr1VcP5rla8l8b-n3SEBy8r4?gv=true'
+            bookingUrl: 'https://calendar.google.com/calendar/appointments/schedules/AcZssZ2UC60-y5UinpTZqTSV_AMOwsLtuXpqYm3xGUI3WsjVjQQ9TcZPSv_ieaSi1CSlKDlL9OXabohZ?gv=true'
         },
         {
             id: 2,
