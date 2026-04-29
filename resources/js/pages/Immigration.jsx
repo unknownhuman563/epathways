@@ -546,51 +546,61 @@ export default function Immigration() {
             </section>
 
             {/* ══════════════════════════════════════════════════════════════
-                KNOW WHERE YOU STAND SECTION  —  Assessment
+                ASSESSMENT VISAS SECTION
             ══════════════════════════════════════════════════════════════ */}
             <section className="py-32 bg-white">
                 <div className="container mx-auto px-6 md:px-12 max-w-7xl">
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-20 items-center">
-                        <div className="aspect-square relative overflow-hidden bg-gray-100 rounded-sm order-2 lg:order-1">
-                            <img 
-                                src={GuidanceImg} 
-                                alt="Assessment" 
-                                className="w-full h-full object-cover"
-                            />
-                        </div>
-                        <div className="order-1 lg:order-2">
-                            <span className="text-[11px] font-bold tracking-[0.4em] uppercase text-[#00A693] mb-6 block">
-                                Assessment
-                            </span>
-                            <h2 className="text-4xl md:text-6xl font-medium mb-8 tracking-tight text-[#282728]">
-                                Know where you stand
-                            </h2>
-                            <p className="text-gray-500 text-sm md:text-base leading-relaxed mb-12 max-w-xl">
-                                Unsure if you qualify? Our free assessment evaluates your background against current requirements and identifies the best pathways forward.
-                            </p>
+                    <div className="text-center mb-16">
+                        <span className="text-[11px] font-bold tracking-[0.4em] uppercase text-[#00A693] mb-4 block">
+                            Assessment
+                        </span>
+                        <h2 className="text-4xl md:text-5xl font-medium mb-6 tracking-tight text-[#282728]">
+                            Select your visa pathway
+                        </h2>
+                        <p className="text-gray-500 text-sm md:text-base max-w-3xl mx-auto leading-relaxed">
+                            Choose a visa category below to start your free assessment.<br className="hidden md:block" /> We will evaluate your qualifications and help you find the best path forward.
+                        </p>
+                    </div>
 
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-10 mb-12">
-                                <div>
-                                    <h4 className="text-sm font-bold text-[#282728] mb-3">Education</h4>
-                                    <p className="text-xs text-gray-400 leading-relaxed">
-                                        Relevant qualifications strengthen most applications significantly.
-                                    </p>
-                                </div>
-                                <div>
-                                    <h4 className="text-sm font-bold text-[#282728] mb-3">Financial</h4>
-                                    <p className="text-xs text-gray-400 leading-relaxed">
-                                        Proof of funds demonstrates your ability to support yourself abroad.
-                                    </p>
-                                </div>
-                            </div>
-
-                            <a 
-                                href="/free-assessment" 
-                                className="inline-flex items-center gap-3 border border-gray-200 px-8 py-3 text-[11px] font-bold uppercase tracking-widest hover:bg-[#282728] hover:text-white transition-all duration-300"
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {[
+                            { title: "Student Visa", desc: "Study at leading institutions with full support for admissions and visa processing.", img: StudentVisaImg, link: "/visa-assessment-form?type=student" },
+                            { title: "Work Visa", desc: "Secure international employment through skilled migration and employer programs.", img: WorkVisaImg, link: "/visa-assessment-form?type=work" },
+                            { title: "Visitor Visa", desc: "Experience new destinations for tourism, business, or visiting family and friends.", img: VisitorVisaImg, link: "/visa-assessment-form?type=visitor" },
+                            { title: "Family Visa", desc: "Reunite with your loved ones through partner, parent, and dependent child pathways.", img: SettleVisaImg, link: "/visa-assessment-form?type=family" },
+                            { title: "Residency Visa", desc: "Navigate the complex path to permanent residency with end-to-end expert guidance.", img: ResidencyImg, link: "/visa-assessment-form?type=residency" },
+                            { title: "General Assessment", desc: "Unsure which visa suits you? Let our experts evaluate your profile and find the best option.", img: GuidanceImg, link: "/visa-assessment-form?type=general" },
+                        ].map((visa, idx) => (
+                            <motion.div 
+                                key={idx}
+                                initial={{ opacity: 0, y: 20 }}
+                                whileInView={{ opacity: 1, y: 0 }}
+                                viewport={{ once: true }}
+                                transition={{ delay: idx * 0.1 }}
+                                className="group relative h-[400px] md:h-[450px] rounded-sm overflow-hidden bg-[#282728]"
                             >
-                                Assess now <ArrowRight size={14} />
-                            </a>
-                        </div>
+                                <img 
+                                    src={visa.img} 
+                                    alt={visa.title} 
+                                    className="absolute inset-0 w-full h-full object-cover opacity-60 group-hover:opacity-40 group-hover:scale-105 transition-all duration-700"
+                                />
+                                <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent"></div>
+                                <div className="absolute inset-0 p-8 flex flex-col justify-end items-start">
+                                    <h3 className="text-2xl font-medium text-white mb-3">
+                                        {visa.title}
+                                    </h3>
+                                    <p className="text-gray-300 text-sm leading-relaxed mb-6 max-w-[90%] group-hover:text-white transition-colors duration-300">
+                                        {visa.desc}
+                                    </p>
+                                    <a 
+                                        href={visa.link}
+                                        className="inline-flex items-center gap-3 bg-white text-[#282728] px-6 py-3 text-[11px] font-bold uppercase tracking-widest hover:bg-[#00A693] hover:text-white transition-all duration-300"
+                                    >
+                                        Assess now <ArrowRight size={14} />
+                                    </a>
+                                </div>
+                            </motion.div>
+                        ))}
                     </div>
                 </div>
             </section>
@@ -750,7 +760,7 @@ export default function Immigration() {
                                         {c.bio}
                                     </p>
                                     <a 
-                                        href="/booking" 
+                                        href="/immigration-assessment" 
                                         className="text-[10px] font-bold uppercase tracking-widest flex items-center gap-2 text-white hover:text-[#00A693] transition-colors group/link"
                                     >
                                         Connect <ArrowRight size={12} className="group-hover/link:translate-x-1 transition-transform" />
