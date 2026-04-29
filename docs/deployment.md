@@ -551,11 +551,15 @@ jobs:
             --exclude='storage/framework/cache/*' \
             --exclude='storage/framework/sessions/*' \
             --exclude='storage/framework/views/*' \
+            --exclude='storage/app/public/*' \
+            --exclude='storage/app/private/*' \
             ./ ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/var/www/epathways-staging/
 
       - name: Run post-deploy commands on VPS
         run: ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} 'cd /var/www/epathways-staging && php artisan migrate --force && php artisan config:cache && php artisan view:cache && php artisan queue:restart'
 ```
+
+> **CRITICAL — about the storage excludes:** `storage/app/public/*` and `storage/app/private/*` exclusions are **non-negotiable** for production safety. Without them, the `--delete` flag would attempt to remove user-uploaded files (passport PDFs, etc.) on every deploy because they don't exist in the source repo. We learned this the hard way — see [Lessons Learned](#lessons-learned).
 
 Commit and push:
 
@@ -892,6 +896,8 @@ jobs:
             --exclude='storage/framework/cache/*' \
             --exclude='storage/framework/sessions/*' \
             --exclude='storage/framework/views/*' \
+            --exclude='storage/app/public/*' \
+            --exclude='storage/app/private/*' \
             ./ ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/var/www/epathways-production/
 
       - name: Run post-deploy commands on VPS
@@ -1031,6 +1037,7 @@ The rsync uses these `--exclude` flags:
 
 - `.env` — never overwritten; environment-specific config stays put
 - `storage/logs/*`, `storage/framework/cache/*`, `storage/framework/sessions/*`, `storage/framework/views/*` — runtime state preserved
+- `storage/app/public/*`, `storage/app/private/*` — **user-uploaded files preserved** (passport PDFs, banner images, etc.). Without these excludes, `--delete` would wipe customer data on every deploy.
 - `node_modules`, `.git`, `.github` — not needed on server
 
 ### Branch flow
@@ -1217,9 +1224,13 @@ sudo find /var/www/<site>/storage -type f -exec chmod 664 {} \;
 
 Symptom: `lead.ai_analysis_status = completed` but the analysis JSON is just `{"type":"object"}` — score shows as 0.
 
-Cause: `CEREBRAS_MODEL=llama3.1-8b` is too small for structured JSON output and returns a schema fragment instead of data.
+Cause: small models like `llama3.1-8b` misinterpret the `response_format: json_object` flag — they sometimes echo the schema description instead of generating actual data conforming to it.
 
-Fix: change to a larger model:
+**Two fixes (use whichever fits):**
+
+#### Fix A — Use a larger model (cleanest)
+
+If your Cerebras tier has access:
 
 ```bash
 sudo -u deploy sed -i 's|^CEREBRAS_MODEL=.*|CEREBRAS_MODEL=llama3.3-70b|' /var/www/<site>/.env
@@ -1229,7 +1240,44 @@ sudo -u deploy php artisan config:cache
 sudo -u deploy php artisan queue:restart
 ```
 
-Available Cerebras models (as of 2026): `llama3.3-70b`, `gpt-oss-120b`, `qwen-3-32b`, `llama-4-maverick-17b-128e-instruct`. Avoid `llama3.1-8b` for structured output.
+Available Cerebras models (as of 2026): `llama3.3-70b`, `gpt-oss-120b`, `qwen-3-32b`, `llama-4-maverick-17b-128e-instruct`. **NOTE:** if a model returns 404, your tier may not have access — list available models with:
+```bash
+curl -s https://api.cerebras.ai/v1/models -H "Authorization: Bearer <YOUR-CEREBRAS-KEY>"
+```
+
+#### Fix B — Make `llama3.1-8b` work (if it's the only model your tier allows)
+
+In `app/Services/CerebrasService.php`:
+
+1. **Drop `'response_format' => ['type' => 'json_object']`** from the `Http::post()` payload. Without this flag, the model follows prompt instructions normally.
+
+2. **Add a JSON extraction helper** that handles cases where the model wraps output in markdown code fences:
+   ```php
+   private function extractJson(string $content): string
+   {
+       $trimmed = trim($content);
+       if (preg_match('/```(?:json)?\s*(.+?)\s*```/s', $trimmed, $m)) {
+           return trim($m[1]);
+       }
+       $start = strpos($trimmed, '{');
+       $end = strrpos($trimmed, '}');
+       if ($start !== false && $end !== false && $end > $start) {
+           return substr($trimmed, $start, $end - $start + 1);
+       }
+       return $trimmed;
+   }
+   ```
+
+3. **Validate required fields** after parsing. If the model returned malformed/incomplete JSON, throw an exception so the job's automatic retry can re-attempt:
+   ```php
+   if (!isset($analysis['overall_score'], $analysis['categories'])) {
+       throw new \RuntimeException('Cerebras response missing required fields');
+   }
+   ```
+
+4. **Add a concrete one-shot example to the system prompt.** Small models pattern-match worked examples far better than abstract schemas. Replace `<placeholder>` syntax with a fully-realized example output the model can imitate.
+
+After committing the code change and pushing through CI/CD, llama3.1-8b becomes reliable. Trade-off: small models will copy phrasing from the example for fields that aren't directly tied to applicant data (top-level summary, generic strengths/concerns). Scores and category-specific summaries are generated fresh from data.
 
 ### Vite build fails on case-sensitivity
 
@@ -1360,7 +1408,35 @@ grep -rn "/resources/Assets" .
 
 ### Small LLM models can fail structured-output prompts
 
-`llama3.1-8b` (Cerebras's smallest model) returned `{"type": "object"}` (a JSON schema fragment) instead of actual data when asked for structured eligibility analysis. Use models with ≥ 32B parameters for reliable structured output: `llama3.3-70b`, `gpt-oss-120b`, `qwen-3-32b`.
+`llama3.1-8b` (Cerebras's smallest model) returned `{"type": "object"}` (a JSON schema fragment) instead of actual data when asked for structured eligibility analysis. Two paths forward:
+
+1. **Larger model** (≥ 32B parameters): `llama3.3-70b`, `gpt-oss-120b`, `qwen-3-32b` handle structured output reliably with `response_format: json_object`.
+2. **Adapt to small models**: drop the `response_format` flag, add JSON extraction (handles markdown code fences), add field validation, and put a concrete worked example in the system prompt. Small models copy from examples — give them a good one. See [Troubleshooting → AI eligibility analysis returning empty](#ai-eligibility-analysis-returning-empty--type-object) for the full code change.
+
+### rsync `--delete` will eat user uploads if you don't exclude them
+
+Our original `deploy-staging.yml` and `deploy-production.yml` workflows had this rsync line:
+
+```yaml
+rsync -rlptvz --delete --no-owner --no-group \
+  --exclude='.git' --exclude='.github' --exclude='.env' --exclude='node_modules' \
+  --exclude='storage/logs/*' --exclude='storage/framework/cache/*' \
+  --exclude='storage/framework/sessions/*' --exclude='storage/framework/views/*' \
+  ./ deploy@vps:/var/www/<site>/
+```
+
+We forgot two excludes: `storage/app/public/*` and `storage/app/private/*`. These are where Laravel stores user-uploaded files (passport PDFs in our case).
+
+**What happened on every deploy:**
+1. Source repo doesn't have user uploads (they're not in git)
+2. rsync `--delete` says: "this exists on dest but not source → delete it"
+3. Tries to unlink `storage/app/public/passports/abc123.pdf`
+4. ✅ Lucky save: file permissions (`www-data` ownership from PHP-FPM) prevented `deploy` user from deleting → rsync errors but data survives
+5. Without that permission "bug", every deploy would silently destroy customer data
+
+**Fix:** add `--exclude='storage/app/public/*'` and `--exclude='storage/app/private/*'` to both workflows.
+
+**Lesson:** when using `rsync --delete`, **explicitly exclude every directory the application writes to**. If unsure, prefer `rsync` without `--delete` (leaves orphaned files but doesn't destroy data).
 
 ### One snapshot ≠ a backup strategy
 

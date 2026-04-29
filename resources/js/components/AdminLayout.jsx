@@ -1,8 +1,8 @@
 import { Link, usePage, router } from "@inertiajs/react";
 import { useState } from "react";
-import { 
+import {
     Menu, X, Search, Bell, Settings, HelpCircle, LogOut,
-    Home, Users, Calendar as CalendarIcon, BookOpen, ChevronDown
+    Home, Users, Calendar as CalendarIcon, BookOpen, ChevronDown, GraduationCap
 } from "lucide-react";
 
 export default function AdminLayout({ children }) {
@@ -15,6 +15,7 @@ export default function AdminLayout({ children }) {
         { name: "Leads", href: "/admin/leads", icon: <Users size={20} /> },
         { name: "Events", href: "/admin/events", icon: <CalendarIcon size={20} /> },
         { name: "Bookings", href: "/admin/booking", icon: <BookOpen size={20} /> },
+        { name: "Programs", href: "/admin/programs", icon: <GraduationCap size={20} /> },
     ];
 
     const handleLogout = () => {

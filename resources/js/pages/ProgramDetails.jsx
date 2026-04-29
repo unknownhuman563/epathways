@@ -9,7 +9,15 @@ import ScrollToTop from "@/components/scrolltotop";
 import heroBg from "@assets/Services/education.png";
 import programImg from "@assets/Services/pathways.png"; // Changed from Testimonies/testi1.png to a more relevant education asset
 
-export default function ProgramDetails() {
+export default function ProgramDetails({ program }) {
+    const paragraphs = (program?.description || '').split(/\n\n+/).filter(Boolean);
+    const fees = Array.isArray(program?.fee_guide) ? program.fee_guide : [];
+    const fmt = (val) => {
+        if (val === null || val === undefined || val === '') return '—';
+        const n = Number(val);
+        return Number.isFinite(n) ? n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : String(val);
+    };
+
     return (
         <div className="min-h-screen bg-white font-urbanist overflow-x-hidden">
             <Navbar />
@@ -39,20 +47,14 @@ export default function ProgramDetails() {
                             {/* Left: Text Content */}
                             <div className="p-4 lg:p-3 flex flex-col justify-center">
                                 <h1 className="text-4xl md:text-5xl font-bold text-[#282728] mb-2 leading-tight">
-                                    NZ Diploma in Enrolled Nursing
+                                    {program?.title || 'Program'}
                                 </h1>
-                                <h2 className="text-2xl font-normal text-[#436235] mb-8">Auckland</h2>
+                                <h2 className="text-2xl font-normal text-[#436235] mb-8">{program?.location || ''}</h2>
 
                                 <div className="prose prose-lg text-gray-600 leading-relaxed space-y-4">
-                                    <p>
-                                        This program is for those who want to work in clinical settings as an enrolled nurse and a valued member of the health team. Students will gain knowledge in nursing, social science, and the structure and function of the human body.
-                                    </p>
-                                    <p>
-                                        They will learn skills in simulated learning environments which can then be applied on placements in clinical practice. A range of clinical courses in different health care settings will prepare students to practice in areas including rehabilitation, acute care and mental health.
-                                    </p>
-                                    <p>
-                                        After completing this program students will be able to apply to the Nursing Council of New Zealand to sit an exam to be registered as an Enrolled Nurse; this means they will be able to practice under the direction of a Registered Nurse.
-                                    </p>
+                                    {paragraphs.length === 0 ? (
+                                        <p>No description available.</p>
+                                    ) : paragraphs.map((p, i) => <p key={i}>{p}</p>)}
                                 </div>
                             </div>
 
@@ -60,13 +62,15 @@ export default function ProgramDetails() {
                             <div className="p-4 lg:p-3 h-full min-h-[400px]">
                                 <div className="relative h-full w-full rounded-[5px] overflow-hidden shadow-lg">
                                     <img
-                                        src={programImg}
-                                        alt="Nursing Student"
+                                        src={program?.image_url || programImg}
+                                        alt={program?.title || ''}
                                         className="absolute inset-0 w-full h-full object-cover"
                                     />
-                                    <div className="absolute top-6 right-6 bg-[#1a1a1a]/80 backdrop-blur-sm text-white px-4 py-2 rounded-lg text-sm font-medium uppercase tracking-wide">
-                                        February, July
-                                    </div>
+                                    {program?.intake_months && (
+                                        <div className="absolute top-6 right-6 bg-[#1a1a1a]/80 backdrop-blur-sm text-white px-4 py-2 rounded-lg text-sm font-medium uppercase tracking-wide">
+                                            {program.intake_months}
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         </div>
@@ -74,37 +78,28 @@ export default function ProgramDetails() {
                         {/* Stats Bar - Elegant Footer of the Card */}
                         <div className="bg-[#1a1a1a] text-white py-10 px-6">
                             <div className="grid grid-cols-5 items-center">
-                                {/* Level */}
                                 <div className="flex flex-col items-center border-r border-white/10 last:border-r-0">
-                                    <span className="text-3xl font-bold mb-1.5 tabular-nums">5</span>
+                                    <span className="text-3xl font-bold mb-1.5 tabular-nums">{program?.level ?? '—'}</span>
                                     <span className="text-[10px] text-gray-400 font-medium uppercase tracking-[0.2em]">Level</span>
                                 </div>
-
-                                {/* Duration */}
                                 <div className="flex flex-col items-center border-r border-white/10 last:border-r-0">
-                                    <span className="text-3xl font-bold mb-1.5 tabular-nums">18</span>
+                                    <span className="text-3xl font-bold mb-1.5 tabular-nums">{program?.duration_months ?? '—'}</span>
                                     <div className="text-[10px] text-gray-400 font-medium uppercase tracking-[0.2em] text-center leading-relaxed">
                                         Months<br />(Duration)
                                     </div>
                                 </div>
-
-                                {/* Credits */}
                                 <div className="flex flex-col items-center border-r border-white/10 last:border-r-0">
-                                    <span className="text-3xl font-bold mb-1.5 tabular-nums">180</span>
+                                    <span className="text-3xl font-bold mb-1.5 tabular-nums">{program?.credits ?? '—'}</span>
                                     <span className="text-[10px] text-gray-400 font-medium uppercase tracking-[0.2em]">Credits</span>
                                 </div>
-
-                                {/* Residency */}
                                 <div className="flex flex-col items-center border-r border-white/10 last:border-r-0">
-                                    <span className="text-3xl font-bold mb-1.5 tabular-nums">3</span>
+                                    <span className="text-3xl font-bold mb-1.5 tabular-nums">{program?.residency_points ?? '—'}</span>
                                     <div className="text-[10px] text-gray-400 font-medium uppercase tracking-[0.2em] text-center leading-relaxed px-2">
                                         Points of Residency
                                     </div>
                                 </div>
-
-                                {/* Hours */}
                                 <div className="flex flex-col items-center border-r border-white/10 last:border-r-0">
-                                    <span className="text-3xl font-bold mb-1.5 tabular-nums">25</span>
+                                    <span className="text-3xl font-bold mb-1.5 tabular-nums">{program?.hours_per_week ?? '—'}</span>
                                     <div className="text-[10px] text-gray-400 font-medium uppercase tracking-[0.2em] text-center leading-relaxed">
                                         Hours per Week<br />(Works Right)
                                     </div>
@@ -120,7 +115,7 @@ export default function ProgramDetails() {
                     <div className="bg-white p-8 rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.05)] border border-gray-100 h-full">
                         <h3 className="text-lg font-bold text-[#282728] mb-4">Entry Requirements</h3>
                         <p className="text-sm text-gray-600 leading-relaxed">
-                            Completion of equivalent secondary education to New Zealand's NCEA Level 2. Some institutions may require credits in English and Mathematics.
+                            {program?.entry_requirements || 'No entry requirements specified.'}
                         </p>
                     </div>
 
@@ -128,7 +123,7 @@ export default function ProgramDetails() {
                     <div className="bg-white p-8 rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.05)] border border-gray-100 h-full">
                         <h3 className="text-lg font-bold text-[#282728] mb-4">Employment Outcomes</h3>
                         <p className="text-sm text-gray-600 leading-relaxed">
-                            Graduates of New Zealand's Enrolled Nursing diploma generally find employment in hospitals, aged care, mental health and community settings. Starting salaries average NZD $50,000-$60,000, rising with experience. While demand exists, some face competition for positions. Expanded scope of practice and flexible work settings improve long-term opportunities and career growth.
+                            {program?.employment_outcomes || 'No employment outcomes specified.'}
                         </p>
                     </div>
 
@@ -136,7 +131,7 @@ export default function ProgramDetails() {
                     <div className="bg-white p-8 rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.05)] border border-gray-100 h-full">
                         <h3 className="text-lg font-bold text-[#282728] mb-4">Post Study</h3>
                         <p className="text-sm text-gray-600 leading-relaxed">
-                            Graduates who complete an Enrolled Nursing qualification (typically a Level 5 Diploma) in New Zealand can apply for a Post Study Work Visa (PSWV). This visa allows them to work for any employer in the health sector, often for up to 1-2 years, provided they have completed a 60-week full-time course and hold a valid registration with the Nursing Council of New Zealand.
+                            {program?.post_study || 'No post-study information specified.'}
                         </p>
                     </div>
                 </div>
@@ -149,7 +144,7 @@ export default function ProgramDetails() {
                             <Check className="w-4 h-4 text-white" strokeWidth={3} />
                         </div>
                         <p className="text-sm text-gray-600 leading-relaxed">
-                            Completion of equivalent secondary education to New Zealand's NCEA Level 2. Some institutions may require credits in English and Mathematics.
+                            {program?.entry_requirements || 'No entry requirements specified.'}
                         </p>
                     </div>
                 </div>
@@ -166,22 +161,14 @@ export default function ProgramDetails() {
                             </div>
 
                             <div className="space-y-6">
-                                <div className="flex justify-between items-center text-sm">
-                                    <span className="text-gray-600">India & Subcontinent</span>
-                                    <span className="font-bold text-[#282728]">31,200.00</span>
-                                </div>
-                                <div className="flex justify-between items-center text-sm">
-                                    <span className="text-gray-600">Southeast Asia</span>
-                                    <span className="font-bold text-[#282728]">31,200.00</span>
-                                </div>
-                                <div className="flex justify-between items-center text-sm">
-                                    <span className="text-gray-600">China/Malaysia/Singapore</span>
-                                    <span className="font-bold text-[#282728]">31,200.00</span>
-                                </div>
-                                <div className="flex justify-between items-center text-sm">
-                                    <span className="text-gray-600">LATAM/Europe/ Africa/Middle East</span>
-                                    <span className="font-bold text-[#282728]">31,200.00</span>
-                                </div>
+                                {fees.length === 0 ? (
+                                    <p className="text-sm text-gray-400">No fee data available.</p>
+                                ) : fees.map((row, i) => (
+                                    <div key={i} className="flex justify-between items-center text-sm">
+                                        <span className="text-gray-600">{row.region}</span>
+                                        <span className="font-bold text-[#282728]">{fmt(row.fee)}</span>
+                                    </div>
+                                ))}
                             </div>
                         </div>
 
@@ -189,19 +176,19 @@ export default function ProgramDetails() {
                         <div className="bg-[#282728] text-white rounded-2xl p-8 lg:p-10 shadow-2xl">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-y-10 gap-x-8">
                                 <div>
-                                    <h4 className="text-2xl font-bold mb-1">1,000.00</h4>
+                                    <h4 className="text-2xl font-bold mb-1">{fmt(program?.insurance_fee)}</h4>
                                     <p className="text-[10px] text-gray-400 uppercase tracking-wider">INSURANCE (indicative)</p>
                                 </div>
                                 <div>
-                                    <h4 className="text-2xl font-bold mb-1">2,350.00</h4>
+                                    <h4 className="text-2xl font-bold mb-1">{fmt(program?.visa_processing_fee)}</h4>
                                     <p className="text-[10px] text-gray-400 uppercase tracking-wider">Visa Processing Fee</p>
                                 </div>
                                 <div>
-                                    <h4 className="text-2xl font-bold mb-1">20,000.00</h4>
+                                    <h4 className="text-2xl font-bold mb-1">{fmt(program?.living_expense)}</h4>
                                     <p className="text-[10px] text-gray-400 uppercase tracking-wider">Living Expense (one year)</p>
                                 </div>
                                 <div>
-                                    <h4 className="text-xl font-bold mb-1">from $180/week</h4>
+                                    <h4 className="text-xl font-bold mb-1">{program?.accommodation || '—'}</h4>
                                     <p className="text-[10px] text-gray-400 uppercase tracking-wider">Accommodation (single occupancy)</p>
                                 </div>
                             </div>
