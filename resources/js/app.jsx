@@ -2,9 +2,11 @@ import './bootstrap';
 
 import { createInertiaApp } from '@inertiajs/react';
 import { createRoot } from 'react-dom/client';
+import { Toaster } from 'sonner';
 import '../css/app.css';
 
 import AdminLayout from './components/AdminLayout'; // Import AdminLayout
+import FlashToaster from './components/FlashToaster';
 
 createInertiaApp({
   resolve: name => {
@@ -19,6 +21,12 @@ createInertiaApp({
 
   },
   setup({ el, App, props }) {
-    createRoot(el).render(<App {...props} />)
+    createRoot(el).render(
+      <>
+        <App {...props} />
+        <FlashToaster />
+        <Toaster position="top-right" richColors closeButton />
+      </>
+    )
   },
 })

@@ -54,7 +54,7 @@ export default function FreeAssessment() {
         }
     }, [flash]);
 
-    const { data, setData, post, processing, errors } = useForm({
+    const { data, setData, post, processing, errors, clearErrors } = useForm({
         terms_accepted: false,
         // Personal
         first_name: '',
@@ -232,6 +232,33 @@ export default function FreeAssessment() {
 
     const formRef = useRef(null);
 
+    const step2Keys = ['first_name', 'last_name', 'email', 'phone', 'gender', 'marital_status', 'dob', 'country_of_birth', 'place_of_birth', 'citizenship', 'residence_city', 'residence_state', 'residence_country', 'has_passport', 'passport_number', 'passport_expiry', 'passport_pdf', 'has_other_names', 'other_names'];
+
+    const keyToStepNumber = (key) => {
+        if (key === 'terms_accepted') return 1;
+        if (step2Keys.includes(key)) return 2;
+        if (key.startsWith('study_plans')) return 3;
+        if (key.startsWith('education_background') || key.startsWith('high_school') || key.startsWith('education_docs') || key === 'has_gap' || key.startsWith('gap_')) return 4;
+        if (key.startsWith('work_experience')) return 5;
+        if (key.startsWith('financial_info')) return 6;
+        if (key.startsWith('source_of_funds_info')) return 7;
+        if (key.startsWith('immigration_info')) return 8;
+        if (key.startsWith('character_info') || key.startsWith('health_info')) return 9;
+        if (key.startsWith('family_info')) return 10;
+        if (key.startsWith('nz_contacts_info') || key.startsWith('military_info') || key.startsWith('home_ties_info')) return 11;
+        if (key === 'declaration_accepted') return 12;
+        return null;
+    };
+
+    const findFirstErrorStep = (keys) => {
+        let earliest = null;
+        for (const k of keys) {
+            const s = keyToStepNumber(k);
+            if (s !== null && (earliest === null || s < earliest)) earliest = s;
+        }
+        return earliest;
+    };
+
     const validateStep = (stepNum) => {
         const errs = {};
 
@@ -277,6 +304,9 @@ export default function FreeAssessment() {
             case 6:
                 if (!data.financial_info.funding_source.length) errs['financial_info.funding_source'] = 'Please select at least one funding source';
                 if (!data.financial_info.estimated_budget.trim()) errs['financial_info.estimated_budget'] = 'Estimated budget is required';
+                if (data.financial_info.has_sponsors === 'Yes' && !data.financial_info.sponsor_relation.trim()) {
+                    errs['financial_info.sponsor_relation'] = 'Sponsor relation is required';
+                }
                 break;
             case 7:
                 if (!data.source_of_funds_info.sources.length) errs['source_of_funds_info.sources'] = 'Please select at least one source of funds';
@@ -319,14 +349,63 @@ export default function FreeAssessment() {
         return errs;
     };
 
+    const validateRange = (fromStep, toStep) => {
+        const aggregated = {};
+        let firstInvalid = null;
+        for (let n = fromStep; n <= toStep; n++) {
+            const errs = validateStep(n);
+            if (Object.keys(errs).length > 0 && firstInvalid === null) {
+                firstInvalid = n;
+            }
+            Object.assign(aggregated, errs);
+        }
+        return { aggregated, firstInvalid };
+    };
+
+    const scrollFormToTop = () => {
+        if (formRef.current) {
+            formRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+    };
+
+    // As the user fills in fields, clear any "Field Required" markers that
+    // are no longer accurate so the red border disappears immediately.
+    useEffect(() => {
+        const localKeys = Object.keys(localErrors);
+        const serverKeys = Object.keys(errors);
+        if (localKeys.length === 0 && serverKeys.length === 0) return;
+
+        const { aggregated } = validateRange(1, 12);
+
+        if (localKeys.length > 0) {
+            const next = {};
+            let changed = false;
+            for (const k of localKeys) {
+                if (aggregated[k]) next[k] = aggregated[k];
+                else changed = true;
+            }
+            if (changed) setLocalErrors(next);
+        }
+
+        if (serverKeys.length > 0) {
+            const stripIndex = (k) => k.replace(/\.\d+(?=\.)/g, '');
+            const toClear = serverKeys.filter((k) => {
+                if (keyToStepNumber(k) === null) return false;
+                return !aggregated[k] && !aggregated[stripIndex(k)];
+            });
+            if (toClear.length > 0) clearErrors(...toClear);
+        }
+    }, [data]);
+
     const nextStep = () => {
         const errs = validateStep(step);
         if (Object.keys(errs).length > 0) {
             setLocalErrors(errs);
             setModal({
                 show: true,
-                message: 'Please complete all required fields before proceeding.',
+                message: `Please complete the required fields in Step ${step} (${steps[step - 1].title}) before proceeding.`,
             });
+            scrollFormToTop();
             return;
         }
         setLocalErrors({});
@@ -338,53 +417,92 @@ export default function FreeAssessment() {
         setStep(s => Math.max(s - 1, 1));
     };
 
-    const allErrors = { ...localErrors, ...errors };
-
-    const handleSubmit = (e) => {
-        e.preventDefault();
-
-        const errs = validateStep(step);
-        if (Object.keys(errs).length > 0) {
-            setLocalErrors(errs);
+    const handleSidebarClick = (targetStepId) => {
+        if (targetStepId === step) return;
+        if (targetStepId < step) {
+            setLocalErrors({});
+            setStep(targetStepId);
+            return;
+        }
+        const { aggregated, firstInvalid } = validateRange(1, targetStepId - 1);
+        if (firstInvalid !== null) {
+            setLocalErrors(aggregated);
+            setStep(firstInvalid);
             setModal({
                 show: true,
-                message: 'Please complete all required fields before submitting.',
+                message: `Please complete the required fields in Step ${firstInvalid} (${steps[firstInvalid - 1].title}) before moving forward.`,
             });
+            scrollFormToTop();
+            return;
+        }
+        setLocalErrors({});
+        setStep(targetStepId);
+    };
+
+    const normalizeServerErrors = (errs) => {
+        const out = { ...errs };
+        for (const k of Object.keys(errs)) {
+            const stripped = k.replace(/\.\d+(?=\.)/g, '');
+            if (stripped !== k && !out[stripped]) out[stripped] = errs[k];
+        }
+        return out;
+    };
+
+    const allErrors = { ...localErrors, ...normalizeServerErrors(errors) };
+
+    const handleSubmit = (e) => {
+        if (e && typeof e.preventDefault === 'function') e.preventDefault();
+
+        //submission only happens from step 12. If the form was submitted
+        if (step !== 12) {
+            nextStep();
+            return;
+        }
+
+        submitFinal();
+    };
+
+    const submitFinal = () => {
+        const { aggregated, firstInvalid } = validateRange(1, 12);
+        if (firstInvalid !== null) {
+            setLocalErrors(aggregated);
+            setStep(firstInvalid);
+            setModal({
+                show: true,
+                message: `Please complete the required fields in Step ${firstInvalid} (${steps[firstInvalid - 1].title}) before submitting.`,
+            });
+            scrollFormToTop();
             return;
         }
         setLocalErrors({});
 
-        if (step !== 12) {
-            setStep(s => Math.min(s + 1, 12));
-            return;
-        }
-
         post('/free-assessment', {
+            forceFormData: true,
             onSuccess: () => setIsSuccess(true),
-            onError: (errs) => {
-                let targetStep = 12;
-                const keys = Object.keys(errs);
-                const step2Keys = ['first_name', 'last_name', 'email', 'phone', 'gender', 'marital_status', 'dob', 'country_of_birth', 'place_of_birth', 'citizenship', 'residence_city', 'residence_state', 'residence_country', 'has_passport', 'passport_number', 'passport_expiry', 'passport_pdf', 'has_other_names', 'other_names'];
+            onError: (serverErrs) => {
+                const keys = Object.keys(serverErrs || {});
 
-                if (keys.includes('terms_accepted')) targetStep = 1;
-                else if (keys.some(k => step2Keys.includes(k))) targetStep = 2;
-                else if (keys.some(k => k.startsWith('study_plans'))) targetStep = 3;
-                else if (keys.some(k => k.startsWith('education_background') || k.startsWith('high_school') || k.startsWith('education_docs') || k === 'has_gap' || k.startsWith('gap_'))) targetStep = 4;
-                else if (keys.some(k => k.startsWith('work_experience'))) targetStep = 5;
-                else if (keys.some(k => k.startsWith('financial_info'))) targetStep = 6;
-                else if (keys.some(k => k.startsWith('source_of_funds_info'))) targetStep = 7;
-                else if (keys.some(k => k.startsWith('immigration_info'))) targetStep = 8;
-                else if (keys.some(k => k.startsWith('character_info') || k.startsWith('health_info'))) targetStep = 9;
-                else if (keys.some(k => k.startsWith('family_info'))) targetStep = 10;
-                else if (keys.some(k => k.startsWith('nz_contacts_info') || k.startsWith('military_info') || k.startsWith('home_ties_info'))) targetStep = 11;
-                else if (keys.includes('declaration_accepted')) targetStep = 12;
+                const fieldKeys = keys.filter(k => keyToStepNumber(k) !== null);
+                const onlyServerError = fieldKeys.length === 0;
+
+                if (onlyServerError) {
+                    const msg = serverErrs?.error || 'Submission failed. Please try again or contact support.';
+                    setModal({
+                        show: true,
+                        message: msg,
+                    });
+                    return;
+                }
+
+                const targetStep = findFirstErrorStep(fieldKeys) ?? 12;
 
                 setModal({
                     show: true,
-                    message: "There is some missing or invalid information. Let's head over to that section to complete it.",
+                    message: `There is some missing or invalid information in Step ${targetStep} (${steps[targetStep - 1].title}). Let's head over to fix it.`,
                     action: () => {
                         setStep(targetStep);
                         setModal({ show: false, message: '' });
+                        scrollFormToTop();
                     }
                 });
             }
@@ -434,7 +552,7 @@ export default function FreeAssessment() {
                                 return (
                                     <div
                                         key={s.id}
-                                        onClick={() => setStep(s.id)}
+                                        onClick={() => handleSidebarClick(s.id)}
                                         className="group cursor-pointer py-2 pl-4 relative"
                                     >
                                         <div className="flex items-center gap-6">
@@ -528,7 +646,8 @@ export default function FreeAssessment() {
                                         </button>
                                     ) : (
                                         <button
-                                            type="submit"
+                                            type="button"
+                                            onClick={submitFinal}
                                             disabled={processing}
                                             className="px-12 py-5 bg-[#436235] text-white rounded-xl text-[10px] font-black uppercase tracking-[0.3em] hover:bg-[#354d2a] transition-all shadow-2xl shadow-[#436235]/10 active:scale-95"
                                         >
@@ -583,7 +702,7 @@ function StepTerms({ data, setData, errors }) {
         <div className="space-y-12">
             <h2 className="text-3xl font-black text-[#282728] uppercase tracking-tighter mb-8 leading-tight">Privacy & Terms</h2>
             <div className="bg-gray-50/50 rounded-3xl p-10 text-[13px] text-gray-400 leading-[2] font-medium h-96 overflow-y-auto border border-gray-100/50">
-                <p>Welcome to Pathway's free assessment. By proceeding, you agree to the following terms. This assessment is designed to help us understand your immigration pathway to New Zealand, Australia, Canada, Singapore, and the United Kingdom.</p>
+                <p>Welcome to ePathways. By proceeding, you agree to the following terms. This assessment is designed to help us understand your immigration pathway to New Zealand and Australia.</p>
                 <p>The information you provide will be used solely for the purpose of this assessment. Eligibility criteria and pathways are subject to change in accordance with government regulations.</p>
                 <p>We are committed to protecting your privacy. All data submitted is encrypted and handled with the highest level of security. Please ensure that all information provided is accurate and complete to receive the most reliable evaluation.</p>
                 <p>ePathways facilitates the connection between potential students and educational institutions. We do not guarantee visa approval, as final decisions rest with the respective immigration authorities.</p>
@@ -1209,7 +1328,7 @@ function StepFinancial({ data, setData, errors }) {
                          </div>
                     </Field>
                     {data.financial_info.has_sponsors === 'Yes' && (
-                        <Field label="Relation to Sponsor(s)">
+                        <Field label="Relation to Sponsor(s) *" error={errors['financial_info.sponsor_relation']}>
                             <input type="text" placeholder="e.g. Parents" className="w-full px-5 py-3.5 bg-white border border-[#282728] rounded-xl" value={data.financial_info.sponsor_relation} onChange={e => updateFinancial('sponsor_relation', e.target.value)} />
                         </Field>
                     )}
@@ -1773,7 +1892,7 @@ function Field({ label, error, children }) {
                 {hasError && <span className="text-[9px] font-black text-red-500 uppercase tracking-widest leading-none">Field Required</span>}
             </div>
             <div className={`transition-all duration-300 ${hasError ? 'scale-[1.01]' : ''}`}>
-                <div className={hasError ? 'p-[1px] bg-red-500 rounded-xl overflow-hidden ring-4 ring-red-500/10' : ''}>
+                <div className={hasError ? 'rounded-xl ring-2 ring-red-500 ring-offset-2 ring-offset-white shadow-[0_0_0_6px_rgba(239,68,68,0.08)]' : ''}>
                     {children}
                 </div>
             </div>

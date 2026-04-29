@@ -1,7 +1,7 @@
 import React from "react";
 import { Facebook, Mail, Twitter, Linkedin, Instagram } from "lucide-react";
 
-const images = import.meta.glob("/resources/Assets/team/*", { eager: true, import: "default" });
+const images = import.meta.glob("/resources/assets/team/*", { eager: true, import: "default" });
 
 const imageMap = Object.keys(images).reduce((acc, key) => {
     const filename = key.split("/").pop();

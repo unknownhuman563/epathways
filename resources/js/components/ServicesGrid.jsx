@@ -2,7 +2,7 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import { ArrowRight } from 'react-feather';
 
-const images = import.meta.glob("/resources/Assets/Services/*", { eager: true, import: "default" });
+const images = import.meta.glob("/resources/assets/Services/*", { eager: true, import: "default" });
 
 const imageMap = Object.keys(images).reduce((acc, key) => {
     const filename = key.split("/").pop();

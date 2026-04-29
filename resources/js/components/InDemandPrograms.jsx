@@ -3,14 +3,13 @@ import { ChevronLeft, ChevronRight } from 'react-feather';
 import educationImg from "@assets/Services/education.png";
 import visaImg from "@assets/Services/visa.png";
 import settlementImg from "@assets/Services/settlement.png";
-import pathwaysImg from "@assets/Services/pathways.png";
 import agentsImg from "@assets/Services/agents.png";
 
 const categories = [
     {
         id: 1,
         title: "IT / Computer Science & Data",
-        description: "Degrees such as a Bachelor in Computer Science, Software Engineering or Data Science are in high demand thanks to the growth of tech, cybersecurity, cloud computing and digital services in NZ.",
+        description: "Degrees such as a Bachelor in Computer Science, Software Engineering or Data Science are in high demand thanks to the growth of tech, cybersecurity, and data-driven industries.",
         programs: [
             "Bachelor of Computer Science",
             "Bachelor of Information Technology",
@@ -19,12 +18,12 @@ const categories = [
         ],
         intakes: ["February", "March", "May", "July"],
         tags: ["Technology", "Bachelor"],
-        image: pathwaysImg,
+        image: educationImg,
     },
     {
         id: 2,
         title: "Engineering (Civil, Electrical, Mechanical, Environmental)",
-        description: "A Bachelor of Engineering in one of the major branches gives a strong job-market outlook (and is also on the skill shortage lists) which is great for positioning to students.",
+        description: "Infrastructure growth and the shift to renewable energy are driving strong demand for engineers. Degrees in Civil, Mechanical, and Electrical Engineering open doors across NZ.",
         programs: [
             "Bachelor of Civil Engineering",
             "Bachelor of Mechanical Engineering",

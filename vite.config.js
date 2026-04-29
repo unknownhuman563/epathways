@@ -22,7 +22,7 @@ export default defineConfig({
     resolve: {
         alias: {
             "@": "/resources/js",
-            "@assets": "/resources/Assets",
+            "@assets": "/resources/assets",
             "@AdminLayout": "/resources/js/components/AdminLayout"
         }
     }
