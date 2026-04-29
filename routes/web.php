@@ -39,6 +39,10 @@ Route::get("/immigration", function (){
    return inertia('Immigration'); 
 });
 
+Route::get("/coming-soon", function (){
+   return inertia('ComingSoon'); 
+});
+
 Route::get('/activities', [EventController::class, 'activities']);
 
 // Public Registration & Assessment Routes
