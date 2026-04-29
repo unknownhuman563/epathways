@@ -39,6 +39,14 @@ Route::get("/immigration", function (){
    return inertia('Immigration'); 
 });
 
+Route::get("/immigration-assessment", function (){
+   return inertia('ImmigrationAssessment'); 
+});
+
+Route::get("/visa-assessment-form", function (){
+   return inertia('VisaAssessmentForm'); 
+});
+
 Route::get('/activities', [EventController::class, 'activities']);
 
 // Public Registration & Assessment Routes
