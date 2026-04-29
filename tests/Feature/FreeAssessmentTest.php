@@ -429,8 +429,11 @@ class FreeAssessmentTest extends TestCase
         $response->assertSessionHasErrors(['terms_accepted']);
     }
 
-    public function test_minimal_submission_works(): void
+    public function test_partial_submission_is_rejected(): void
     {
+        // The form contract requires all step fields. A submission missing any
+        // of them must be rejected with validation errors so the frontend can
+        // navigate the user back to the offending step.
         $response = $this->post('/free-assessment', [
             'first_name' => 'Jane',
             'last_name' => 'Doe',
@@ -438,15 +441,24 @@ class FreeAssessmentTest extends TestCase
             'terms_accepted' => true,
         ]);
 
-        $response->assertRedirect();
-        $response->assertSessionHas('success');
+        $response->assertSessionHasErrors([
+            'phone',
+            'gender',
+            'dob',
+            'country_of_birth',
+            'citizenship',
+            'residence_country',
+            'study_plans.preferred_course',
+            'study_plans.qualification_level',
+            'work_experience',
+            'financial_info.funding_source',
+            'financial_info.estimated_budget',
+            'source_of_funds_info.sources',
+            'immigration_info.submission_country',
+            'declaration_accepted',
+        ]);
 
-        $lead = Lead::latest()->first();
-        $this->assertEquals('Jane', $lead->first_name);
-        $this->assertEquals('Doe', $lead->last_name);
-        $this->assertEquals('jane@test.com', $lead->email);
-        $this->assertEquals('New', $lead->status);
-        $this->assertEquals('Evaluation', $lead->stage);
+        $this->assertNull(Lead::latest()->first());
     }
 
     public function test_passport_pdf_upload(): void

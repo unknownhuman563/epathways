@@ -18,7 +18,7 @@ export default function AdminLayout({ children }) {
     ];
 
     const handleLogout = () => {
-        router.post(route('logout'));
+        router.post('/logout');
     };
 
     const getPageTitle = () => {

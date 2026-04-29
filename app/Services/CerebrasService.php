@@ -32,7 +32,6 @@ class CerebrasService
                 ['role' => 'system', 'content' => $this->buildSystemPrompt()],
                 ['role' => 'user', 'content' => $this->buildUserMessage($lead)],
             ],
-            'response_format' => ['type' => 'json_object'],
             'temperature' => 0.3,
         ]);
 
@@ -51,7 +50,9 @@ class CerebrasService
             throw new \RuntimeException('Cerebras API returned empty content');
         }
 
-        $analysis = json_decode($content, true);
+        $jsonString = $this->extractJson($content);
+
+        $analysis = json_decode($jsonString, true);
 
         if (json_last_error() !== JSON_ERROR_NONE) {
             Log::error('Cerebras JSON parse error', [
@@ -62,7 +63,33 @@ class CerebrasService
             throw new \RuntimeException('Failed to parse Cerebras response as JSON');
         }
 
+        if (!isset($analysis['overall_score'], $analysis['categories'])) {
+            Log::error('Cerebras response missing required fields', [
+                'content' => $content,
+                'lead_id' => $lead->lead_id,
+            ]);
+            throw new \RuntimeException('Cerebras response missing required fields');
+        }
+
         return $analysis;
+    }
+
+    private function extractJson(string $content): string
+    {
+        $trimmed = trim($content);
+
+        if (preg_match('/```(?:json)?\s*(.+?)\s*```/s', $trimmed, $m)) {
+            return trim($m[1]);
+        }
+
+        $start = strpos($trimmed, '{');
+        $end = strrpos($trimmed, '}');
+
+        if ($start !== false && $end !== false && $end > $start) {
+            return substr($trimmed, $start, $end - $start + 1);
+        }
+
+        return $trimmed;
     }
 
     private function buildSystemPrompt(): string
@@ -113,21 +140,26 @@ You are an immigration education consultant AI for ePathways, a New Zealand educ
 
 ## Output Format
 
-Return ONLY valid JSON with this exact structure:
+CRITICAL: Respond with ONLY a single valid JSON object. No markdown, no code fences, no preamble, no commentary. The output must start with `{` and end with `}` and be parseable by JSON.parse().
+
+The JSON object must have exactly these fields with these types:
+
 {
-  "overall_score": <0-100>,
+  "overall_score": 75,
   "categories": {
-    "financial_readiness": { "score": <0-50>, "max": 50, "summary": "<2-3 sentences>" },
-    "education": { "score": <0-25>, "max": 25, "summary": "<2-3 sentences>" },
-    "work_experience": { "score": <0-15>, "max": 15, "summary": "<2-3 sentences>" },
-    "immigration_risk": { "score": <0-10>, "max": 10, "summary": "<2-3 sentences>" }
+    "financial_readiness": { "score": 35, "max": 50, "summary": "Applicant shows clear funding plan with bank statements and a sponsor (uncle) earning verified income. Total available funds cover Year 1 tuition plus 20,000 NZD living expenses." },
+    "education": { "score": 22, "max": 25, "summary": "Holds Bachelor of Computer Science (2019, Distinction). Field aligns with chosen Master's pathway. No education gaps." },
+    "work_experience": { "score": 12, "max": 15, "summary": "3 years as Software Engineer at established firm, last 12 months as Senior. Relevant to chosen study area. Provides strong demonstration of work-readiness." },
+    "immigration_risk": { "score": 9, "max": 10, "summary": "Clean travel history, no visa refusals, owns family home in origin country (strong home tie). One previous tourist visa to Australia approved." }
   },
-  "recommended_pathway": "<e.g. Master's Degree (Level 9)>",
-  "pathway_reasoning": "<2-3 sentences explaining why this pathway>",
-  "strengths": ["<strength 1>", "<strength 2>", ...],
-  "concerns": ["<concern 1>", "<concern 2>", ...],
-  "summary": "<3-4 sentence overall assessment>"
+  "recommended_pathway": "Master's Degree (Level 9)",
+  "pathway_reasoning": "Strong Bachelor's foundation, relevant work experience, and adequate funding make Level 9 viable. Master's also opens stronger post-study work pathway for partner accompaniment.",
+  "strengths": ["Bachelor's in relevant field", "Documented funding from multiple sources", "Strong home ties", "Relevant work experience"],
+  "concerns": ["English test scores not yet provided", "Sponsor relationship documentation may need notarization"],
+  "summary": "Applicant is a well-prepared candidate with solid academic, financial, and professional foundations for a Master's pathway in New Zealand. Minor documentation items remain. Overall low-risk, recommend proceeding."
 }
+
+Use the example above as the FORMAT but produce values that reflect the actual applicant data. Replace each example value with one specific to the applicant being analyzed. Always include all keys shown above. Output JSON only.
 PROMPT;
     }
 

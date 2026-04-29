@@ -87,29 +87,93 @@ class LeadController extends Controller
      */
     public function storeFreeAssessment(\Illuminate\Http\Request $request)
     {
-        // 1. Comprehensive Validation for Security
+        // 1. Comprehensive Validation - mirrors the frontend per-step contract.
+        //    Field names match the keys the React form uses so onError can
+        //    map each error back to the correct step.
         $validated = $request->validate([
-            'first_name' => 'required|string|max:255',
-            'last_name' => 'required|string|max:255',
-            'email' => 'required|email|max:255',
-            'phone' => 'nullable|string|max:25',
+            // Step 1 - Terms
             'terms_accepted' => 'required|accepted',
-            'passport_pdf' => 'nullable|file|mimes:pdf|max:10240',
 
-            // Nested validation - validate structure
-            'study_plans' => 'nullable|array',
-            'financial_info' => 'nullable|array',
+            // Step 2 - Personal
+            'first_name'        => 'required|string|max:255',
+            'last_name'         => 'required|string|max:255',
+            'email'             => 'required|email|max:255',
+            'phone'             => 'required|string|max:25',
+            'gender'            => 'required|string|max:50',
+            'dob'               => 'required|date',
+            'country_of_birth'  => 'required|string|max:120',
+            'citizenship'       => 'required|string|max:120',
+            'residence_country' => 'required|string|max:120',
+            'has_other_names'   => 'nullable|in:Yes,No',
+            'other_names'       => 'nullable|required_if:has_other_names,Yes|string|max:255',
+            'has_passport'      => 'nullable|in:Yes,No',
+            'passport_number'   => 'nullable|required_if:has_passport,Yes|string|max:60',
+            'passport_expiry'   => 'nullable|required_if:has_passport,Yes|date',
+            'passport_pdf'      => 'nullable|file|mimes:pdf|max:10240',
+
+            // Step 3 - Study Plans
+            'study_plans'                       => 'nullable|array',
+            'study_plans.preferred_course'      => 'required|string|max:255',
+            'study_plans.qualification_level'   => 'required|string|max:120',
+            'study_plans.has_english_test'      => 'nullable|in:Yes,No',
+            'study_plans.english_test_type'     => 'nullable|required_if:study_plans.has_english_test,Yes|string|max:120',
+            'study_plans.test_score_overall'    => 'nullable|required_if:study_plans.has_english_test,Yes|string|max:20',
+
+            // Step 4 - Education
             'education_background' => 'nullable|array',
-            'work_experience' => 'nullable|array',
-            'immigration_info' => 'nullable|array',
+            'has_gap'              => 'nullable|in:Yes,No',
+            'gap_length'           => 'nullable|required_if:has_gap,Yes|string|max:120',
+            'gap_activities'       => 'nullable|required_if:has_gap,Yes|array|min:1',
+
+            // Step 5 - Work
+            'work_experience'                 => 'required|array|min:1',
+            'work_experience.0.company_name'  => 'required|string|max:255',
+            'work_experience.0.job_title'     => 'required|string|max:255',
+
+            // Step 6 - Financial
+            'financial_info'                    => 'required|array',
+            'financial_info.funding_source'     => 'required|array|min:1',
+            'financial_info.estimated_budget'   => 'required|string|max:120',
+            'financial_info.has_sponsors'       => 'nullable|in:Yes,No',
+            'financial_info.sponsor_relation'   => 'nullable|required_if:financial_info.has_sponsors,Yes|string|max:120',
+
+            // Step 7 - Source of funds
+            'source_of_funds_info'                          => 'required|array',
+            'source_of_funds_info.sources'                  => 'required|array|min:1',
+            'source_of_funds_info.will_use_sponsor'         => 'nullable|in:Yes,No',
+            'source_of_funds_info.sponsor_relation'         => 'nullable|required_if:source_of_funds_info.will_use_sponsor,Yes|string|max:120',
+            'source_of_funds_info.sponsor_occupation'       => 'nullable|required_if:source_of_funds_info.will_use_sponsor,Yes|string|max:120',
+            'source_of_funds_info.sponsor_annual_income'    => 'nullable|required_if:source_of_funds_info.will_use_sponsor,Yes|string|max:120',
+
+            // Step 8 - Immigration
+            'immigration_info'                              => 'required|array',
+            'immigration_info.submission_country'           => 'required|string|max:120',
+            'immigration_info.has_travelled_overseas'       => 'nullable|in:Yes,No',
+            'immigration_info.overseas_travel_details'      => 'nullable|required_if:immigration_info.has_travelled_overseas,Yes|string',
+            'immigration_info.has_applied_nz_visa'          => 'nullable|in:Yes,No',
+            'immigration_info.nz_visa_details'              => 'nullable|required_if:immigration_info.has_applied_nz_visa,Yes|string',
+            'immigration_info.has_applied_other_visa'       => 'nullable|in:Yes,No',
+            'immigration_info.other_visa_details'           => 'nullable|required_if:immigration_info.has_applied_other_visa,Yes|string',
+            'immigration_info.has_visa_refusal'             => 'nullable|in:Yes,No',
+            'immigration_info.visa_refusal_details'         => 'nullable|required_if:immigration_info.has_visa_refusal,Yes|string',
+
+            // Step 9 - Character / Health (optional structure)
             'character_info' => 'nullable|array',
-            'health_info' => 'nullable|array',
+            'health_info'    => 'nullable|array',
+
+            // Step 10 - Family
             'family_info' => 'nullable|array',
-            'nz_contacts_info' => 'nullable|array',
-            'military_info' => 'nullable|array',
-            'source_of_funds_info' => 'nullable|array',
+
+            // Step 11 - Additional
+            'nz_contacts_info'                          => 'nullable|array',
+            'nz_contacts_info.has_nz_contacts'          => 'nullable|in:Yes,No',
+            'nz_contacts_info.contact_first_name'       => 'nullable|required_if:nz_contacts_info.has_nz_contacts,Yes|string|max:120',
+            'nz_contacts_info.contact_family_name'      => 'nullable|required_if:nz_contacts_info.has_nz_contacts,Yes|string|max:120',
+            'military_info'  => 'nullable|array',
             'home_ties_info' => 'nullable|array',
-            'declaration_accepted' => 'nullable',
+
+            // Step 12 - Declaration
+            'declaration_accepted' => 'required|accepted',
         ]);
 
         try {
@@ -229,7 +293,10 @@ class LeadController extends Controller
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error('Free assessment mapping failed', ['error' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
-            return redirect()->back()->withErrors(['error' => 'Submission failed. Our team has been notified.']);
+            $message = app()->environment('production')
+                ? 'Submission failed due to a server error. Our team has been notified.'
+                : 'Submission failed: ' . $e->getMessage();
+            return redirect()->back()->withErrors(['error' => $message])->withInput();
         }
     }
 
