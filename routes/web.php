@@ -42,6 +42,13 @@ Route::get("/immigration", function (){
 Route::get("/coming-soon", function (){
    return inertia('ComingSoon'); 
 });
+Route::get("/immigration-assessment", function (){
+   return inertia('ImmigrationAssessment'); 
+});
+
+Route::get("/visa-assessment-form", function (){
+   return inertia('VisaAssessmentForm'); 
+});
 
 Route::get('/activities', [EventController::class, 'activities']);
 
