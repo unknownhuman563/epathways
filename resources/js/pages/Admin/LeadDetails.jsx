@@ -51,12 +51,23 @@ export default function LeadDetails({ lead: backendLead }) {
     ) || {};
 
     // Aggregate all education documents into one list
-    const allDocuments = backendLead.education_exps?.reduce((acc, exp) => {
-        if (exp.documents && Array.isArray(exp.documents)) {
-            return [...acc, ...exp.documents];
+    let allDocuments = backendLead.education_notes?.education_docs || [];
+    if (allDocuments.length === 0) {
+        allDocuments = backendLead.education_exps?.reduce((acc, exp) => {
+            if (exp.documents && Array.isArray(exp.documents)) {
+                return [...acc, ...exp.documents];
+            }
+            return acc;
+        }, []) || [];
+    }
+
+    const workExperiences = Array.isArray(backendLead.work_info) ? backendLead.work_info : [];
+    const workDocuments = workExperiences.reduce((acc, work) => {
+        if (work.supporting_docs && Array.isArray(work.supporting_docs)) {
+            return [...acc, ...work.supporting_docs];
         }
         return acc;
-    }, []) || [];
+    }, []);
 
     // Find any gap explanation in education history
     const gapExp = backendLead.education_exps?.find(e => e.gap_explanation)?.gap_explanation;
@@ -74,19 +85,19 @@ export default function LeadDetails({ lead: backendLead }) {
         personal: {
             surname: backendLead.last_name || '—',
             firstName: backendLead.first_name || '—',
-            otherNames: workInfo.other_names || 'None',
+            otherNames: backendLead.other_names || workInfo.other_names || 'None',
             gender: backendLead.gender || '—',
             phone: backendLead.phone || '—',
             email: backendLead.email || '—',
             maritalStatus: backendLead.marital_status || '—',
-            dob: workInfo.dob || '—',
-            countryOfBirth: workInfo.country_of_birth || '—',
-            placeOfBirth: workInfo.place_of_birth || '—',
-            citizenship: workInfo.citizenship || '—',
-            residence: workInfo.city || workInfo.residence || '—',
-            hasPassport: !!workInfo.passport || (workInfo.passport_expiry && workInfo.passport_expiry !== '—'),
-            passportExpiry: workInfo.passport_expiry || '—',
-            passportFile: workInfo.passport_file || 'No file uploaded'
+            dob: backendLead.dob || workInfo.dob || '—',
+            countryOfBirth: backendLead.country_of_birth || workInfo.country_of_birth || '—',
+            placeOfBirth: backendLead.place_of_birth || workInfo.place_of_birth || '—',
+            citizenship: backendLead.citizenship || workInfo.citizenship || '—',
+            residence: backendLead.residence_city || workInfo.city || workInfo.residence || '—',
+            hasPassport: backendLead.has_passport === 'Yes' || !!workInfo.passport || (workInfo.passport_expiry && workInfo.passport_expiry !== '—'),
+            passportExpiry: backendLead.passport_expiry || workInfo.passport_expiry || '—',
+            passportFile: backendLead.passport_path || workInfo.passport_file || 'No file uploaded'
         },
 
         // 2. Study Plans in New Zealand
@@ -135,6 +146,7 @@ export default function LeadDetails({ lead: backendLead }) {
                 }
             },
             documents: allDocuments.length > 0 ? allDocuments : ['No documents listed'],
+            workDocuments: workDocuments.length > 0 ? workDocuments : ['No documents listed'],
             gap: {
                 hasGap: !!gapExp,
                 length: '—', 
@@ -599,12 +611,27 @@ export default function LeadDetails({ lead: backendLead }) {
                             
                             <div>
                                 <h3 className="text-sm font-bold text-gray-900 mb-3">Documents Available</h3>
-                                <div className="flex flex-wrap gap-2">
-                                    {lead.education.documents.map((doc, idx) => (
-                                        <span key={idx} className="inline-flex items-center gap-1.5 text-xs font-medium bg-gray-100 text-gray-700 px-2.5 py-1.5 rounded-lg border border-gray-200">
-                                            <CheckCircle2 size={12} className="text-emerald-500" /> {doc}
-                                        </span>
-                                    ))}
+                                <div className="space-y-4">
+                                    <div>
+                                        <p className="text-[10px] font-bold text-gray-500 mb-2 uppercase tracking-wide">Education</p>
+                                        <div className="flex flex-wrap gap-2">
+                                            {lead.education.documents.map((doc, idx) => (
+                                                <span key={`edu-${idx}`} className="inline-flex items-center gap-1.5 text-xs font-medium bg-gray-100 text-gray-700 px-2.5 py-1.5 rounded-lg border border-gray-200">
+                                                    <CheckCircle2 size={12} className="text-emerald-500" /> {doc}
+                                                </span>
+                                            ))}
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <p className="text-[10px] font-bold text-gray-500 mb-2 uppercase tracking-wide">Work & Business</p>
+                                        <div className="flex flex-wrap gap-2">
+                                            {lead.education.workDocuments.map((doc, idx) => (
+                                                <span key={`work-${idx}`} className="inline-flex items-center gap-1.5 text-xs font-medium bg-gray-100 text-gray-700 px-2.5 py-1.5 rounded-lg border border-gray-200">
+                                                    <CheckCircle2 size={12} className="text-blue-500" /> {doc}
+                                                </span>
+                                            ))}
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
