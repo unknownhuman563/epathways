@@ -30,6 +30,7 @@ import devImg from "@assets/team/Dev.png";
 import daiImg from "@assets/team/dai.png";
 import emilyImg from "@assets/team/emily.png";
 import emmaImg from "@assets/team/emma.png";
+import bryllImg from "@assets/team/bryll.jpg";
 
 const categories = [
     {
@@ -108,9 +109,9 @@ const consultants = {
     education: [
         {
             id: 2,
-            name: 'Bryll',
+            name: 'Fhilip Bryll Añabeza',
             role: 'Education Consultant',
-            image: emilyImg,
+            image: bryllImg,
             bio: "Bryll supports international students with admissions, course selection, and pathway planning into New Zealand institutions.",
             tags: ['EDUCATION SPEC', 'EN'],
             status: 'available',
@@ -119,13 +120,13 @@ const consultants = {
             sessionFormat: 'Video Call or Phone',
             institutions: 'Nationwide Support',
             specialisesIn: ['Admissions', 'Course Matching', 'Pathway Planning', 'Student Support'],
-            bookingUrl: 'https://calendar.google.com/calendar/appointments/schedules/AcZssZ2UC60-y5UinpTZqTSV_AMOwsLtuXpqYm3xGUI3WsjVjQQ9TcZPSv_ieaSi1CSlKDlL9OXabohZ?gv=true'
+            bookingUrl: 'https://calendar.google.com/calendar/u/0/appointments/schedules/AcZssZ3t5XRly86tQbMNTzGHAGUyn1v-wJttaxqgFrCIAIWkKiiiwxZYSZE2TDMRy-5bHUdNz67ZpEuk'
         },
         {
             id: 6,
             readOnly: true,
             name: 'Emma Ceballo',
-            role: 'People Journey Experience Champion',
+            role: <>Head <br /> <span className="italic text-[8px] text-gray-400 font-medium mt-1 inline-block">Education Department</span></>,
             image: emmaImg,
             bio: "Emma is a dedicated education consultant helping international students seamlessly transition into the New Zealand education system, with a focus on holistic student success and pathway planning.",
             tags: ['EDUCATION SPEC', '5 YRS EXP', 'EN'],
@@ -141,7 +142,7 @@ const consultants = {
             id: 1,
             readOnly: true,
             name: 'Dinah Suarin',
-            role: 'People Engagement and Wellbeing Champion',
+            role: 'CEO / Founder',
             image: dinaImg,
             bio: "Dinah brings 8 years of hands-on experience helping international students navigate New Zealand's tertiary education system. She has placed over 300 students in top NZ universities and polytechnics, and specialises in tailoring pathways for students from Southeast Asia and the Pacific.",
             tags: ['IAA LICENSED', '8 YRS EXP', 'EN · FIL'],
@@ -377,11 +378,10 @@ export default function BookingPage() {
                                             <div
                                                 key={cat.id}
                                                 onClick={() => !cat.comingSoon && handleCategorySelect(cat)}
-                                                className={`group relative flex-1 min-h-[450px] md:min-h-[500px] min-w-[200px] transition-all duration-500 ease-in-out bg-white rounded-[24px] overflow-hidden shadow-sm border border-gray-100 ${
-                                                    cat.comingSoon
-                                                        ? 'cursor-not-allowed opacity-80'
-                                                        : 'cursor-pointer hover:shadow-xl hover:flex-[2] md:hover:flex-[2.5]'
-                                                }`}
+                                                className={`group relative flex-1 min-h-[450px] md:min-h-[500px] min-w-[200px] transition-all duration-500 ease-in-out bg-white rounded-[24px] overflow-hidden shadow-sm border border-gray-100 ${cat.comingSoon
+                                                    ? 'cursor-not-allowed opacity-80'
+                                                    : 'cursor-pointer hover:shadow-xl hover:flex-[2] md:hover:flex-[2.5]'
+                                                    }`}
                                             >
                                                 {/* Coming Soon Badge */}
                                                 {cat.comingSoon && (
@@ -392,18 +392,15 @@ export default function BookingPage() {
                                                 )}
 
                                                 {/* Image Wrapper */}
-                                                <div className={`absolute top-0 left-0 w-full h-1/2 transition-all duration-500 ease-in-out bg-gray-50 flex items-center justify-center overflow-hidden ${
-                                                    cat.comingSoon ? '' : 'md:group-hover:w-1/2 md:group-hover:h-full'
-                                                }`}>
-                                                    <img src={cat.image} alt={cat.title} className={`w-full h-full object-cover transition-transform duration-700 ${
-                                                        cat.comingSoon ? 'grayscale-[30%]' : 'group-hover:scale-105'
-                                                    }`} />
+                                                <div className={`absolute top-0 left-0 w-full h-1/2 transition-all duration-500 ease-in-out bg-gray-50 flex items-center justify-center overflow-hidden ${cat.comingSoon ? '' : 'md:group-hover:w-1/2 md:group-hover:h-full'
+                                                    }`}>
+                                                    <img src={cat.image} alt={cat.title} className={`w-full h-full object-cover transition-transform duration-700 ${cat.comingSoon ? 'grayscale-[30%]' : 'group-hover:scale-105'
+                                                        }`} />
                                                 </div>
 
                                                 {/* Text Wrapper */}
-                                                <div className={`absolute left-0 top-1/2 w-full h-1/2 transition-all duration-500 ease-in-out p-6 md:p-8 flex flex-col justify-center bg-white ${
-                                                    cat.comingSoon ? '' : 'md:group-hover:left-1/2 md:group-hover:top-0 md:group-hover:w-1/2 md:group-hover:h-full'
-                                                }`}>
+                                                <div className={`absolute left-0 top-1/2 w-full h-1/2 transition-all duration-500 ease-in-out p-6 md:p-8 flex flex-col justify-center bg-white ${cat.comingSoon ? '' : 'md:group-hover:left-1/2 md:group-hover:top-0 md:group-hover:w-1/2 md:group-hover:h-full'
+                                                    }`}>
                                                     <span className="text-[10px] font-bold tracking-[0.2em] text-gray-400 uppercase mb-2 block">{cat.label}</span>
                                                     <h3 className="text-xl md:text-2xl font-black text-[#282728] mb-3 leading-tight">
                                                         {cat.title}
@@ -516,8 +513,8 @@ export default function BookingPage() {
                             {step === 2 && (
                                 <div className="max-w-6xl mx-auto w-full">
                                     <div className="relative mb-16 text-center">
-                                        <button onClick={prevStep} className="absolute left-0 top-1/2 -translate-y-1/2 p-2 text-gray-400 hover:text-white transition-colors">
-                                            <ChevronLeft className="w-6 h-6" />
+                                        <button onClick={prevStep} className="absolute left-0 top-1/2 -translate-y-1/2 p-2 text-gray-400 hover:text-white transition-colors flex items-center gap-1">
+                                            <ChevronLeft className="w-5 h-5" /> <span className="text-sm font-bold uppercase tracking-widest">Back</span>
                                         </button>
                                         <span className="text-[11px] font-bold tracking-widest text-gray-400 uppercase mb-4 block">Step two</span>
                                         <h2 className="text-4xl md:text-5xl font-normal text-white mb-4">Meet your consultant</h2>
@@ -528,43 +525,37 @@ export default function BookingPage() {
 
                                     <div className="relative w-full max-w-[1600px] mx-auto group/carousel">
                                         {canScrollLeft && (
-                                            <button 
+                                            <button
                                                 onClick={() => scroll('left')}
-                                                className="absolute left-0 md:left-6 xl:left-8 top-[calc(50%-24px)] -translate-y-1/2 z-10 w-12 h-12 bg-[#1A1C19]/90 hover:bg-[#282728] backdrop-blur-md rounded-full flex items-center justify-center text-white border border-gray-700 transition-all shadow-2xl"
+                                                className="absolute left-2 md:-left-8 lg:-left-12 xl:-left-16 top-[calc(50%-24px)] -translate-y-1/2 z-10 w-12 h-12 bg-[#1A1C19]/90 hover:bg-[#282728] backdrop-blur-md rounded-full flex items-center justify-center text-white border border-gray-700 transition-all shadow-2xl"
                                             >
                                                 <ChevronLeft className="w-6 h-6" />
                                             </button>
                                         )}
                                         {canScrollRight && (
-                                            <button 
+                                            <button
                                                 onClick={() => scroll('right')}
-                                                className="absolute right-0 md:right-6 xl:right-8 top-[calc(50%-24px)] -translate-y-1/2 z-10 w-12 h-12 bg-[#1A1C19]/90 hover:bg-[#282728] backdrop-blur-md rounded-full flex items-center justify-center text-white border border-gray-700 transition-all shadow-2xl"
+                                                className="absolute right-2 md:-right-8 lg:-right-12 xl:-right-16 top-[calc(50%-24px)] -translate-y-1/2 z-10 w-12 h-12 bg-[#1A1C19]/90 hover:bg-[#282728] backdrop-blur-md rounded-full flex items-center justify-center text-white border border-gray-700 transition-all shadow-2xl"
                                             >
                                                 <ChevronRight className="w-6 h-6" />
                                             </button>
                                         )}
-                                        <div 
+                                        <div
                                             ref={scrollContainerRef}
                                             onScroll={checkScroll}
-                                            className="flex overflow-x-auto gap-6 w-full pb-12 snap-x snap-mandatory px-4 md:px-24 xl:px-28 [&::-webkit-scrollbar]:hidden" 
+                                            className="flex overflow-x-auto gap-6 w-full pb-12 snap-x snap-mandatory px-4 md:px-24 xl:px-28 [&::-webkit-scrollbar]:hidden"
                                             style={{ scrollbarWidth: 'none' }}
                                         >
                                             {selection.category && consultants[selection.category.id]?.map((con) => (
                                                 <div
                                                     key={con.id}
                                                     onClick={() => !con.readOnly && handleConsultantSelect(con)}
-                                                    className={`group relative flex flex-col md:flex-row bg-[#1A1C19] border border-gray-800 rounded-2xl overflow-hidden transition-all duration-300 min-h-[280px] md:min-h-0 md:h-[220px] lg:h-[240px] shrink-0 w-[85vw] md:w-[600px] lg:w-[calc(33.333%-16px)] lg:min-w-[400px] snap-start ${
-                                                        con.readOnly
-                                                            ? 'cursor-not-allowed opacity-60'
-                                                            : 'cursor-pointer hover:border-gray-500 hover:shadow-2xl'
-                                                    }`}
+                                                    className={`group relative flex flex-col md:flex-row bg-[#1A1C19] border border-gray-800 rounded-2xl overflow-hidden transition-all duration-300 min-h-[280px] md:min-h-0 md:h-[220px] lg:h-[240px] shrink-0 w-[85vw] md:w-[600px] lg:w-[calc(33.333%-16px)] lg:min-w-[400px] snap-start ${con.readOnly
+                                                        ? 'cursor-default'
+                                                        : 'cursor-pointer hover:border-gray-500 hover:shadow-2xl'
+                                                        }`}
                                                 >
-                                                    {con.readOnly && (
-                                                        <div className="absolute top-4 right-4 z-20 bg-white/10 backdrop-blur-md text-gray-300 text-[10px] font-bold tracking-[0.2em] uppercase px-3 py-1.5 rounded-full border border-white/10 flex items-center gap-1.5">
-                                                            <span className="w-1.5 h-1.5 rounded-full bg-gray-400 inline-block"></span>
-                                                            Read Only
-                                                        </div>
-                                                    )}
+
 
                                                     {/* Text Wrapper */}
                                                     <div className="w-full md:w-1/2 p-6 xl:p-8 flex flex-col justify-center order-2 md:order-1">
@@ -579,7 +570,7 @@ export default function BookingPage() {
                                                         <div className="mt-auto">
                                                             {con.readOnly ? (
                                                                 <span className="flex items-center gap-2 text-gray-500 text-sm font-medium">
-                                                                    Unavailable for booking
+                                                                    See you soon !
                                                                 </span>
                                                             ) : (
                                                                 <span className="flex items-center gap-2 text-white text-sm font-medium transition-transform duration-300 group-hover:translate-x-2">
@@ -614,227 +605,242 @@ export default function BookingPage() {
                                 <div className="max-w-7xl mx-auto w-full px-4 lg:px-8">
                                     {!bookingSuccess ? (
                                         <div className="grid grid-cols-1 lg:grid-cols-12 gap-16">
-                                        
-                                        {/* Left Column: Headings & Info */}
-                                        <div className="lg:col-span-4 flex flex-col">
-                                            <div className="mb-12">
-                                                <button onClick={prevStep} className="mb-6 p-2 -ml-2 text-gray-400 hover:text-black hover:bg-gray-100 rounded-full transition-colors flex items-center">
-                                                    <ChevronLeft className="w-5 h-5 mr-1" /> <span className="text-sm font-bold uppercase tracking-widest text-black">Finalize</span>
-                                                </button>
-                                                <h2 className="text-4xl md:text-5xl font-light text-black mb-6">Schedule your time</h2>
-                                                <p className="text-gray-600 text-lg mb-12">Pick a slot that works for you and confirm your details</p>
-                                                
-                                                {/* Selection Summary */}
-                                                <div className="bg-gray-50 border border-gray-100 p-6 rounded-2xl mb-12">
-                                                    <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-1">Service</p>
-                                                    <p className="font-bold text-gray-900 mb-6">{selection.category?.title}</p>
-                                                    
-                                                    {selection.consultant && (
-                                                        <>
-                                                            <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-1">Consultant</p>
-                                                            <div className="flex items-center gap-3 mt-2">
-                                                                <img src={selection.consultant.image} alt="" className="w-12 h-12 rounded-full object-cover object-top border border-gray-200" />
-                                                                <div>
-                                                                    <p className="font-bold text-gray-900">{selection.consultant.name}</p>
-                                                                    {selection.consultant.role && <p className="text-xs text-gray-500">{selection.consultant.role}</p>}
-                                                                </div>
-                                                            </div>
-                                                        </>
-                                                    )}
-                                                </div>
 
-                                                <div className="space-y-6 text-gray-600">
-                                                    <div className="flex items-center gap-4">
-                                                        <Mail className="w-5 h-5 text-black" />
-                                                        <span>info@epathways.co.nz</span>
+                                            {/* Left Column: Headings & Info */}
+                                            <div className="lg:col-span-4 flex flex-col">
+                                                <div className="mb-12">
+                                                    <button onClick={prevStep} className="mb-6 p-2 -ml-2 text-gray-400 hover:text-black hover:bg-gray-100 rounded-full transition-colors flex items-center">
+                                                        <ChevronLeft className="w-5 h-5 mr-1" /> <span className="text-sm font-bold uppercase tracking-widest text-black">Finalize</span>
+                                                    </button>
+                                                    <h2 className="text-4xl md:text-5xl font-light text-black mb-6">Schedule your time</h2>
+                                                    <p className="text-gray-600 text-lg mb-12">Pick a slot that works for you and confirm your details</p>
+
+                                                    {/* Selection Summary */}
+                                                    <div className="bg-gray-50 border border-gray-100 p-6 rounded-2xl mb-12">
+                                                        <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-1">Service</p>
+                                                        <p className="font-bold text-gray-900 mb-6">{selection.category?.title}</p>
+
+                                                        {selection.consultant && (
+                                                            <>
+                                                                <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-1">Consultant</p>
+                                                                <div className="flex items-center gap-3 mt-2">
+                                                                    <img src={selection.consultant.image} alt="" className="w-12 h-12 rounded-full object-cover object-top border border-gray-200" />
+                                                                    <div>
+                                                                        <p className="font-bold text-gray-900">{selection.consultant.name}</p>
+                                                                        {selection.consultant.role && <p className="text-xs text-gray-500">{selection.consultant.role}</p>}
+                                                                    </div>
+                                                                </div>
+                                                            </>
+                                                        )}
                                                     </div>
-                                                    <div className="flex items-center gap-4">
-                                                        <Phone className="w-5 h-5 text-black" />
-                                                        <span>+64 27 777 5586</span>
-                                                    </div>
-                                                    <div className="flex items-start gap-4">
-                                                        <MapPin className="w-5 h-5 text-black shrink-0 mt-1" />
-                                                        <span>Auckland, New Zealand</span>
+
+                                                    <div className="space-y-6 text-gray-600">
+                                                        {selection.consultant?.name === 'Fhilip Bryll Añabeza' ? (
+                                                            <>
+                                                                <div className="flex items-center gap-4">
+                                                                    <Phone className="w-5 h-5 text-black" />
+                                                                    <span>0991 854 8675 (PH)</span>
+                                                                </div>
+                                                                <div className="flex items-center gap-4">
+                                                                    <MessageSquare className="w-5 h-5 text-black" />
+                                                                    <span>0939 586 3654 (WhatsApp)</span>
+                                                                </div>
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                <div className="flex items-center gap-4">
+                                                                    <Mail className="w-5 h-5 text-black" />
+                                                                    <span>info@epathways.co.nz</span>
+                                                                </div>
+                                                                <div className="flex items-center gap-4">
+                                                                    <Phone className="w-5 h-5 text-black" />
+                                                                    <span>+64 27 777 5586</span>
+                                                                </div>
+                                                                <div className="flex items-start gap-4">
+                                                                    <MapPin className="w-5 h-5 text-black shrink-0 mt-1" />
+                                                                    <span>Auckland, New Zealand</span>
+                                                                </div>
+                                                            </>
+                                                        )}
                                                     </div>
                                                 </div>
                                             </div>
-                                        </div>
 
-                                        {/* Right Column: Form */}
-                                        <div className="lg:col-span-8">
-                                            <form className="space-y-8" onSubmit={handleBookingSubmit}>
-                                                
-                                                {/* Row 1 */}
-                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                                    <div>
-                                                        <label className="block text-sm font-light text-gray-800 mb-2">First name</label>
-                                                        <input 
-                                                            type="text" 
-                                                            name="firstName"
-                                                            value={selection.info.firstName}
-                                                            onChange={handleInputChange}
-                                                            required
-                                                            className="w-full bg-[#F3F4F6] border-none py-3 px-4 rounded-sm focus:ring-1 focus:ring-gray-300" 
-                                                        />
-                                                    </div>
-                                                    <div>
-                                                        <label className="block text-sm font-light text-gray-800 mb-2">Last name</label>
-                                                        <input 
-                                                            type="text" 
-                                                            name="lastName"
-                                                            value={selection.info.lastName}
-                                                            onChange={handleInputChange}
-                                                            required
-                                                            className="w-full bg-[#F3F4F6] border-none py-3 px-4 rounded-sm focus:ring-1 focus:ring-gray-300" 
-                                                        />
-                                                    </div>
-                                                </div>
+                                            {/* Right Column: Form */}
+                                            <div className="lg:col-span-8">
+                                                <form className="space-y-8" onSubmit={handleBookingSubmit}>
 
-                                                {/* Row 2 */}
-                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                                    <div>
-                                                        <label className="block text-sm font-light text-gray-800 mb-2">Email</label>
-                                                        <input 
-                                                            type="email" 
-                                                            name="email"
-                                                            value={selection.info.email}
-                                                            onChange={handleInputChange}
-                                                            required
-                                                            className="w-full bg-[#F3F4F6] border-none py-3 px-4 rounded-sm focus:ring-1 focus:ring-gray-300" 
-                                                        />
-                                                    </div>
-                                                    <div>
-                                                        <label className="block text-sm font-light text-gray-800 mb-2">Phone number</label>
-                                                        <input 
-                                                            type="tel" 
-                                                            name="phoneNumber"
-                                                            value={selection.info.phoneNumber}
-                                                            onChange={handleInputChange}
-                                                            required
-                                                            className="w-full bg-[#F3F4F6] border-none py-3 px-4 rounded-sm focus:ring-1 focus:ring-gray-300" 
-                                                        />
-                                                    </div>
-                                                </div>
-
-                                                {/* Row 3 */}
-                                                <div>
-                                                    <label className="block text-sm font-light text-gray-800 mb-2">Your country of residence</label>
-                                                    <select 
-                                                        name="country"
-                                                        value={selection.info.country}
-                                                        onChange={handleInputChange}
-                                                        required
-                                                        className="w-full bg-[#F3F4F6] border-none py-3 px-4 rounded-sm focus:ring-1 focus:ring-gray-300 text-gray-500"
-                                                    >
-                                                        <option value="" disabled>Select your country</option>
-                                                        <option value="ph">Philippines</option>
-                                                        <option value="in">India</option>
-                                                        <option value="ae">UAE</option>
-                                                        <option value="cn">China</option>
-                                                        <option value="other">Other</option>
-                                                    </select>
-                                                </div>
-
-                                                {/* Row 4 */}
-                                                <div>
-                                                    <label className="block text-sm font-light text-gray-800 mb-4">What brings you here?</label>
-                                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-4 gap-x-8">
-                                                        {['Student visa', 'Work visa', 'Permanent residency', 'Study abroad', 'Housing assistance', 'Other'].map((type) => (
-                                                            <label key={type} className="flex items-center gap-3 cursor-pointer group">
-                                                                <div className={`w-5 h-5 rounded-full border flex flex-shrink-0 items-center justify-center transition-colors ${selection.info.inquiryType === type ? 'border-[#436235]' : 'border-gray-300 group-hover:border-gray-400'}`}>
-                                                                    {selection.info.inquiryType === type && <div className="w-2.5 h-2.5 rounded-full bg-[#436235]" />}
-                                                                </div>
-                                                                <input 
-                                                                    type="radio" 
-                                                                    name="inquiryType" 
-                                                                    value={type}
-                                                                    checked={selection.info.inquiryType === type}
-                                                                    onChange={handleInputChange}
-                                                                    className="hidden"
-                                                                />
-                                                                <span className="text-sm text-gray-700">{type}</span>
-                                                            </label>
-                                                        ))}
-                                                    </div>
-                                                </div>
-
-                                                {/* Google Calendar */}
-                                                <div>
-                                                    <label className="block text-sm font-light text-gray-800 mb-2">Select a time for your consultation</label>
-                                                    <div className="w-full bg-white rounded-sm border border-gray-200 overflow-hidden h-[500px]">
-                                                        <iframe 
-                                                            src={selection.consultant?.bookingUrl} 
-                                                            style={{ border: 0 }} 
-                                                            width="100%" 
-                                                            height="100%" 
-                                                            frameBorder="0"
-                                                        ></iframe>
-                                                    </div>
-                                                </div>
-
-                                                {/* Row 5 */}
-                                                <div>
-                                                    <label className="block text-sm font-light text-gray-800 mb-2">Additional details</label>
-                                                    <textarea 
-                                                        rows="5" 
-                                                        name="message"
-                                                        value={selection.info.message}
-                                                        onChange={handleInputChange}
-                                                        className="w-full bg-[#F3F4F6] border-none py-3 px-4 rounded-sm focus:ring-1 focus:ring-gray-300 resize-none" 
-                                                        placeholder="Tell us anything else we should know"
-                                                    ></textarea>
-                                                </div>
-
-                                                {/* Checkbox */}
-                                                <label className="flex items-start gap-3 cursor-pointer group pt-2">
-                                                    <div className={`w-5 h-5 mt-0.5 border flex flex-shrink-0 items-center justify-center transition-colors ${selection.info.agreeTerms ? 'bg-[#436235] border-[#436235]' : 'bg-[#F3F4F6] border-gray-300 group-hover:border-gray-400'}`}>
-                                                        {selection.info.agreeTerms && <CheckCircle className="w-3 h-3 text-white" />}
-                                                    </div>
-                                                    <input 
-                                                        type="checkbox" 
-                                                        name="agreeTerms"
-                                                        checked={selection.info.agreeTerms}
-                                                        onChange={handleInputChange}
-                                                        required
-                                                        className="hidden"
-                                                    />
-                                                    <span className="text-sm text-gray-700 font-light">I agree to the terms and conditions</span>
-                                                </label>
-
-                                                {/* Submit & Error */}
-                                                <div className="pt-6">
-                                                    {error && (
-                                                        <div className="mb-6 bg-red-50 border border-red-100 text-red-600 px-4 py-3 rounded-lg text-sm font-medium animate-fade-in">
-                                                            {error}
+                                                    {/* Row 1 */}
+                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                                        <div>
+                                                            <label className="block text-sm font-light text-gray-800 mb-2">First name</label>
+                                                            <input
+                                                                type="text"
+                                                                name="firstName"
+                                                                value={selection.info.firstName}
+                                                                onChange={handleInputChange}
+                                                                required
+                                                                className="w-full bg-[#F3F4F6] border-none py-3 px-4 rounded-sm focus:ring-1 focus:ring-gray-300"
+                                                            />
                                                         </div>
-                                                    )}
-                                                    <button
-                                                        type="submit"
-                                                        disabled={isSubmitting || !selection.info.agreeTerms}
-                                                        className="bg-[#436235] text-white px-8 py-3 rounded-sm font-medium hover:bg-black transition-all flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed w-fit"
-                                                    >
-                                                        {isSubmitting ? 'Processing...' : 'Book now'}
-                                                    </button>
-                                                </div>
-                                            </form>
+                                                        <div>
+                                                            <label className="block text-sm font-light text-gray-800 mb-2">Last name</label>
+                                                            <input
+                                                                type="text"
+                                                                name="lastName"
+                                                                value={selection.info.lastName}
+                                                                onChange={handleInputChange}
+                                                                required
+                                                                className="w-full bg-[#F3F4F6] border-none py-3 px-4 rounded-sm focus:ring-1 focus:ring-gray-300"
+                                                            />
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Row 2 */}
+                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                                        <div>
+                                                            <label className="block text-sm font-light text-gray-800 mb-2">Email</label>
+                                                            <input
+                                                                type="email"
+                                                                name="email"
+                                                                value={selection.info.email}
+                                                                onChange={handleInputChange}
+                                                                required
+                                                                className="w-full bg-[#F3F4F6] border-none py-3 px-4 rounded-sm focus:ring-1 focus:ring-gray-300"
+                                                            />
+                                                        </div>
+                                                        <div>
+                                                            <label className="block text-sm font-light text-gray-800 mb-2">Phone number</label>
+                                                            <input
+                                                                type="tel"
+                                                                name="phoneNumber"
+                                                                value={selection.info.phoneNumber}
+                                                                onChange={handleInputChange}
+                                                                required
+                                                                className="w-full bg-[#F3F4F6] border-none py-3 px-4 rounded-sm focus:ring-1 focus:ring-gray-300"
+                                                            />
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Row 3 */}
+                                                    <div>
+                                                        <label className="block text-sm font-light text-gray-800 mb-2">Your country of residence</label>
+                                                        <select
+                                                            name="country"
+                                                            value={selection.info.country}
+                                                            onChange={handleInputChange}
+                                                            required
+                                                            className="w-full bg-[#F3F4F6] border-none py-3 px-4 rounded-sm focus:ring-1 focus:ring-gray-300 text-gray-500"
+                                                        >
+                                                            <option value="" disabled>Select your country</option>
+                                                            <option value="ph">Philippines</option>
+                                                            <option value="in">India</option>
+                                                            <option value="ae">UAE</option>
+                                                            <option value="cn">China</option>
+                                                            <option value="other">Other</option>
+                                                        </select>
+                                                    </div>
+
+                                                    {/* Row 4 */}
+                                                    <div>
+                                                        <label className="block text-sm font-light text-gray-800 mb-4">What brings you here?</label>
+                                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-4 gap-x-8">
+                                                            {['Student visa', 'Work visa', 'Permanent residency', 'Study abroad', 'Housing assistance', 'Other'].map((type) => (
+                                                                <label key={type} className="flex items-center gap-3 cursor-pointer group">
+                                                                    <div className={`w-5 h-5 rounded-full border flex flex-shrink-0 items-center justify-center transition-colors ${selection.info.inquiryType === type ? 'border-[#436235]' : 'border-gray-300 group-hover:border-gray-400'}`}>
+                                                                        {selection.info.inquiryType === type && <div className="w-2.5 h-2.5 rounded-full bg-[#436235]" />}
+                                                                    </div>
+                                                                    <input
+                                                                        type="radio"
+                                                                        name="inquiryType"
+                                                                        value={type}
+                                                                        checked={selection.info.inquiryType === type}
+                                                                        onChange={handleInputChange}
+                                                                        className="hidden"
+                                                                    />
+                                                                    <span className="text-sm text-gray-700">{type}</span>
+                                                                </label>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Google Calendar */}
+                                                    <div>
+                                                        <label className="block text-sm font-light text-gray-800 mb-2">Select a time for your consultation</label>
+                                                        <div className="w-full bg-white rounded-sm border border-gray-200 overflow-hidden h-[500px]">
+                                                            <iframe
+                                                                src={selection.consultant?.bookingUrl}
+                                                                style={{ border: 0 }}
+                                                                width="100%"
+                                                                height="100%"
+                                                                frameBorder="0"
+                                                            ></iframe>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Row 5 */}
+                                                    <div>
+                                                        <label className="block text-sm font-light text-gray-800 mb-2">Additional details</label>
+                                                        <textarea
+                                                            rows="5"
+                                                            name="message"
+                                                            value={selection.info.message}
+                                                            onChange={handleInputChange}
+                                                            className="w-full bg-[#F3F4F6] border-none py-3 px-4 rounded-sm focus:ring-1 focus:ring-gray-300 resize-none"
+                                                            placeholder="Tell us anything else we should know"
+                                                        ></textarea>
+                                                    </div>
+
+                                                    {/* Checkbox */}
+                                                    <label className="flex items-start gap-3 cursor-pointer group pt-2">
+                                                        <div className={`w-5 h-5 mt-0.5 border flex flex-shrink-0 items-center justify-center transition-colors ${selection.info.agreeTerms ? 'bg-[#436235] border-[#436235]' : 'bg-[#F3F4F6] border-gray-300 group-hover:border-gray-400'}`}>
+                                                            {selection.info.agreeTerms && <CheckCircle className="w-3 h-3 text-white" />}
+                                                        </div>
+                                                        <input
+                                                            type="checkbox"
+                                                            name="agreeTerms"
+                                                            checked={selection.info.agreeTerms}
+                                                            onChange={handleInputChange}
+                                                            required
+                                                            className="hidden"
+                                                        />
+                                                        <span className="text-sm text-gray-700 font-light">I agree to the terms and conditions</span>
+                                                    </label>
+
+                                                    {/* Submit & Error */}
+                                                    <div className="pt-6">
+                                                        {error && (
+                                                            <div className="mb-6 bg-red-50 border border-red-100 text-red-600 px-4 py-3 rounded-lg text-sm font-medium animate-fade-in">
+                                                                {error}
+                                                            </div>
+                                                        )}
+                                                        <button
+                                                            type="submit"
+                                                            disabled={isSubmitting || !selection.info.agreeTerms}
+                                                            className="bg-[#436235] text-white px-8 py-3 rounded-sm font-medium hover:bg-black transition-all flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed w-fit"
+                                                        >
+                                                            {isSubmitting ? 'Processing...' : 'Book now'}
+                                                        </button>
+                                                    </div>
+                                                </form>
+                                            </div>
                                         </div>
-                                    </div>
                                     ) : (
                                         <div className="max-w-4xl mx-auto animate-fade-in py-12 md:py-20 text-center">
-                                            
+
                                             <div className="w-24 h-24 mx-auto bg-[#436235]/5 rounded-full flex items-center justify-center mb-8 border border-[#436235]/10 relative">
                                                 <div className="absolute inset-0 rounded-full border border-[#436235]/20 animate-ping opacity-20"></div>
                                                 <CheckCircle size={40} strokeWidth={1} className="text-[#436235]" />
                                             </div>
-                                            
+
                                             <h3 className="text-5xl md:text-6xl font-light text-black mb-6 tracking-tight">Booking Confirmed.</h3>
-                                            
+
                                             <p className="text-gray-500 text-xl font-light max-w-4xl mx-auto leading-relaxed mb-16 px-4">
                                                 We've successfully saved your details. You will receive an email shortly regarding your consultation with <span className="font-medium text-black">{selection.consultant?.name}</span>.
                                             </p>
-                                            
+
                                             <div className="mt-12 text-center">
-                                                <button 
+                                                <button
                                                     onClick={() => window.location.reload()}
                                                     className="inline-flex items-center gap-2 text-gray-400 hover:text-black text-sm font-bold tracking-widest uppercase transition-colors group"
                                                 >

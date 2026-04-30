@@ -51,6 +51,7 @@ export default function FreeAssessment() {
         if (flash?.success) {
             setIsSuccess(true);
             if (flash?.lead_id) setLeadId(flash.lead_id);
+            localStorage.removeItem('assessment_draft');
         }
     }, [flash]);
 
@@ -59,7 +60,7 @@ export default function FreeAssessment() {
         // Personal
         first_name: '',
         last_name: '',
-        has_other_names: 'No',
+        has_other_names: '',
         other_names: '',
         gender: '',
         marital_status: '',
@@ -72,7 +73,7 @@ export default function FreeAssessment() {
         residence_city: '',
         residence_state: '',
         residence_country: '',
-        has_passport: 'No',
+        has_passport: '',
         passport_number: '',
         passport_expiry: '',
         passport_pdf: null,
@@ -82,7 +83,7 @@ export default function FreeAssessment() {
             qualification_level: '',
             preferred_city: '',
             preferred_intake: '',
-            has_english_test: 'No',
+            has_english_test: '',
             english_test_type: '',
             test_score_overall: '',
             test_score_reading: '',
@@ -92,7 +93,7 @@ export default function FreeAssessment() {
             test_date: ''
         },
         // Education
-        high_school_completed: 'No',
+        high_school_completed: '',
         high_school_level: '',
         high_school_institution: '',
         high_school_start: '',
@@ -105,7 +106,7 @@ export default function FreeAssessment() {
             { level: 'Doctorate', field_of_study: '', institution: '', start_date: '', end_date: '', marks_percentage: '', completed: false },
         ],
         education_docs: [],
-        has_gap: 'No',
+        has_gap: '',
         gap_length: '',
         gap_activities: [],
         gap_explanation: '',
@@ -116,30 +117,30 @@ export default function FreeAssessment() {
                 job_title: '',
                 start_date: '',
                 end_date: '',
-                is_current: 'Yes',
+                is_current: '',
                 duties: '',
-                has_supporting_docs: 'No',
+                has_supporting_docs: '',
                 supporting_docs: []
             }
         ],
         // Financial
         financial_info: {
-            can_cover_tuition: 'No',
-            can_cover_living: 'No',
+            can_cover_tuition: '',
+            can_cover_living: '',
             funding_source: [],
             estimated_budget: '',
-            has_sponsors: 'No',
+            has_sponsors: '',
             sponsor_relation: ''
         },
         // Source of Funds
         source_of_funds_info: {
             sources: [],
-            will_self_fund: 'No',
+            will_self_fund: '',
             student_financial_docs: [],
-            will_use_sponsor: 'No',
+            will_use_sponsor: '',
             sponsor_relation: '',
-            sponsor_nz_based: 'No',
-            sponsor_nz_resident: 'No',
+            sponsor_nz_based: '',
+            sponsor_nz_resident: '',
             sponsor_occupation: '',
             sponsor_employer: '',
             sponsor_annual_income: '',
@@ -149,32 +150,32 @@ export default function FreeAssessment() {
         },
         // Immigration
         immigration_info: {
-            has_travelled_overseas: 'No',
+            has_travelled_overseas: '',
             overseas_travel_details: '',
-            has_applied_nz_visa: 'No',
+            has_applied_nz_visa: '',
             nz_visa_details: '',
-            total_nz_time_24_months: 'No',
-            has_applied_other_visa: 'No',
+            total_nz_time_24_months: '',
+            has_applied_other_visa: '',
             other_visa_details: '',
-            has_visa_refusal: 'No',
+            has_visa_refusal: '',
             visa_refusal_details: '',
             submission_country: ''
         },
         // Character
         character_info: {
-            has_conviction: 'No',
-            under_investigation: 'No',
-            has_deportation: 'No',
-            has_visa_refusal_other: 'No',
-            lived_5_years_since_17: 'No'
+            has_conviction: '',
+            under_investigation: '',
+            has_deportation: '',
+            has_visa_refusal_other: '',
+            lived_5_years_since_17: ''
         },
         // Health
         health_info: {
-            has_tuberculosis: 'No',
-            has_renal_dialysis: 'No',
-            needs_hospital_care: 'No',
-            needs_residential_care: 'No',
-            is_pregnant: 'No'
+            has_tuberculosis: '',
+            has_renal_dialysis: '',
+            needs_hospital_care: '',
+            needs_residential_care: '',
+            is_pregnant: ''
         },
         // Family
         family_info: {
@@ -189,7 +190,7 @@ export default function FreeAssessment() {
         },
         // NZ Contacts
         nz_contacts_info: {
-            has_nz_contacts: 'No',
+            has_nz_contacts: '',
             contact_first_name: '',
             contact_family_name: '',
             contact_relationship: '',
@@ -198,22 +199,45 @@ export default function FreeAssessment() {
         },
         // Military
         military_info: {
-            military_compulsory: 'No',
-            has_military_service: 'No'
+            military_compulsory: '',
+            has_military_service: ''
         },
         // Home Ties
         home_ties_info: {
-            family_owns_property: 'No',
+            family_owns_property: '',
             property_type: '',
             property_location: '',
             property_owner: '',
-            family_owns_business: 'No',
+            family_owns_business: '',
             business_type: '',
             business_involvement: ''
         },
         // Declaration
         declaration_accepted: false
     });
+
+    const [isLoaded, setIsLoaded] = useState(false);
+
+    useEffect(() => {
+        if (!isSuccess) {
+            const draft = localStorage.getItem('assessment_draft');
+            if (draft) {
+                try {
+                    const parsed = JSON.parse(draft);
+                    setData(prev => ({ ...prev, ...parsed }));
+                } catch (e) {
+                    console.error("Could not load draft", e);
+                }
+            }
+        }
+        setIsLoaded(true);
+    }, []);
+
+    useEffect(() => {
+        if (isLoaded && !isSuccess) {
+            localStorage.setItem('assessment_draft', JSON.stringify(data));
+        }
+    }, [data, isLoaded, isSuccess]);
 
     const steps = [
         { id: 1, title: 'Terms', icon: ShieldCheck },
@@ -292,6 +316,12 @@ export default function FreeAssessment() {
                 }
                 break;
             case 4:
+                data.education_background.forEach((edu, i) => {
+                    if (edu.completed) {
+                        if (!edu.field_of_study.trim()) errs[`education_background.${i}.field_of_study`] = 'Field of study is required';
+                        if (!edu.institution.trim()) errs[`education_background.${i}.institution`] = 'Name of institution is required';
+                    }
+                });
                 if (data.has_gap === 'Yes') {
                     if (!data.gap_length.trim()) errs.gap_length = 'Gap length is required';
                     if (!data.gap_activities || !data.gap_activities.length) errs.gap_activities = 'Please select at least one activity';
@@ -519,94 +549,161 @@ export default function FreeAssessment() {
 
             <Navbar />
 
-            {/* Header/Title - Minimal Gallery Style */}
-            <div className="bg-white py-32 border-b border-gray-100">
-                <div className="container mx-auto px-6">
-                    <div className="flex flex-col items-center text-center max-w-5xl mx-auto">
-                        <h1 className="text-4xl lg:text-5xl font-black text-[#282728] uppercase tracking-tighter mb-6 leading-[1.1]">
-                            Enrolment Eligibility<br className="hidden lg:block"/> Assessment Form
+            {/* Hero Header — Site-Matching Editorial Style */}
+            <div className="relative bg-white border-b border-gray-100 overflow-hidden">
+                {/* Green top accent stripe */}
+                <div className="absolute top-0 left-0 right-0 h-1 bg-[#436235]" />
+
+                {/* Faint background pattern */}
+                <div className="absolute inset-0 opacity-[0.025]" style={{backgroundImage: 'repeating-linear-gradient(0deg, transparent, transparent 40px, #282728 40px, #282728 41px), repeating-linear-gradient(90deg, transparent, transparent 80px, #282728 80px, #282728 81px)'}} />
+
+                <div className="container mx-auto px-6 py-24 lg:py-32 relative z-10">
+                    <div className="max-w-5xl mx-auto">
+                        {/* Eyebrow — matches site style */}
+                        <span className="text-[10px] font-bold text-[#436235] uppercase tracking-[0.3em] mb-6 block">Free Immigration Assessment</span>
+
+                        <h1 className="text-5xl lg:text-7xl font-black text-[#282728] uppercase tracking-tighter leading-[0.9] mb-8">
+                            Enrolment<br/>
+                            <span className="text-[#436235]">Eligibility</span><br/>
+                            Assessment
                         </h1>
-                        <h2 className="text-[11px] font-black text-[#436235] uppercase tracking-[0.6em] mb-12 opacity-80">
-                            Pre-Screening & Study Planning
-                        </h2>
 
-                        <div className="w-8 h-[2px] bg-[#282728]/20 mb-12" />
+                        <div className="w-12 h-[2px] bg-[#282728]/20 my-8" />
 
-                        <p className="text-gray-400 text-sm leading-[2.2] font-medium max-w-[440px] px-4 uppercase tracking-widest">
-                            Assess your eligibility for studying in New Zealand and prepare your pathway.
-                        </p>
+                        <div className="flex flex-col md:flex-row md:items-end gap-10">
+                            <p className="text-gray-500 text-sm leading-[1.9] font-light max-w-[400px] tracking-wide">
+                                Your responses help us determine the best study pathway to New Zealand for you.
+                            </p>
+                            <div className="flex items-center gap-8 md:ml-auto flex-shrink-0">
+                                <div className="text-center">
+                                    <div className="text-4xl font-black text-[#282728]">~15</div>
+                                    <div className="text-[9px] text-gray-400 uppercase tracking-[0.3em] font-bold mt-1">Minutes</div>
+                                </div>
+                                <div className="w-[1px] h-10 bg-gray-200" />
+                                <div className="text-center">
+                                    <div className="text-4xl font-black text-[#436235]">Free</div>
+                                    <div className="text-[9px] text-gray-400 uppercase tracking-[0.3em] font-bold mt-1">No Cost</div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
 
-            <main className="container mx-auto px-6 py-24 max-w-7xl">
-                <div className="flex flex-col lg:flex-row gap-8 lg:gap-20 items-start">
+            <main className="container mx-auto px-6 pb-32 pt-12 max-w-7xl">
+                <div className="flex flex-col lg:flex-row gap-8 lg:gap-16 items-start">
 
-                    {/* Sidebar Navigation - Zen Minimalist */}
-                    <div className="lg:w-[240px] sticky top-32 flex-shrink-0">
-                        <div className="space-y-4">
-                            {steps.map((s) => {
-                                const isActive = step === s.id;
-                                const isCompleted = step > s.id;
-                                const stepNum = s.id < 10 ? `0${s.id}` : `${s.id}`;
-                                return (
-                                    <div
-                                        key={s.id}
-                                        onClick={() => handleSidebarClick(s.id)}
-                                        className="group cursor-pointer py-2 pl-4 relative"
-                                    >
-                                        <div className="flex items-center gap-6">
-                                            {/* Dot Indicator */}
-                                            <div className="relative">
-                                                <div className={`w-2 h-2 rounded-full transition-all duration-500 ${isActive ? 'bg-[#282728] scale-150' : (isCompleted ? 'bg-[#436235]' : 'bg-gray-200')}`} />
-                                                {isActive && (
-                                                    <motion.div
-                                                        layoutId="active-dot"
-                                                        className="absolute -inset-1.5 border border-[#282728]/20 rounded-full"
-                                                    />
+                    {/* Sidebar Navigation — Premium Timeline */}
+                    <div className="lg:w-[220px] sticky top-28 flex-shrink-0">
+                        <div className="rounded-3xl overflow-hidden border border-gray-100 shadow-xl shadow-gray-100/80">
+                        {/* Sidebar header — matches site palette */}
+                            <div className="px-6 pt-6 pb-5 bg-[#282728]">
+                                <p className="text-[9px] font-bold text-white/40 uppercase tracking-[0.4em] mb-1">Form Progress</p>
+                                <div className="text-2xl font-black text-white">{Math.round((step / 12) * 100)}<span className="text-base text-white/30">%</span></div>
+                                <div className="mt-3 h-0.5 bg-white/10 rounded-full overflow-hidden">
+                                    <motion.div
+                                        className="h-full bg-[#436235]"
+                                        initial={{ width: 0 }}
+                                        animate={{ width: `${(step / 12) * 100}%` }}
+                                        transition={{ duration: 0.8, ease: 'circOut' }}
+                                    />
+                                </div>
+                            </div>
+                            {/* Steps list */}
+                            <div className="bg-white px-3 py-4 space-y-0.5">
+                                {steps.map((s) => {
+                                    const isActive = step === s.id;
+                                    const isCompleted = step > s.id;
+                                    const Icon = s.icon;
+                                    const stepNum = s.id < 10 ? `0${s.id}` : `${s.id}`;
+                                    return (
+                                        <div
+                                            key={s.id}
+                                            onClick={() => handleSidebarClick(s.id)}
+                                            className={`group flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer transition-all duration-200 ${
+                                                isActive
+                                                    ? 'bg-[#282728]'
+                                                    : 'hover:bg-gray-50'
+                                            }`}
+                                        >
+                                            {/* Icon badge */}
+                                            <div className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 transition-all ${
+                                                isActive
+                                                    ? 'bg-[#436235]'
+                                                    : isCompleted
+                                                    ? 'bg-[#436235]/10'
+                                                    : 'bg-gray-100'
+                                            }`}>
+                                                {isCompleted && !isActive ? (
+                                                    <CheckCircle size={12} className="text-[#436235]" />
+                                                ) : (
+                                                    <Icon size={11} className={isActive ? 'text-white' : 'text-gray-400'} />
                                                 )}
                                             </div>
-
-                                            <div className="flex flex-col">
-                                                <span className={`text-[8px] font-black uppercase tracking-[0.3em] leading-none mb-2 transition-colors ${isActive ? 'text-[#282728]' : 'text-gray-300'}`}>Step {stepNum}</span>
-                                                <span className={`text-[10px] font-black leading-none uppercase tracking-[0.2em] transition-all ${isActive ? 'text-[#282728] translate-x-1' : 'text-gray-400 group-hover:text-[#282728]'}`}>{s.title}</span>
+                                            <div className="flex flex-col min-w-0">
+                                                <span className={`text-[7.5px] font-black uppercase tracking-[0.25em] leading-none mb-0.5 ${
+                                                    isActive ? 'text-white/40' : 'text-gray-300'
+                                                }`}>{stepNum}</span>
+                                                <span className={`text-[10px] font-black uppercase tracking-[0.12em] leading-none truncate ${
+                                                    isActive ? 'text-white' : isCompleted ? 'text-[#436235]' : 'text-gray-400 group-hover:text-[#282728]'
+                                                }`}>{s.title}</span>
                                             </div>
+                                            {isActive && (
+                                                <motion.div layoutId="sidebar-active" className="ml-auto w-1 h-4 rounded-full bg-[#436235]" />
+                                            )}
                                         </div>
-                                    </div>
-                                );
-                            })}
+                                    );
+                                })}
+                            </div>
                         </div>
                     </div>
 
-                    {/* Form Content Area - Pure Whitespace */}
-                    <div className="flex-1 max-w-3xl bg-white">
-                        {/* Elegant Progress Line */}
-                        <div className="mb-20">
-                            <div className="h-[2px] w-full bg-gray-50 rounded-full mb-6 overflow-hidden">
+                    {/* Form Content Area */}
+                    <div className="flex-1 min-w-0 bg-white rounded-3xl border border-gray-100 shadow-xl shadow-gray-100/80 overflow-hidden">
+                        {/* Form Top Bar */}
+                        <div className="px-8 pt-8 pb-6 border-b border-gray-50">
+                            <div className="flex items-center justify-between mb-4">
+                                <div>
+                                    <p className="text-[9px] font-black uppercase tracking-[0.4em] text-gray-400 mb-1">Section {stepLabel} of 12</p>
+                                    <p className="text-base font-black uppercase tracking-tight text-[#282728]">{steps[step - 1]?.title}</p>
+                                </div>
+                                <div className="flex items-center gap-1.5 flex-wrap justify-end max-w-[160px]">
+                                    {steps.map((s) => (
+                                        <div
+                                            key={s.id}
+                                            className={`transition-all duration-300 rounded-full ${
+                                                s.id === step
+                                                    ? 'w-5 h-2 bg-[#282728]'
+                                                    : s.id < step
+                                                    ? 'w-2 h-2 bg-[#436235]'
+                                                    : 'w-2 h-2 bg-gray-100'
+                                            }`}
+                                        />
+                                    ))}
+                                </div>
+                            </div>
+                            {/* Gradient progress bar */}
+                            <div className="h-0.5 w-full bg-gray-100 overflow-hidden">
                                 <motion.div
-                                    className="h-full bg-[#282728]"
+                                    className="h-full bg-[#436235]"
                                     initial={{ width: 0 }}
                                     animate={{ width: `${(step / 12) * 100}%` }}
-                                    transition={{ duration: 0.8, ease: "circOut" }}
+                                    transition={{ duration: 0.8, ease: 'circOut' }}
                                 />
-                            </div>
-                            <div className="flex justify-between items-center pr-1">
-                                <span className="text-[9px] font-black uppercase tracking-[0.4em] text-[#282728]">Questionnaire Stage</span>
-                                <span className="text-[9px] font-black uppercase tracking-[0.4em] text-gray-300">Section {stepLabel} / 12</span>
                             </div>
                         </div>
 
                         {/* Step Components */}
                         <div className="flex-1">
                             <form ref={formRef} onSubmit={handleSubmit} className="h-full flex flex-col">
-                                <div className="flex-1">
+                                <div className="flex-1 px-8 py-10">
                                     <AnimatePresence mode="wait">
                                         <motion.div
                                             key={step}
-                                            initial={{ opacity: 0, y: 10 }}
+                                            initial={{ opacity: 0, y: 14 }}
                                             animate={{ opacity: 1, y: 0 }}
-                                            exit={{ opacity: 0, y: -10 }}
-                                            transition={{ duration: 0.3 }}
+                                            exit={{ opacity: 0, y: -14 }}
+                                            transition={{ duration: 0.35, ease: 'easeOut' }}
                                         >
                                             {step === 1 && <StepTerms data={data} setData={setData} errors={allErrors} />}
                                             {step === 2 && <StepPersonal data={data} setData={setData} errors={allErrors} />}
@@ -624,36 +721,43 @@ export default function FreeAssessment() {
                                     </AnimatePresence>
                                 </div>
 
-                                 {/* Form Footer Control - Discreet */}
-                                <div className="mt-24 flex items-center justify-between pt-12 border-t border-gray-50">
+                                {/* Form Footer — Premium Controls */}
+                                <div className="flex items-center justify-between px-8 py-6 border-t border-gray-50 bg-gray-50/40">
                                     <button
                                         type="button"
                                         onClick={prevStep}
                                         disabled={step === 1}
-                                        className={`px-8 py-4 text-[10px] font-black uppercase tracking-[0.3em] transition-all border border-transparent rounded-xl ${step === 1 ? 'opacity-0 cursor-default' : 'text-gray-300 hover:text-[#282728]'}`}
+                                        className={`flex items-center gap-2 px-6 py-2.5 text-[9px] font-bold uppercase tracking-[0.2em] transition-all border ${
+                                            step === 1
+                                                ? 'opacity-0 cursor-default border-transparent'
+                                                : 'border-gray-300 text-gray-400 hover:border-[#282728] hover:text-[#282728]'
+                                        }`}
                                     >
-                                        &larr; Back
+                                        <ChevronLeft size={13} /> Back
                                     </button>
 
-                                    {step < 12 ? (
-                                        <button
-                                            type="button"
-                                            onClick={nextStep}
-                                            className="group relative px-12 py-5 bg-[#282728] text-white rounded-xl text-[10px] font-black uppercase tracking-[0.3em] hover:bg-black transition-all shadow-2xl shadow-[#282728]/10 active:scale-95 overflow-hidden"
-                                        >
-                                            <span className="relative z-10">Next Sequence</span>
-                                            <div className="absolute inset-0 bg-white/5 opacity-0 group-hover:opacity-100 transition-opacity" />
-                                        </button>
-                                    ) : (
-                                        <button
-                                            type="button"
-                                            onClick={submitFinal}
-                                            disabled={processing}
-                                            className="px-12 py-5 bg-[#436235] text-white rounded-xl text-[10px] font-black uppercase tracking-[0.3em] hover:bg-[#354d2a] transition-all shadow-2xl shadow-[#436235]/10 active:scale-95"
-                                        >
-                                            {processing ? 'Finalizing...' : 'Submit Profile'}
-                                        </button>
-                                    )}
+                                    <div className="flex items-center gap-3">
+                                        <span className="text-[9px] font-black uppercase tracking-[0.3em] text-gray-300">{stepLabel} / 12</span>
+                                        {step < 12 ? (
+                                            <button
+                                                type="button"
+                                                onClick={nextStep}
+                                                className="group flex items-center gap-2 px-8 py-2.5 bg-[#282728] text-white text-[9px] font-bold uppercase tracking-[0.2em] transition-all hover:bg-[#436235] active:scale-95"
+                                            >
+                                                Continue <ChevronRight size={13} className="transition-transform group-hover:translate-x-0.5" />
+                                            </button>
+                                        ) : (
+                                            <button
+                                                type="button"
+                                                onClick={submitFinal}
+                                                disabled={processing}
+                                                className="flex items-center gap-2 px-8 py-2.5 bg-[#436235] text-white text-[9px] font-bold uppercase tracking-[0.2em] transition-all hover:bg-[#354d2a] active:scale-95 disabled:opacity-60"
+                                            >
+                                                <CheckCircle size={13} />
+                                                {processing ? 'Finalizing...' : 'Submit Profile'}
+                                            </button>
+                                        )}
+                                    </div>
                                 </div>
                             </form>
                         </div>
@@ -683,7 +787,7 @@ export default function FreeAssessment() {
                                     if (modal.action) modal.action();
                                     else setModal({ show: false, message: '' });
                                 }}
-                                className="w-full bg-[#282728] text-white py-5 rounded-2xl text-[10px] font-black uppercase tracking-[0.4em] shadow-xl hover:bg-black transition-all active:scale-95"
+                                className="w-full bg-[#282728] text-white py-5 rounded-2xl text-xs font-black uppercase tracking-[0.4em] shadow-xl hover:bg-black transition-all active:scale-95"
                             >
                                 {modal.action ? 'Go to Section' : 'Acknowledge'}
                             </button>
@@ -715,11 +819,11 @@ function StepTerms({ data, setData, errors }) {
                         checked={data.terms_accepted}
                         onChange={e => setData('terms_accepted', e.target.checked)}
                     />
-                    <span className={`text-[11px] font-black uppercase tracking-[0.15em] transition-colors ${errors.terms_accepted ? 'text-red-500' : 'text-[#282728]'}`}>
+                    <span className={`text-sm font-black uppercase tracking-[0.15em] transition-colors ${errors.terms_accepted ? 'text-red-500' : 'text-[#282728]'}`}>
                         I have read and agree to the terms and conditions *
                     </span>
                 </label>
-                {errors.terms_accepted && <p className="text-[9px] font-black text-red-500 uppercase tracking-widest mt-2 pl-4">{errors.terms_accepted}</p>}
+                {errors.terms_accepted && <p className="text-sm font-black text-red-500 uppercase tracking-widest mt-2 pl-4">{errors.terms_accepted}</p>}
             </div>
         </div>
     );
@@ -992,7 +1096,8 @@ function StepStudyPlans({ data, setData, errors }) {
 }
 
 function StepEducation({ data, setData, errors }) {
-    const eduDocs = ['10th Certificate', '12th Certificate', 'Diploma Certificate', "Bachelor's Certificate", "Master's Certificate", 'Academic Transcripts'];
+    const eduDocs = ['Year 10th Certificate', 'Year 12th Certificate', "Vocational Certificate", "Bachelor's Certificate", "Master's Certificate", "Doctorate Certificate"];
+    const transcriptDocs = ['Year 10th Transcript/Marks', 'Year 12th Transcript/Marks', "Vocational Transcript/Marks", "Bachelor's Transcript/Marks", "Master's Transcript/Marks", "Doctorate Transcript/Marks"];
     const gapActivities = ['Working', 'Family business', 'Preparing for exams', 'Looking for work', 'Other'];
 
     const toggleEduDoc = (doc) => {
@@ -1062,6 +1167,7 @@ function StepEducation({ data, setData, errors }) {
                         edu={edu}
                         index={index}
                         updateEduLevel={updateEduLevel}
+                        errors={errors}
                     />
                 ))}
             </div>
@@ -1069,13 +1175,29 @@ function StepEducation({ data, setData, errors }) {
             {/* Available Documents */}
             <div className="space-y-6">
                 <h3 className="text-sm font-bold uppercase tracking-widest text-[#436235]">Available Documents</h3>
-                <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
-                    {eduDocs.map(doc => (
-                        <label key={doc} className="flex items-center gap-3 p-4 bg-white border border-[#282728] rounded-xl cursor-pointer hover:border-[#436235] transition-colors">
-                            <input type="checkbox" className="w-4 h-4 rounded text-[#436235]" checked={(data.education_docs || []).includes(doc)} onChange={() => toggleEduDoc(doc)} />
-                            <span className="text-[10px] font-bold uppercase tracking-tight text-gray-500">{doc}</span>
-                        </label>
-                    ))}
+                
+                <div>
+                    <h4 className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-3">Certificates</h4>
+                    <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+                        {eduDocs.map(doc => (
+                            <label key={doc} className="flex items-center gap-3 p-4 bg-white border border-[#282728] rounded-xl cursor-pointer hover:border-[#436235] transition-colors">
+                                <input type="checkbox" className="w-4 h-4 rounded text-[#436235]" checked={(data.education_docs || []).includes(doc)} onChange={() => toggleEduDoc(doc)} />
+                                <span className="text-xs font-bold uppercase tracking-tight text-gray-500">{doc}</span>
+                            </label>
+                        ))}
+                    </div>
+                </div>
+
+                <div className="pt-2">
+                    <h4 className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-3">Transcripts</h4>
+                    <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+                        {transcriptDocs.map(doc => (
+                            <label key={doc} className="flex items-center gap-3 p-4 bg-white border border-[#282728] rounded-xl cursor-pointer hover:border-[#436235] transition-colors">
+                                <input type="checkbox" className="w-4 h-4 rounded text-[#436235]" checked={(data.education_docs || []).includes(doc)} onChange={() => toggleEduDoc(doc)} />
+                                <span className="text-xs font-bold uppercase tracking-tight text-gray-500">{doc}</span>
+                            </label>
+                        ))}
+                    </div>
                 </div>
             </div>
 
@@ -1084,7 +1206,7 @@ function StepEducation({ data, setData, errors }) {
                 <Field label="Has there been a gap in your study?">
                     <div className="flex gap-4 mt-2">
                         {['Yes', 'No'].map(o => (
-                            <button key={o} type="button" onClick={() => setData('has_gap', o)} className={`px-8 py-3 rounded-xl text-[10px] font-bold uppercase tracking-widest border ${data.has_gap === o ? 'bg-[#282728] text-white' : 'bg-white text-gray-400'}`}>{o}</button>
+                            <button key={o} type="button" onClick={() => setData('has_gap', o)} className={`px-8 py-3 rounded-xl text-xs font-bold uppercase tracking-widest border ${data.has_gap === o ? 'bg-[#282728] text-white' : 'bg-white text-gray-400'}`}>{o}</button>
                         ))}
                     </div>
                 </Field>
@@ -1100,7 +1222,7 @@ function StepEducation({ data, setData, errors }) {
                                         key={activity}
                                         type="button"
                                         onClick={() => toggleGapActivity(activity)}
-                                        className={`px-4 py-3 rounded-xl text-[10px] font-bold uppercase tracking-widest border transition-all text-center ${(data.gap_activities || []).includes(activity) ? 'bg-[#436235] text-white border-[#436235]' : 'bg-white text-gray-400 border-gray-100 hover:border-[#436235]'}`}
+                                        className={`px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-widest border transition-all text-center ${(data.gap_activities || []).includes(activity) ? 'bg-[#436235] text-white border-[#436235]' : 'bg-white text-gray-400 border-gray-100 hover:border-[#436235]'}`}
                                     >
                                         {activity}
                                     </button>
@@ -1117,8 +1239,10 @@ function StepEducation({ data, setData, errors }) {
     );
 }
 
-function ExpandableEducationCard({ edu, index, updateEduLevel }) {
+function ExpandableEducationCard({ edu, index, updateEduLevel, errors }) {
     const [expanded, setExpanded] = useState(edu.completed);
+    const fieldOfStudyErr = errors?.[`education_background.${index}.field_of_study`];
+    const institutionErr = errors?.[`education_background.${index}.institution`];
 
     return (
         <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden">
@@ -1142,18 +1266,18 @@ function ExpandableEducationCard({ edu, index, updateEduLevel }) {
                             setExpanded(newCompleted);
                         }}
                     />
-                    <span className="text-[11px] font-black uppercase tracking-[0.15em] text-[#282728]">{edu.level}</span>
+                    <span className="text-sm font-black uppercase tracking-[0.15em] text-[#282728]">{edu.level}</span>
                 </div>
                 {edu.completed ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
             </div>
             {edu.completed && expanded && (
                 <div className="px-6 pb-6 pt-2 border-t border-gray-50">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <Field label="Field of Study">
-                            <input type="text" className="w-full px-5 py-3 bg-white border border-[#282728] rounded-xl" value={edu.field_of_study} onChange={e => updateEduLevel(index, 'field_of_study', e.target.value)} />
+                        <Field label="Field of Study *" error={fieldOfStudyErr}>
+                            <input type="text" className={`w-full px-5 py-3 bg-white border rounded-xl ${fieldOfStudyErr ? 'border-red-500' : 'border-[#282728]'}`} value={edu.field_of_study} onChange={e => updateEduLevel(index, 'field_of_study', e.target.value)} />
                         </Field>
-                        <Field label="Name of Institution">
-                            <input type="text" className="w-full px-5 py-3 bg-white border border-[#282728] rounded-xl" value={edu.institution} onChange={e => updateEduLevel(index, 'institution', e.target.value)} />
+                        <Field label="Name of Institution *" error={institutionErr}>
+                            <input type="text" className={`w-full px-5 py-3 bg-white border rounded-xl ${institutionErr ? 'border-red-500' : 'border-[#282728]'}`} value={edu.institution} onChange={e => updateEduLevel(index, 'institution', e.target.value)} />
                         </Field>
                         <Field label="Start Date">
                             <input type="date" className="w-full px-5 py-3 bg-white border border-[#282728] rounded-xl" value={edu.start_date} onChange={e => updateEduLevel(index, 'start_date', e.target.value)} />
@@ -1172,7 +1296,8 @@ function ExpandableEducationCard({ edu, index, updateEduLevel }) {
 }
 
 function StepWork({ data, setData, errors }) {
-    const workDocs = ['Certificate of Employment', 'Work Experience Letter', 'Salary slips', 'Business documents'];
+    const selfEmployedDocs = ['Certificate of Employment', 'Work Experience Letter', 'Salary slips', 'Work contract', 'Salary certificate'];
+    const businessDocs = ['Business certificate', 'Income tax return', 'DTI certificate', 'Mayors permit'];
 
     const updateWork = (field, value) => {
         const copy = [...data.work_experience];
@@ -1196,7 +1321,7 @@ function StepWork({ data, setData, errors }) {
                 <div className="p-8 rounded-[2rem] border-2 border-dashed border-gray-100 bg-gray-50/20 text-center">
                     <Briefcase className="w-10 h-10 text-gray-300 mx-auto mb-4" />
                     <h4 className="text-sm font-bold text-[#282728] uppercase tracking-widest mb-2">Detailed Work History</h4>
-                    <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mx-auto max-w-[240px]">This section will be used to assess your job relevance to your chosen study pathway.</p>
+                    <p className="text-xs text-gray-400 font-bold uppercase tracking-widest mx-auto max-w-[240px]">This section will be used to assess your job relevance to your chosen study pathway.</p>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -1234,13 +1359,24 @@ function StepWork({ data, setData, errors }) {
                                 ))}
                             </div>
                         </Field>
-                        {data.work_experience[0].has_supporting_docs === 'Yes' && (
-                            <div className="mt-6">
+                        
+                        <div className="mt-8 mb-4">
+                            <Field label="Work environment">
+                                <div className="flex gap-4 mt-2">
+                                    {['Private / Government Employee', 'Business Owner / Self-Employed'].map(o => (
+                                        <button key={o} type="button" onClick={() => updateWork('work_environment', o)} className={`px-6 py-2 rounded-lg text-xs font-bold border ${data.work_experience[0].work_environment === o ? 'bg-[#282728] text-white' : 'bg-white text-gray-400'}`}>{o}</button>
+                                    ))}
+                                </div>
+                            </Field>
+                        </div>
+
+                        {data.work_experience[0].has_supporting_docs === 'Yes' && data.work_experience[0].work_environment && (
+                            <div className="mt-6 space-y-4 pt-4 border-t border-gray-50">
                                 <div className="grid grid-cols-2 gap-3">
-                                    {workDocs.map(doc => (
+                                    {(data.work_experience[0].work_environment === 'Private / Government Employee' ? selfEmployedDocs : businessDocs).map(doc => (
                                         <label key={doc} className="flex items-center gap-3 p-4 bg-white border border-[#282728] rounded-xl cursor-pointer hover:border-[#436235] transition-colors">
                                             <input type="checkbox" className="w-4 h-4 rounded text-[#436235]" checked={(data.work_experience[0].supporting_docs || []).includes(doc)} onChange={() => toggleWorkDoc(doc)} />
-                                            <span className="text-[10px] font-bold uppercase tracking-tight text-gray-500">{doc}</span>
+                                            <span className="text-xs font-bold uppercase tracking-tight text-gray-500">{doc}</span>
                                         </label>
                                     ))}
                                 </div>
@@ -1276,7 +1412,7 @@ function StepFinancial({ data, setData, errors }) {
                 </Field>
 
                 <div className="bg-gray-50/50 rounded-3xl p-8 border border-gray-100 text-sm text-gray-500 leading-relaxed">
-                    <h4 className="text-[9px] font-black uppercase tracking-[0.3em] text-[#436235] mb-4">Estimated Tuition Ranges (per year)</h4>
+                    <h4 className="text-sm font-black uppercase tracking-[0.3em] text-[#436235] mb-4">Estimated Tuition Ranges (per year)</h4>
                     <ul className="space-y-2 text-[12px] text-gray-400 font-medium">
                         <li>Diploma (Level 5-6): NZ$18,000 - NZ$26,000</li>
                         <li>Bachelor Degree (Level 7): NZ$22,000 - NZ$32,000</li>
@@ -1301,7 +1437,7 @@ function StepFinancial({ data, setData, errors }) {
                                 key={s}
                                 type="button"
                                 onClick={() => toggleSource(s)}
-                                className={`px-4 py-3 rounded-xl text-[10px] font-bold uppercase tracking-widest border transition-all text-center ${data.financial_info.funding_source.includes(s) ? 'bg-[#436235] text-white border-[#436235]' : 'bg-white text-gray-400 border-gray-100 hover:border-[#436235]'}`}
+                                className={`px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-widest border transition-all text-center ${data.financial_info.funding_source.includes(s) ? 'bg-[#436235] text-white border-[#436235]' : 'bg-white text-gray-400 border-gray-100 hover:border-[#436235]'}`}
                             >
                                 {s}
                             </button>
@@ -1323,7 +1459,7 @@ function StepFinancial({ data, setData, errors }) {
                     <Field label="Do you have financial sponsors?">
                          <div className="flex gap-4 mt-2">
                              {['Yes', 'No'].map(o => (
-                                 <button key={o} type="button" onClick={() => updateFinancial('has_sponsors', o)} className={`px-8 py-3 rounded-xl text-[10px] font-bold uppercase tracking-widest border ${data.financial_info.has_sponsors === o ? 'bg-[#282728] text-white' : 'bg-white text-gray-400'}`}>{o}</button>
+                                 <button key={o} type="button" onClick={() => updateFinancial('has_sponsors', o)} className={`px-8 py-3 rounded-xl text-xs font-bold uppercase tracking-widest border ${data.financial_info.has_sponsors === o ? 'bg-[#282728] text-white' : 'bg-white text-gray-400'}`}>{o}</button>
                              ))}
                          </div>
                     </Field>
@@ -1335,7 +1471,7 @@ function StepFinancial({ data, setData, errors }) {
                 </div>
 
                 <div className="bg-gray-50/50 rounded-3xl p-8 border border-gray-100 text-sm text-gray-500 leading-relaxed">
-                    <h4 className="text-[9px] font-black uppercase tracking-[0.3em] text-[#436235] mb-4">Additional Costs to Consider</h4>
+                    <h4 className="text-sm font-black uppercase tracking-[0.3em] text-[#436235] mb-4">Additional Costs to Consider</h4>
                     <ul className="space-y-2 text-[12px] text-gray-400 font-medium">
                         <li>Travel & Medical Insurance: NZ$1,000 - NZ$1,600 per year</li>
                         <li>Visa Application Fee (INZ): NZ$850</li>
@@ -1375,7 +1511,7 @@ function StepSourceOfFunds({ data, setData, errors }) {
                                 key={s}
                                 type="button"
                                 onClick={() => toggleArrayItem('sources', s)}
-                                className={`px-4 py-3 rounded-xl text-[10px] font-bold uppercase tracking-widest border transition-all text-center ${(data.source_of_funds_info.sources || []).includes(s) ? 'bg-[#436235] text-white border-[#436235]' : 'bg-white text-gray-400 border-gray-100 hover:border-[#436235]'}`}
+                                className={`px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-widest border transition-all text-center ${(data.source_of_funds_info.sources || []).includes(s) ? 'bg-[#436235] text-white border-[#436235]' : 'bg-white text-gray-400 border-gray-100 hover:border-[#436235]'}`}
                             >
                                 {s}
                             </button>
@@ -1397,7 +1533,7 @@ function StepSourceOfFunds({ data, setData, errors }) {
                         {studentDocs.map(doc => (
                             <label key={doc} className="flex items-center gap-3 p-4 bg-white border border-[#282728] rounded-xl cursor-pointer hover:border-[#436235] transition-colors">
                                 <input type="checkbox" className="w-4 h-4 rounded text-[#436235]" checked={(data.source_of_funds_info.student_financial_docs || []).includes(doc)} onChange={() => toggleArrayItem('student_financial_docs', doc)} />
-                                <span className="text-[10px] font-bold uppercase tracking-tight text-gray-500">{doc}</span>
+                                <span className="text-xs font-bold uppercase tracking-tight text-gray-500">{doc}</span>
                             </label>
                         ))}
                     </div>
@@ -1459,7 +1595,7 @@ function StepSourceOfFunds({ data, setData, errors }) {
                                             key={s}
                                             type="button"
                                             onClick={() => toggleArrayItem('sponsor_source_of_funds', s)}
-                                            className={`px-4 py-3 rounded-xl text-[10px] font-bold uppercase tracking-widest border transition-all text-center ${(data.source_of_funds_info.sponsor_source_of_funds || []).includes(s) ? 'bg-[#436235] text-white border-[#436235]' : 'bg-white text-gray-400 border-gray-100 hover:border-[#436235]'}`}
+                                            className={`px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-widest border transition-all text-center ${(data.source_of_funds_info.sponsor_source_of_funds || []).includes(s) ? 'bg-[#436235] text-white border-[#436235]' : 'bg-white text-gray-400 border-gray-100 hover:border-[#436235]'}`}
                                         >
                                             {s}
                                         </button>
@@ -1468,24 +1604,24 @@ function StepSourceOfFunds({ data, setData, errors }) {
                             </Field>
 
                             <div className="space-y-6">
-                                <h5 className="text-[9px] font-black uppercase tracking-[0.3em] text-[#282728] opacity-60">Sponsor Financial Documents Available</h5>
+                                <h5 className="text-sm font-black uppercase tracking-[0.3em] text-[#282728] opacity-60">Sponsor Financial Documents Available</h5>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                     {sponsorFinDocs.map(doc => (
                                         <label key={doc} className="flex items-center gap-3 p-4 bg-white border border-[#282728] rounded-xl cursor-pointer hover:border-[#436235] transition-colors">
                                             <input type="checkbox" className="w-4 h-4 rounded text-[#436235]" checked={(data.source_of_funds_info.sponsor_financial_docs || []).includes(doc)} onChange={() => toggleArrayItem('sponsor_financial_docs', doc)} />
-                                            <span className="text-[10px] font-bold uppercase tracking-tight text-gray-500">{doc}</span>
+                                            <span className="text-xs font-bold uppercase tracking-tight text-gray-500">{doc}</span>
                                         </label>
                                     ))}
                                 </div>
                             </div>
 
                             <div className="space-y-6">
-                                <h5 className="text-[9px] font-black uppercase tracking-[0.3em] text-[#282728] opacity-60">Can the sponsor provide these identity documents?</h5>
+                                <h5 className="text-sm font-black uppercase tracking-[0.3em] text-[#282728] opacity-60">Can the sponsor provide these identity documents?</h5>
                                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                                     {sponsorIdDocs.map(doc => (
                                         <label key={doc} className="flex items-center gap-3 p-4 bg-white border border-[#282728] rounded-xl cursor-pointer hover:border-[#436235] transition-colors">
                                             <input type="checkbox" className="w-4 h-4 rounded text-[#436235]" checked={(data.source_of_funds_info.sponsor_identity_docs || []).includes(doc)} onChange={() => toggleArrayItem('sponsor_identity_docs', doc)} />
-                                            <span className="text-[10px] font-bold uppercase tracking-tight text-gray-500">{doc}</span>
+                                            <span className="text-xs font-bold uppercase tracking-tight text-gray-500">{doc}</span>
                                         </label>
                                     ))}
                                 </div>
@@ -1684,7 +1820,7 @@ function FamilyMemberCard({ member, index, updateMember, partnershipStatuses }) 
                 className="flex items-center justify-between p-6 cursor-pointer hover:bg-gray-50/50 transition-colors"
                 onClick={() => setExpanded(!expanded)}
             >
-                <span className="text-[11px] font-black uppercase tracking-[0.15em] text-[#282728]">{member.relation}</span>
+                <span className="text-sm font-black uppercase tracking-[0.15em] text-[#282728]">{member.relation}</span>
                 {expanded ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
             </div>
             {expanded && (
@@ -1873,11 +2009,11 @@ function StepDeclaration({ data, setData, errors }) {
                         checked={data.declaration_accepted}
                         onChange={e => setData('declaration_accepted', e.target.checked)}
                     />
-                    <span className={`text-[11px] font-black uppercase tracking-[0.15em] transition-colors ${errors.declaration_accepted ? 'text-red-500' : 'text-[#282728]'}`}>
+                    <span className={`text-sm font-black uppercase tracking-[0.15em] transition-colors ${errors.declaration_accepted ? 'text-red-500' : 'text-[#282728]'}`}>
                         I have read, understood and agree to the declaration above *
                     </span>
                 </label>
-                {errors.declaration_accepted && <p className="text-[9px] font-black text-red-500 uppercase tracking-widest mt-2 pl-4">{errors.declaration_accepted}</p>}
+                {errors.declaration_accepted && <p className="text-sm font-black text-red-500 uppercase tracking-widest mt-2 pl-4">{errors.declaration_accepted}</p>}
             </div>
         </div>
     );
@@ -1888,8 +2024,8 @@ function Field({ label, error, children }) {
     return (
         <div className="space-y-3">
             <div className="flex justify-between items-end px-1">
-                <label className={`text-[9px] font-black uppercase tracking-[0.3em] transition-colors ${hasError ? 'text-red-500' : 'text-[#282728] opacity-60'}`}>{label}</label>
-                {hasError && <span className="text-[9px] font-black text-red-500 uppercase tracking-widest leading-none">Field Required</span>}
+                <label className={`text-sm font-black uppercase tracking-[0.3em] transition-colors ${hasError ? 'text-red-500' : 'text-[#282728] opacity-60'}`}>{label}</label>
+                {hasError && <span className="text-sm font-black text-red-500 uppercase tracking-widest leading-none">Field Required</span>}
             </div>
             <div className={`transition-all duration-300 ${hasError ? 'scale-[1.01]' : ''}`}>
                 <div className={hasError ? 'rounded-xl ring-2 ring-red-500 ring-offset-2 ring-offset-white shadow-[0_0_0_6px_rgba(239,68,68,0.08)]' : ''}>
@@ -1916,18 +2052,18 @@ function SuccessMessage({ leadId }) {
                     Your profile has been securely received. Our AI is now analyzing your eligibility. View your results using the link below.
                 </p>
                 <div className="bg-gray-50/50 rounded-2xl p-8 mb-8 border border-gray-100/50">
-                    <p className="text-[9px] font-black text-gray-300 uppercase tracking-[0.4em] mb-3 text-center">Protocol ID</p>
+                    <p className="text-sm font-black text-gray-300 uppercase tracking-[0.4em] mb-3 text-center">Protocol ID</p>
                     <p className="text-lg font-mono font-black text-[#282728]">{leadId || '---'}</p>
                 </div>
                 {leadId && (
                     <a
                         href={`/assessment-result/${leadId}`}
-                        className="inline-block w-full bg-[#436235] text-white py-6 rounded-2xl text-[10px] font-black uppercase tracking-[0.4em] shadow-2xl shadow-[#436235]/10 hover:bg-[#354d2a] transition-all active:scale-95 mb-4"
+                        className="inline-block w-full bg-[#436235] text-white py-6 rounded-2xl text-xs font-black uppercase tracking-[0.4em] shadow-2xl shadow-[#436235]/10 hover:bg-[#354d2a] transition-all active:scale-95 mb-4"
                     >
                         View Assessment Result
                     </a>
                 )}
-                <a href="/" className="inline-block w-full bg-[#282728] text-white py-6 rounded-2xl text-[10px] font-black uppercase tracking-[0.4em] shadow-2xl shadow-[#282728]/10 hover:bg-black transition-all active:scale-95">
+                <a href="/" className="inline-block w-full bg-[#282728] text-white py-6 rounded-2xl text-xs font-black uppercase tracking-[0.4em] shadow-2xl shadow-[#282728]/10 hover:bg-black transition-all active:scale-95">
                     Return to Portal
                 </a>
             </div>
