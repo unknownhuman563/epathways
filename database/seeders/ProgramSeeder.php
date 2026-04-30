@@ -122,7 +122,16 @@ class ProgramSeeder extends Seeder
             'credits' => 180,
             'residency_points' => 3,
             'hours_per_week' => 25,
-            'entry_requirements' => "Completion of equivalent secondary education to New Zealand's NCEA Level 2. Some institutions may require credits in English and Mathematics.",
+            'entry_requirements' => [
+                [
+                    'intro' => "Completion of equivalent secondary education to New Zealand's NCEA Level 2.",
+                    'bullets' => [
+                        'English credits at NCEA Level 2',
+                        'Mathematics credits at NCEA Level 2',
+                        'Health-related course (where available)',
+                    ],
+                ],
+            ],
             'specialization' => 'Clinical practice across multiple care settings — rehabilitation, acute care, and mental health.',
             'other_benefits' => [
                 'Pathway to Bachelor of Nursing',

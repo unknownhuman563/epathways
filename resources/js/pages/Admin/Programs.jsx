@@ -72,7 +72,7 @@ const blankProgram = () => ({
     credits: '',
     residency_points: '',
     hours_per_week: '',
-    entry_requirements: '',
+    entry_requirements: [],
     english_requirements: '',
     specialization: '',
     employment_outcomes: [],
@@ -87,6 +87,122 @@ const blankProgram = () => ({
     accommodation: '',
 });
 
+function SectionsField({ value, onChange, label, emptyHint, footnote, descriptionPlaceholder = 'Description' }) {
+    const sections = Array.isArray(value) ? value : [];
+
+    const updateSection = (idx, patch) => {
+        const next = [...sections];
+        next[idx] = { ...next[idx], ...patch };
+        onChange(next);
+    };
+    const addSection = () => onChange([...sections, { intro: '', bullets: [] }]);
+    const removeSection = (idx) => onChange(sections.filter((_, i) => i !== idx));
+
+    return (
+        <div>
+            <div className="flex items-center justify-between">
+                <Label>{label}</Label>
+                <button
+                    type="button"
+                    onClick={addSection}
+                    className="text-[10px] font-semibold text-[#436235] hover:text-[#2d4622] flex items-center gap-1"
+                >
+                    <Plus size={11} /> Add section
+                </button>
+            </div>
+
+            {sections.length === 0 ? (
+                <p className="text-[11px] text-gray-400 italic px-3 py-3 bg-gray-50 border border-dashed border-gray-200 rounded-lg">
+                    {emptyHint}
+                </p>
+            ) : (
+                <div className="space-y-3">
+                    {sections.map((section, sectionIdx) => (
+                        <div key={sectionIdx} className="border border-gray-200 rounded-xl p-4 bg-gray-50/30 space-y-3">
+                            <div className="flex items-center justify-between">
+                                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Section {sectionIdx + 1}</span>
+                                <button
+                                    type="button"
+                                    onClick={() => removeSection(sectionIdx)}
+                                    className="text-[10px] font-semibold text-red-500 hover:text-red-700 flex items-center gap-1"
+                                    title="Remove section"
+                                >
+                                    <X size={11} /> Remove section
+                                </button>
+                            </div>
+
+                            <div>
+                                <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
+                                    Description <span className="text-gray-400 normal-case">(optional)</span>
+                                </p>
+                                <Textarea
+                                    value={section.intro || ''}
+                                    onChange={e => updateSection(sectionIdx, { intro: e.target.value })}
+                                    rows={4}
+                                    placeholder={descriptionPlaceholder}
+                                />
+                            </div>
+
+                            <div>
+                                <div className="flex items-center justify-between mb-1.5">
+                                    <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">
+                                        Bullets <span className="text-gray-400 normal-case">(optional)</span>
+                                    </p>
+                                    <button
+                                        type="button"
+                                        onClick={() => updateSection(sectionIdx, { bullets: [...(section.bullets || []), ''] })}
+                                        className="text-[10px] font-semibold text-[#436235] hover:text-[#2d4622] flex items-center gap-1"
+                                    >
+                                        <Plus size={11} /> Add bullet
+                                    </button>
+                                </div>
+
+                                {(section.bullets || []).length === 0 ? (
+                                    <p className="text-[11px] text-gray-400 italic px-3 py-2 bg-white border border-dashed border-gray-200 rounded-lg">
+                                        No bullets yet. Leave empty if this section is paragraph-only.
+                                    </p>
+                                ) : (
+                                    <div className="space-y-2">
+                                        {section.bullets.map((item, bulletIdx) => (
+                                            <div key={bulletIdx} className="flex items-center gap-2">
+                                                <span className="text-gray-300 flex-shrink-0">•</span>
+                                                <Input
+                                                    value={item}
+                                                    onChange={e => {
+                                                        const bullets = [...section.bullets];
+                                                        bullets[bulletIdx] = e.target.value;
+                                                        updateSection(sectionIdx, { bullets });
+                                                    }}
+                                                    placeholder={`Bullet ${bulletIdx + 1}`}
+                                                    className="flex-1"
+                                                />
+                                                <button
+                                                    type="button"
+                                                    onClick={() => updateSection(sectionIdx, { bullets: section.bullets.filter((_, i) => i !== bulletIdx) })}
+                                                    className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg flex-shrink-0"
+                                                    title="Remove bullet"
+                                                >
+                                                    <X size={14} />
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            )}
+
+            {footnote && (
+                <p className="text-[10px] text-gray-400 leading-relaxed mt-2">
+                    {footnote}
+                </p>
+            )}
+        </div>
+    );
+}
+
 function getStatusStyle(status) {
     switch (status) {
         case 'published': return 'bg-emerald-100 text-emerald-700 border-emerald-200';
@@ -100,7 +216,7 @@ function ProgramModal({ open, onClose, editing }) {
     const [step, setStep] = useState(1);
     const isEdit = !!editing;
 
-    const normalizeEmploymentOutcomes = (value) => {
+    const normalizeSectionsField = (value) => {
         const normalizeSections = (arr) => arr.map(s => ({
             intro: typeof s?.intro === 'string' ? s.intro : '',
             bullets: Array.isArray(s?.bullets) ? s.bullets : [],
@@ -134,6 +250,15 @@ function ProgramModal({ open, onClose, editing }) {
         return [];
     };
 
+    const cleanSectionsField = (sections) => (Array.isArray(sections) ? sections : [])
+        .map(s => ({
+            intro: typeof s?.intro === 'string' ? s.intro.trim() : '',
+            bullets: Array.isArray(s?.bullets)
+                ? s.bullets.filter(b => b && String(b).trim())
+                : [],
+        }))
+        .filter(s => s.intro || s.bullets.length > 0);
+
     const buildInitial = () => {
         if (!editing) return blankProgram();
         return {
@@ -143,7 +268,8 @@ function ProgramModal({ open, onClose, editing }) {
             fee_guide: editing.fee_guide && editing.fee_guide.length > 0
                 ? editing.fee_guide
                 : DEFAULT_FEE_REGIONS.map(region => ({ region, fee: '' })),
-            employment_outcomes: normalizeEmploymentOutcomes(editing.employment_outcomes),
+            entry_requirements: normalizeSectionsField(editing.entry_requirements),
+            employment_outcomes: normalizeSectionsField(editing.employment_outcomes),
         };
     };
 
@@ -162,15 +288,8 @@ function ProgramModal({ open, onClose, editing }) {
         const out = { ...d };
         if (out.image === null && isEdit) delete out.image;
         out.fee_guide = (out.fee_guide || []).filter(r => r.region || r.fee);
-        const sections = Array.isArray(out.employment_outcomes) ? out.employment_outcomes : [];
-        out.employment_outcomes = sections
-            .map(s => ({
-                intro: typeof s?.intro === 'string' ? s.intro.trim() : '',
-                bullets: Array.isArray(s?.bullets)
-                    ? s.bullets.filter(b => b && String(b).trim())
-                    : [],
-            }))
-            .filter(s => s.intro || s.bullets.length > 0);
+        out.entry_requirements = cleanSectionsField(out.entry_requirements);
+        out.employment_outcomes = cleanSectionsField(out.employment_outcomes);
         out.other_benefits = Array.isArray(out.other_benefits)
             ? out.other_benefits.filter(b => b && String(b).trim())
             : [];
@@ -185,33 +304,6 @@ function ProgramModal({ open, onClose, editing }) {
     const addBenefit = () => setData('other_benefits', [...(data.other_benefits || []), '']);
     const removeBenefit = (idx) => {
         setData('other_benefits', (data.other_benefits || []).filter((_, i) => i !== idx));
-    };
-
-    const updateSection = (sectionIdx, patch) => {
-        const sections = [...(data.employment_outcomes || [])];
-        sections[sectionIdx] = { ...sections[sectionIdx], ...patch };
-        setData('employment_outcomes', sections);
-    };
-    const setSectionIntro = (sectionIdx, val) => updateSection(sectionIdx, { intro: val });
-    const setSectionBullet = (sectionIdx, bulletIdx, val) => {
-        const section = data.employment_outcomes?.[sectionIdx] || { intro: '', bullets: [] };
-        const bullets = [...(section.bullets || [])];
-        bullets[bulletIdx] = val;
-        updateSection(sectionIdx, { bullets });
-    };
-    const addSectionBullet = (sectionIdx) => {
-        const section = data.employment_outcomes?.[sectionIdx] || { intro: '', bullets: [] };
-        updateSection(sectionIdx, { bullets: [...(section.bullets || []), ''] });
-    };
-    const removeSectionBullet = (sectionIdx, bulletIdx) => {
-        const section = data.employment_outcomes?.[sectionIdx] || { intro: '', bullets: [] };
-        updateSection(sectionIdx, { bullets: (section.bullets || []).filter((_, i) => i !== bulletIdx) });
-    };
-    const addSection = () => {
-        setData('employment_outcomes', [...(data.employment_outcomes || []), { intro: '', bullets: [] }]);
-    };
-    const removeSection = (sectionIdx) => {
-        setData('employment_outcomes', (data.employment_outcomes || []).filter((_, i) => i !== sectionIdx));
     };
 
     const setField = (key, val) => setData(key, val);
@@ -375,109 +467,26 @@ function ProgramModal({ open, onClose, editing }) {
                                     <Input type="number" min="0" value={data.hours_per_week} onChange={e => setField('hours_per_week', e.target.value)} />
                                 </div>
                             </div>
-                            <div>
-                                <Label>Entry Requirements</Label>
-                                <Textarea value={data.entry_requirements} onChange={e => setField('entry_requirements', e.target.value)} />
-                            </div>
+                            <SectionsField
+                                label="Entry Requirements"
+                                value={data.entry_requirements}
+                                onChange={(val) => setField('entry_requirements', val)}
+                                emptyHint="No sections yet. Click 'Add section' to add content. Each section can be a paragraph (description only), a bullet list (bullets only), or both."
+                                footnote="Each section: description only = paragraph; bullets only = bullet list; both = description with bullets underneath."
+                                descriptionPlaceholder="e.g. Completion of equivalent secondary education to NCEA Level 2."
+                            />
                             <div>
                                 <Label>English Requirements</Label>
                                 <Textarea value={data.english_requirements} onChange={e => setField('english_requirements', e.target.value)} placeholder="e.g. IELTS 6.0 overall, no band less than 5.5" />
                             </div>
-                            <div>
-                                <div className="flex items-center justify-between">
-                                    <Label>Employment Outcomes</Label>
-                                    <button
-                                        type="button"
-                                        onClick={addSection}
-                                        className="text-[10px] font-semibold text-[#436235] hover:text-[#2d4622] flex items-center gap-1"
-                                    >
-                                        <Plus size={11} /> Add section
-                                    </button>
-                                </div>
-
-                                {(data.employment_outcomes || []).length === 0 ? (
-                                    <p className="text-[11px] text-gray-400 italic px-3 py-3 bg-gray-50 border border-dashed border-gray-200 rounded-lg">
-                                        No sections yet. Click "Add section" to add content. Each section can be a paragraph (description only), a bullet list (bullets only), or both.
-                                    </p>
-                                ) : (
-                                    <div className="space-y-3">
-                                        {data.employment_outcomes.map((section, sectionIdx) => (
-                                            <div key={sectionIdx} className="border border-gray-200 rounded-xl p-4 bg-gray-50/30 space-y-3">
-                                                <div className="flex items-center justify-between">
-                                                    <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Section {sectionIdx + 1}</span>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => removeSection(sectionIdx)}
-                                                        className="text-[10px] font-semibold text-red-500 hover:text-red-700 flex items-center gap-1"
-                                                        title="Remove section"
-                                                    >
-                                                        <X size={11} /> Remove section
-                                                    </button>
-                                                </div>
-
-                                                <div>
-                                                    <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
-                                                        Description <span className="text-gray-400 normal-case">(optional)</span>
-                                                    </p>
-                                                    <Textarea
-                                                        value={section.intro || ''}
-                                                        onChange={e => setSectionIntro(sectionIdx, e.target.value)}
-                                                        rows={4}
-                                                        placeholder="e.g. Graduates find employment in:"
-                                                    />
-                                                </div>
-
-                                                <div>
-                                                    <div className="flex items-center justify-between mb-1.5">
-                                                        <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">
-                                                            Bullets <span className="text-gray-400 normal-case">(optional)</span>
-                                                        </p>
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => addSectionBullet(sectionIdx)}
-                                                            className="text-[10px] font-semibold text-[#436235] hover:text-[#2d4622] flex items-center gap-1"
-                                                        >
-                                                            <Plus size={11} /> Add bullet
-                                                        </button>
-                                                    </div>
-
-                                                    {(section.bullets || []).length === 0 ? (
-                                                        <p className="text-[11px] text-gray-400 italic px-3 py-2 bg-white border border-dashed border-gray-200 rounded-lg">
-                                                            No bullets yet. Leave empty if this section is paragraph-only.
-                                                        </p>
-                                                    ) : (
-                                                        <div className="space-y-2">
-                                                            {section.bullets.map((item, bulletIdx) => (
-                                                                <div key={bulletIdx} className="flex items-center gap-2">
-                                                                    <span className="text-gray-300 flex-shrink-0">•</span>
-                                                                    <Input
-                                                                        value={item}
-                                                                        onChange={e => setSectionBullet(sectionIdx, bulletIdx, e.target.value)}
-                                                                        placeholder={`Bullet ${bulletIdx + 1}`}
-                                                                        className="flex-1"
-                                                                    />
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={() => removeSectionBullet(sectionIdx, bulletIdx)}
-                                                                        className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg flex-shrink-0"
-                                                                        title="Remove bullet"
-                                                                    >
-                                                                        <X size={14} />
-                                                                    </button>
-                                                                </div>
-                                                            ))}
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
-
-                                <p className="text-[10px] text-gray-400 leading-relaxed mt-2">
-                                    Each section: description only = paragraph; bullets only = bullet list; both = description with bullets underneath. Add multiple sections for multi-topic content.
-                                </p>
-                            </div>
+                            <SectionsField
+                                label="Employment Outcomes"
+                                value={data.employment_outcomes}
+                                onChange={(val) => setField('employment_outcomes', val)}
+                                emptyHint="No sections yet. Click 'Add section' to add content. Each section can be a paragraph (description only), a bullet list (bullets only), or both."
+                                footnote="Each section: description only = paragraph; bullets only = bullet list; both = description with bullets underneath. Add multiple sections for multi-topic content."
+                                descriptionPlaceholder="e.g. Graduates find employment in:"
+                            />
                             <div>
                                 <Label>Post Study</Label>
                                 <Textarea value={data.post_study} onChange={e => setField('post_study', e.target.value)} />

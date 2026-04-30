@@ -38,6 +38,7 @@ class Program extends Model
 
     protected $casts = [
         'fee_guide' => 'array',
+        'entry_requirements' => 'array',
         'employment_outcomes' => 'array',
         'other_benefits' => 'array',
     ];

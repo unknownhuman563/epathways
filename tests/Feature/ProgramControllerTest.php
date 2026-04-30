@@ -34,7 +34,9 @@ class ProgramControllerTest extends TestCase
             'credits' => 180,
             'residency_points' => 3,
             'hours_per_week' => 25,
-            'entry_requirements' => 'NCEA Level 2.',
+            'entry_requirements' => [
+                ['intro' => 'NCEA Level 2.', 'bullets' => []],
+            ],
             'specialization' => 'Clinical practice.',
             'employment_outcomes' => [
                 ['intro' => 'Hospitals.', 'bullets' => []],
