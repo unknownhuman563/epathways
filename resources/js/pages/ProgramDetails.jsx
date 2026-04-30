@@ -9,7 +9,7 @@ import ScrollToTop from "@/components/scrolltotop";
 import heroBg from "@assets/Services/education.png";
 import programImg from "@assets/Services/pathways.png"; // Changed from Testimonies/testi1.png to a more relevant education asset
 
-function renderEmploymentOutcomes(value, fallback) {
+function renderSections(value, fallback) {
     let sections = [];
 
     if (value && typeof value === 'object' && !Array.isArray(value)) {
@@ -167,9 +167,9 @@ export default function ProgramDetails({ program }) {
                     {/* Entry Requirements Card */}
                     <div className="bg-white p-8 rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.05)] border border-gray-100 h-full">
                         <h3 className="text-lg font-bold text-[#282728] mb-4">Entry Requirements</h3>
-                        <p className="text-sm text-gray-600 leading-relaxed">
-                            {program?.entry_requirements || 'No entry requirements specified.'}
-                        </p>
+                        <div className="text-sm text-gray-600 leading-relaxed">
+                            {renderSections(program?.entry_requirements, 'No entry requirements specified.')}
+                        </div>
                     </div>
 
                     {/* English Requirements Card */}
@@ -184,7 +184,7 @@ export default function ProgramDetails({ program }) {
                     <div className="bg-white p-8 rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.05)] border border-gray-100 h-full">
                         <h3 className="text-lg font-bold text-[#282728] mb-4">Employment Outcomes</h3>
                         <div className="text-sm text-gray-600 leading-relaxed">
-                            {renderEmploymentOutcomes(program?.employment_outcomes, 'No employment outcomes specified.')}
+                            {renderSections(program?.employment_outcomes, 'No employment outcomes specified.')}
                         </div>
                     </div>
 
@@ -226,9 +226,9 @@ export default function ProgramDetails({ program }) {
                         <div className="min-w-[24px] h-6 bg-[#436235] rounded flex items-center justify-center mt-0.5">
                             <Check className="w-4 h-4 text-white" strokeWidth={3} />
                         </div>
-                        <p className="text-sm text-gray-600 leading-relaxed">
-                            {program?.entry_requirements || 'No entry requirements specified.'}
-                        </p>
+                        <div className="text-sm text-gray-600 leading-relaxed flex-1">
+                            {renderSections(program?.entry_requirements, 'No entry requirements specified.')}
+                        </div>
                     </div>
                 </div>
 
