@@ -86,7 +86,7 @@ class ProgramControllerTest extends TestCase
     {
         $response = $this->actingAs($this->admin())->post('/admin/programs', []);
 
-        $response->assertSessionHasErrors(['title', 'institution', 'level', 'category', 'status']);
+        $response->assertSessionHasErrors(['title', 'level', 'category', 'status']);
     }
 
     public function test_admin_can_update_program(): void

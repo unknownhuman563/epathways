@@ -3,7 +3,7 @@ import { Head, router, useForm } from '@inertiajs/react';
 import {
     Search, Plus, Edit2, Trash2, ChevronDown, GraduationCap,
     BookOpen, FileText, Archive, ArrowUpRight, X, ChevronRight, ChevronLeft,
-    AlertCircle,
+    AlertCircle, AlertTriangle,
 } from 'lucide-react';
 
 const CATEGORY_LABELS = {
@@ -73,9 +73,12 @@ const blankProgram = () => ({
     residency_points: '',
     hours_per_week: '',
     entry_requirements: '',
+    english_requirements: '',
     employment_outcomes: '',
     post_study: '',
     fee_guide: DEFAULT_FEE_REGIONS.map(region => ({ region, fee: '' })),
+    tuition_fee: '',
+    tuition_fee_notes: '',
     insurance_fee: '',
     visa_processing_fee: '',
     living_expense: '',
@@ -191,10 +194,12 @@ function ProgramModal({ open, onClose, editing }) {
                                 <Label required>Title</Label>
                                 <Input value={data.title} onChange={e => setField('title', e.target.value)} placeholder="e.g. NZ Diploma in Enrolled Nursing" />
                             </div>
+                            {/*
                             <div>
                                 <Label required>Institution</Label>
                                 <Input value={data.institution} onChange={e => setField('institution', e.target.value)} placeholder="e.g. Wintec" />
                             </div>
+                            */}
                             <div className="grid grid-cols-3 gap-4">
                                 <div>
                                     <Label required>Level</Label>
@@ -219,15 +224,9 @@ function ProgramModal({ open, onClose, editing }) {
                                     </Select>
                                 </div>
                             </div>
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <Label>Location</Label>
-                                    <Input value={data.location} onChange={e => setField('location', e.target.value)} placeholder="e.g. Auckland" />
-                                </div>
-                                <div>
-                                    <Label>Price Text</Label>
-                                    <Input value={data.price_text} onChange={e => setField('price_text', e.target.value)} placeholder="e.g. Contact for price" />
-                                </div>
+                            <div>
+                                <Label>Location</Label>
+                                <Input value={data.location} onChange={e => setField('location', e.target.value)} placeholder="e.g. Auckland" />
                             </div>
                             <div>
                                 <Label>Banner Image</Label>
@@ -264,7 +263,7 @@ function ProgramModal({ open, onClose, editing }) {
                                 </div>
                             </div>
                             <div>
-                                <Label>Description</Label>
+                                <Label>Program Overview</Label>
                                 <Textarea rows={5} value={data.description} onChange={e => setField('description', e.target.value)} placeholder="About this program..." />
                             </div>
                         </div>
@@ -299,6 +298,10 @@ function ProgramModal({ open, onClose, editing }) {
                                 <Textarea value={data.entry_requirements} onChange={e => setField('entry_requirements', e.target.value)} />
                             </div>
                             <div>
+                                <Label>English Requirements</Label>
+                                <Textarea value={data.english_requirements} onChange={e => setField('english_requirements', e.target.value)} placeholder="e.g. IELTS 6.0 overall, no band less than 5.5" />
+                            </div>
+                            <div>
                                 <Label>Employment Outcomes</Label>
                                 <Textarea value={data.employment_outcomes} onChange={e => setField('employment_outcomes', e.target.value)} />
                             </div>
@@ -307,6 +310,32 @@ function ProgramModal({ open, onClose, editing }) {
                                 <Textarea value={data.post_study} onChange={e => setField('post_study', e.target.value)} />
                             </div>
 
+                            <div className="border border-gray-200 rounded-xl p-4 bg-gray-50/50">
+                                <Label>Tuition Fee</Label>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2">
+                                    <div>
+                                        <Input
+                                            type="number"
+                                            step="0.01"
+                                            min="0"
+                                            value={data.tuition_fee}
+                                            onChange={e => setField('tuition_fee', e.target.value)}
+                                            placeholder="1000.00"
+                                        />
+                                        <p className="text-[10px] text-gray-400 mt-1">Amount in NZD</p>
+                                    </div>
+                                    <div>
+                                        <Input
+                                            value={data.tuition_fee_notes}
+                                            onChange={e => setField('tuition_fee_notes', e.target.value)}
+                                            placeholder="e.g. Partial scholarship available"
+                                        />
+                                        <p className="text-[10px] text-gray-400 mt-1">Notes (e.g. partial, sponsored, per semester)</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/*
                             <div className="border border-gray-200 rounded-xl p-4 bg-gray-50/50">
                                 <Label>Fee Guide (per region)</Label>
                                 <div className="flex justify-between items-center mt-2 mb-1 px-1 pb-2 border-b border-gray-200">
@@ -351,25 +380,30 @@ function ProgramModal({ open, onClose, editing }) {
                                     <Plus size={14} /> Add Region
                                 </button>
                             </div>
+                            */}
 
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <Label>Insurance Fee</Label>
-                                    <Input type="number" step="0.01" min="0" value={data.insurance_fee} onChange={e => setField('insurance_fee', e.target.value)} />
+                                    <Input type="number" step="0.01" min="0" value={data.insurance_fee} onChange={e => setField('insurance_fee', e.target.value)} placeholder="1000.00" />
+                                    <p className="text-[10px] text-gray-400 mt-1">Amount in NZD</p>
                                 </div>
                                 <div>
                                     <Label>Visa Processing Fee</Label>
-                                    <Input type="number" step="0.01" min="0" value={data.visa_processing_fee} onChange={e => setField('visa_processing_fee', e.target.value)} />
+                                    <Input type="number" step="0.01" min="0" value={data.visa_processing_fee} onChange={e => setField('visa_processing_fee', e.target.value)} placeholder="2350.00" />
+                                    <p className="text-[10px] text-gray-400 mt-1">Amount in NZD</p>
                                 </div>
                             </div>
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <Label>Living Expense (yearly)</Label>
-                                    <Input type="number" step="0.01" min="0" value={data.living_expense} onChange={e => setField('living_expense', e.target.value)} />
+                                    <Input type="number" step="0.01" min="0" value={data.living_expense} onChange={e => setField('living_expense', e.target.value)} placeholder="20000.00" />
+                                    <p className="text-[10px] text-gray-400 mt-1">Amount in NZD per year</p>
                                 </div>
                                 <div>
                                     <Label>Accommodation</Label>
                                     <Input value={data.accommodation} onChange={e => setField('accommodation', e.target.value)} placeholder="from $180/week" />
+                                    <p className="text-[10px] text-gray-400 mt-1">Free-text (include currency if relevant)</p>
                                 </div>
                             </div>
                         </div>
@@ -427,6 +461,12 @@ export default function Programs({ programs = [] }) {
     const [showModal, setShowModal] = useState(false);
     const [editing, setEditing] = useState(null);
 
+    const [currentPage, setCurrentPage] = useState(1);
+    const [pageSize, setPageSize] = useState(10);
+
+    const [deleteTarget, setDeleteTarget] = useState(null);
+    const [isDeleting, setIsDeleting] = useState(false);
+
     const openCreate = () => { setEditing(null); setShowModal(true); };
     const openEdit = (program) => { setEditing(program); setShowModal(true); };
     const closeModal = () => { setShowModal(false); setEditing(null); };
@@ -441,6 +481,33 @@ export default function Programs({ programs = [] }) {
         return matchesSearch && matchesStatus && matchesCategory && matchesLevel;
     });
 
+    const totalItems = filtered.length;
+    const totalPages = pageSize === 'all' ? 1 : Math.max(1, Math.ceil(totalItems / pageSize));
+    const startIdx = pageSize === 'all' ? 0 : (currentPage - 1) * pageSize;
+    const endIdx = pageSize === 'all' ? totalItems : Math.min(startIdx + pageSize, totalItems);
+    const pageItems = pageSize === 'all' ? filtered : filtered.slice(startIdx, endIdx);
+
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [search, statusFilter, categoryFilter, levelFilter, pageSize]);
+
+    useEffect(() => {
+        if (currentPage > totalPages) setCurrentPage(totalPages);
+    }, [currentPage, totalPages]);
+
+    const getPageNumbers = () => {
+        const delta = 1;
+        const pages = [];
+        const left = Math.max(2, currentPage - delta);
+        const right = Math.min(totalPages - 1, currentPage + delta);
+        pages.push(1);
+        if (left > 2) pages.push('…');
+        for (let i = left; i <= right; i++) pages.push(i);
+        if (right < totalPages - 1) pages.push('…');
+        if (totalPages > 1) pages.push(totalPages);
+        return pages;
+    };
+
     const summaryCards = [
         { label: 'Total Programs', value: programs.length, icon: <GraduationCap className="w-5 h-5" />, dark: true, filterTo: 'All' },
         { label: 'Published', value: programs.filter(p => p.status === 'published').length, icon: <BookOpen className="w-5 h-5" />, filterTo: 'Published' },
@@ -449,11 +516,25 @@ export default function Programs({ programs = [] }) {
     ];
 
     const handleDelete = (program) => {
-        if (!confirm(`Delete "${program.title}"? This cannot be undone.`)) return;
-        router.delete('/admin/programs/' + program.id, {
-            preserveScroll: true,
-        });
+        setDeleteTarget(program);
         setActiveDropdown(null);
+    };
+
+    const confirmDelete = () => {
+        if (!deleteTarget) return;
+        setIsDeleting(true);
+        router.delete('/admin/programs/' + deleteTarget.id, {
+            preserveScroll: true,
+            onFinish: () => {
+                setIsDeleting(false);
+                setDeleteTarget(null);
+            },
+        });
+    };
+
+    const cancelDelete = () => {
+        if (isDeleting) return;
+        setDeleteTarget(null);
     };
 
     return (
@@ -551,7 +632,7 @@ export default function Programs({ programs = [] }) {
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-50">
-                            {filtered.length === 0 ? (
+                            {pageItems.length === 0 ? (
                                 <tr>
                                     <td colSpan={6} className="px-6 py-16 text-center text-gray-400">
                                         <GraduationCap className="w-10 h-10 mx-auto mb-3 text-gray-200" />
@@ -559,7 +640,7 @@ export default function Programs({ programs = [] }) {
                                         <p className="text-sm mt-1">Try adjusting your filters or create a new program.</p>
                                     </td>
                                 </tr>
-                            ) : filtered.map(program => (
+                            ) : pageItems.map(program => (
                                 <tr key={program.id} className="hover:bg-blue-50/30 transition-colors">
                                     <td className="px-6 py-4">
                                         <div className="flex items-center gap-3">
@@ -625,9 +706,138 @@ export default function Programs({ programs = [] }) {
                         </tbody>
                     </table>
                 </div>
+
+                {totalItems > 0 && (
+                    <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-6 py-4 border-t border-gray-100 bg-gray-50/30">
+                        <div className="flex items-center gap-2 text-sm text-gray-500">
+                            <span>Show</span>
+                            <select
+                                value={pageSize}
+                                onChange={e => setPageSize(e.target.value === 'all' ? 'all' : parseInt(e.target.value, 10))}
+                                className="bg-white border border-gray-200 text-gray-700 text-sm rounded-lg py-1 pl-2 pr-7 outline-none hover:bg-gray-50 cursor-pointer"
+                            >
+                                <option value={10}>10</option>
+                                <option value={25}>25</option>
+                                <option value={50}>50</option>
+                                <option value="all">All</option>
+                            </select>
+                            <span>per page</span>
+                        </div>
+
+                        <div className="text-sm text-gray-500">
+                            Showing <span className="font-semibold text-gray-900">{startIdx + 1}</span> to <span className="font-semibold text-gray-900">{endIdx}</span> of <span className="font-semibold text-gray-900">{totalItems}</span>
+                        </div>
+
+                        {pageSize !== 'all' && totalPages > 1 && (
+                            <div className="flex items-center gap-1">
+                                <button
+                                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                                    disabled={currentPage === 1}
+                                    className="flex items-center gap-1 px-3 py-1.5 border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                                >
+                                    <ChevronLeft size={14} /> Prev
+                                </button>
+                                {getPageNumbers().map((p, i) => (
+                                    p === '…' ? (
+                                        <span key={'ellipsis-' + i} className="px-2 text-gray-400 text-sm">…</span>
+                                    ) : (
+                                        <button
+                                            key={p}
+                                            onClick={() => setCurrentPage(p)}
+                                            className={`min-w-[32px] px-2 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                                                currentPage === p
+                                                    ? 'bg-gray-900 text-white shadow-sm'
+                                                    : 'text-gray-700 hover:bg-gray-100'
+                                            }`}
+                                        >
+                                            {p}
+                                        </button>
+                                    )
+                                ))}
+                                <button
+                                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                                    disabled={currentPage === totalPages}
+                                    className="flex items-center gap-1 px-3 py-1.5 border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                                >
+                                    Next <ChevronRight size={14} />
+                                </button>
+                            </div>
+                        )}
+                    </div>
+                )}
             </div>
 
             <ProgramModal open={showModal} onClose={closeModal} editing={editing} />
+
+            {deleteTarget && (
+                <>
+                    <div
+                        className="fixed inset-0 bg-black/40 backdrop-blur-sm z-40"
+                        onClick={cancelDelete}
+                    />
+                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
+                        <div
+                            className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 pointer-events-auto animate-fade-in-up"
+                            role="dialog"
+                            aria-modal="true"
+                        >
+                            <div className="flex items-start gap-4">
+                                <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
+                                    <AlertTriangle className="w-5 h-5 text-red-600" />
+                                </div>
+                                <div className="flex-1">
+                                    <h3 className="text-lg font-bold text-gray-900">Delete Program?</h3>
+                                    <p className="text-sm text-gray-600 mt-1.5 leading-relaxed">
+                                        You're about to permanently delete{' '}
+                                        <span className="font-semibold text-gray-900">"{deleteTarget.title}"</span>.
+                                        This will also remove its banner image from disk. This action cannot be undone.
+                                    </p>
+                                </div>
+                                <button
+                                    onClick={cancelDelete}
+                                    disabled={isDeleting}
+                                    className="p-1 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors disabled:opacity-50"
+                                    aria-label="Close"
+                                >
+                                    <X size={18} />
+                                </button>
+                            </div>
+                            <div className="flex justify-end gap-2 mt-6">
+                                <button
+                                    onClick={cancelDelete}
+                                    disabled={isDeleting}
+                                    className="px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-100 rounded-xl transition-colors disabled:opacity-50"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={confirmDelete}
+                                    disabled={isDeleting}
+                                    className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white text-sm font-semibold rounded-xl hover:bg-red-700 transition-colors shadow-sm disabled:opacity-60 disabled:cursor-not-allowed"
+                                >
+                                    {isDeleting ? (
+                                        <>
+                                            <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                            Deleting…
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Trash2 size={14} /> Delete Program
+                                        </>
+                                    )}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <style dangerouslySetInnerHTML={{ __html: `
+                        @keyframes fadeInUp {
+                            from { opacity: 0; transform: translateY(8px) scale(0.98); }
+                            to { opacity: 1; transform: translateY(0) scale(1); }
+                        }
+                        .animate-fade-in-up { animation: fadeInUp 0.18s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+                    `}} />
+                </>
+            )}
         </div>
     );
 }

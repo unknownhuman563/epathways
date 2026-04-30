@@ -110,12 +110,20 @@ export default function ProgramDetails({ program }) {
                 </div>
 
                 {/* Info Cards Grid */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-16">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 mb-16">
                     {/* Entry Requirements Card */}
                     <div className="bg-white p-8 rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.05)] border border-gray-100 h-full">
                         <h3 className="text-lg font-bold text-[#282728] mb-4">Entry Requirements</h3>
                         <p className="text-sm text-gray-600 leading-relaxed">
                             {program?.entry_requirements || 'No entry requirements specified.'}
+                        </p>
+                    </div>
+
+                    {/* English Requirements Card */}
+                    <div className="bg-white p-8 rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.05)] border border-gray-100 h-full">
+                        <h3 className="text-lg font-bold text-[#282728] mb-4">English Requirements</h3>
+                        <p className="text-sm text-gray-600 leading-relaxed">
+                            {program?.english_requirements || 'No English requirements specified.'}
                         </p>
                     </div>
 
@@ -153,38 +161,78 @@ export default function ProgramDetails({ program }) {
                 <div>
                     <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-6">Fee Guide</h3>
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-start">
-                        {/* Schools Table */}
+                        {/* Tuition Fee */}
                         <div>
                             <div className="flex justify-between items-center mb-6 pb-2 border-b border-gray-200">
-                                <span className="text-sm font-bold text-[#282728] uppercase tracking-wider">SCHOOLS</span>
-                                <span className="text-sm font-bold text-[#282728] uppercase tracking-wider">FEES</span>
+                                <span className="text-sm font-bold text-[#282728] uppercase tracking-wider">Tuition Fee</span>
+                                <span className="text-sm font-bold text-[#282728] uppercase tracking-wider">Amount (NZD)</span>
                             </div>
 
-                            <div className="space-y-6">
-                                {fees.length === 0 ? (
-                                    <p className="text-sm text-gray-400">No fee data available.</p>
-                                ) : fees.map((row, i) => (
-                                    <div key={i} className="flex justify-between items-center text-sm">
-                                        <span className="text-gray-600">{row.region}</span>
-                                        <span className="font-bold text-[#282728]">{fmt(row.fee)}</span>
-                                    </div>
-                                ))}
+                            <div className="space-y-3">
+                                <div className="flex justify-between items-baseline gap-4">
+                                    <span className="text-gray-600 text-sm flex-shrink-0">Tuition</span>
+                                    <span className="font-bold text-[#282728] text-right">
+                                        <span className="text-2xl tabular-nums">
+                                            {program?.tuition_fee ? fmt(program.tuition_fee) : '—'}
+                                        </span>
+                                        {program?.tuition_fee && program?.tuition_fee_notes && (
+                                            <span className="text-sm font-normal text-gray-500 ml-2">
+                                                ({program.tuition_fee_notes})
+                                            </span>
+                                        )}
+                                    </span>
+                                </div>
+                                {!program?.tuition_fee && (
+                                    <p className="text-sm text-gray-400">No tuition fee specified.</p>
+                                )}
                             </div>
+
+                            {/*
+                            Legacy regional fee guide — kept for backward compatibility with seeded data.
+                            Uncomment the block below to display per-region fees if any are saved on the program.
+                            */}
+                            {/*
+                            <div className="mt-8 pt-6 border-t border-gray-200">
+                                <div className="flex justify-between items-center mb-4 pb-2 border-b border-gray-100">
+                                    <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Schools</span>
+                                    <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Fees</span>
+                                </div>
+                                <div className="space-y-4">
+                                    {fees.length === 0 ? (
+                                        <p className="text-sm text-gray-400">No fee data available.</p>
+                                    ) : fees.map((row, i) => (
+                                        <div key={i} className="flex justify-between items-center text-sm">
+                                            <span className="text-gray-600">{row.region}</span>
+                                            <span className="font-bold text-[#282728]">{fmt(row.fee)}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                            */}
                         </div>
 
                         {/* Cost Card */}
                         <div className="bg-[#282728] text-white rounded-2xl p-8 lg:p-10 shadow-2xl">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-y-10 gap-x-8">
                                 <div>
-                                    <h4 className="text-2xl font-bold mb-1">{fmt(program?.insurance_fee)}</h4>
-                                    <p className="text-[10px] text-gray-400 uppercase tracking-wider">INSURANCE (indicative)</p>
+                                    <div className="flex items-baseline gap-2 mb-1">
+                                        <span className="text-[10px] text-gray-400 font-medium tracking-wider">NZD</span>
+                                        <h4 className="text-2xl font-bold tabular-nums">{fmt(program?.insurance_fee)}</h4>
+                                    </div>
+                                    <p className="text-[10px] text-gray-400 uppercase tracking-wider">Insurance (indicative)</p>
                                 </div>
                                 <div>
-                                    <h4 className="text-2xl font-bold mb-1">{fmt(program?.visa_processing_fee)}</h4>
+                                    <div className="flex items-baseline gap-2 mb-1">
+                                        <span className="text-[10px] text-gray-400 font-medium tracking-wider">NZD</span>
+                                        <h4 className="text-2xl font-bold tabular-nums">{fmt(program?.visa_processing_fee)}</h4>
+                                    </div>
                                     <p className="text-[10px] text-gray-400 uppercase tracking-wider">Visa Processing Fee</p>
                                 </div>
                                 <div>
-                                    <h4 className="text-2xl font-bold mb-1">{fmt(program?.living_expense)}</h4>
+                                    <div className="flex items-baseline gap-2 mb-1">
+                                        <span className="text-[10px] text-gray-400 font-medium tracking-wider">NZD</span>
+                                        <h4 className="text-2xl font-bold tabular-nums">{fmt(program?.living_expense)}</h4>
+                                    </div>
                                     <p className="text-[10px] text-gray-400 uppercase tracking-wider">Living Expense (one year)</p>
                                 </div>
                                 <div>

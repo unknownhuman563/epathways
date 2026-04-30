@@ -211,9 +211,12 @@ export default function ProgramsLevels({ programs = [] }) {
 
                                     <p className="text-sm text-gray-500 mt-1">{program.institution}</p>
 
-                                    <p className="text-[10px] font-bold text-[#436235] mt-2 mb-4">
-                                        Start from {program.price_text || 'Contact for price'}
-                                    </p>
+                                    <div className="text-[10px] font-bold text-[#436235] mt-2 mb-4 leading-snug">
+                                        <p>Start from {program.intake_months || 'TBA'}</p>
+                                        {program.duration_months && (
+                                            <p className="font-normal text-gray-500 mt-0.5">{program.duration_months} months duration</p>
+                                        )}
+                                    </div>
 
                                     <div className="flex justify-end gap-2 mt-auto">
                                         <Link href={`/program-details/${program.id}`} className="px-3 py-1.5 border border-gray-300 text-[10px] font-medium rounded text-gray-600 hover:bg-gray-50 transition-colors flex items-center justify-center">
