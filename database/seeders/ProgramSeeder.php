@@ -97,8 +97,10 @@ class ProgramSeeder extends Seeder
                 'residency_points' => null,
                 'hours_per_week' => null,
                 'entry_requirements' => null,
+                'specialization' => null,
                 'employment_outcomes' => null,
                 'post_study' => null,
+                'other_benefits' => null,
                 'fee_guide' => null,
                 'insurance_fee' => null,
                 'visa_processing_fee' => null,
@@ -121,7 +123,35 @@ class ProgramSeeder extends Seeder
             'residency_points' => 3,
             'hours_per_week' => 25,
             'entry_requirements' => "Completion of equivalent secondary education to New Zealand's NCEA Level 2. Some institutions may require credits in English and Mathematics.",
-            'employment_outcomes' => ["Graduates of New Zealand's Enrolled Nursing diploma generally find employment in hospitals, aged care, mental health and community settings. Starting salaries average NZD \$50,000-\$60,000, rising with experience. While demand exists, some face competition for positions. Expanded scope of practice and flexible work settings improve long-term opportunities and career growth."],
+            'specialization' => 'Clinical practice across multiple care settings — rehabilitation, acute care, and mental health.',
+            'other_benefits' => [
+                'Pathway to Bachelor of Nursing',
+                'Industry placement included',
+                'Free uniform and equipment kit',
+            ],
+            'employment_outcomes' => [
+                [
+                    'intro' => "Graduates of New Zealand's Enrolled Nursing diploma find a wide range of opportunities across the health sector.",
+                    'bullets' => [],
+                ],
+                [
+                    'intro' => 'Common employment settings:',
+                    'bullets' => [
+                        'Hospitals',
+                        'Aged care facilities',
+                        'Mental health services',
+                        'Community health settings',
+                    ],
+                ],
+                [
+                    'intro' => 'Salary and demand:',
+                    'bullets' => [
+                        'Starting salaries average NZD $50,000-$60,000',
+                        'Rises with experience and specialisation',
+                        'Some competition exists for entry-level positions',
+                    ],
+                ],
+            ],
             'post_study' => 'Graduates who complete an Enrolled Nursing qualification (typically a Level 5 Diploma) in New Zealand can apply for a Post Study Work Visa (PSWV). This visa allows them to work for any employer in the health sector, often for up to 1-2 years, provided they have completed a 60-week full-time course and hold a valid registration with the Nursing Council of New Zealand.',
             'fee_guide' => [
                 ['region' => 'India & Subcontinent', 'fee' => 31200],

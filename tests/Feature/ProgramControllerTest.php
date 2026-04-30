@@ -35,8 +35,12 @@ class ProgramControllerTest extends TestCase
             'residency_points' => 3,
             'hours_per_week' => 25,
             'entry_requirements' => 'NCEA Level 2.',
-            'employment_outcomes' => ['Hospitals.'],
+            'specialization' => 'Clinical practice.',
+            'employment_outcomes' => [
+                ['intro' => 'Hospitals.', 'bullets' => []],
+            ],
             'post_study' => 'PSWV.',
+            'other_benefits' => ['Free uniform', 'Industry mentor'],
             'fee_guide' => [
                 ['region' => 'India & Subcontinent', 'fee' => 31200],
                 ['region' => 'Southeast Asia', 'fee' => 31200],
