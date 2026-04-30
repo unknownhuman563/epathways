@@ -1,189 +1,31 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, ChevronDown, ChevronUp, ExternalLink } from 'react-feather';
+import { Search, ChevronDown, ChevronUp } from 'react-feather';
+import { Link } from '@inertiajs/react';
 import Navbar from "@/components/navigation-bar";
 import Footer from "@/components/footer";
 import ScrollToTop from "@/components/scrolltotop";
 
-// Assets
-import educationImg from "@assets/Services/education.png";
-import pathwaysImg from "@assets/Services/pathways.png";
-import agentsImg from "@assets/Services/agents.png";
+import heroBg from "@assets/Services/education.png";
+import placeholderImg from "@assets/Services/education.png";
 
-// Mock data for the accordion - in a real app, this might come from a prop or API
-const programs = [
-    {
-        id: 1,
-        title: "NZ Diploma in Enrolled Nursing",
-        institution: "Southern Institure of Tech",
-        level: 5,
-        type: 'diploma',
-        image: educationImg,
-        baseFee: "31,200",
-        fees: {
-            "India & Subcontinent": "31,200.00",
-            "Southeast Asia": "31,200.00",
-            "China/Malaysia/Singapore": "31,200.00",
-            "LATAM/Europe/ Africa/Middle East": "31,200.00"
-        },
-        additionalCosts: {
-            insurance: "1,000.00",
-            visa: "2,350.00",
-            living: "20,000.00",
-            accommodation: "from $180/week"
-        }
-    },
-    {
-        id: 2,
-        title: "NZ Diploma in Enrolled Nursing",
-        institution: "Wintec",
-        level: 5,
-        type: 'diploma',
-        image: pathwaysImg,
-        baseFee: "26,600",
-        fees: {
-            "India & Subcontinent": "26,600.00",
-            "Southeast Asia": "26,600.00",
-            "China/Malaysia/Singapore": "26,600.00",
-            "LATAM/Europe/ Africa/Middle East": "26,600.00"
-        },
-        additionalCosts: {
-            insurance: "1,000.00",
-            visa: "2,350.00",
-            living: "20,000.00",
-            accommodation: "from $180/week"
-        }
-    },
-    {
-        id: 3,
-        title: "NZ Diploma in Early Childhood Education",
-        institution: "NZTC",
-        level: 5,
-        type: 'diploma',
-        image: educationImg,
-        baseFee: "28,000",
-        fees: {
-            "India & Subcontinent": "28,000.00",
-            "Southeast Asia": "28,000.00",
-            "China/Malaysia/Singapore": "28,000.00",
-            "LATAM/Europe/ Africa/Middle East": "28,000.00"
-        },
-        additionalCosts: {
-            insurance: "1,000.00",
-            visa: "2,350.00",
-            living: "20,000.00",
-            accommodation: "from $180/week"
-        }
-    },
-    {
-        id: 4,
-        title: "NZ Diploma in IT Technical Support",
-        institution: "NZSE",
-        level: 5,
-        type: 'diploma',
-        image: pathwaysImg,
-        baseFee: "20,900",
-        fees: {
-            "India & Subcontinent": "20,900.00",
-            "Southeast Asia": "17,750.00",
-            "China/Malaysia/Singapore": "20,900.00",
-            "LATAM/Europe/ Africa/Middle East": "20,900.00"
-        },
-        additionalCosts: {
-            insurance: "1,000.00",
-            visa: "2,350.00",
-            living: "20,000.00",
-            accommodation: "from $180/week"
-        }
-    },
-    {
-        id: 5,
-        title: "Bachelor of Accounting",
-        institution: "Wintec",
-        level: 7,
-        type: 'bachelor',
-        image: educationImg,
-        baseFee: "26,600",
-        fees: {
-            "India & Subcontinent": "26,600.00/year",
-            "Southeast Asia": "26,600.00/year",
-            "China/Malaysia/Singapore": "26,600.00/year",
-            "LATAM/Europe/ Africa/Middle East": "26,600.00/year"
-        },
-        additionalCosts: {
-            insurance: "1,000.00",
-            visa: "2,350.00",
-            living: "20,000.00",
-            accommodation: "from $180/week"
-        }
-    },
-    {
-        id: 6,
-        title: "Bachelor of Nursing",
-        institution: "Wintec",
-        level: 7,
-        type: 'bachelor',
-        image: pathwaysImg,
-        baseFee: "29,800",
-        fees: {
-            "India & Subcontinent": "29,800.00/year",
-            "Southeast Asia": "29,800.00/year",
-            "China/Malaysia/Singapore": "29,800.00/year",
-            "LATAM/Europe/ Africa/Middle East": "29,800.00/year"
-        },
-        additionalCosts: {
-            insurance: "1,000.00",
-            visa: "2,350.00",
-            living: "20,000.00",
-            accommodation: "from $180/week"
-        }
-    },
-    {
-        id: 7,
-        title: "Master of Business Informatics",
-        institution: "ICL Graduate Business School",
-        level: 9,
-        type: 'masters',
-        image: educationImg,
-        baseFee: "30,460",
-        fees: {
-            "India & Subcontinent": "30,460.00",
-            "Southeast Asia": "29,700.00",
-            "China/Malaysia/Singapore": "32,460.00",
-            "LATAM/Europe/ Africa/Middle East": "27,960.00"
-        },
-        additionalCosts: {
-            insurance: "1,000.00",
-            visa: "2,350.00",
-            living: "20,000.00",
-            accommodation: "from $180/week"
-        }
-    },
-    {
-        id: 8,
-        title: "Master of Management",
-        institution: "ICL Graduate Business School",
-        level: 9,
-        type: 'masters',
-        image: pathwaysImg,
-        baseFee: "32,460",
-        fees: {
-            "India & Subcontinent": "32,460.00",
-            "Southeast Asia": "32,200.00",
-            "China/Malaysia/Singapore": "34,460.00",
-            "LATAM/Europe/ Africa/Middle East": "28,460.00"
-        },
-        additionalCosts: {
-            insurance: "1,000.00",
-            visa: "2,350.00",
-            living: "20,000.00",
-            accommodation: "from $180/week"
-        }
-    }
-];
+const fmt = (val) => {
+    if (val === null || val === undefined || val === '') return '—';
+    const n = Number(val);
+    return Number.isFinite(n)
+        ? n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+        : String(val);
+};
 
-export default function FeeGuide() {
-    const [expandedIds, setExpandedIds] = useState([]); // All items closed by default
+const FILTER_LABELS = {
+    all: 'All Programs',
+    diplomas: 'Diplomas',
+    bachelors: 'Bachelor',
+    masters: 'PG / Masters',
+};
+
+export default function FeeGuide({ programs = [] }) {
+    const [expandedIds, setExpandedIds] = useState([]);
     const [activeFilter, setActiveFilter] = useState('all');
     const [searchQuery, setSearchQuery] = useState('');
 
@@ -193,6 +35,15 @@ export default function FeeGuide() {
         );
     };
 
+    const filtered = programs
+        .filter(p => activeFilter === 'all' || p.category === activeFilter)
+        .filter(p => {
+            const q = searchQuery.toLowerCase();
+            return !q ||
+                (p.title || '').toLowerCase().includes(q) ||
+                (p.institution || '').toLowerCase().includes(q);
+        });
+
     return (
         <div className="min-h-screen bg-[#f8f9fa] font-urbanist overflow-x-hidden">
             <Navbar />
@@ -200,7 +51,7 @@ export default function FeeGuide() {
             {/* Hero Section */}
             <div className="relative h-[40vh] min-h-[350px] w-full overflow-hidden">
                 <img
-                    src={educationImg}
+                    src={heroBg}
                     alt="University Campus"
                     className="absolute inset-0 w-full h-full object-cover"
                 />
@@ -211,15 +62,12 @@ export default function FeeGuide() {
                 </div>
             </div>
 
-            {/* Main Content Container */}
             <div className="container mx-auto px-4 py-16 max-w-4xl">
-
-                {/* Centered Search Bar */}
                 <div className="flex justify-center mb-20">
                     <div className="relative w-full max-w-xl">
                         <input
                             type="text"
-                            placeholder="Search programs, levels..."
+                            placeholder="Search programs, institutions..."
                             className="w-full px-8 py-4 rounded-full border border-gray-200 bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-[#436235]/10 focus:border-[#436235] transition-all text-base placeholder-gray-400"
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
@@ -228,130 +76,163 @@ export default function FeeGuide() {
                     </div>
                 </div>
 
-                {/* Title and Filters Row */}
                 <div className="flex flex-col md:flex-row justify-between items-center mb-12 border-b border-gray-100 pb-2">
                     <div className="text-base font-medium text-[#282728] uppercase tracking-[0.2em] mb-4 md:mb-0">
                         Fee Guide
                     </div>
 
-                    {/* Filter Tabs */}
                     <div className="flex gap-8">
-                        {['all', 'diploma', 'bachelor', 'masters'].map((filter) => (
+                        {Object.keys(FILTER_LABELS).map((key) => (
                             <button
-                                key={filter}
-                                onClick={() => setActiveFilter(filter)}
-                                className={`text-[10px] font-bold uppercase tracking-[0.15em] pb-3 transition-all border-b-2 ${activeFilter === filter
+                                key={key}
+                                onClick={() => setActiveFilter(key)}
+                                className={`text-[10px] font-bold uppercase tracking-[0.15em] pb-3 transition-all border-b-2 ${activeFilter === key
                                     ? 'text-[#436235] border-[#436235]'
                                     : 'text-gray-400 border-transparent hover:text-gray-600'
                                     }`}
                             >
-                                {filter === 'all' ? 'All Programs' : filter}
+                                {FILTER_LABELS[key]}
                             </button>
                         ))}
                     </div>
                 </div>
 
-                {/* Transitions List */}
                 <div className="space-y-4">
-                    {programs
-                        .filter(p => activeFilter === 'all' || p.type === activeFilter)
-                        .filter(p => p.title.toLowerCase().includes(searchQuery.toLowerCase()) || p.institution.toLowerCase().includes(searchQuery.toLowerCase()))
-                        .map((program) => {
-                            const isExpanded = expandedIds.includes(program.id);
-                            return (
+                    {filtered.length === 0 ? (
+                        <div className="text-center py-16 text-gray-400">
+                            <p className="text-sm">No programs found matching your filters.</p>
+                        </div>
+                    ) : filtered.map((program) => {
+                        const isExpanded = expandedIds.includes(program.id);
+                        return (
+                            <div
+                                key={program.id}
+                                className="bg-white rounded-xl overflow-hidden shadow-[0_2px_15px_-3px_rgba(0,0,0,0.07),0_10px_20px_-2px_rgba(0,0,0,0.04)] border border-gray-100 transition-all duration-300"
+                            >
                                 <div
-                                    key={program.id}
-                                    className="bg-white rounded-xl overflow-hidden shadow-[0_2px_15px_-3px_rgba(0,0,0,0.07),0_10px_20px_-2px_rgba(0,0,0,0.04)] border border-gray-100 transition-all duration-300"
+                                    className="p-4 flex items-center cursor-pointer gap-4"
+                                    onClick={() => toggleAccordion(program.id)}
                                 >
-                                    {/* Header */}
-                                    <div
-                                        className="p-4 flex items-center cursor-pointer gap-4"
-                                        onClick={() => toggleAccordion(program.id)}
-                                    >
-                                        <div className="w-16 h-12 rounded-lg overflow-hidden flex-shrink-0">
-                                            <img src={program.image} className="w-full h-full object-cover" alt={program.title} />
+                                    <div className="w-16 h-12 rounded-lg overflow-hidden flex-shrink-0 bg-gray-100">
+                                        <img
+                                            src={program.image_url || placeholderImg}
+                                            className="w-full h-full object-cover"
+                                            alt={program.title}
+                                        />
+                                    </div>
+                                    <div className="flex-grow min-w-0">
+                                        <div className="flex items-center gap-2 mb-0.5 flex-wrap">
+                                            <h3 className="text-base font-bold text-[#282728] truncate">{program.title}</h3>
+                                            <span className="bg-[#436235] text-white text-[8px] font-bold px-1.5 py-0.5 rounded leading-none flex-shrink-0">
+                                                Level {program.level}
+                                            </span>
                                         </div>
-                                        <div className="flex-grow">
-                                            <div className="flex items-center gap-2 mb-0.5">
-                                                <h3 className="text-base font-bold text-[#282728]">{program.title}</h3>
-                                                <span className="bg-[#436235] text-white text-[8px] font-bold px-1.5 py-0.5 rounded leading-none">
-                                                    Level {program.level}
-                                                </span>
-                                            </div>
-                                            <p className="text-[10px] text-gray-400 font-medium">{program.institution}</p>
+                                        <p className="text-[10px] text-gray-400 font-medium">{program.institution || '—'}</p>
+                                    </div>
+                                    <div className="text-right flex items-center gap-4 flex-shrink-0">
+                                        <div className="hidden sm:block">
+                                            <p className="text-[10px] text-gray-500 font-medium leading-none mb-1">Start from</p>
+                                            <p className="text-sm font-bold text-gray-800 tabular-nums">
+                                                {program.tuition_fee ? fmt(program.tuition_fee) : 'TBA'}
+                                                {program.tuition_fee && program.tuition_fee_notes && (
+                                                    <span className="ml-1 text-[10px] font-normal text-gray-500">
+                                                        ({program.tuition_fee_notes})
+                                                    </span>
+                                                )}
+                                            </p>
                                         </div>
-                                        <div className="text-right flex items-center gap-4">
-                                            <div className="hidden sm:block">
-                                                <p className="text-[10px] text-gray-500 font-medium leading-none mb-1">Start from</p>
-                                                <p className="text-sm font-bold text-gray-800">{program.baseFee}!</p>
-                                            </div>
-                                            <div className="text-gray-400">
-                                                {isExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
-                                            </div>
+                                        <div className="text-gray-400">
+                                            {isExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
                                         </div>
                                     </div>
+                                </div>
 
-                                    {/* Expanded Content */}
-                                    <AnimatePresence>
-                                        {isExpanded && (
-                                            <motion.div
-                                                initial={{ height: 0, opacity: 0 }}
-                                                animate={{ height: "auto", opacity: 1 }}
-                                                exit={{ height: 0, opacity: 0 }}
-                                                transition={{ duration: 0.3, ease: "easeInOut" }}
-                                            >
-                                                <div className="px-6 pb-8 pt-4 border-t border-gray-50">
-                                                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 mt-4">
-                                                        {/* Regional Fees */}
-                                                        <div className="lg:col-span-5 bg-gray-50/50 p-6 rounded-2xl border border-gray-100">
-                                                            <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-6">Total School Fees</h4>
-                                                            <div className="space-y-4">
-                                                                {Object.entries(program.fees).map(([region, fee]) => (
-                                                                    <div key={region} className="flex justify-between items-center text-[11px]">
-                                                                        <span className="text-gray-500 font-medium">{region}</span>
-                                                                        <span className="font-bold text-[#282728]">{fee}</span>
-                                                                    </div>
-                                                                ))}
-                                                            </div>
+                                <AnimatePresence>
+                                    {isExpanded && (
+                                        <motion.div
+                                            initial={{ height: 0, opacity: 0 }}
+                                            animate={{ height: "auto", opacity: 1 }}
+                                            exit={{ height: 0, opacity: 0 }}
+                                            transition={{ duration: 0.3, ease: "easeInOut" }}
+                                            style={{ overflow: 'hidden' }}
+                                        >
+                                            <div className="px-6 pb-8 pt-4 border-t border-gray-50">
+                                                <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 mt-4">
+                                                    {/* Tuition Fee */}
+                                                    <div className="lg:col-span-5 bg-gray-50/50 p-6 rounded-2xl border border-gray-100">
+                                                        <div className="flex justify-between items-center mb-6 pb-2 border-b border-gray-200">
+                                                            <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Tuition Fee</span>
+                                                            <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Amount (NZD)</span>
                                                         </div>
 
-                                                        {/* Additional Costs */}
-                                                        <div className="lg:col-span-7 grid grid-cols-2 gap-y-10 gap-x-8 py-4">
-                                                            <div>
-                                                                <div className="text-xl font-bold text-[#282728] mb-1 tabular-nums">{program.additionalCosts.insurance}</div>
-                                                                <p className="text-[10px] text-gray-400 uppercase tracking-[0.15em] font-medium">Insurance (indicative)</p>
+                                                        <div className="space-y-3">
+                                                            <div className="flex justify-between items-baseline gap-3">
+                                                                <span className="text-gray-600 text-sm flex-shrink-0">Tuition</span>
+                                                                <span className="font-bold text-[#282728] text-right">
+                                                                    <span className="text-xl tabular-nums">
+                                                                        {program.tuition_fee ? fmt(program.tuition_fee) : '—'}
+                                                                    </span>
+                                                                    {program.tuition_fee && program.tuition_fee_notes && (
+                                                                        <span className="text-xs font-normal text-gray-500 ml-2">
+                                                                            ({program.tuition_fee_notes})
+                                                                        </span>
+                                                                    )}
+                                                                </span>
                                                             </div>
-                                                            <div>
-                                                                <div className="text-xl font-bold text-[#282728] mb-1 tabular-nums">{program.additionalCosts.visa}</div>
-                                                                <p className="text-[10px] text-gray-400 uppercase tracking-[0.15em] font-medium">Visa Processing Fee</p>
-                                                            </div>
-                                                            <div>
-                                                                <div className="text-xl font-bold text-[#282728] mb-1 tabular-nums">{program.additionalCosts.living}</div>
-                                                                <p className="text-[10px] text-gray-400 uppercase tracking-[0.15em] font-medium">Living Expense (one year)</p>
-                                                            </div>
-                                                            <div>
-                                                                <div className="text-xl font-bold text-[#282728] mb-1 tabular-nums">{program.additionalCosts.accommodation}</div>
-                                                                <p className="text-[10px] text-gray-400 uppercase tracking-[0.15em] font-medium">Accommodation (single occupancy)</p>
-                                                            </div>
+                                                            {!program.tuition_fee && (
+                                                                <p className="text-xs text-gray-400">No tuition fee specified.</p>
+                                                            )}
                                                         </div>
                                                     </div>
 
-                                                    {/* Action Buttons */}
-                                                    <div className="flex justify-end gap-3 mt-10">
-                                                        <a href="/program-details" className="px-5 py-2 border border-gray-200 text-[10px] font-bold rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-50 transition-all uppercase tracking-widest">
-                                                            Details
-                                                        </a>
-                                                        <button className="px-6 py-2 bg-[#1a1a1a] text-white text-[10px] font-bold rounded-lg hover:bg-black transition-all shadow-md active:scale-95 uppercase tracking-widest">
-                                                            Book Now
-                                                        </button>
+                                                    {/* Additional Costs */}
+                                                    <div className="lg:col-span-7 grid grid-cols-2 gap-y-10 gap-x-8 py-4">
+                                                        <div>
+                                                            <div className="flex items-baseline gap-2 mb-1">
+                                                                <span className="text-[10px] text-gray-400 font-medium tracking-wider">NZD</span>
+                                                                <div className="text-xl font-bold text-[#282728] tabular-nums">{fmt(program.insurance_fee)}</div>
+                                                            </div>
+                                                            <p className="text-[10px] text-gray-400 uppercase tracking-[0.15em] font-medium">Insurance (indicative)</p>
+                                                        </div>
+                                                        <div>
+                                                            <div className="flex items-baseline gap-2 mb-1">
+                                                                <span className="text-[10px] text-gray-400 font-medium tracking-wider">NZD</span>
+                                                                <div className="text-xl font-bold text-[#282728] tabular-nums">{fmt(program.visa_processing_fee)}</div>
+                                                            </div>
+                                                            <p className="text-[10px] text-gray-400 uppercase tracking-[0.15em] font-medium">Visa Processing Fee</p>
+                                                        </div>
+                                                        <div>
+                                                            <div className="flex items-baseline gap-2 mb-1">
+                                                                <span className="text-[10px] text-gray-400 font-medium tracking-wider">NZD</span>
+                                                                <div className="text-xl font-bold text-[#282728] tabular-nums">{fmt(program.living_expense)}</div>
+                                                            </div>
+                                                            <p className="text-[10px] text-gray-400 uppercase tracking-[0.15em] font-medium">Living Expense (one year)</p>
+                                                        </div>
+                                                        <div>
+                                                            <div className="text-xl font-bold text-[#282728] mb-1">{program.accommodation || '—'}</div>
+                                                            <p className="text-[10px] text-gray-400 uppercase tracking-[0.15em] font-medium">Accommodation (single occupancy)</p>
+                                                        </div>
                                                     </div>
                                                 </div>
-                                            </motion.div>
-                                        )}
-                                    </AnimatePresence>
-                                </div>
-                            );
-                        })}
+
+                                                <div className="flex justify-end gap-3 mt-10">
+                                                    <Link
+                                                        href={`/program-details/${program.id}`}
+                                                        className="px-5 py-2 border border-gray-200 text-[10px] font-bold rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-50 transition-all uppercase tracking-widest"
+                                                    >
+                                                        Details
+                                                    </Link>
+                                                    <button className="px-6 py-2 bg-[#1a1a1a] text-white text-[10px] font-bold rounded-lg hover:bg-black transition-all shadow-md active:scale-95 uppercase tracking-widest">
+                                                        Book Now
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </motion.div>
+                                    )}
+                                </AnimatePresence>
+                            </div>
+                        );
+                    })}
                 </div>
             </div>
 

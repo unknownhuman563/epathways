@@ -1,99 +1,24 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Search, ArrowRight } from 'react-feather';
+import { Link } from '@inertiajs/react';
 import Navbar from "@/components/navigation-bar";
 import Footer from "@/components/footer";
 import ScrollToTop from "@/components/scrolltotop";
 
 // Assets
 import heroBg from "@assets/Services/education.png";
-import educationImg from "@assets/Services/education.png";
-import pathwaysImg from "@assets/Services/pathways.png";
-import agentsImg from "@assets/Services/agents.png";
+import placeholderImg from "@assets/Services/education.png";
 
-// Comprehensive Program Data
-const programsData = [
-    // Level 5
-    { id: 1, level: "Level 5", title: "NZ Diploma in Enrolled Nursing", institution: "Southern Institute of Tech", price: "Contact for price", category: "diplomas", image: educationImg },
-    { id: 2, level: "Level 5", title: "NZ Diploma in Enrolled Nursing", institution: "Wintec", price: "Contact for price", category: "diplomas", image: pathwaysImg },
-    { id: 3, level: "Level 5", title: "NZ Diploma in Early Childhood Education", institution: "NZTC", price: "Contact for price", category: "diplomas", image: educationImg },
-    { id: 4, level: "Level 5", title: "New Zealand Diploma in Hospitality Management", institution: "PIHMS", price: "Contact for price", category: "diplomas", image: pathwaysImg },
-    { id: 5, level: "Level 5", title: "NZ Diploma in IT Technical Support", institution: "NZSE", price: "Contact for price", category: "diplomas", image: educationImg },
-    { id: 6, level: "Level 5", title: "NZ Diploma in IT Technical Support", institution: "International College of Auckland", price: "Contact for price", category: "diplomas", image: pathwaysImg },
 
-    // Level 6
-    { id: 7, level: "Level 6", title: "NZ Diploma in Engineering - Electronics", institution: "ICA", price: "Contact for price", category: "diplomas", image: educationImg },
-    { id: 8, level: "Level 6", title: "NZ Diploma in Engineering - Electrical", institution: "ICA", price: "Contact for price", category: "diplomas", image: pathwaysImg },
-    { id: 9, level: "Level 6", title: "NZ Diploma in Engineering - Electronics", institution: "NZSE", price: "Contact for price", category: "diplomas", image: educationImg },
-    { id: 10, level: "Level 6", title: "NZ Diploma in Engineering - Civil/Mechanical", institution: "Southern Institute of Tech", price: "Contact for price", category: "diplomas", image: pathwaysImg },
-
-    // Level 7
-    { id: 11, level: "Level 7", title: "Bachelor of Accounting", institution: "Wintec", price: "180,000!", category: "bachelors", image: educationImg },
-    { id: 12, level: "Level 7", title: "Bachelor of Nursing", institution: "Wintec", price: "180,000!", category: "bachelors", image: pathwaysImg },
-    { id: 13, level: "Level 7", title: "Bachelor of Applied Hotel Management", institution: "PIHMS", price: "180,000!", category: "bachelors", image: educationImg },
-    { id: 14, level: "Level 7", title: "Bachelor of Applied Information Technology", institution: "Whitecliffe", price: "180,000!", category: "bachelors", image: pathwaysImg },
-    { id: 15, level: "Level 7", title: "Bachelors of Applied Information Technology", institution: "Wintec", price: "180,000!", category: "bachelors", image: educationImg },
-    { id: 16, level: "Level 7", title: "Bachelor of Computer and Information Sciences", institution: "AUT", price: "180,000!", category: "bachelors", image: pathwaysImg },
-    { id: 17, level: "Level 7", title: "Bachelor of Engineering Technology", institution: "AUT", price: "180,000!", category: "bachelors", image: educationImg },
-    { id: 18, level: "Level 7", title: "Bachelor of Engineering (Honours)", institution: "AUT", price: "180,000!", category: "bachelors", image: pathwaysImg },
-    { id: 19, level: "Level 7", title: "Bachelor of Software Engineering", institution: "Yoobee", price: "180,000!", category: "bachelors", image: educationImg },
-    { id: 20, level: "Level 7", title: "Bachelor of Engineering Technology", institution: "Wintec", price: "180,000!", category: "bachelors", image: pathwaysImg },
-    { id: 21, level: "Level 7", title: "Bachelor of Applied Management", institution: "Wintec", price: "180,000!", category: "bachelors", image: educationImg },
-    { id: 22, level: "Level 7", title: "Bachelor of Applied Management", institution: "Future Skills", price: "180,000!", category: "bachelors", image: pathwaysImg },
-    { id: 23, level: "Level 7", title: "Bachelors in Applied Management", institution: "ATMC", price: "180,000!", category: "bachelors", image: educationImg },
-    { id: 24, level: "Level 7", title: "Bachelor of Teaching (ECE)", institution: "NZTC", price: "180,000!", category: "bachelors", image: pathwaysImg },
-    { id: 25, level: "Level 7", title: "Bachelor of Teaching (ECE)", institution: "Te Rito Maioha", price: "180,000!", category: "bachelors", image: educationImg },
-    { id: 26, level: "Level 7", title: "Bachelor of Teaching (Primary)", institution: "Te Rito Maioha", price: "180,000!", category: "bachelors", image: pathwaysImg },
-
-    // Level 7 Diplomas/Graduate Diplomas
-    { id: 27, level: "Level 7", title: "Graduate Diploma in Teaching (ECE)", institution: "ICL Graduate Business School", price: "Contact for price", category: "diplomas", image: educationImg },
-    { id: 28, level: "Level 7", title: "Graduate Diploma in Teaching (ECE)", institution: "NZTC", price: "Contact for price", category: "diplomas", image: pathwaysImg },
-    { id: 29, level: "Level 7", title: "NZ Diploma in Healthcare Management", institution: "ATMC", price: "Contact for price", category: "diplomas", image: educationImg },
-    { id: 30, level: "Level 7", title: "Diploma in Applied Network and Cloud Tech", institution: "NZSE", price: "Contact for price", category: "diplomas", image: pathwaysImg },
-    { id: 31, level: "Level 7", title: "Diploma in Community Healthcare and Support", institution: "NZSE", price: "Contact for price", category: "diplomas", image: educationImg },
-    { id: 32, level: "Level 7", title: "Diploma in Software Development", institution: "ATMC", price: "Contact for price", category: "diplomas", image: pathwaysImg },
-    { id: 33, level: "Level 7", title: "Graduate Diploma in Teaching (ECE)", institution: "NZTC", price: "Contact for price", category: "diplomas", image: educationImg },
-    { id: 34, level: "Level 7", title: "Graduate Diploma of Teaching (Primary)", institution: "Te Rito Maioha", price: "Contact for price", category: "diplomas", image: pathwaysImg },
-    { id: 35, level: "Level 7", title: "Graduate Diploma of Teaching (ECE)", institution: "Te Rito Maioha", price: "Contact for price", category: "diplomas", image: educationImg },
-
-    // Level 8
-    { id: 36, level: "Level 8", title: "Postgraduate Diploma in AI Integrated Solutions", institution: "Future Skills", price: "Contact for price", category: "masters", image: pathwaysImg }, // Grouping PG with Masters for simplicity or create separate? Using 'masters' as PG/Masters bucket for now to keep filters simple, or add 'postgraduate'
-    { id: 37, level: "Level 8", title: "Postgraduate Diploma in Applied Hotel Management", institution: "PIHMS", price: "Contact for price", category: "masters", image: educationImg },
-    { id: 38, level: "Level 8", title: "Postgraduate Diploma in Healthcare (Addiction Support)", institution: "NZSE", price: "Contact for price", category: "masters", image: pathwaysImg },
-    { id: 39, level: "Level 8", title: "Postgraduate Certificate in Business Administration (PGCBA)", institution: "Auckland Institute of Studies", price: "Contact for price", category: "masters", image: educationImg },
-
-    // Level 9
-    { id: 40, level: "Level 9", title: "Master of Business Informatics", institution: "ICL Graduate Business School", price: "Contact for price", category: "masters", image: pathwaysImg },
-    { id: 41, level: "Level 9", title: "Master of Business Informatics (Thesis)", institution: "ICL Graduate Business School", price: "Contact for price", category: "masters", image: educationImg },
-    { id: 42, level: "Level 9", title: "Master of Management", institution: "ICL Graduate Business School", price: "Contact for price", category: "masters", image: pathwaysImg },
-    { id: 43, level: "Level 9", title: "Master of Management (Thesis)", institution: "ICL Graduate Business School", price: "Contact for price", category: "masters", image: educationImg },
-    { id: 44, level: "Level 9", title: "Master of Management (Healthcare)", institution: "ICL Graduate Business School", price: "Contact for price", category: "masters", image: pathwaysImg },
-    { id: 45, level: "Level 9", title: "Master of Business Administration", institution: "Auckland Institute of Studies", price: "Contact for price", category: "masters", image: educationImg },
-    { id: 46, level: "Level 9", title: "Master of Information Technology", institution: "Auckland Institute of Studies", price: "Contact for price", category: "masters", image: pathwaysImg },
-    { id: 47, level: "Level 9", title: "Master of Applied Hotel Management", institution: "PIHMS", price: "Contact for price", category: "masters", image: educationImg },
-    { id: 48, level: "Level 9", title: "Master of Business Informatics", institution: "Yoobee", price: "Contact for price", category: "masters", image: pathwaysImg },
-    { id: 49, level: "Level 9", title: "Master of Software Engineering", institution: "Yoobee", price: "Contact for price", category: "masters", image: educationImg },
-    { id: 50, level: "Level 9", title: "Master of Information Technology", institution: "Whitecliffe", price: "Contact for price", category: "masters", image: pathwaysImg },
-    { id: 51, level: "Level 9", title: "Master of Teaching and Learning (ECE)", institution: "NZTC", price: "Contact for price", category: "masters", image: educationImg },
-    { id: 52, level: "Level 9", title: "Master of Applied Management", institution: "Southern Institute of Tech", price: "Contact for price", category: "masters", image: pathwaysImg },
-    { id: 53, level: "Level 9", title: "Master of Information Technology", institution: "Southern Institute of Tech", price: "Contact for price", category: "masters", image: educationImg },
-    { id: 54, level: "Level 9", title: "Master of Applied Health Sciences (Rehab)", institution: "Southern Institute of Tech", price: "Contact for price", category: "masters", image: pathwaysImg },
-    { id: 55, level: "Level 9", title: "Master of Applied Management", institution: "Wintec", price: "Contact for price", category: "masters", image: educationImg },
-    { id: 56, level: "Level 9", title: "Master of Applied Information Technology", institution: "Wintec", price: "Contact for price", category: "masters", image: pathwaysImg },
-    { id: 57, level: "Level 9", title: "Master of Nursing Science (Pre-Registration)", institution: "Wintec", price: "Contact for price", category: "masters", image: educationImg },
-    { id: 58, level: "Level 9", title: "Master of AI Integrated IT Solutions", institution: "Future Skills", price: "Contact for price", category: "masters", image: pathwaysImg },
-    { id: 59, level: "Level 9", title: "Master of Nursing Science", institution: "Eastern Institute of Tech", price: "Contact for price", category: "masters", image: educationImg },
-    { id: 60, level: "Level 9", title: "Master of Applied Management", institution: "Future Skills", price: "Contact for price", category: "masters", image: pathwaysImg },
-];
-
-export default function ProgramsLevels() {
+export default function ProgramsLevels({ programs = [] }) {
     const [searchQuery, setSearchQuery] = useState('');
     const [activeFilter, setActiveFilter] = useState('all');
     const [visibleCount, setVisibleCount] = useState(8); // Start with 8 visible cards
 
-    const filteredPrograms = programsData.filter(program => {
-        const matchesSearch = program.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            program.institution.toLowerCase().includes(searchQuery.toLowerCase());
+    const filteredPrograms = programs.filter(program => {
+        const matchesSearch = (program.title || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+            (program.institution || '').toLowerCase().includes(searchQuery.toLowerCase());
         const matchesFilter = activeFilter === 'all' || program.category === activeFilter;
         return matchesSearch && matchesFilter;
     });
@@ -265,7 +190,7 @@ export default function ProgramsLevels() {
                                 {/* Program Image */}
                                 <div className="relative h-48 w-full rounded-xl overflow-hidden">
                                     <img
-                                        src={program.image}
+                                        src={program.image_url || placeholderImg}
                                         alt={program.title}
                                         className="w-full h-full object-cover transform group-hover:scale-105 transition-transform duration-500"
                                     />
@@ -274,7 +199,7 @@ export default function ProgramsLevels() {
 
                                     {/* Level Badge - Green Pill */}
                                     <div className="absolute top-3 right-3 bg-[#436235] text-white text-[10px] font-medium px-2.5 py-1 rounded shadow-sm">
-                                        {program.level}
+                                        Level {program.level}
                                     </div>
                                 </div>
 
@@ -286,14 +211,17 @@ export default function ProgramsLevels() {
 
                                     <p className="text-sm text-gray-500 mt-1">{program.institution}</p>
 
-                                    <p className="text-[10px] font-bold text-[#436235] mt-2 mb-4">
-                                        Start from {program.price}
-                                    </p>
+                                    <div className="text-[10px] font-bold text-[#436235] mt-2 mb-4 leading-snug">
+                                        <p>Start from {program.intake_months || 'TBA'}</p>
+                                        {program.duration_months && (
+                                            <p className="font-normal text-gray-500 mt-0.5">{program.duration_months} months duration</p>
+                                        )}
+                                    </div>
 
                                     <div className="flex justify-end gap-2 mt-auto">
-                                        <a href="/program-details" className="px-3 py-1.5 border border-gray-300 text-[10px] font-medium rounded text-gray-600 hover:bg-gray-50 transition-colors flex items-center justify-center">
+                                        <Link href={`/program-details/${program.id}`} className="px-3 py-1.5 border border-gray-300 text-[10px] font-medium rounded text-gray-600 hover:bg-gray-50 transition-colors flex items-center justify-center">
                                             Details
-                                        </a>
+                                        </Link>
                                         <button className="px-3 py-1.5 bg-[#1a1a1a] text-white text-[10px] font-medium rounded hover:bg-black transition-colors shadow-sm">
                                             Book Now
                                         </button>
