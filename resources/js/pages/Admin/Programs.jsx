@@ -47,12 +47,12 @@ function Select({ children, ...props }) {
     );
 }
 
-function Textarea(props) {
+function Textarea({ className, rows, ...rest }) {
     return (
         <textarea
-            {...props}
-            rows={props.rows || 3}
-            className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-gray-900 transition-all placeholder-gray-400 resize-none"
+            {...rest}
+            rows={rows || 3}
+            className={`w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-gray-900 transition-all placeholder-gray-400 resize-y min-h-[80px] ${className || ''}`}
         />
     );
 }
@@ -422,7 +422,7 @@ function ProgramModal({ open, onClose, editing }) {
                                                     <Textarea
                                                         value={section.intro || ''}
                                                         onChange={e => setSectionIntro(sectionIdx, e.target.value)}
-                                                        rows={2}
+                                                        rows={4}
                                                         placeholder="e.g. Graduates find employment in:"
                                                     />
                                                 </div>
