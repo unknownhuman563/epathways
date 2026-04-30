@@ -253,6 +253,39 @@ icacls "$env:USERPROFILE\.ssh\id_ed25519" /inheritance:r /grant:r "${env:USERNAM
 
 Now `ssh deploy@76.13.193.63` works from either WSL or PowerShell.
 
+### 1.11 — Add NOPASSWD sudoers rule for deploy user (REQUIRED for CI/CD perm-fix step)
+
+The CI/CD post-deploy step runs `sudo chown` / `sudo find ... -exec chmod` on `storage/` and `bootstrap/cache/` to restore permissions that rsync's `-p` flag wipes (see [Lessons Learned → rsync `-p` wipes storage perms](#rsync--p-wipes-storage-perms-on-every-deploy)). GitHub Actions runs deploys non-interactively, so sudo cannot prompt for a password — it would hang and time out.
+
+We need a narrow sudoers rule allowing **only** the three commands the workflow uses (`chown`, `find`, `chmod`) to run without password.
+
+As **root** on the VPS:
+
+```bash
+printf 'deploy ALL=(ALL) NOPASSWD: /usr/bin/chown, /usr/bin/find, /usr/bin/chmod\n' > /etc/sudoers.d/deploy-perm-fix
+chmod 440 /etc/sudoers.d/deploy-perm-fix
+visudo -c -f /etc/sudoers.d/deploy-perm-fix
+```
+
+Expected output of `visudo -c`:
+```
+/etc/sudoers.d/deploy-perm-fix: parsed OK
+```
+
+> **Why `printf` and not heredoc:** PowerShell SSH and many terminal pasters add leading whitespace, which corrupts heredoc-based file creation. `printf` is a single line with explicit `\n`, immune to paste indentation. See [Lessons Learned → PowerShell SSH paste indents pasted text](#powershell-ssh-paste-indents-pasted-text).
+
+Verify deploy can now run sudo without password:
+
+```bash
+sudo -u deploy sudo -n true
+```
+
+Expected: silent (no output). If you see `sudo: a password is required`, the sudoers file isn't being picked up — check the file exists, is mode `440`, and `visudo -c` reports `parsed OK`.
+
+> **Single VPS hosts both environments**, so this one sudoers file applies to both staging and production deploys. You don't need to repeat this for production setup.
+
+> **Security boundary unchanged:** `deploy` already has full sudo with password (per §1.5: `usermod -aG sudo deploy`). This rule just removes the password prompt for three specific tools used by the deploy script. Anyone who could already become root can still become root.
+
 ---
 
 ## Phase 2: Stack Installation
@@ -551,11 +584,28 @@ jobs:
             --exclude='storage/framework/cache/*' \
             --exclude='storage/framework/sessions/*' \
             --exclude='storage/framework/views/*' \
+            --exclude='storage/app/public/*' \
+            --exclude='storage/app/private/*' \
             ./ ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/var/www/epathways-staging/
 
       - name: Run post-deploy commands on VPS
-        run: ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} 'cd /var/www/epathways-staging && php artisan migrate --force && php artisan config:cache && php artisan view:cache && php artisan queue:restart'
+        run: |
+          ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} '
+            cd /var/www/epathways-staging &&
+            sudo chown -R deploy:www-data storage bootstrap/cache &&
+            sudo find storage bootstrap/cache -type d -exec chmod 2775 {} \; &&
+            sudo find storage bootstrap/cache -type f -exec chmod 664 {} \; &&
+            php artisan storage:link &&
+            php artisan migrate --force &&
+            php artisan config:cache &&
+            php artisan view:cache &&
+            php artisan queue:restart
+          '
 ```
+
+> **CRITICAL — about the storage excludes:** `storage/app/public/*` and `storage/app/private/*` exclusions are **non-negotiable** for production safety. Without them, the `--delete` flag would attempt to remove user-uploaded files (passport PDFs, etc.) on every deploy because they don't exist in the source repo. We learned this the hard way — see [Lessons Learned](#lessons-learned).
+
+> **CRITICAL — about the post-deploy chown/chmod and storage:link:** rsync's `-p` flag preserves source-side permissions on directories. The source (GitHub Actions runner) has default `755` on `storage/app/public/`, so every deploy wipes the `2775` setgid bit and group-write that PHP-FPM (`www-data`) needs to create upload subdirectories. Symptom: 500 error on first upload after each deploy with `Unable to create a directory at storage/app/public/...`. Similarly, the gitignored `public/storage` symlink is wiped by `--delete` and must be recreated. The post-deploy step **self-heals both** on every deploy: chown + find chmod restore perms, `storage:link` is idempotent and recreates the symlink if rsync deleted it. See [Lessons Learned → rsync `-p` wipes storage perms](#rsync--p-wipes-storage-perms-on-every-deploy). The `sudo` calls require the NOPASSWD sudoers rule from §1.11.
 
 Commit and push:
 
@@ -892,11 +942,26 @@ jobs:
             --exclude='storage/framework/cache/*' \
             --exclude='storage/framework/sessions/*' \
             --exclude='storage/framework/views/*' \
+            --exclude='storage/app/public/*' \
+            --exclude='storage/app/private/*' \
             ./ ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/var/www/epathways-production/
 
       - name: Run post-deploy commands on VPS
-        run: ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} 'cd /var/www/epathways-production && php artisan migrate --force && php artisan config:cache && php artisan view:cache && php artisan queue:restart'
+        run: |
+          ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} '
+            cd /var/www/epathways-production &&
+            sudo chown -R deploy:www-data storage bootstrap/cache &&
+            sudo find storage bootstrap/cache -type d -exec chmod 2775 {} \; &&
+            sudo find storage bootstrap/cache -type f -exec chmod 664 {} \; &&
+            php artisan storage:link &&
+            php artisan migrate --force &&
+            php artisan config:cache &&
+            php artisan view:cache &&
+            php artisan queue:restart
+          '
 ```
+
+> **Note:** the `sudo` calls in the post-deploy step require the NOPASSWD sudoers rule from §1.11. Single VPS hosts both environments, so the rule set up during staging covers production automatically — no additional VPS setup needed for production.
 
 Commit + push to staging first, then merge to main:
 
@@ -1031,7 +1096,17 @@ The rsync uses these `--exclude` flags:
 
 - `.env` — never overwritten; environment-specific config stays put
 - `storage/logs/*`, `storage/framework/cache/*`, `storage/framework/sessions/*`, `storage/framework/views/*` — runtime state preserved
+- `storage/app/public/*`, `storage/app/private/*` — **user-uploaded files preserved** (passport PDFs, banner images, etc.). Without these excludes, `--delete` would wipe customer data on every deploy.
 - `node_modules`, `.git`, `.github` — not needed on server
+
+### What gets self-healed on every deploy
+
+The post-deploy SSH step automatically restores two things rsync would otherwise damage:
+
+- **Storage and bootstrap/cache permissions** — rsync's `-p` flag preserves source perms (`755 root:root` from the GitHub runner), wiping the `2775 deploy:www-data` setup the web server needs. Auto-restored via `sudo chown ... && sudo find ... -exec chmod 2775/664`.
+- **The `public/storage` symlink** — gitignored (so absent from source), `--delete` removes it from destination. Auto-restored via `php artisan storage:link` (idempotent).
+
+These commands run after rsync, before any other artisan commands. If they fail (e.g., NOPASSWD sudoers rule missing per §1.11), the deploy fails loudly in Actions — you'll see exactly which command hung.
 
 ### Branch flow
 
@@ -1205,21 +1280,49 @@ Prevention: **don't run commands directly on the VPS** — let CI/CD handle depl
 
 ### "Unable to create a directory at storage/app/public/..."
 
-Permission issue + the `public/` disk lacking the setgid bit. Fix:
+500 error returned to the user, log shows `League\Flysystem\UnableToCreateDirectory` from a controller's `->store('something', 'public')` call.
+
+**Root cause:** rsync's `-p` flag preserved the source's default `755` permissions on `storage/app/public/`, wiping the `2775 deploy:www-data` setup. PHP-FPM (running as `www-data`) can't create subdirectories because group-write is gone.
+
+**Immediate fix on the affected VPS:**
 
 ```bash
-sudo chown -R deploy:www-data /var/www/<site>/storage
-sudo find /var/www/<site>/storage -type d -exec chmod 2775 {} \;
-sudo find /var/www/<site>/storage -type f -exec chmod 664 {} \;
+sudo chown -R deploy:www-data /var/www/<site>/storage /var/www/<site>/bootstrap/cache
+sudo find /var/www/<site>/storage /var/www/<site>/bootstrap/cache -type d -exec chmod 2775 {} \;
+sudo find /var/www/<site>/storage /var/www/<site>/bootstrap/cache -type f -exec chmod 664 {} \;
 ```
+
+**Permanent fix:** the post-deploy step in §3.7 / §4.6 already includes these commands. If you're seeing this error, either:
+
+1. The workflow YAML wasn't updated (older deploy ran without the perm-fix). Update the workflow per §3.7 and push.
+2. The NOPASSWD sudoers rule from §1.11 isn't in place, so the workflow's sudo calls were rejected. Verify with `sudo -u deploy sudo -n true` on the VPS.
+
+### Image upload succeeds but the image displays as broken (404)
+
+The `image_url` in the database points to `/storage/programs/banners/foo.webp` but the URL returns 404 in the browser.
+
+**Root cause:** `public/storage` symlink is missing. rsync's `--delete` flag removes the symlink because it's gitignored (`/public/storage` in `.gitignore`) and therefore not in the source repo.
+
+**Immediate fix:**
+
+```bash
+cd /var/www/<site>
+sudo -u deploy php artisan storage:link
+```
+
+**Permanent fix:** the post-deploy step from §3.7 / §4.6 includes `php artisan storage:link` (idempotent — safe to run on every deploy). Update the workflow if you don't have it yet.
 
 ### AI eligibility analysis returning empty / `{"type": "object"}`
 
 Symptom: `lead.ai_analysis_status = completed` but the analysis JSON is just `{"type":"object"}` — score shows as 0.
 
-Cause: `CEREBRAS_MODEL=llama3.1-8b` is too small for structured JSON output and returns a schema fragment instead of data.
+Cause: small models like `llama3.1-8b` misinterpret the `response_format: json_object` flag — they sometimes echo the schema description instead of generating actual data conforming to it.
 
-Fix: change to a larger model:
+**Two fixes (use whichever fits):**
+
+#### Fix A — Use a larger model (cleanest)
+
+If your Cerebras tier has access:
 
 ```bash
 sudo -u deploy sed -i 's|^CEREBRAS_MODEL=.*|CEREBRAS_MODEL=llama3.3-70b|' /var/www/<site>/.env
@@ -1229,7 +1332,44 @@ sudo -u deploy php artisan config:cache
 sudo -u deploy php artisan queue:restart
 ```
 
-Available Cerebras models (as of 2026): `llama3.3-70b`, `gpt-oss-120b`, `qwen-3-32b`, `llama-4-maverick-17b-128e-instruct`. Avoid `llama3.1-8b` for structured output.
+Available Cerebras models (as of 2026): `llama3.3-70b`, `gpt-oss-120b`, `qwen-3-32b`, `llama-4-maverick-17b-128e-instruct`. **NOTE:** if a model returns 404, your tier may not have access — list available models with:
+```bash
+curl -s https://api.cerebras.ai/v1/models -H "Authorization: Bearer <YOUR-CEREBRAS-KEY>"
+```
+
+#### Fix B — Make `llama3.1-8b` work (if it's the only model your tier allows)
+
+In `app/Services/CerebrasService.php`:
+
+1. **Drop `'response_format' => ['type' => 'json_object']`** from the `Http::post()` payload. Without this flag, the model follows prompt instructions normally.
+
+2. **Add a JSON extraction helper** that handles cases where the model wraps output in markdown code fences:
+   ```php
+   private function extractJson(string $content): string
+   {
+       $trimmed = trim($content);
+       if (preg_match('/```(?:json)?\s*(.+?)\s*```/s', $trimmed, $m)) {
+           return trim($m[1]);
+       }
+       $start = strpos($trimmed, '{');
+       $end = strrpos($trimmed, '}');
+       if ($start !== false && $end !== false && $end > $start) {
+           return substr($trimmed, $start, $end - $start + 1);
+       }
+       return $trimmed;
+   }
+   ```
+
+3. **Validate required fields** after parsing. If the model returned malformed/incomplete JSON, throw an exception so the job's automatic retry can re-attempt:
+   ```php
+   if (!isset($analysis['overall_score'], $analysis['categories'])) {
+       throw new \RuntimeException('Cerebras response missing required fields');
+   }
+   ```
+
+4. **Add a concrete one-shot example to the system prompt.** Small models pattern-match worked examples far better than abstract schemas. Replace `<placeholder>` syntax with a fully-realized example output the model can imitate.
+
+After committing the code change and pushing through CI/CD, llama3.1-8b becomes reliable. Trade-off: small models will copy phrasing from the example for fields that aren't directly tied to applicant data (top-level summary, generic strengths/concerns). Scores and category-specific summaries are generated fresh from data.
 
 ### Vite build fails on case-sensitivity
 
@@ -1360,11 +1500,73 @@ grep -rn "/resources/Assets" .
 
 ### Small LLM models can fail structured-output prompts
 
-`llama3.1-8b` (Cerebras's smallest model) returned `{"type": "object"}` (a JSON schema fragment) instead of actual data when asked for structured eligibility analysis. Use models with ≥ 32B parameters for reliable structured output: `llama3.3-70b`, `gpt-oss-120b`, `qwen-3-32b`.
+`llama3.1-8b` (Cerebras's smallest model) returned `{"type": "object"}` (a JSON schema fragment) instead of actual data when asked for structured eligibility analysis. Two paths forward:
+
+1. **Larger model** (≥ 32B parameters): `llama3.3-70b`, `gpt-oss-120b`, `qwen-3-32b` handle structured output reliably with `response_format: json_object`.
+2. **Adapt to small models**: drop the `response_format` flag, add JSON extraction (handles markdown code fences), add field validation, and put a concrete worked example in the system prompt. Small models copy from examples — give them a good one. See [Troubleshooting → AI eligibility analysis returning empty](#ai-eligibility-analysis-returning-empty--type-object) for the full code change.
+
+### rsync `--delete` will eat user uploads if you don't exclude them
+
+Our original `deploy-staging.yml` and `deploy-production.yml` workflows had this rsync line:
+
+```yaml
+rsync -rlptvz --delete --no-owner --no-group \
+  --exclude='.git' --exclude='.github' --exclude='.env' --exclude='node_modules' \
+  --exclude='storage/logs/*' --exclude='storage/framework/cache/*' \
+  --exclude='storage/framework/sessions/*' --exclude='storage/framework/views/*' \
+  ./ deploy@vps:/var/www/<site>/
+```
+
+We forgot two excludes: `storage/app/public/*` and `storage/app/private/*`. These are where Laravel stores user-uploaded files (passport PDFs in our case).
+
+**What happened on every deploy:**
+1. Source repo doesn't have user uploads (they're not in git)
+2. rsync `--delete` says: "this exists on dest but not source → delete it"
+3. Tries to unlink `storage/app/public/passports/abc123.pdf`
+4. ✅ Lucky save: file permissions (`www-data` ownership from PHP-FPM) prevented `deploy` user from deleting → rsync errors but data survives
+5. Without that permission "bug", every deploy would silently destroy customer data
+
+**Fix:** add `--exclude='storage/app/public/*'` and `--exclude='storage/app/private/*'` to both workflows.
+
+**Lesson:** when using `rsync --delete`, **explicitly exclude every directory the application writes to**. If unsure, prefer `rsync` without `--delete` (leaves orphaned files but doesn't destroy data).
 
 ### One snapshot ≠ a backup strategy
 
 Hostinger's free single snapshot is one point-in-time recovery option. For production with real customer data, enable automated daily backups (`$6/month`) — they roll over so you have multiple recovery points across the past week.
+
+### rsync `-p` wipes storage perms on every deploy
+
+Sister bug to the `--delete` issue above. `rsync -rlptvz --delete` includes `-p` (preserve permissions). It preserves them **from the source side, applied onto the destination**. The source repo on a fresh GitHub Actions runner has `storage/app/public/` with default `755 root:root` (or whatever the runner's umask produces). On every deploy, rsync overwrites the destination's `2775 deploy:www-data` setup with those defaults — wiping the setgid bit and group-write.
+
+**What happens after every deploy until fixed:**
+
+1. PHP-FPM (`www-data`) tries to upload a file → calls `Storage::disk('public')->put()`
+2. Laravel attempts to `mkdir storage/app/public/programs/banners/`
+3. Parent dir is now `755 root:root` (or `755 deploy:deploy` after rsync) — `www-data` lacks write
+4. `League\Flysystem\UnableToCreateDirectory` thrown → 500 to the user
+
+**Sister symptom — symlink wipe:** the gitignored `public/storage` symlink isn't in the source, so `--delete` removes it. After every deploy, the upload-display URL `/storage/...` returns 404 even though the file uploaded successfully (when perms allow).
+
+**Fix (already integrated into §3.7 and §4.6 workflow YAML):**
+
+The post-deploy SSH step now runs:
+
+```bash
+sudo chown -R deploy:www-data storage bootstrap/cache &&
+sudo find storage bootstrap/cache -type d -exec chmod 2775 {} \; &&
+sudo find storage bootstrap/cache -type f -exec chmod 664 {} \; &&
+php artisan storage:link
+```
+
+This auto-restores perms and symlink on every deploy. The `sudo` calls require the NOPASSWD sudoers rule from §1.11.
+
+**Lesson:** when using `rsync -p` against a destination that needs custom perms (web server / setgid / mixed-ownership directories), you have three choices:
+
+1. **Don't preserve permissions** (`--no-perms`) — but then permissions across the whole tree become whatever rsync's umask produces. Often unacceptable.
+2. **Carefully match source-side perms to destination needs** — fragile, breaks when anyone touches the source.
+3. **Re-apply destination perms after rsync** in a post-deploy step ← what we do.
+
+Option 3 is the only sustainable path for this stack. The post-deploy is idempotent and adds ~1 second to deploys.
 
 ---
 
@@ -1427,4 +1629,4 @@ uptime
 
 ---
 
-*Last updated: April 2026*
+*Last updated: April 2026 (added storage perm-fix and symlink self-heal in post-deploy step; added §1.11 sudoers rule)*

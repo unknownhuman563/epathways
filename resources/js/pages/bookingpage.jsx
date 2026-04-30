@@ -107,22 +107,23 @@ const faqs = [
 const consultants = {
     education: [
         {
-            id: 1,
-            name: 'Dinah Suarin',
-            role: 'People Engagement and Wellbeing Champion',
-            image: dinaImg,
-            bio: "Dinah brings 8 years of hands-on experience helping international students navigate New Zealand's tertiary education system. She has placed over 300 students in top NZ universities and polytechnics, and specialises in tailoring pathways for students from Southeast Asia and the Pacific.",
-            tags: ['IAA LICENSED', '8 YRS EXP', 'EN · FIL'],
+            id: 2,
+            name: 'Bryll',
+            role: 'Education Consultant',
+            image: emilyImg,
+            bio: "Bryll supports international students with admissions, course selection, and pathway planning into New Zealand institutions.",
+            tags: ['EDUCATION SPEC', 'EN'],
             status: 'available',
             availability: 'Mon – Fri, 9am – 5pm NZST',
-            sessionLength: '60 min, Video or Phone',
+            sessionLength: '45 – 60 min, Video',
             sessionFormat: 'Video Call or Phone',
-            institutions: 'UoA, AUT, Massey +14 more',
-            specialisesIn: ['University Admissions', 'Student Visa', 'Scholarship Guidance', 'English Pathways', 'Course Matching'],
-            bookingUrl: 'https://calendar.google.com/calendar/appointments/schedules/AcZssZ0A25brqHYLx6o-iqanRiIG-jugrE62FGo4ryI_dQyPsPl8N1m3dr1VcP5rla8l8b-n3SEBy8r4?gv=true'
+            institutions: 'Nationwide Support',
+            specialisesIn: ['Admissions', 'Course Matching', 'Pathway Planning', 'Student Support'],
+            bookingUrl: 'https://calendar.google.com/calendar/appointments/schedules/AcZssZ2UC60-y5UinpTZqTSV_AMOwsLtuXpqYm3xGUI3WsjVjQQ9TcZPSv_ieaSi1CSlKDlL9OXabohZ?gv=true'
         },
         {
             id: 6,
+            readOnly: true,
             name: 'Emma Ceballo',
             role: 'People Journey Experience Champion',
             image: emmaImg,
@@ -137,18 +138,19 @@ const consultants = {
             bookingUrl: 'https://calendar.google.com/calendar/appointments/schedules/AcZssZ2UC60-y5UinpTZqTSV_AMOwsLtuXpqYm3xGUI3WsjVjQQ9TcZPSv_ieaSi1CSlKDlL9OXabohZ?gv=true'
         },
         {
-            id: 2,
-            name: 'Emily Dela Pena',
-            role: '',
-            image: emilyImg,
-            bio: "Emily is a former academic at the University of Auckland with over 12 years in tertiary education advising. She specialises in postgraduate pathways, research programmes, and helping professionals transition into NZ academic institutions from China and East Asia.",
-            tags: ['IAA LICENSED', '12 YRS EXP', 'EN · ZH'],
+            id: 1,
+            readOnly: true,
+            name: 'Dinah Suarin',
+            role: 'People Engagement and Wellbeing Champion',
+            image: dinaImg,
+            bio: "Dinah brings 8 years of hands-on experience helping international students navigate New Zealand's tertiary education system. She has placed over 300 students in top NZ universities and polytechnics, and specialises in tailoring pathways for students from Southeast Asia and the Pacific.",
+            tags: ['IAA LICENSED', '8 YRS EXP', 'EN · FIL'],
             status: 'available',
-            availability: 'Mon – Fri, 10am – 6pm NZST',
-            sessionLength: '60 – 90 min, Video or Phone',
+            availability: 'Mon – Fri, 9am – 5pm NZST',
+            sessionLength: '60 min, Video or Phone',
             sessionFormat: 'Video Call or Phone',
-            institutions: 'UoA, Victoria, Otago +20 more',
-            specialisesIn: ['Postgraduate Pathways', 'Research Programmes', 'Academic Transfers', 'PhD Applications', 'Work-Study Visas'],
+            institutions: 'UoA, AUT, Massey +14 more',
+            specialisesIn: ['University Admissions', 'Student Visa', 'Scholarship Guidance', 'English Pathways', 'Course Matching'],
             bookingUrl: 'https://calendar.google.com/calendar/appointments/schedules/AcZssZ0A25brqHYLx6o-iqanRiIG-jugrE62FGo4ryI_dQyPsPl8N1m3dr1VcP5rla8l8b-n3SEBy8r4?gv=true'
         }
     ],
@@ -550,9 +552,20 @@ export default function BookingPage() {
                                             {selection.category && consultants[selection.category.id]?.map((con) => (
                                                 <div
                                                     key={con.id}
-                                                    onClick={() => handleConsultantSelect(con)}
-                                                    className="group flex flex-col md:flex-row bg-[#1A1C19] border border-gray-800 rounded-2xl overflow-hidden cursor-pointer hover:border-gray-500 hover:shadow-2xl transition-all duration-300 min-h-[280px] md:min-h-0 md:h-[220px] lg:h-[240px] shrink-0 w-[85vw] md:w-[600px] lg:w-[calc(33.333%-16px)] lg:min-w-[400px] snap-start"
+                                                    onClick={() => !con.readOnly && handleConsultantSelect(con)}
+                                                    className={`group relative flex flex-col md:flex-row bg-[#1A1C19] border border-gray-800 rounded-2xl overflow-hidden transition-all duration-300 min-h-[280px] md:min-h-0 md:h-[220px] lg:h-[240px] shrink-0 w-[85vw] md:w-[600px] lg:w-[calc(33.333%-16px)] lg:min-w-[400px] snap-start ${
+                                                        con.readOnly
+                                                            ? 'cursor-not-allowed opacity-60'
+                                                            : 'cursor-pointer hover:border-gray-500 hover:shadow-2xl'
+                                                    }`}
                                                 >
+                                                    {con.readOnly && (
+                                                        <div className="absolute top-4 right-4 z-20 bg-white/10 backdrop-blur-md text-gray-300 text-[10px] font-bold tracking-[0.2em] uppercase px-3 py-1.5 rounded-full border border-white/10 flex items-center gap-1.5">
+                                                            <span className="w-1.5 h-1.5 rounded-full bg-gray-400 inline-block"></span>
+                                                            Read Only
+                                                        </div>
+                                                    )}
+
                                                     {/* Text Wrapper */}
                                                     <div className="w-full md:w-1/2 p-6 xl:p-8 flex flex-col justify-center order-2 md:order-1">
                                                         {con.role && (
@@ -564,16 +577,22 @@ export default function BookingPage() {
                                                             {con.name}
                                                         </h3>
                                                         <div className="mt-auto">
-                                                            <span className="flex items-center gap-2 text-white text-sm font-medium transition-transform duration-300 group-hover:translate-x-2">
-                                                                Select <ChevronRight size={16} />
-                                                            </span>
+                                                            {con.readOnly ? (
+                                                                <span className="flex items-center gap-2 text-gray-500 text-sm font-medium">
+                                                                    Unavailable for booking
+                                                                </span>
+                                                            ) : (
+                                                                <span className="flex items-center gap-2 text-white text-sm font-medium transition-transform duration-300 group-hover:translate-x-2">
+                                                                    Select <ChevronRight size={16} />
+                                                                </span>
+                                                            )}
                                                         </div>
                                                     </div>
 
                                                     {/* Image Wrapper */}
                                                     <div className="w-full md:w-1/2 bg-white flex items-center justify-center order-1 md:order-2 overflow-hidden">
                                                         {con.image ? (
-                                                            <img src={con.image} alt={con.name} className="w-full h-full object-cover object-top transition-transform duration-700 group-hover:scale-105" />
+                                                            <img src={con.image} alt={con.name} className={`w-full h-full object-cover object-top transition-transform duration-700 ${con.readOnly ? '' : 'group-hover:scale-105'}`} />
                                                         ) : (
                                                             <div className="w-full h-full bg-[#2C3029] flex items-center justify-center">
                                                                 <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">

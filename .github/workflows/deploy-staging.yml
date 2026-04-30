@@ -59,4 +59,15 @@ jobs:
             ./ ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/var/www/epathways-staging/
 
       - name: Run post-deploy commands on VPS
-        run: ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} 'cd /var/www/epathways-staging && php artisan migrate --force && php artisan config:cache && php artisan view:cache && php artisan queue:restart'
+        run: |
+          ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} '
+            cd /var/www/epathways-staging &&
+            sudo chown -R deploy:www-data storage bootstrap/cache &&
+            sudo find storage bootstrap/cache -type d -exec chmod 2775 {} \; &&
+            sudo find storage bootstrap/cache -type f -exec chmod 664 {} \; &&
+            php artisan storage:link &&
+            php artisan migrate --force &&
+            php artisan config:cache &&
+            php artisan view:cache &&
+            php artisan queue:restart
+          '
