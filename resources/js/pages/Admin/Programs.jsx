@@ -74,8 +74,10 @@ const blankProgram = () => ({
     hours_per_week: '',
     entry_requirements: '',
     english_requirements: '',
-    employment_outcomes: [''],
+    specialization: '',
+    employment_outcomes: [],
     post_study: '',
+    other_benefits: [],
     fee_guide: DEFAULT_FEE_REGIONS.map(region => ({ region, fee: '' })),
     tuition_fee: '',
     tuition_fee_notes: '',
@@ -98,6 +100,40 @@ function ProgramModal({ open, onClose, editing }) {
     const [step, setStep] = useState(1);
     const isEdit = !!editing;
 
+    const normalizeEmploymentOutcomes = (value) => {
+        const normalizeSections = (arr) => arr.map(s => ({
+            intro: typeof s?.intro === 'string' ? s.intro : '',
+            bullets: Array.isArray(s?.bullets) ? s.bullets : [],
+        }));
+        if (value && typeof value === 'object' && !Array.isArray(value)) {
+            if ('paragraph' in value || 'sections' in value) {
+                const sections = Array.isArray(value.sections) ? normalizeSections(value.sections) : [];
+                if (typeof value.paragraph === 'string' && value.paragraph.trim()) {
+                    sections.unshift({ intro: value.paragraph, bullets: [] });
+                }
+                return sections;
+            }
+            if ('intro' in value || 'bullets' in value) {
+                return normalizeSections([value]);
+            }
+            return [];
+        }
+        if (Array.isArray(value)) {
+            const first = value[0];
+            if (value.length > 0 && first && typeof first === 'object' && !Array.isArray(first) && ('intro' in first || 'bullets' in first)) {
+                return normalizeSections(value);
+            }
+            const items = value.filter(v => v && String(v).trim());
+            if (items.length === 1) return [{ intro: items[0], bullets: [] }];
+            if (items.length > 1) return [{ intro: '', bullets: items }];
+            return [];
+        }
+        if (typeof value === 'string' && value.trim()) {
+            return [{ intro: value, bullets: [] }];
+        }
+        return [];
+    };
+
     const buildInitial = () => {
         if (!editing) return blankProgram();
         return {
@@ -107,9 +143,7 @@ function ProgramModal({ open, onClose, editing }) {
             fee_guide: editing.fee_guide && editing.fee_guide.length > 0
                 ? editing.fee_guide
                 : DEFAULT_FEE_REGIONS.map(region => ({ region, fee: '' })),
-            employment_outcomes: Array.isArray(editing.employment_outcomes) && editing.employment_outcomes.length > 0
-                ? editing.employment_outcomes
-                : [''],
+            employment_outcomes: normalizeEmploymentOutcomes(editing.employment_outcomes),
         };
     };
 
@@ -128,19 +162,56 @@ function ProgramModal({ open, onClose, editing }) {
         const out = { ...d };
         if (out.image === null && isEdit) delete out.image;
         out.fee_guide = (out.fee_guide || []).filter(r => r.region || r.fee);
-        out.employment_outcomes = (out.employment_outcomes || []).filter(item => item && String(item).trim());
+        const sections = Array.isArray(out.employment_outcomes) ? out.employment_outcomes : [];
+        out.employment_outcomes = sections
+            .map(s => ({
+                intro: typeof s?.intro === 'string' ? s.intro.trim() : '',
+                bullets: Array.isArray(s?.bullets)
+                    ? s.bullets.filter(b => b && String(b).trim())
+                    : [],
+            }))
+            .filter(s => s.intro || s.bullets.length > 0);
+        out.other_benefits = Array.isArray(out.other_benefits)
+            ? out.other_benefits.filter(b => b && String(b).trim())
+            : [];
         return out;
     });
 
-    const setEmploymentRow = (idx, val) => {
-        const next = [...(data.employment_outcomes || [''])];
-        next[idx] = val;
-        setData('employment_outcomes', next);
+    const setBenefit = (idx, val) => {
+        const arr = [...(data.other_benefits || [])];
+        arr[idx] = val;
+        setData('other_benefits', arr);
     };
-    const addEmploymentRow = () => setData('employment_outcomes', [...(data.employment_outcomes || ['']), '']);
-    const removeEmploymentRow = (idx) => {
-        const arr = (data.employment_outcomes || []).filter((_, i) => i !== idx);
-        setData('employment_outcomes', arr.length > 0 ? arr : ['']);
+    const addBenefit = () => setData('other_benefits', [...(data.other_benefits || []), '']);
+    const removeBenefit = (idx) => {
+        setData('other_benefits', (data.other_benefits || []).filter((_, i) => i !== idx));
+    };
+
+    const updateSection = (sectionIdx, patch) => {
+        const sections = [...(data.employment_outcomes || [])];
+        sections[sectionIdx] = { ...sections[sectionIdx], ...patch };
+        setData('employment_outcomes', sections);
+    };
+    const setSectionIntro = (sectionIdx, val) => updateSection(sectionIdx, { intro: val });
+    const setSectionBullet = (sectionIdx, bulletIdx, val) => {
+        const section = data.employment_outcomes?.[sectionIdx] || { intro: '', bullets: [] };
+        const bullets = [...(section.bullets || [])];
+        bullets[bulletIdx] = val;
+        updateSection(sectionIdx, { bullets });
+    };
+    const addSectionBullet = (sectionIdx) => {
+        const section = data.employment_outcomes?.[sectionIdx] || { intro: '', bullets: [] };
+        updateSection(sectionIdx, { bullets: [...(section.bullets || []), ''] });
+    };
+    const removeSectionBullet = (sectionIdx, bulletIdx) => {
+        const section = data.employment_outcomes?.[sectionIdx] || { intro: '', bullets: [] };
+        updateSection(sectionIdx, { bullets: (section.bullets || []).filter((_, i) => i !== bulletIdx) });
+    };
+    const addSection = () => {
+        setData('employment_outcomes', [...(data.employment_outcomes || []), { intro: '', bullets: [] }]);
+    };
+    const removeSection = (sectionIdx) => {
+        setData('employment_outcomes', (data.employment_outcomes || []).filter((_, i) => i !== sectionIdx));
     };
 
     const setField = (key, val) => setData(key, val);
@@ -313,51 +384,148 @@ function ProgramModal({ open, onClose, editing }) {
                                 <Textarea value={data.english_requirements} onChange={e => setField('english_requirements', e.target.value)} placeholder="e.g. IELTS 6.0 overall, no band less than 5.5" />
                             </div>
                             <div>
-                                <Label>Employment Outcomes</Label>
-                                <div className="space-y-2">
-                                    {(data.employment_outcomes || ['']).map((item, idx) => (
-                                        <div key={idx} className="flex items-start gap-2">
-                                            <Textarea
-                                                value={item}
-                                                onChange={e => setEmploymentRow(idx, e.target.value)}
-                                                rows={(data.employment_outcomes || []).length > 1 ? 2 : 3}
-                                                placeholder={
-                                                    idx === 0
-                                                        ? 'e.g. Graduates find employment in hospitals, aged care, and community settings.'
-                                                        : 'Another item…'
-                                                }
-                                            />
-                                            {(data.employment_outcomes || []).length > 1 && (
-                                                <button
-                                                    type="button"
-                                                    onClick={() => removeEmploymentRow(idx)}
-                                                    className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg flex-shrink-0"
-                                                    title="Remove this item"
-                                                >
-                                                    <X size={14} />
-                                                </button>
-                                            )}
-                                        </div>
-                                    ))}
-                                </div>
-                                <div className="flex items-center justify-between mt-2">
-                                    <p className="text-[10px] text-gray-400">
-                                        {(data.employment_outcomes || []).filter(i => i && i.trim()).length >= 2
-                                            ? 'Will display as a bulleted list on the public page.'
-                                            : 'Single item displays as plain text. Add another to make it a bulleted list.'}
-                                    </p>
+                                <div className="flex items-center justify-between">
+                                    <Label>Employment Outcomes</Label>
                                     <button
                                         type="button"
-                                        onClick={addEmploymentRow}
+                                        onClick={addSection}
                                         className="text-[10px] font-semibold text-[#436235] hover:text-[#2d4622] flex items-center gap-1"
                                     >
-                                        <Plus size={11} /> Add another
+                                        <Plus size={11} /> Add section
                                     </button>
                                 </div>
+
+                                {(data.employment_outcomes || []).length === 0 ? (
+                                    <p className="text-[11px] text-gray-400 italic px-3 py-3 bg-gray-50 border border-dashed border-gray-200 rounded-lg">
+                                        No sections yet. Click "Add section" to add content. Each section can be a paragraph (description only), a bullet list (bullets only), or both.
+                                    </p>
+                                ) : (
+                                    <div className="space-y-3">
+                                        {data.employment_outcomes.map((section, sectionIdx) => (
+                                            <div key={sectionIdx} className="border border-gray-200 rounded-xl p-4 bg-gray-50/30 space-y-3">
+                                                <div className="flex items-center justify-between">
+                                                    <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Section {sectionIdx + 1}</span>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => removeSection(sectionIdx)}
+                                                        className="text-[10px] font-semibold text-red-500 hover:text-red-700 flex items-center gap-1"
+                                                        title="Remove section"
+                                                    >
+                                                        <X size={11} /> Remove section
+                                                    </button>
+                                                </div>
+
+                                                <div>
+                                                    <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
+                                                        Description <span className="text-gray-400 normal-case">(optional)</span>
+                                                    </p>
+                                                    <Textarea
+                                                        value={section.intro || ''}
+                                                        onChange={e => setSectionIntro(sectionIdx, e.target.value)}
+                                                        rows={2}
+                                                        placeholder="e.g. Graduates find employment in:"
+                                                    />
+                                                </div>
+
+                                                <div>
+                                                    <div className="flex items-center justify-between mb-1.5">
+                                                        <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">
+                                                            Bullets <span className="text-gray-400 normal-case">(optional)</span>
+                                                        </p>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => addSectionBullet(sectionIdx)}
+                                                            className="text-[10px] font-semibold text-[#436235] hover:text-[#2d4622] flex items-center gap-1"
+                                                        >
+                                                            <Plus size={11} /> Add bullet
+                                                        </button>
+                                                    </div>
+
+                                                    {(section.bullets || []).length === 0 ? (
+                                                        <p className="text-[11px] text-gray-400 italic px-3 py-2 bg-white border border-dashed border-gray-200 rounded-lg">
+                                                            No bullets yet. Leave empty if this section is paragraph-only.
+                                                        </p>
+                                                    ) : (
+                                                        <div className="space-y-2">
+                                                            {section.bullets.map((item, bulletIdx) => (
+                                                                <div key={bulletIdx} className="flex items-center gap-2">
+                                                                    <span className="text-gray-300 flex-shrink-0">•</span>
+                                                                    <Input
+                                                                        value={item}
+                                                                        onChange={e => setSectionBullet(sectionIdx, bulletIdx, e.target.value)}
+                                                                        placeholder={`Bullet ${bulletIdx + 1}`}
+                                                                        className="flex-1"
+                                                                    />
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => removeSectionBullet(sectionIdx, bulletIdx)}
+                                                                        className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg flex-shrink-0"
+                                                                        title="Remove bullet"
+                                                                    >
+                                                                        <X size={14} />
+                                                                    </button>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+
+                                <p className="text-[10px] text-gray-400 leading-relaxed mt-2">
+                                    Each section: description only = paragraph; bullets only = bullet list; both = description with bullets underneath. Add multiple sections for multi-topic content.
+                                </p>
                             </div>
                             <div>
                                 <Label>Post Study</Label>
                                 <Textarea value={data.post_study} onChange={e => setField('post_study', e.target.value)} />
+                            </div>
+                            <div>
+                                <Label>Specialization <span className="text-gray-400 font-normal">(optional)</span></Label>
+                                <Textarea value={data.specialization} onChange={e => setField('specialization', e.target.value)} placeholder="e.g. Clinical practice across rehabilitation, acute care, and mental health." />
+                                <p className="text-[10px] text-gray-400 mt-1">Hidden on the public page when empty.</p>
+                            </div>
+
+                            <div>
+                                <div className="flex items-center justify-between mb-1.5">
+                                    <Label>Other Benefits <span className="text-gray-400 font-normal">(optional)</span></Label>
+                                    <button
+                                        type="button"
+                                        onClick={addBenefit}
+                                        className="text-[10px] font-semibold text-[#436235] hover:text-[#2d4622] flex items-center gap-1"
+                                    >
+                                        <Plus size={11} /> Add bullet
+                                    </button>
+                                </div>
+                                {(data.other_benefits || []).length === 0 ? (
+                                    <p className="text-[11px] text-gray-400 italic px-3 py-3 bg-gray-50 border border-dashed border-gray-200 rounded-lg">
+                                        No benefits yet. Click "Add bullet" to list extras like scholarships, mentorship, or equipment kits. Hidden on the public page when empty.
+                                    </p>
+                                ) : (
+                                    <div className="space-y-2">
+                                        {data.other_benefits.map((item, idx) => (
+                                            <div key={idx} className="flex items-center gap-2">
+                                                <span className="text-gray-300 flex-shrink-0">•</span>
+                                                <Input
+                                                    value={item}
+                                                    onChange={e => setBenefit(idx, e.target.value)}
+                                                    placeholder={`Benefit ${idx + 1}`}
+                                                    className="flex-1"
+                                                />
+                                                <button
+                                                    type="button"
+                                                    onClick={() => removeBenefit(idx)}
+                                                    className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg flex-shrink-0"
+                                                    title="Remove benefit"
+                                                >
+                                                    <X size={14} />
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
                             </div>
 
                             <div className="border border-gray-200 rounded-xl p-4 bg-gray-50/50">

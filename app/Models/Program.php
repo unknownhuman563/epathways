@@ -23,8 +23,10 @@ class Program extends Model
         'hours_per_week',
         'entry_requirements',
         'english_requirements',
+        'specialization',
         'employment_outcomes',
         'post_study',
+        'other_benefits',
         'fee_guide',
         'tuition_fee',
         'tuition_fee_notes',
@@ -37,5 +39,6 @@ class Program extends Model
     protected $casts = [
         'fee_guide' => 'array',
         'employment_outcomes' => 'array',
+        'other_benefits' => 'array',
     ];
 }

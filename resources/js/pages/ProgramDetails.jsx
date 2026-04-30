@@ -9,17 +9,56 @@ import ScrollToTop from "@/components/scrolltotop";
 import heroBg from "@assets/Services/education.png";
 import programImg from "@assets/Services/pathways.png"; // Changed from Testimonies/testi1.png to a more relevant education asset
 
-function renderEmploymentOutcomes(items, fallback) {
-    const arr = Array.isArray(items)
-        ? items.filter(i => i && String(i).trim())
-        : (items && String(items).trim() ? [String(items)] : []);
+function renderEmploymentOutcomes(value, fallback) {
+    let sections = [];
 
-    if (arr.length === 0) return <p className="text-sm text-gray-400">{fallback}</p>;
-    if (arr.length === 1) return <p>{arr[0]}</p>;
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+        if ('paragraph' in value || 'sections' in value) {
+            const legacySections = Array.isArray(value.sections) ? value.sections : [];
+            const paragraph = typeof value.paragraph === 'string' ? value.paragraph.trim() : '';
+            sections = paragraph ? [{ intro: paragraph, bullets: [] }, ...legacySections] : legacySections;
+        } else if ('intro' in value || 'bullets' in value) {
+            sections = [value];
+        }
+    } else if (Array.isArray(value)) {
+        const first = value[0];
+        if (value.length > 0 && first && typeof first === 'object' && !Array.isArray(first) && ('intro' in first || 'bullets' in first)) {
+            sections = value;
+        } else {
+            const items = value.filter(b => b && String(b).trim());
+            if (items.length === 1) sections = [{ intro: items[0], bullets: [] }];
+            else if (items.length > 1) sections = [{ intro: '', bullets: items }];
+        }
+    } else if (typeof value === 'string' && value.trim()) {
+        sections = [{ intro: value, bullets: [] }];
+    }
+
+    sections = sections
+        .map(s => ({
+            intro: typeof s?.intro === 'string' ? s.intro.trim() : '',
+            bullets: Array.isArray(s?.bullets)
+                ? s.bullets.filter(b => b && String(b).trim())
+                : [],
+        }))
+        .filter(s => s.intro || s.bullets.length > 0);
+
+    if (sections.length === 0) {
+        return <p className="text-sm text-gray-400">{fallback}</p>;
+    }
+
     return (
-        <ul className="list-disc pl-5 space-y-1.5 marker:text-[#436235]">
-            {arr.map((item, i) => <li key={i}>{item}</li>)}
-        </ul>
+        <div className="space-y-4">
+            {sections.map((section, idx) => (
+                <div key={idx}>
+                    {section.intro && <p>{section.intro}</p>}
+                    {section.bullets.length > 0 && (
+                        <ul className={`list-disc pl-5 space-y-1.5 marker:text-[#436235] ${section.intro ? 'mt-2' : ''}`}>
+                            {section.bullets.map((b, i) => <li key={i}>{b}</li>)}
+                        </ul>
+                    )}
+                </div>
+            ))}
+        </div>
     );
 }
 
@@ -156,6 +195,28 @@ export default function ProgramDetails({ program }) {
                             {program?.post_study || 'No post-study information specified.'}
                         </p>
                     </div>
+
+                    {/* Specialization Card — hidden when empty */}
+                    {program?.specialization && String(program.specialization).trim() && (
+                        <div className="bg-white p-8 rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.05)] border border-gray-100 h-full">
+                            <h3 className="text-lg font-bold text-[#282728] mb-4">Specialization</h3>
+                            <p className="text-sm text-gray-600 leading-relaxed">
+                                {program.specialization}
+                            </p>
+                        </div>
+                    )}
+
+                    {/* Other Benefits Card — hidden when empty */}
+                    {Array.isArray(program?.other_benefits) && program.other_benefits.filter(b => b && String(b).trim()).length > 0 && (
+                        <div className="bg-white p-8 rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.05)] border border-gray-100 h-full">
+                            <h3 className="text-lg font-bold text-[#282728] mb-4">Other Benefits</h3>
+                            <ul className="list-disc pl-5 space-y-1.5 text-sm text-gray-600 leading-relaxed marker:text-[#436235]">
+                                {program.other_benefits.filter(b => b && String(b).trim()).map((b, i) => (
+                                    <li key={i}>{b}</li>
+                                ))}
+                            </ul>
+                        </div>
+                    )}
                 </div>
 
                 {/* Detailed Entry Requirements Alert */}
