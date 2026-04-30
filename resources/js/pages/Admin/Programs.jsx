@@ -74,7 +74,7 @@ const blankProgram = () => ({
     hours_per_week: '',
     entry_requirements: '',
     english_requirements: '',
-    employment_outcomes: '',
+    employment_outcomes: [''],
     post_study: '',
     fee_guide: DEFAULT_FEE_REGIONS.map(region => ({ region, fee: '' })),
     tuition_fee: '',
@@ -98,27 +98,26 @@ function ProgramModal({ open, onClose, editing }) {
     const [step, setStep] = useState(1);
     const isEdit = !!editing;
 
-    const initial = editing
-        ? {
+    const buildInitial = () => {
+        if (!editing) return blankProgram();
+        return {
             ...blankProgram(),
             ...editing,
             image: null,
             fee_guide: editing.fee_guide && editing.fee_guide.length > 0
                 ? editing.fee_guide
                 : DEFAULT_FEE_REGIONS.map(region => ({ region, fee: '' })),
-        }
-        : blankProgram();
+            employment_outcomes: Array.isArray(editing.employment_outcomes) && editing.employment_outcomes.length > 0
+                ? editing.employment_outcomes
+                : [''],
+        };
+    };
 
-    const { data, setData, post, processing, errors, reset, clearErrors, transform } = useForm(initial);
+    const { data, setData, post, processing, errors, reset, clearErrors, transform } = useForm(buildInitial());
 
     useEffect(() => {
         if (open) {
-            setData(editing
-                ? { ...blankProgram(), ...editing, image: null,
-                    fee_guide: editing.fee_guide && editing.fee_guide.length > 0
-                        ? editing.fee_guide
-                        : DEFAULT_FEE_REGIONS.map(region => ({ region, fee: '' })) }
-                : blankProgram());
+            setData(buildInitial());
             setStep(1);
             clearErrors();
         }
@@ -129,8 +128,20 @@ function ProgramModal({ open, onClose, editing }) {
         const out = { ...d };
         if (out.image === null && isEdit) delete out.image;
         out.fee_guide = (out.fee_guide || []).filter(r => r.region || r.fee);
+        out.employment_outcomes = (out.employment_outcomes || []).filter(item => item && String(item).trim());
         return out;
     });
+
+    const setEmploymentRow = (idx, val) => {
+        const next = [...(data.employment_outcomes || [''])];
+        next[idx] = val;
+        setData('employment_outcomes', next);
+    };
+    const addEmploymentRow = () => setData('employment_outcomes', [...(data.employment_outcomes || ['']), '']);
+    const removeEmploymentRow = (idx) => {
+        const arr = (data.employment_outcomes || []).filter((_, i) => i !== idx);
+        setData('employment_outcomes', arr.length > 0 ? arr : ['']);
+    };
 
     const setField = (key, val) => setData(key, val);
 
@@ -303,7 +314,46 @@ function ProgramModal({ open, onClose, editing }) {
                             </div>
                             <div>
                                 <Label>Employment Outcomes</Label>
-                                <Textarea value={data.employment_outcomes} onChange={e => setField('employment_outcomes', e.target.value)} />
+                                <div className="space-y-2">
+                                    {(data.employment_outcomes || ['']).map((item, idx) => (
+                                        <div key={idx} className="flex items-start gap-2">
+                                            <Textarea
+                                                value={item}
+                                                onChange={e => setEmploymentRow(idx, e.target.value)}
+                                                rows={(data.employment_outcomes || []).length > 1 ? 2 : 3}
+                                                placeholder={
+                                                    idx === 0
+                                                        ? 'e.g. Graduates find employment in hospitals, aged care, and community settings.'
+                                                        : 'Another item…'
+                                                }
+                                            />
+                                            {(data.employment_outcomes || []).length > 1 && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => removeEmploymentRow(idx)}
+                                                    className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg flex-shrink-0"
+                                                    title="Remove this item"
+                                                >
+                                                    <X size={14} />
+                                                </button>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                                <div className="flex items-center justify-between mt-2">
+                                    <p className="text-[10px] text-gray-400">
+                                        {(data.employment_outcomes || []).filter(i => i && i.trim()).length >= 2
+                                            ? 'Will display as a bulleted list on the public page.'
+                                            : 'Single item displays as plain text. Add another to make it a bulleted list.'}
+                                    </p>
+                                    <button
+                                        type="button"
+                                        onClick={addEmploymentRow}
+                                        className="text-[10px] font-semibold text-[#436235] hover:text-[#2d4622] flex items-center gap-1"
+                                    >
+                                        <Plus size={11} /> Add another
+                                    </button>
+                                </div>
                             </div>
                             <div>
                                 <Label>Post Study</Label>

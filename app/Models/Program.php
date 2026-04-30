@@ -36,5 +36,6 @@ class Program extends Model
 
     protected $casts = [
         'fee_guide' => 'array',
+        'employment_outcomes' => 'array',
     ];
 }
