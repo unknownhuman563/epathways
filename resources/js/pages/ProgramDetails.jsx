@@ -9,6 +9,20 @@ import ScrollToTop from "@/components/scrolltotop";
 import heroBg from "@assets/Services/education.png";
 import programImg from "@assets/Services/pathways.png"; // Changed from Testimonies/testi1.png to a more relevant education asset
 
+function renderEmploymentOutcomes(items, fallback) {
+    const arr = Array.isArray(items)
+        ? items.filter(i => i && String(i).trim())
+        : (items && String(items).trim() ? [String(items)] : []);
+
+    if (arr.length === 0) return <p className="text-sm text-gray-400">{fallback}</p>;
+    if (arr.length === 1) return <p>{arr[0]}</p>;
+    return (
+        <ul className="list-disc pl-5 space-y-1.5 marker:text-[#436235]">
+            {arr.map((item, i) => <li key={i}>{item}</li>)}
+        </ul>
+    );
+}
+
 export default function ProgramDetails({ program }) {
     const paragraphs = (program?.description || '').split(/\n\n+/).filter(Boolean);
     const fees = Array.isArray(program?.fee_guide) ? program.fee_guide : [];
@@ -130,9 +144,9 @@ export default function ProgramDetails({ program }) {
                     {/* Employment Outcomes Card */}
                     <div className="bg-white p-8 rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.05)] border border-gray-100 h-full">
                         <h3 className="text-lg font-bold text-[#282728] mb-4">Employment Outcomes</h3>
-                        <p className="text-sm text-gray-600 leading-relaxed">
-                            {program?.employment_outcomes || 'No employment outcomes specified.'}
-                        </p>
+                        <div className="text-sm text-gray-600 leading-relaxed">
+                            {renderEmploymentOutcomes(program?.employment_outcomes, 'No employment outcomes specified.')}
+                        </div>
                     </div>
 
                     {/* Post Study Card */}
