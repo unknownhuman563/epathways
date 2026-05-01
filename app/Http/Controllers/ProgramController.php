@@ -12,7 +12,7 @@ class ProgramController extends Controller
     {
         return [
             'title' => 'required|string|max:255',
-            'institution' => 'required|string|max:255',
+            'institution' => 'nullable|string|max:255',
             'location' => 'nullable|string|max:255',
             'level' => 'required|integer|min:1|max:10',
             'category' => 'required|in:diplomas,bachelors,masters',
@@ -25,12 +25,26 @@ class ProgramController extends Controller
             'credits' => 'nullable|integer|min:0',
             'residency_points' => 'nullable|integer|min:0',
             'hours_per_week' => 'nullable|integer|min:0',
-            'entry_requirements' => 'nullable|string',
-            'employment_outcomes' => 'nullable|string',
+            'entry_requirements' => 'nullable|array',
+            'entry_requirements.*' => 'nullable|array',
+            'entry_requirements.*.intro' => 'nullable|string',
+            'entry_requirements.*.bullets' => 'nullable|array',
+            'entry_requirements.*.bullets.*' => 'nullable|string',
+            'english_requirements' => 'nullable|string',
+            'specialization' => 'nullable|string',
+            'employment_outcomes' => 'nullable|array',
+            'employment_outcomes.*' => 'nullable|array',
+            'employment_outcomes.*.intro' => 'nullable|string',
+            'employment_outcomes.*.bullets' => 'nullable|array',
+            'employment_outcomes.*.bullets.*' => 'nullable|string',
             'post_study' => 'nullable|string',
+            'other_benefits' => 'nullable|array',
+            'other_benefits.*' => 'nullable|string',
             'fee_guide' => 'nullable|array',
             'fee_guide.*.region' => 'nullable|string|max:255',
             'fee_guide.*.fee' => 'nullable|numeric|min:0',
+            'tuition_fee' => 'nullable|numeric|min:0',
+            'tuition_fee_notes' => 'nullable|string|max:255',
             'insurance_fee' => 'nullable|numeric|min:0',
             'visa_processing_fee' => 'nullable|numeric|min:0',
             'living_expense' => 'nullable|numeric|min:0',
@@ -102,10 +116,20 @@ class ProgramController extends Controller
 
     public function publicIndex()
     {
+        return inertia('ProgramsLevels', ['programs' => $this->fetchPublishedPrograms()]);
+    }
+
+    public function feeGuideIndex()
+    {
+        return inertia('FeeGuide', ['programs' => $this->fetchPublishedPrograms()]);
+    }
+
+    private function fetchPublishedPrograms()
+    {
         $programs = Program::where('status', 'published')->orderBy('level')->latest()->get();
         $programs->each(fn ($p) => $this->appendImageUrl($p));
 
-        return inertia('ProgramsLevels', ['programs' => $programs]);
+        return $programs;
     }
 
     public function publicShow($id)

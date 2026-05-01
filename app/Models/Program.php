@@ -22,9 +22,14 @@ class Program extends Model
         'residency_points',
         'hours_per_week',
         'entry_requirements',
+        'english_requirements',
+        'specialization',
         'employment_outcomes',
         'post_study',
+        'other_benefits',
         'fee_guide',
+        'tuition_fee',
+        'tuition_fee_notes',
         'insurance_fee',
         'visa_processing_fee',
         'living_expense',
@@ -33,5 +38,8 @@ class Program extends Model
 
     protected $casts = [
         'fee_guide' => 'array',
+        'entry_requirements' => 'array',
+        'employment_outcomes' => 'array',
+        'other_benefits' => 'array',
     ];
 }

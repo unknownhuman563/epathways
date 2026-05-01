@@ -34,9 +34,15 @@ class ProgramControllerTest extends TestCase
             'credits' => 180,
             'residency_points' => 3,
             'hours_per_week' => 25,
-            'entry_requirements' => 'NCEA Level 2.',
-            'employment_outcomes' => 'Hospitals.',
+            'entry_requirements' => [
+                ['intro' => 'NCEA Level 2.', 'bullets' => []],
+            ],
+            'specialization' => 'Clinical practice.',
+            'employment_outcomes' => [
+                ['intro' => 'Hospitals.', 'bullets' => []],
+            ],
             'post_study' => 'PSWV.',
+            'other_benefits' => ['Free uniform', 'Industry mentor'],
             'fee_guide' => [
                 ['region' => 'India & Subcontinent', 'fee' => 31200],
                 ['region' => 'Southeast Asia', 'fee' => 31200],
@@ -86,7 +92,7 @@ class ProgramControllerTest extends TestCase
     {
         $response = $this->actingAs($this->admin())->post('/admin/programs', []);
 
-        $response->assertSessionHasErrors(['title', 'institution', 'level', 'category', 'status']);
+        $response->assertSessionHasErrors(['title', 'level', 'category', 'status']);
     }
 
     public function test_admin_can_update_program(): void
