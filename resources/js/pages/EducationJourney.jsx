@@ -14,6 +14,7 @@ import agentsImg from "@assets/Services/agents.png";
 import dinaImage from "@assets/team/dina.png";
 import bryllImage from "@assets/team/bryll.png";
 import emmaImage from "@assets/team/emma.png";
+import bannerTeam from "@assets/banner/team_education.png";
 
 // Partner Logos
 import logoAIS from "@assets/Partners/AIS.png";
@@ -778,41 +779,20 @@ export default function EducationJourney() {
                         </a>
                     </motion.div>
 
-                    {/* Partner Logos Row */}
+                    {/* Banner Section */}
                     <motion.div
-                        initial={{ opacity: 0 }}
-                        whileInView={{ opacity: 1 }}
+                        initial={{ opacity: 0, y: 30 }}
+                        whileInView={{ opacity: 1, y: 0 }}
                         viewport={{ once: true }}
                         transition={{ duration: 0.8, delay: 0.4 }}
-                        className="flex flex-wrap items-center justify-center gap-x-10 gap-y-6"
+                        className="relative w-full overflow-hidden rounded-sm shadow-lg group mt-20"
                     >
-                        {[
-                            { name: "AIS", logo: logoAIS, size: "h-16" },
-                            { name: "ATMC", logo: logoATMC, size: "h-14" },
-                            { name: "Bridge", logo: logoBridge, size: "h-16" },
-                            { name: "ICA", logo: logoICA, size: "h-14" },
-                            { name: "NZ Tourism", logo: logoNSTourism, size: "h-20" },
-                            { name: "NZSE", logo: logoNZSE, size: "h-14" },
-                            { name: "NZ Tertiary", logo: logoNZTertiary, size: "h-16" },
-                            { name: "Strategix", logo: logoStrategix, size: "h-14" },
-                            { name: "YOOBEE", logo: logoYOOBEE, size: "h-16" },
-                            { name: "ICL", logo: logoICL, size: "h-14" },
-                            { name: "Ignite", logo: logoIgnite, size: "h-16" },
-                            { name: "NZMA", logo: logoNZMA, size: "h-14" },
-                            { name: "Skills", logo: logoSkills, size: "h-16" },
-                            { name: "Tawera", logo: logoTawera, size: "h-14" },
-                            { name: "White Cliffe", logo: logoWhiteCliffe, size: "h-14" },
-                            { name: "Wintec", logo: logoWintec, size: "h-16" },
-                            { name: "UP", logo: logoUP, size: "h-14" },
-                            { name: "SR", logo: logoSR, size: "h-14" },
-                        ].map((partner, i) => (
-                            <img
-                                key={i}
-                                src={partner.logo}
-                                alt={partner.name}
-                                className={`${partner.size} w-auto object-contain opacity-60 hover:opacity-100 hover:scale-110 transition-all duration-300`}
-                            />
-                        ))}
+                        <img 
+                            src={bannerTeam} 
+                            alt="Education Team" 
+                            className="w-full h-auto transition-transform duration-1000 group-hover:scale-[1.01]"
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-[#0a0f0a]/10 via-transparent to-transparent"></div>
                     </motion.div>
                 </div>
             </section>
