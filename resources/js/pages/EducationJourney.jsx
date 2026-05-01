@@ -1,5 +1,5 @@
-import React from 'react';
-import { motion } from 'framer-motion';
+import React, { useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowRight } from 'react-feather';
 import Navbar from "@/components/navigation-bar";
 import Footer from "@/components/footer";
@@ -8,7 +8,12 @@ import JourneyExperience from "@/components/JourneyExperience";
 
 // Assets
 import heroBg from "@assets/Services/education.png";
-import ceoImage from "@assets/team/dina.png";
+import visaImg from "@assets/Services/visa.png";
+import settlementImg from "@assets/Services/settlement.png";
+import agentsImg from "@assets/Services/agents.png";
+import dinaImage from "@assets/team/dina.png";
+import bryllImage from "@assets/team/bryll.png";
+import emmaImage from "@assets/team/emma.png";
 
 // Partner Logos
 import logoAIS from "@assets/Partners/AIS.png";
@@ -31,6 +36,81 @@ import logoWhiteCliffe from "@assets/Partners/whitecligge.png";
 import logoWintec from "@assets/Partners/wintec.png";
 
 export default function EducationJourney() {
+    const [activeProgram, setActiveProgram] = useState(0);
+
+    const demandPrograms = [
+        {
+            id: 0,
+            title: "IT & Computer Science",
+            description: "Software engineering, cybersecurity, and data-driven disciplines are experiencing unprecedented growth.",
+            programs: [
+                "Bachelor of Computer Science",
+                "Bachelor of Information Technology",
+                "Bachelor of Software Engineering",
+                "Bachelor of Data Science"
+            ],
+            intakes: "Feb, Mar, May, Jul",
+            tags: ["Technology", "Bachelor"],
+            image: heroBg
+        },
+        {
+            id: 1,
+            title: "Engineering",
+            description: "Infrastructure growth and renewable energy shift drive strong global demand for specialized engineers.",
+            programs: [
+                "Bachelor of Civil Engineering",
+                "Bachelor of Mechanical Engineering",
+                "Bachelor of Electrical Engineering",
+                "Bachelor of Chemical Engineering"
+            ],
+            intakes: "Feb, Mar, Jun, Jul",
+            tags: ["Engineering", "Bachelor"],
+            image: agentsImg
+        },
+        {
+            id: 2,
+            title: "Healthcare & Nursing",
+            description: "Address global shortages in key health professions with recognized degrees and strong residency pathways.",
+            programs: [
+                "Bachelor of Nursing",
+                "Bachelor of Medicine",
+                "Bachelor of Pharmacy",
+                "Bachelor of Physiotherapy"
+            ],
+            intakes: "Feb, Mar, Apr, May, Jun, Jul",
+            tags: ["Healthcare", "Diploma"],
+            image: settlementImg
+        },
+        {
+            id: 3,
+            title: "Business & Management",
+            description: "Develop advanced leadership and analytical skills for modern corporate and tech sectors.",
+            programs: [
+                "Bachelor of Business Administration",
+                "Bachelor of Commerce",
+                "Bachelor of Applied Management",
+                "Bachelor of Business Informatics"
+            ],
+            intakes: "Feb, Mar, Apr, May, Jul",
+            tags: ["Business", "Bachelor"],
+            image: heroBg
+        },
+        {
+            id: 4,
+            title: "Education & Teaching",
+            description: "STEM-specialized teachers remain in critical shortage globally, offering distinct long-term career benefits.",
+            programs: [
+                "Bachelor of Education",
+                "Bachelor of Early Childhood",
+                "Bachelor of Primary Education",
+                "Bachelor of Secondary Education"
+            ],
+            intakes: "Feb, Mar, Apr, May, Jun",
+            tags: ["Education", "Bachelor"],
+            image: visaImg
+        }
+    ];
+
     return (
         <div className="min-h-screen bg-white font-urbanist overflow-x-hidden">
             <Navbar />
@@ -233,6 +313,121 @@ export default function EducationJourney() {
 
             <JourneyExperience />
 
+            {/* Top In-Demand Programs Section - Custom Editorial Redesign */}
+            <section className="py-32 bg-white text-[#282728] font-urbanist border-t border-gray-100 overflow-hidden">
+                <div className="container mx-auto px-6 max-w-7xl">
+                    {/* Header */}
+                    <div className="mb-20 md:mb-28 max-w-4xl">
+                        <motion.span
+                            initial={{ opacity: 0 }}
+                            whileInView={{ opacity: 1 }}
+                            viewport={{ once: true }}
+                            className="text-[11px] font-bold tracking-[0.4em] uppercase text-[#436235] mb-6 block"
+                        >
+                            Pathways
+                        </motion.span>
+                        <motion.h2
+                            initial={{ opacity: 0, y: 20 }}
+                            whileInView={{ opacity: 1, y: 0 }}
+                            viewport={{ once: true }}
+                            transition={{ duration: 0.6 }}
+                            className="text-4xl md:text-5xl lg:text-6xl font-medium mb-8 tracking-tight leading-tight whitespace-normal md:whitespace-nowrap"
+                        >
+                            Top in-demand programs
+                        </motion.h2>
+                        <motion.p
+                            initial={{ opacity: 0 }}
+                            whileInView={{ opacity: 1 }}
+                            viewport={{ once: true }}
+                            transition={{ duration: 0.6, delay: 0.2 }}
+                            className="text-gray-500 text-sm md:text-base leading-relaxed max-w-none lg:whitespace-nowrap"
+                        >
+                            The most sought-after qualifications for international careers and residency pathways. Hover to explore specific disciplines.
+                        </motion.p>
+                    </div>
+
+                    <div className="flex flex-col lg:flex-row gap-16 lg:gap-24 items-start">
+                        {/* Left: Program Titles */}
+                        <div className="lg:w-2/5 flex flex-col gap-8 relative z-10 w-full">
+                            {demandPrograms.map((item) => (
+                                <div 
+                                    key={item.id}
+                                    onMouseEnter={() => setActiveProgram(item.id)}
+                                    className="cursor-pointer group flex items-center gap-6 py-2 border-b border-gray-100 last:border-b-0"
+                                >
+                                    <span className={`text-xs font-bold font-mono transition-colors duration-500 ${activeProgram === item.id ? "text-[#436235]" : "text-gray-300"}`}>
+                                        0{item.id + 1}
+                                    </span>
+                                    <h3 className={`text-2xl md:text-3xl font-light tracking-tight transition-all duration-500 ${activeProgram === item.id ? "text-[#282728] translate-x-2" : "text-gray-400 group-hover:text-gray-700"}`}>
+                                        {item.title}
+                                    </h3>
+                                </div>
+                            ))}
+                        </div>
+
+                        {/* Right: Active Program Details */}
+                        <div className="lg:w-3/5 w-full">
+                            <AnimatePresence mode="wait">
+                                <motion.div
+                                    key={activeProgram}
+                                    initial={{ opacity: 0, x: 20 }}
+                                    animate={{ opacity: 1, x: 0 }}
+                                    exit={{ opacity: 0, x: -20 }}
+                                    transition={{ duration: 0.4 }}
+                                    className="bg-gray-50 border border-gray-100 rounded-sm overflow-hidden flex flex-col shadow-sm"
+                                >
+                                    {/* Image Top */}
+                                    <div className="h-64 relative overflow-hidden bg-gray-200">
+                                        <img 
+                                            src={demandPrograms[activeProgram].image} 
+                                            alt={demandPrograms[activeProgram].title} 
+                                            className="w-full h-full object-cover opacity-80"
+                                        />
+                                        <div className="absolute inset-0 bg-gradient-to-t from-gray-900/60 to-transparent"></div>
+                                        <div className="absolute bottom-6 left-8 flex gap-3">
+                                            {demandPrograms[activeProgram].tags.map(t => (
+                                                <span key={t} className="px-3 py-1 bg-[#436235] text-white text-[10px] font-bold tracking-widest uppercase rounded-sm shadow-sm">
+                                                    {t}
+                                                </span>
+                                            ))}
+                                        </div>
+                                    </div>
+                                    
+                                    {/* Details Bottom */}
+                                    <div className="p-8 md:p-10 bg-white">
+                                        <p className="text-gray-600 text-sm leading-relaxed mb-8">
+                                            {demandPrograms[activeProgram].description}
+                                        </p>
+                                        
+                                        <div className="mb-10">
+                                            <h4 className="text-[10px] font-bold tracking-[0.2em] uppercase text-[#436235] mb-4">Core Programs</h4>
+                                            <ul className="space-y-3">
+                                                {demandPrograms[activeProgram].programs.map((prog, i) => (
+                                                    <li key={i} className="flex items-center gap-3 text-sm text-gray-600">
+                                                        <div className="w-1 h-1 rounded-full bg-[#436235]"></div>
+                                                        {prog}
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        </div>
+                                        
+                                        <div className="mt-8 pt-6 border-t border-gray-100 flex items-center justify-between">
+                                            <div>
+                                                <span className="text-[10px] uppercase tracking-widest text-gray-400 block mb-1">Intakes</span>
+                                                <span className="text-xs font-medium text-[#282728]">{demandPrograms[activeProgram].intakes}</span>
+                                            </div>
+                                            <a href="/programs-levels" className="w-10 h-10 rounded-sm border border-gray-300 flex items-center justify-center text-gray-500 hover:text-white hover:bg-[#436235] hover:border-[#436235] transition-all">
+                                                <ArrowRight size={16} />
+                                            </a>
+                                        </div>
+                                    </div>
+                                </motion.div>
+                            </AnimatePresence>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
             {/* Transparent Fees Section */}
             <section className="py-32 bg-[#e8e8e6] font-urbanist">
                 <div className="container mx-auto px-6 max-w-7xl">
@@ -364,8 +559,111 @@ export default function EducationJourney() {
                 </div>
             </section>
 
+            {/* Education Consultant Section */}
+            <section id="education-consultants" className="py-32 bg-white text-[#282728] font-urbanist border-t border-gray-100">
+                <div className="container mx-auto px-6 max-w-7xl">
+                    {/* Header */}
+                    <div className="text-center mb-24">
+                        <motion.span
+                            initial={{ opacity: 0 }}
+                            whileInView={{ opacity: 1 }}
+                            viewport={{ once: true }}
+                            className="text-[11px] font-bold tracking-[0.4em] uppercase text-[#436235] mb-4 block"
+                        >
+                            Team
+                        </motion.span>
+                        <motion.h2
+                            initial={{ opacity: 0, y: 20 }}
+                            whileInView={{ opacity: 1, y: 0 }}
+                            viewport={{ once: true }}
+                            transition={{ duration: 0.6 }}
+                            className="text-4xl md:text-5xl font-medium mb-6 tracking-tight"
+                        >
+                            Meet our education consultants
+                        </motion.h2>
+                        <motion.p
+                            initial={{ opacity: 0 }}
+                            whileInView={{ opacity: 1 }}
+                            viewport={{ once: true }}
+                            transition={{ duration: 0.6, delay: 0.2 }}
+                            className="text-gray-500 text-sm md:text-base max-w-2xl mx-auto leading-relaxed"
+                        >
+                            Dedicated specialists guiding every step of your international education journey
+                        </motion.p>
+                    </div>
+
+                    {/* Consultant Cards */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                        {[
+                            {
+                                name: "Fhilip Bryll Añabeza",
+                                role: "Education Consultant",
+                                bio: "Fhilip provides expert guidance on matching students to the right programs and navigating the application process.",
+                                img: bryllImage,
+                                badge: "Consultant"
+                            },
+                            {
+                                name: "Emma Ceballo",
+                                role: "Head of Education Dept",
+                                bio: "Emma leads our education team, bringing extensive expertise in enrollment support and international student success.",
+                                img: emmaImage,
+                                badge: "Head"
+                            },
+                            {
+                                name: "Dinah Suarin",
+                                role: "CEO / Founder",
+                                bio: "With over a decade of experience, Dinah founded ePathways to help students navigate their global education journey.",
+                                img: dinaImage,
+                                badge: "Founder"
+                            }
+                        ].map((c, i) => (
+                            <motion.div
+                                key={i}
+                                initial={{ opacity: 0, y: 30 }}
+                                whileInView={{ opacity: 1, y: 0 }}
+                                viewport={{ once: true }}
+                                transition={{ delay: i * 0.1 }}
+                                className="flex flex-col bg-[#141a14] text-white border border-[#2a3a2a] rounded-sm overflow-hidden group hover:border-[#436235] transition-all duration-500 shadow-lg hover:shadow-xl"
+                            >
+                                {/* Top: Image */}
+                                <div className="aspect-[4/5] relative overflow-hidden bg-[#0a0f0a]">
+                                    <img
+                                        src={c.img}
+                                        alt={c.name}
+                                        className="w-full h-full object-cover object-top group-hover:scale-105 transition-all duration-700"
+                                    />
+                                    {/* Badge */}
+                                    <div className="absolute top-4 left-4 px-3 py-1.5 bg-[#436235] text-white text-[9px] font-bold uppercase tracking-widest rounded-sm shadow-sm">
+                                        {c.badge}
+                                    </div>
+                                </div>
+
+                                {/* Bottom: Info */}
+                                <div className="p-8 flex flex-col justify-center flex-1">
+                                    <span className="text-[10px] font-bold tracking-widest uppercase text-[#436235] mb-3 block">
+                                        {c.role}
+                                    </span>
+                                    <h3 className="text-2xl font-medium mb-4 text-white leading-tight">
+                                        {c.name}
+                                    </h3>
+                                    <p className="text-white/60 text-xs leading-relaxed mb-8 flex-1">
+                                        {c.bio}
+                                    </p>
+                                    <a
+                                        href="/booking"
+                                        className="text-[10px] font-bold uppercase tracking-widest flex items-center gap-2 text-white/80 hover:text-[#436235] transition-colors group/link mt-auto"
+                                    >
+                                        Book a session <ArrowRight size={12} className="group-hover/link:translate-x-1 transition-transform" />
+                                    </a>
+                                </div>
+                            </motion.div>
+                        ))}
+                    </div>
+                </div>
+            </section>
+
             {/* Partner Universities Section */}
-            <section className="bg-[#0f1a0f] text-white font-urbanist py-20">
+            <section className="bg-[#0f1a0f] text-white font-urbanist py-20 border-t border-white/5">
                 <div className="container mx-auto px-6 max-w-7xl">
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
                         {/* Left - Text */}

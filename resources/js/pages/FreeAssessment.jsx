@@ -560,7 +560,7 @@ export default function FreeAssessment() {
                 <div className="container mx-auto px-6 py-24 lg:py-32 relative z-10">
                     <div className="max-w-5xl mx-auto">
                         {/* Eyebrow — matches site style */}
-                        <span className="text-[10px] font-bold text-[#436235] uppercase tracking-[0.3em] mb-6 block">Free Immigration Assessment</span>
+                        <span className="text-xs font-bold text-[#436235] uppercase tracking-[0.3em] mb-6 block">Free Immigration Assessment</span>
 
                         <h1 className="text-5xl lg:text-7xl font-black text-[#282728] uppercase tracking-tighter leading-[0.9] mb-8">
                             Enrolment<br/>
@@ -577,12 +577,12 @@ export default function FreeAssessment() {
                             <div className="flex items-center gap-8 md:ml-auto flex-shrink-0">
                                 <div className="text-center">
                                     <div className="text-4xl font-black text-[#282728]">~15</div>
-                                    <div className="text-[9px] text-gray-400 uppercase tracking-[0.3em] font-bold mt-1">Minutes</div>
+                                    <div className="text-xs text-gray-400 uppercase tracking-[0.3em] font-bold mt-1">Minutes</div>
                                 </div>
                                 <div className="w-[1px] h-10 bg-gray-200" />
                                 <div className="text-center">
                                     <div className="text-4xl font-black text-[#436235]">Free</div>
-                                    <div className="text-[9px] text-gray-400 uppercase tracking-[0.3em] font-bold mt-1">No Cost</div>
+                                    <div className="text-xs text-gray-400 uppercase tracking-[0.3em] font-bold mt-1">No Cost</div>
                                 </div>
                             </div>
                         </div>
@@ -598,7 +598,7 @@ export default function FreeAssessment() {
                         <div className="rounded-3xl overflow-hidden border border-gray-100 shadow-xl shadow-gray-100/80">
                         {/* Sidebar header — matches site palette */}
                             <div className="px-6 pt-6 pb-5 bg-[#282728]">
-                                <p className="text-[9px] font-bold text-white/40 uppercase tracking-[0.4em] mb-1">Form Progress</p>
+                                <p className="text-xs font-bold text-white/40 uppercase tracking-[0.4em] mb-1">Form Progress</p>
                                 <div className="text-2xl font-black text-white">{Math.round((step / 12) * 100)}<span className="text-base text-white/30">%</span></div>
                                 <div className="mt-3 h-0.5 bg-white/10 rounded-full overflow-hidden">
                                     <motion.div
@@ -641,10 +641,10 @@ export default function FreeAssessment() {
                                                 )}
                                             </div>
                                             <div className="flex flex-col min-w-0">
-                                                <span className={`text-[7.5px] font-black uppercase tracking-[0.25em] leading-none mb-0.5 ${
+                                                <span className={`text-xs font-black uppercase tracking-[0.25em] leading-none mb-0.5 ${
                                                     isActive ? 'text-white/40' : 'text-gray-300'
                                                 }`}>{stepNum}</span>
-                                                <span className={`text-[10px] font-black uppercase tracking-[0.12em] leading-none truncate ${
+                                                <span className={`text-xs font-black uppercase tracking-[0.12em] leading-none truncate ${
                                                     isActive ? 'text-white' : isCompleted ? 'text-[#436235]' : 'text-gray-400 group-hover:text-[#282728]'
                                                 }`}>{s.title}</span>
                                             </div>
@@ -664,7 +664,7 @@ export default function FreeAssessment() {
                         <div className="px-8 pt-8 pb-6 border-b border-gray-50">
                             <div className="flex items-center justify-between mb-4">
                                 <div>
-                                    <p className="text-[9px] font-black uppercase tracking-[0.4em] text-gray-400 mb-1">Section {stepLabel} of 12</p>
+                                    <p className="text-xs font-black uppercase tracking-[0.4em] text-gray-400 mb-1">Section {stepLabel} of 12</p>
                                     <p className="text-base font-black uppercase tracking-tight text-[#282728]">{steps[step - 1]?.title}</p>
                                 </div>
                                 <div className="flex items-center gap-1.5 flex-wrap justify-end max-w-[160px]">
@@ -727,7 +727,7 @@ export default function FreeAssessment() {
                                         type="button"
                                         onClick={prevStep}
                                         disabled={step === 1}
-                                        className={`flex items-center gap-2 px-6 py-2.5 text-[9px] font-bold uppercase tracking-[0.2em] transition-all border ${
+                                        className={`flex items-center gap-2 px-6 py-2.5 text-xs font-bold uppercase tracking-[0.2em] transition-all border ${
                                             step === 1
                                                 ? 'opacity-0 cursor-default border-transparent'
                                                 : 'border-gray-300 text-gray-400 hover:border-[#282728] hover:text-[#282728]'
@@ -737,12 +737,12 @@ export default function FreeAssessment() {
                                     </button>
 
                                     <div className="flex items-center gap-3">
-                                        <span className="text-[9px] font-black uppercase tracking-[0.3em] text-gray-300">{stepLabel} / 12</span>
+                                        <span className="text-xs font-black uppercase tracking-[0.3em] text-gray-300">{stepLabel} / 12</span>
                                         {step < 12 ? (
                                             <button
                                                 type="button"
                                                 onClick={nextStep}
-                                                className="group flex items-center gap-2 px-8 py-2.5 bg-[#282728] text-white text-[9px] font-bold uppercase tracking-[0.2em] transition-all hover:bg-[#436235] active:scale-95"
+                                                className="group flex items-center gap-2 px-8 py-2.5 bg-[#282728] text-white text-xs font-bold uppercase tracking-[0.2em] transition-all hover:bg-[#436235] active:scale-95"
                                             >
                                                 Continue <ChevronRight size={13} className="transition-transform group-hover:translate-x-0.5" />
                                             </button>
@@ -751,7 +751,7 @@ export default function FreeAssessment() {
                                                 type="button"
                                                 onClick={submitFinal}
                                                 disabled={processing}
-                                                className="flex items-center gap-2 px-8 py-2.5 bg-[#436235] text-white text-[9px] font-bold uppercase tracking-[0.2em] transition-all hover:bg-[#354d2a] active:scale-95 disabled:opacity-60"
+                                                className="flex items-center gap-2 px-8 py-2.5 bg-[#436235] text-white text-xs font-bold uppercase tracking-[0.2em] transition-all hover:bg-[#354d2a] active:scale-95 disabled:opacity-60"
                                             >
                                                 <CheckCircle size={13} />
                                                 {processing ? 'Finalizing...' : 'Submit Profile'}
@@ -805,7 +805,7 @@ function StepTerms({ data, setData, errors }) {
     return (
         <div className="space-y-12">
             <h2 className="text-3xl font-black text-[#282728] uppercase tracking-tighter mb-8 leading-tight">Privacy & Terms</h2>
-            <div className="bg-gray-50/50 rounded-3xl p-10 text-[13px] text-gray-400 leading-[2] font-medium h-96 overflow-y-auto border border-gray-100/50">
+            <div className="bg-gray-50/50 rounded-3xl p-10 text-base text-gray-400 leading-[2] font-medium h-96 overflow-y-auto border border-gray-100/50">
                 <p>Welcome to ePathways. By proceeding, you agree to the following terms. This assessment is designed to help us understand your immigration pathway to New Zealand and Australia.</p>
                 <p>The information you provide will be used solely for the purpose of this assessment. Eligibility criteria and pathways are subject to change in accordance with government regulations.</p>
                 <p>We are committed to protecting your privacy. All data submitted is encrypted and handled with the highest level of security. Please ensure that all information provided is accurate and complete to receive the most reliable evaluation.</p>
@@ -838,7 +838,7 @@ function StepPersonal({ data, setData, errors }) {
                 <Field label="First Name *" error={errors.first_name}>
                     <input
                         type="text"
-                        className="w-full px-5 py-3.5 bg-white border border-[#282728] rounded-xl focus:ring-2 focus:ring-[#436235]/20 focus:border-[#436235] transition-all outline-none"
+                        className="w-full bg-transparent border-b border-gray-200 py-3 text-[#282728] focus:outline-none focus:border-[#436235] transition-colors"
                         value={data.first_name}
                         onChange={e => setData('first_name', e.target.value)}
                     />
@@ -846,7 +846,7 @@ function StepPersonal({ data, setData, errors }) {
                 <Field label="Surname *" error={errors.last_name}>
                     <input
                         type="text"
-                        className="w-full px-5 py-3.5 bg-white border border-[#282728] rounded-xl focus:ring-2 focus:ring-[#436235]/20 focus:border-[#436235] transition-all outline-none"
+                        className="w-full bg-transparent border-b border-gray-200 py-3 text-[#282728] focus:outline-none focus:border-[#436235] transition-colors"
                         value={data.last_name}
                         onChange={e => setData('last_name', e.target.value)}
                     />
@@ -883,7 +883,7 @@ function StepPersonal({ data, setData, errors }) {
 
                 <Field label="Gender *" error={errors.gender}>
                     <select
-                        className="w-full px-5 py-3.5 bg-white border border-[#282728] rounded-xl outline-none"
+                        className="w-full bg-transparent border-b border-gray-200 py-3 text-[#282728] focus:outline-none focus:border-[#436235] transition-colors"
                         value={data.gender}
                         onChange={e => setData('gender', e.target.value)}
                     >
@@ -896,7 +896,7 @@ function StepPersonal({ data, setData, errors }) {
 
                 <Field label="Marital Status">
                     <select
-                        className="w-full px-5 py-3.5 bg-white border border-[#282728] rounded-xl outline-none"
+                        className="w-full bg-transparent border-b border-gray-200 py-3 text-[#282728] focus:outline-none focus:border-[#436235] transition-colors"
                         value={data.marital_status}
                         onChange={e => setData('marital_status', e.target.value)}
                     >
@@ -911,7 +911,7 @@ function StepPersonal({ data, setData, errors }) {
                 <Field label="Phone Number *" error={errors.phone}>
                     <input
                         type="tel"
-                        className="w-full px-5 py-3.5 bg-white border border-[#282728] rounded-xl outline-none"
+                        className="w-full bg-transparent border-b border-gray-200 py-3 text-[#282728] focus:outline-none focus:border-[#436235] transition-colors"
                         value={data.phone}
                         onChange={e => setData('phone', e.target.value)}
                     />
@@ -920,7 +920,7 @@ function StepPersonal({ data, setData, errors }) {
                 <Field label="Email Address *" error={errors.email}>
                     <input
                         type="email"
-                        className="w-full px-5 py-3.5 bg-white border border-[#282728] rounded-xl outline-none"
+                        className="w-full bg-transparent border-b border-gray-200 py-3 text-[#282728] focus:outline-none focus:border-[#436235] transition-colors"
                         value={data.email}
                         onChange={e => setData('email', e.target.value)}
                     />
@@ -929,7 +929,7 @@ function StepPersonal({ data, setData, errors }) {
                 <Field label="Date of Birth *" error={errors.dob}>
                     <input
                         type="date"
-                        className="w-full px-5 py-3.5 bg-white border border-[#282728] rounded-xl outline-none"
+                        className="w-full bg-transparent border-b border-gray-200 py-3 text-[#282728] focus:outline-none focus:border-[#436235] transition-colors"
                         value={data.dob}
                         onChange={e => setData('dob', e.target.value)}
                     />
@@ -938,7 +938,7 @@ function StepPersonal({ data, setData, errors }) {
                 <Field label="Country of Birth *" error={errors.country_of_birth}>
                     <input
                         type="text"
-                        className="w-full px-5 py-3.5 bg-white border border-[#282728] rounded-xl outline-none"
+                        className="w-full bg-transparent border-b border-gray-200 py-3 text-[#282728] focus:outline-none focus:border-[#436235] transition-colors"
                         value={data.country_of_birth}
                         onChange={e => setData('country_of_birth', e.target.value)}
                     />
@@ -947,7 +947,7 @@ function StepPersonal({ data, setData, errors }) {
                 <Field label="Place of Birth">
                     <input
                         type="text"
-                        className="w-full px-5 py-3.5 bg-white border border-[#282728] rounded-xl outline-none"
+                        className="w-full bg-transparent border-b border-gray-200 py-3 text-[#282728] focus:outline-none focus:border-[#436235] transition-colors"
                         placeholder="e.g. City or Town"
                         value={data.place_of_birth}
                         onChange={e => setData('place_of_birth', e.target.value)}
@@ -957,7 +957,7 @@ function StepPersonal({ data, setData, errors }) {
                 <Field label="Citizenship *" error={errors.citizenship}>
                     <input
                         type="text"
-                        className="w-full px-5 py-3.5 bg-white border border-[#282728] rounded-xl outline-none"
+                        className="w-full bg-transparent border-b border-gray-200 py-3 text-[#282728] focus:outline-none focus:border-[#436235] transition-colors"
                         value={data.citizenship}
                         onChange={e => setData('citizenship', e.target.value)}
                     />
@@ -967,13 +967,13 @@ function StepPersonal({ data, setData, errors }) {
                     <h3 className="text-sm font-bold uppercase tracking-widest text-[#436235] mb-6">Current Residence</h3>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                         <Field label="City">
-                            <input type="text" className="w-full px-5 py-3 bg-white border border-[#282728] rounded-xl" value={data.residence_city} onChange={e => setData('residence_city', e.target.value)} />
+                            <input type="text" className="w-full bg-transparent border-b border-gray-200 py-3 text-[#282728] focus:outline-none focus:border-[#436235] transition-colors" value={data.residence_city} onChange={e => setData('residence_city', e.target.value)} />
                         </Field>
                         <Field label="State/Province">
-                            <input type="text" className="w-full px-5 py-3 bg-white border border-[#282728] rounded-xl" value={data.residence_state} onChange={e => setData('residence_state', e.target.value)} />
+                            <input type="text" className="w-full bg-transparent border-b border-gray-200 py-3 text-[#282728] focus:outline-none focus:border-[#436235] transition-colors" value={data.residence_state} onChange={e => setData('residence_state', e.target.value)} />
                         </Field>
                         <Field label="Country *" error={errors.residence_country}>
-                            <input type="text" className="w-full px-5 py-3 bg-white border border-[#282728] rounded-xl" value={data.residence_country} onChange={e => setData('residence_country', e.target.value)} />
+                            <input type="text" className="w-full bg-transparent border-b border-gray-200 py-3 text-[#282728] focus:outline-none focus:border-[#436235] transition-colors" value={data.residence_country} onChange={e => setData('residence_country', e.target.value)} />
                         </Field>
                     </div>
                 </div>
@@ -991,10 +991,10 @@ function StepPersonal({ data, setData, errors }) {
                         {data.has_passport === 'Yes' && (
                             <>
                                 <Field label="Passport Number *" error={errors.passport_number}>
-                                    <input type="text" className="w-full px-5 py-3 bg-white border border-[#282728] rounded-xl" value={data.passport_number} onChange={e => setData('passport_number', e.target.value)} />
+                                    <input type="text" className="w-full bg-transparent border-b border-gray-200 py-3 text-[#282728] focus:outline-none focus:border-[#436235] transition-colors" value={data.passport_number} onChange={e => setData('passport_number', e.target.value)} />
                                 </Field>
                                 <Field label="Expiry Date *" error={errors.passport_expiry}>
-                                    <input type="date" className="w-full px-5 py-3 bg-white border border-[#282728] rounded-xl" value={data.passport_expiry} onChange={e => setData('passport_expiry', e.target.value)} />
+                                    <input type="date" className="w-full bg-transparent border-b border-gray-200 py-3 text-[#282728] focus:outline-none focus:border-[#436235] transition-colors" value={data.passport_expiry} onChange={e => setData('passport_expiry', e.target.value)} />
                                 </Field>
                                 <div className="col-span-full">
                                     <Field label="Upload Passport Copy (PDF)">
@@ -1029,19 +1029,19 @@ function StepStudyPlans({ data, setData, errors }) {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <Field label="Preferred Course/Program *" error={errors['study_plans.preferred_course']}>
-                    <input type="text" className="w-full px-5 py-3 bg-white border border-[#282728] rounded-xl" value={data.study_plans.preferred_course} onChange={e => updateNested('preferred_course', e.target.value)} />
+                    <input type="text" className="w-full bg-transparent border-b border-gray-200 py-3 text-[#282728] focus:outline-none focus:border-[#436235] transition-colors" value={data.study_plans.preferred_course} onChange={e => updateNested('preferred_course', e.target.value)} />
                 </Field>
                 <Field label="Qualification Level *" error={errors['study_plans.qualification_level']}>
-                    <select className="w-full px-5 py-3 bg-white border border-[#282728] rounded-xl" value={data.study_plans.qualification_level} onChange={e => updateNested('qualification_level', e.target.value)}>
+                    <select className="w-full bg-transparent border-b border-gray-200 py-3 text-[#282728] focus:outline-none focus:border-[#436235] transition-colors" value={data.study_plans.qualification_level} onChange={e => updateNested('qualification_level', e.target.value)}>
                         <option value="">Select Level</option>
                         {levels.map(l => <option key={l}>{l}</option>)}
                     </select>
                 </Field>
                 <Field label="Preferred City (if any)">
-                    <input type="text" className="w-full px-5 py-3 bg-white border border-[#282728] rounded-xl" value={data.study_plans.preferred_city} onChange={e => updateNested('preferred_city', e.target.value)} />
+                    <input type="text" className="w-full bg-transparent border-b border-gray-200 py-3 text-[#282728] focus:outline-none focus:border-[#436235] transition-colors" value={data.study_plans.preferred_city} onChange={e => updateNested('preferred_city', e.target.value)} />
                 </Field>
                 <Field label="Preferred Intake">
-                    <input type="text" placeholder="e.g. Feb 2025" className="w-full px-5 py-3 bg-white border border-[#282728] rounded-xl" value={data.study_plans.preferred_intake} onChange={e => updateNested('preferred_intake', e.target.value)} />
+                    <input type="text" placeholder="e.g. Feb 2025" className="w-full bg-transparent border-b border-gray-200 py-3 text-[#282728] focus:outline-none focus:border-[#436235] transition-colors" value={data.study_plans.preferred_intake} onChange={e => updateNested('preferred_intake', e.target.value)} />
                 </Field>
 
                 <div className="col-span-full border-t border-gray-50 pt-8 mt-4">
@@ -1135,7 +1135,7 @@ function StepEducation({ data, setData, errors }) {
                 {data.high_school_completed === 'Yes' && (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
                         <Field label="Highest Level Completed">
-                            <select className="w-full px-5 py-3 bg-white border border-[#282728] rounded-xl" value={data.high_school_level} onChange={e => setData('high_school_level', e.target.value)}>
+                            <select className="w-full bg-transparent border-b border-gray-200 py-3 text-[#282728] focus:outline-none focus:border-[#436235] transition-colors" value={data.high_school_level} onChange={e => setData('high_school_level', e.target.value)}>
                                 <option value="">Select Level</option>
                                 <option>10th</option>
                                 <option>12th</option>
@@ -1143,16 +1143,16 @@ function StepEducation({ data, setData, errors }) {
                             </select>
                         </Field>
                         <Field label="Name of Institution">
-                            <input type="text" className="w-full px-5 py-3 bg-white border border-[#282728] rounded-xl" value={data.high_school_institution} onChange={e => setData('high_school_institution', e.target.value)} />
+                            <input type="text" className="w-full bg-transparent border-b border-gray-200 py-3 text-[#282728] focus:outline-none focus:border-[#436235] transition-colors" value={data.high_school_institution} onChange={e => setData('high_school_institution', e.target.value)} />
                         </Field>
                         <Field label="Start Date">
-                            <input type="date" className="w-full px-5 py-3 bg-white border border-[#282728] rounded-xl" value={data.high_school_start} onChange={e => setData('high_school_start', e.target.value)} />
+                            <input type="date" className="w-full bg-transparent border-b border-gray-200 py-3 text-[#282728] focus:outline-none focus:border-[#436235] transition-colors" value={data.high_school_start} onChange={e => setData('high_school_start', e.target.value)} />
                         </Field>
                         <Field label="End Date">
-                            <input type="date" className="w-full px-5 py-3 bg-white border border-[#282728] rounded-xl" value={data.high_school_end} onChange={e => setData('high_school_end', e.target.value)} />
+                            <input type="date" className="w-full bg-transparent border-b border-gray-200 py-3 text-[#282728] focus:outline-none focus:border-[#436235] transition-colors" value={data.high_school_end} onChange={e => setData('high_school_end', e.target.value)} />
                         </Field>
                         <Field label="Average Marks / Percentage">
-                            <input type="text" className="w-full px-5 py-3 bg-white border border-[#282728] rounded-xl" value={data.high_school_marks} onChange={e => setData('high_school_marks', e.target.value)} />
+                            <input type="text" className="w-full bg-transparent border-b border-gray-200 py-3 text-[#282728] focus:outline-none focus:border-[#436235] transition-colors" value={data.high_school_marks} onChange={e => setData('high_school_marks', e.target.value)} />
                         </Field>
                     </div>
                 )}
@@ -1213,7 +1213,7 @@ function StepEducation({ data, setData, errors }) {
                 {data.has_gap === 'Yes' && (
                     <div className="mt-6 space-y-6">
                         <Field label="How long was the gap? *" error={errors.gap_length}>
-                            <input type="text" placeholder="e.g. 2 years" className="w-full px-5 py-3 bg-white border border-[#282728] rounded-xl" value={data.gap_length} onChange={e => setData('gap_length', e.target.value)} />
+                            <input type="text" placeholder="e.g. 2 years" className="w-full bg-transparent border-b border-gray-200 py-3 text-[#282728] focus:outline-none focus:border-[#436235] transition-colors" value={data.gap_length} onChange={e => setData('gap_length', e.target.value)} />
                         </Field>
                         <Field label="What were you doing during this time? *" error={errors.gap_activities}>
                             <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mt-2">
@@ -1274,19 +1274,19 @@ function ExpandableEducationCard({ edu, index, updateEduLevel, errors }) {
                 <div className="px-6 pb-6 pt-2 border-t border-gray-50">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <Field label="Field of Study *" error={fieldOfStudyErr}>
-                            <input type="text" className={`w-full px-5 py-3 bg-white border rounded-xl ${fieldOfStudyErr ? 'border-red-500' : 'border-[#282728]'}`} value={edu.field_of_study} onChange={e => updateEduLevel(index, 'field_of_study', e.target.value)} />
+                            <input type="text" className={`w-full bg-transparent border-b py-3 text-[#282728] focus:outline-none focus:border-[#436235] transition-colors ${fieldOfStudyErr ? "border-red-500" : "border-gray-200"}`} value={edu.field_of_study} onChange={e => updateEduLevel(index, 'field_of_study', e.target.value)} />
                         </Field>
                         <Field label="Name of Institution *" error={institutionErr}>
-                            <input type="text" className={`w-full px-5 py-3 bg-white border rounded-xl ${institutionErr ? 'border-red-500' : 'border-[#282728]'}`} value={edu.institution} onChange={e => updateEduLevel(index, 'institution', e.target.value)} />
+                            <input type="text" className={`w-full bg-transparent border-b py-3 text-[#282728] focus:outline-none focus:border-[#436235] transition-colors ${institutionErr ? "border-red-500" : "border-gray-200"}`} value={edu.institution} onChange={e => updateEduLevel(index, 'institution', e.target.value)} />
                         </Field>
                         <Field label="Start Date">
-                            <input type="date" className="w-full px-5 py-3 bg-white border border-[#282728] rounded-xl" value={edu.start_date} onChange={e => updateEduLevel(index, 'start_date', e.target.value)} />
+                            <input type="date" className="w-full bg-transparent border-b border-gray-200 py-3 text-[#282728] focus:outline-none focus:border-[#436235] transition-colors" value={edu.start_date} onChange={e => updateEduLevel(index, 'start_date', e.target.value)} />
                         </Field>
                         <Field label="End Date">
-                            <input type="date" className="w-full px-5 py-3 bg-white border border-[#282728] rounded-xl" value={edu.end_date} onChange={e => updateEduLevel(index, 'end_date', e.target.value)} />
+                            <input type="date" className="w-full bg-transparent border-b border-gray-200 py-3 text-[#282728] focus:outline-none focus:border-[#436235] transition-colors" value={edu.end_date} onChange={e => updateEduLevel(index, 'end_date', e.target.value)} />
                         </Field>
                         <Field label="Average Marks / Percentage">
-                            <input type="text" className="w-full px-5 py-3 bg-white border border-[#282728] rounded-xl" value={edu.marks_percentage} onChange={e => updateEduLevel(index, 'marks_percentage', e.target.value)} />
+                            <input type="text" className="w-full bg-transparent border-b border-gray-200 py-3 text-[#282728] focus:outline-none focus:border-[#436235] transition-colors" value={edu.marks_percentage} onChange={e => updateEduLevel(index, 'marks_percentage', e.target.value)} />
                         </Field>
                     </div>
                 </div>
@@ -1326,13 +1326,13 @@ function StepWork({ data, setData, errors }) {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <Field label="Current Company / Organization *" error={errors['work_experience.company_name']}>
-                        <input type="text" className="w-full px-5 py-3.5 bg-white border border-[#282728] rounded-xl outline-none" value={data.work_experience[0].company_name} onChange={e => updateWork('company_name', e.target.value)} />
+                        <input type="text" className="w-full bg-transparent border-b border-gray-200 py-3 text-[#282728] focus:outline-none focus:border-[#436235] transition-colors" value={data.work_experience[0].company_name} onChange={e => updateWork('company_name', e.target.value)} />
                     </Field>
                     <Field label="Job Title / Role *" error={errors['work_experience.job_title']}>
-                        <input type="text" className="w-full px-5 py-3.5 bg-white border border-[#282728] rounded-xl outline-none" value={data.work_experience[0].job_title} onChange={e => updateWork('job_title', e.target.value)} />
+                        <input type="text" className="w-full bg-transparent border-b border-gray-200 py-3 text-[#282728] focus:outline-none focus:border-[#436235] transition-colors" value={data.work_experience[0].job_title} onChange={e => updateWork('job_title', e.target.value)} />
                     </Field>
                     <Field label="Start Date">
-                        <input type="date" className="w-full px-5 py-3.5 bg-white border border-[#282728] rounded-xl outline-none" value={data.work_experience[0].start_date} onChange={e => updateWork('start_date', e.target.value)} />
+                        <input type="date" className="w-full bg-transparent border-b border-gray-200 py-3 text-[#282728] focus:outline-none focus:border-[#436235] transition-colors" value={data.work_experience[0].start_date} onChange={e => updateWork('start_date', e.target.value)} />
                     </Field>
                     <Field label="Still working here?">
                         <div className="flex gap-4 mt-2">
@@ -1342,7 +1342,7 @@ function StepWork({ data, setData, errors }) {
                     </Field>
                     {data.work_experience[0].is_current === 'No' && (
                         <Field label="End Date">
-                            <input type="date" className="w-full px-5 py-3.5 bg-white border border-[#282728] rounded-xl outline-none" value={data.work_experience[0].end_date} onChange={e => updateWork('end_date', e.target.value)} />
+                            <input type="date" className="w-full bg-transparent border-b border-gray-200 py-3 text-[#282728] focus:outline-none focus:border-[#436235] transition-colors" value={data.work_experience[0].end_date} onChange={e => updateWork('end_date', e.target.value)} />
                         </Field>
                     )}
                     <div className="col-span-full">
@@ -1413,7 +1413,7 @@ function StepFinancial({ data, setData, errors }) {
 
                 <div className="bg-gray-50/50 rounded-3xl p-8 border border-gray-100 text-sm text-gray-500 leading-relaxed">
                     <h4 className="text-sm font-black uppercase tracking-[0.3em] text-[#436235] mb-4">Estimated Tuition Ranges (per year)</h4>
-                    <ul className="space-y-2 text-[12px] text-gray-400 font-medium">
+                    <ul className="space-y-2 text-base text-gray-400 font-medium">
                         <li>Diploma (Level 5-6): NZ$18,000 - NZ$26,000</li>
                         <li>Bachelor Degree (Level 7): NZ$22,000 - NZ$32,000</li>
                         <li>Postgraduate Diploma (Level 8): NZ$25,000 - NZ$35,000</li>
@@ -1472,7 +1472,7 @@ function StepFinancial({ data, setData, errors }) {
 
                 <div className="bg-gray-50/50 rounded-3xl p-8 border border-gray-100 text-sm text-gray-500 leading-relaxed">
                     <h4 className="text-sm font-black uppercase tracking-[0.3em] text-[#436235] mb-4">Additional Costs to Consider</h4>
-                    <ul className="space-y-2 text-[12px] text-gray-400 font-medium">
+                    <ul className="space-y-2 text-base text-gray-400 font-medium">
                         <li>Travel & Medical Insurance: NZ$1,000 - NZ$1,600 per year</li>
                         <li>Visa Application Fee (INZ): NZ$850</li>
                         <li>Visa Application Fee (Professional/Agent): NZ$1,500</li>
@@ -1553,7 +1553,7 @@ function StepSourceOfFunds({ data, setData, errors }) {
                             <h4 className="text-sm font-bold uppercase tracking-widest text-[#436235]">Sponsor Details</h4>
 
                             <Field label="Relation to Sponsor *" error={errors['source_of_funds_info.sponsor_relation']}>
-                                <select className="w-full px-5 py-3 bg-white border border-[#282728] rounded-xl" value={data.source_of_funds_info.sponsor_relation} onChange={e => update('sponsor_relation', e.target.value)}>
+                                <select className="w-full bg-transparent border-b border-gray-200 py-3 text-[#282728] focus:outline-none focus:border-[#436235] transition-colors" value={data.source_of_funds_info.sponsor_relation} onChange={e => update('sponsor_relation', e.target.value)}>
                                     <option value="">Select Relation</option>
                                     {sponsorRelations.map(r => <option key={r}>{r}</option>)}
                                 </select>
@@ -1578,13 +1578,13 @@ function StepSourceOfFunds({ data, setData, errors }) {
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <Field label="Sponsor Occupation *" error={errors['source_of_funds_info.sponsor_occupation']}>
-                                    <input type="text" className="w-full px-5 py-3 bg-white border border-[#282728] rounded-xl" value={data.source_of_funds_info.sponsor_occupation} onChange={e => update('sponsor_occupation', e.target.value)} />
+                                    <input type="text" className="w-full bg-transparent border-b border-gray-200 py-3 text-[#282728] focus:outline-none focus:border-[#436235] transition-colors" value={data.source_of_funds_info.sponsor_occupation} onChange={e => update('sponsor_occupation', e.target.value)} />
                                 </Field>
                                 <Field label="Employer / Business Name">
-                                    <input type="text" className="w-full px-5 py-3 bg-white border border-[#282728] rounded-xl" value={data.source_of_funds_info.sponsor_employer} onChange={e => update('sponsor_employer', e.target.value)} />
+                                    <input type="text" className="w-full bg-transparent border-b border-gray-200 py-3 text-[#282728] focus:outline-none focus:border-[#436235] transition-colors" value={data.source_of_funds_info.sponsor_employer} onChange={e => update('sponsor_employer', e.target.value)} />
                                 </Field>
                                 <Field label="Estimated Annual Income *" error={errors['source_of_funds_info.sponsor_annual_income']}>
-                                    <input type="text" placeholder="e.g. NZ$80,000" className="w-full px-5 py-3 bg-white border border-[#282728] rounded-xl" value={data.source_of_funds_info.sponsor_annual_income} onChange={e => update('sponsor_annual_income', e.target.value)} />
+                                    <input type="text" placeholder="e.g. NZ$80,000" className="w-full bg-transparent border-b border-gray-200 py-3 text-[#282728] focus:outline-none focus:border-[#436235] transition-colors" value={data.source_of_funds_info.sponsor_annual_income} onChange={e => update('sponsor_annual_income', e.target.value)} />
                                 </Field>
                             </div>
 
@@ -1718,7 +1718,7 @@ function StepImmigration({ data, setData, errors }) {
 
                 <div className="border-t border-gray-50 pt-8">
                     <Field label="What country will you be in when this application is submitted? *" error={errors['immigration_info.submission_country']}>
-                        <input type="text" className="w-full px-5 py-3.5 bg-white border border-[#282728] rounded-xl outline-none" value={data.immigration_info.submission_country} onChange={e => update('submission_country', e.target.value)} />
+                        <input type="text" className="w-full bg-transparent border-b border-gray-200 py-3 text-[#282728] focus:outline-none focus:border-[#436235] transition-colors" value={data.immigration_info.submission_country} onChange={e => update('submission_country', e.target.value)} />
                     </Field>
                 </div>
             </div>
@@ -1793,7 +1793,7 @@ function StepFamily({ data, setData, errors }) {
             <h2 className="text-3xl font-black text-[#282728] uppercase tracking-tighter mb-10">Family Information</h2>
 
             <div className="bg-gray-50/50 rounded-3xl p-8 border border-gray-100 text-sm text-gray-500 leading-relaxed">
-                <p className="text-[12px] text-gray-400 font-medium">No need to include deceased family members. Please provide information for living family members only.</p>
+                <p className="text-base text-gray-400 font-medium">No need to include deceased family members. Please provide information for living family members only.</p>
             </div>
 
             <div className="space-y-4">
@@ -1827,28 +1827,28 @@ function FamilyMemberCard({ member, index, updateMember, partnershipStatuses }) 
                 <div className="px-6 pb-6 pt-2 border-t border-gray-50">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <Field label="First Name">
-                            <input type="text" className="w-full px-5 py-3 bg-white border border-[#282728] rounded-xl" value={member.first_name} onChange={e => updateMember(index, 'first_name', e.target.value)} />
+                            <input type="text" className="w-full bg-transparent border-b border-gray-200 py-3 text-[#282728] focus:outline-none focus:border-[#436235] transition-colors" value={member.first_name} onChange={e => updateMember(index, 'first_name', e.target.value)} />
                         </Field>
                         <Field label="Family Name">
-                            <input type="text" className="w-full px-5 py-3 bg-white border border-[#282728] rounded-xl" value={member.family_name} onChange={e => updateMember(index, 'family_name', e.target.value)} />
+                            <input type="text" className="w-full bg-transparent border-b border-gray-200 py-3 text-[#282728] focus:outline-none focus:border-[#436235] transition-colors" value={member.family_name} onChange={e => updateMember(index, 'family_name', e.target.value)} />
                         </Field>
                         <Field label="Date of Birth">
-                            <input type="date" className="w-full px-5 py-3 bg-white border border-[#282728] rounded-xl" value={member.dob} onChange={e => updateMember(index, 'dob', e.target.value)} />
+                            <input type="date" className="w-full bg-transparent border-b border-gray-200 py-3 text-[#282728] focus:outline-none focus:border-[#436235] transition-colors" value={member.dob} onChange={e => updateMember(index, 'dob', e.target.value)} />
                         </Field>
                         <Field label="Partnership Status">
-                            <select className="w-full px-5 py-3 bg-white border border-[#282728] rounded-xl" value={member.partnership_status} onChange={e => updateMember(index, 'partnership_status', e.target.value)}>
+                            <select className="w-full bg-transparent border-b border-gray-200 py-3 text-[#282728] focus:outline-none focus:border-[#436235] transition-colors" value={member.partnership_status} onChange={e => updateMember(index, 'partnership_status', e.target.value)}>
                                 <option value="">Select Status</option>
                                 {partnershipStatuses.map(s => <option key={s}>{s}</option>)}
                             </select>
                         </Field>
                         <Field label="Country of Residence">
-                            <input type="text" className="w-full px-5 py-3 bg-white border border-[#282728] rounded-xl" value={member.country_of_residence} onChange={e => updateMember(index, 'country_of_residence', e.target.value)} />
+                            <input type="text" className="w-full bg-transparent border-b border-gray-200 py-3 text-[#282728] focus:outline-none focus:border-[#436235] transition-colors" value={member.country_of_residence} onChange={e => updateMember(index, 'country_of_residence', e.target.value)} />
                         </Field>
                         <Field label="Country of Birth">
-                            <input type="text" className="w-full px-5 py-3 bg-white border border-[#282728] rounded-xl" value={member.country_of_birth} onChange={e => updateMember(index, 'country_of_birth', e.target.value)} />
+                            <input type="text" className="w-full bg-transparent border-b border-gray-200 py-3 text-[#282728] focus:outline-none focus:border-[#436235] transition-colors" value={member.country_of_birth} onChange={e => updateMember(index, 'country_of_birth', e.target.value)} />
                         </Field>
                         <Field label="Occupation">
-                            <input type="text" className="w-full px-5 py-3 bg-white border border-[#282728] rounded-xl" value={member.occupation} onChange={e => updateMember(index, 'occupation', e.target.value)} />
+                            <input type="text" className="w-full bg-transparent border-b border-gray-200 py-3 text-[#282728] focus:outline-none focus:border-[#436235] transition-colors" value={member.occupation} onChange={e => updateMember(index, 'occupation', e.target.value)} />
                         </Field>
                     </div>
                 </div>
@@ -1879,13 +1879,13 @@ function StepAdditional({ data, setData, errors }) {
                 {data.nz_contacts_info.has_nz_contacts === 'Yes' && (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-gray-50/50 p-8 rounded-3xl border border-gray-100">
                         <Field label="First Name *" error={errors['nz_contacts_info.contact_first_name']}>
-                            <input type="text" className="w-full px-5 py-3 bg-white border border-[#282728] rounded-xl" value={data.nz_contacts_info.contact_first_name} onChange={e => updateNzContacts('contact_first_name', e.target.value)} />
+                            <input type="text" className="w-full bg-transparent border-b border-gray-200 py-3 text-[#282728] focus:outline-none focus:border-[#436235] transition-colors" value={data.nz_contacts_info.contact_first_name} onChange={e => updateNzContacts('contact_first_name', e.target.value)} />
                         </Field>
                         <Field label="Family Name *" error={errors['nz_contacts_info.contact_family_name']}>
-                            <input type="text" className="w-full px-5 py-3 bg-white border border-[#282728] rounded-xl" value={data.nz_contacts_info.contact_family_name} onChange={e => updateNzContacts('contact_family_name', e.target.value)} />
+                            <input type="text" className="w-full bg-transparent border-b border-gray-200 py-3 text-[#282728] focus:outline-none focus:border-[#436235] transition-colors" value={data.nz_contacts_info.contact_family_name} onChange={e => updateNzContacts('contact_family_name', e.target.value)} />
                         </Field>
                         <Field label="Relationship">
-                            <select className="w-full px-5 py-3 bg-white border border-[#282728] rounded-xl" value={data.nz_contacts_info.contact_relationship} onChange={e => updateNzContacts('contact_relationship', e.target.value)}>
+                            <select className="w-full bg-transparent border-b border-gray-200 py-3 text-[#282728] focus:outline-none focus:border-[#436235] transition-colors" value={data.nz_contacts_info.contact_relationship} onChange={e => updateNzContacts('contact_relationship', e.target.value)}>
                                 <option value="">Select Relationship</option>
                                 <option>Family</option>
                                 <option>Friend</option>
@@ -1893,11 +1893,11 @@ function StepAdditional({ data, setData, errors }) {
                             </select>
                         </Field>
                         <Field label="Contact Number">
-                            <input type="tel" className="w-full px-5 py-3 bg-white border border-[#282728] rounded-xl" value={data.nz_contacts_info.contact_number} onChange={e => updateNzContacts('contact_number', e.target.value)} />
+                            <input type="tel" className="w-full bg-transparent border-b border-gray-200 py-3 text-[#282728] focus:outline-none focus:border-[#436235] transition-colors" value={data.nz_contacts_info.contact_number} onChange={e => updateNzContacts('contact_number', e.target.value)} />
                         </Field>
                         <div className="col-span-full">
                             <Field label="Address in New Zealand">
-                                <input type="text" className="w-full px-5 py-3 bg-white border border-[#282728] rounded-xl" value={data.nz_contacts_info.contact_address} onChange={e => updateNzContacts('contact_address', e.target.value)} />
+                                <input type="text" className="w-full bg-transparent border-b border-gray-200 py-3 text-[#282728] focus:outline-none focus:border-[#436235] transition-colors" value={data.nz_contacts_info.contact_address} onChange={e => updateNzContacts('contact_address', e.target.value)} />
                             </Field>
                         </div>
                     </div>
@@ -1936,7 +1936,7 @@ function StepAdditional({ data, setData, errors }) {
                 {data.home_ties_info.family_owns_property === 'Yes' && (
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6 bg-gray-50/50 p-8 rounded-3xl border border-gray-100">
                         <Field label="Property Type">
-                            <select className="w-full px-5 py-3 bg-white border border-[#282728] rounded-xl" value={data.home_ties_info.property_type} onChange={e => updateHomeTies('property_type', e.target.value)}>
+                            <select className="w-full bg-transparent border-b border-gray-200 py-3 text-[#282728] focus:outline-none focus:border-[#436235] transition-colors" value={data.home_ties_info.property_type} onChange={e => updateHomeTies('property_type', e.target.value)}>
                                 <option value="">Select Type</option>
                                 <option>House</option>
                                 <option>Apartment</option>
@@ -1945,10 +1945,10 @@ function StepAdditional({ data, setData, errors }) {
                             </select>
                         </Field>
                         <Field label="Location">
-                            <input type="text" className="w-full px-5 py-3 bg-white border border-[#282728] rounded-xl" value={data.home_ties_info.property_location} onChange={e => updateHomeTies('property_location', e.target.value)} />
+                            <input type="text" className="w-full bg-transparent border-b border-gray-200 py-3 text-[#282728] focus:outline-none focus:border-[#436235] transition-colors" value={data.home_ties_info.property_location} onChange={e => updateHomeTies('property_location', e.target.value)} />
                         </Field>
                         <Field label="Owner">
-                            <select className="w-full px-5 py-3 bg-white border border-[#282728] rounded-xl" value={data.home_ties_info.property_owner} onChange={e => updateHomeTies('property_owner', e.target.value)}>
+                            <select className="w-full bg-transparent border-b border-gray-200 py-3 text-[#282728] focus:outline-none focus:border-[#436235] transition-colors" value={data.home_ties_info.property_owner} onChange={e => updateHomeTies('property_owner', e.target.value)}>
                                 <option value="">Select Owner</option>
                                 <option>Self</option>
                                 <option>Parents</option>
@@ -1970,10 +1970,10 @@ function StepAdditional({ data, setData, errors }) {
                 {data.home_ties_info.family_owns_business === 'Yes' && (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-gray-50/50 p-8 rounded-3xl border border-gray-100">
                         <Field label="Type of Business">
-                            <input type="text" className="w-full px-5 py-3 bg-white border border-[#282728] rounded-xl" value={data.home_ties_info.business_type} onChange={e => updateHomeTies('business_type', e.target.value)} />
+                            <input type="text" className="w-full bg-transparent border-b border-gray-200 py-3 text-[#282728] focus:outline-none focus:border-[#436235] transition-colors" value={data.home_ties_info.business_type} onChange={e => updateHomeTies('business_type', e.target.value)} />
                         </Field>
                         <Field label="Your Involvement">
-                            <input type="text" className="w-full px-5 py-3 bg-white border border-[#282728] rounded-xl" placeholder="e.g. Manager, Employee, None" value={data.home_ties_info.business_involvement} onChange={e => updateHomeTies('business_involvement', e.target.value)} />
+                            <input type="text" className="w-full bg-transparent border-b border-gray-200 py-3 text-[#282728] focus:outline-none focus:border-[#436235] transition-colors" placeholder="e.g. Manager, Employee, None" value={data.home_ties_info.business_involvement} onChange={e => updateHomeTies('business_involvement', e.target.value)} />
                         </Field>
                     </div>
                 )}
@@ -1986,7 +1986,7 @@ function StepDeclaration({ data, setData, errors }) {
     return (
         <div className="space-y-12">
             <h2 className="text-3xl font-black text-[#282728] uppercase tracking-tighter mb-8 leading-tight">Declaration</h2>
-            <div className="bg-gray-50/50 rounded-3xl p-10 text-[13px] text-gray-400 leading-[2] font-medium h-96 overflow-y-auto border border-gray-100/50">
+            <div className="bg-gray-50/50 rounded-3xl p-10 text-base text-gray-400 leading-[2] font-medium h-96 overflow-y-auto border border-gray-100/50">
                 <p className="mb-4">I declare that the above information I provide is true, correct and complete. I understand that I must inform Immigration New Zealand (INZ) of any relevant fact or change of circumstances that may affect this application, including changes that occur after this form is submitted and before the application is decided.</p>
                 <p className="mb-4">I understand that INZ may verify the information I have provided and may request further documentation to support my application.</p>
                 <p className="mb-4"><strong className="text-[#282728]">Examples of relevant facts include but are not limited to:</strong></p>
@@ -2022,16 +2022,18 @@ function StepDeclaration({ data, setData, errors }) {
 function Field({ label, error, children }) {
     const hasError = !!error;
     return (
-        <div className="space-y-3">
+        <div className="space-y-2">
             <div className="flex justify-between items-end px-1">
-                <label className={`text-sm font-black uppercase tracking-[0.3em] transition-colors ${hasError ? 'text-red-500' : 'text-[#282728] opacity-60'}`}>{label}</label>
-                {hasError && <span className="text-sm font-black text-red-500 uppercase tracking-widest leading-none">Field Required</span>}
+                <label className={`text-xs font-bold uppercase tracking-[0.2em] transition-colors ${hasError ? 'text-red-500' : 'text-gray-400'}`}>
+                    {label}
+                </label>
             </div>
-            <div className={`transition-all duration-300 ${hasError ? 'scale-[1.01]' : ''}`}>
-                <div className={hasError ? 'rounded-xl ring-2 ring-red-500 ring-offset-2 ring-offset-white shadow-[0_0_0_6px_rgba(239,68,68,0.08)]' : ''}>
-                    {children}
-                </div>
-            </div>
+            {children}
+            {hasError && (
+                <p className="text-[10px] font-black text-red-500 uppercase tracking-widest mt-1.5 pl-1">
+                    {error}
+                </p>
+            )}
         </div>
     );
 }

@@ -38,11 +38,11 @@ export default function VisaAssessmentForm() {
 
                     <div className="relative z-10 flex flex-col h-full justify-between">
                         <div>
-                            <a href="/immigration-assessment" className="inline-flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-white/50 hover:text-white mb-16 transition-colors group">
+                            <a href="/immigration-assessment" className="inline-flex items-center gap-2 text-sm font-bold uppercase tracking-widest text-white/50 hover:text-white mb-16 transition-colors group">
                                 <ChevronLeft size={12} className="group-hover:-translate-x-1 transition-transform" /> Back to pathways
                             </a>
 
-                            <span className="text-[11px] font-bold tracking-[0.4em] uppercase text-[#00A693] mb-6 block">
+                            <span className="text-sm font-bold tracking-[0.4em] uppercase text-[#00A693] mb-6 block">
                                 Immigration Assessment
                             </span>
                             <h1 className="text-4xl md:text-5xl lg:text-6xl font-medium mb-8 tracking-tight text-white leading-tight">
@@ -56,15 +56,15 @@ export default function VisaAssessmentForm() {
                         <div className="space-y-6 hidden md:block">
                             <div className="flex items-center gap-4">
                                 <div className={`w-8 h-8 rounded-full border flex items-center justify-center text-xs font-bold transition-colors duration-500 ${step >= 1 ? 'bg-[#00A693] border-[#00A693] text-white' : 'border-white/20 text-white/50'}`}>1</div>
-                                <span className={`text-[11px] font-bold uppercase tracking-widest transition-colors duration-500 ${step >= 1 ? 'text-white' : 'text-white/50'}`}>Personal Details</span>
+                                <span className={`text-sm font-bold uppercase tracking-widest transition-colors duration-500 ${step >= 1 ? 'text-white' : 'text-white/50'}`}>Personal Details</span>
                             </div>
                             <div className="flex items-center gap-4">
                                 <div className={`w-8 h-8 rounded-full border flex items-center justify-center text-xs font-bold transition-colors duration-500 ${step >= 2 ? 'bg-[#00A693] border-[#00A693] text-white' : 'border-white/20 text-white/50'}`}>2</div>
-                                <span className={`text-[11px] font-bold uppercase tracking-widest transition-colors duration-500 ${step >= 2 ? 'text-white' : 'text-white/50'}`}>Academic & Work</span>
+                                <span className={`text-sm font-bold uppercase tracking-widest transition-colors duration-500 ${step >= 2 ? 'text-white' : 'text-white/50'}`}>Academic & Work</span>
                             </div>
                             <div className="flex items-center gap-4">
                                 <div className={`w-8 h-8 rounded-full border flex items-center justify-center text-xs font-bold transition-colors duration-500 ${step >= 3 ? 'bg-[#00A693] border-[#00A693] text-white' : 'border-white/20 text-white/50'}`}>3</div>
-                                <span className={`text-[11px] font-bold uppercase tracking-widest transition-colors duration-500 ${step >= 3 ? 'text-white' : 'text-white/50'}`}>Final Review</span>
+                                <span className={`text-sm font-bold uppercase tracking-widest transition-colors duration-500 ${step >= 3 ? 'text-white' : 'text-white/50'}`}>Final Review</span>
                             </div>
                         </div>
                     </div>
@@ -88,25 +88,25 @@ export default function VisaAssessmentForm() {
 
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-10">
                                             <div className="space-y-2">
-                                                <label className="block text-[10px] font-bold uppercase tracking-[0.2em] text-gray-400">First Name</label>
+                                                <label className="block text-xs font-bold uppercase tracking-[0.2em] text-gray-400">First Name</label>
                                                 <input type="text" className="w-full bg-transparent border-b border-gray-200 py-3 text-[#282728] focus:outline-none focus:border-[#00A693] transition-colors" placeholder="e.g. John" required />
                                             </div>
                                             <div className="space-y-2">
-                                                <label className="block text-[10px] font-bold uppercase tracking-[0.2em] text-gray-400">Last Name</label>
+                                                <label className="block text-xs font-bold uppercase tracking-[0.2em] text-gray-400">Last Name</label>
                                                 <input type="text" className="w-full bg-transparent border-b border-gray-200 py-3 text-[#282728] focus:outline-none focus:border-[#00A693] transition-colors" placeholder="e.g. Doe" required />
                                             </div>
                                             <div className="space-y-2 md:col-span-2">
-                                                <label className="block text-[10px] font-bold uppercase tracking-[0.2em] text-gray-400">Email Address</label>
+                                                <label className="block text-xs font-bold uppercase tracking-[0.2em] text-gray-400">Email Address</label>
                                                 <input type="email" className="w-full bg-transparent border-b border-gray-200 py-3 text-[#282728] focus:outline-none focus:border-[#00A693] transition-colors" placeholder="you@example.com" required />
                                             </div>
                                             <div className="space-y-2 md:col-span-2">
-                                                <label className="block text-[10px] font-bold uppercase tracking-[0.2em] text-gray-400">Nationality</label>
+                                                <label className="block text-xs font-bold uppercase tracking-[0.2em] text-gray-400">Nationality</label>
                                                 <input type="text" className="w-full bg-transparent border-b border-gray-200 py-3 text-[#282728] focus:outline-none focus:border-[#00A693] transition-colors" placeholder="e.g. Indian" required />
                                             </div>
                                         </div>
 
                                         <div className="pt-12">
-                                            <button type="submit" className="w-full md:w-auto bg-[#282728] text-white px-10 py-5 text-[11px] font-bold uppercase tracking-[0.2em] hover:bg-[#00A693] transition-all inline-flex items-center justify-center gap-4 group">
+                                            <button type="submit" className="w-full md:w-auto bg-[#282728] text-white px-10 py-5 text-sm font-bold uppercase tracking-[0.2em] hover:bg-[#00A693] transition-all inline-flex items-center justify-center gap-4 group">
                                                 Continue <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
                                             </button>
                                         </div>
@@ -126,7 +126,7 @@ export default function VisaAssessmentForm() {
 
                                         <div className="space-y-10">
                                             <div className="space-y-2">
-                                                <label className="block text-[10px] font-bold uppercase tracking-[0.2em] text-gray-400">Highest Qualification</label>
+                                                <label className="block text-xs font-bold uppercase tracking-[0.2em] text-gray-400">Highest Qualification</label>
                                                 <select className="w-full bg-transparent border-b border-gray-200 py-3 text-[#282728] focus:outline-none focus:border-[#00A693] transition-colors appearance-none">
                                                     <option value="">Select level...</option>
                                                     <option value="high-school">High School</option>
@@ -137,7 +137,7 @@ export default function VisaAssessmentForm() {
                                                 </select>
                                             </div>
                                             <div className="space-y-2">
-                                                <label className="block text-[10px] font-bold uppercase tracking-[0.2em] text-gray-400">Years of Relevant Work Experience</label>
+                                                <label className="block text-xs font-bold uppercase tracking-[0.2em] text-gray-400">Years of Relevant Work Experience</label>
                                                 <select className="w-full bg-transparent border-b border-gray-200 py-3 text-[#282728] focus:outline-none focus:border-[#00A693] transition-colors appearance-none">
                                                     <option value="">Select experience...</option>
                                                     <option value="0-1">Less than 1 year</option>
@@ -147,16 +147,16 @@ export default function VisaAssessmentForm() {
                                                 </select>
                                             </div>
                                             <div className="space-y-2">
-                                                <label className="block text-[10px] font-bold uppercase tracking-[0.2em] text-gray-400">Current Occupation / Field</label>
+                                                <label className="block text-xs font-bold uppercase tracking-[0.2em] text-gray-400">Current Occupation / Field</label>
                                                 <input type="text" className="w-full bg-transparent border-b border-gray-200 py-3 text-[#282728] focus:outline-none focus:border-[#00A693] transition-colors" placeholder="e.g. Software Engineer" />
                                             </div>
                                         </div>
 
                                         <div className="pt-12 flex flex-col sm:flex-row gap-4">
-                                            <button type="button" onClick={() => setStep(1)} className="w-full sm:w-auto border border-gray-200 text-[#282728] px-10 py-5 text-[11px] font-bold uppercase tracking-[0.2em] hover:bg-gray-50 transition-colors">
+                                            <button type="button" onClick={() => setStep(1)} className="w-full sm:w-auto border border-gray-200 text-[#282728] px-10 py-5 text-sm font-bold uppercase tracking-[0.2em] hover:bg-gray-50 transition-colors">
                                                 Back
                                             </button>
-                                            <button type="submit" className="w-full sm:w-auto bg-[#282728] text-white px-10 py-5 text-[11px] font-bold uppercase tracking-[0.2em] hover:bg-[#00A693] transition-all inline-flex items-center justify-center gap-4 group">
+                                            <button type="submit" className="w-full sm:w-auto bg-[#282728] text-white px-10 py-5 text-sm font-bold uppercase tracking-[0.2em] hover:bg-[#00A693] transition-all inline-flex items-center justify-center gap-4 group">
                                                 Continue <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
                                             </button>
                                         </div>
@@ -176,26 +176,26 @@ export default function VisaAssessmentForm() {
 
                                         <div className="space-y-10">
                                             <div className="space-y-2">
-                                                <label className="block text-[10px] font-bold uppercase tracking-[0.2em] text-gray-400">Upload Resume / CV (Optional)</label>
+                                                <label className="block text-xs font-bold uppercase tracking-[0.2em] text-gray-400">Upload Resume / CV (Optional)</label>
                                                 <div className="border border-dashed border-gray-300 p-10 hover:border-[#00A693] hover:bg-[#00A693]/5 transition-colors cursor-pointer flex flex-col items-center justify-center gap-4 rounded-sm mt-4">
                                                     <div className="w-12 h-12 bg-gray-50 rounded-full flex items-center justify-center">
                                                         <UploadCloud className="text-gray-400" size={20} />
                                                     </div>
                                                     <span className="text-sm font-medium text-[#282728]">Click or drag file to upload</span>
-                                                    <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">PDF, DOCX up to 10MB</span>
+                                                    <span className="text-sm font-bold uppercase tracking-widest text-gray-400">PDF, DOCX up to 10MB</span>
                                                 </div>
                                             </div>
                                             <div className="space-y-2">
-                                                <label className="block text-[10px] font-bold uppercase tracking-[0.2em] text-gray-400">Do you have any criminal convictions or medical conditions?</label>
+                                                <label className="block text-xs font-bold uppercase tracking-[0.2em] text-gray-400">Do you have any criminal convictions or medical conditions?</label>
                                                 <textarea className="w-full bg-transparent border-b border-gray-200 py-3 text-[#282728] focus:outline-none focus:border-[#00A693] transition-colors min-h-[80px]" placeholder="Provide brief details if applicable..." />
                                             </div>
                                         </div>
 
                                         <div className="pt-12 flex flex-col sm:flex-row gap-4">
-                                            <button type="button" onClick={() => setStep(2)} className="w-full sm:w-auto border border-gray-200 text-[#282728] px-10 py-5 text-[11px] font-bold uppercase tracking-[0.2em] hover:bg-gray-50 transition-colors">
+                                            <button type="button" onClick={() => setStep(2)} className="w-full sm:w-auto border border-gray-200 text-[#282728] px-10 py-5 text-sm font-bold uppercase tracking-[0.2em] hover:bg-gray-50 transition-colors">
                                                 Back
                                             </button>
-                                            <button type="button" onClick={() => alert('Assessment Submitted Successfully!')} className="w-full sm:w-auto bg-[#00A693] text-white px-10 py-5 text-[11px] font-bold uppercase tracking-[0.2em] hover:bg-[#008c7c] transition-all inline-flex items-center justify-center gap-4 group">
+                                            <button type="button" onClick={() => alert('Assessment Submitted Successfully!')} className="w-full sm:w-auto bg-[#00A693] text-white px-10 py-5 text-sm font-bold uppercase tracking-[0.2em] hover:bg-[#008c7c] transition-all inline-flex items-center justify-center gap-4 group">
                                                 Submit <CheckCircle size={14} className="ml-2" />
                                             </button>
                                         </div>
