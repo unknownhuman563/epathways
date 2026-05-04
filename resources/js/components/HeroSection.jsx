@@ -86,7 +86,7 @@ export default function HeroSection({ backgroundVideo }) {
                             href="/booking" 
                             className="w-full sm:w-auto bg-transparent border border-white text-white px-7 py-2.5 rounded-none text-[9px] font-bold tracking-[0.2em] transition-all duration-300 uppercase text-center"
                         >
-                            Book Free Consultation
+                            Book Your Free Consultation
                         </motion.a>
                         <motion.a 
                             whileHover={{ scale: 1.05, backgroundColor: "rgba(255, 255, 255, 1)", color: "#282728" }}
@@ -94,7 +94,7 @@ export default function HeroSection({ backgroundVideo }) {
                             href="/free-assessment" 
                             className="w-full sm:w-auto bg-transparent border border-white text-white px-7 py-2.5 rounded-none text-[9px] font-bold tracking-[0.2em] transition-all duration-300 uppercase text-center"
                         >
-                            Free Assessment
+                            Assess your Eligibility
                         </motion.a>
                     </div>
                 </motion.div>
