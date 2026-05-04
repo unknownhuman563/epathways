@@ -18,7 +18,7 @@ const formatEventDate = (dateStr) => {
     return { day, date: dayNum, monthYear };
 };
 
-export default function Activities({ events }) {
+export default function Activities({ events, pastSessions = [], featuredSession = null }) {
     return (
         <div className="min-h-screen bg-white font-urbanist overflow-x-hidden">
             <Head title="Activities - Events, Announcements & Live" />
@@ -216,7 +216,7 @@ export default function Activities({ events }) {
             {/* Facebook Live Section */}
             <section id="facebook-live" className="py-24 bg-white border-t border-gray-50">
                 <div className="container mx-auto px-4 max-w-7xl">
-                    <FacebookLive />
+                    <FacebookLive pastSessions={pastSessions} featuredSession={featuredSession} />
                 </div>
             </section>
 
