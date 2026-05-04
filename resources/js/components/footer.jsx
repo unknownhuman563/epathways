@@ -1,5 +1,6 @@
 import React from "react";
 import Logo from "@assets/newlogosite.png";
+import IcefLogo from "@assets/about_us/icef.png";
 import { Instagram, Facebook, Linkedin } from "lucide-react";
 
 export default function Footer() {
@@ -11,24 +12,25 @@ export default function Footer() {
       <div className="bg-white text-black py-20 px-6 md:px-12 lg:px-20 border-t border-gray-100">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between gap-10 md:gap-4 lg:gap-10">
 
-          {/* Column 1: Brand & Socials */}
-          <div className="space-y-6 md:w-1/4">
-            <a href="/" className="block w-40">
-              <img src={Logo} alt="ePathways Logo" className="w-full" />
-            </a>
-            <p className="text-gray-500 text-sm leading-relaxed max-w-xs">
-              It is a long established fact that a reader will be distracted by the readable content of a page when looking at its layout.
-            </p>
-            <div className="flex space-x-5 text-gray-800">
-              <a href="https://instagram.com/nz.epathways" target="_blank" rel="noopener noreferrer" className="hover:text-green-600 transition-colors">
-                <Instagram size={24} strokeWidth={1.5} />
+          <div className="md:w-1/4">
+            <div className="flex flex-col items-center md:items-start space-y-8">
+              <a href="/" className="block w-48">
+                <img src={Logo} alt="ePathways Logo" className="w-full" />
               </a>
-              <a href="#" className="hover:text-green-600 transition-colors">
-                <Facebook size={24} strokeWidth={1.5} />
-              </a>
-              <a href="#" className="hover:text-green-600 transition-colors">
-                <Linkedin size={24} strokeWidth={1.5} />
-              </a>
+              <div className="w-72">
+                <img src={IcefLogo} alt="ICEF Logo" className="w-full" />
+              </div>
+              <div className="flex space-x-5 text-gray-800">
+                <a href="https://instagram.com/nz.epathways" target="_blank" rel="noopener noreferrer" className="hover:text-green-600 transition-colors">
+                  <Instagram size={24} strokeWidth={1.5} />
+                </a>
+                <a href="#" className="hover:text-green-600 transition-colors">
+                  <Facebook size={24} strokeWidth={1.5} />
+                </a>
+                <a href="#" className="hover:text-green-600 transition-colors">
+                  <Linkedin size={24} strokeWidth={1.5} />
+                </a>
+              </div>
             </div>
           </div>
 

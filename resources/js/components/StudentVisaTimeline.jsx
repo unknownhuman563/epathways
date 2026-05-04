@@ -8,6 +8,10 @@ import pathwaysImg   from "@assets/Services/pathways.png";
 import visaImg       from "@assets/Services/visa.png";
 import settlementImg from "@assets/Services/settlement.png";
 import jobImg        from "@assets/Services/job.png";
+import day80Img     from "@assets/visa_process/day_80.png";
+import day1Video     from "@assets/visa_process/day_1.mp4";
+import day2Video     from "@assets/visa_process/day_2.mp4";
+
 
 // Alternating pattern:
 // Even index (0, 2, 4) -> Image on top, Text on bottom
@@ -16,12 +20,12 @@ const milestones = [
     {
         day: "Day 1",
         desc: "We assess your eligibility and discuss your goals at no cost.",
-        img: agentsImg,
+        video: day1Video,
     },
     {
         day: "Day 2",
         desc: "You meet with our team to set clear objectives for your journey.",
-        img: educationImg,
+        video: day2Video,
     },
     {
         day: "Day 4",
@@ -51,7 +55,7 @@ const milestones = [
     {
         day: "Day 80",
         desc: "Finalise flights, accommodation, and orientation. Arrive confident.",
-        img: pathwaysImg,
+        img: day80Img,
     },
 ];
 
@@ -112,7 +116,16 @@ export default function StudentVisaTimeline() {
                                     transition={{ duration: 0.5, delay: i * 0.1 }}
                                     className="w-48 h-48 bg-[#f2f2f2] relative group overflow-hidden"
                                 >
-                                    {step.img ? (
+                                    {step.video ? (
+                                        <video 
+                                            src={step.video} 
+                                            autoPlay 
+                                            loop 
+                                            muted 
+                                            playsInline 
+                                            className="w-full h-full object-cover"
+                                        />
+                                    ) : step.img ? (
                                         <img 
                                             src={step.img} 
                                             alt={step.day} 

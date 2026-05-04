@@ -16,6 +16,8 @@ import Modal from "@/components/modal-component";
 import Footer from "../components/footer";
 import CTASection from "@/components/CTASection";
 import AccreditationSection from "@/components/AccreditationSection";
+import VisaApprovedShowcase from "@/components/VisaApprovedShowcase";
+
 
 import HeroVideo from "@assets/Hero/02 - client epathway intro (1).mp4";
 
@@ -53,6 +55,8 @@ export default function Home() {
 
         <WhyUs />
         <ProcessSteps />
+        <VisaApprovedShowcase />
+
 
         {/* In-Demand Programs Section */}
         <InDemandPrograms />

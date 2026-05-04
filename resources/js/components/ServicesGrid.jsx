@@ -1,6 +1,7 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { ArrowRight } from 'react-feather';
+import immigrationVideo from "/resources/assets/visa_process/immigration_support.mp4";
 
 const images = import.meta.glob("/resources/assets/Services/*", { eager: true, import: "default" });
 
@@ -12,12 +13,12 @@ const imageMap = Object.keys(images).reduce((acc, key) => {
 
 const services = [
     {
-        tag: "Visa & Migration",
-        title: "Immigration Support",
-        description: "Navigate visas with confidence. Expert guidance from eligibility to processing.",
-        image: imageMap['visa.png'],
+        tag: "Study Abroad",
+        title: "Education Services",
+        description: "Admission and scholarship guidance for top global institutions.",
+        image: imageMap['education.png'],
         size: "large", // spans 2 rows
-        link: "/immigration"
+        link: "/education-journey"
     },
     {
         tag: "Pathways",
@@ -28,20 +29,20 @@ const services = [
         link: "/programs-levels"
     },
     {
+        tag: "Visa & Migration",
+        title: "Immigration Support",
+        description: "Navigate visas with confidence. Expert guidance from eligibility to processing.",
+        video: immigrationVideo,
+        size: "small",
+        link: "/immigration"
+    },
+    {
         tag: "Consultation",
         title: "Engagement Services",
         description: "Connect with our advisors to find the best pathway for your future.",
         image: imageMap['agents.png'],
         size: "small",
         link: "/contact"
-    },
-    {
-        tag: "Study Abroad",
-        title: "Education Services",
-        description: "Admission and scholarship guidance for top global institutions.",
-        image: imageMap['education.png'],
-        size: "small",
-        link: "/education-journey"
     },
     {
         tag: "Career",
@@ -85,12 +86,23 @@ export default function ServicesGrid() {
                             className={`group relative overflow-hidden rounded-[2rem] cursor-pointer shadow-sm hover:shadow-2xl transition-all duration-700 
                                 ${service.size === 'large' ? 'md:row-span-2' : ''}`}
                         >
-                            {/* Background Image */}
-                            <img 
-                                src={service.image} 
-                                alt={service.title} 
-                                className="w-full h-full object-cover transition-transform duration-[1.5s] group-hover:scale-110" 
-                            />
+                            {/* Background Asset */}
+                            {service.video ? (
+                                <video 
+                                    src={service.video} 
+                                    autoPlay 
+                                    loop 
+                                    muted 
+                                    playsInline 
+                                    className="w-full h-full object-cover transition-transform duration-[1.5s] group-hover:scale-110"
+                                />
+                            ) : (
+                                <img 
+                                    src={service.image} 
+                                    alt={service.title} 
+                                    className="w-full h-full object-cover transition-transform duration-[1.5s] group-hover:scale-110" 
+                                />
+                            )}
                             
                             {/* Dark Overlay - Gradient for bottom readability */}
                             <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent transition-opacity duration-500 group-hover:from-black/100"></div>
