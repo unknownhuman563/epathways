@@ -81,7 +81,7 @@ export default function ProgramsLevels({ programs = [] }) {
                                     transition={{ delay: 0.2 }}
                                     className="flex flex-col items-center justify-center p-2"
                                 >
-                                    <h3 className="text-4xl md:text-6xl font-bold mb-3 tracking-tight">7-9</h3>
+                                    <h3 className="text-4xl md:text-6xl font-bold mb-3 tracking-tight">5-9</h3>
                                     <p className="text-[10px] md:text-xs text-gray-400 uppercase tracking-[0.2em] font-medium">Levels Offered</p>
                                 </motion.div>
                                 <motion.div
