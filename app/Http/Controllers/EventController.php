@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Event;
+use App\Models\FacebookLiveSession;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
@@ -246,13 +247,28 @@ class EventController extends Controller
             ->latest()
             ->get();
 
-        // Append the registration URL to each event
         $events->each(function ($event) {
             $event->registration_url = url('/register/' . $event->event_code);
         });
 
+        $today = today()->toDateString();
+
+        $featuredSession = FacebookLiveSession::whereDate('session_date', '>=', $today)
+            ->orderBy('session_date', 'asc')
+            ->first();
+
+        $pastSessions = FacebookLiveSession::whereDate('session_date', '<', $today)
+            ->orderBy('session_date', 'desc')
+            ->get();
+
+        if (!$featuredSession && $pastSessions->isNotEmpty()) {
+            $featuredSession = $pastSessions->shift();
+        }
+
         return inertia('Activities', [
-            'events' => $events
+            'events'          => $events,
+            'pastSessions'    => $pastSessions->values(),
+            'featuredSession' => $featuredSession,
         ]);
     }
 }

@@ -75,6 +75,10 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/admin/events/{id}', [EventController::class, 'show'])->name('admin.events.show');
 
     Route::get('/admin/programs', [ProgramController::class, 'index'])->name('admin.programs');
+    Route::get('/admin/facebook-live', [App\Http\Controllers\FacebookLiveController::class, 'index'])->name('admin.facebook-live');
+    Route::post('/admin/facebook-live', [App\Http\Controllers\FacebookLiveController::class, 'store']);
+    Route::post('/admin/facebook-live/{id}', [App\Http\Controllers\FacebookLiveController::class, 'update']);
+    Route::delete('/admin/facebook-live/{id}', [App\Http\Controllers\FacebookLiveController::class, 'destroy']);
     Route::post('/admin/programs', [ProgramController::class, 'store']);
     Route::post('/admin/programs/{id}', [ProgramController::class, 'update']);
     Route::delete('/admin/programs/{id}', [ProgramController::class, 'destroy']);

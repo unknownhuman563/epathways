@@ -690,41 +690,31 @@ export default function BookingPage() {
                                                                     </div>
                                                                 </div>
 
-                                                                <div className="border-t border-gray-200 pt-6">
-                                                                    <p className="text-[10px] text-gray-600 font-bold uppercase tracking-widest mb-4">Contact Info</p>
-                                                                    <div className="space-y-4 text-sm text-gray-600">
-                                                                        {selection.consultant.name === 'Fhilip Bryll Añabeza' ? (
-                                                                            <>
-                                                                                <div className="flex items-center gap-3">
-                                                                                    <Phone className="w-4 h-4 text-gray-500" />
-                                                                                    <span>+63 991 854 8675 (Call)</span>
-                                                                                </div>
-                                                                                <div className="flex items-center gap-3">
-                                                                                    <MessageSquare className="w-4 h-4 text-gray-500" />
-                                                                                    <span>+63 939 586 3654 (WhatsApp)</span>
-                                                                                </div>
-                                                                                <div className="flex items-center gap-3">
-                                                                                    <Mail className="w-4 h-4 text-gray-500" />
-                                                                                    <span>hello@epathways.ph</span>
-                                                                                </div>
-                                                                            </>
-                                                                        ) : (
-                                                                            <>
-                                                                                <div className="flex items-center gap-3">
-                                                                                    <Mail className="w-4 h-4 text-gray-500" />
-                                                                                    <span>info@epathways.co.nz</span>
-                                                                                </div>
-                                                                                <div className="flex items-center gap-3">
-                                                                                    <Phone className="w-4 h-4 text-gray-500" />
-                                                                                    <span>+64 27 777 5586</span>
-                                                                                </div>
-                                                                                <div className="flex items-start gap-3">
-                                                                                    <MapPin className="w-4 h-4 text-gray-500 shrink-0 mt-0.5" />
-                                                                                    <span>Auckland, New Zealand</span>
-                                                                                </div>
-                                                                            </>
-                                                                        )}
-                                                                    </div>
+                                                    <div className="space-y-6 text-gray-600">
+                                                        {selection.consultant?.name === 'Fhilip Bryll Añabeza' ? (
+                                                            <>
+                                                                <div className="flex items-center gap-4">
+                                                                    <Phone className="w-5 h-5 text-black" />
+                                                                    <span>+63 991 854 8675 (PH)</span>
+                                                                </div>
+                                                                <div className="flex items-center gap-4">
+                                                                    <MessageSquare className="w-5 h-5 text-black" />
+                                                                    <span>+63 939 586 3654 (WhatsApp)</span>
+                                                                </div>
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                <div className="flex items-center gap-4">
+                                                                    <Mail className="w-5 h-5 text-black" />
+                                                                    <span>info@epathways.co.nz</span>
+                                                                </div>
+                                                                <div className="flex items-center gap-4">
+                                                                    <Phone className="w-5 h-5 text-black" />
+                                                                    <span>+64 27 777 5586</span>
+                                                                </div>
+                                                                <div className="flex items-start gap-4">
+                                                                    <MapPin className="w-5 h-5 text-black shrink-0 mt-1" />
+                                                                    <span>Auckland, New Zealand</span>
                                                                 </div>
                                                             </>
                                                         )}
