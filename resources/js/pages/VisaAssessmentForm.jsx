@@ -83,24 +83,24 @@ export default function VisaAssessmentForm() {
                                     >
                                         <div className="pb-8 border-b border-gray-100">
                                             <h3 className="text-3xl md:text-4xl font-medium text-[#282728] tracking-tight">Personal Information</h3>
-                                            <p className="text-gray-500 text-sm md:text-base mt-4 leading-relaxed">Please provide your details exactly as they appear on your passport.</p>
+                                            <p className="text-gray-600 text-sm md:text-base mt-4 leading-relaxed">Please provide your details exactly as they appear on your passport.</p>
                                         </div>
 
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-10">
                                             <div className="space-y-2">
-                                                <label className="block text-xs font-bold uppercase tracking-[0.2em] text-gray-400">First Name</label>
+                                                <label className="block text-xs font-bold uppercase tracking-[0.2em] text-gray-500">First Name</label>
                                                 <input type="text" className="w-full bg-transparent border-b border-gray-200 py-3 text-[#282728] focus:outline-none focus:border-[#00A693] transition-colors" placeholder="e.g. John" required />
                                             </div>
                                             <div className="space-y-2">
-                                                <label className="block text-xs font-bold uppercase tracking-[0.2em] text-gray-400">Last Name</label>
+                                                <label className="block text-xs font-bold uppercase tracking-[0.2em] text-gray-500">Last Name</label>
                                                 <input type="text" className="w-full bg-transparent border-b border-gray-200 py-3 text-[#282728] focus:outline-none focus:border-[#00A693] transition-colors" placeholder="e.g. Doe" required />
                                             </div>
                                             <div className="space-y-2 md:col-span-2">
-                                                <label className="block text-xs font-bold uppercase tracking-[0.2em] text-gray-400">Email Address</label>
+                                                <label className="block text-xs font-bold uppercase tracking-[0.2em] text-gray-500">Email Address</label>
                                                 <input type="email" className="w-full bg-transparent border-b border-gray-200 py-3 text-[#282728] focus:outline-none focus:border-[#00A693] transition-colors" placeholder="you@example.com" required />
                                             </div>
                                             <div className="space-y-2 md:col-span-2">
-                                                <label className="block text-xs font-bold uppercase tracking-[0.2em] text-gray-400">Nationality</label>
+                                                <label className="block text-xs font-bold uppercase tracking-[0.2em] text-gray-500">Nationality</label>
                                                 <input type="text" className="w-full bg-transparent border-b border-gray-200 py-3 text-[#282728] focus:outline-none focus:border-[#00A693] transition-colors" placeholder="e.g. Indian" required />
                                             </div>
                                         </div>
@@ -121,12 +121,12 @@ export default function VisaAssessmentForm() {
                                     >
                                         <div className="pb-8 border-b border-gray-100">
                                             <h3 className="text-3xl md:text-4xl font-medium text-[#282728] tracking-tight">Professional & Academic</h3>
-                                            <p className="text-gray-500 text-sm md:text-base mt-4 leading-relaxed">Help us understand your background to find the best fit.</p>
+                                            <p className="text-gray-600 text-sm md:text-base mt-4 leading-relaxed">Help us understand your background to find the best fit.</p>
                                         </div>
 
                                         <div className="space-y-10">
                                             <div className="space-y-2">
-                                                <label className="block text-xs font-bold uppercase tracking-[0.2em] text-gray-400">Highest Qualification</label>
+                                                <label className="block text-xs font-bold uppercase tracking-[0.2em] text-gray-500">Highest Qualification</label>
                                                 <select className="w-full bg-transparent border-b border-gray-200 py-3 text-[#282728] focus:outline-none focus:border-[#00A693] transition-colors appearance-none">
                                                     <option value="">Select level...</option>
                                                     <option value="high-school">High School</option>
@@ -137,7 +137,7 @@ export default function VisaAssessmentForm() {
                                                 </select>
                                             </div>
                                             <div className="space-y-2">
-                                                <label className="block text-xs font-bold uppercase tracking-[0.2em] text-gray-400">Years of Relevant Work Experience</label>
+                                                <label className="block text-xs font-bold uppercase tracking-[0.2em] text-gray-500">Years of Relevant Work Experience</label>
                                                 <select className="w-full bg-transparent border-b border-gray-200 py-3 text-[#282728] focus:outline-none focus:border-[#00A693] transition-colors appearance-none">
                                                     <option value="">Select experience...</option>
                                                     <option value="0-1">Less than 1 year</option>
@@ -147,7 +147,7 @@ export default function VisaAssessmentForm() {
                                                 </select>
                                             </div>
                                             <div className="space-y-2">
-                                                <label className="block text-xs font-bold uppercase tracking-[0.2em] text-gray-400">Current Occupation / Field</label>
+                                                <label className="block text-xs font-bold uppercase tracking-[0.2em] text-gray-500">Current Occupation / Field</label>
                                                 <input type="text" className="w-full bg-transparent border-b border-gray-200 py-3 text-[#282728] focus:outline-none focus:border-[#00A693] transition-colors" placeholder="e.g. Software Engineer" />
                                             </div>
                                         </div>
@@ -171,22 +171,22 @@ export default function VisaAssessmentForm() {
                                     >
                                         <div className="pb-8 border-b border-gray-100">
                                             <h3 className="text-3xl md:text-4xl font-medium text-[#282728] tracking-tight">Additional Details</h3>
-                                            <p className="text-gray-500 text-sm md:text-base mt-4 leading-relaxed">Final details and any supporting documents.</p>
+                                            <p className="text-gray-600 text-sm md:text-base mt-4 leading-relaxed">Final details and any supporting documents.</p>
                                         </div>
 
                                         <div className="space-y-10">
                                             <div className="space-y-2">
-                                                <label className="block text-xs font-bold uppercase tracking-[0.2em] text-gray-400">Upload Resume / CV (Optional)</label>
+                                                <label className="block text-xs font-bold uppercase tracking-[0.2em] text-gray-500">Upload Resume / CV (Optional)</label>
                                                 <div className="border border-dashed border-gray-300 p-10 hover:border-[#00A693] hover:bg-[#00A693]/5 transition-colors cursor-pointer flex flex-col items-center justify-center gap-4 rounded-sm mt-4">
                                                     <div className="w-12 h-12 bg-gray-50 rounded-full flex items-center justify-center">
-                                                        <UploadCloud className="text-gray-400" size={20} />
+                                                        <UploadCloud className="text-gray-500" size={20} />
                                                     </div>
                                                     <span className="text-sm font-medium text-[#282728]">Click or drag file to upload</span>
-                                                    <span className="text-sm font-bold uppercase tracking-widest text-gray-400">PDF, DOCX up to 10MB</span>
+                                                    <span className="text-sm font-bold uppercase tracking-widest text-gray-500">PDF, DOCX up to 10MB</span>
                                                 </div>
                                             </div>
                                             <div className="space-y-2">
-                                                <label className="block text-xs font-bold uppercase tracking-[0.2em] text-gray-400">Do you have any criminal convictions or medical conditions?</label>
+                                                <label className="block text-xs font-bold uppercase tracking-[0.2em] text-gray-500">Do you have any criminal convictions or medical conditions?</label>
                                                 <textarea className="w-full bg-transparent border-b border-gray-200 py-3 text-[#282728] focus:outline-none focus:border-[#00A693] transition-colors min-h-[80px]" placeholder="Provide brief details if applicable..." />
                                             </div>
                                         </div>

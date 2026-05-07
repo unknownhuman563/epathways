@@ -58,7 +58,7 @@ export default function Login() {
                                 <label className="text-[10px] font-black text-[#282728] uppercase tracking-[0.2em] block">
                                     Secret Password
                                 </label>
-                                <a href="#" className="text-[9px] font-bold text-gray-400 uppercase tracking-widest hover:text-[#282728] transition-colors">
+                                <a href="#" className="text-[9px] font-bold text-gray-500 uppercase tracking-widest hover:text-[#282728] transition-colors">
                                     Forgot?
                                 </a>
                             </div>
@@ -85,7 +85,7 @@ export default function Login() {
                                 <div className="w-5 h-5 bg-white border border-[#282728] rounded-md peer-checked:bg-[#282728] transition-all flex items-center justify-center">
                                     <div className="w-1.5 h-1.5 bg-white rounded-full opacity-0 peer-checked:opacity-100 transition-opacity" />
                                 </div>
-                                <span className="ml-3 text-[10px] font-bold text-gray-500 uppercase tracking-widest">Keep me logged in</span>
+                                <span className="ml-3 text-[10px] font-bold text-gray-600 uppercase tracking-widest">Keep me logged in</span>
                             </label>
                         </div>
 
@@ -100,7 +100,7 @@ export default function Login() {
                 </div>
 
                 <div className="mt-12 text-center">
-                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.2em]">
+                    <p className="text-[10px] font-bold text-gray-500 uppercase tracking-[0.2em]">
                         &copy; {new Date().getFullYear()} ePathways Education Specialists
                     </p>
                 </div>

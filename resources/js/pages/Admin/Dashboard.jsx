@@ -35,13 +35,13 @@ export default function Dashboard() {
                 <div className="flex-1"></div>
                 <div className="flex items-center gap-3">
                     <div className="bg-white rounded-full p-1 border border-gray-100 flex shadow-sm">
-                        <button className="px-4 py-1.5 text-sm font-medium rounded-full text-gray-500 hover:text-gray-900 transition-colors">Day</button>
-                        <button className="px-4 py-1.5 text-sm font-medium rounded-full text-gray-500 hover:text-gray-900 transition-colors">Week</button>
+                        <button className="px-4 py-1.5 text-sm font-medium rounded-full text-gray-600 hover:text-gray-900 transition-colors">Day</button>
+                        <button className="px-4 py-1.5 text-sm font-medium rounded-full text-gray-600 hover:text-gray-900 transition-colors">Week</button>
                         <button className="px-4 py-1.5 text-sm font-bold bg-gray-900 text-white rounded-full shadow-sm">Month</button>
-                        <button className="px-4 py-1.5 text-sm font-medium rounded-full text-gray-500 hover:text-gray-900 transition-colors">Year</button>
+                        <button className="px-4 py-1.5 text-sm font-medium rounded-full text-gray-600 hover:text-gray-900 transition-colors">Year</button>
                     </div>
                     <div className="bg-white border border-gray-100 rounded-full px-4 py-2 text-sm font-medium text-gray-700 shadow-sm flex items-center gap-2 cursor-pointer hover:bg-gray-50">
-                        <CalendarIcon size={16} className="text-gray-400" />
+                        <CalendarIcon size={16} className="text-gray-500" />
                         1 Sep 2024 - 31 Sep 2024
                     </div>
                 </div>
@@ -51,14 +51,14 @@ export default function Dashboard() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 {summaryCards.map((card, idx) => (
                     <div key={idx} className={`p-6 rounded-3xl ${card.dark ? 'bg-gray-900 text-white shadow-lg' : 'bg-white text-gray-900 shadow-sm border border-gray-50'} transition-transform hover:scale-[1.02] duration-300`}>
-                        <h3 className={`text-sm font-medium mb-3 ${card.dark ? 'text-gray-300' : 'text-gray-500'}`}>{card.title}</h3>
+                        <h3 className={`text-sm font-medium mb-3 ${card.dark ? 'text-gray-300' : 'text-gray-600'}`}>{card.title}</h3>
                         <p className="text-3xl font-bold mb-4 tracking-tight">{card.value}</p>
                         <div className="flex items-center gap-2 text-xs font-semibold">
                             <span className={`flex items-center ${card.isPositive ? 'text-emerald-500' : 'text-red-500'}`}>
                                 {card.isPositive ? <ArrowUpRight size={14} className="mr-0.5" /> : <ArrowDownRight size={14} className="mr-0.5" />}
                                 {card.trend}
                             </span>
-                            <span className={card.dark ? 'text-gray-400 font-medium' : 'text-gray-400 font-medium'}>
+                            <span className={card.dark ? 'text-gray-500 font-medium' : 'text-gray-500 font-medium'}>
                                 {card.trendLabel}
                             </span>
                         </div>
@@ -73,14 +73,14 @@ export default function Dashboard() {
                 <div className="lg:col-span-2 bg-white p-6 rounded-3xl shadow-sm border border-gray-50">
                     <div className="flex items-center justify-between mb-8">
                         <h2 className="text-lg font-bold text-gray-900">Total Leads Overview</h2>
-                        <button className="bg-gray-50 hover:bg-gray-100 p-2 rounded-full text-gray-500 transition-colors">
+                        <button className="bg-gray-50 hover:bg-gray-100 p-2 rounded-full text-gray-600 transition-colors">
                             <ArrowUpRight size={18} />
                         </button>
                     </div>
                     
                     <div className="h-64 flex items-end justify-between gap-2 sm:gap-4 px-2 relative">
                         {/* Fake Y Axis */}
-                        <div className="absolute left-0 top-0 bottom-8 flex flex-col justify-between text-xs text-gray-400 font-medium w-6 text-right">
+                        <div className="absolute left-0 top-0 bottom-8 flex flex-col justify-between text-xs text-gray-500 font-medium w-6 text-right">
                             <span>10K</span>
                             <span>8K</span>
                             <span>4K</span>
@@ -102,7 +102,7 @@ export default function Dashboard() {
                                     >
                                         <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent"></div>
                                     </div>
-                                    <span className="text-sm font-medium text-gray-500 absolute -bottom-6">{data.month}</span>
+                                    <span className="text-sm font-medium text-gray-600 absolute -bottom-6">{data.month}</span>
                                 </div>
                             ))}
                         </div>
@@ -114,19 +114,19 @@ export default function Dashboard() {
                     {/* Calendar Mini */}
                     <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-50">
                         <div className="flex items-center justify-between mb-6">
-                            <button className="text-gray-400 hover:text-gray-700">
+                            <button className="text-gray-500 hover:text-gray-700">
                                 <ChevronLeft size={20} />
                             </button>
                             <h3 className="font-bold text-gray-900">September 2024</h3>
-                            <button className="text-gray-400 hover:text-gray-700">
+                            <button className="text-gray-500 hover:text-gray-700">
                                 <ChevronRight size={20} />
                             </button>
                         </div>
                         <div className="grid grid-cols-4 gap-2 text-center">
-                            <div className="text-xs font-semibold text-gray-400 mb-2">Tue</div>
-                            <div className="text-xs font-semibold text-gray-400 mb-2">Wed</div>
-                            <div className="text-xs font-semibold text-gray-400 mb-2">Thu</div>
-                            <div className="text-xs font-semibold text-gray-400 mb-2">Fri</div>
+                            <div className="text-xs font-semibold text-gray-500 mb-2">Tue</div>
+                            <div className="text-xs font-semibold text-gray-500 mb-2">Wed</div>
+                            <div className="text-xs font-semibold text-gray-500 mb-2">Thu</div>
+                            <div className="text-xs font-semibold text-gray-500 mb-2">Fri</div>
                             
                             <div className="text-sm font-bold text-gray-900 py-2">17</div>
                             <div className="text-sm font-bold text-gray-900 py-2">18</div>
@@ -141,7 +141,7 @@ export default function Dashboard() {
                             <h3 className="font-bold text-gray-900 mb-2">Community growth</h3>
                             <div className="flex items-center gap-1 text-xs font-semibold text-emerald-500">
                                 <ArrowUpRight size={14} />
-                                0.9% <span className="text-gray-400 ml-1 font-medium">from last month</span>
+                                0.9% <span className="text-gray-500 ml-1 font-medium">from last month</span>
                             </div>
                         </div>
                         <div className="relative w-14 h-14 flex items-center justify-center">
@@ -174,10 +174,10 @@ export default function Dashboard() {
                 <div className="flex items-center justify-between mb-6">
                     <h2 className="text-lg font-bold text-gray-900">Recent Bookings</h2>
                     <div className="flex gap-2">
-                        <button className="p-2 border border-gray-100 rounded-full text-gray-500 hover:bg-gray-50">
+                        <button className="p-2 border border-gray-100 rounded-full text-gray-600 hover:bg-gray-50">
                             <Search size={16} />
                         </button>
-                        <button className="p-2 border border-gray-100 rounded-full text-gray-500 hover:bg-gray-50">
+                        <button className="p-2 border border-gray-100 rounded-full text-gray-600 hover:bg-gray-50">
                             <ArrowUpRight size={16} />
                         </button>
                     </div>
@@ -187,11 +187,11 @@ export default function Dashboard() {
                     <table className="w-full text-left border-collapse">
                         <thead>
                             <tr className="border-b border-gray-100">
-                                <th className="pb-4 text-xs font-semibold text-gray-500 uppercase tracking-wider pl-2">Service Name</th>
-                                <th className="pb-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Student Name</th>
-                                <th className="pb-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Booking ID</th>
-                                <th className="pb-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Amount</th>
-                                <th className="pb-4 text-xs font-semibold text-gray-500 uppercase tracking-wider text-right pr-2">Status</th>
+                                <th className="pb-4 text-xs font-semibold text-gray-600 uppercase tracking-wider pl-2">Service Name</th>
+                                <th className="pb-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">Student Name</th>
+                                <th className="pb-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">Booking ID</th>
+                                <th className="pb-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">Amount</th>
+                                <th className="pb-4 text-xs font-semibold text-gray-600 uppercase tracking-wider text-right pr-2">Status</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-50">
@@ -206,7 +206,7 @@ export default function Dashboard() {
                                         </div>
                                     </td>
                                     <td className="py-4 text-sm text-gray-600 font-medium">{booking.student}</td>
-                                    <td className="py-4 text-sm text-gray-500 font-medium">{booking.studentId}</td>
+                                    <td className="py-4 text-sm text-gray-600 font-medium">{booking.studentId}</td>
                                     <td className="py-4 text-sm font-bold text-gray-900">{booking.amount}</td>
                                     <td className="py-4 text-right pr-2">
                                         <span className={`inline-flex px-3 py-1 rounded-full text-xs font-bold ${

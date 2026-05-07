@@ -32,7 +32,7 @@ export default function AdminLayout({ children }) {
             <div className="flex items-center justify-between px-6 py-6 border-b border-gray-50/50 lg:border-none">
                 <h2 className="text-2xl font-black tracking-tighter text-gray-900">ePathways.</h2>
                 <button className="lg:hidden" onClick={() => setSidebarOpen(false)}>
-                    <X className="w-5 h-5 text-gray-500 hover:text-gray-800" />
+                    <X className="w-5 h-5 text-gray-600 hover:text-gray-800" />
                 </button>
             </div>
 
@@ -46,10 +46,10 @@ export default function AdminLayout({ children }) {
                             className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 group ${
                                 isActive 
                                     ? "bg-gray-100/80 text-gray-900 shadow-sm" 
-                                    : "text-gray-500 hover:bg-gray-50 hover:text-gray-900"
+                                    : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
                             }`}
                         >
-                            <div className={`${isActive ? "text-gray-900" : "text-gray-400 group-hover:text-gray-600"}`}>
+                            <div className={`${isActive ? "text-gray-900" : "text-gray-500 group-hover:text-gray-600"}`}>
                                 {item.icon}
                             </div>
                             {item.name}
@@ -60,16 +60,16 @@ export default function AdminLayout({ children }) {
             </div>
 
             <div className="px-4 py-4 mt-auto border-t border-gray-50 flex flex-col gap-1">
-                <Link href="/admin/settings" className="flex items-center gap-3 px-4 py-3 text-sm font-medium text-gray-500 hover:text-gray-900 hover:bg-gray-50 rounded-xl transition-colors">
-                    <Settings size={20} className="text-gray-400" />
+                <Link href="/admin/settings" className="flex items-center gap-3 px-4 py-3 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-xl transition-colors">
+                    <Settings size={20} className="text-gray-500" />
                     Settings
                 </Link>
 
                 <button 
                     onClick={handleLogout}
-                    className="flex items-center gap-3 px-4 py-3 text-sm font-medium text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors w-full text-left group"
+                    className="flex items-center gap-3 px-4 py-3 text-sm font-medium text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors w-full text-left group"
                 >
-                    <LogOut size={20} className="text-gray-400 group-hover:text-red-600" />
+                    <LogOut size={20} className="text-gray-500 group-hover:text-red-600" />
                     Log out
                 </button>
             </div>
@@ -116,7 +116,7 @@ export default function AdminLayout({ children }) {
                     
                     <div className="flex items-center gap-4 lg:gap-5 mt-2">
                         <div className="hidden md:flex items-center bg-white border border-gray-100 rounded-full px-4 py-1.5 shadow-sm focus-within:ring-2 focus-within:ring-gray-200 focus-within:border-gray-200 transition-shadow">
-                            <Search size={16} className="text-gray-400" />
+                            <Search size={16} className="text-gray-500" />
                             <input 
                                 type="text" 
                                 placeholder="Search..." 
@@ -124,7 +124,7 @@ export default function AdminLayout({ children }) {
                             />
                         </div>
 
-                        <button className="relative p-1.5 text-gray-500 hover:bg-white hover:shadow-sm rounded-full transition-all">
+                        <button className="relative p-1.5 text-gray-600 hover:bg-white hover:shadow-sm rounded-full transition-all">
                             <Bell size={18} />
                             <span className="absolute top-1 right-1.5 w-2 h-2 bg-red-500 rounded-full border-2 border-[#F5F5F7]"></span>
                         </button>

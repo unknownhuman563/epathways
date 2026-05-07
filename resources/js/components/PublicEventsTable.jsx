@@ -12,7 +12,7 @@ const PublicEventsTable = ({ events }) => {
         switch (status?.toLowerCase()) {
             case 'ongoing': return 'bg-[#282728] text-white border border-[#282728] shadow-2xl shadow-[#282728]/20';
             case 'upcoming': return 'bg-white text-[#282728] border border-gray-100 shadow-xl';
-            default: return 'bg-gray-50 text-gray-400 border border-gray-100';
+            default: return 'bg-gray-50 text-gray-500 border border-gray-100';
         }
     };
 
@@ -21,7 +21,7 @@ const PublicEventsTable = ({ events }) => {
             <div className="text-center py-20 bg-white rounded-[2.5rem] border border-[#282728]/5 shadow-sm">
                 <Calendar className="w-16 h-16 mx-auto mb-6 text-gray-200" />
                 <h3 className="text-xl font-black text-[#282728] uppercase tracking-tighter mb-2">No Upcoming Events</h3>
-                <p className="text-[11px] font-bold uppercase tracking-widest text-gray-400">Check back later for more activities</p>
+                <p className="text-[11px] font-bold uppercase tracking-widest text-gray-500">Check back later for more activities</p>
             </div>
         );
     }
@@ -43,7 +43,7 @@ const PublicEventsTable = ({ events }) => {
                         {/* Status Badge */}
                         <div className="absolute top-4 left-4">
                             <div className={`${getStatusStyle(event.status)} px-3 py-1.5 rounded-lg text-[8px] font-black uppercase tracking-[0.3em] flex items-center gap-1.5 backdrop-blur-md`}>
-                                <Star size={10} className={status?.toLowerCase() === 'ongoing' ? 'text-white' : 'text-gray-400'} />
+                                <Star size={10} className={status?.toLowerCase() === 'ongoing' ? 'text-white' : 'text-gray-500'} />
                                 {event.status}
                             </div>
                         </div>
@@ -53,11 +53,11 @@ const PublicEventsTable = ({ events }) => {
                     <div className="p-6 flex flex-col flex-grow">
                         <div className="mb-5 relative z-10">
                             <div className="flex flex-wrap gap-2 mb-4">
-                                <span className="px-2 py-1 bg-gray-50 text-[8px] font-black text-gray-500 rounded uppercase tracking-widest flex items-center gap-1.5 border border-gray-100">
+                                <span className="px-2 py-1 bg-gray-50 text-[8px] font-black text-gray-600 rounded uppercase tracking-widest flex items-center gap-1.5 border border-gray-100">
                                     <Tag size={10} /> {event.type || 'Event'}
                                 </span>
                                 {event.mode && (
-                                    <span className="px-2 py-1 bg-gray-50 text-[8px] font-black text-gray-500 rounded uppercase tracking-widest flex items-center gap-1.5 border border-gray-100">
+                                    <span className="px-2 py-1 bg-gray-50 text-[8px] font-black text-gray-600 rounded uppercase tracking-widest flex items-center gap-1.5 border border-gray-100">
                                         {event.mode === 'online' ? <Globe size={10} /> : <MapPin size={10} />}
                                         {event.mode}
                                     </span>
@@ -66,7 +66,7 @@ const PublicEventsTable = ({ events }) => {
                             <h3 className="text-xl font-black text-[#282728] uppercase tracking-tighter mb-3 line-clamp-2 leading-tight">
                                 {event.name || event.title}
                             </h3>
-                            <p className="text-[13px] text-gray-500 font-medium leading-relaxed line-clamp-2">
+                            <p className="text-[13px] text-gray-600 font-medium leading-relaxed line-clamp-2">
                                 {event.description || "Join us for an insightful session where we explore opportunities and pathways for your future journey."}
                             </p>
                         </div>
@@ -74,17 +74,17 @@ const PublicEventsTable = ({ events }) => {
                         {/* Details Compact Grid */}
                         <div className="grid grid-cols-3 gap-2 border-y border-gray-50 py-4 mb-6 mt-auto">
                             <div className="flex flex-col text-left">
-                                <span className="flex items-center gap-1.5 text-[8px] font-black text-gray-400 uppercase tracking-widest mb-1.5"><Calendar size={10} /> Date</span>
+                                <span className="flex items-center gap-1.5 text-[8px] font-black text-gray-500 uppercase tracking-widest mb-1.5"><Calendar size={10} /> Date</span>
                                 <span className="text-[10px] font-bold text-[#282728] uppercase tracking-wider truncate" title={formatDate(event.date_from || event.date)}>{formatDate(event.date_from || event.date)}</span>
                             </div>
                             
                             <div className="flex flex-col text-left px-3 border-x border-gray-50">
-                                <span className="flex items-center gap-1.5 text-[8px] font-black text-gray-400 uppercase tracking-widest mb-1.5"><Clock size={10} /> Time</span>
+                                <span className="flex items-center gap-1.5 text-[8px] font-black text-gray-500 uppercase tracking-widest mb-1.5"><Clock size={10} /> Time</span>
                                 <span className="text-[10px] font-bold text-[#282728] uppercase tracking-wider truncate" title={event.time || event.sessions?.[0]?.time_start?.slice(0,5) || 'TBA'}>{event.time || event.sessions?.[0]?.time_start?.slice(0,5) || 'TBA'}</span>
                             </div>
 
                             <div className="flex flex-col text-left pl-3">
-                                <span className="flex items-center gap-1.5 text-[8px] font-black text-gray-400 uppercase tracking-widest mb-1.5"><MapPin size={10} /> Venue</span>
+                                <span className="flex items-center gap-1.5 text-[8px] font-black text-gray-500 uppercase tracking-widest mb-1.5"><MapPin size={10} /> Venue</span>
                                 <span className="text-[10px] font-bold text-[#282728] uppercase tracking-wider truncate" title={event.mode === 'online' ? 'Online' : (event.location || event.sessions?.[0]?.city || 'TBA')}>{event.mode === 'online' ? 'Online' : (event.location || event.sessions?.[0]?.city || 'TBA')}</span>
                             </div>
                         </div>

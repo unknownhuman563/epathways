@@ -82,7 +82,7 @@ export default function AboutUs() {
                         {/* Overlapping dark box with green bottom border */}
                         <div className="absolute -bottom-10 -left-10 bg-[#282728] py-5 px-3 text-white min-w-[170px] shadow-2xl border-b-[6px] border-[#436235] text-center z-20">
                             <div className="text-3xl font-bold mb-0.5">300 +</div>
-                            <div className="text-[10px] font-light text-gray-400 uppercase tracking-[0.2em]">
+                            <div className="text-[10px] text-gray-600 uppercase tracking-[0.2em]">
                                 Visa Approvals
                             </div>
                         </div>
@@ -91,7 +91,7 @@ export default function AboutUs() {
                     {/* Right: Content */}
                     <div className="lg:pl-12 mt-20 lg:mt-0">
                         <div className="flex items-center gap-4 mb-8">
-                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">About Us</span>
+                            <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">About Us</span>
                             <div className="h-[2px] w-12 bg-[#436235]"></div>
                         </div>
 
@@ -99,7 +99,7 @@ export default function AboutUs() {
                             emerge. energise. evolve
                         </h2>
 
-                        <p className="text-lg text-gray-500 mb-12 leading-relaxed font-light">
+                        <p className="text-lg text-gray-600 mb-12 leading-relaxed font-light">
                             Pathways empowers students to emerge. energise. and evolve by guiding them through global education opportunities, scholarships, and career pathways.
                         </p>
 
@@ -114,7 +114,7 @@ export default function AboutUs() {
                                     <div className="mt-1 w-6 h-6 bg-[#436235] rounded-full flex items-center justify-center flex-shrink-0 transition-transform group-hover:scale-110">
                                         <Check className="text-white w-3.5 h-3.5" strokeWidth={4} />
                                     </div>
-                                    <span className="text-sm text-gray-400 font-medium italic leading-relaxed">{item}</span>
+                                    <span className="text-sm text-gray-500 font-medium italic leading-relaxed">{item}</span>
                                 </li>
                             ))}
                         </ul>
@@ -138,7 +138,7 @@ export default function AboutUs() {
                         {/* Left: Benefits */}
                         <div className="pt-12">
                             <div className="flex items-center gap-4 mb-8">
-                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Licensed and Accredited in New Zealand</span>
+                                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Licensed and Accredited in New Zealand</span>
                                 <div className="h-[2px] w-12 bg-[#436235]"></div>
                             </div>
 
@@ -172,7 +172,7 @@ export default function AboutUs() {
 
                                 <div className="p-12 pb-0 relative z-10 bg-white">
                                     <h3 className="text-4xl font-bold text-[#282728] mb-10 uppercase tracking-tight leading-[1.1]">
-                                        Licensed Immigration<br /><span className="text-gray-400">Advisers (LIA)</span>
+                                        Licensed Immigration<br /><span className="text-gray-500">Advisers (LIA)</span>
                                     </h3>
                                 </div>
 
@@ -205,7 +205,7 @@ export default function AboutUs() {
             <section className="py-24 bg-white border-t border-gray-100">
                 <div className="container mx-auto px-4 max-w-7xl">
                     <div className="flex flex-col items-center mb-20 text-center">
-                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.3em] mb-4">The Team Behind</span>
+                        <span className="text-[10px] font-bold text-gray-500 uppercase tracking-[0.3em] mb-4">The Team Behind</span>
                         <div className="flex items-center gap-2 mb-6">
                             <img src={LogoBlack} alt="ePathways Logo" className="h-8 object-contain grayscale brightness-0" />
                         </div>
@@ -239,7 +239,7 @@ export default function AboutUs() {
                 <div className="container mx-auto px-4 max-w-7xl">
                     <div className="mb-20">
                         <div className="flex items-center gap-4 mb-8">
-                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Global Pathways</span>
+                            <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Global Pathways</span>
                             <div className="h-[2px] w-12 bg-[#436235]"></div>
                         </div>
                         <h2 className="text-4xl md:text-5xl font-bold text-[#282728] uppercase tracking-tight">
@@ -286,7 +286,7 @@ export default function AboutUs() {
                                             <div className="w-6 h-6 bg-[#436235] rounded-full border-2 border-white shadow-xl flex items-center justify-center hover:scale-125 transition-transform cursor-pointer">
                                                 <div className="w-1.5 h-1.5 bg-white rounded-full"></div>
                                             </div>
-                                            <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 bg-white px-2 py-1 rounded shadow-sm opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap text-[8px] font-bold uppercase tracking-widest text-gray-500 z-30">
+                                            <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 bg-white px-2 py-1 rounded shadow-sm opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap text-[8px] font-bold uppercase tracking-widest text-gray-600 z-30">
                                                 {loc.name}
                                             </div>
                                         </div>

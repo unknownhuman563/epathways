@@ -48,7 +48,7 @@ const TestimonialSlider = () => {
         <section className="py-16 bg-gray-50 overflow-hidden">
             <div className="max-w-7xl mx-auto px-4">
                 <div className="text-center mb-16">
-                    <p className="text-sm font-semibold tracking-widest text-gray-400 uppercase mb-2">Testimonials</p>
+                    <p className="text-sm font-semibold tracking-widest text-gray-500 uppercase mb-2">Testimonials</p>
                     <h2 className="text-3xl md:text-4xl font-black text-[#282728] mb-4">
                         What They Say
                     </h2>
@@ -99,13 +99,13 @@ const TestimonialSlider = () => {
                                     <div className="flex gap-4">
                                         <button
                                             onClick={prevSlide}
-                                            className="p-3 rounded-full border border-gray-200 text-gray-400 hover:border-green-700 hover:text-green-700 transition-all duration-300"
+                                            className="p-3 rounded-full border border-gray-200 text-gray-500 hover:border-green-700 hover:text-green-700 transition-all duration-300"
                                         >
                                             <ChevronLeft size={20} />
                                         </button>
                                         <button
                                             onClick={nextSlide}
-                                            className="p-4 rounded-full border border-gray-200 text-gray-400 hover:border-green-700 hover:text-green-700 transition-all duration-300"
+                                            className="p-4 rounded-full border border-gray-200 text-gray-500 hover:border-green-700 hover:text-green-700 transition-all duration-300"
                                         >
                                             <ChevronRight size={24} />
                                         </button>

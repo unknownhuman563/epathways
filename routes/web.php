@@ -46,6 +46,10 @@ Route::get("/visa-assessment-form", function (){
 
 Route::get('/activities', [EventController::class, 'activities']);
 
+Route::get("/visa-approved", function (){
+   return inertia('VisaApproved'); 
+});
+
 // Public Registration & Assessment Routes
 Route::get('/register/{event_code}', [EventController::class, 'showRegistrationForm']);
 Route::post('/register/{event_code}', [EventController::class, 'registerLead']);

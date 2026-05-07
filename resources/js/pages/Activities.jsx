@@ -79,7 +79,7 @@ export default function Activities({ events }) {
                         Three ways to connect with us
                     </h2>
                     
-                    <p className="text-gray-400 text-lg max-w-5xl mx-auto mb-20 leading-relaxed font-light">
+                    <p className="text-gray-500 text-lg max-w-5xl mx-auto mb-20 leading-relaxed font-light">
                         From live sessions on social media to interactive webinars and local community gatherings, 
                         we provide multiple platforms for you to learn, grow, and network.
                     </p>
@@ -95,7 +95,7 @@ export default function Activities({ events }) {
                                 />
                             </div>
                             <h3 className="text-2xl font-medium text-white mb-4">Facebook Live</h3>
-                            <p className="text-gray-400 font-light leading-relaxed">
+                            <p className="text-gray-600 leading-relaxed">
                                 Join our weekly live sessions for real-time updates and direct Q&A with our migration experts.
                             </p>
                         </div>
@@ -110,7 +110,7 @@ export default function Activities({ events }) {
                                 />
                             </div>
                             <h3 className="text-2xl font-medium text-white mb-4">Webinars</h3>
-                            <p className="text-gray-400 font-light leading-relaxed">
+                            <p className="text-gray-600 leading-relaxed">
                                 Dive deep into specific educational paths and visa processes through our structured online seminars.
                             </p>
                         </div>
@@ -125,7 +125,7 @@ export default function Activities({ events }) {
                                 />
                             </div>
                             <h3 className="text-2xl font-medium text-white mb-4">Community Events</h3>
-                            <p className="text-gray-400 font-light leading-relaxed">
+                            <p className="text-gray-600 leading-relaxed">
                                 Meet us in person at our local workshops and networking events designed to build lasting connections.
                             </p>
                         </div>
@@ -176,9 +176,9 @@ export default function Activities({ events }) {
                                             />
                                             {/* Date Badge */}
                                             <div className="absolute top-0 right-0 m-4 bg-white/90 backdrop-blur-md px-4 py-3 text-center min-w-[80px] shadow-sm">
-                                                <span className="block text-[10px] text-gray-500 uppercase font-bold">{day}</span>
+                                                <span className="block text-[10px] text-gray-600 uppercase font-bold">{day}</span>
                                                 <span className="block text-2xl font-medium text-gray-900">{date}</span>
-                                                <span className="block text-[10px] text-gray-500 uppercase font-bold">{monthYear}</span>
+                                                <span className="block text-[10px] text-gray-600 uppercase font-bold">{monthYear}</span>
                                             </div>
                                         </div>
                                         <div className="p-8 md:p-10 flex flex-col items-start flex-grow">
@@ -188,7 +188,7 @@ export default function Activities({ events }) {
                                                 </span>
                                             </div>
                                             <h3 className="text-2xl font-medium text-gray-900 mb-2 line-clamp-1">{event.name || event.title}</h3>
-                                            <p className="text-sm text-gray-500 mb-6 uppercase tracking-wider">
+                                            <p className="text-sm text-gray-600 mb-6 uppercase tracking-wider">
                                                 {event.mode === 'online' ? 'Online' : (event.location || event.sessions?.[0]?.city || 'TBA')}
                                             </p>
                                             <p className="text-gray-600 font-light mb-8 leading-relaxed line-clamp-2">
@@ -205,7 +205,7 @@ export default function Activities({ events }) {
                                 );
                             })
                         ) : (
-                            <div className="w-full py-20 text-center text-gray-400 font-light">
+                            <div className="w-full py-20 text-center text-gray-600">
                                 No upcoming events found. Please check back later.
                             </div>
                         )}
@@ -261,7 +261,7 @@ export default function Activities({ events }) {
                     <h2 className="text-4xl md:text-5xl font-medium text-white mb-8 tracking-tight">
                         Ready to take the next step
                     </h2>
-                    <p className="text-gray-400 text-lg font-light mb-12">
+                    <p className="text-gray-500 text-lg font-light mb-12">
                         Sign up for an upcoming activity and start building your network with us today.
                     </p>
                     <div className="flex flex-wrap justify-center gap-4">

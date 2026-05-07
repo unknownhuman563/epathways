@@ -51,7 +51,7 @@ const ConsultationSection = () => {
                     >
                         <div className="h-40 bg-gray-200 flex items-center justify-center">
                             {/* Placeholder image */}
-                            <span className="text-gray-400">Image</span>
+                            <span className="text-gray-500">Image</span>
                         </div>
                         <div className="p-4">
                             <h3 className="font-semibold text-gray-800">{item.name}</h3>

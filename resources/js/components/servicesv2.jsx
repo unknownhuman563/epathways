@@ -37,12 +37,12 @@ const CardCarousel = () => {
                         <div className="bg-white shadow-md rounded-lg overflow-hidden border">
                             {/* Image placeholder */}
                             <div className="bg-gray-200 h-40 flex items-center justify-center">
-                                <span className="text-gray-500">Image</span>
+                                <span className="text-gray-600">Image</span>
                             </div>
 
                             {/* Content */}
                             <div className="p-4 text-left">
-                                <p className="text-sm text-gray-500">{card.category}</p>
+                                <p className="text-sm text-gray-600">{card.category}</p>
                                 <h3 className="text-lg font-bold">{card.title}</h3>
                                 <p className="text-gray-600 mt-2">
                                     Egestas elit dui scelerisque ut eu purus aliquam vitae habitasse.
@@ -53,7 +53,7 @@ const CardCarousel = () => {
                                     <div className="w-8 h-8 bg-gray-300 rounded-full"></div>
                                     <div>
                                         <p className="text-sm font-medium">{card.author}</p>
-                                        <p className="text-xs text-gray-500">{card.role}</p>
+                                        <p className="text-xs text-gray-600">{card.role}</p>
                                     </div>
                                 </div>
 

@@ -40,7 +40,7 @@ export default function EventDetails({ event, leads }) {
             {/* Header */}
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div className="flex flex-col gap-2">
-                    <Link href="/admin/events" className="inline-flex items-center gap-1.5 text-sm font-medium text-gray-500 hover:text-blue-600 transition-colors w-max">
+                    <Link href="/admin/events" className="inline-flex items-center gap-1.5 text-sm font-medium text-gray-600 hover:text-blue-600 transition-colors w-max">
                         <ArrowLeft size={16} /> Back to Events
                     </Link>
                     <div className="flex flex-wrap items-center gap-3">
@@ -53,7 +53,7 @@ export default function EventDetails({ event, leads }) {
                         <span className="text-xs text-indigo-700 font-bold bg-indigo-50 border border-indigo-100 px-2 py-1 rounded-md uppercase tracking-wider">
                             {event.mode || 'In-Person'}
                         </span>
-                        <span className="text-xs text-gray-500 font-medium bg-gray-100 px-2 py-1 rounded-md">CODE: {event.event_code}</span>
+                        <span className="text-xs text-gray-600 font-medium bg-gray-100 px-2 py-1 rounded-md">CODE: {event.event_code}</span>
                     </div>
                 </div>
 
@@ -74,7 +74,7 @@ export default function EventDetails({ event, leads }) {
                         <Users size={20} />
                     </div>
                     <div>
-                        <p className="text-sm text-gray-500 font-medium">Registrants</p>
+                        <p className="text-sm text-gray-600 font-medium">Registrants</p>
                         <p className="text-2xl font-bold text-gray-900">{leads.length}</p>
                     </div>
                 </div>
@@ -83,7 +83,7 @@ export default function EventDetails({ event, leads }) {
                         <Calendar size={20} />
                     </div>
                     <div>
-                        <p className="text-sm text-gray-500 font-medium">Date Range</p>
+                        <p className="text-sm text-gray-600 font-medium">Date Range</p>
                         <p className="text-sm font-bold text-gray-900 leading-tight mt-1">
                             {formatDate(event.date_from)} {event.date_to ? ` - ${formatDate(event.date_to)}` : ''}
                         </p>
@@ -94,7 +94,7 @@ export default function EventDetails({ event, leads }) {
                         <Tag size={20} />
                     </div>
                     <div>
-                        <p className="text-sm text-gray-500 font-medium">Event Type</p>
+                        <p className="text-sm text-gray-600 font-medium">Event Type</p>
                         <p className="text-sm font-bold text-gray-900 mt-1">{event.type}</p>
                     </div>
                 </div>
@@ -103,7 +103,7 @@ export default function EventDetails({ event, leads }) {
                         {String(event.mode).toLowerCase() === 'online' ? <Globe size={20} /> : <MapPin size={20} />}
                     </div>
                     <div>
-                        <p className="text-sm text-gray-500 font-medium">Location</p>
+                        <p className="text-sm text-gray-600 font-medium">Location</p>
                         <p className="text-sm font-bold text-gray-900 line-clamp-2 mt-1">{String(event.mode).toLowerCase() === 'online' ? 'Online / Webinar' : 'Multiple / Venue'}</p>
                     </div>
                 </div>
@@ -137,10 +137,10 @@ export default function EventDetails({ event, leads }) {
                 <div className="p-5 border-b border-gray-100 flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
                     <div>
                         <h2 className="text-lg font-bold text-gray-900">Registrants</h2>
-                        <p className="text-xs text-gray-500 mt-1">People who have signed up directly for this event.</p>
+                        <p className="text-xs text-gray-600 mt-1">People who have signed up directly for this event.</p>
                     </div>
                     <div className="w-full sm:w-72 relative">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 w-4 h-4" />
                         <input 
                             type="text" 
                             placeholder="Search name or email..." 
@@ -155,19 +155,19 @@ export default function EventDetails({ event, leads }) {
                     <table className="w-full text-left border-collapse">
                         <thead>
                             <tr className="bg-gray-50/50 border-b border-gray-100">
-                                <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Name & Contact</th>
-                                <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Interest / Study Plan</th>
-                                <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
-                                <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Date Registered</th>
-                                <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider text-right">Actions</th>
+                                <th className="px-6 py-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">Name & Contact</th>
+                                <th className="px-6 py-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">Interest / Study Plan</th>
+                                <th className="px-6 py-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">Status</th>
+                                <th className="px-6 py-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">Date Registered</th>
+                                <th className="px-6 py-4 text-xs font-semibold text-gray-600 uppercase tracking-wider text-right">Actions</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-50">
                             {filteredLeads.length === 0 ? (
                                 <tr>
-                                    <td colSpan={5} className="px-6 py-12 text-center text-gray-400">
+                                    <td colSpan={5} className="px-6 py-12 text-center text-gray-500">
                                         <Users className="w-10 h-10 mx-auto mb-3 text-gray-200" />
-                                        <p className="font-semibold text-gray-500 mb-1">No registrants found</p>
+                                        <p className="font-semibold text-gray-600 mb-1">No registrants found</p>
                                         <p className="text-sm">No one has registered for this event yet.</p>
                                     </td>
                                 </tr>
@@ -181,15 +181,15 @@ export default function EventDetails({ event, leads }) {
                                                 </div>
                                                 <div>
                                                     <p className="font-bold text-gray-900 text-sm">{lead.first_name} {lead.last_name}</p>
-                                                    <p className="text-xs text-gray-500">{lead.email}</p>
-                                                    <p className="text-xs text-gray-400 mt-0.5">{lead.phone}</p>
+                                                    <p className="text-xs text-gray-600">{lead.email}</p>
+                                                    <p className="text-xs text-gray-500 mt-0.5">{lead.phone}</p>
                                                 </div>
                                             </div>
                                         </td>
                                         <td className="px-6 py-4">
                                             <div className="flex flex-col gap-1">
                                                 <span className="text-sm font-semibold text-gray-800">{lead.stage || 'N/A'}</span>
-                                                <span className="text-xs text-gray-500">{lead.study_plans?.[0]?.qualification_level || lead.education_exps?.[0]?.level || 'N/A'}</span>
+                                                <span className="text-xs text-gray-600">{lead.study_plans?.[0]?.qualification_level || lead.education_exps?.[0]?.level || 'N/A'}</span>
                                             </div>
                                         </td>
                                         <td className="px-6 py-4">

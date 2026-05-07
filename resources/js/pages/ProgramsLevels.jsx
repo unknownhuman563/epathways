@@ -72,7 +72,7 @@ export default function ProgramsLevels({ programs = [] }) {
                                     className="flex flex-col items-center justify-center p-2"
                                 >
                                     <h3 className="text-4xl md:text-6xl font-bold mb-3 tracking-tight">12+</h3>
-                                    <p className="text-[10px] md:text-xs text-gray-400 uppercase tracking-[0.2em] font-medium">Categories<br />Programs</p>
+                                    <p className="text-[10px] md:text-xs text-gray-500 uppercase tracking-[0.2em] font-medium">Categories<br />Programs</p>
                                 </motion.div>
                                 <motion.div
                                     initial={{ opacity: 0, y: 20 }}
@@ -82,7 +82,7 @@ export default function ProgramsLevels({ programs = [] }) {
                                     className="flex flex-col items-center justify-center p-2"
                                 >
                                     <h3 className="text-4xl md:text-6xl font-bold mb-3 tracking-tight">7-9</h3>
-                                    <p className="text-[10px] md:text-xs text-gray-400 uppercase tracking-[0.2em] font-medium">Levels Offered</p>
+                                    <p className="text-[10px] md:text-xs text-gray-500 uppercase tracking-[0.2em] font-medium">Levels Offered</p>
                                 </motion.div>
                                 <motion.div
                                     initial={{ opacity: 0, y: 20 }}
@@ -92,7 +92,7 @@ export default function ProgramsLevels({ programs = [] }) {
                                     className="flex flex-col items-center justify-center p-2"
                                 >
                                     <h3 className="text-4xl md:text-6xl font-bold mb-3 tracking-tight">63</h3>
-                                    <p className="text-[10px] md:text-xs text-gray-400 uppercase tracking-[0.2em] font-medium">Fields of Study</p>
+                                    <p className="text-[10px] md:text-xs text-gray-500 uppercase tracking-[0.2em] font-medium">Fields of Study</p>
                                 </motion.div>
                                 <motion.div
                                     initial={{ opacity: 0, y: 20 }}
@@ -102,7 +102,7 @@ export default function ProgramsLevels({ programs = [] }) {
                                     className="flex flex-col items-center justify-center p-2"
                                 >
                                     <h3 className="text-4xl md:text-6xl font-bold mb-3 tracking-tight">25+</h3>
-                                    <p className="text-[10px] md:text-xs text-gray-400 uppercase tracking-[0.2em] font-medium">Partners<br />Institutions</p>
+                                    <p className="text-[10px] md:text-xs text-gray-500 uppercase tracking-[0.2em] font-medium">Partners<br />Institutions</p>
                                 </motion.div>
                             </div>
                         </div>
@@ -141,7 +141,7 @@ export default function ProgramsLevels({ programs = [] }) {
                                 onClick={() => setActiveFilter('all')}
                                 className={`text-sm font-bold uppercase tracking-widest pb-2 transition-all border-b-2 ${activeFilter === 'all'
                                     ? 'text-[#436235] border-[#436235]'
-                                    : 'text-gray-500 border-transparent hover:text-gray-900'
+                                    : 'text-gray-600 border-transparent hover:text-gray-900'
                                     }`}
                             >
                                 All Programs
@@ -150,7 +150,7 @@ export default function ProgramsLevels({ programs = [] }) {
                                 onClick={() => setActiveFilter('diplomas')}
                                 className={`text-sm font-bold uppercase tracking-widest pb-2 transition-all border-b-2 ${activeFilter === 'diplomas'
                                     ? 'text-[#436235] border-[#436235]'
-                                    : 'text-gray-500 border-transparent hover:text-gray-900'
+                                    : 'text-gray-600 border-transparent hover:text-gray-900'
                                     }`}
                             >
                                 Diplomas
@@ -159,7 +159,7 @@ export default function ProgramsLevels({ programs = [] }) {
                                 onClick={() => setActiveFilter('bachelors')}
                                 className={`text-sm font-bold uppercase tracking-widest pb-2 transition-all border-b-2 ${activeFilter === 'bachelors'
                                     ? 'text-[#436235] border-[#436235]'
-                                    : 'text-gray-500 border-transparent hover:text-gray-900'
+                                    : 'text-gray-600 border-transparent hover:text-gray-900'
                                     }`}
                             >
                                 Bachelor
@@ -168,7 +168,7 @@ export default function ProgramsLevels({ programs = [] }) {
                                 onClick={() => setActiveFilter('masters')}
                                 className={`text-sm font-bold uppercase tracking-widest pb-2 transition-all border-b-2 ${activeFilter === 'masters'
                                     ? 'text-[#436235] border-[#436235]'
-                                    : 'text-gray-500 border-transparent hover:text-gray-900'
+                                    : 'text-gray-600 border-transparent hover:text-gray-900'
                                     }`}
                             >
                                 PG / Masters
@@ -209,12 +209,12 @@ export default function ProgramsLevels({ programs = [] }) {
                                         {program.title}
                                     </h4>
 
-                                    <p className="text-sm text-gray-500 mt-1">{program.institution}</p>
+                                    <p className="text-sm text-gray-600 mt-1">{program.institution}</p>
 
                                     <div className="text-[10px] font-bold text-[#436235] mt-2 mb-4 leading-snug">
                                         <p>Start from {program.intake_months || 'TBA'}</p>
                                         {program.duration_months && (
-                                            <p className="font-normal text-gray-500 mt-0.5">{program.duration_months} months duration</p>
+                                            <p className="font-normal text-gray-600 mt-0.5">{program.duration_months} months duration</p>
                                         )}
                                     </div>
 
@@ -236,7 +236,7 @@ export default function ProgramsLevels({ programs = [] }) {
                         <div className="text-center mt-16">
                             <button
                                 onClick={handleSeeMore}
-                                className="text-sm font-bold text-gray-400 hover:text-gray-900 transition-colors uppercase tracking-widest"
+                                className="text-sm font-bold text-gray-500 hover:text-gray-900 transition-colors uppercase tracking-widest"
                             >
                                 See More
                             </button>
@@ -246,7 +246,7 @@ export default function ProgramsLevels({ programs = [] }) {
                     {/* No Results */}
                     {filteredPrograms.length === 0 && (
                         <div className="text-center py-12">
-                            <p className="text-gray-500 text-sm">No programs found matching your criteria.</p>
+                            <p className="text-gray-600 text-sm">No programs found matching your criteria.</p>
                         </div>
                     )}
                 </div>

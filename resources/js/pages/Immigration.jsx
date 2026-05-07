@@ -135,7 +135,7 @@ function FaqItem({ item, i }) {
                 className="w-full flex items-center justify-between py-5 text-left gap-4"
             >
                 <span className={`text-sm font-semibold transition-colors ${open ? 'text-[#00A693]' : 'text-[#282728]'}`}>{item.q}</span>
-                <span className={`flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center transition-colors ${open ? 'bg-[#00A693] text-white' : 'bg-gray-100 text-gray-400'}`}>
+                <span className={`flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center transition-colors ${open ? 'bg-[#00A693] text-white' : 'bg-gray-100 text-gray-500'}`}>
                     {open ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                 </span>
             </button>
@@ -148,7 +148,7 @@ function FaqItem({ item, i }) {
                         transition={{ duration: 0.3 }}
                         className="overflow-hidden"
                     >
-                        <p className="pb-5 text-sm text-gray-500 leading-relaxed">{item.a}</p>
+                        <p className="pb-5 text-sm text-gray-600 leading-relaxed">{item.a}</p>
                     </motion.div>
                 )}
             </AnimatePresence>
@@ -298,14 +298,14 @@ export default function Immigration() {
                             viewport={{ once: true }}
                             transition={{ duration: 0.8 }}
                         >
-                            <span className="text-[11px] font-bold tracking-[0.3em] uppercase text-gray-400 mb-6 block">
+                            <span className="text-[11px] font-bold tracking-[0.3em] uppercase text-gray-500 mb-6 block">
                                 Guidance
                             </span>
                             <h2 className="text-4xl md:text-5xl lg:text-6xl font-medium leading-tight mb-8">
                                 We handle immigration with <br />
                                 <span className="text-gray-300 italic">care and precision</span>
                             </h2>
-                            <p className="text-gray-500 text-base md:text-lg leading-relaxed mb-12 max-w-md">
+                            <p className="text-gray-600 text-base md:text-lg leading-relaxed mb-12 max-w-md">
                                 ePathways connects you with licensed consultants who know the terrain. 
                                 We've guided thousands through visa applications, residency pathways, and new beginnings abroad.
                             </p>
@@ -317,7 +317,7 @@ export default function Immigration() {
                                         <CheckCircle size={20} />
                                     </div>
                                     <h3 className="text-lg font-bold">Expert team</h3>
-                                    <p className="text-gray-400 text-sm leading-relaxed">
+                                    <p className="text-gray-500 text-sm leading-relaxed">
                                         Certified professionals with years of real-world immigration experience.
                                     </p>
                                 </div>
@@ -328,7 +328,7 @@ export default function Immigration() {
                                         <MapPin size={20} />
                                     </div>
                                     <h3 className="text-lg font-bold">Proven results</h3>
-                                    <p className="text-gray-400 text-sm leading-relaxed">
+                                    <p className="text-gray-500 text-sm leading-relaxed">
                                         High approval rates backed by meticulous preparation and attention to detail.
                                     </p>
                                 </div>
@@ -466,7 +466,7 @@ export default function Immigration() {
                     <div className="text-center mb-16">
                         <motion.span
                             initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true }}
-                            className="text-[11px] font-bold tracking-[0.4em] uppercase text-gray-400 mb-4 block"
+                            className="text-[11px] font-bold tracking-[0.4em] uppercase text-gray-500 mb-4 block"
                         >
                             Popular
                         </motion.span>
@@ -478,7 +478,7 @@ export default function Immigration() {
                         </motion.h2>
                         <motion.p
                             initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true }}
-                            className="text-gray-500 text-sm md:text-base max-w-xl mx-auto leading-relaxed mb-10"
+                            className="text-gray-600 text-sm md:text-base max-w-xl mx-auto leading-relaxed mb-10"
                         >
                             These pathways open doors for thousands each year. Explore what might work for you.
                         </motion.p>
@@ -496,7 +496,7 @@ export default function Immigration() {
                             <button
                                 key={tab}
                                 onClick={() => setActiveTab(tab)}
-                                className={`pb-4 text-sm font-bold tracking-widest uppercase transition-all relative ${activeTab === tab ? 'text-[#282728]' : 'text-gray-300 hover:text-gray-500'}`}
+                                className={`pb-4 text-sm font-bold tracking-widest uppercase transition-all relative ${activeTab === tab ? 'text-[#282728]' : 'text-gray-300 hover:text-gray-600'}`}
                             >
                                 {tab}
                                 {activeTab === tab && (
@@ -530,7 +530,7 @@ export default function Immigration() {
                                 <h3 className="text-3xl md:text-5xl font-medium mb-8 leading-tight text-[#282728]">
                                     {visaTabs[activeTab].title}
                                 </h3>
-                                <p className="text-gray-500 text-sm md:text-base leading-relaxed mb-10 max-w-md">
+                                <p className="text-gray-600 text-sm md:text-base leading-relaxed mb-10 max-w-md">
                                     {visaTabs[activeTab].desc}
                                 </p>
                                 <a 
@@ -557,7 +557,7 @@ export default function Immigration() {
                         <h2 className="text-4xl md:text-5xl font-medium mb-6 tracking-tight text-[#282728]">
                             Select your visa pathway
                         </h2>
-                        <p className="text-gray-500 text-sm md:text-base max-w-3xl mx-auto leading-relaxed">
+                        <p className="text-gray-600 text-sm md:text-base max-w-3xl mx-auto leading-relaxed">
                             Choose a visa category below to start your free assessment.<br className="hidden md:block" /> We will evaluate your qualifications and help you find the best path forward.
                         </p>
                     </div>
@@ -614,7 +614,7 @@ export default function Immigration() {
                     <div className="text-center mb-20">
                         <motion.span
                             initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true }}
-                            className="text-[11px] font-bold tracking-[0.4em] uppercase text-gray-400 mb-4 block"
+                            className="text-[11px] font-bold tracking-[0.4em] uppercase text-gray-500 mb-4 block"
                         >
                             Process
                         </motion.span>
@@ -626,7 +626,7 @@ export default function Immigration() {
                         </motion.h2>
                         <motion.p
                             initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true }}
-                            className="text-gray-500 text-sm md:text-base max-w-xl mx-auto leading-relaxed"
+                            className="text-gray-600 text-sm md:text-base max-w-xl mx-auto leading-relaxed"
                         >
                             We move methodically through each stage, keeping you informed and prepared at every turn.
                         </motion.p>
@@ -651,7 +651,7 @@ export default function Immigration() {
                                     <h3 className="text-3xl md:text-5xl font-medium mb-8 leading-tight text-[#282728]">
                                         {processSteps[activeStep].title}
                                     </h3>
-                                    <p className="text-gray-500 text-base md:text-lg leading-relaxed mb-10 font-light">
+                                    <p className="text-gray-600 text-base md:text-lg leading-relaxed mb-10 font-light">
                                         {processSteps[activeStep].desc}
                                     </p>
                                     <a 
@@ -670,7 +670,7 @@ export default function Immigration() {
                                 <button
                                     key={step}
                                     onClick={() => setActiveStep(step)}
-                                    className={`flex-1 text-left px-10 py-6 text-sm font-bold tracking-widest uppercase transition-all border-b border-gray-100 last:border-b-0 relative ${activeStep === step ? 'bg-white text-[#282728]' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100/50'}`}
+                                    className={`flex-1 text-left px-10 py-6 text-sm font-bold tracking-widest uppercase transition-all border-b border-gray-100 last:border-b-0 relative ${activeStep === step ? 'bg-white text-[#282728]' : 'text-gray-500 hover:text-gray-600 hover:bg-gray-100/50'}`}
                                 >
                                     {step}
                                     {activeStep === step && (
@@ -787,7 +787,7 @@ export default function Immigration() {
                         </motion.h2>
                         <motion.p
                             initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true }}
-                            className="text-gray-400 text-sm md:text-base max-w-lg leading-relaxed"
+                            className="text-gray-500 text-sm md:text-base max-w-lg leading-relaxed"
                         >
                             Real journeys, real outcomes
                         </motion.p>
@@ -819,7 +819,7 @@ export default function Immigration() {
                                     </div>
                                     <div>
                                         <h4 className="text-sm font-bold text-[#282728]">{s.name}</h4>
-                                        <p className="text-[11px] text-gray-400 font-medium uppercase tracking-widest">{s.detail}</p>
+                                        <p className="text-[11px] text-gray-500 font-medium uppercase tracking-widest">{s.detail}</p>
                                     </div>
                                 </div>
 
@@ -844,7 +844,7 @@ export default function Immigration() {
                         <div>
                             <motion.span
                                 initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true }}
-                                className="text-[11px] font-bold tracking-[0.4em] uppercase text-gray-400 mb-4 block"
+                                className="text-[11px] font-bold tracking-[0.4em] uppercase text-gray-500 mb-4 block"
                             >
                                 Blog
                             </motion.span>
@@ -879,12 +879,12 @@ export default function Immigration() {
                                 </div>
                                 <div className="flex items-center gap-4 mb-4">
                                     <span className="text-[10px] font-bold uppercase tracking-widest text-[#00A693]">{n.tag}</span>
-                                    <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">5 min read</span>
+                                    <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">5 min read</span>
                                 </div>
                                 <h3 className="text-xl md:text-2xl font-medium text-[#282728] leading-tight mb-4 group-hover:text-[#00A693] transition-colors">
                                     {n.title}
                                 </h3>
-                                <p className="text-gray-400 text-sm leading-relaxed mb-6 flex-1">
+                                <p className="text-gray-500 text-sm leading-relaxed mb-6 flex-1">
                                     {n.body}
                                 </p>
                                 <a 
@@ -971,7 +971,7 @@ export default function Immigration() {
                             </motion.h2>
                             <motion.p
                                 initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true }} transition={{ delay: 0.1 }}
-                                className="text-sm text-gray-400 leading-relaxed mb-8"
+                                className="text-sm text-gray-500 leading-relaxed mb-8"
                             >
                                 Got more questions? Our licensed advisers are happy to help.
                             </motion.p>
@@ -1010,7 +1010,7 @@ export default function Immigration() {
                             >
                                 We Got<br /><span className="text-[#00A693]">Your Back. 🇳🇿</span>
                             </motion.h2>
-                            <p className="text-gray-400 text-base max-w-md leading-relaxed">
+                            <p className="text-gray-500 text-base max-w-md leading-relaxed">
                                 Start your journey with a free immigration assessment. Our licensed advisers will give you a clear, honest picture of your options.
                             </p>
                         </div>
@@ -1021,9 +1021,9 @@ export default function Immigration() {
                             className="bg-white rounded-3xl shadow-2xl p-8 flex flex-col gap-5 w-full max-w-sm flex-shrink-0"
                         >
                             <h3 className="text-lg font-bold text-[#282728]">Book a Free Consultation</h3>
-                            <p className="text-sm text-gray-400">Speak directly with a Licensed Immigration Adviser — no obligation, no hidden fees.</p>
+                            <p className="text-sm text-gray-500">Speak directly with a Licensed Immigration Adviser — no obligation, no hidden fees.</p>
 
-                            <div className="space-y-2 text-sm text-gray-500">
+                            <div className="space-y-2 text-sm text-gray-600">
                                 {["Free initial assessment", "IAA Licensed advisers", "Personalised visa roadmap"].map((item, i) => (
                                     <div key={i} className="flex items-center gap-2">
                                         <CheckCircle size={14} className="text-[#00A693]" />
@@ -1046,7 +1046,7 @@ export default function Immigration() {
                             </a>
 
                             {/* Contact row */}
-                            <div className="pt-2 border-t border-gray-100 flex flex-col gap-2 text-[11px] text-gray-400">
+                            <div className="pt-2 border-t border-gray-100 flex flex-col gap-2 text-[11px] text-gray-500">
                                 <a href="tel:+64277775586" className="flex items-center gap-2 hover:text-[#00A693] transition-colors"><Phone size={12} /> +64 27 777 5586</a>
                                 <a href="mailto:info@epathways.co.nz" className="flex items-center gap-2 hover:text-[#00A693] transition-colors"><Mail size={12} /> info@epathways.co.nz</a>
                                 <span className="flex items-center gap-2"><MapPin size={12} /> Auckland, New Zealand</span>

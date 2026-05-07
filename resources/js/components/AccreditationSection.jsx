@@ -22,7 +22,7 @@ const AccreditationSection = () => {
                             Global Standards, <br />
                             <span className="text-[#436235]">Local Expertise</span>
                         </h2>
-                        <p className="text-gray-500 text-lg font-light leading-relaxed mb-8">
+                        <p className="text-gray-600 text-lg font-light leading-relaxed mb-8">
                             ePathways is a recognized education and immigration agency. Our team includes ICEF-trained consultants and Licensed Immigration Advisers, ensuring that your journey is backed by professional knowledge and ethical standards.
                         </p>
                         <div className="flex items-center gap-4">

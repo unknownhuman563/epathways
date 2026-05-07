@@ -35,11 +35,11 @@ export default function ProcessSteps() {
             <div className="max-w-7xl mx-auto px-6">
                 {/* Section Header */}
                 <div className="text-center mb-20 px-4">
-                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.3em] mb-4 block">Service Trifecta</span>
+                    <span className="text-[10px] font-bold text-gray-600 uppercase tracking-[0.3em] mb-4 block">Service Trifecta</span>
                     <h2 className="text-4xl md:text-5xl font-black text-[#282728] leading-tight mb-6">
                         3 Pillars
                     </h2>
-                    <p className="text-gray-500 text-sm md:text-base font-light max-w-xl mx-auto leading-relaxed">
+                    <p className="text-gray-600 text-sm md:text-base max-w-xl mx-auto leading-relaxed">
                         Integrated core offerings to support every step of your journey.
                     </p>
                 </div>
@@ -62,7 +62,7 @@ export default function ProcessSteps() {
                                 <h3 className="text-xl font-bold text-[#282728] mb-4 leading-tight group-hover:text-[#436235] transition-colors">
                                     {step.title}
                                 </h3>
-                                <p className="text-gray-400 text-sm font-light leading-relaxed mb-8 flex-grow">
+                                <p className="text-gray-600 text-sm leading-relaxed mb-8 flex-grow">
                                     {step.desc}
                                 </p>
                                 

@@ -81,7 +81,7 @@ const FacebookLive = () => {
                     </span>
                 </div>
                 <div className="md:w-1/2 p-10 md:p-16 flex flex-col justify-center items-start">
-                    <div className="flex flex-wrap gap-6 mb-8 text-gray-500 text-xs font-medium uppercase tracking-wider">
+                    <div className="flex flex-wrap gap-6 mb-8 text-gray-600 text-xs font-medium uppercase tracking-wider">
                         <span className="flex items-center gap-2"><Calendar size={14} /> Sat 10 Feb 2024</span>
                         <span className="flex items-center gap-2"><MapPin size={14} /> Online</span>
                     </div>
@@ -122,12 +122,12 @@ const FacebookLive = () => {
                                 </span>
                             </div>
                             <div className="p-8 flex flex-col items-start flex-grow">
-                                <div className="flex flex-wrap gap-4 mb-4 text-gray-500 text-[10px] font-medium uppercase tracking-wider">
+                                <div className="flex flex-wrap gap-4 mb-4 text-gray-600 text-[10px] font-medium uppercase tracking-wider">
                                     <span className="flex items-center gap-1.5"><Calendar size={12} /> {session.date}</span>
                                     <span className="flex items-center gap-1.5"><MapPin size={12} /> {session.mode}</span>
                                 </div>
                                 <h4 className="text-xl font-medium text-gray-900 mb-4">{session.title}</h4>
-                                <p className="text-gray-500 text-sm font-light mb-8 leading-relaxed line-clamp-2">
+                                <p className="text-gray-600 text-sm font-light mb-8 leading-relaxed line-clamp-2">
                                     {session.description}
                                 </p>
                                 <a 

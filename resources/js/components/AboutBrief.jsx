@@ -23,7 +23,7 @@ export default function AboutBrief() {
                             ePathways guides your <span className="text-[#436235]">journey forward</span>
                         </h2>
                         
-                        <p className="text-gray-500 text-sm md:text-base font-light leading-relaxed mb-10 max-w-xl">
+                        <p className="text-gray-600 text-sm md:text-base font-light leading-relaxed mb-10 max-w-xl">
                             We believe education and opportunity know no borders. Our team works to make your transition seamless, from application to arrival.
                         </p>
                         
@@ -37,7 +37,7 @@ export default function AboutBrief() {
                                     <div className="w-5 h-5 rounded-full bg-[#436235]/10 flex items-center justify-center group-hover:bg-[#436235] transition-colors">
                                         <Check size={10} className="text-[#436235] group-hover:text-white transition-colors" />
                                     </div>
-                                    <span className="text-sm font-medium text-gray-500">{item}</span>
+                                    <span className="text-sm font-medium text-gray-600">{item}</span>
                                 </li>
                             ))}
                         </ul>

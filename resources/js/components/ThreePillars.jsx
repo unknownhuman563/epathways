@@ -37,7 +37,7 @@ export default function ThreePillars() {
             <div className="max-w-7xl mx-auto px-4">
                 {/* Section Header */}
                 <div className="text-center mb-16">
-                    <p className="text-sm font-semibold tracking-widest text-gray-400 uppercase mb-2">Why Choose Us</p>
+                    <p className="text-sm font-semibold tracking-widest text-gray-500 uppercase mb-2">Why Choose Us</p>
                     <h2 className="text-3xl md:text-4xl font-black text-white mb-4">
                         How ePathways Helps You
                     </h2>

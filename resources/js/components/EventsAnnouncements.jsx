@@ -91,7 +91,7 @@ export default function EventsAnnouncements() {
                         <h2 className="text-4xl md:text-5xl font-black text-[#282728] leading-tight mb-2">
                              News & <span className="text-[#436235]">Announcements</span>
                         </h2>
-                        <p className="text-gray-500 text-sm md:text-base font-light max-w-xl">
+                        <p className="text-gray-600 text-sm md:text-base font-light max-w-xl">
                             The latest updates on New Zealand immigration, company events, and success stories from the ePathways community.
                         </p>
                     </div>
@@ -131,7 +131,7 @@ export default function EventsAnnouncements() {
                                 <h3 className="text-xl font-bold text-[#282728] mb-4 leading-tight group-hover:text-[#436235] transition-colors line-clamp-2">
                                     {article.title}
                                 </h3>
-                                <p className="text-gray-500 text-sm leading-relaxed mb-8 font-light line-clamp-3">
+                                <p className="text-gray-600 text-sm leading-relaxed mb-8 font-light line-clamp-3">
                                     {article.excerpt}
                                 </p>
                                 
