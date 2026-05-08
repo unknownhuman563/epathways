@@ -701,6 +701,10 @@ export default function BookingPage() {
                                                                     <MessageSquare className="w-5 h-5 text-black" />
                                                                     <span>+63 939 586 3654 (WhatsApp)</span>
                                                                 </div>
+                                                                <div className="flex items-center gap-4">
+                                                                    <Mail className="w-5 h-5 text-black" />
+                                                                    <span>hello@epathways.ph</span>
+                                                                </div>
                                                             </>
                                                         ) : (
                                                             <>
@@ -716,6 +720,9 @@ export default function BookingPage() {
                                                                     <MapPin className="w-5 h-5 text-black shrink-0 mt-1" />
                                                                     <span>Auckland, New Zealand</span>
                                                                 </div>
+                                                            </>
+                                                        )}
+                                                    </div>
                                                             </>
                                                         )}
                                                     </div>

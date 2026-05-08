@@ -45,15 +45,15 @@ const services = []; // Removed in favor of ImmigrationServices component
 const consultants = [
     { 
         name: "Dev Bhageerutty", 
-        license: "LIA 201401301", 
-        role: "Consultant", 
+        license: "202401351", 
+        role: "Licence Immigration Adviser (Provisional)", 
         bio: "Senior adviser with 15 years of immigration law expertise in New Zealand.",
         img: DevImg 
     },
     { 
         name: "Hendry Dai", 
-        license: "LIA 202200456", 
-        role: "Consultant", 
+        license: "IAA: 201500074", 
+        role: "Licence Immigration Adviser", 
         bio: "Specialist in skilled migration programs and employer accredited work visas.",
         img: DaiImg 
     },
@@ -109,7 +109,7 @@ const successStories = [
 
 const faqs = [
     { q: "What is a Licensed Immigration Adviser (LIA)?",  a: "A person licensed by the IAA to legally give immigration advice in NZ for a fee. Using a licensed adviser protects you." },
-    { q: "How do I know which visa suits me?",              a: "It depends on your qualifications, job situation, and goals. Our free assessment gives you a clear, personalised recommendation." },
+    { q: "How do I know which visa suits me?",              a: "It depends on your qualifications, job situation, and goals. Our assessment gives you a clear, personalised recommendation." },
     { q: "How long does a visa take to process?",           a: "From a few weeks for a visitor visa to over a year for residence. We keep you updated at every step." },
     { q: "Can I work while my application is pending?",     a: "Often yes — bridging options exist depending on your situation. Our advisers will guide you." },
     { q: "What is the Green List?",                         a: "A list of shortage occupations in NZ. Tier 1 roles qualify for immediate residence; Tier 2 has a two-year fast-track pathway." },
@@ -187,7 +187,7 @@ export default function Immigration() {
     const processSteps = {
         Assessment: {
             title: "We evaluate your profile thoroughly",
-            desc: "Our consultants review your background, goals, and eligibility across available pathways.",
+            desc: "Our advisers review your background, goals, and eligibility across available pathways.",
             icon: <Shield size={24} />
         },
         Consultation: {
@@ -306,7 +306,7 @@ export default function Immigration() {
                                 <span className="text-gray-300 italic">care and precision</span>
                             </h2>
                             <p className="text-gray-600 text-base md:text-lg leading-relaxed mb-12 max-w-md">
-                                ePathways connects you with licensed consultants who know the terrain. 
+                                ePathways connects you with licensed advisers who know the terrain. 
                                 We've guided thousands through visa applications, residency pathways, and new beginnings abroad.
                             </p>
 
@@ -417,7 +417,7 @@ export default function Immigration() {
                             {[
                                 { 
                                     tag: "Travel", title: "Visitor visa", img: VisitorVisaImg, 
-                                    desc: "Travel with confidence. Our consultants prepare documentation and applications for tourism, family visits, and short-term stays." 
+                                    desc: "Travel with confidence. Our advisers prepare documentation and applications for tourism, family visits, and short-term stays." 
                                 },
                                 { 
                                     tag: "Career", title: "Work visa", img: WorkVisaImg, 
@@ -558,7 +558,7 @@ export default function Immigration() {
                             Select your visa pathway
                         </h2>
                         <p className="text-gray-600 text-sm md:text-base max-w-3xl mx-auto leading-relaxed">
-                            Choose a visa category below to start your free assessment.<br className="hidden md:block" /> We will evaluate your qualifications and help you find the best path forward.
+                            Choose a visa category below to start your assessment.<br className="hidden md:block" /> We will evaluate your qualifications and help you find the best path forward.
                         </p>
                     </div>
 
@@ -605,83 +605,7 @@ export default function Immigration() {
                 </div>
             </section>
 
-            {/* ══════════════════════════════════════════════════════════════
-                APPROVAL PROCESS SECTION  —  Vertical Tabs
-            ══════════════════════════════════════════════════════════════ */}
-            <section className="py-32 bg-gray-50/50">
-                <div className="container mx-auto px-6 md:px-12 max-w-7xl">
-                    {/* Header */}
-                    <div className="text-center mb-20">
-                        <motion.span
-                            initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true }}
-                            className="text-[11px] font-bold tracking-[0.4em] uppercase text-gray-500 mb-4 block"
-                        >
-                            Process
-                        </motion.span>
-                        <motion.h2
-                            initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}
-                            className="text-4xl md:text-6xl font-medium mb-6 tracking-tight text-[#282728]"
-                        >
-                            Five steps to approval
-                        </motion.h2>
-                        <motion.p
-                            initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true }}
-                            className="text-gray-600 text-sm md:text-base max-w-xl mx-auto leading-relaxed"
-                        >
-                            We move methodically through each stage, keeping you informed and prepared at every turn.
-                        </motion.p>
-                    </div>
 
-                    {/* Interactive Component */}
-                    <div className="grid grid-cols-1 lg:grid-cols-12 bg-white rounded-sm overflow-hidden shadow-2xl shadow-gray-200/50 border border-gray-100 min-h-[500px]">
-                        {/* Content Area (Left) */}
-                        <div className="lg:col-span-8 p-12 md:p-20 flex flex-col justify-center bg-white border-r border-gray-50">
-                            <AnimatePresence mode="wait">
-                                <motion.div
-                                    key={activeStep}
-                                    initial={{ opacity: 0, y: 10 }}
-                                    animate={{ opacity: 1, y: 0 }}
-                                    exit={{ opacity: 0, y: -10 }}
-                                    transition={{ duration: 0.3 }}
-                                    className="max-w-xl"
-                                >
-                                    <div className="text-[#00A693] mb-8">
-                                        {processSteps[activeStep].icon}
-                                    </div>
-                                    <h3 className="text-3xl md:text-5xl font-medium mb-8 leading-tight text-[#282728]">
-                                        {processSteps[activeStep].title}
-                                    </h3>
-                                    <p className="text-gray-600 text-base md:text-lg leading-relaxed mb-10 font-light">
-                                        {processSteps[activeStep].desc}
-                                    </p>
-                                    <a 
-                                        href="/free-assessment" 
-                                        className="inline-flex items-center gap-3 bg-gray-50 border border-gray-200 px-8 py-3 text-[11px] font-bold uppercase tracking-widest hover:border-[#282728] transition-all duration-300"
-                                    >
-                                        Start <ArrowRight size={14} />
-                                    </a>
-                                </motion.div>
-                            </AnimatePresence>
-                        </div>
-
-                        {/* Sidebar (Right) */}
-                        <div className="lg:col-span-4 bg-gray-50 flex flex-col">
-                            {Object.keys(processSteps).map((step) => (
-                                <button
-                                    key={step}
-                                    onClick={() => setActiveStep(step)}
-                                    className={`flex-1 text-left px-10 py-6 text-sm font-bold tracking-widest uppercase transition-all border-b border-gray-100 last:border-b-0 relative ${activeStep === step ? 'bg-white text-[#282728]' : 'text-gray-500 hover:text-gray-600 hover:bg-gray-100/50'}`}
-                                >
-                                    {step}
-                                    {activeStep === step && (
-                                        <motion.div layoutId="activeStep" className="absolute left-0 top-0 bottom-0 w-1 bg-[#00A693]" />
-                                    )}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-                </div>
-            </section>
 
             {/* ══════════════════════════════════════════════════════════════
                 PARTNER / CREDENTIAL STRIP (Moved below Top Visas)
@@ -701,7 +625,7 @@ export default function Immigration() {
             </section>
 
             {/* ══════════════════════════════════════════════════════════════
-                TEAM / LICENSED CONSULTANTS  —  Horizontal Dark Cards
+                TEAM / LICENSED ADVISERS  —  Horizontal Dark Cards
             ══════════════════════════════════════════════════════════════ */}
             <section id="consultants" className="py-32 bg-[#0c1611] text-white">
                 <div className="container mx-auto px-6 md:px-12 max-w-7xl">
@@ -717,7 +641,7 @@ export default function Immigration() {
                             initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}
                             className="text-4xl md:text-5xl font-medium mb-6 tracking-tight"
                         >
-                            Meet our licensed consultants
+                            Meet our licensed advisers
                         </motion.h2>
                         <motion.p
                             initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true }}
@@ -753,9 +677,12 @@ export default function Immigration() {
                                     <span className="text-[10px] font-bold tracking-widest uppercase text-[#00A693] mb-3 block">
                                         {c.role}
                                     </span>
-                                    <h3 className="text-2xl md:text-3xl font-medium mb-4 text-white leading-tight">
+                                    <h3 className="text-2xl md:text-3xl font-medium mb-1 text-white leading-tight">
                                         {c.name}
                                     </h3>
+                                    <div className="text-white/60 text-[10px] font-bold uppercase tracking-widest mb-4">
+                                        {c.license}
+                                    </div>
                                     <p className="text-white/40 text-xs md:text-sm leading-relaxed mb-8">
                                         {c.bio}
                                     </p>
@@ -1011,7 +938,7 @@ export default function Immigration() {
                                 We Got<br /><span className="text-[#00A693]">Your Back. 🇳🇿</span>
                             </motion.h2>
                             <p className="text-gray-500 text-base max-w-md leading-relaxed">
-                                Start your journey with a free immigration assessment. Our licensed advisers will give you a clear, honest picture of your options.
+                                Start your journey with a comprehensive immigration assessment. Our licensed advisers will give you a clear, honest picture of your options.
                             </p>
                         </div>
 
@@ -1024,7 +951,7 @@ export default function Immigration() {
                             <p className="text-sm text-gray-500">Speak directly with a Licensed Immigration Adviser — no obligation, no hidden fees.</p>
 
                             <div className="space-y-2 text-sm text-gray-600">
-                                {["Free initial assessment", "IAA Licensed advisers", "Personalised visa roadmap"].map((item, i) => (
+                                {["Comprehensive assessment", "IAA Licensed advisers", "Personalised visa roadmap"].map((item, i) => (
                                     <div key={i} className="flex items-center gap-2">
                                         <CheckCircle size={14} className="text-[#00A693]" />
                                         <span>{item}</span>
@@ -1036,7 +963,7 @@ export default function Immigration() {
                                 href="/free-assessment"
                                 className="w-full flex items-center justify-center gap-2 bg-[#00A693] text-white text-sm font-bold py-4 rounded-xl hover:bg-[#008f7e] transition-colors duration-300"
                             >
-                                Start Free Assessment <ArrowRight size={15} />
+                                Start Assessment <ArrowRight size={15} />
                             </a>
                             <a
                                 href="/booking"

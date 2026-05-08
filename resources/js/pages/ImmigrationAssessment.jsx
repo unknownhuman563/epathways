@@ -28,7 +28,7 @@ export default function ImmigrationAssessment() {
                             Select your visa pathway
                         </h1>
                         <p className="text-gray-600 text-sm md:text-base max-w-3xl mx-auto leading-relaxed">
-                            Choose a visa category below to start your free assessment.<br className="hidden md:block" /> We will evaluate your qualifications and help you find the best path forward.
+                            Choose a visa category below to start your assessment.<br className="hidden md:block" /> We will evaluate your qualifications and help you find the best path forward.
                         </p>
                     </div>
 

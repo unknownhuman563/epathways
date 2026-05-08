@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Check, ArrowRight } from 'react-feather';
 import Navbar from "@/components/navigation-bar";
 import Footer from "@/components/footer";
@@ -21,17 +21,20 @@ import EmmaImg from "@assets/team/emma.png";
 import DaiImg from "@assets/team/dai.png";
 import EmilyImg from "@assets/team/emily.png";
 import NovaImg from "@assets/team/nova.png";
+import BryllImg from "@assets/team/bryll.png";
 
 const teamMembers = [
-    { name: "DAVID BHAGEERUTTY", role: "CEO, FOUNDING MEMBER", image: DevImg },
+    { name: "DAVID BHAGEERUTTY", role: "LICENCE IMMIGRATION ADVISER (PROVISIONAL) - 202401351", image: DevImg },
     { name: "DINAH SUARIN", role: "CO, FOUNDING MEMBER", image: DinaImg },
     { name: "EMMA CEBALLO", role: "PEOPLE JOURNEY EXPERIENCE CHAMPION", image: EmmaImg },
-    { name: "HENDRY DAI", role: "LICENSE IMMIGRATION ADVISER", image: DaiImg },
-    { name: "DINAH SUARIN", role: "FINANCE ADMIN CHAMPION", image: DinaImg },
+    { name: "HENDRY DAI", role: "LICENCE IMMIGRATION ADVISER - IAA: 201500074", image: DaiImg },
+    { name: "EMILY DELA PENA", role: "FINANCE ADMIN CHAMPION", image: EmilyImg },
     { name: "NOVA PALACA", role: "ADMIN CHAMPION", image: NovaImg }
 ];
 
 export default function AboutUs() {
+    const [activeLocation, setActiveLocation] = useState(null);
+
     return (
         <div className="min-h-screen bg-white font-urbanist overflow-x-hidden">
             <Navbar />
@@ -131,6 +134,9 @@ export default function AboutUs() {
                 </div>
             </section>
 
+            {/* How ePathways Helps You Section */}
+            <ThreePillars />
+
             {/* Licensed and Accredited Section */}
             <section className="py-32 bg-white">
                 <div className="container mx-auto px-4 max-w-7xl">
@@ -152,7 +158,7 @@ export default function AboutUs() {
                                     "Collaborates with Allianz & Southern Cross for insurance",
                                     "Compliant with NZQA and INZ standards"
                                 ].map((item, index) => (
-                                    <div key={index} className="bg-[#282728] p-10 rounded-xl text-gray-300 text-sm font-medium tracking-wide shadow-lg border-l-4 border-transparent hover:border-[#436235] transition-all duration-300">
+                                    <div key={index} className="bg-[#282728] px-8 py-6 rounded-xl text-gray-300 text-sm font-medium tracking-wide shadow-lg border-l-4 border-transparent hover:border-[#436235] transition-all duration-300">
                                         {item}
                                     </div>
                                 ))}
@@ -162,18 +168,17 @@ export default function AboutUs() {
                         {/* Right: Advisor Card */}
                         <div className="bg-gray-50 rounded-3xl shadow-inner border border-gray-100 overflow-hidden">
                             <div className="flex flex-col h-full bg-white relative group">
-                                <div className="absolute top-10 left-10 z-20">
-                                    <div className="w-16 h-16 bg-[#436235]/10 rounded-full flex items-center justify-center p-3 border border-[#436235]/20 backdrop-blur-sm">
-                                        <div className="w-full h-full bg-[#436235] rounded-full flex items-center justify-center text-white text-[8px] uppercase font-bold text-center leading-none">
-                                            Licensed<br />IAA
+                                <div className="p-10 lg:p-12 pb-0 relative z-10 bg-white">
+                                    <div className="flex justify-between items-start mb-10">
+                                        <h3 className="text-3xl lg:text-4xl font-bold text-[#282728] uppercase tracking-tight leading-[1.2]">
+                                            Licensed Immigration<br /><span className="text-gray-500">Advisers (LIA)</span>
+                                        </h3>
+                                        <div className="w-16 h-16 shrink-0 bg-[#436235]/10 rounded-full flex items-center justify-center p-2 border border-[#436235]/20 backdrop-blur-sm ml-4">
+                                            <div className="w-full h-full bg-[#436235] rounded-full flex items-center justify-center text-white text-[8px] uppercase font-bold text-center leading-none">
+                                                Licensed<br />IAA
+                                            </div>
                                         </div>
                                     </div>
-                                </div>
-
-                                <div className="p-12 pb-0 relative z-10 bg-white">
-                                    <h3 className="text-4xl font-bold text-[#282728] mb-10 uppercase tracking-tight leading-[1.1]">
-                                        Licensed Immigration<br /><span className="text-gray-500">Advisers (LIA)</span>
-                                    </h3>
                                 </div>
 
                                 <div className="relative aspect-[3/4] overflow-hidden">
@@ -186,7 +191,7 @@ export default function AboutUs() {
                                     <div className="absolute bottom-10 left-10 text-white z-20">
                                         <div className="text-3xl font-bold mb-2">Dev Bhageerutty</div>
                                         <div className="text-[10px] text-gray-300 uppercase tracking-[0.2em] font-medium leading-relaxed mb-6">
-                                            (LIA 201401301)<br />
+                                            (LIA 202401351)<br />
                                             dev@epathways.co.nz
                                         </div>
                                         <div className="flex gap-2">
@@ -218,7 +223,7 @@ export default function AboutUs() {
                                 <img
                                     src={member.image}
                                     alt={member.name}
-                                    className="w-full h-full object-cover grayscale transition-all duration-700 group-hover:grayscale-0 group-hover:scale-105"
+                                    className="w-full h-full object-cover transition-all duration-700 group-hover:scale-105"
                                 />
                                 <div className="absolute inset-x-0 bottom-0 p-8 pt-20 bg-gradient-to-t from-black/80 via-black/40 to-transparent">
                                     <h3 className="text-lg font-bold text-white mb-1 uppercase tracking-tight leading-tight">
@@ -235,71 +240,228 @@ export default function AboutUs() {
             </section>
 
             {/* Global Reach Section */}
-            <section className="py-24 bg-[#fcfcfc] overflow-hidden">
+            <section className="py-24 bg-white overflow-hidden">
                 <div className="container mx-auto px-4 max-w-7xl">
-                    <div className="mb-20">
-                        <div className="flex items-center gap-4 mb-8">
-                            <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Global Pathways</span>
-                            <div className="h-[2px] w-12 bg-[#436235]"></div>
+                    <div className="mb-16 flex flex-col md:flex-row md:items-end md:justify-between gap-6">
+                        <div>
+                            <div className="flex items-center gap-4 mb-5">
+                                <span className="text-[10px] font-bold text-[#436235] uppercase tracking-[0.3em]">Global Pathways</span>
+                                <div className="h-[1px] w-12 bg-[#436235]/60"></div>
+                            </div>
+                            <h2 className="text-4xl md:text-5xl font-bold text-[#282728] uppercase tracking-tight leading-tight">
+                                ePathways <br /><span className="text-[#436235]">Worldwide</span>
+                            </h2>
                         </div>
-                        <h2 className="text-4xl md:text-5xl font-bold text-[#282728] uppercase tracking-tight">
-                            ePathways Evolves <br /> the <span className="text-[#436235]">World</span>
-                        </h2>
+                        <p className="text-gray-500 text-sm max-w-xs leading-relaxed">Click on any location pin to meet the local team and get in touch.</p>
                     </div>
 
-                    <div className="relative w-full aspect-[2/1] bg-white rounded-[3rem] shadow-inner border border-gray-100 flex items-center justify-center p-12 overflow-hidden">
-                        {/* Placeholder for World Map - Using a clean SVG Map concept */}
-                        <svg viewBox="0 0 1000 500" className="w-full h-full opacity-10 grayscale pointer-events-none absolute inset-0">
-                            <path d="M150,150 Q200,100 250,150 T350,150 T450,150 T550,150 T650,150 T750,150 T850,150" fill="none" stroke="#282728" strokeWidth="2" />
-                            {/* Generic World Map Silhouette */}
-                            <path d="M100,100 L900,100 L900,400 L100,400 Z" fill="#282728" opacity="0.1" />
-                        </svg>
+                    {/* Map Container */}
+                    <div className="relative w-full rounded-2xl overflow-hidden border border-gray-100 shadow-sm" style={{paddingBottom: '50%'}}>
+                        {/* White background */}
+                        <div className="absolute inset-0 bg-[#f7f8f6]"></div>
 
-                        {/* Map Pins / Locations */}
-                        <div className="relative w-full h-full z-10">
-                            {/* Example Pins matched to screenshot locations roughly */}
+                        {/* Map SVG - dark gray silhouette */}
+                        <img 
+                            src="https://upload.wikimedia.org/wikipedia/commons/e/ec/World_map_blank_without_borders.svg" 
+                            alt="World Map" 
+                            className="absolute inset-0 w-full h-full object-contain pointer-events-none p-6"
+                            style={{filter: 'brightness(0)', opacity: 0.12}}
+                        />
+
+                        {/* Location Pins */}
+                        <div className="absolute inset-0">
                             {[
-                                { name: "New Zealand", top: "85%", left: "88%" },
-                                { name: "Philippines", top: "55%", left: "78%" },
-                                { name: "Vietnam", top: "52%", left: "74%" },
-                                { name: "Indonesia", top: "65%", left: "75%" },
-                                { name: "India", top: "55%", left: "68%", main: true },
-                                { name: "Australia", top: "78%", left: "82%" },
-                                { name: "Mauritius", top: "72%", left: "62%" }
-                            ].map((loc, idx) => (
+                                { 
+                                    id: 'nz', name: "New Zealand", city: "Auckland", top: "72%", left: "87%",
+                                    address: "Auckland, New Zealand", email: "admin@epathways.co.nz", phone: "+64 21 000 0000",
+                                    head: { name: "Dinah Suarin", image: DinaImg },
+                                    team: [
+                                        { name: "Dev Bhageerutty", role: "Licence Immigration Adviser (Provisional)", image: DevImg },
+                                        { name: "Dinah Suarin", role: "Co-Founding Member", image: DinaImg },
+                                        { name: "Emma Ceballo", role: "People Journey Experience Champion", image: EmmaImg },
+                                        { name: "Emily Dela Pena", role: "Finance Admin Champion", image: EmilyImg },
+                                        { name: "Hendry Dai", role: "Licence Immigration Adviser", image: DaiImg }
+                                    ]
+                                },
+                                { 
+                                    id: 'ph', name: "Philippines", city: "Digos City", top: "49%", left: "77%",
+                                    address: "Digos City, Davao del Sur, Philippines", email: "hello@epathways.ph", phone: "+63 900 000 0000",
+                                    head: { name: "Neil Escaner", image: null },
+                                    team: [
+                                        { name: "Neil Escaner", role: "Booking Specialist", image: null },
+                                        { name: "Bryll", role: "Booking Officer", image: BryllImg },
+                                        { name: "Angelika Libanan", role: "Booking Coordinator", image: null }
+                                    ]
+                                },
+                                { 
+                                    id: 'in', name: "India", city: "New Delhi", top: "37%", left: "63%",
+                                    address: "New Delhi, India", email: "india@epathways.co.nz", phone: "+91 000 000 0000",
+                                    head: { name: "Dinah Suarin", image: DinaImg },
+                                    team: [
+                                        { name: "Dinah Suarin", role: "Co-Founding Member", image: DinaImg }
+                                    ]
+                                },
+                                { 
+                                    id: 'my', name: "Malaysia", city: "Kuala Lumpur", top: "50%", left: "71%",
+                                    address: "Kuala Lumpur, Malaysia", email: "my@epathways.co.nz", phone: "+60 00 000 0000",
+                                    head: { name: "Emily Dela Pena", image: EmilyImg },
+                                    team: [
+                                        { name: "Emily Dela Pena", role: "Finance Admin Champion", image: EmilyImg }
+                                    ]
+                                }
+                            ].map((loc) => (
                                 <div
-                                    key={idx}
-                                    className="absolute transform -translate-x-1/2 -translate-y-1/2 group"
+                                    key={loc.id}
+                                    className="absolute transform -translate-x-1/2 -translate-y-1/2 z-20"
                                     style={{ top: loc.top, left: loc.left }}
                                 >
-                                    {loc.main ? (
-                                        <div className="relative">
-                                            <div className="w-16 h-16 rounded-full border-4 border-white shadow-2xl overflow-hidden animate-bounce">
-                                                <img src={DevImg} className="w-full h-full object-cover" alt="Main Representative" />
-                                            </div>
-                                            <div className="absolute -bottom-2 -right-2 w-6 h-6 bg-[#436235] rounded-full border-2 border-white shadow-lg flex items-center justify-center">
-                                                <div className="w-1.5 h-1.5 bg-white rounded-full"></div>
+                                    <button
+                                        onClick={() => setActiveLocation(loc)}
+                                        className="relative group focus:outline-none flex flex-col items-center"
+                                    >
+                                        {/* Pulse ring */}
+                                        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-14 h-14 rounded-full border-2 border-[#436235]/30 animate-ping pointer-events-none"></div>
+
+                                        {/* Photo avatar */}
+                                        <div className={`relative w-12 h-12 rounded-full overflow-hidden border-[3px] shadow-lg transition-all duration-300 group-hover:scale-110 group-hover:shadow-xl ${
+                                            activeLocation?.id === loc.id
+                                                ? 'border-[#436235] scale-110 shadow-[0_0_0_4px_rgba(67,98,53,0.2)]'
+                                                : 'border-white'
+                                        }`}>
+                                            <img
+                                                src={loc.head.image || `https://ui-avatars.com/api/?background=436235&color=fff&size=100&bold=true&name=${encodeURIComponent(loc.head.name)}`}
+                                                alt={loc.head.name}
+                                                className="w-full h-full object-cover object-top"
+                                            />
+                                        </div>
+
+                                        {/* Name + country pill — shows on hover */}
+                                        <div className="mt-1.5 opacity-0 group-hover:opacity-100 -translate-y-1 group-hover:translate-y-0 transition-all duration-200 pointer-events-none">
+                                            <div className="bg-[#282728] text-white text-[8px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-full whitespace-nowrap shadow-lg">
+                                                {loc.city}
                                             </div>
                                         </div>
-                                    ) : (
-                                        <div className="relative">
-                                            <div className="w-6 h-6 bg-[#436235] rounded-full border-2 border-white shadow-xl flex items-center justify-center hover:scale-125 transition-transform cursor-pointer">
-                                                <div className="w-1.5 h-1.5 bg-white rounded-full"></div>
-                                            </div>
-                                            <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 bg-white px-2 py-1 rounded shadow-sm opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap text-[8px] font-bold uppercase tracking-widest text-gray-600 z-30">
-                                                {loc.name}
-                                            </div>
-                                        </div>
-                                    )}
+                                    </button>
                                 </div>
                             ))}
                         </div>
+
+                        {/* Bottom legend */}
+                        <div className="absolute bottom-4 left-6 flex items-center gap-3">
+                            <div className="w-3 h-3 rounded-full bg-[#436235] border-2 border-white shadow"></div>
+                            <span className="text-[9px] text-gray-400 uppercase tracking-widest font-bold">ePathways Office</span>
+                        </div>
                     </div>
+
+                    {/* Full Modal Popup */}
+                    <AnimatePresence>
+                        {activeLocation && (
+                            <motion.div
+                                initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                                className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/70 backdrop-blur-md"
+                                onClick={() => setActiveLocation(null)}
+                            >
+                                <motion.div
+                                    initial={{ scale: 0.9, y: 30, opacity: 0 }} 
+                                    animate={{ scale: 1, y: 0, opacity: 1 }} 
+                                    exit={{ scale: 0.9, y: 30, opacity: 0 }}
+                                    transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+                                    className="bg-white rounded-[2rem] max-w-4xl w-full max-h-[90vh] overflow-hidden shadow-[0_40px_80px_rgba(0,0,0,0.4)] relative flex flex-col"
+                                    onClick={(e) => e.stopPropagation()}
+                                >
+                                    {/* Dark Premium Header */}
+                                    <div className="relative bg-[#1a2e1e] px-10 pt-10 pb-16 overflow-hidden flex-shrink-0">
+                                        {/* Decorative background pattern */}
+                                        <div className="absolute inset-0 opacity-5">
+                                            <div className="absolute top-0 right-0 w-96 h-96 rounded-full bg-[#436235] -translate-y-1/2 translate-x-1/2"></div>
+                                            <div className="absolute bottom-0 left-0 w-64 h-64 rounded-full bg-[#00A693] translate-y-1/2 -translate-x-1/2"></div>
+                                        </div>
+
+                                        {/* Close button */}
+                                        <button 
+                                            onClick={() => setActiveLocation(null)} 
+                                            className="absolute top-6 right-6 w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 text-white transition-all flex items-center justify-center"
+                                        >
+                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M18 6L6 18M6 6l12 12"></path></svg>
+                                        </button>
+
+                                        {/* Location tag */}
+                                        <div className="inline-flex items-center gap-2 bg-[#436235]/40 px-4 py-2 rounded-full mb-5">
+                                            <div className="w-2 h-2 rounded-full bg-[#00A693] animate-pulse"></div>
+                                            <span className="text-[10px] font-bold uppercase tracking-[0.25em] text-[#a8d5a2]">{activeLocation.address}</span>
+                                        </div>
+
+                                        <h3 className="text-4xl md:text-5xl font-bold text-white uppercase tracking-tight leading-none">
+                                            {activeLocation.name}
+                                            <span className="block text-[#436235] mt-1">Team</span>
+                                        </h3>
+                                    </div>
+
+                                    {/* Body - scrollable */}
+                                    <div className="overflow-y-auto flex-1 -mt-8">
+                                        {/* Team Grid */}
+                                        <div className="px-8 md:px-10 pb-8">
+                                            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-5">
+                                                {activeLocation.team.map((member, idx) => (
+                                                    <motion.div 
+                                                        key={idx} 
+                                                        initial={{ opacity: 0, y: 20 }}
+                                                        animate={{ opacity: 1, y: 0 }}
+                                                        transition={{ delay: idx * 0.07 }}
+                                                        className="group relative rounded-2xl overflow-hidden bg-white shadow-md hover:shadow-xl border border-gray-100 hover:border-[#436235]/30 transition-all duration-300 cursor-default"
+                                                    >
+                                                        {/* Square Portrait Photo */}
+                                                        <div className="aspect-[3/4] overflow-hidden bg-[#282728]">
+                                                            <img 
+                                                                src={member.image || `https://ui-avatars.com/api/?background=282728&color=ffffff&size=300&bold=true&font-size=0.33&name=${encodeURIComponent(member.name)}`} 
+                                                                alt={member.name} 
+                                                                className="w-full h-full object-cover object-top group-hover:scale-105 transition-transform duration-500"
+                                                            />
+                                                        </div>
+                                                        {/* Name bar */}
+                                                        <div className="p-4 bg-white">
+                                                            <h4 className="text-sm font-bold text-[#282728] leading-tight mb-1">{member.name}</h4>
+                                                            <div className="flex items-center gap-1.5">
+                                                                <div className="w-1.5 h-1.5 rounded-full bg-[#436235] flex-shrink-0"></div>
+                                                                <p className="text-[9px] text-gray-400 uppercase tracking-widest font-semibold leading-tight">{member.role}</p>
+                                                            </div>
+                                                        </div>
+                                                    </motion.div>
+                                                ))}
+                                            </div>
+                                        </div>
+
+                                        {/* Contact Bar */}
+                                        <div className="border-t border-gray-100 bg-[#f8faf8] px-8 md:px-10 py-7">
+                                            <h4 className="text-[9px] font-bold text-gray-400 uppercase tracking-[0.3em] mb-5">Get In Touch</h4>
+                                            <div className="flex flex-col sm:flex-row gap-4">
+                                                <a href={`mailto:${activeLocation.email}`} className="group flex items-center gap-4 bg-white px-6 py-4 rounded-xl border border-gray-200 hover:border-[#436235] hover:shadow-md transition-all flex-1">
+                                                    <div className="w-10 h-10 rounded-xl bg-[#436235]/10 flex items-center justify-center text-[#436235] group-hover:bg-[#436235] group-hover:text-white transition-all">
+                                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>
+                                                    </div>
+                                                    <div>
+                                                        <div className="text-[9px] text-gray-400 uppercase tracking-widest mb-0.5">Email</div>
+                                                        <span className="text-sm font-bold text-[#282728]">{activeLocation.email}</span>
+                                                    </div>
+                                                </a>
+                                                <a href={`tel:${activeLocation.phone}`} className="group flex items-center gap-4 bg-white px-6 py-4 rounded-xl border border-gray-200 hover:border-[#436235] hover:shadow-md transition-all flex-1">
+                                                    <div className="w-10 h-10 rounded-xl bg-[#436235]/10 flex items-center justify-center text-[#436235] group-hover:bg-[#436235] group-hover:text-white transition-all">
+                                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg>
+                                                    </div>
+                                                    <div>
+                                                        <div className="text-[9px] text-gray-400 uppercase tracking-widest mb-0.5">Phone</div>
+                                                        <span className="text-sm font-bold text-[#282728]">{activeLocation.phone}</span>
+                                                    </div>
+                                                </a>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </motion.div>
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
                 </div>
             </section>
-
-            {/* How ePathways Helps You Section */}
-            <ThreePillars />
 
             {/* Learn About Section */}
             <LearnAbout />
