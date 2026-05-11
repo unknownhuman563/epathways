@@ -22,6 +22,7 @@ import BrandBanner   from "@assets/NewSections/brand_banner.png";
 import DevImg         from "@assets/team/Dev.png";
 import DaiImg         from "@assets/team/dai.png";
 import EmmaImg        from "@assets/team/emma.png";
+import EmilyImg       from "@assets/team/emily.png";
 import VisaImg        from "@assets/Services/visa.png";
 import AgentsImg      from "@assets/Services/agents.png";
 import SettlementImg  from "@assets/Services/settlement.png";
@@ -43,6 +44,13 @@ const topVisas = [
 const services = []; // Removed in favor of ImmigrationServices component
 
 const consultants = [
+    { 
+        name: "Emily Dela Pena", 
+        license: "Finance Admin Champion", 
+        role: "Finance & Admin", 
+        bio: "Dedicated finance and administration champion ensuring smooth operations and a seamless client experience at ePathways.",
+        img: EmilyImg 
+    },
     { 
         name: "Dev Bhageerutty", 
         license: "202401351", 
@@ -651,8 +659,8 @@ export default function Immigration() {
                         </motion.p>
                     </div>
 
-                    {/* Consultant Grid */}
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    {/* Consultant Grid — 1 row, 3 columns */}
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                         {consultants.map((c, i) => (
                             <motion.div
                                 key={i}
@@ -683,9 +691,6 @@ export default function Immigration() {
                                     <div className="text-white/60 text-[10px] font-bold uppercase tracking-widest mb-4">
                                         {c.license}
                                     </div>
-                                    <p className="text-white/40 text-xs md:text-sm leading-relaxed mb-8">
-                                        {c.bio}
-                                    </p>
                                     <a 
                                         href="/immigration-assessment" 
                                         className="text-[10px] font-bold uppercase tracking-widest flex items-center gap-2 text-white hover:text-[#00A693] transition-colors group/link"
