@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Check, ArrowRight } from 'react-feather';
-import Navbar from "@/components/navigation-bar";
-import Footer from "@/components/footer";
-import ScrollToTop from "@/components/scrolltotop";
-import LearnAbout from "@/components/LearnAbout";
-import ThreePillars from "@/components/ThreePillars";
+import Navbar from "@/components/layout/Navbar";
+import Footer from "@/components/layout/Footer";
+import ScrollToTop from "@/components/ui/ScrollToTop";
+import LearnAbout from "./LearnAbout";
+import ThreePillars from "./ThreePillars";
 
 // Import assets
 import GroupPic from "@assets/about_us/group_pic.png";

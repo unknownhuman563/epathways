@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowRight, CheckCircle } from 'react-feather';
-import Navbar from "@/components/navigation-bar";
-import Footer from "@/components/footer";
-import ScrollToTop from "@/components/scrolltotop";
-import JourneyExperience from "@/components/JourneyExperience";
+import Navbar from "@/components/layout/Navbar";
+import Footer from "@/components/layout/Footer";
+import ScrollToTop from "@/components/ui/ScrollToTop";
+import JourneyExperience from "./JourneyExperience";
 
 // Assets
 import heroBg from "@assets/Services/education.png";

@@ -2,9 +2,9 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, ChevronDown, ChevronUp } from 'react-feather';
 import { Link } from '@inertiajs/react';
-import Navbar from "@/components/navigation-bar";
-import Footer from "@/components/footer";
-import ScrollToTop from "@/components/scrolltotop";
+import Navbar from "@/components/layout/Navbar";
+import Footer from "@/components/layout/Footer";
+import ScrollToTop from "@/components/ui/ScrollToTop";
 
 import heroBg from "@assets/Services/education.png";
 import placeholderImg from "@assets/Services/education.png";

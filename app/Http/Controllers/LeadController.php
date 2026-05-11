@@ -17,7 +17,7 @@ class LeadController extends Controller
     public function index()
     {
         $leads = Lead::with(['studyPlans', 'event'])->latest()->get();
-        return inertia('Admin/Leads', [
+        return inertia('admin/Leads', [
             'leads' => $leads
         ]);
     }
@@ -79,7 +79,7 @@ class LeadController extends Controller
      */
     public function showFreeAssessment()
     {
-        return inertia('FreeAssessment');
+        return inertia('free-assessment/FreeAssessmentPage');
     }
 
     /**
@@ -307,7 +307,7 @@ class LeadController extends Controller
     {
         $lead = Lead::where('lead_id', $leadId)->firstOrFail();
 
-        return inertia('AssessmentResult', [
+        return inertia('free-assessment/AssessmentResult', [
             'lead_id' => $lead->lead_id,
             'first_name' => $lead->first_name,
             'status' => $lead->ai_analysis_status,
@@ -325,7 +325,7 @@ class LeadController extends Controller
             ->with(['studyPlans', 'educationExps', 'event'])
             ->firstOrFail();
 
-        return inertia('Admin/LeadDetails', [
+        return inertia('admin/LeadDetails', [
             'lead' => $lead
         ]);
     }

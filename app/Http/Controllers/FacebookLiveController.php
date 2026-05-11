@@ -23,7 +23,7 @@ class FacebookLiveController extends Controller
     {
         $sessions = FacebookLiveSession::orderBy('session_date', 'desc')->get();
 
-        return inertia('Admin/FacebookLive', ['sessions' => $sessions]);
+        return inertia('admin/FacebookLive', ['sessions' => $sessions]);
     }
 
     public function store(Request $request)

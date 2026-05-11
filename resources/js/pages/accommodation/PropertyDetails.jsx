@@ -1,6 +1,6 @@
 import React from 'react';
-import Navbar from '../components/navigation-bar';
-import Footer from '../components/footer';
+import Navbar from '@/components/layout/Navbar';
+import Footer from '@/components/layout/Footer';
 
 const PropertyDetails = ({ id }) => {
   // In a real app, you would fetch data based on the ID. Using dummy data for now.

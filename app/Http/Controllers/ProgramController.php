@@ -66,7 +66,7 @@ class ProgramController extends Controller
         $programs = Program::latest()->get();
         $programs->each(fn ($p) => $this->appendImageUrl($p));
 
-        return inertia('Admin/Programs', ['programs' => $programs]);
+        return inertia('admin/Programs', ['programs' => $programs]);
     }
 
     public function store(Request $request)
@@ -116,12 +116,12 @@ class ProgramController extends Controller
 
     public function publicIndex()
     {
-        return inertia('ProgramsLevels', ['programs' => $this->fetchPublishedPrograms()]);
+        return inertia('programs/ProgramsLevels', ['programs' => $this->fetchPublishedPrograms()]);
     }
 
     public function feeGuideIndex()
     {
-        return inertia('FeeGuide', ['programs' => $this->fetchPublishedPrograms()]);
+        return inertia('programs/FeeGuide', ['programs' => $this->fetchPublishedPrograms()]);
     }
 
     private function fetchPublishedPrograms()
@@ -137,6 +137,6 @@ class ProgramController extends Controller
         $program = Program::where('status', 'published')->findOrFail($id);
         $this->appendImageUrl($program);
 
-        return inertia('ProgramDetails', ['program' => $program]);
+        return inertia('programs/ProgramDetails', ['program' => $program]);
     }
 }

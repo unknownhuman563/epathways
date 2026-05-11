@@ -5,15 +5,15 @@ import { createRoot } from 'react-dom/client';
 import { Toaster } from 'sonner';
 import '../css/app.css';
 
-import AdminLayout from './components/AdminLayout'; // Import AdminLayout
-import FlashToaster from './components/FlashToaster';
+import AdminLayout from './components/layout/AdminLayout';
+import FlashToaster from './components/ui/FlashToaster';
 
 createInertiaApp({
   resolve: name => {
     const pages = import.meta.glob('./pages/**/*.jsx', { eager: true })
     let page = pages[`./pages/${name}.jsx`]
 
-    if (name.startsWith('Admin/')) {
+    if (name.startsWith('admin/')) {
       page.default.layout = page.default.layout || ((page) => <AdminLayout>{page}</AdminLayout>);
     }
 

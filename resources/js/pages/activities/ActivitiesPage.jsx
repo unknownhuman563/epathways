@@ -1,10 +1,10 @@
 import React from 'react';
 import { Head } from '@inertiajs/react';
-import Navbar from "@/components/navigation-bar";
-import Footer from "@/components/footer";
-import ScrollToTop from "@/components/scrolltotop";
+import Navbar from "@/components/layout/Navbar";
+import Footer from "@/components/layout/Footer";
+import ScrollToTop from "@/components/ui/ScrollToTop";
 // Announcements removed per minimalist redesign
-import FacebookLive from "@/components/FacebookLive";
+import FacebookLive from "./FacebookLive";
 
 // Import Logo for Backdrop
 import LogoBackdrop from "@assets/newlogosite.png";

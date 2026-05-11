@@ -7,17 +7,17 @@ use App\Http\Controllers\LeadController;
 use App\Http\Controllers\BookingController;
 use App\Http\Controllers\ProgramController;
 Route::get('/', function () {
-    return inertia('home');
+    return inertia('home/HomePage');
 });
 
 Route::get("/booking", function (){
-   return inertia('bookingpage'); 
+   return inertia('booking/BookingPage');
 });
 Route::post("/bookings", [BookingController::class, 'store']);
 
 
 Route::get("/education-journey", function (){
-   return inertia('EducationJourney'); 
+   return inertia('education-journey/EducationJourneyPage');
 });
 
 Route::get('/programs-levels', [ProgramController::class, 'publicIndex']);
@@ -26,40 +26,40 @@ Route::get('/program-details/{id}', [ProgramController::class, 'publicShow']);
 Route::get('/fee-guide', [ProgramController::class, 'feeGuideIndex']);
 
 Route::get("/about-us", function (){
-   return inertia('AboutUs'); 
+   return inertia('about-us/AboutUsPage');
 });
 
 Route::get("/immigration", function (){
-   return inertia('Immigration'); 
+   return inertia('immigration/ImmigrationPage');
 });
 
 Route::get("/accommodation", function (){
-   return inertia('Accommodation'); 
+   return inertia('accommodation/AccommodationPage');
 });
 
 Route::get("/accommodation/{id}", function ($id){
-   return inertia('PropertyDetails', ['id' => $id]); 
+   return inertia('accommodation/PropertyDetails', ['id' => $id]);
 });
 
 Route::get("/accommodation/{id}/checkout", function ($id){
-   return inertia('Checkout', ['id' => $id]); 
+   return inertia('accommodation/Checkout', ['id' => $id]);
 });
 
 Route::get("/coming-soon", function (){
-   return inertia('ComingSoon'); 
+   return inertia('coming-soon/ComingSoonPage');
 });
 Route::get("/immigration-assessment", function (){
-   return inertia('ImmigrationAssessment'); 
+   return inertia('visa/ImmigrationAssessment');
 });
 
 Route::get("/visa-assessment-form", function (){
-   return inertia('VisaAssessmentForm'); 
+   return inertia('visa/VisaAssessmentForm');
 });
 
 Route::get('/activities', [EventController::class, 'activities']);
 
 Route::get("/visa-approved", function (){
-   return inertia('VisaApproved'); 
+   return inertia('visa/VisaApproved');
 });
 
 // Public Registration & Assessment Routes
@@ -78,7 +78,7 @@ Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 Route::middleware(['auth'])->group(function () {
     Route::redirect('/admin', '/admin/dashboard');
     Route::get("/admin/dashboard", function (){
-       return inertia('Admin/Dashboard'); 
+       return inertia('admin/Dashboard');
     });
     Route::get("/admin/leads", [LeadController::class, 'index'])->name('admin.leads');
     Route::get("/admin/leads/{id}", [LeadController::class, 'show'])->name('admin.leads.show');

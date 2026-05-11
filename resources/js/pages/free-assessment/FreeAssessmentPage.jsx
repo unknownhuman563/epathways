@@ -24,8 +24,8 @@ import {
     ChevronUp
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import Navbar from "@/components/navigation-bar";
-import Footer from "../components/footer";
+import Navbar from "@/components/layout/Navbar";
+import Footer from "@/components/layout/Footer";
 
 const C = {
     primary: '#436235',

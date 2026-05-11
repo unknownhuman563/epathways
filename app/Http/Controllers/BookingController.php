@@ -12,7 +12,7 @@ class BookingController extends Controller
     public function index()
     {
         $bookings = Booking::with('lead')->latest()->get();
-        return Inertia::render('Admin/Bookings', [
+        return Inertia::render('admin/Bookings', [
             'bookings' => $bookings
         ]);
     }

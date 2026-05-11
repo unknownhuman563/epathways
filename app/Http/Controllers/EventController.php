@@ -25,7 +25,7 @@ class EventController extends Controller
             $event->registration_url = url('/register/' . $event->event_code);
         });
 
-        return inertia('Admin/Events', [
+        return inertia('admin/Events', [
             'events' => $events
         ]);
     }
@@ -45,7 +45,7 @@ class EventController extends Controller
         // Fetch leads that registered for this specific event
         $leads = $event->leads()->with(['studyPlans', 'educationExps', 'eventSession'])->latest()->get();
 
-        return inertia('Admin/EventDetails', [
+        return inertia('admin/EventDetails', [
             'event' => $event,
             'leads' => $leads
         ]);
@@ -141,7 +141,7 @@ class EventController extends Controller
             $event->banner_image_url = Storage::disk('public')->url($event->banner_image);
         }
 
-        return inertia('Registration', [
+        return inertia('registration/RegistrationPage', [
             'event' => $event
         ]);
     }
@@ -265,7 +265,7 @@ class EventController extends Controller
             $featuredSession = $pastSessions->shift();
         }
 
-        return inertia('Activities', [
+        return inertia('activities/ActivitiesPage', [
             'events'          => $events,
             'pastSessions'    => $pastSessions->values(),
             'featuredSession' => $featuredSession,

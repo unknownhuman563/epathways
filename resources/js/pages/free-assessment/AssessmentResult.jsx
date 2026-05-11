@@ -2,8 +2,8 @@ import React from 'react';
 import { Head } from '@inertiajs/react';
 import { motion } from 'framer-motion';
 import { CheckCircle, Clock, AlertTriangle, TrendingUp, AlertCircle, ChevronRight } from 'lucide-react';
-import Navbar from '@/components/navigation-bar';
-import Footer from '../components/footer';
+import Navbar from '@/components/layout/Navbar';
+import Footer from '@/components/layout/Footer';
 
 export default function AssessmentResult({ lead_id, first_name, status, analysis }) {
     if (status === 'pending' || status === 'processing') {
