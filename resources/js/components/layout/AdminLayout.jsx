@@ -2,7 +2,7 @@ import { Link, usePage, router } from "@inertiajs/react";
 import { useState, useEffect } from "react";
 import {
     Menu, X, Search, Bell, Settings, HelpCircle, LogOut,
-    Home, Users, Calendar as CalendarIcon, BookOpen, ChevronDown, ChevronRight, GraduationCap, Video, Globe, FileText
+    Home, Users, Calendar as CalendarIcon, BookOpen, ChevronDown, ChevronRight, GraduationCap, Video, Globe, FileText, Star
 } from "lucide-react";
 
 export default function AdminLayout({ children }) {
@@ -22,6 +22,7 @@ export default function AdminLayout({ children }) {
             icon: <Globe size={20} />,
             children: [
                 { name: "Resident Visa Intake", href: "/admin/immigration/resident-intakes", icon: <FileText size={16} /> },
+                { name: "User Reviews", href: "/admin/immigration/user-reviews", icon: <Star size={16} /> },
             ],
         },
     ];

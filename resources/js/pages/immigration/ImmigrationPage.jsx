@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useForm, usePage } from '@inertiajs/react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowRight, ChevronDown, ChevronUp, Star, CheckCircle, Calendar, MapPin, Phone, Mail, Shield } from 'react-feather';
+import { ArrowRight, ChevronDown, ChevronUp, Star, CheckCircle, Calendar, MapPin, Phone, Mail, Shield, MessageCircle, FileText } from 'react-feather';
 import Navbar from "@/components/layout/Navbar";
 import ImmigrationServices from "./ImmigrationServices";
 import Footer from "@/components/layout/Footer";
@@ -127,6 +128,230 @@ const faqs = [
 const partners = ["INZ Accredited", "IAA Licensed", "NZQA Compliant", "Allianz Partner", "Southern Cross"];
 
 // ─── Sub-components ──────────────────────────────────────────────────────────
+
+function UserReviewSection() {
+    const { flash } = usePage().props;
+    const [submitted, setSubmitted] = useState(false);
+    const [reviewId, setReviewId] = useState(null);
+
+    const { data, setData, post, processing, errors, reset } = useForm({
+        name: '',
+        email: '',
+        mode: 'questions',
+        answer_1: '',
+        answer_2: '',
+        answer_3: '',
+        paragraph: '',
+    });
+
+    useEffect(() => {
+        if (flash?.review_success) {
+            setSubmitted(true);
+            if (flash?.review_id) setReviewId(flash.review_id);
+        }
+    }, [flash]);
+
+    const handleSubmit = (e) => {
+        e.preventDefault();
+        post('/user-reviews', {
+            preserveScroll: true,
+            onSuccess: () => {
+                setSubmitted(true);
+                reset();
+            },
+        });
+    };
+
+    const questions = [
+        'Lorem ipsum dolor sit amet, consectetur adipiscing elit?',
+        'Sed do eiusmod tempor incididunt ut labore et dolore magna?',
+        'Ut enim ad minim veniam, quis nostrud exercitation ullamco?',
+    ];
+
+    return (
+        <section id="user-review" className="py-28 bg-white border-t border-gray-100 relative overflow-hidden">
+            <div className="container mx-auto px-6 md:px-12 max-w-6xl">
+                {/* Header */}
+                <div className="text-center mb-16">
+                    <motion.span
+                        initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true }}
+                        className="text-[11px] font-bold tracking-[0.4em] uppercase text-[#00A693] mb-4 block"
+                    >
+                        Share your experience
+                    </motion.span>
+                    <motion.h2
+                        initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}
+                        className="text-4xl md:text-5xl font-medium mb-6 tracking-tight text-[#282728]"
+                    >
+                        Leave a User Review
+                    </motion.h2>
+                    <motion.p
+                        initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true }}
+                        className="text-gray-600 text-sm md:text-base max-w-2xl mx-auto leading-relaxed"
+                    >
+                        Help future clients by sharing your experience. Answer three quick questions or write a paragraph — your choice.
+                    </motion.p>
+                </div>
+
+                {submitted ? (
+                    <motion.div
+                        initial={{ opacity: 0, scale: 0.95 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        className="max-w-xl mx-auto bg-[#00A693]/5 border border-[#00A693]/20 rounded-2xl p-12 text-center"
+                    >
+                        <div className="w-16 h-16 bg-[#00A693] rounded-2xl flex items-center justify-center text-white mx-auto mb-6">
+                            <CheckCircle size={28} />
+                        </div>
+                        <h3 className="text-2xl font-bold text-[#282728] mb-3">Thank you for your review</h3>
+                        <p className="text-gray-600 text-sm leading-relaxed mb-6">
+                            Your feedback has been received and will help future clients on their journey.
+                        </p>
+                        {reviewId && (
+                            <div className="text-[10px] font-bold uppercase tracking-[0.3em] text-gray-400">
+                                Ref: <span className="font-mono text-gray-700">{reviewId}</span>
+                            </div>
+                        )}
+                        <button
+                            type="button"
+                            onClick={() => setSubmitted(false)}
+                            className="mt-8 text-[11px] font-bold uppercase tracking-[0.2em] text-[#00A693] hover:text-[#008c7c] transition-colors"
+                        >
+                            Submit another review →
+                        </button>
+                    </motion.div>
+                ) : (
+                    <motion.form
+                        initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}
+                        onSubmit={handleSubmit}
+                        className="max-w-3xl mx-auto bg-gray-50/40 border border-gray-100 rounded-3xl p-8 md:p-12"
+                    >
+                        {/* Identity row */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                            <div>
+                                <label className="block text-[11px] font-bold uppercase tracking-[0.2em] text-gray-700 mb-2">Name *</label>
+                                <input
+                                    type="text"
+                                    value={data.name}
+                                    onChange={(e) => setData('name', e.target.value)}
+                                    className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-[#00A693] transition-colors"
+                                    placeholder="Your full name"
+                                />
+                                {errors.name && <p className="text-xs text-red-500 mt-1.5">{errors.name}</p>}
+                            </div>
+                            <div>
+                                <label className="block text-[11px] font-bold uppercase tracking-[0.2em] text-gray-700 mb-2">Email <span className="text-gray-300 normal-case tracking-normal">(optional)</span></label>
+                                <input
+                                    type="email"
+                                    value={data.email}
+                                    onChange={(e) => setData('email', e.target.value)}
+                                    className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-[#00A693] transition-colors"
+                                    placeholder="email@example.com"
+                                />
+                                {errors.email && <p className="text-xs text-red-500 mt-1.5">{errors.email}</p>}
+                            </div>
+                        </div>
+
+                        {/* Mode toggle */}
+                        <div className="mb-8">
+                            <label className="block text-[11px] font-bold uppercase tracking-[0.2em] text-gray-700 mb-3">How would you like to share?</label>
+                            <div className="grid grid-cols-2 gap-3 max-w-md">
+                                <button
+                                    type="button"
+                                    onClick={() => setData('mode', 'questions')}
+                                    className={`flex items-center justify-center gap-2 px-5 py-3.5 rounded-xl text-xs font-bold uppercase tracking-widest border transition-all ${
+                                        data.mode === 'questions'
+                                            ? 'bg-[#282728] text-white border-[#282728]'
+                                            : 'bg-white text-gray-500 border-gray-200 hover:border-[#00A693] hover:text-[#00A693]'
+                                    }`}
+                                >
+                                    <FileText size={14} /> 3 Questions
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setData('mode', 'paragraph')}
+                                    className={`flex items-center justify-center gap-2 px-5 py-3.5 rounded-xl text-xs font-bold uppercase tracking-widest border transition-all ${
+                                        data.mode === 'paragraph'
+                                            ? 'bg-[#282728] text-white border-[#282728]'
+                                            : 'bg-white text-gray-500 border-gray-200 hover:border-[#00A693] hover:text-[#00A693]'
+                                    }`}
+                                >
+                                    <MessageCircle size={14} /> Paragraph
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Mode content */}
+                        <AnimatePresence mode="wait">
+                            {data.mode === 'questions' ? (
+                                <motion.div
+                                    key="questions"
+                                    initial={{ opacity: 0, y: 10 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    exit={{ opacity: 0, y: -10 }}
+                                    transition={{ duration: 0.25 }}
+                                    className="space-y-6"
+                                >
+                                    {questions.map((q, idx) => {
+                                        const key = `answer_${idx + 1}`;
+                                        return (
+                                            <div key={key}>
+                                                <label className="flex items-center gap-2 text-sm font-semibold text-[#282728] mb-2">
+                                                    <span className="w-6 h-6 rounded-full bg-[#00A693] text-white flex items-center justify-center text-[11px] font-bold flex-shrink-0">{idx + 1}</span>
+                                                    {q} *
+                                                </label>
+                                                <textarea
+                                                    rows={3}
+                                                    value={data[key]}
+                                                    onChange={(e) => setData(key, e.target.value)}
+                                                    className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-[#00A693] transition-colors resize-none"
+                                                    placeholder="Your answer..."
+                                                />
+                                                {errors[key] && <p className="text-xs text-red-500 mt-1.5">{errors[key]}</p>}
+                                            </div>
+                                        );
+                                    })}
+                                </motion.div>
+                            ) : (
+                                <motion.div
+                                    key="paragraph"
+                                    initial={{ opacity: 0, y: 10 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    exit={{ opacity: 0, y: -10 }}
+                                    transition={{ duration: 0.25 }}
+                                >
+                                    <label className="block text-sm font-semibold text-[#282728] mb-2">Your review *</label>
+                                    <textarea
+                                        rows={8}
+                                        value={data.paragraph}
+                                        onChange={(e) => setData('paragraph', e.target.value)}
+                                        className="w-full bg-white border border-gray-200 rounded-xl px-4 py-4 text-sm focus:outline-none focus:border-[#00A693] transition-colors resize-none leading-relaxed"
+                                        placeholder="Share your experience with ePathways in your own words..."
+                                    />
+                                    {errors.paragraph && <p className="text-xs text-red-500 mt-1.5">{errors.paragraph}</p>}
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
+
+                        {/* Submit */}
+                        <div className="mt-10 flex flex-col sm:flex-row items-center justify-between gap-4 pt-8 border-t border-gray-100">
+                            <p className="text-[11px] text-gray-400 leading-relaxed">
+                                Your review may be published on our site. We will never share your email.
+                            </p>
+                            <button
+                                type="submit"
+                                disabled={processing}
+                                className="inline-flex items-center gap-3 bg-[#00A693] text-white text-[11px] font-bold px-10 py-4 hover:bg-[#008c7c] transition-all duration-300 uppercase tracking-[0.25em] disabled:opacity-60 disabled:cursor-not-allowed"
+                            >
+                                {processing ? 'Submitting...' : 'Submit Review'}
+                                <ArrowRight size={14} />
+                            </button>
+                        </div>
+                    </motion.form>
+                )}
+            </div>
+        </section>
+    );
+}
 
 function FaqItem({ item, i }) {
     const [open, setOpen] = useState(false);
@@ -556,7 +781,11 @@ export default function Immigration() {
             {/* ══════════════════════════════════════════════════════════════
                 RESIDENT INTAKE CTA SECTION  —  Skilled Migrant Category
             ══════════════════════════════════════════════════════════════ */}
-            <section id="resident-intake" className="py-28 bg-gradient-to-br from-[#0c1611] via-[#0f1d17] to-[#0c1611] text-white relative overflow-hidden border-t border-white/5">
+            <section
+                id="resident-intake"
+                className="py-28 text-white relative overflow-hidden border-t border-white/5"
+                style={{ backgroundColor: '#0c1611', backgroundImage: 'linear-gradient(to bottom right, #0c1611, #0f1d17, #0c1611)' }}
+            >
                 {/* Decorative elements */}
                 <div className="absolute -top-32 -right-32 w-[500px] h-[500px] rounded-full border border-[#00A693]/10 pointer-events-none" />
                 <div className="absolute -bottom-40 -left-40 w-[600px] h-[600px] rounded-full bg-[#00A693]/5 pointer-events-none" />
@@ -566,13 +795,7 @@ export default function Immigration() {
                 <div className="container mx-auto px-6 md:px-12 max-w-7xl relative z-10">
                     <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
                         {/* Left content */}
-                        <motion.div
-                            initial={{ opacity: 0, x: -30 }}
-                            whileInView={{ opacity: 1, x: 0 }}
-                            viewport={{ once: true }}
-                            transition={{ duration: 0.8 }}
-                            className="lg:col-span-7"
-                        >
+                        <div className="lg:col-span-7">
                             <div className="flex items-center gap-3 mb-6">
                                 <div className="w-10 h-[1px] bg-[#00A693]" />
                                 <span className="text-[11px] font-bold tracking-[0.4em] uppercase text-[#00A693]">
@@ -580,12 +803,12 @@ export default function Immigration() {
                                 </span>
                             </div>
 
-                            <h2 className="text-4xl md:text-5xl lg:text-6xl font-medium leading-[1.05] mb-8 tracking-tight">
+                            <h2 className="text-4xl md:text-5xl lg:text-6xl font-medium leading-[1.05] mb-8 tracking-tight text-white">
                                 NZ Resident Visa <br />
                                 <span className="text-[#00A693] italic font-light">client intake form</span>
                             </h2>
 
-                            <p className="text-white/60 text-base md:text-lg leading-relaxed mb-10 max-w-xl font-light">
+                            <p className="text-white/80 text-base md:text-lg leading-relaxed mb-10 max-w-xl font-light">
                                 Already on an AEWV, Essential Skills, or Work to Residence visa with Ergo? Complete our
                                 Skilled Migrant Category intake — the initial step before we issue your engagement
                                 agreement.
@@ -595,18 +818,18 @@ export default function Immigration() {
                             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-12">
                                 {[
                                     { value: "$35.00", label: "Median wage / hr (2025)" },
-                                    { value: "12", label: "Guided sections" },
+                                    { value: "9", label: "Guided sections" },
                                     { value: "~10", label: "Minutes to complete" },
                                 ].map((stat, i) => (
-                                    <div key={i} className="bg-white/[0.03] border border-white/10 rounded-sm p-5 backdrop-blur-sm">
-                                        <div className="text-2xl md:text-3xl font-medium text-white mb-1">{stat.value}</div>
-                                        <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/40">{stat.label}</div>
+                                    <div key={i} className="bg-white/10 border border-white/15 rounded-sm p-5 backdrop-blur-sm">
+                                        <div className="text-2xl md:text-3xl font-semibold text-white mb-1">{stat.value}</div>
+                                        <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/70">{stat.label}</div>
                                     </div>
                                 ))}
                             </div>
 
-                            {/* CTAs */}
-                            <div className="flex flex-col sm:flex-row gap-4">
+                            {/* CTA */}
+                            <div className="flex">
                                 <a
                                     href="/resident-intake"
                                     className="group inline-flex items-center justify-center gap-3 bg-[#00A693] text-white text-[11px] font-bold px-10 py-5 hover:bg-[#008c7c] transition-all duration-300 uppercase tracking-[0.25em] shadow-2xl shadow-[#00A693]/20"
@@ -614,30 +837,18 @@ export default function Immigration() {
                                     Apply Resident Intake
                                     <ArrowRight size={14} className="transition-transform group-hover:translate-x-1" />
                                 </a>
-                                <a
-                                    href="/booking"
-                                    className="inline-flex items-center justify-center gap-3 bg-transparent border border-white/20 text-white text-[11px] font-bold px-10 py-5 hover:bg-white/5 transition-all duration-300 uppercase tracking-[0.25em]"
-                                >
-                                    Speak to an Adviser
-                                </a>
                             </div>
-                        </motion.div>
+                        </div>
 
                         {/* Right content — checklist preview card */}
-                        <motion.div
-                            initial={{ opacity: 0, x: 30 }}
-                            whileInView={{ opacity: 1, x: 0 }}
-                            viewport={{ once: true }}
-                            transition={{ duration: 0.8, delay: 0.2 }}
-                            className="lg:col-span-5"
-                        >
-                            <div className="bg-white/[0.04] border border-white/10 rounded-sm p-8 md:p-10 backdrop-blur-sm relative overflow-hidden">
+                        <div className="lg:col-span-5">
+                            <div className="bg-white/10 border border-white/15 rounded-sm p-8 md:p-10 backdrop-blur-sm relative overflow-hidden">
                                 {/* Card corner accent */}
                                 <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-[#00A693]/10 to-transparent pointer-events-none" />
 
                                 <div className="flex items-center justify-between mb-8 relative">
                                     <span className="text-[10px] font-bold uppercase tracking-[0.3em] text-[#00A693]">Document checklist</span>
-                                    <span className="text-[10px] font-bold uppercase tracking-[0.3em] text-white/40">7 items</span>
+                                    <span className="text-[10px] font-bold uppercase tracking-[0.3em] text-white/70">7 items</span>
                                 </div>
 
                                 <div className="space-y-4 relative">
@@ -650,33 +861,34 @@ export default function Immigration() {
                                         "Education certificates",
                                         "CV (NZ & overseas history)",
                                     ].map((item, i) => (
-                                        <motion.div
+                                        <div
                                             key={i}
-                                            initial={{ opacity: 0, x: 10 }}
-                                            whileInView={{ opacity: 1, x: 0 }}
-                                            viewport={{ once: true }}
-                                            transition={{ delay: 0.3 + i * 0.07 }}
                                             className="flex items-start gap-3 group"
                                         >
-                                            <div className="w-5 h-5 rounded-full border border-[#00A693]/40 flex items-center justify-center mt-0.5 flex-shrink-0 group-hover:bg-[#00A693]/20 transition-colors">
+                                            <div className="w-5 h-5 rounded-full border border-[#00A693]/60 flex items-center justify-center mt-0.5 flex-shrink-0 group-hover:bg-[#00A693]/20 transition-colors">
                                                 <CheckCircle size={11} className="text-[#00A693]" />
                                             </div>
-                                            <span className="text-sm text-white/70 leading-relaxed">{item}</span>
-                                        </motion.div>
+                                            <span className="text-sm text-white/90 leading-relaxed">{item}</span>
+                                        </div>
                                     ))}
                                 </div>
 
-                                <div className="mt-8 pt-6 border-t border-white/10 flex items-center gap-3 relative">
+                                <div className="mt-8 pt-6 border-t border-white/15 flex items-center gap-3 relative">
                                     <Shield size={14} className="text-[#00A693]" />
-                                    <p className="text-[11px] text-white/40 leading-relaxed">
+                                    <p className="text-[11px] text-white/70 leading-relaxed">
                                         Confidential — IAA Licensed advisers, secure submission
                                     </p>
                                 </div>
                             </div>
-                        </motion.div>
+                        </div>
                     </div>
                 </div>
             </section>
+
+            {/* ══════════════════════════════════════════════════════════════
+                USER REVIEW SECTION
+            ══════════════════════════════════════════════════════════════ */}
+            <UserReviewSection />
 
             {/* ══════════════════════════════════════════════════════════════
                 ASSESSMENT VISAS SECTION

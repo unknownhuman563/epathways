@@ -7,6 +7,7 @@ use App\Http\Controllers\LeadController;
 use App\Http\Controllers\BookingController;
 use App\Http\Controllers\ProgramController;
 use App\Http\Controllers\ResidentIntakeController;
+use App\Http\Controllers\UserReviewController;
 Route::get('/', function () {
     return inertia('home/HomePage');
 });
@@ -60,6 +61,8 @@ Route::get("/visa-assessment-form", function (){
 Route::get("/resident-intake", [ResidentIntakeController::class, 'showForm'])->name('resident-intake');
 Route::post("/resident-intake", [ResidentIntakeController::class, 'store']);
 
+Route::post('/user-reviews', [UserReviewController::class, 'store'])->name('user-reviews.store');
+
 Route::get('/activities', [EventController::class, 'activities']);
 
 Route::get("/visa-approved", function (){
@@ -101,6 +104,9 @@ Route::middleware(['auth'])->group(function () {
 
     Route::get('/admin/immigration/resident-intakes', [ResidentIntakeController::class, 'adminIndex'])->name('admin.immigration.resident-intakes');
     Route::get('/admin/immigration/resident-intakes/{id}', [ResidentIntakeController::class, 'adminShow'])->name('admin.immigration.resident-intakes.show');
+
+    Route::get('/admin/immigration/user-reviews', [UserReviewController::class, 'adminIndex'])->name('admin.immigration.user-reviews');
+    Route::get('/admin/immigration/user-reviews/{id}', [UserReviewController::class, 'adminShow'])->name('admin.immigration.user-reviews.show');
 
     Route::get("/admin/booking", [BookingController::class, 'index'])->name('admin.bookings');
     Route::post("/admin/bookings/{id}", [BookingController::class, 'update']);
