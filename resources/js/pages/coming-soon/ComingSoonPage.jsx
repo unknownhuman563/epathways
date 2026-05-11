@@ -1,7 +1,7 @@
 import React from "react";
 import { motion } from "framer-motion";
-import Navbar from "@/components/navigation-bar";
-import Footer from "@/components/footer";
+import Navbar from "@/components/layout/Navbar";
+import Footer from "@/components/layout/Footer";
 
 export default function ComingSoon() {
     return (

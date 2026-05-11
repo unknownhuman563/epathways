@@ -1,9 +1,9 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { ArrowRight } from 'react-feather';
-import Navbar from "@/components/navigation-bar";
-import Footer from "@/components/footer";
-import ScrollToTop from "@/components/scrolltotop";
+import Navbar from "@/components/layout/Navbar";
+import Footer from "@/components/layout/Footer";
+import ScrollToTop from "@/components/ui/ScrollToTop";
 
 import StudentVisaImg from "@assets/NewSections/student_visa.png";
 import VisitorVisaImg from "@assets/NewSections/visitor_visa.png";

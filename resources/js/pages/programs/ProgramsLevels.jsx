@@ -2,9 +2,9 @@ import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Search, ArrowRight } from 'react-feather';
 import { Link } from '@inertiajs/react';
-import Navbar from "@/components/navigation-bar";
-import Footer from "@/components/footer";
-import ScrollToTop from "@/components/scrolltotop";
+import Navbar from "@/components/layout/Navbar";
+import Footer from "@/components/layout/Footer";
+import ScrollToTop from "@/components/ui/ScrollToTop";
 
 // Assets
 import heroBg from "@assets/Services/education.png";

@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowRight, ChevronDown, ChevronUp, Star, CheckCircle, Calendar, MapPin, Phone, Mail, Shield } from 'react-feather';
-import Navbar from "@/components/navigation-bar";
-import ImmigrationServices from "@/components/ImmigrationServices";
-import Footer from "@/components/footer";
-import ScrollToTop from "@/components/scrolltotop";
+import Navbar from "@/components/layout/Navbar";
+import ImmigrationServices from "./ImmigrationServices";
+import Footer from "@/components/layout/Footer";
+import ScrollToTop from "@/components/ui/ScrollToTop";
 
 // Assets
 import MigrationLogo  from "@assets/Immigration/migration_logo.png";
