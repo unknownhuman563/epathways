@@ -78,12 +78,12 @@ function formatDate(dateStr) {
 }
 
 function CapacityBar({ registered, capacity }) {
-    if (!capacity) return <span className="text-xs text-gray-400">—</span>;
+    if (!capacity) return <span className="text-xs text-gray-500">—</span>;
     const pct = Math.min(Math.round((registered / capacity) * 100), 100);
     const color = pct >= 100 ? 'bg-red-500' : pct >= 80 ? 'bg-amber-500' : 'bg-emerald-500';
     return (
         <div className="w-full">
-            <div className="flex justify-between text-[10px] text-gray-500 mb-1 font-medium">
+            <div className="flex justify-between text-[10px] text-gray-600 mb-1 font-medium">
                 <span>{registered} registered</span><span>{pct}%</span>
             </div>
             <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
@@ -202,9 +202,9 @@ function CreateEventModal({ open, onClose, onCreated }) {
                 <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between flex-shrink-0">
                     <div>
                         <h2 className="text-lg font-bold text-gray-900">Create Event</h2>
-                        <p className="text-xs text-gray-400 mt-0.5">Step {step} of 2 — {step === 1 ? 'Event Details' : 'Sessions (Optional)'}</p>
+                        <p className="text-xs text-gray-500 mt-0.5">Step {step} of 2 — {step === 1 ? 'Event Details' : 'Sessions (Optional)'}</p>
                     </div>
-                    <button onClick={resetAndClose} className="p-2 rounded-xl text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors">
+                    <button onClick={resetAndClose} className="p-2 rounded-xl text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors">
                         <X size={20} />
                     </button>
                 </div>
@@ -214,7 +214,7 @@ function CreateEventModal({ open, onClose, onCreated }) {
                     <div className="flex items-center gap-2">
                         {[1, 2].map(s => (
                             <React.Fragment key={s}>
-                                <div className={`flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold transition-all ${step >= s ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-400'}`}>{s}</div>
+                                <div className={`flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold transition-all ${step >= s ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-500'}`}>{s}</div>
                                 {s < 2 && <div className={`flex-1 h-0.5 rounded-full transition-all ${step >= 2 ? 'bg-gray-900' : 'bg-gray-100'}`} />}
                             </React.Fragment>
                         ))}
@@ -320,8 +320,8 @@ function CreateEventModal({ open, onClose, onCreated }) {
                                     ) : (
                                         <div className="py-4">
                                             <div className="text-3xl mb-2">🖼️</div>
-                                            <p className="text-xs font-semibold text-gray-500">Click to upload banner image</p>
-                                            <p className="text-[10px] text-gray-400 mt-1">PNG, JPG, WEBP up to 4MB</p>
+                                            <p className="text-xs font-semibold text-gray-600">Click to upload banner image</p>
+                                            <p className="text-[10px] text-gray-500 mt-1">PNG, JPG, WEBP up to 4MB</p>
                                         </div>
                                     )}
                                     <input
@@ -347,7 +347,7 @@ function CreateEventModal({ open, onClose, onCreated }) {
                             <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl border border-gray-200">
                                 <div>
                                     <p className="text-sm font-semibold text-gray-800">Add Sessions?</p>
-                                    <p className="text-xs text-gray-400 mt-0.5">Sessions are optional — use them to split the event by location or date.</p>
+                                    <p className="text-xs text-gray-500 mt-0.5">Sessions are optional — use them to split the event by location or date.</p>
                                 </div>
                                 <button
                                     type="button"
@@ -363,9 +363,9 @@ function CreateEventModal({ open, onClose, onCreated }) {
                                     {data.sessions.map((session, idx) => (
                                         <div key={session._key} className="border border-gray-200 rounded-xl p-4 space-y-3 bg-white relative">
                                             <div className="flex items-center justify-between mb-1">
-                                                <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Session {idx + 1}</span>
+                                                <span className="text-xs font-bold text-gray-600 uppercase tracking-wider">Session {idx + 1}</span>
                                                 {data.sessions.length > 1 && (
-                                                    <button onClick={() => removeSession(idx)} className="p-1 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors">
+                                                    <button onClick={() => removeSession(idx)} className="p-1 text-gray-500 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors">
                                                         <X size={14} />
                                                     </button>
                                                 )}
@@ -418,7 +418,7 @@ function CreateEventModal({ open, onClose, onCreated }) {
                                     <button
                                         type="button"
                                         onClick={addSession}
-                                        className="w-full py-2.5 border-2 border-dashed border-gray-200 rounded-xl text-sm font-semibold text-gray-500 hover:border-gray-400 hover:text-gray-700 hover:bg-gray-50 transition-all flex items-center justify-center gap-2"
+                                        className="w-full py-2.5 border-2 border-dashed border-gray-200 rounded-xl text-sm font-semibold text-gray-600 hover:border-gray-400 hover:text-gray-700 hover:bg-gray-50 transition-all flex items-center justify-center gap-2"
                                     >
                                         <Plus size={16} /> Add Another Session
                                     </button>
@@ -498,7 +498,7 @@ export default function Events({ events: backendEvents }) {
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 hidden lg:flex mb-6">
                 <div>
                     <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Events</h1>
-                    <p className="text-sm text-gray-500 mt-1">Manage, schedule, and track all ePathways events.</p>
+                    <p className="text-sm text-gray-600 mt-1">Manage, schedule, and track all ePathways events.</p>
                 </div>
                 <div className="flex items-center gap-3">
                     <button className="flex items-center justify-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 transition-colors text-sm font-semibold shadow-sm">
@@ -524,8 +524,8 @@ export default function Events({ events: backendEvents }) {
                         className={`p-5 rounded-2xl cursor-pointer transition-all duration-300 hover:scale-[1.02] ${card.dark ? 'bg-gray-900 text-white shadow-lg' : 'bg-white text-gray-900 shadow-sm border border-gray-100'}`}
                     >
                         <div className="flex items-center justify-between mb-3">
-                            <span className={`text-sm font-medium ${card.dark ? 'text-gray-300' : 'text-gray-500'}`}>{card.label}</span>
-                            <span className={`p-1.5 rounded-lg ${card.dark ? 'bg-white/10 text-white' : 'bg-gray-100 text-gray-500'}`}>{card.icon}</span>
+                            <span className={`text-sm font-medium ${card.dark ? 'text-gray-300' : 'text-gray-600'}`}>{card.label}</span>
+                            <span className={`p-1.5 rounded-lg ${card.dark ? 'bg-white/10 text-white' : 'bg-gray-100 text-gray-600'}`}>{card.icon}</span>
                         </div>
                         <p className="text-3xl font-bold mb-3 tracking-tight">{card.value}</p>
                         <div className="flex items-center gap-1.5 text-xs font-semibold">
@@ -533,7 +533,7 @@ export default function Events({ events: backendEvents }) {
                                 {card.isPositive ? <ArrowUpRight size={13} className="mr-0.5" /> : <ArrowDownRight size={13} className="mr-0.5" />}
                                 {card.trend}
                             </span>
-                            <span className="text-gray-400 font-medium">{card.trendLabel}</span>
+                            <span className="text-gray-500 font-medium">{card.trendLabel}</span>
                         </div>
                     </div>
                 ))}
@@ -543,7 +543,7 @@ export default function Events({ events: backendEvents }) {
             <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex flex-col lg:flex-row items-center justify-between gap-4">
                 <div className="w-full lg:w-80 relative group">
                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <Search className="h-5 w-5 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+                        <Search className="h-5 w-5 text-gray-500 group-focus-within:text-blue-500 transition-colors" />
                     </div>
                     <input type="text" className="block w-full pl-10 pr-3 py-2.5 border border-gray-200 rounded-xl leading-5 bg-gray-50 placeholder-gray-400 focus:outline-none focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition-all" placeholder="Search events by title, location..." />
                 </div>
@@ -566,7 +566,7 @@ export default function Events({ events: backendEvents }) {
                         <>
                             <div className="h-8 w-px bg-gray-200 mx-1" />
                             <span className="text-sm font-bold text-blue-700 bg-blue-50 px-3 py-1 rounded-lg">{selectedEvents.length} Selected</span>
-                            <button className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"><Trash2 size={16} /></button>
+                            <button className="p-2 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"><Trash2 size={16} /></button>
                         </>
                     )}
                 </div>
@@ -578,21 +578,21 @@ export default function Events({ events: backendEvents }) {
                     <table className="w-full text-left border-collapse whitespace-nowrap">
                         <thead>
                             <tr className="bg-gray-50/50 border-b border-gray-100">
-                                <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider w-10">
+                                <th className="px-6 py-4 text-xs font-semibold text-gray-600 uppercase tracking-wider w-10">
                                     <input type="checkbox" className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 cursor-pointer" onChange={toggleSelectAll} checked={selectedEvents.length === filtered.length && filtered.length > 0} />
                                 </th>
-                                <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Event</th>
-                                <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Date & Time</th>
-                                <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Location</th>
-                                <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">No. of Registrants</th>
-                                <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
-                                <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider text-right pr-8">Actions</th>
+                                <th className="px-6 py-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">Event</th>
+                                <th className="px-6 py-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">Date & Time</th>
+                                <th className="px-6 py-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">Location</th>
+                                <th className="px-6 py-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">No. of Registrants</th>
+                                <th className="px-6 py-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">Status</th>
+                                <th className="px-6 py-4 text-xs font-semibold text-gray-600 uppercase tracking-wider text-right pr-8">Actions</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-50">
                             {filtered.length === 0 ? (
                                 <tr>
-                                    <td colSpan={7} className="px-6 py-16 text-center text-gray-400">
+                                    <td colSpan={7} className="px-6 py-16 text-center text-gray-500">
                                         <Calendar className="w-10 h-10 mx-auto mb-3 text-gray-200" />
                                         <p className="font-semibold">No events found</p>
                                         <p className="text-sm mt-1">Try adjusting your filters or
@@ -622,12 +622,12 @@ export default function Events({ events: backendEvents }) {
                                                 </button>
                                             </div>
                                             <div className="flex items-center gap-2 flex-wrap">
-                                                <span className="text-[10px] font-bold text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">{event.event_code || event.id}</span>
+                                                <span className="text-[10px] font-bold text-gray-600 bg-gray-100 px-1.5 py-0.5 rounded">{event.event_code || event.id}</span>
                                                 <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border capitalize ${getModeStyle(event.mode || 'In-Person')}`}>{event.mode || 'In-Person'}</span>
                                                 <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 border border-indigo-100 px-1.5 py-0.5 rounded uppercase tracking-wider">{event.branch || 'Global'}</span>
                                             </div>
                                             <div className="flex items-center gap-2 mt-0.5">
-                                                <Tag size={10} className="text-gray-400" /><span className="text-[10px] text-gray-500 font-medium">{event.type}</span>
+                                                <Tag size={10} className="text-gray-500" /><span className="text-[10px] text-gray-600 font-medium">{event.type}</span>
                                                 {(event.sessions_count > 0 || event.sessions > 0) && (
                                                     <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-100 px-1.5 py-0.5 rounded">
                                                         {event.sessions_count || event.sessions} sessions
@@ -638,8 +638,8 @@ export default function Events({ events: backendEvents }) {
                                     </td>
                                     <td className="px-6 py-4">
                                         <div className="flex flex-col gap-1">
-                                            <div className="flex items-center gap-1.5"><Calendar size={13} className="text-gray-400" /><span className="text-sm font-semibold text-gray-900">{formatDate(event.date_from || event.date)}</span></div>
-                                            <div className="flex items-center gap-1.5"><Clock size={13} className="text-gray-400" /><span className="text-xs text-gray-500">{event.time || (event.sessions?.[0]?.time_start) || 'TBA'}</span></div>
+                                            <div className="flex items-center gap-1.5"><Calendar size={13} className="text-gray-500" /><span className="text-sm font-semibold text-gray-900">{formatDate(event.date_from || event.date)}</span></div>
+                                            <div className="flex items-center gap-1.5"><Clock size={13} className="text-gray-500" /><span className="text-xs text-gray-600">{event.time || (event.sessions?.[0]?.time_start) || 'TBA'}</span></div>
                                         </div>
                                     </td>
                                     <td className="px-6 py-4">
@@ -648,20 +648,20 @@ export default function Events({ events: backendEvents }) {
                                                 {(String(event.mode).toLowerCase() === 'online') ? (
                                                     <><Globe size={13} className="text-blue-500" /><span className="text-sm text-blue-700 font-semibold italic">Online / Zoom</span></>
                                                 ) : (
-                                                    <><MapPin size={13} className="text-gray-400" /><span className="text-sm text-gray-700 font-medium max-w-[160px] truncate">{event.location || (event.sessions_count > 0 ? 'Multiple' : 'N/A')}</span></>
+                                                    <><MapPin size={13} className="text-gray-500" /><span className="text-sm text-gray-700 font-medium max-w-[160px] truncate">{event.location || (event.sessions_count > 0 ? 'Multiple' : 'N/A')}</span></>
                                                 )}
                                             </div>
                                             <div className="flex items-center gap-1.5">
                                                 <div className="w-4 h-4 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-[9px] font-bold">
                                                     {(event.organizer_id || event.organizer || '?').charAt(0)}
                                                 </div>
-                                                <span className="text-xs text-gray-500 font-medium">{event.organizer_id || event.organizer}</span>
+                                                <span className="text-xs text-gray-600 font-medium">{event.organizer_id || event.organizer}</span>
                                             </div>
                                         </div>
                                     </td>
                                     <td className="px-6 py-4">
                                         <div className="flex items-center gap-2">
-                                            <Users size={16} className="text-gray-400" />
+                                            <Users size={16} className="text-gray-500" />
                                             <span className="text-sm font-bold text-gray-900">{event.leads_count || 0}</span>
                                         </div>
                                     </td>
@@ -671,7 +671,7 @@ export default function Events({ events: backendEvents }) {
                                     <td className="px-6 py-4 text-right pr-6 relative">
                                         <button onClick={() => setActiveDropdown(activeDropdown === event.id ? null : event.id)}
                                             className="inline-flex items-center gap-2 px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-                                            Actions <ChevronDown size={14} className="text-gray-400" />
+                                            Actions <ChevronDown size={14} className="text-gray-500" />
                                         </button>
                                         {activeDropdown === event.id && (
                                             <>
@@ -688,8 +688,8 @@ export default function Events({ events: backendEvents }) {
                                                         >
                                                             <Copy size={16} /> Copy Registration Link
                                                         </button>
-                                                        <Link href={`/admin/events/${event.id}`} className="flex w-full items-center gap-3 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"><Eye size={16} className="text-gray-400" /> View Details</Link>
-                                                        <button className="flex w-full items-center gap-3 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"><Edit2 size={16} className="text-gray-400" /> Edit Event</button>
+                                                        <Link href={`/admin/events/${event.id}`} className="flex w-full items-center gap-3 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"><Eye size={16} className="text-gray-500" /> View Details</Link>
+                                                        <button className="flex w-full items-center gap-3 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"><Edit2 size={16} className="text-gray-500" /> Edit Event</button>
                                                     </div>
                                                     <div className="px-1 py-1">
                                                         <button className="flex w-full items-center gap-3 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"><Copy size={16} className="text-blue-500" /> Duplicate</button>
@@ -710,11 +710,11 @@ export default function Events({ events: backendEvents }) {
 
                     {/* Pagination */}
                     <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100 bg-white">
-                        <div className="text-sm text-gray-500">
+                        <div className="text-sm text-gray-600">
                             Showing <span className="font-semibold text-gray-900">1</span> to <span className="font-semibold text-gray-900">{filtered.length}</span> of <span className="font-semibold text-gray-900">{filtered.length}</span> Events
                         </div>
                         <div className="flex gap-1">
-                            <button className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50" disabled>Previous</button>
+                            <button className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50" disabled>Previous</button>
                             <button className="px-3 py-1.5 border border-gray-200 bg-gray-900 text-white rounded-lg text-sm font-medium shadow-sm">1</button>
                             <button className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50">Next</button>
                         </div>

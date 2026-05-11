@@ -175,7 +175,7 @@ export default function JourneyExperience() {
                             whileInView={{ opacity: 1, y: 0 }}
                             viewport={{ once: true }}
                             transition={{ delay: 0.2 }}
-                            className="text-gray-400 font-light leading-relaxed mb-10 max-w-md"
+                            className="text-gray-600 leading-relaxed mb-10 max-w-md"
                         >
                             We map the entire path from diploma through doctorate. Each level brings new opportunities and we're there to guide you forward.
                         </motion.p>
@@ -212,7 +212,7 @@ export default function JourneyExperience() {
                             initial={{ opacity: 0, y: 20 }}
                             whileInView={{ opacity: 1, y: 0 }}
                             viewport={{ once: true }}
-                            className="text-xl md:text-3xl font-black tracking-[0.3em] md:tracking-[0.4em] text-gray-400 mb-2 uppercase"
+                            className="text-xl md:text-3xl font-black tracking-[0.3em] md:tracking-[0.4em] text-gray-500 mb-2 uppercase"
                         >
                             Journey Experience
                         </motion.h2>
@@ -221,7 +221,7 @@ export default function JourneyExperience() {
                             whileInView={{ opacity: 1, y: 0 }}
                             viewport={{ once: true }}
                             transition={{ delay: 0.2 }}
-                            className="text-sm md:text-lg tracking-[0.2em] md:tracking-[0.3em] text-gray-500 uppercase"
+                            className="text-sm md:text-lg tracking-[0.2em] md:tracking-[0.3em] text-gray-600 uppercase"
                         >
                             New Zealand
                         </motion.p>
@@ -274,9 +274,9 @@ function JourneyItem({ item, index }) {
                         viewport={{ once: true, margin: "-50px" }}
                     >
                         <h2 className="text-xl md:text-3xl font-black text-[#282728] leading-tight mb-1">{item.title}</h2>
-                        {item.subtitle && <p className="text-sm md:text-base text-gray-400 font-bold leading-tight mt-1 uppercase tracking-[0.1em]">{item.subtitle}</p>}
+                        {item.subtitle && <p className="text-sm md:text-base text-gray-500 font-bold leading-tight mt-1 uppercase tracking-[0.1em]">{item.subtitle}</p>}
                         {item.description && (
-                            <p className="text-[9px] md:text-[11px] text-gray-400 mt-2 max-w-[220px] leading-relaxed mx-auto md:mx-0">
+                            <p className="text-[9px] md:text-[11px] text-gray-500 mt-2 max-w-[220px] leading-relaxed mx-auto md:mx-0">
                                 {item.description}
                             </p>
                         )}

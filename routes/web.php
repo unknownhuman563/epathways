@@ -33,6 +33,18 @@ Route::get("/immigration", function (){
    return inertia('Immigration'); 
 });
 
+Route::get("/accommodation", function (){
+   return inertia('Accommodation'); 
+});
+
+Route::get("/accommodation/{id}", function ($id){
+   return inertia('PropertyDetails', ['id' => $id]); 
+});
+
+Route::get("/accommodation/{id}/checkout", function ($id){
+   return inertia('Checkout', ['id' => $id]); 
+});
+
 Route::get("/coming-soon", function (){
    return inertia('ComingSoon'); 
 });
@@ -45,6 +57,10 @@ Route::get("/visa-assessment-form", function (){
 });
 
 Route::get('/activities', [EventController::class, 'activities']);
+
+Route::get("/visa-approved", function (){
+   return inertia('VisaApproved'); 
+});
 
 // Public Registration & Assessment Routes
 Route::get('/register/{event_code}', [EventController::class, 'showRegistrationForm']);

@@ -88,7 +88,7 @@ export default function FeeGuide({ programs = [] }) {
                                 onClick={() => setActiveFilter(key)}
                                 className={`text-[10px] font-bold uppercase tracking-[0.15em] pb-3 transition-all border-b-2 ${activeFilter === key
                                     ? 'text-[#436235] border-[#436235]'
-                                    : 'text-gray-400 border-transparent hover:text-gray-600'
+                                    : 'text-gray-500 border-transparent hover:text-gray-600'
                                     }`}
                             >
                                 {FILTER_LABELS[key]}
@@ -99,7 +99,7 @@ export default function FeeGuide({ programs = [] }) {
 
                 <div className="space-y-4">
                     {filtered.length === 0 ? (
-                        <div className="text-center py-16 text-gray-400">
+                        <div className="text-center py-16 text-gray-500">
                             <p className="text-sm">No programs found matching your filters.</p>
                         </div>
                     ) : filtered.map((program) => {
@@ -127,21 +127,21 @@ export default function FeeGuide({ programs = [] }) {
                                                 Level {program.level}
                                             </span>
                                         </div>
-                                        <p className="text-[10px] text-gray-400 font-medium">{program.institution || '—'}</p>
+                                        <p className="text-[10px] text-gray-500 font-medium">{program.institution || '—'}</p>
                                     </div>
                                     <div className="text-right flex items-center gap-4 flex-shrink-0">
                                         <div className="hidden sm:block">
-                                            <p className="text-[10px] text-gray-500 font-medium leading-none mb-1">Start from</p>
+                                            <p className="text-[10px] text-gray-600 font-medium leading-none mb-1">Start from</p>
                                             <p className="text-sm font-bold text-gray-800 tabular-nums">
                                                 {program.tuition_fee ? fmt(program.tuition_fee) : 'TBA'}
                                                 {program.tuition_fee && program.tuition_fee_notes && (
-                                                    <span className="ml-1 text-[10px] font-normal text-gray-500">
+                                                    <span className="ml-1 text-[10px] font-normal text-gray-600">
                                                         ({program.tuition_fee_notes})
                                                     </span>
                                                 )}
                                             </p>
                                         </div>
-                                        <div className="text-gray-400">
+                                        <div className="text-gray-500">
                                             {isExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
                                         </div>
                                     </div>
@@ -161,8 +161,8 @@ export default function FeeGuide({ programs = [] }) {
                                                     {/* Tuition Fee */}
                                                     <div className="lg:col-span-5 bg-gray-50/50 p-6 rounded-2xl border border-gray-100">
                                                         <div className="flex justify-between items-center mb-6 pb-2 border-b border-gray-200">
-                                                            <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Tuition Fee</span>
-                                                            <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Amount (NZD)</span>
+                                                            <span className="text-[10px] font-bold text-gray-600 uppercase tracking-widest">Tuition Fee</span>
+                                                            <span className="text-[10px] font-bold text-gray-600 uppercase tracking-widest">Amount (NZD)</span>
                                                         </div>
 
                                                         <div className="space-y-3">
@@ -173,14 +173,14 @@ export default function FeeGuide({ programs = [] }) {
                                                                         {program.tuition_fee ? fmt(program.tuition_fee) : '—'}
                                                                     </span>
                                                                     {program.tuition_fee && program.tuition_fee_notes && (
-                                                                        <span className="text-xs font-normal text-gray-500 ml-2">
+                                                                        <span className="text-xs font-normal text-gray-600 ml-2">
                                                                             ({program.tuition_fee_notes})
                                                                         </span>
                                                                     )}
                                                                 </span>
                                                             </div>
                                                             {!program.tuition_fee && (
-                                                                <p className="text-xs text-gray-400">No tuition fee specified.</p>
+                                                                <p className="text-xs text-gray-500">No tuition fee specified.</p>
                                                             )}
                                                         </div>
                                                     </div>
@@ -189,28 +189,28 @@ export default function FeeGuide({ programs = [] }) {
                                                     <div className="lg:col-span-7 grid grid-cols-2 gap-y-10 gap-x-8 py-4">
                                                         <div>
                                                             <div className="flex items-baseline gap-2 mb-1">
-                                                                <span className="text-[10px] text-gray-400 font-medium tracking-wider">NZD</span>
+                                                                <span className="text-[10px] text-gray-500 font-medium tracking-wider">NZD</span>
                                                                 <div className="text-xl font-bold text-[#282728] tabular-nums">{fmt(program.insurance_fee)}</div>
                                                             </div>
-                                                            <p className="text-[10px] text-gray-400 uppercase tracking-[0.15em] font-medium">Insurance (indicative)</p>
+                                                            <p className="text-[10px] text-gray-500 uppercase tracking-[0.15em] font-medium">Insurance (indicative)</p>
                                                         </div>
                                                         <div>
                                                             <div className="flex items-baseline gap-2 mb-1">
-                                                                <span className="text-[10px] text-gray-400 font-medium tracking-wider">NZD</span>
+                                                                <span className="text-[10px] text-gray-500 font-medium tracking-wider">NZD</span>
                                                                 <div className="text-xl font-bold text-[#282728] tabular-nums">{fmt(program.visa_processing_fee)}</div>
                                                             </div>
-                                                            <p className="text-[10px] text-gray-400 uppercase tracking-[0.15em] font-medium">Visa Processing Fee</p>
+                                                            <p className="text-[10px] text-gray-500 uppercase tracking-[0.15em] font-medium">Visa Processing Fee</p>
                                                         </div>
                                                         <div>
                                                             <div className="flex items-baseline gap-2 mb-1">
-                                                                <span className="text-[10px] text-gray-400 font-medium tracking-wider">NZD</span>
+                                                                <span className="text-[10px] text-gray-500 font-medium tracking-wider">NZD</span>
                                                                 <div className="text-xl font-bold text-[#282728] tabular-nums">{fmt(program.living_expense)}</div>
                                                             </div>
-                                                            <p className="text-[10px] text-gray-400 uppercase tracking-[0.15em] font-medium">Living Expense (one year)</p>
+                                                            <p className="text-[10px] text-gray-500 uppercase tracking-[0.15em] font-medium">Living Expense (one year)</p>
                                                         </div>
                                                         <div>
                                                             <div className="text-xl font-bold text-[#282728] mb-1">{program.accommodation || '—'}</div>
-                                                            <p className="text-[10px] text-gray-400 uppercase tracking-[0.15em] font-medium">Accommodation (single occupancy)</p>
+                                                            <p className="text-[10px] text-gray-500 uppercase tracking-[0.15em] font-medium">Accommodation (single occupancy)</p>
                                                         </div>
                                                     </div>
                                                 </div>
@@ -218,7 +218,7 @@ export default function FeeGuide({ programs = [] }) {
                                                 <div className="flex justify-end gap-3 mt-10">
                                                     <Link
                                                         href={`/program-details/${program.id}`}
-                                                        className="px-5 py-2 border border-gray-200 text-[10px] font-bold rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-50 transition-all uppercase tracking-widest"
+                                                        className="px-5 py-2 border border-gray-200 text-[10px] font-bold rounded-lg text-gray-500 hover:text-gray-600 hover:bg-gray-50 transition-all uppercase tracking-widest"
                                                     >
                                                         Details
                                                     </Link>

@@ -40,7 +40,7 @@ export default function AssessmentResult({ lead_id, first_name, status, analysis
                         <h2 className="text-[11px] font-black text-[#436235] uppercase tracking-[0.6em] mb-8 opacity-80">
                             Eligibility Analysis
                         </h2>
-                        <p className="text-gray-400 text-xs font-bold uppercase tracking-[0.3em]">
+                        <p className="text-gray-500 text-xs font-bold uppercase tracking-[0.3em]">
                             Protocol: {lead_id}
                         </p>
                     </div>
@@ -78,7 +78,7 @@ export default function AssessmentResult({ lead_id, first_name, status, analysis
                         </div>
 
                         {first_name && (
-                            <p className="text-gray-400 text-sm font-medium mb-4">
+                            <p className="text-gray-500 text-sm font-medium mb-4">
                                 Hi {first_name}, here's your eligibility assessment.
                             </p>
                         )}
@@ -100,7 +100,7 @@ export default function AssessmentResult({ lead_id, first_name, status, analysis
                             className="bg-gray-50/50 rounded-3xl p-10 border border-gray-100"
                         >
                             <h3 className="text-[9px] font-black uppercase tracking-[0.4em] text-[#282728] opacity-60 mb-4">Summary</h3>
-                            <p className="text-sm text-gray-500 leading-[2] font-medium">{analysis.summary}</p>
+                            <p className="text-sm text-gray-600 leading-[2] font-medium">{analysis.summary}</p>
                         </motion.div>
                     )}
 
@@ -149,7 +149,7 @@ export default function AssessmentResult({ lead_id, first_name, status, analysis
                         transition={{ delay: 0.9 }}
                         className="text-center pt-8"
                     >
-                        <p className="text-gray-400 text-xs font-bold uppercase tracking-[0.2em] mb-6">Ready to take the next step?</p>
+                        <p className="text-gray-500 text-xs font-bold uppercase tracking-[0.2em] mb-6">Ready to take the next step?</p>
                         <a
                             href="/booking"
                             className="inline-flex items-center gap-3 px-12 py-5 bg-[#282728] text-white rounded-xl text-[10px] font-black uppercase tracking-[0.3em] hover:bg-black transition-all shadow-2xl shadow-[#282728]/10 active:scale-95"
@@ -177,7 +177,7 @@ function ProcessingState({ leadId, firstName }) {
                     className="w-16 h-16 border-4 border-gray-100 border-t-[#436235] rounded-full mb-8"
                 />
                 <h2 className="text-2xl font-black text-[#282728] uppercase tracking-tighter mb-4">Analyzing Your Profile</h2>
-                {firstName && <p className="text-gray-400 text-sm font-medium mb-2">Hi {firstName}, we're reviewing your submission.</p>}
+                {firstName && <p className="text-gray-500 text-sm font-medium mb-2">Hi {firstName}, we're reviewing your submission.</p>}
                 <p className="text-gray-300 text-xs font-bold uppercase tracking-[0.2em] mb-8">This usually takes less than a minute</p>
                 <p className="text-gray-300 text-[10px] font-bold uppercase tracking-[0.3em]">Protocol: {leadId}</p>
                 <button
@@ -202,8 +202,8 @@ function FailedState({ leadId, firstName }) {
                     <AlertTriangle size={32} />
                 </div>
                 <h2 className="text-2xl font-black text-[#282728] uppercase tracking-tighter mb-4">Analysis Unavailable</h2>
-                {firstName && <p className="text-gray-400 text-sm font-medium mb-2">Hi {firstName}, we encountered an issue.</p>}
-                <p className="text-gray-400 text-sm font-medium mb-8 max-w-md text-center">
+                {firstName && <p className="text-gray-500 text-sm font-medium mb-2">Hi {firstName}, we encountered an issue.</p>}
+                <p className="text-gray-500 text-sm font-medium mb-8 max-w-md text-center">
                     Your submission was received successfully, but the automated analysis could not be completed. Our team will review your profile manually and contact you.
                 </p>
                 <p className="text-gray-300 text-[10px] font-bold uppercase tracking-[0.3em] mb-8">Protocol: {leadId}</p>

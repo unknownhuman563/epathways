@@ -49,7 +49,7 @@ export default function ImmigrationServices() {
                     <h2 className="text-4xl md:text-5xl lg:text-5xl font-black mb-4 text-[#282728] tracking-tight">
                         What we handle for you
                     </h2>
-                    <p className="text-gray-500 text-sm md:text-base font-medium max-w-2xl mx-auto tracking-wide">
+                    <p className="text-gray-600 text-sm md:text-base font-medium max-w-2xl mx-auto tracking-wide">
                         Each step of immigration requires expertise. We provide it all.
                     </p>
                 </div>
@@ -90,7 +90,7 @@ export default function ImmigrationServices() {
                                     
                                     <motion.p 
                                         layout
-                                        className={`text-gray-500 text-sm leading-relaxed mb-6 flex-grow`}
+                                        className={`text-gray-600 text-sm leading-relaxed mb-6 flex-grow`}
                                     >
                                         {service.desc}
                                     </motion.p>

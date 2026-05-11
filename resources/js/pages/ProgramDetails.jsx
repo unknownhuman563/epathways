@@ -43,7 +43,7 @@ function renderSections(value, fallback) {
         .filter(s => s.intro || s.bullets.length > 0);
 
     if (sections.length === 0) {
-        return <p className="text-sm text-gray-400">{fallback}</p>;
+        return <p className="text-sm text-gray-500">{fallback}</p>;
     }
 
     return (
@@ -93,7 +93,7 @@ export default function ProgramDetails({ program }) {
 
                 {/* About This Program Section - Card Style */}
                 <div className="mb-16">
-                    <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-6">About This Program</h4>
+                    <h4 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-6">About This Program</h4>
 
                     <div className="bg-white shadow-[0_8px_30px_rgb(0,0,0,0.04)] rounded-3xl overflow-hidden border border-gray-100">
                         <div className="grid grid-cols-1 lg:grid-cols-2">
@@ -133,27 +133,27 @@ export default function ProgramDetails({ program }) {
                             <div className="grid grid-cols-5 items-center">
                                 <div className="flex flex-col items-center border-r border-white/10 last:border-r-0">
                                     <span className="text-3xl font-bold mb-1.5 tabular-nums">{program?.level ?? '—'}</span>
-                                    <span className="text-[10px] text-gray-400 font-medium uppercase tracking-[0.2em]">Level</span>
+                                    <span className="text-[10px] text-gray-500 font-medium uppercase tracking-[0.2em]">Level</span>
                                 </div>
                                 <div className="flex flex-col items-center border-r border-white/10 last:border-r-0">
                                     <span className="text-3xl font-bold mb-1.5 tabular-nums">{program?.duration_months ?? '—'}</span>
-                                    <div className="text-[10px] text-gray-400 font-medium uppercase tracking-[0.2em] text-center leading-relaxed">
+                                    <div className="text-[10px] text-gray-500 font-medium uppercase tracking-[0.2em] text-center leading-relaxed">
                                         Months<br />(Duration)
                                     </div>
                                 </div>
                                 <div className="flex flex-col items-center border-r border-white/10 last:border-r-0">
                                     <span className="text-3xl font-bold mb-1.5 tabular-nums">{program?.credits ?? '—'}</span>
-                                    <span className="text-[10px] text-gray-400 font-medium uppercase tracking-[0.2em]">Credits</span>
+                                    <span className="text-[10px] text-gray-500 font-medium uppercase tracking-[0.2em]">Credits</span>
                                 </div>
                                 <div className="flex flex-col items-center border-r border-white/10 last:border-r-0">
                                     <span className="text-3xl font-bold mb-1.5 tabular-nums">{program?.residency_points ?? '—'}</span>
-                                    <div className="text-[10px] text-gray-400 font-medium uppercase tracking-[0.2em] text-center leading-relaxed px-2">
+                                    <div className="text-[10px] text-gray-500 font-medium uppercase tracking-[0.2em] text-center leading-relaxed px-2">
                                         Points of Residency
                                     </div>
                                 </div>
                                 <div className="flex flex-col items-center border-r border-white/10 last:border-r-0">
                                     <span className="text-3xl font-bold mb-1.5 tabular-nums">{program?.hours_per_week ?? '—'}</span>
-                                    <div className="text-[10px] text-gray-400 font-medium uppercase tracking-[0.2em] text-center leading-relaxed">
+                                    <div className="text-[10px] text-gray-500 font-medium uppercase tracking-[0.2em] text-center leading-relaxed">
                                         Hours per Week<br />(Works Right)
                                     </div>
                                 </div>
@@ -234,7 +234,7 @@ export default function ProgramDetails({ program }) {
 
                 {/* Fee Guide */}
                 <div>
-                    <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-6">Fee Guide</h3>
+                    <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-6">Fee Guide</h3>
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-start">
                         {/* Tuition Fee */}
                         <div>
@@ -251,14 +251,14 @@ export default function ProgramDetails({ program }) {
                                             {program?.tuition_fee ? fmt(program.tuition_fee) : '—'}
                                         </span>
                                         {program?.tuition_fee && program?.tuition_fee_notes && (
-                                            <span className="text-sm font-normal text-gray-500 ml-2">
+                                            <span className="text-sm font-normal text-gray-600 ml-2">
                                                 ({program.tuition_fee_notes})
                                             </span>
                                         )}
                                     </span>
                                 </div>
                                 {!program?.tuition_fee && (
-                                    <p className="text-sm text-gray-400">No tuition fee specified.</p>
+                                    <p className="text-sm text-gray-500">No tuition fee specified.</p>
                                 )}
                             </div>
 
@@ -269,12 +269,12 @@ export default function ProgramDetails({ program }) {
                             {/*
                             <div className="mt-8 pt-6 border-t border-gray-200">
                                 <div className="flex justify-between items-center mb-4 pb-2 border-b border-gray-100">
-                                    <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Schools</span>
-                                    <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Fees</span>
+                                    <span className="text-xs font-bold text-gray-600 uppercase tracking-wider">Schools</span>
+                                    <span className="text-xs font-bold text-gray-600 uppercase tracking-wider">Fees</span>
                                 </div>
                                 <div className="space-y-4">
                                     {fees.length === 0 ? (
-                                        <p className="text-sm text-gray-400">No fee data available.</p>
+                                        <p className="text-sm text-gray-500">No fee data available.</p>
                                     ) : fees.map((row, i) => (
                                         <div key={i} className="flex justify-between items-center text-sm">
                                             <span className="text-gray-600">{row.region}</span>
@@ -291,28 +291,28 @@ export default function ProgramDetails({ program }) {
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-y-10 gap-x-8">
                                 <div>
                                     <div className="flex items-baseline gap-2 mb-1">
-                                        <span className="text-[10px] text-gray-400 font-medium tracking-wider">NZD</span>
+                                        <span className="text-[10px] text-gray-500 font-medium tracking-wider">NZD</span>
                                         <h4 className="text-2xl font-bold tabular-nums">{fmt(program?.insurance_fee)}</h4>
                                     </div>
-                                    <p className="text-[10px] text-gray-400 uppercase tracking-wider">Insurance (indicative)</p>
+                                    <p className="text-[10px] text-gray-500 uppercase tracking-wider">Insurance (indicative)</p>
                                 </div>
                                 <div>
                                     <div className="flex items-baseline gap-2 mb-1">
-                                        <span className="text-[10px] text-gray-400 font-medium tracking-wider">NZD</span>
+                                        <span className="text-[10px] text-gray-500 font-medium tracking-wider">NZD</span>
                                         <h4 className="text-2xl font-bold tabular-nums">{fmt(program?.visa_processing_fee)}</h4>
                                     </div>
-                                    <p className="text-[10px] text-gray-400 uppercase tracking-wider">Visa Processing Fee</p>
+                                    <p className="text-[10px] text-gray-500 uppercase tracking-wider">Visa Processing Fee</p>
                                 </div>
                                 <div>
                                     <div className="flex items-baseline gap-2 mb-1">
-                                        <span className="text-[10px] text-gray-400 font-medium tracking-wider">NZD</span>
+                                        <span className="text-[10px] text-gray-500 font-medium tracking-wider">NZD</span>
                                         <h4 className="text-2xl font-bold tabular-nums">{fmt(program?.living_expense)}</h4>
                                     </div>
-                                    <p className="text-[10px] text-gray-400 uppercase tracking-wider">Living Expense (one year)</p>
+                                    <p className="text-[10px] text-gray-500 uppercase tracking-wider">Living Expense (one year)</p>
                                 </div>
                                 <div>
                                     <h4 className="text-xl font-bold mb-1">{program?.accommodation || '—'}</h4>
-                                    <p className="text-[10px] text-gray-400 uppercase tracking-wider">Accommodation (single occupancy)</p>
+                                    <p className="text-[10px] text-gray-500 uppercase tracking-wider">Accommodation (single occupancy)</p>
                                 </div>
                             </div>
                         </div>

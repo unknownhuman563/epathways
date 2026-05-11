@@ -36,7 +36,7 @@ function SuccessScreen({ eventName }) {
                     <CheckCircle size={48} />
                 </motion.div>
                 <h2 className="text-3xl font-black text-[#282728] uppercase tracking-tighter mb-6">Registered</h2>
-                <p className="text-gray-400 text-sm leading-[2] mb-12 font-medium px-4">
+                <p className="text-gray-500 text-sm leading-[2] mb-12 font-medium px-4">
                     Your seat for <strong className="text-[#282728]">{eventName}</strong> is confirmed. We look forward to seeing you there.
                 </p>
                 <div className="bg-gray-50/50 rounded-2xl p-8 mb-12 border border-gray-100/50">
@@ -53,7 +53,7 @@ function SuccessScreen({ eventName }) {
 
 // --- Main Registration Component ---
 export default function Registration({ event }) {
-    if (!event) return <div className="p-20 text-center font-bold text-gray-400 uppercase tracking-widest text-xs font-urbanist">Error: Event data missing.</div>;
+    if (!event) return <div className="p-20 text-center font-bold text-gray-500 uppercase tracking-widest text-xs font-urbanist">Error: Event data missing.</div>;
 
     const [success, setSuccess] = useState(false);
     const [modal, setModal] = useState({ show: false, message: '' });
@@ -100,7 +100,7 @@ export default function Registration({ event }) {
                         key={opt}
                         type="button"
                         onClick={() => onChange(opt)}
-                        className={`px-6 py-3 rounded-xl text-[10px] font-bold uppercase tracking-widest border transition-all text-center ${isSelected ? 'bg-[#282728] text-white border-[#282728]' : 'bg-white text-gray-400 border-gray-200 hover:border-[#282728]'}`}
+                        className={`px-6 py-3 rounded-xl text-[10px] font-bold uppercase tracking-widest border transition-all text-center ${isSelected ? 'bg-[#282728] text-white border-[#282728]' : 'bg-white text-gray-500 border-gray-200 hover:border-[#282728]'}`}
                     >
                         {opt}
                     </button>
@@ -159,12 +159,12 @@ export default function Registration({ event }) {
                         className="flex flex-wrap items-center justify-center gap-4 text-[10px] font-black uppercase tracking-widest text-[#282728]"
                     >
                         <div className="flex items-center gap-2 px-6 py-4 rounded-2xl bg-white shadow-2xl shadow-black/20">
-                            <Calendar size={14} className="text-gray-400" /> 
+                            <Calendar size={14} className="text-gray-500" /> 
                             {event.date_from ? new Date(event.date_from).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) : 'Date TBA'}
                         </div>
                         {event.mode && (
                             <div className="flex items-center gap-2 px-6 py-4 rounded-2xl bg-white shadow-2xl shadow-black/20">
-                                <MapPin size={14} className="text-gray-400" /> 
+                                <MapPin size={14} className="text-gray-500" /> 
                                 {event.mode}
                             </div>
                         )}
@@ -336,7 +336,7 @@ export default function Registration({ event }) {
                                         {processing ? 'Processing...' : 'Confirm Registration'}
                                         {!processing && <ChevronRight className="w-4 h-4" />}
                                     </button>
-                                    <div className="mt-8 flex items-center gap-2 text-[9px] font-bold uppercase tracking-widest text-gray-400">
+                                    <div className="mt-8 flex items-center gap-2 text-[9px] font-bold uppercase tracking-widest text-gray-500">
                                         <Lock size={12} /> Secure Registration • © {new Date().getFullYear()} ePathways
                                     </div>
                                 </div>
@@ -359,7 +359,7 @@ export default function Registration({ event }) {
                             </div>
                             
                             <h3 className="text-xl font-black text-[#282728] uppercase tracking-tighter mb-3 relative z-10">Free Assessment</h3>
-                            <p className="text-xs text-gray-400 font-medium leading-relaxed mb-6 relative z-10">Get a personalized eligibility evaluation for your pathway at absolutely no cost.</p>
+                            <p className="text-xs text-gray-500 font-medium leading-relaxed mb-6 relative z-10">Get a personalized eligibility evaluation for your pathway at absolutely no cost.</p>
                             
                             <ul className="mb-8 space-y-3 relative z-10">
                                 {['Visa eligibility mapping', 'Qualification recognition', 'Step-by-step action plan'].map((txt, i) => (
@@ -412,23 +412,23 @@ export default function Registration({ event }) {
                             <h3 className="text-sm font-black text-[#282728] uppercase tracking-[0.2em] mb-8 text-center pb-6 border-b border-gray-50">Connect</h3>
                             <div className="space-y-6">
                                 <div className="flex items-start gap-4">
-                                    <div className="w-10 h-10 rounded-[1.2rem] bg-gray-50 flex items-center justify-center text-gray-400 shrink-0 border border-gray-100 transition-colors hover:text-[#282728]"><MapPin size={16} /></div>
+                                    <div className="w-10 h-10 rounded-[1.2rem] bg-gray-50 flex items-center justify-center text-gray-500 shrink-0 border border-gray-100 transition-colors hover:text-[#282728]"><MapPin size={16} /></div>
                                     <div>
-                                        <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Location</p>
+                                        <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-1">Location</p>
                                         <p className="text-xs font-bold text-[#282728]">2F Landco Center<br/>Davao City, PH</p>
                                     </div>
                                 </div>
                                 <div className="flex items-start gap-4">
-                                    <div className="w-10 h-10 rounded-[1.2rem] bg-gray-50 flex items-center justify-center text-gray-400 shrink-0 border border-gray-100 transition-colors hover:text-[#282728]"><Phone size={16} /></div>
+                                    <div className="w-10 h-10 rounded-[1.2rem] bg-gray-50 flex items-center justify-center text-gray-500 shrink-0 border border-gray-100 transition-colors hover:text-[#282728]"><Phone size={16} /></div>
                                     <div>
-                                        <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Telephone</p>
+                                        <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-1">Telephone</p>
                                         <p className="text-xs font-bold text-[#282728]">+63 (82) 297-5000</p>
                                     </div>
                                 </div>
                                 <div className="flex items-start gap-4">
-                                    <div className="w-10 h-10 rounded-[1.2rem] bg-gray-50 flex items-center justify-center text-gray-400 shrink-0 border border-gray-100 transition-colors hover:text-[#282728]"><Mail size={16} /></div>
+                                    <div className="w-10 h-10 rounded-[1.2rem] bg-gray-50 flex items-center justify-center text-gray-500 shrink-0 border border-gray-100 transition-colors hover:text-[#282728]"><Mail size={16} /></div>
                                     <div>
-                                        <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Email</p>
+                                        <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-1">Email</p>
                                         <p className="text-xs font-bold text-[#282728]">hello@epathways.com.ph</p>
                                     </div>
                                 </div>
@@ -453,7 +453,7 @@ export default function Registration({ event }) {
                                 <AlertCircle size={32} />
                             </div>
                             <h3 className="text-xl font-black text-[#282728] uppercase tracking-tighter mb-4">Action Required</h3>
-                            <p className="text-gray-400 text-sm leading-relaxed mb-10 font-medium px-4 whitespace-pre-wrap">{modal.message}</p>
+                            <p className="text-gray-500 text-sm leading-relaxed mb-10 font-medium px-4 whitespace-pre-wrap">{modal.message}</p>
                             <button 
                                 type="button"
                                 onClick={() => setModal({ show: false, message: '' })}

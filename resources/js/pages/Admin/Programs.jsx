@@ -112,7 +112,7 @@ function SectionsField({ value, onChange, label, emptyHint, footnote, descriptio
             </div>
 
             {sections.length === 0 ? (
-                <p className="text-[11px] text-gray-400 italic px-3 py-3 bg-gray-50 border border-dashed border-gray-200 rounded-lg">
+                <p className="text-[11px] text-gray-500 italic px-3 py-3 bg-gray-50 border border-dashed border-gray-200 rounded-lg">
                     {emptyHint}
                 </p>
             ) : (
@@ -120,7 +120,7 @@ function SectionsField({ value, onChange, label, emptyHint, footnote, descriptio
                     {sections.map((section, sectionIdx) => (
                         <div key={sectionIdx} className="border border-gray-200 rounded-xl p-4 bg-gray-50/30 space-y-3">
                             <div className="flex items-center justify-between">
-                                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Section {sectionIdx + 1}</span>
+                                <span className="text-[10px] font-bold text-gray-600 uppercase tracking-wider">Section {sectionIdx + 1}</span>
                                 <button
                                     type="button"
                                     onClick={() => removeSection(sectionIdx)}
@@ -132,8 +132,8 @@ function SectionsField({ value, onChange, label, emptyHint, footnote, descriptio
                             </div>
 
                             <div>
-                                <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
-                                    Description <span className="text-gray-400 normal-case">(optional)</span>
+                                <p className="text-[10px] font-semibold text-gray-600 uppercase tracking-wider mb-1.5">
+                                    Description <span className="text-gray-500 normal-case">(optional)</span>
                                 </p>
                                 <Textarea
                                     value={section.intro || ''}
@@ -145,8 +145,8 @@ function SectionsField({ value, onChange, label, emptyHint, footnote, descriptio
 
                             <div>
                                 <div className="flex items-center justify-between mb-1.5">
-                                    <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">
-                                        Bullets <span className="text-gray-400 normal-case">(optional)</span>
+                                    <p className="text-[10px] font-semibold text-gray-600 uppercase tracking-wider">
+                                        Bullets <span className="text-gray-500 normal-case">(optional)</span>
                                     </p>
                                     <button
                                         type="button"
@@ -158,7 +158,7 @@ function SectionsField({ value, onChange, label, emptyHint, footnote, descriptio
                                 </div>
 
                                 {(section.bullets || []).length === 0 ? (
-                                    <p className="text-[11px] text-gray-400 italic px-3 py-2 bg-white border border-dashed border-gray-200 rounded-lg">
+                                    <p className="text-[11px] text-gray-500 italic px-3 py-2 bg-white border border-dashed border-gray-200 rounded-lg">
                                         No bullets yet. Leave empty if this section is paragraph-only.
                                     </p>
                                 ) : (
@@ -179,7 +179,7 @@ function SectionsField({ value, onChange, label, emptyHint, footnote, descriptio
                                                 <button
                                                     type="button"
                                                     onClick={() => updateSection(sectionIdx, { bullets: section.bullets.filter((_, i) => i !== bulletIdx) })}
-                                                    className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg flex-shrink-0"
+                                                    className="p-2 text-gray-500 hover:text-red-500 hover:bg-red-50 rounded-lg flex-shrink-0"
                                                     title="Remove bullet"
                                                 >
                                                     <X size={14} />
@@ -195,7 +195,7 @@ function SectionsField({ value, onChange, label, emptyHint, footnote, descriptio
             )}
 
             {footnote && (
-                <p className="text-[10px] text-gray-400 leading-relaxed mt-2">
+                <p className="text-[10px] text-gray-500 leading-relaxed mt-2">
                     {footnote}
                 </p>
             )}
@@ -337,9 +337,9 @@ function ProgramModal({ open, onClose, editing }) {
                 <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between flex-shrink-0">
                     <div>
                         <h2 className="text-lg font-bold text-gray-900">{isEdit ? 'Edit Program' : 'Create Program'}</h2>
-                        <p className="text-xs text-gray-400 mt-0.5">Step {step} of 2 — {step === 1 ? 'Basics' : 'Details & Fees'}</p>
+                        <p className="text-xs text-gray-500 mt-0.5">Step {step} of 2 — {step === 1 ? 'Basics' : 'Details & Fees'}</p>
                     </div>
-                    <button onClick={onClose} className="p-2 rounded-xl text-gray-400 hover:text-gray-700 hover:bg-gray-100">
+                    <button onClick={onClose} className="p-2 rounded-xl text-gray-500 hover:text-gray-700 hover:bg-gray-100">
                         <X size={20} />
                     </button>
                 </div>
@@ -348,7 +348,7 @@ function ProgramModal({ open, onClose, editing }) {
                     <div className="flex items-center gap-2">
                         {[1, 2].map(s => (
                             <React.Fragment key={s}>
-                                <div className={`flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold ${step >= s ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-400'}`}>{s}</div>
+                                <div className={`flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold ${step >= s ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-500'}`}>{s}</div>
                                 {s < 2 && <div className={`flex-1 h-0.5 rounded-full ${step >= 2 ? 'bg-gray-900' : 'bg-gray-100'}`} />}
                             </React.Fragment>
                         ))}
@@ -418,13 +418,13 @@ function ProgramModal({ open, onClose, editing }) {
                                     ) : isEdit && editing?.image_url ? (
                                         <div>
                                             <img src={editing.image_url} alt="current" className="w-full h-32 object-cover rounded-lg" />
-                                            <p className="text-[10px] text-gray-400 mt-2">Current image — click to replace</p>
+                                            <p className="text-[10px] text-gray-500 mt-2">Current image — click to replace</p>
                                         </div>
                                     ) : (
                                         <div className="py-4">
                                             <div className="text-3xl mb-2">🖼️</div>
-                                            <p className="text-xs font-semibold text-gray-500">Click to upload banner</p>
-                                            <p className="text-[10px] text-gray-400 mt-1">PNG, JPG, WEBP up to 4MB</p>
+                                            <p className="text-xs font-semibold text-gray-600">Click to upload banner</p>
+                                            <p className="text-[10px] text-gray-500 mt-1">PNG, JPG, WEBP up to 4MB</p>
                                         </div>
                                     )}
                                     <input
@@ -492,14 +492,14 @@ function ProgramModal({ open, onClose, editing }) {
                                 <Textarea value={data.post_study} onChange={e => setField('post_study', e.target.value)} />
                             </div>
                             <div>
-                                <Label>Specialization <span className="text-gray-400 font-normal">(optional)</span></Label>
+                                <Label>Specialization <span className="text-gray-500 font-normal">(optional)</span></Label>
                                 <Textarea value={data.specialization} onChange={e => setField('specialization', e.target.value)} placeholder="e.g. Clinical practice across rehabilitation, acute care, and mental health." />
-                                <p className="text-[10px] text-gray-400 mt-1">Hidden on the public page when empty.</p>
+                                <p className="text-[10px] text-gray-500 mt-1">Hidden on the public page when empty.</p>
                             </div>
 
                             <div>
                                 <div className="flex items-center justify-between mb-1.5">
-                                    <Label>Other Benefits <span className="text-gray-400 font-normal">(optional)</span></Label>
+                                    <Label>Other Benefits <span className="text-gray-500 font-normal">(optional)</span></Label>
                                     <button
                                         type="button"
                                         onClick={addBenefit}
@@ -509,7 +509,7 @@ function ProgramModal({ open, onClose, editing }) {
                                     </button>
                                 </div>
                                 {(data.other_benefits || []).length === 0 ? (
-                                    <p className="text-[11px] text-gray-400 italic px-3 py-3 bg-gray-50 border border-dashed border-gray-200 rounded-lg">
+                                    <p className="text-[11px] text-gray-500 italic px-3 py-3 bg-gray-50 border border-dashed border-gray-200 rounded-lg">
                                         No benefits yet. Click "Add bullet" to list extras like scholarships, mentorship, or equipment kits. Hidden on the public page when empty.
                                     </p>
                                 ) : (
@@ -526,7 +526,7 @@ function ProgramModal({ open, onClose, editing }) {
                                                 <button
                                                     type="button"
                                                     onClick={() => removeBenefit(idx)}
-                                                    className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg flex-shrink-0"
+                                                    className="p-2 text-gray-500 hover:text-red-500 hover:bg-red-50 rounded-lg flex-shrink-0"
                                                     title="Remove benefit"
                                                 >
                                                     <X size={14} />
@@ -549,7 +549,7 @@ function ProgramModal({ open, onClose, editing }) {
                                             onChange={e => setField('tuition_fee', e.target.value)}
                                             placeholder="1000.00"
                                         />
-                                        <p className="text-[10px] text-gray-400 mt-1">Amount in NZD</p>
+                                        <p className="text-[10px] text-gray-500 mt-1">Amount in NZD</p>
                                     </div>
                                     <div>
                                         <Input
@@ -557,7 +557,7 @@ function ProgramModal({ open, onClose, editing }) {
                                             onChange={e => setField('tuition_fee_notes', e.target.value)}
                                             placeholder="e.g. Partial scholarship available"
                                         />
-                                        <p className="text-[10px] text-gray-400 mt-1">Notes (e.g. partial, sponsored, per semester)</p>
+                                        <p className="text-[10px] text-gray-500 mt-1">Notes (e.g. partial, sponsored, per semester)</p>
                                     </div>
                                 </div>
                             </div>
@@ -566,8 +566,8 @@ function ProgramModal({ open, onClose, editing }) {
                             <div className="border border-gray-200 rounded-xl p-4 bg-gray-50/50">
                                 <Label>Fee Guide (per region)</Label>
                                 <div className="flex justify-between items-center mt-2 mb-1 px-1 pb-2 border-b border-gray-200">
-                                    <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Schools</span>
-                                    <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mr-14">Fees</span>
+                                    <span className="text-[10px] font-bold text-gray-600 uppercase tracking-wider">Schools</span>
+                                    <span className="text-[10px] font-bold text-gray-600 uppercase tracking-wider mr-14">Fees</span>
                                 </div>
                                 <div className="space-y-1 mt-1">
                                     {data.fee_guide.map((row, idx) => (
@@ -591,7 +591,7 @@ function ProgramModal({ open, onClose, editing }) {
                                             <button
                                                 type="button"
                                                 onClick={() => removeFeeRow(idx)}
-                                                className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg"
+                                                className="p-2 text-gray-500 hover:text-red-500 hover:bg-red-50 rounded-lg"
                                                 title="Remove region"
                                             >
                                                 <X size={14} />
@@ -602,7 +602,7 @@ function ProgramModal({ open, onClose, editing }) {
                                 <button
                                     type="button"
                                     onClick={addFeeRow}
-                                    className="mt-3 w-full py-2 border-2 border-dashed border-gray-200 rounded-xl text-xs font-semibold text-gray-500 hover:border-gray-400 hover:text-gray-700 hover:bg-white flex items-center justify-center gap-2"
+                                    className="mt-3 w-full py-2 border-2 border-dashed border-gray-200 rounded-xl text-xs font-semibold text-gray-600 hover:border-gray-400 hover:text-gray-700 hover:bg-white flex items-center justify-center gap-2"
                                 >
                                     <Plus size={14} /> Add Region
                                 </button>
@@ -613,24 +613,24 @@ function ProgramModal({ open, onClose, editing }) {
                                 <div>
                                     <Label>Insurance Fee</Label>
                                     <Input type="number" step="0.01" min="0" value={data.insurance_fee} onChange={e => setField('insurance_fee', e.target.value)} placeholder="1000.00" />
-                                    <p className="text-[10px] text-gray-400 mt-1">Amount in NZD</p>
+                                    <p className="text-[10px] text-gray-500 mt-1">Amount in NZD</p>
                                 </div>
                                 <div>
                                     <Label>Visa Processing Fee</Label>
                                     <Input type="number" step="0.01" min="0" value={data.visa_processing_fee} onChange={e => setField('visa_processing_fee', e.target.value)} placeholder="2350.00" />
-                                    <p className="text-[10px] text-gray-400 mt-1">Amount in NZD</p>
+                                    <p className="text-[10px] text-gray-500 mt-1">Amount in NZD</p>
                                 </div>
                             </div>
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <Label>Living Expense (yearly)</Label>
                                     <Input type="number" step="0.01" min="0" value={data.living_expense} onChange={e => setField('living_expense', e.target.value)} placeholder="20000.00" />
-                                    <p className="text-[10px] text-gray-400 mt-1">Amount in NZD per year</p>
+                                    <p className="text-[10px] text-gray-500 mt-1">Amount in NZD per year</p>
                                 </div>
                                 <div>
                                     <Label>Accommodation</Label>
                                     <Input value={data.accommodation} onChange={e => setField('accommodation', e.target.value)} placeholder="from $180/week" />
-                                    <p className="text-[10px] text-gray-400 mt-1">Free-text (include currency if relevant)</p>
+                                    <p className="text-[10px] text-gray-500 mt-1">Free-text (include currency if relevant)</p>
                                 </div>
                             </div>
                         </div>
@@ -771,7 +771,7 @@ export default function Programs({ programs = [] }) {
             <div className="hidden lg:flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
                 <div>
                     <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Programs</h1>
-                    <p className="text-sm text-gray-500 mt-1">Manage the catalog of courses shown on the public site.</p>
+                    <p className="text-sm text-gray-600 mt-1">Manage the catalog of courses shown on the public site.</p>
                 </div>
                 <div className="flex items-center gap-3">
                     <button
@@ -792,8 +792,8 @@ export default function Programs({ programs = [] }) {
                         className={`p-5 rounded-2xl cursor-pointer transition-all duration-300 hover:scale-[1.02] ${card.dark ? 'bg-gray-900 text-white shadow-lg' : 'bg-white text-gray-900 shadow-sm border border-gray-100'}`}
                     >
                         <div className="flex items-center justify-between mb-3">
-                            <span className={`text-sm font-medium ${card.dark ? 'text-gray-300' : 'text-gray-500'}`}>{card.label}</span>
-                            <span className={`p-1.5 rounded-lg ${card.dark ? 'bg-white/10 text-white' : 'bg-gray-100 text-gray-500'}`}>{card.icon}</span>
+                            <span className={`text-sm font-medium ${card.dark ? 'text-gray-300' : 'text-gray-600'}`}>{card.label}</span>
+                            <span className={`p-1.5 rounded-lg ${card.dark ? 'bg-white/10 text-white' : 'bg-gray-100 text-gray-600'}`}>{card.icon}</span>
                         </div>
                         <p className="text-3xl font-bold tracking-tight">{card.value}</p>
                     </div>
@@ -803,7 +803,7 @@ export default function Programs({ programs = [] }) {
             <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between lg:gap-4">
                 <div className="w-full lg:w-72 relative group">
                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <Search className="h-5 w-5 text-gray-400" />
+                        <Search className="h-5 w-5 text-gray-500" />
                     </div>
                     <input
                         type="text"
@@ -850,18 +850,18 @@ export default function Programs({ programs = [] }) {
                     <table className="w-full text-left border-collapse whitespace-nowrap">
                         <thead>
                             <tr className="bg-gray-50/50 border-b border-gray-100">
-                                <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Program</th>
-                                <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Category</th>
-                                <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Location</th>
-                                <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Price</th>
-                                <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
-                                <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider text-right pr-8">Actions</th>
+                                <th className="px-6 py-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">Program</th>
+                                <th className="px-6 py-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">Category</th>
+                                <th className="px-6 py-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">Location</th>
+                                <th className="px-6 py-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">Price</th>
+                                <th className="px-6 py-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">Status</th>
+                                <th className="px-6 py-4 text-xs font-semibold text-gray-600 uppercase tracking-wider text-right pr-8">Actions</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-50">
                             {pageItems.length === 0 ? (
                                 <tr>
-                                    <td colSpan={6} className="px-6 py-16 text-center text-gray-400">
+                                    <td colSpan={6} className="px-6 py-16 text-center text-gray-500">
                                         <GraduationCap className="w-10 h-10 mx-auto mb-3 text-gray-200" />
                                         <p className="font-semibold">No programs found</p>
                                         <p className="text-sm mt-1">Try adjusting your filters or create a new program.</p>
@@ -881,7 +881,7 @@ export default function Programs({ programs = [] }) {
                                             <div className="flex flex-col">
                                                 <span className="font-bold text-gray-900 text-sm max-w-[280px] truncate">{program.title}</span>
                                                 <div className="flex items-center gap-2 mt-0.5">
-                                                    <span className="text-xs text-gray-500">{program.institution}</span>
+                                                    <span className="text-xs text-gray-600">{program.institution}</span>
                                                     <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-100 px-1.5 py-0.5 rounded">Level {program.level}</span>
                                                 </div>
                                             </div>
@@ -898,7 +898,7 @@ export default function Programs({ programs = [] }) {
                                             onClick={() => setActiveDropdown(activeDropdown === program.id ? null : program.id)}
                                             className="inline-flex items-center gap-2 px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors shadow-sm"
                                         >
-                                            Actions <ChevronDown size={14} className="text-gray-400" />
+                                            Actions <ChevronDown size={14} className="text-gray-500" />
                                         </button>
                                         {activeDropdown === program.id && (
                                             <>
@@ -908,7 +908,7 @@ export default function Programs({ programs = [] }) {
                                                         onClick={() => { openEdit(program); setActiveDropdown(null); }}
                                                         className="flex w-full items-center gap-3 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"
                                                     >
-                                                        <Edit2 size={16} className="text-gray-400" /> Edit
+                                                        <Edit2 size={16} className="text-gray-500" /> Edit
                                                     </button>
                                                     <a
                                                         href={'/program-details/' + program.id}
@@ -916,7 +916,7 @@ export default function Programs({ programs = [] }) {
                                                         rel="noreferrer"
                                                         className="flex w-full items-center gap-3 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"
                                                     >
-                                                        <ArrowUpRight size={16} className="text-gray-400" /> View Public
+                                                        <ArrowUpRight size={16} className="text-gray-500" /> View Public
                                                     </a>
                                                     <button
                                                         onClick={() => handleDelete(program)}
@@ -936,7 +936,7 @@ export default function Programs({ programs = [] }) {
 
                 {totalItems > 0 && (
                     <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-6 py-4 border-t border-gray-100 bg-gray-50/30">
-                        <div className="flex items-center gap-2 text-sm text-gray-500">
+                        <div className="flex items-center gap-2 text-sm text-gray-600">
                             <span>Show</span>
                             <select
                                 value={pageSize}
@@ -951,7 +951,7 @@ export default function Programs({ programs = [] }) {
                             <span>per page</span>
                         </div>
 
-                        <div className="text-sm text-gray-500">
+                        <div className="text-sm text-gray-600">
                             Showing <span className="font-semibold text-gray-900">{startIdx + 1}</span> to <span className="font-semibold text-gray-900">{endIdx}</span> of <span className="font-semibold text-gray-900">{totalItems}</span>
                         </div>
 
@@ -966,7 +966,7 @@ export default function Programs({ programs = [] }) {
                                 </button>
                                 {getPageNumbers().map((p, i) => (
                                     p === '…' ? (
-                                        <span key={'ellipsis-' + i} className="px-2 text-gray-400 text-sm">…</span>
+                                        <span key={'ellipsis-' + i} className="px-2 text-gray-500 text-sm">…</span>
                                     ) : (
                                         <button
                                             key={p}
@@ -1023,7 +1023,7 @@ export default function Programs({ programs = [] }) {
                                 <button
                                     onClick={cancelDelete}
                                     disabled={isDeleting}
-                                    className="p-1 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors disabled:opacity-50"
+                                    className="p-1 rounded-lg text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors disabled:opacity-50"
                                     aria-label="Close"
                                 >
                                     <X size={18} />

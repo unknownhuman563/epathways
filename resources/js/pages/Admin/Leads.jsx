@@ -64,7 +64,7 @@ export default function Leads({ leads: backendLeads }) {
         switch(priority) {
             case 'High': return <Star className="w-4 h-4 text-amber-500 fill-amber-500" />;
             case 'Medium': return <Star className="w-4 h-4 text-emerald-500 fill-emerald-500" />;
-            case 'Low': return <Star className="w-4 h-4 text-gray-400" />;
+            case 'Low': return <Star className="w-4 h-4 text-gray-500" />;
             default: return null;
         }
     };
@@ -77,7 +77,7 @@ export default function Leads({ leads: backendLeads }) {
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 hidden lg:flex mb-6">
                 <div>
                     <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Leads Pipeline</h1>
-                    <p className="text-sm text-gray-500 mt-1">Manage, filter, and track your incoming leads.</p>
+                    <p className="text-sm text-gray-600 mt-1">Manage, filter, and track your incoming leads.</p>
                 </div>
                 
                 <div className="flex items-center gap-3">
@@ -102,7 +102,7 @@ export default function Leads({ leads: backendLeads }) {
                 {/* Search */}
                 <div className="w-full lg:w-96 relative group">
                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <Search className="h-5 w-5 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+                        <Search className="h-5 w-5 text-gray-500 group-focus-within:text-blue-500 transition-colors" />
                     </div>
                     <input 
                         type="text" 
@@ -157,16 +157,16 @@ export default function Leads({ leads: backendLeads }) {
                             <span className="text-sm font-bold text-gray-700 mr-2 bg-blue-50 px-3 py-1 rounded-lg text-blue-700">
                                 {selectedLeads.length} Selected
                             </span>
-                            <button className="p-2 text-gray-500 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors tooltip" title="WhatsApp Message">
+                            <button className="p-2 text-gray-600 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors tooltip" title="WhatsApp Message">
                                 <MessageSquare size={18} />
                             </button>
-                            <button className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors tooltip" title="Send Email">
+                            <button className="p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors tooltip" title="Send Email">
                                 <Mail size={18} />
                             </button>
-                            <button className="p-2 text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors tooltip" title="Change Status">
+                            <button className="p-2 text-gray-600 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors tooltip" title="Change Status">
                                 <CheckSquare size={18} />
                             </button>
-                            <button className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors tooltip" title="Delete">
+                            <button className="p-2 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors tooltip" title="Delete">
                                 <Trash2 size={18} />
                             </button>
                         </div>
@@ -180,7 +180,7 @@ export default function Leads({ leads: backendLeads }) {
                     <table className="w-full text-left border-collapse whitespace-nowrap">
                         <thead>
                             <tr className="bg-gray-50/50 border-b border-gray-100">
-                                <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider w-10">
+                                <th className="px-6 py-4 text-xs font-semibold text-gray-600 uppercase tracking-wider w-10">
                                     <input 
                                         type="checkbox" 
                                         className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 cursor-pointer" 
@@ -188,13 +188,13 @@ export default function Leads({ leads: backendLeads }) {
                                         checked={selectedLeads.length === leads.length && leads.length > 0}
                                     />
                                 </th>
-                                <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Lead Info</th>
-                                <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Contact</th>
-                                <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Interest</th>
-                                <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Country</th>
-                                <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Source & Assignment</th>
-                                <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
-                                <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider text-right pr-8">Actions</th>
+                                <th className="px-6 py-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">Lead Info</th>
+                                <th className="px-6 py-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">Contact</th>
+                                <th className="px-6 py-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">Interest</th>
+                                <th className="px-6 py-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">Country</th>
+                                <th className="px-6 py-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">Source & Assignment</th>
+                                <th className="px-6 py-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">Status</th>
+                                <th className="px-6 py-4 text-xs font-semibold text-gray-600 uppercase tracking-wider text-right pr-8">Actions</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-50">
@@ -218,7 +218,7 @@ export default function Leads({ leads: backendLeads }) {
                                                 <Link href={`/admin/leads/${lead.id}`} className="font-bold text-gray-900 text-sm hover:text-blue-600 transition-colors">{lead.name}</Link>
                                             </div>
                                             <div className="flex items-center gap-2">
-                                                <Link href={`/admin/leads/${lead.id}`} className="text-[10px] font-bold text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded w-max hover:bg-gray-200 transition-colors">{lead.id}</Link>
+                                                <Link href={`/admin/leads/${lead.id}`} className="text-[10px] font-bold text-gray-600 bg-gray-100 px-1.5 py-0.5 rounded w-max hover:bg-gray-200 transition-colors">{lead.id}</Link>
                                                 <span className="text-[10px] font-bold text-blue-600 bg-blue-50 border border-blue-100 px-1.5 py-0.5 rounded w-max uppercase tracking-wider">{lead.branch}</span>
                                             </div>
                                         </div>
@@ -270,7 +270,7 @@ export default function Leads({ leads: backendLeads }) {
                                             <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-bold border ${getStatusStyle(lead.status)}`}>
                                                 {lead.status}
                                             </span>
-                                            <span className="text-[10px] text-gray-400 font-medium flex items-center gap-1 mt-1">
+                                            <span className="text-[10px] text-gray-500 font-medium flex items-center gap-1 mt-1">
                                                 <Clock size={10} /> {lead.recentActivity}
                                             </span>
                                         </div>
@@ -282,7 +282,7 @@ export default function Leads({ leads: backendLeads }) {
                                             onClick={() => setActiveDropdown(activeDropdown === lead.id ? null : lead.id)}
                                             className="inline-flex items-center gap-2 px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                                         >
-                                            Actions <ChevronDown size={14} className="text-gray-400" />
+                                            Actions <ChevronDown size={14} className="text-gray-500" />
                                         </button>
 
                                         {/* Actions Dropdown Menu */}
@@ -296,10 +296,10 @@ export default function Leads({ leads: backendLeads }) {
                                                     {/* Group: View / Edit */}
                                                     <div className="px-1 py-1">
                                                         <Link href={`/admin/leads/${lead.id}`} className="flex w-full items-center gap-3 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-gray-900 rounded-lg transition-colors">
-                                                            <Eye size={16} className="text-gray-400" /> View Details
+                                                            <Eye size={16} className="text-gray-500" /> View Details
                                                         </Link>
                                                         <button className="flex w-full items-center gap-3 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-gray-900 rounded-lg transition-colors">
-                                                            <Edit2 size={16} className="text-gray-400" /> Edit Lead
+                                                            <Edit2 size={16} className="text-gray-500" /> Edit Lead
                                                         </button>
                                                     </div>
 
@@ -346,15 +346,15 @@ export default function Leads({ leads: backendLeads }) {
 
                     {/* Pagination - Mocked */}
                     <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100 bg-white">
-                        <div className="text-sm text-gray-500">
+                        <div className="text-sm text-gray-600">
                             Showing <span className="font-semibold text-gray-900">1</span> to <span className="font-semibold text-gray-900">{leads.length}</span> of <span className="font-semibold text-gray-900">{leads.length}</span> Leads
                         </div>
                         <div className="flex gap-1">
-                            <button className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50" disabled>Previous</button>
+                            <button className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50" disabled>Previous</button>
                             <button className="px-3 py-1.5 border border-gray-200 bg-gray-900 text-white rounded-lg text-sm font-medium shadow-sm">1</button>
                             <button className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50">2</button>
                             <button className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50">3</button>
-                            <span className="px-2 py-1.5 text-gray-400">...</span>
+                            <span className="px-2 py-1.5 text-gray-500">...</span>
                             <button className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50">Next</button>
                         </div>
                     </div>

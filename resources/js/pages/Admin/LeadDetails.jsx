@@ -13,7 +13,7 @@ export default function LeadDetails({ lead: backendLead }) {
         return (
             <div className="flex flex-col items-center justify-center min-h-[400px] space-y-4">
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-                <p className="text-gray-500 font-medium font-inter">Loading lead details...</p>
+                <p className="text-gray-600 font-medium font-inter">Loading lead details...</p>
                 <Link href="/admin/leads" className="text-blue-600 hover:underline text-sm font-semibold">Back to Leads</Link>
             </div>
         );
@@ -172,7 +172,7 @@ export default function LeadDetails({ lead: backendLead }) {
 
     const DataRow = ({ label, value, fullWidth = false }) => (
         <div className={`flex flex-col gap-1 ${fullWidth ? 'col-span-1 md:col-span-2' : ''}`}>
-            <span className="text-xs font-semibold text-gray-400 tracking-wide uppercase">{label}</span>
+            <span className="text-xs font-semibold text-gray-500 tracking-wide uppercase">{label}</span>
             <span className="text-sm font-medium text-gray-900 bg-gray-50/50 px-3 py-2 rounded-lg border border-gray-100">{value || '-'}</span>
         </div>
     );
@@ -209,12 +209,12 @@ export default function LeadDetails({ lead: backendLead }) {
                 </div>
                 <div className="flex items-end gap-3 mb-3">
                     <span className={`text-2xl font-black ${level.color}`}>{pct}%</span>
-                    <span className="text-xs text-gray-400 font-medium pb-1">{score} / {max} pts</span>
+                    <span className="text-xs text-gray-500 font-medium pb-1">{score} / {max} pts</span>
                 </div>
                 <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden mb-3">
                     <div className={`h-full rounded-full ${level.bg} transition-all duration-700`} style={{ width: `${pct}%` }} />
                 </div>
-                {summary && <p className="text-xs text-gray-500 leading-relaxed">{summary}</p>}
+                {summary && <p className="text-xs text-gray-600 leading-relaxed">{summary}</p>}
             </div>
         );
     };
@@ -231,7 +231,7 @@ export default function LeadDetails({ lead: backendLead }) {
                 </svg>
                 <div className="absolute inset-0 flex flex-col items-center justify-center">
                     <span className={`text-2xl font-black ${level.color}`}>{score}</span>
-                    <span className="text-[8px] font-bold text-gray-400 uppercase tracking-wider">/100</span>
+                    <span className="text-[8px] font-bold text-gray-500 uppercase tracking-wider">/100</span>
                 </div>
             </div>
         );
@@ -244,7 +244,7 @@ export default function LeadDetails({ lead: backendLead }) {
             {/* Header / Navigation */}
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div className="flex flex-col gap-2">
-                    <Link href="/admin/leads" className="inline-flex items-center gap-1.5 text-sm font-medium text-gray-500 hover:text-blue-600 transition-colors">
+                    <Link href="/admin/leads" className="inline-flex items-center gap-1.5 text-sm font-medium text-gray-600 hover:text-blue-600 transition-colors">
                         <ArrowLeft size={16} /> Back to Leads
                     </Link>
                     <div className="flex items-center gap-3">
@@ -258,7 +258,7 @@ export default function LeadDetails({ lead: backendLead }) {
                             {lead.stage}
                         </span>
                         <span className="text-xs text-blue-700 font-bold bg-blue-50 border border-blue-100 px-2 py-1 rounded-md uppercase tracking-wider">{lead.branch}</span>
-                        <span className="text-xs text-gray-500 font-medium bg-gray-100 px-2 py-1 rounded-md">ID: {lead.id}</span>
+                        <span className="text-xs text-gray-600 font-medium bg-gray-100 px-2 py-1 rounded-md">ID: {lead.id}</span>
                     </div>
                 </div>
 
@@ -279,7 +279,7 @@ export default function LeadDetails({ lead: backendLead }) {
                         <Phone size={18} />
                     </div>
                     <div className="min-w-0">
-                        <p className="text-xs text-gray-500 font-medium">Phone</p>
+                        <p className="text-xs text-gray-600 font-medium">Phone</p>
                         <p className="text-sm font-semibold text-gray-900 truncate">{lead.personal.phone}</p>
                     </div>
                 </div>
@@ -288,7 +288,7 @@ export default function LeadDetails({ lead: backendLead }) {
                         <Mail size={18} />
                     </div>
                     <div className="min-w-0">
-                        <p className="text-xs text-gray-500 font-medium">Email</p>
+                        <p className="text-xs text-gray-600 font-medium">Email</p>
                         <p className="text-sm font-semibold text-gray-900 truncate">{lead.personal.email}</p>
                     </div>
                 </div>
@@ -297,7 +297,7 @@ export default function LeadDetails({ lead: backendLead }) {
                         <MapPin size={18} />
                     </div>
                     <div className="min-w-0">
-                        <p className="text-xs text-gray-500 font-medium">Location</p>
+                        <p className="text-xs text-gray-600 font-medium">Location</p>
                         <p className="text-sm font-semibold text-gray-900 truncate">{lead.country}</p>
                     </div>
                 </div>
@@ -306,7 +306,7 @@ export default function LeadDetails({ lead: backendLead }) {
                         <Calendar size={18} />
                     </div>
                     <div className="min-w-0">
-                        <p className="text-xs text-gray-500 font-medium">Applied On</p>
+                        <p className="text-xs text-gray-600 font-medium">Applied On</p>
                         <p className="text-sm font-semibold text-gray-900 truncate">{lead.submittedAt}</p>
                     </div>
                 </div>
@@ -338,7 +338,7 @@ export default function LeadDetails({ lead: backendLead }) {
                             <div className="flex flex-col sm:flex-row items-center gap-8 p-6 bg-gray-50/50 rounded-2xl border border-gray-100">
                                 <ScoreCircle score={aiAnalysis.overall_score ?? 0} />
                                 <div className="flex-1 text-center sm:text-left">
-                                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Overall Eligibility Score</p>
+                                    <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1">Overall Eligibility Score</p>
                                     <p className={`text-sm font-bold mb-3 ${getScoreLevel(aiAnalysis.overall_score ?? 0).color}`}>
                                         {getScoreLevel(aiAnalysis.overall_score ?? 0).label} Candidate
                                     </p>
@@ -349,7 +349,7 @@ export default function LeadDetails({ lead: backendLead }) {
                                         </div>
                                     )}
                                     {aiAnalysis.pathway_reasoning && (
-                                        <p className="text-xs text-gray-500 mt-3 leading-relaxed">{aiAnalysis.pathway_reasoning}</p>
+                                        <p className="text-xs text-gray-600 mt-3 leading-relaxed">{aiAnalysis.pathway_reasoning}</p>
                                     )}
                                 </div>
                             </div>
@@ -409,16 +409,16 @@ export default function LeadDetails({ lead: backendLead }) {
                     {aiStatus === 'processing' && (
                         <div className="p-10 text-center">
                             <div className="w-10 h-10 border-3 border-gray-200 border-t-purple-500 rounded-full animate-spin mx-auto mb-4" />
-                            <p className="text-sm text-gray-500 font-medium">AI analysis is currently in progress.</p>
-                            <p className="text-xs text-gray-400 mt-1">Refresh the page to check for updates.</p>
+                            <p className="text-sm text-gray-600 font-medium">AI analysis is currently in progress.</p>
+                            <p className="text-xs text-gray-500 mt-1">Refresh the page to check for updates.</p>
                         </div>
                     )}
 
                     {aiStatus === 'failed' && (
                         <div className="p-10 text-center">
                             <AlertTriangle size={24} className="text-red-400 mx-auto mb-3" />
-                            <p className="text-sm text-gray-500 font-medium">The automated analysis could not be completed.</p>
-                            <p className="text-xs text-gray-400 mt-1">Please review the lead data manually.</p>
+                            <p className="text-sm text-gray-600 font-medium">The automated analysis could not be completed.</p>
+                            <p className="text-xs text-gray-500 mt-1">Please review the lead data manually.</p>
                         </div>
                     )}
                 </div>
@@ -449,7 +449,7 @@ export default function LeadDetails({ lead: backendLead }) {
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                     <DataRow label="Expiry Date" value={lead.personal.passportExpiry} />
                                     <div className="flex flex-col gap-1">
-                                        <span className="text-xs font-semibold text-gray-400 tracking-wide uppercase">Passport Document</span>
+                                        <span className="text-xs font-semibold text-gray-500 tracking-wide uppercase">Passport Document</span>
                                         <a href="#" className="inline-flex items-center gap-2 text-sm font-medium text-blue-600 bg-blue-50/50 px-3 py-2 rounded-lg border border-blue-100 hover:bg-blue-100 transition-colors w-max">
                                             <FileText size={16} /> {lead.personal.passportFile}
                                         </a>
@@ -475,29 +475,29 @@ export default function LeadDetails({ lead: backendLead }) {
                             {lead.studyPlans.englishTest.taken ? (
                                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-4 bg-gray-50/50 p-4 rounded-xl border border-gray-100">
                                     <div className="col-span-2 sm:col-span-3 md:col-span-2">
-                                        <p className="text-xs text-gray-500 font-medium">Test Type</p>
+                                        <p className="text-xs text-gray-600 font-medium">Test Type</p>
                                         <p className="text-sm font-bold text-gray-900">{lead.studyPlans.englishTest.type}</p>
-                                        <p className="text-xs text-gray-500 mt-1">Date: {lead.studyPlans.englishTest.date}</p>
+                                        <p className="text-xs text-gray-600 mt-1">Date: {lead.studyPlans.englishTest.date}</p>
                                     </div>
                                     <div className="text-center">
-                                        <p className="text-xs text-gray-500 font-medium">Overall</p>
+                                        <p className="text-xs text-gray-600 font-medium">Overall</p>
                                         <p className="text-xl font-black text-blue-600">{lead.studyPlans.englishTest.overall}</p>
                                     </div>
                                     <div className="text-center">
-                                        <p className="text-xs text-gray-500 font-medium">Reading</p>
+                                        <p className="text-xs text-gray-600 font-medium">Reading</p>
                                         <p className="text-lg font-bold text-gray-900">{lead.studyPlans.englishTest.reading}</p>
                                     </div>
                                     <div className="text-center">
-                                        <p className="text-xs text-gray-500 font-medium">Listening</p>
+                                        <p className="text-xs text-gray-600 font-medium">Listening</p>
                                         <p className="text-lg font-bold text-gray-900">{lead.studyPlans.englishTest.listening}</p>
                                     </div>
                                     <div className="text-center">
-                                        <p className="text-xs text-gray-500 font-medium">Writing/Spkg</p>
+                                        <p className="text-xs text-gray-600 font-medium">Writing/Spkg</p>
                                         <p className="text-lg font-bold text-gray-900">{lead.studyPlans.englishTest.writing}</p>
                                     </div>
                                 </div>
                             ) : (
-                                <p className="text-sm text-gray-500 bg-gray-50 p-3 rounded-lg border border-gray-100">No English test taken yet.</p>
+                                <p className="text-sm text-gray-600 bg-gray-50 p-3 rounded-lg border border-gray-100">No English test taken yet.</p>
                             )}
                         </div>
                     </div>
@@ -510,7 +510,7 @@ export default function LeadDetails({ lead: backendLead }) {
                             <div className="flex items-start justify-between p-4 bg-gray-50/50 rounded-xl border border-gray-100">
                                 <div>
                                     <h4 className="text-sm font-bold text-gray-900">Tuition/School Fees</h4>
-                                    <p className="text-xs text-gray-500 mt-1">Sufficient funds to cover intended program</p>
+                                    <p className="text-xs text-gray-600 mt-1">Sufficient funds to cover intended program</p>
                                 </div>
                                 {lead.financial.hasTuitionFunds ? (
                                     <span className="px-2.5 py-1 bg-emerald-100 text-emerald-700 rounded text-xs font-bold border border-emerald-200">YES</span>
@@ -521,7 +521,7 @@ export default function LeadDetails({ lead: backendLead }) {
                             <div className="flex items-start justify-between p-4 bg-gray-50/50 rounded-xl border border-gray-100">
                                 <div>
                                     <h4 className="text-sm font-bold text-gray-900">Living Expenses</h4>
-                                    <p className="text-xs text-gray-500 mt-1">Has NZ$ 20,000 for living expenses per year</p>
+                                    <p className="text-xs text-gray-600 mt-1">Has NZ$ 20,000 for living expenses per year</p>
                                 </div>
                                 {lead.financial.hasLivingExpenses ? (
                                     <span className="px-2.5 py-1 bg-emerald-100 text-emerald-700 rounded text-xs font-bold border border-emerald-200">YES</span>
@@ -605,7 +605,7 @@ export default function LeadDetails({ lead: backendLead }) {
                                         <p className="text-xs font-medium text-amber-800">Current Activity: {lead.education.gap.activity}</p>
                                     </div>
                                 ) : (
-                                    <p className="text-sm text-gray-500">No educational gap reported.</p>
+                                    <p className="text-sm text-gray-600">No educational gap reported.</p>
                                 )}
                             </div>
                             
@@ -613,7 +613,7 @@ export default function LeadDetails({ lead: backendLead }) {
                                 <h3 className="text-sm font-bold text-gray-900 mb-3">Documents Available</h3>
                                 <div className="space-y-4">
                                     <div>
-                                        <p className="text-[10px] font-bold text-gray-500 mb-2 uppercase tracking-wide">Education</p>
+                                        <p className="text-[10px] font-bold text-gray-600 mb-2 uppercase tracking-wide">Education</p>
                                         <div className="flex flex-wrap gap-2">
                                             {lead.education.documents.map((doc, idx) => (
                                                 <span key={`edu-${idx}`} className="inline-flex items-center gap-1.5 text-xs font-medium bg-gray-100 text-gray-700 px-2.5 py-1.5 rounded-lg border border-gray-200">
@@ -623,7 +623,7 @@ export default function LeadDetails({ lead: backendLead }) {
                                         </div>
                                     </div>
                                     <div>
-                                        <p className="text-[10px] font-bold text-gray-500 mb-2 uppercase tracking-wide">Work & Business</p>
+                                        <p className="text-[10px] font-bold text-gray-600 mb-2 uppercase tracking-wide">Work & Business</p>
                                         <div className="flex flex-wrap gap-2">
                                             {lead.education.workDocuments.map((doc, idx) => (
                                                 <span key={`work-${idx}`} className="inline-flex items-center gap-1.5 text-xs font-medium bg-gray-100 text-gray-700 px-2.5 py-1.5 rounded-lg border border-gray-200">

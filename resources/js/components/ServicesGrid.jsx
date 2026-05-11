@@ -68,7 +68,7 @@ export default function ServicesGrid() {
                         <h2 className="text-4xl md:text-5xl font-black text-[#282728] leading-tight mb-6">
                             What We <span className="text-[#436235]">Offer</span>
                         </h2>
-                        <p className="text-gray-500 text-sm md:text-base font-light mx-auto">
+                        <p className="text-gray-600 text-sm md:text-base font-light mx-auto">
                             ePathways is your trusted partner, providing expert guidance and end-to-end support—from assessment to success.
                         </p>
                     </div>
