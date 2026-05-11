@@ -6,6 +6,7 @@ use App\Http\Controllers\EventController;
 use App\Http\Controllers\LeadController;
 use App\Http\Controllers\BookingController;
 use App\Http\Controllers\ProgramController;
+use App\Http\Controllers\ResidentIntakeController;
 Route::get('/', function () {
     return inertia('home/HomePage');
 });
@@ -56,6 +57,9 @@ Route::get("/visa-assessment-form", function (){
    return inertia('visa/VisaAssessmentForm');
 });
 
+Route::get("/resident-intake", [ResidentIntakeController::class, 'showForm'])->name('resident-intake');
+Route::post("/resident-intake", [ResidentIntakeController::class, 'store']);
+
 Route::get('/activities', [EventController::class, 'activities']);
 
 Route::get("/visa-approved", function (){
@@ -94,6 +98,9 @@ Route::middleware(['auth'])->group(function () {
     Route::post('/admin/programs', [ProgramController::class, 'store']);
     Route::post('/admin/programs/{id}', [ProgramController::class, 'update']);
     Route::delete('/admin/programs/{id}', [ProgramController::class, 'destroy']);
+
+    Route::get('/admin/immigration/resident-intakes', [ResidentIntakeController::class, 'adminIndex'])->name('admin.immigration.resident-intakes');
+    Route::get('/admin/immigration/resident-intakes/{id}', [ResidentIntakeController::class, 'adminShow'])->name('admin.immigration.resident-intakes.show');
 
     Route::get("/admin/booking", [BookingController::class, 'index'])->name('admin.bookings');
     Route::post("/admin/bookings/{id}", [BookingController::class, 'update']);

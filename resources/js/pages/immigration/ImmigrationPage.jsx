@@ -554,6 +554,131 @@ export default function Immigration() {
             </section>
 
             {/* ══════════════════════════════════════════════════════════════
+                RESIDENT INTAKE CTA SECTION  —  Skilled Migrant Category
+            ══════════════════════════════════════════════════════════════ */}
+            <section id="resident-intake" className="py-28 bg-gradient-to-br from-[#0c1611] via-[#0f1d17] to-[#0c1611] text-white relative overflow-hidden border-t border-white/5">
+                {/* Decorative elements */}
+                <div className="absolute -top-32 -right-32 w-[500px] h-[500px] rounded-full border border-[#00A693]/10 pointer-events-none" />
+                <div className="absolute -bottom-40 -left-40 w-[600px] h-[600px] rounded-full bg-[#00A693]/5 pointer-events-none" />
+                <div className="absolute top-1/2 left-1/4 w-2 h-2 rounded-full bg-[#00A693]/40 pointer-events-none" />
+                <div className="absolute top-1/3 right-1/3 w-1.5 h-1.5 rounded-full bg-[#00A693]/30 pointer-events-none" />
+
+                <div className="container mx-auto px-6 md:px-12 max-w-7xl relative z-10">
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
+                        {/* Left content */}
+                        <motion.div
+                            initial={{ opacity: 0, x: -30 }}
+                            whileInView={{ opacity: 1, x: 0 }}
+                            viewport={{ once: true }}
+                            transition={{ duration: 0.8 }}
+                            className="lg:col-span-7"
+                        >
+                            <div className="flex items-center gap-3 mb-6">
+                                <div className="w-10 h-[1px] bg-[#00A693]" />
+                                <span className="text-[11px] font-bold tracking-[0.4em] uppercase text-[#00A693]">
+                                    Skilled Migrant Category
+                                </span>
+                            </div>
+
+                            <h2 className="text-4xl md:text-5xl lg:text-6xl font-medium leading-[1.05] mb-8 tracking-tight">
+                                NZ Resident Visa <br />
+                                <span className="text-[#00A693] italic font-light">client intake form</span>
+                            </h2>
+
+                            <p className="text-white/60 text-base md:text-lg leading-relaxed mb-10 max-w-xl font-light">
+                                Already on an AEWV, Essential Skills, or Work to Residence visa with Ergo? Complete our
+                                Skilled Migrant Category intake — the initial step before we issue your engagement
+                                agreement.
+                            </p>
+
+                            {/* Highlight pills */}
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-12">
+                                {[
+                                    { value: "$35.00", label: "Median wage / hr (2025)" },
+                                    { value: "12", label: "Guided sections" },
+                                    { value: "~10", label: "Minutes to complete" },
+                                ].map((stat, i) => (
+                                    <div key={i} className="bg-white/[0.03] border border-white/10 rounded-sm p-5 backdrop-blur-sm">
+                                        <div className="text-2xl md:text-3xl font-medium text-white mb-1">{stat.value}</div>
+                                        <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/40">{stat.label}</div>
+                                    </div>
+                                ))}
+                            </div>
+
+                            {/* CTAs */}
+                            <div className="flex flex-col sm:flex-row gap-4">
+                                <a
+                                    href="/resident-intake"
+                                    className="group inline-flex items-center justify-center gap-3 bg-[#00A693] text-white text-[11px] font-bold px-10 py-5 hover:bg-[#008c7c] transition-all duration-300 uppercase tracking-[0.25em] shadow-2xl shadow-[#00A693]/20"
+                                >
+                                    Apply Resident Intake
+                                    <ArrowRight size={14} className="transition-transform group-hover:translate-x-1" />
+                                </a>
+                                <a
+                                    href="/booking"
+                                    className="inline-flex items-center justify-center gap-3 bg-transparent border border-white/20 text-white text-[11px] font-bold px-10 py-5 hover:bg-white/5 transition-all duration-300 uppercase tracking-[0.25em]"
+                                >
+                                    Speak to an Adviser
+                                </a>
+                            </div>
+                        </motion.div>
+
+                        {/* Right content — checklist preview card */}
+                        <motion.div
+                            initial={{ opacity: 0, x: 30 }}
+                            whileInView={{ opacity: 1, x: 0 }}
+                            viewport={{ once: true }}
+                            transition={{ duration: 0.8, delay: 0.2 }}
+                            className="lg:col-span-5"
+                        >
+                            <div className="bg-white/[0.04] border border-white/10 rounded-sm p-8 md:p-10 backdrop-blur-sm relative overflow-hidden">
+                                {/* Card corner accent */}
+                                <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-[#00A693]/10 to-transparent pointer-events-none" />
+
+                                <div className="flex items-center justify-between mb-8 relative">
+                                    <span className="text-[10px] font-bold uppercase tracking-[0.3em] text-[#00A693]">Document checklist</span>
+                                    <span className="text-[10px] font-bold uppercase tracking-[0.3em] text-white/40">7 items</span>
+                                </div>
+
+                                <div className="space-y-4 relative">
+                                    {[
+                                        "Valid passport (all pages)",
+                                        "All NZ visa copies",
+                                        "Ergo employment contracts",
+                                        "Payslips — first 2 mo + latest",
+                                        "IRD summary of earnings",
+                                        "Education certificates",
+                                        "CV (NZ & overseas history)",
+                                    ].map((item, i) => (
+                                        <motion.div
+                                            key={i}
+                                            initial={{ opacity: 0, x: 10 }}
+                                            whileInView={{ opacity: 1, x: 0 }}
+                                            viewport={{ once: true }}
+                                            transition={{ delay: 0.3 + i * 0.07 }}
+                                            className="flex items-start gap-3 group"
+                                        >
+                                            <div className="w-5 h-5 rounded-full border border-[#00A693]/40 flex items-center justify-center mt-0.5 flex-shrink-0 group-hover:bg-[#00A693]/20 transition-colors">
+                                                <CheckCircle size={11} className="text-[#00A693]" />
+                                            </div>
+                                            <span className="text-sm text-white/70 leading-relaxed">{item}</span>
+                                        </motion.div>
+                                    ))}
+                                </div>
+
+                                <div className="mt-8 pt-6 border-t border-white/10 flex items-center gap-3 relative">
+                                    <Shield size={14} className="text-[#00A693]" />
+                                    <p className="text-[11px] text-white/40 leading-relaxed">
+                                        Confidential — IAA Licensed advisers, secure submission
+                                    </p>
+                                </div>
+                            </div>
+                        </motion.div>
+                    </div>
+                </div>
+            </section>
+
+            {/* ══════════════════════════════════════════════════════════════
                 ASSESSMENT VISAS SECTION
             ══════════════════════════════════════════════════════════════ */}
             <section className="py-32 bg-white">
