@@ -78,7 +78,7 @@ export default function WelcomeModal() {
               </a>
               <button
                 onClick={() => setIsOpen(false)}
-                className="mt-5 text-[11px] text-gray-400 hover:text-gray-600 underline underline-offset-4 hover:cursor-pointer transition-colors"
+                className="mt-5 text-[11px] text-gray-500 hover:text-gray-600 underline underline-offset-4 hover:cursor-pointer transition-colors"
               >
                 No thanks, maybe later
               </button>

@@ -81,7 +81,7 @@ export default function Bookings({ bookings: backendBookings }) {
         if (s.includes('education')) return <GraduationCap size={14} className="text-blue-500" />;
         if (s.includes('immigration')) return <Globe size={14} className="text-emerald-500" />;
         if (s.includes('accommodation')) return <Home size={14} className="text-orange-500" />;
-        return <Calendar size={14} className="text-gray-500" />;
+        return <Calendar size={14} className="text-gray-600" />;
     };
 
     return (
@@ -92,7 +92,7 @@ export default function Bookings({ bookings: backendBookings }) {
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 hidden lg:flex mb-6">
                 <div>
                     <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Consultation Bookings</h1>
-                    <p className="text-sm text-gray-500 mt-1">Manage and track all professional consultation requests.</p>
+                    <p className="text-sm text-gray-600 mt-1">Manage and track all professional consultation requests.</p>
                 </div>
                 
                 <div className="flex items-center gap-3">
@@ -111,7 +111,7 @@ export default function Bookings({ bookings: backendBookings }) {
             <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex flex-col lg:flex-row items-center justify-between gap-4">
                 <div className="w-full lg:w-96 relative group">
                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <Search className="h-5 w-5 text-gray-400 group-focus-within:text-[#436235] transition-colors" />
+                        <Search className="h-5 w-5 text-gray-500 group-focus-within:text-[#436235] transition-colors" />
                     </div>
                     <input 
                         type="text" 
@@ -139,7 +139,7 @@ export default function Bookings({ bookings: backendBookings }) {
                             <span className="text-sm font-bold text-gray-700 mr-2 bg-green-50 px-3 py-1 rounded-lg text-green-700">
                                 {selectedBookings.length} Selected
                             </span>
-                            <button className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Delete">
+                            <button className="p-2 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Delete">
                                 <Trash2 size={18} />
                             </button>
                         </div>
@@ -161,14 +161,14 @@ export default function Bookings({ bookings: backendBookings }) {
                                         checked={selectedBookings.length === bookings.length && bookings.length > 0}
                                     />
                                 </th>
-                                <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Client</th>
-                                <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Service & Consultant</th>
-                                <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Platform</th>
-                                <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Requested On</th>
-                                <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider text-left">Appointment</th>
-                                <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider text-left">Country</th>
-                                <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider text-left">Status</th>
-                                <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider text-right pr-8">Actions</th>
+                                <th className="px-6 py-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">Client</th>
+                                <th className="px-6 py-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">Service & Consultant</th>
+                                <th className="px-6 py-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">Platform</th>
+                                <th className="px-6 py-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">Requested On</th>
+                                <th className="px-6 py-4 text-xs font-semibold text-gray-600 uppercase tracking-wider text-left">Appointment</th>
+                                <th className="px-6 py-4 text-xs font-semibold text-gray-600 uppercase tracking-wider text-left">Country</th>
+                                <th className="px-6 py-4 text-xs font-semibold text-gray-600 uppercase tracking-wider text-left">Status</th>
+                                <th className="px-6 py-4 text-xs font-semibold text-gray-600 uppercase tracking-wider text-right pr-8">Actions</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-50">
@@ -199,7 +199,7 @@ export default function Bookings({ bookings: backendBookings }) {
                                                     </Link>
                                                 )}
                                             </div>
-                                            <span className="text-xs text-gray-500">{booking.email}</span>
+                                            <span className="text-xs text-gray-600">{booking.email}</span>
                                         </div>
                                     </td>
 
@@ -227,7 +227,7 @@ export default function Bookings({ bookings: backendBookings }) {
                                     <td className="px-6 py-4">
                                         <div className="flex flex-col">
                                             <span className="text-sm text-gray-900">{booking.createdAt}</span>
-                                            <span className="text-[10px] text-gray-400 font-medium">Recorded</span>
+                                            <span className="text-[10px] text-gray-500 font-medium">Recorded</span>
                                         </div>
                                     </td>
 
@@ -238,13 +238,13 @@ export default function Bookings({ bookings: backendBookings }) {
                                                 <span className="text-xs text-blue-600 font-medium">{booking.appointmentTime}</span>
                                             </div>
                                         ) : (
-                                            <span className="text-xs text-gray-400 italic">TBD (Check Calendar)</span>
+                                            <span className="text-xs text-gray-500 italic">TBD (Check Calendar)</span>
                                         )}
                                     </td>
 
                                     <td className="px-6 py-4">
                                         <div className="flex items-center gap-1.5 capitalize font-medium text-gray-700 text-xs bg-gray-50 px-2 py-1 rounded border border-gray-100 w-max">
-                                            <Globe size={12} className="text-gray-400" />
+                                            <Globe size={12} className="text-gray-500" />
                                             {booking.currentCountry}
                                         </div>
                                     </td>
@@ -260,7 +260,7 @@ export default function Bookings({ bookings: backendBookings }) {
                                             onClick={() => setActiveDropdown(activeDropdown === booking.id ? null : booking.id)}
                                             className="inline-flex items-center gap-2 px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors shadow-sm"
                                         >
-                                            Actions <ChevronDown size={14} className="text-gray-400" />
+                                            Actions <ChevronDown size={14} className="text-gray-500" />
                                         </button>
 
                                         {activeDropdown === booking.id && (
@@ -269,7 +269,7 @@ export default function Bookings({ bookings: backendBookings }) {
                                                 <div className="absolute right-6 top-12 w-48 bg-white rounded-xl shadow-xl border border-gray-100 z-50 py-2 divide-y divide-gray-50">
                                                     <div className="px-1 py-1">
                                                         <button className="flex w-full items-center gap-3 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg">
-                                                            <Eye size={16} className="text-gray-400" /> View Details
+                                                            <Eye size={16} className="text-gray-500" /> View Details
                                                         </button>
                                                         <button 
                                                             onClick={() => {
@@ -284,7 +284,7 @@ export default function Bookings({ bookings: backendBookings }) {
                                                             }}
                                                             className="flex w-full items-center gap-3 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg"
                                                         >
-                                                            <Edit2 size={16} className="text-gray-400" /> Edit Booking
+                                                            <Edit2 size={16} className="text-gray-500" /> Edit Booking
                                                         </button>
                                                     </div>
                                                     <div className="px-1 py-1">
@@ -300,7 +300,7 @@ export default function Bookings({ bookings: backendBookings }) {
                             ))}
                             {bookings.length === 0 && (
                                 <tr>
-                                    <td colSpan="7" className="px-6 py-12 text-center text-gray-500">
+                                    <td colSpan="7" className="px-6 py-12 text-center text-gray-600">
                                         No bookings found.
                                     </td>
                                 </tr>
@@ -330,7 +330,7 @@ export default function Bookings({ bookings: backendBookings }) {
                             <div className="p-8 space-y-6">
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                                     <div>
-                                        <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-2">Appointment Date</label>
+                                        <label className="block text-xs font-bold text-gray-600 uppercase tracking-widest mb-2">Appointment Date</label>
                                         <input 
                                             type="date" 
                                             value={editingData.date}
@@ -339,7 +339,7 @@ export default function Bookings({ bookings: backendBookings }) {
                                         />
                                     </div>
                                     <div>
-                                        <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-2">Appointment Time</label>
+                                        <label className="block text-xs font-bold text-gray-600 uppercase tracking-widest mb-2">Appointment Time</label>
                                         <input 
                                             type="text" 
                                             placeholder="e.g. 9:00 AM - 11:00 AM"
@@ -351,7 +351,7 @@ export default function Bookings({ bookings: backendBookings }) {
                                 </div>
                                 
                                 <div>
-                                    <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-2">Status</label>
+                                    <label className="block text-xs font-bold text-gray-600 uppercase tracking-widest mb-2">Status</label>
                                     <select 
                                         value={editingData.status}
                                         onChange={(e) => setEditingData({...editingData, status: e.target.value})}
@@ -369,7 +369,7 @@ export default function Bookings({ bookings: backendBookings }) {
                                 <button 
                                     type="button"
                                     onClick={() => setIsEditModalOpen(false)}
-                                    className="px-6 py-2.5 text-sm font-bold text-gray-500 hover:text-gray-800 transition-colors"
+                                    className="px-6 py-2.5 text-sm font-bold text-gray-600 hover:text-gray-800 transition-colors"
                                 >
                                     Cancel
                                 </button>

@@ -39,7 +39,7 @@ export default function WhyUs() {
                     <h2 className="text-4xl md:text-5xl font-black text-[#282728] leading-tight mb-6">
                         We stand with you
                     </h2>
-                    <p className="text-gray-500 text-sm md:text-lg font-light max-w-5xl mx-auto leading-relaxed px-4">
+                    <p className="text-gray-600 text-sm md:text-lg font-light max-w-5xl mx-auto leading-relaxed px-4">
                         Our approach is built on knowing your situation deeply and meeting you where you are. We've guided thousands through their transitions with care and precision.
                     </p>
                     
@@ -59,7 +59,7 @@ export default function WhyUs() {
                         <button 
                             key={idx}
                             onClick={() => setActiveTab(idx)}
-                            className={`text-[11px] font-bold uppercase tracking-[0.2em] pb-2 relative transition-colors ${idx === activeTab ? 'text-[#436235]' : 'text-gray-400 hover:text-[#282728]'}`}
+                            className={`text-[11px] font-bold uppercase tracking-[0.2em] pb-2 relative transition-colors ${idx === activeTab ? 'text-[#436235]' : 'text-gray-500 hover:text-[#282728]'}`}
                         >
                             {tab.title}
                             {idx === activeTab && (
@@ -83,13 +83,13 @@ export default function WhyUs() {
                             transition={{ duration: 0.4 }}
                             className="max-w-xl"
                         >
-                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.3em] mb-4 block">
+                            <span className="text-[10px] font-bold text-gray-500 uppercase tracking-[0.3em] mb-4 block">
                                 {tabContent[activeTab].label}
                             </span>
                             <h3 className="text-3xl md:text-4xl font-black text-[#282728] leading-tight mb-6">
                                 {tabContent[activeTab].heading}
                             </h3>
-                            <p className="text-gray-500 text-sm md:text-base font-light leading-relaxed mb-10 text-justify">
+                            <p className="text-gray-600 text-sm md:text-base font-light leading-relaxed mb-10 text-justify">
                                 {tabContent[activeTab].description}
                             </p>
                             

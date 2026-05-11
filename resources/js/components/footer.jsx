@@ -37,7 +37,7 @@ export default function Footer() {
           {/* Column 2: Education */}
           <div className="space-y-6">
             <h3 className="text-lg font-bold">Education</h3>
-            <ul className="space-y-4 text-gray-500 text-sm font-medium">
+            <ul className="space-y-4 text-gray-600 text-sm font-medium">
               <li><a href="/programs-levels" className="hover:text-green-600 transition-colors">Program and Levels</a></li>
               <li><a href="/fee-guide" className="hover:text-green-600 transition-colors">Fee Guide</a></li>
             </ul>
@@ -46,7 +46,7 @@ export default function Footer() {
           {/* Column 3: Immigration */}
           <div className="space-y-6">
             <h3 className="text-lg font-bold">Immigration</h3>
-            <ul className="space-y-4 text-gray-500 text-sm font-medium">
+            <ul className="space-y-4 text-gray-600 text-sm font-medium">
               <li><a href="#" className="hover:text-green-600 transition-colors">Program and Levels</a></li>
               <li><a href="#" className="hover:text-green-600 transition-colors">Requirement</a></li>
               <li><a href="#" className="hover:text-green-600 transition-colors">Benefits</a></li>
@@ -57,7 +57,7 @@ export default function Footer() {
           {/* Column 4: Accommodation */}
           <div className="space-y-6">
             <h3 className="text-lg font-bold">Accomodation</h3>
-            <ul className="space-y-4 text-gray-500 text-sm font-medium">
+            <ul className="space-y-4 text-gray-600 text-sm font-medium">
               <li><a href="#" className="hover:text-green-600 transition-colors">Program and Levels</a></li>
               <li><a href="#" className="hover:text-green-600 transition-colors">Requirement</a></li>
               <li><a href="#" className="hover:text-green-600 transition-colors">Benefits</a></li>
@@ -68,7 +68,7 @@ export default function Footer() {
           {/* Column 5: Contact Us */}
           <div className="space-y-6">
             <h3 className="text-lg font-bold">Contact us</h3>
-            <div className="space-y-6 text-gray-500 text-sm font-medium">
+            <div className="space-y-6 text-gray-600 text-sm font-medium">
               <div>
                 <p className="font-bold text-black mb-1">Call :</p>
                 <a href="tel:+64277775586" className="hover:text-green-600 transition-colors flex items-center gap-2">
@@ -98,12 +98,12 @@ export default function Footer() {
         <div className="max-w-7xl mx-auto px-6 md:px-12 lg:px-20 flex flex-col md:flex-row justify-between items-center text-sm">
           <div className="flex space-x-6 mb-4 md:mb-0">
             <a href="#" className="hover:text-green-400 transition-colors">Privacy Policy</a>
-            <span className="text-gray-500">|</span>
+            <span className="text-gray-600">|</span>
             <a href="#" className="hover:text-green-400 transition-colors">Our History</a>
-            <span className="text-gray-500">|</span>
+            <span className="text-gray-600">|</span>
             <a href="#" className="hover:text-green-400 transition-colors">What We Do</a>
           </div>
-          <div className="text-gray-400">
+          <div className="text-gray-500">
             © {currentYear} ePathways. All rights reserved.
           </div>
         </div>

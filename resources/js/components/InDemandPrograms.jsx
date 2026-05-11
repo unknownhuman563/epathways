@@ -98,7 +98,7 @@ export default function InDemandPrograms() {
                 {/* Header */}
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-12 gap-6">
                     <div>
-                        <p className="text-xs font-bold uppercase tracking-widest mb-3 text-gray-400">Programs</p>
+                        <p className="text-xs font-bold uppercase tracking-widest mb-3 text-gray-500">Programs</p>
                         <h2 className="text-4xl md:text-5xl font-medium tracking-tight mb-2">
                             Top In-Demand Programs
                         </h2>
@@ -170,14 +170,14 @@ export default function InDemandPrograms() {
                                 <ul className="space-y-1 mb-4 flex-grow">
                                     {cat.programs.map((prog, i) => (
                                         <li key={i} className="flex items-start gap-1.5 text-xs text-gray-700 leading-relaxed">
-                                            <span className="text-gray-500 mt-0.5">›</span>
+                                            <span className="text-gray-600 mt-0.5">›</span>
                                             <span>{prog}</span>
                                         </li>
                                     ))}
                                 </ul>
 
                                 {/* Intakes */}
-                                <p className="text-[11px] text-gray-500 mb-4">
+                                <p className="text-[11px] text-gray-600 mb-4">
                                     Intakes: <span className="text-gray-700 font-semibold">{cat.intakes.join(", ")}</span>
                                 </p>
 

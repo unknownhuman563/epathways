@@ -49,7 +49,7 @@ export default function SuccessStories() {
 
                 {/* ── Section heading ───────────────────────────────── */}
                 <div className="mb-10">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-gray-400 mb-2">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-gray-500 mb-2">
                         Testimonials
                     </p>
                     <h2 className="text-3xl md:text-4xl font-bold text-[#1a1a1a] leading-tight">
@@ -115,7 +115,7 @@ export default function SuccessStories() {
                                         <p className="text-sm font-bold text-[#1a1a1a] leading-tight">
                                             {story.name}
                                         </p>
-                                        <p className="text-xs text-gray-400 mt-0.5 leading-tight">
+                                        <p className="text-xs text-gray-500 mt-0.5 leading-tight">
                                             {story.role}
                                         </p>
                                     </div>

@@ -571,18 +571,18 @@ export default function FreeAssessment() {
                         <div className="w-12 h-[2px] bg-[#282728]/20 my-8" />
 
                         <div className="flex flex-col md:flex-row md:items-end gap-10">
-                            <p className="text-gray-500 text-sm leading-[1.9] font-light max-w-[400px] tracking-wide">
+                            <p className="text-gray-600 text-sm leading-[1.9] font-light max-w-[400px] tracking-wide">
                                 Your responses help us determine the best study pathway to New Zealand for you.
                             </p>
                             <div className="flex items-center gap-8 md:ml-auto flex-shrink-0">
                                 <div className="text-center">
                                     <div className="text-4xl font-black text-[#282728]">~15</div>
-                                    <div className="text-xs text-gray-400 uppercase tracking-[0.3em] font-bold mt-1">Minutes</div>
+                                    <div className="text-xs text-gray-500 uppercase tracking-[0.3em] font-bold mt-1">Minutes</div>
                                 </div>
                                 <div className="w-[1px] h-10 bg-gray-200" />
                                 <div className="text-center">
                                     <div className="text-4xl font-black text-[#436235]">Free</div>
-                                    <div className="text-xs text-gray-400 uppercase tracking-[0.3em] font-bold mt-1">No Cost</div>
+                                    <div className="text-xs text-gray-500 uppercase tracking-[0.3em] font-bold mt-1">No Cost</div>
                                 </div>
                             </div>
                         </div>
@@ -637,7 +637,7 @@ export default function FreeAssessment() {
                                                 {isCompleted && !isActive ? (
                                                     <CheckCircle size={12} className="text-[#436235]" />
                                                 ) : (
-                                                    <Icon size={11} className={isActive ? 'text-white' : 'text-gray-400'} />
+                                                    <Icon size={11} className={isActive ? 'text-white' : 'text-gray-500'} />
                                                 )}
                                             </div>
                                             <div className="flex flex-col min-w-0">
@@ -645,7 +645,7 @@ export default function FreeAssessment() {
                                                     isActive ? 'text-white/40' : 'text-gray-300'
                                                 }`}>{stepNum}</span>
                                                 <span className={`text-xs font-black uppercase tracking-[0.12em] leading-none truncate ${
-                                                    isActive ? 'text-white' : isCompleted ? 'text-[#436235]' : 'text-gray-400 group-hover:text-[#282728]'
+                                                    isActive ? 'text-white' : isCompleted ? 'text-[#436235]' : 'text-gray-500 group-hover:text-[#282728]'
                                                 }`}>{s.title}</span>
                                             </div>
                                             {isActive && (
@@ -664,7 +664,7 @@ export default function FreeAssessment() {
                         <div className="px-8 pt-8 pb-6 border-b border-gray-50">
                             <div className="flex items-center justify-between mb-4">
                                 <div>
-                                    <p className="text-xs font-black uppercase tracking-[0.4em] text-gray-400 mb-1">Section {stepLabel} of 12</p>
+                                    <p className="text-xs font-black uppercase tracking-[0.4em] text-gray-500 mb-1">Section {stepLabel} of 12</p>
                                     <p className="text-base font-black uppercase tracking-tight text-[#282728]">{steps[step - 1]?.title}</p>
                                 </div>
                                 <div className="flex items-center gap-1.5 flex-wrap justify-end max-w-[160px]">
@@ -730,7 +730,7 @@ export default function FreeAssessment() {
                                         className={`flex items-center gap-2 px-6 py-2.5 text-xs font-bold uppercase tracking-[0.2em] transition-all border ${
                                             step === 1
                                                 ? 'opacity-0 cursor-default border-transparent'
-                                                : 'border-gray-300 text-gray-400 hover:border-[#282728] hover:text-[#282728]'
+                                                : 'border-gray-300 text-gray-500 hover:border-[#282728] hover:text-[#282728]'
                                         }`}
                                     >
                                         <ChevronLeft size={13} /> Back
@@ -780,7 +780,7 @@ export default function FreeAssessment() {
                                 <AlertCircle size={32} />
                             </div>
                             <h3 className="text-xl font-black text-[#282728] uppercase tracking-tighter mb-4">Action Required</h3>
-                            <p className="text-gray-400 text-sm leading-relaxed mb-10 font-medium px-4 whitespace-pre-wrap">{modal.message}</p>
+                            <p className="text-gray-500 text-sm leading-relaxed mb-10 font-medium px-4 whitespace-pre-wrap">{modal.message}</p>
                             <button
                                 type="button"
                                 onClick={() => {
@@ -805,7 +805,7 @@ function StepTerms({ data, setData, errors }) {
     return (
         <div className="space-y-12">
             <h2 className="text-3xl font-black text-[#282728] uppercase tracking-tighter mb-8 leading-tight">Privacy & Terms</h2>
-            <div className="bg-gray-50/50 rounded-3xl p-10 text-base text-gray-400 leading-[2] font-medium h-96 overflow-y-auto border border-gray-100/50">
+            <div className="bg-gray-50/50 rounded-3xl p-10 text-base text-gray-500 leading-[2] font-medium h-96 overflow-y-auto border border-gray-100/50">
                 <p>Welcome to ePathways. By proceeding, you agree to the following terms. This assessment is designed to help us understand your immigration pathway to New Zealand and Australia.</p>
                 <p>The information you provide will be used solely for the purpose of this assessment. Eligibility criteria and pathways are subject to change in accordance with government regulations.</p>
                 <p>We are committed to protecting your privacy. All data submitted is encrypted and handled with the highest level of security. Please ensure that all information provided is accurate and complete to receive the most reliable evaluation.</p>
@@ -860,7 +860,7 @@ function StepPersonal({ data, setData, errors }) {
                                     key={opt}
                                     type="button"
                                     onClick={() => setData('has_other_names', opt)}
-                                    className={`px-6 py-3 rounded-lg text-xs font-bold uppercase tracking-widest border transition-all ${data.has_other_names === opt ? 'bg-[#282728] text-white border-[#282728]' : 'bg-white text-gray-400 border-gray-200'}`}
+                                    className={`px-6 py-3 rounded-lg text-xs font-bold uppercase tracking-widest border transition-all ${data.has_other_names === opt ? 'bg-[#282728] text-white border-[#282728]' : 'bg-white text-gray-500 border-gray-200'}`}
                                 >
                                     {opt}
                                 </button>
@@ -984,7 +984,7 @@ function StepPersonal({ data, setData, errors }) {
                         <Field label="Do you have a valid passport?">
                            <div className="flex gap-4 mt-2">
                                {['Yes', 'No'].map(o => (
-                                   <button key={o} type="button" onClick={() => setData('has_passport', o)} className={`px-6 py-2 rounded-lg text-xs font-bold border ${data.has_passport === o ? 'bg-[#282728] text-white' : 'bg-white text-gray-400'}`}>{o}</button>
+                                   <button key={o} type="button" onClick={() => setData('has_passport', o)} className={`px-6 py-2 rounded-lg text-xs font-bold border ${data.has_passport === o ? 'bg-[#282728] text-white' : 'bg-white text-gray-500'}`}>{o}</button>
                                ))}
                            </div>
                         </Field>
@@ -1001,8 +1001,8 @@ function StepPersonal({ data, setData, errors }) {
                                         <div className="mt-2 flex items-center justify-center w-full">
                                             <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-gray-200 rounded-2xl cursor-pointer hover:bg-gray-50 transition-colors">
                                                 <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                                                    <Upload className="w-8 h-8 text-gray-400 mb-2" />
-                                                    <p className="text-xs text-gray-500 font-bold uppercase tracking-[0.2em]">{data.passport_pdf ? data.passport_pdf.name : 'Select or drop PDF'}</p>
+                                                    <Upload className="w-8 h-8 text-gray-500 mb-2" />
+                                                    <p className="text-xs text-gray-600 font-bold uppercase tracking-[0.2em]">{data.passport_pdf ? data.passport_pdf.name : 'Select or drop PDF'}</p>
                                                 </div>
                                                 <input type="file" className="hidden" accept=".pdf" onChange={e => setData('passport_pdf', e.target.files[0])} />
                                             </label>
@@ -1049,7 +1049,7 @@ function StepStudyPlans({ data, setData, errors }) {
                     <Field label="Have you taken an English test?">
                         <div className="flex gap-4 mt-2">
                              {['Yes', 'No'].map(o => (
-                                 <button key={o} type="button" onClick={() => updateNested('has_english_test', o)} className={`px-6 py-2 rounded-lg text-xs font-bold border ${data.study_plans.has_english_test === o ? 'bg-[#282728] text-white' : 'bg-white text-gray-400'}`}>{o}</button>
+                                 <button key={o} type="button" onClick={() => updateNested('has_english_test', o)} className={`px-6 py-2 rounded-lg text-xs font-bold border ${data.study_plans.has_english_test === o ? 'bg-[#282728] text-white' : 'bg-white text-gray-500'}`}>{o}</button>
                              ))}
                         </div>
                     </Field>
@@ -1128,7 +1128,7 @@ function StepEducation({ data, setData, errors }) {
                 <Field label="Have you completed high school?">
                     <div className="flex gap-4 mt-2">
                         {['Yes', 'No'].map(o => (
-                            <button key={o} type="button" onClick={() => setData('high_school_completed', o)} className={`px-6 py-2 rounded-lg text-xs font-bold border ${data.high_school_completed === o ? 'bg-[#282728] text-white' : 'bg-white text-gray-400'}`}>{o}</button>
+                            <button key={o} type="button" onClick={() => setData('high_school_completed', o)} className={`px-6 py-2 rounded-lg text-xs font-bold border ${data.high_school_completed === o ? 'bg-[#282728] text-white' : 'bg-white text-gray-500'}`}>{o}</button>
                         ))}
                     </div>
                 </Field>
@@ -1177,24 +1177,24 @@ function StepEducation({ data, setData, errors }) {
                 <h3 className="text-sm font-bold uppercase tracking-widest text-[#436235]">Available Documents</h3>
                 
                 <div>
-                    <h4 className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-3">Certificates</h4>
+                    <h4 className="text-xs font-bold uppercase tracking-widest text-gray-500 mb-3">Certificates</h4>
                     <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
                         {eduDocs.map(doc => (
                             <label key={doc} className="flex items-center gap-3 p-4 bg-white border border-[#282728] rounded-xl cursor-pointer hover:border-[#436235] transition-colors">
                                 <input type="checkbox" className="w-4 h-4 rounded text-[#436235]" checked={(data.education_docs || []).includes(doc)} onChange={() => toggleEduDoc(doc)} />
-                                <span className="text-xs font-bold uppercase tracking-tight text-gray-500">{doc}</span>
+                                <span className="text-xs font-bold uppercase tracking-tight text-gray-600">{doc}</span>
                             </label>
                         ))}
                     </div>
                 </div>
 
                 <div className="pt-2">
-                    <h4 className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-3">Transcripts</h4>
+                    <h4 className="text-xs font-bold uppercase tracking-widest text-gray-500 mb-3">Transcripts</h4>
                     <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
                         {transcriptDocs.map(doc => (
                             <label key={doc} className="flex items-center gap-3 p-4 bg-white border border-[#282728] rounded-xl cursor-pointer hover:border-[#436235] transition-colors">
                                 <input type="checkbox" className="w-4 h-4 rounded text-[#436235]" checked={(data.education_docs || []).includes(doc)} onChange={() => toggleEduDoc(doc)} />
-                                <span className="text-xs font-bold uppercase tracking-tight text-gray-500">{doc}</span>
+                                <span className="text-xs font-bold uppercase tracking-tight text-gray-600">{doc}</span>
                             </label>
                         ))}
                     </div>
@@ -1206,7 +1206,7 @@ function StepEducation({ data, setData, errors }) {
                 <Field label="Has there been a gap in your study?">
                     <div className="flex gap-4 mt-2">
                         {['Yes', 'No'].map(o => (
-                            <button key={o} type="button" onClick={() => setData('has_gap', o)} className={`px-8 py-3 rounded-xl text-xs font-bold uppercase tracking-widest border ${data.has_gap === o ? 'bg-[#282728] text-white' : 'bg-white text-gray-400'}`}>{o}</button>
+                            <button key={o} type="button" onClick={() => setData('has_gap', o)} className={`px-8 py-3 rounded-xl text-xs font-bold uppercase tracking-widest border ${data.has_gap === o ? 'bg-[#282728] text-white' : 'bg-white text-gray-500'}`}>{o}</button>
                         ))}
                     </div>
                 </Field>
@@ -1222,7 +1222,7 @@ function StepEducation({ data, setData, errors }) {
                                         key={activity}
                                         type="button"
                                         onClick={() => toggleGapActivity(activity)}
-                                        className={`px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-widest border transition-all text-center ${(data.gap_activities || []).includes(activity) ? 'bg-[#436235] text-white border-[#436235]' : 'bg-white text-gray-400 border-gray-100 hover:border-[#436235]'}`}
+                                        className={`px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-widest border transition-all text-center ${(data.gap_activities || []).includes(activity) ? 'bg-[#436235] text-white border-[#436235]' : 'bg-white text-gray-500 border-gray-100 hover:border-[#436235]'}`}
                                     >
                                         {activity}
                                     </button>
@@ -1268,7 +1268,7 @@ function ExpandableEducationCard({ edu, index, updateEduLevel, errors }) {
                     />
                     <span className="text-sm font-black uppercase tracking-[0.15em] text-[#282728]">{edu.level}</span>
                 </div>
-                {edu.completed ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
+                {edu.completed ? <ChevronUp size={16} className="text-gray-500" /> : <ChevronDown size={16} className="text-gray-500" />}
             </div>
             {edu.completed && expanded && (
                 <div className="px-6 pb-6 pt-2 border-t border-gray-50">
@@ -1321,7 +1321,7 @@ function StepWork({ data, setData, errors }) {
                 <div className="p-8 rounded-[2rem] border-2 border-dashed border-gray-100 bg-gray-50/20 text-center">
                     <Briefcase className="w-10 h-10 text-gray-300 mx-auto mb-4" />
                     <h4 className="text-sm font-bold text-[#282728] uppercase tracking-widest mb-2">Detailed Work History</h4>
-                    <p className="text-xs text-gray-400 font-bold uppercase tracking-widest mx-auto max-w-[240px]">This section will be used to assess your job relevance to your chosen study pathway.</p>
+                    <p className="text-xs text-gray-500 font-bold uppercase tracking-widest mx-auto max-w-[240px]">This section will be used to assess your job relevance to your chosen study pathway.</p>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -1336,8 +1336,8 @@ function StepWork({ data, setData, errors }) {
                     </Field>
                     <Field label="Still working here?">
                         <div className="flex gap-4 mt-2">
-                             <button type="button" onClick={() => updateWork('is_current', 'Yes')} className={`px-6 py-2 rounded-lg text-xs font-bold border ${data.work_experience[0].is_current === 'Yes' ? 'bg-[#282728] text-white' : 'bg-white text-gray-400 border-gray-100'}`}>Yes</button>
-                             <button type="button" onClick={() => updateWork('is_current', 'No')} className={`px-6 py-2 rounded-lg text-xs font-bold border ${data.work_experience[0].is_current === 'No' ? 'bg-[#282728] text-white' : 'bg-white text-gray-400 border-gray-100'}`}>No</button>
+                             <button type="button" onClick={() => updateWork('is_current', 'Yes')} className={`px-6 py-2 rounded-lg text-xs font-bold border ${data.work_experience[0].is_current === 'Yes' ? 'bg-[#282728] text-white' : 'bg-white text-gray-500 border-gray-100'}`}>Yes</button>
+                             <button type="button" onClick={() => updateWork('is_current', 'No')} className={`px-6 py-2 rounded-lg text-xs font-bold border ${data.work_experience[0].is_current === 'No' ? 'bg-[#282728] text-white' : 'bg-white text-gray-500 border-gray-100'}`}>No</button>
                         </div>
                     </Field>
                     {data.work_experience[0].is_current === 'No' && (
@@ -1355,7 +1355,7 @@ function StepWork({ data, setData, errors }) {
                         <Field label="Can you provide supporting documents?">
                             <div className="flex gap-4 mt-2">
                                 {['Yes', 'No'].map(o => (
-                                    <button key={o} type="button" onClick={() => updateWork('has_supporting_docs', o)} className={`px-6 py-2 rounded-lg text-xs font-bold border ${data.work_experience[0].has_supporting_docs === o ? 'bg-[#282728] text-white' : 'bg-white text-gray-400'}`}>{o}</button>
+                                    <button key={o} type="button" onClick={() => updateWork('has_supporting_docs', o)} className={`px-6 py-2 rounded-lg text-xs font-bold border ${data.work_experience[0].has_supporting_docs === o ? 'bg-[#282728] text-white' : 'bg-white text-gray-500'}`}>{o}</button>
                                 ))}
                             </div>
                         </Field>
@@ -1364,7 +1364,7 @@ function StepWork({ data, setData, errors }) {
                             <Field label="Work environment">
                                 <div className="flex gap-4 mt-2">
                                     {['Private / Government Employee', 'Business Owner / Self-Employed'].map(o => (
-                                        <button key={o} type="button" onClick={() => updateWork('work_environment', o)} className={`px-6 py-2 rounded-lg text-xs font-bold border ${data.work_experience[0].work_environment === o ? 'bg-[#282728] text-white' : 'bg-white text-gray-400'}`}>{o}</button>
+                                        <button key={o} type="button" onClick={() => updateWork('work_environment', o)} className={`px-6 py-2 rounded-lg text-xs font-bold border ${data.work_experience[0].work_environment === o ? 'bg-[#282728] text-white' : 'bg-white text-gray-500'}`}>{o}</button>
                                     ))}
                                 </div>
                             </Field>
@@ -1376,7 +1376,7 @@ function StepWork({ data, setData, errors }) {
                                     {(data.work_experience[0].work_environment === 'Private / Government Employee' ? selfEmployedDocs : businessDocs).map(doc => (
                                         <label key={doc} className="flex items-center gap-3 p-4 bg-white border border-[#282728] rounded-xl cursor-pointer hover:border-[#436235] transition-colors">
                                             <input type="checkbox" className="w-4 h-4 rounded text-[#436235]" checked={(data.work_experience[0].supporting_docs || []).includes(doc)} onChange={() => toggleWorkDoc(doc)} />
-                                            <span className="text-xs font-bold uppercase tracking-tight text-gray-500">{doc}</span>
+                                            <span className="text-xs font-bold uppercase tracking-tight text-gray-600">{doc}</span>
                                         </label>
                                     ))}
                                 </div>
@@ -1406,14 +1406,14 @@ function StepFinancial({ data, setData, errors }) {
                 <Field label="Do you have enough funds to cover the tuition/school fee?">
                     <div className="flex gap-4 mt-2">
                         {['Yes', 'No'].map(o => (
-                            <button key={o} type="button" onClick={() => updateFinancial('can_cover_tuition', o)} className={`px-6 py-2 rounded-lg text-xs font-bold border ${data.financial_info.can_cover_tuition === o ? 'bg-[#282728] text-white' : 'bg-white text-gray-400'}`}>{o}</button>
+                            <button key={o} type="button" onClick={() => updateFinancial('can_cover_tuition', o)} className={`px-6 py-2 rounded-lg text-xs font-bold border ${data.financial_info.can_cover_tuition === o ? 'bg-[#282728] text-white' : 'bg-white text-gray-500'}`}>{o}</button>
                         ))}
                     </div>
                 </Field>
 
-                <div className="bg-gray-50/50 rounded-3xl p-8 border border-gray-100 text-sm text-gray-500 leading-relaxed">
+                <div className="bg-gray-50/50 rounded-3xl p-8 border border-gray-100 text-sm text-gray-600 leading-relaxed">
                     <h4 className="text-sm font-black uppercase tracking-[0.3em] text-[#436235] mb-4">Estimated Tuition Ranges (per year)</h4>
-                    <ul className="space-y-2 text-base text-gray-400 font-medium">
+                    <ul className="space-y-2 text-base text-gray-500 font-medium">
                         <li>Diploma (Level 5-6): NZ$18,000 - NZ$26,000</li>
                         <li>Bachelor Degree (Level 7): NZ$22,000 - NZ$32,000</li>
                         <li>Postgraduate Diploma (Level 8): NZ$25,000 - NZ$35,000</li>
@@ -1425,7 +1425,7 @@ function StepFinancial({ data, setData, errors }) {
                 <Field label="Do you have NZ$20,000 to cover living expenses for a year?">
                     <div className="flex gap-4 mt-2">
                         {['Yes', 'No'].map(o => (
-                            <button key={o} type="button" onClick={() => updateFinancial('can_cover_living', o)} className={`px-6 py-2 rounded-lg text-xs font-bold border ${data.financial_info.can_cover_living === o ? 'bg-[#282728] text-white' : 'bg-white text-gray-400'}`}>{o}</button>
+                            <button key={o} type="button" onClick={() => updateFinancial('can_cover_living', o)} className={`px-6 py-2 rounded-lg text-xs font-bold border ${data.financial_info.can_cover_living === o ? 'bg-[#282728] text-white' : 'bg-white text-gray-500'}`}>{o}</button>
                         ))}
                     </div>
                 </Field>
@@ -1437,7 +1437,7 @@ function StepFinancial({ data, setData, errors }) {
                                 key={s}
                                 type="button"
                                 onClick={() => toggleSource(s)}
-                                className={`px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-widest border transition-all text-center ${data.financial_info.funding_source.includes(s) ? 'bg-[#436235] text-white border-[#436235]' : 'bg-white text-gray-400 border-gray-100 hover:border-[#436235]'}`}
+                                className={`px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-widest border transition-all text-center ${data.financial_info.funding_source.includes(s) ? 'bg-[#436235] text-white border-[#436235]' : 'bg-white text-gray-500 border-gray-100 hover:border-[#436235]'}`}
                             >
                                 {s}
                             </button>
@@ -1459,7 +1459,7 @@ function StepFinancial({ data, setData, errors }) {
                     <Field label="Do you have financial sponsors?">
                          <div className="flex gap-4 mt-2">
                              {['Yes', 'No'].map(o => (
-                                 <button key={o} type="button" onClick={() => updateFinancial('has_sponsors', o)} className={`px-8 py-3 rounded-xl text-xs font-bold uppercase tracking-widest border ${data.financial_info.has_sponsors === o ? 'bg-[#282728] text-white' : 'bg-white text-gray-400'}`}>{o}</button>
+                                 <button key={o} type="button" onClick={() => updateFinancial('has_sponsors', o)} className={`px-8 py-3 rounded-xl text-xs font-bold uppercase tracking-widest border ${data.financial_info.has_sponsors === o ? 'bg-[#282728] text-white' : 'bg-white text-gray-500'}`}>{o}</button>
                              ))}
                          </div>
                     </Field>
@@ -1470,9 +1470,9 @@ function StepFinancial({ data, setData, errors }) {
                     )}
                 </div>
 
-                <div className="bg-gray-50/50 rounded-3xl p-8 border border-gray-100 text-sm text-gray-500 leading-relaxed">
+                <div className="bg-gray-50/50 rounded-3xl p-8 border border-gray-100 text-sm text-gray-600 leading-relaxed">
                     <h4 className="text-sm font-black uppercase tracking-[0.3em] text-[#436235] mb-4">Additional Costs to Consider</h4>
-                    <ul className="space-y-2 text-base text-gray-400 font-medium">
+                    <ul className="space-y-2 text-base text-gray-500 font-medium">
                         <li>Travel & Medical Insurance: NZ$1,000 - NZ$1,600 per year</li>
                         <li>Visa Application Fee (INZ): NZ$850</li>
                         <li>Visa Application Fee (Professional/Agent): NZ$1,500</li>
@@ -1511,7 +1511,7 @@ function StepSourceOfFunds({ data, setData, errors }) {
                                 key={s}
                                 type="button"
                                 onClick={() => toggleArrayItem('sources', s)}
-                                className={`px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-widest border transition-all text-center ${(data.source_of_funds_info.sources || []).includes(s) ? 'bg-[#436235] text-white border-[#436235]' : 'bg-white text-gray-400 border-gray-100 hover:border-[#436235]'}`}
+                                className={`px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-widest border transition-all text-center ${(data.source_of_funds_info.sources || []).includes(s) ? 'bg-[#436235] text-white border-[#436235]' : 'bg-white text-gray-500 border-gray-100 hover:border-[#436235]'}`}
                             >
                                 {s}
                             </button>
@@ -1522,7 +1522,7 @@ function StepSourceOfFunds({ data, setData, errors }) {
                 <Field label="Will you fund your studies yourself?">
                     <div className="flex gap-4 mt-2">
                         {['Yes', 'No'].map(o => (
-                            <button key={o} type="button" onClick={() => update('will_self_fund', o)} className={`px-6 py-2 rounded-lg text-xs font-bold border ${data.source_of_funds_info.will_self_fund === o ? 'bg-[#282728] text-white' : 'bg-white text-gray-400'}`}>{o}</button>
+                            <button key={o} type="button" onClick={() => update('will_self_fund', o)} className={`px-6 py-2 rounded-lg text-xs font-bold border ${data.source_of_funds_info.will_self_fund === o ? 'bg-[#282728] text-white' : 'bg-white text-gray-500'}`}>{o}</button>
                         ))}
                     </div>
                 </Field>
@@ -1533,7 +1533,7 @@ function StepSourceOfFunds({ data, setData, errors }) {
                         {studentDocs.map(doc => (
                             <label key={doc} className="flex items-center gap-3 p-4 bg-white border border-[#282728] rounded-xl cursor-pointer hover:border-[#436235] transition-colors">
                                 <input type="checkbox" className="w-4 h-4 rounded text-[#436235]" checked={(data.source_of_funds_info.student_financial_docs || []).includes(doc)} onChange={() => toggleArrayItem('student_financial_docs', doc)} />
-                                <span className="text-xs font-bold uppercase tracking-tight text-gray-500">{doc}</span>
+                                <span className="text-xs font-bold uppercase tracking-tight text-gray-600">{doc}</span>
                             </label>
                         ))}
                     </div>
@@ -1543,7 +1543,7 @@ function StepSourceOfFunds({ data, setData, errors }) {
                     <Field label="Will you be using someone to sponsor your studies?">
                         <div className="flex gap-4 mt-2">
                             {['Yes', 'No'].map(o => (
-                                <button key={o} type="button" onClick={() => update('will_use_sponsor', o)} className={`px-6 py-2 rounded-lg text-xs font-bold border ${data.source_of_funds_info.will_use_sponsor === o ? 'bg-[#282728] text-white' : 'bg-white text-gray-400'}`}>{o}</button>
+                                <button key={o} type="button" onClick={() => update('will_use_sponsor', o)} className={`px-6 py-2 rounded-lg text-xs font-bold border ${data.source_of_funds_info.will_use_sponsor === o ? 'bg-[#282728] text-white' : 'bg-white text-gray-500'}`}>{o}</button>
                             ))}
                         </div>
                     </Field>
@@ -1563,14 +1563,14 @@ function StepSourceOfFunds({ data, setData, errors }) {
                                 <Field label="Is the sponsor NZ based?">
                                     <div className="flex gap-4 mt-2">
                                         {['Yes', 'No'].map(o => (
-                                            <button key={o} type="button" onClick={() => update('sponsor_nz_based', o)} className={`px-6 py-2 rounded-lg text-xs font-bold border ${data.source_of_funds_info.sponsor_nz_based === o ? 'bg-[#282728] text-white' : 'bg-white text-gray-400'}`}>{o}</button>
+                                            <button key={o} type="button" onClick={() => update('sponsor_nz_based', o)} className={`px-6 py-2 rounded-lg text-xs font-bold border ${data.source_of_funds_info.sponsor_nz_based === o ? 'bg-[#282728] text-white' : 'bg-white text-gray-500'}`}>{o}</button>
                                         ))}
                                     </div>
                                 </Field>
                                 <Field label="Is the sponsor an NZ resident/citizen?">
                                     <div className="flex gap-4 mt-2">
                                         {['Yes', 'No'].map(o => (
-                                            <button key={o} type="button" onClick={() => update('sponsor_nz_resident', o)} className={`px-6 py-2 rounded-lg text-xs font-bold border ${data.source_of_funds_info.sponsor_nz_resident === o ? 'bg-[#282728] text-white' : 'bg-white text-gray-400'}`}>{o}</button>
+                                            <button key={o} type="button" onClick={() => update('sponsor_nz_resident', o)} className={`px-6 py-2 rounded-lg text-xs font-bold border ${data.source_of_funds_info.sponsor_nz_resident === o ? 'bg-[#282728] text-white' : 'bg-white text-gray-500'}`}>{o}</button>
                                         ))}
                                     </div>
                                 </Field>
@@ -1595,7 +1595,7 @@ function StepSourceOfFunds({ data, setData, errors }) {
                                             key={s}
                                             type="button"
                                             onClick={() => toggleArrayItem('sponsor_source_of_funds', s)}
-                                            className={`px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-widest border transition-all text-center ${(data.source_of_funds_info.sponsor_source_of_funds || []).includes(s) ? 'bg-[#436235] text-white border-[#436235]' : 'bg-white text-gray-400 border-gray-100 hover:border-[#436235]'}`}
+                                            className={`px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-widest border transition-all text-center ${(data.source_of_funds_info.sponsor_source_of_funds || []).includes(s) ? 'bg-[#436235] text-white border-[#436235]' : 'bg-white text-gray-500 border-gray-100 hover:border-[#436235]'}`}
                                         >
                                             {s}
                                         </button>
@@ -1609,7 +1609,7 @@ function StepSourceOfFunds({ data, setData, errors }) {
                                     {sponsorFinDocs.map(doc => (
                                         <label key={doc} className="flex items-center gap-3 p-4 bg-white border border-[#282728] rounded-xl cursor-pointer hover:border-[#436235] transition-colors">
                                             <input type="checkbox" className="w-4 h-4 rounded text-[#436235]" checked={(data.source_of_funds_info.sponsor_financial_docs || []).includes(doc)} onChange={() => toggleArrayItem('sponsor_financial_docs', doc)} />
-                                            <span className="text-xs font-bold uppercase tracking-tight text-gray-500">{doc}</span>
+                                            <span className="text-xs font-bold uppercase tracking-tight text-gray-600">{doc}</span>
                                         </label>
                                     ))}
                                 </div>
@@ -1621,7 +1621,7 @@ function StepSourceOfFunds({ data, setData, errors }) {
                                     {sponsorIdDocs.map(doc => (
                                         <label key={doc} className="flex items-center gap-3 p-4 bg-white border border-[#282728] rounded-xl cursor-pointer hover:border-[#436235] transition-colors">
                                             <input type="checkbox" className="w-4 h-4 rounded text-[#436235]" checked={(data.source_of_funds_info.sponsor_identity_docs || []).includes(doc)} onChange={() => toggleArrayItem('sponsor_identity_docs', doc)} />
-                                            <span className="text-xs font-bold uppercase tracking-tight text-gray-500">{doc}</span>
+                                            <span className="text-xs font-bold uppercase tracking-tight text-gray-600">{doc}</span>
                                         </label>
                                     ))}
                                 </div>
@@ -1645,7 +1645,7 @@ function StepImmigration({ data, setData, errors }) {
                 <Field label="Have you previously travelled overseas?">
                     <div className="flex gap-4 mt-2">
                         {['Yes', 'No'].map(o => (
-                            <button key={o} type="button" onClick={() => update('has_travelled_overseas', o)} className={`px-6 py-2 rounded-lg text-xs font-bold border ${data.immigration_info.has_travelled_overseas === o ? 'bg-[#282728] text-white' : 'bg-white text-gray-400'}`}>{o}</button>
+                            <button key={o} type="button" onClick={() => update('has_travelled_overseas', o)} className={`px-6 py-2 rounded-lg text-xs font-bold border ${data.immigration_info.has_travelled_overseas === o ? 'bg-[#282728] text-white' : 'bg-white text-gray-500'}`}>{o}</button>
                         ))}
                     </div>
                 </Field>
@@ -1659,7 +1659,7 @@ function StepImmigration({ data, setData, errors }) {
                     <Field label="Have you ever applied for a visa to New Zealand?">
                         <div className="flex gap-4 mt-2">
                             {['Yes', 'No'].map(o => (
-                                <button key={o} type="button" onClick={() => update('has_applied_nz_visa', o)} className={`px-6 py-2 rounded-lg text-xs font-bold border ${data.immigration_info.has_applied_nz_visa === o ? 'bg-[#282728] text-white' : 'bg-white text-gray-400'}`}>{o}</button>
+                                <button key={o} type="button" onClick={() => update('has_applied_nz_visa', o)} className={`px-6 py-2 rounded-lg text-xs font-bold border ${data.immigration_info.has_applied_nz_visa === o ? 'bg-[#282728] text-white' : 'bg-white text-gray-500'}`}>{o}</button>
                             ))}
                         </div>
                     </Field>
@@ -1676,7 +1676,7 @@ function StepImmigration({ data, setData, errors }) {
                     <Field label="Will your total time in New Zealand equal 24 months or more?">
                         <div className="flex gap-4 mt-2">
                             {['Yes', 'No'].map(o => (
-                                <button key={o} type="button" onClick={() => update('total_nz_time_24_months', o)} className={`px-6 py-2 rounded-lg text-xs font-bold border ${data.immigration_info.total_nz_time_24_months === o ? 'bg-[#282728] text-white' : 'bg-white text-gray-400'}`}>{o}</button>
+                                <button key={o} type="button" onClick={() => update('total_nz_time_24_months', o)} className={`px-6 py-2 rounded-lg text-xs font-bold border ${data.immigration_info.total_nz_time_24_months === o ? 'bg-[#282728] text-white' : 'bg-white text-gray-500'}`}>{o}</button>
                             ))}
                         </div>
                     </Field>
@@ -1686,7 +1686,7 @@ function StepImmigration({ data, setData, errors }) {
                     <Field label="Have you ever applied for a visa to another country?">
                         <div className="flex gap-4 mt-2">
                             {['Yes', 'No'].map(o => (
-                                <button key={o} type="button" onClick={() => update('has_applied_other_visa', o)} className={`px-6 py-2 rounded-lg text-xs font-bold border ${data.immigration_info.has_applied_other_visa === o ? 'bg-[#282728] text-white' : 'bg-white text-gray-400'}`}>{o}</button>
+                                <button key={o} type="button" onClick={() => update('has_applied_other_visa', o)} className={`px-6 py-2 rounded-lg text-xs font-bold border ${data.immigration_info.has_applied_other_visa === o ? 'bg-[#282728] text-white' : 'bg-white text-gray-500'}`}>{o}</button>
                             ))}
                         </div>
                     </Field>
@@ -1703,7 +1703,7 @@ function StepImmigration({ data, setData, errors }) {
                     <Field label="Have you ever had a visa refusal?">
                         <div className="flex gap-4 mt-2">
                             {['Yes', 'No'].map(o => (
-                                <button key={o} type="button" onClick={() => update('has_visa_refusal', o)} className={`px-6 py-2 rounded-lg text-xs font-bold border ${data.immigration_info.has_visa_refusal === o ? 'bg-[#282728] text-white' : 'bg-white text-gray-400'}`}>{o}</button>
+                                <button key={o} type="button" onClick={() => update('has_visa_refusal', o)} className={`px-6 py-2 rounded-lg text-xs font-bold border ${data.immigration_info.has_visa_refusal === o ? 'bg-[#282728] text-white' : 'bg-white text-gray-500'}`}>{o}</button>
                             ))}
                         </div>
                     </Field>
@@ -1756,7 +1756,7 @@ function StepCharacterHealth({ data, setData, errors }) {
                     <Field key={q.key} label={q.label}>
                         <div className="flex gap-4 mt-2">
                             {['Yes', 'No'].map(o => (
-                                <button key={o} type="button" onClick={() => updateCharacter(q.key, o)} className={`px-6 py-2 rounded-lg text-xs font-bold border ${data.character_info[q.key] === o ? 'bg-[#282728] text-white' : 'bg-white text-gray-400'}`}>{o}</button>
+                                <button key={o} type="button" onClick={() => updateCharacter(q.key, o)} className={`px-6 py-2 rounded-lg text-xs font-bold border ${data.character_info[q.key] === o ? 'bg-[#282728] text-white' : 'bg-white text-gray-500'}`}>{o}</button>
                             ))}
                         </div>
                     </Field>
@@ -1769,7 +1769,7 @@ function StepCharacterHealth({ data, setData, errors }) {
                     <Field key={q.key} label={q.label}>
                         <div className="flex gap-4 mt-2">
                             {['Yes', 'No'].map(o => (
-                                <button key={o} type="button" onClick={() => updateHealth(q.key, o)} className={`px-6 py-2 rounded-lg text-xs font-bold border ${data.health_info[q.key] === o ? 'bg-[#282728] text-white' : 'bg-white text-gray-400'}`}>{o}</button>
+                                <button key={o} type="button" onClick={() => updateHealth(q.key, o)} className={`px-6 py-2 rounded-lg text-xs font-bold border ${data.health_info[q.key] === o ? 'bg-[#282728] text-white' : 'bg-white text-gray-500'}`}>{o}</button>
                             ))}
                         </div>
                     </Field>
@@ -1792,8 +1792,8 @@ function StepFamily({ data, setData, errors }) {
         <div className="space-y-12">
             <h2 className="text-3xl font-black text-[#282728] uppercase tracking-tighter mb-10">Family Information</h2>
 
-            <div className="bg-gray-50/50 rounded-3xl p-8 border border-gray-100 text-sm text-gray-500 leading-relaxed">
-                <p className="text-base text-gray-400 font-medium">No need to include deceased family members. Please provide information for living family members only.</p>
+            <div className="bg-gray-50/50 rounded-3xl p-8 border border-gray-100 text-sm text-gray-600 leading-relaxed">
+                <p className="text-base text-gray-500 font-medium">No need to include deceased family members. Please provide information for living family members only.</p>
             </div>
 
             <div className="space-y-4">
@@ -1821,7 +1821,7 @@ function FamilyMemberCard({ member, index, updateMember, partnershipStatuses }) 
                 onClick={() => setExpanded(!expanded)}
             >
                 <span className="text-sm font-black uppercase tracking-[0.15em] text-[#282728]">{member.relation}</span>
-                {expanded ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
+                {expanded ? <ChevronUp size={16} className="text-gray-500" /> : <ChevronDown size={16} className="text-gray-500" />}
             </div>
             {expanded && (
                 <div className="px-6 pb-6 pt-2 border-t border-gray-50">
@@ -1872,7 +1872,7 @@ function StepAdditional({ data, setData, errors }) {
                 <Field label="Do you have any contacts in New Zealand?">
                     <div className="flex gap-4 mt-2">
                         {['Yes', 'No'].map(o => (
-                            <button key={o} type="button" onClick={() => updateNzContacts('has_nz_contacts', o)} className={`px-6 py-2 rounded-lg text-xs font-bold border ${data.nz_contacts_info.has_nz_contacts === o ? 'bg-[#282728] text-white' : 'bg-white text-gray-400'}`}>{o}</button>
+                            <button key={o} type="button" onClick={() => updateNzContacts('has_nz_contacts', o)} className={`px-6 py-2 rounded-lg text-xs font-bold border ${data.nz_contacts_info.has_nz_contacts === o ? 'bg-[#282728] text-white' : 'bg-white text-gray-500'}`}>{o}</button>
                         ))}
                     </div>
                 </Field>
@@ -1910,14 +1910,14 @@ function StepAdditional({ data, setData, errors }) {
                 <Field label="Has military service been compulsory in your home country?">
                     <div className="flex gap-4 mt-2">
                         {['Yes', 'No'].map(o => (
-                            <button key={o} type="button" onClick={() => updateMilitary('military_compulsory', o)} className={`px-6 py-2 rounded-lg text-xs font-bold border ${data.military_info.military_compulsory === o ? 'bg-[#282728] text-white' : 'bg-white text-gray-400'}`}>{o}</button>
+                            <button key={o} type="button" onClick={() => updateMilitary('military_compulsory', o)} className={`px-6 py-2 rounded-lg text-xs font-bold border ${data.military_info.military_compulsory === o ? 'bg-[#282728] text-white' : 'bg-white text-gray-500'}`}>{o}</button>
                         ))}
                     </div>
                 </Field>
                 <Field label="Have you ever undertaken military service?">
                     <div className="flex gap-4 mt-2">
                         {['Yes', 'No'].map(o => (
-                            <button key={o} type="button" onClick={() => updateMilitary('has_military_service', o)} className={`px-6 py-2 rounded-lg text-xs font-bold border ${data.military_info.has_military_service === o ? 'bg-[#282728] text-white' : 'bg-white text-gray-400'}`}>{o}</button>
+                            <button key={o} type="button" onClick={() => updateMilitary('has_military_service', o)} className={`px-6 py-2 rounded-lg text-xs font-bold border ${data.military_info.has_military_service === o ? 'bg-[#282728] text-white' : 'bg-white text-gray-500'}`}>{o}</button>
                         ))}
                     </div>
                 </Field>
@@ -1929,7 +1929,7 @@ function StepAdditional({ data, setData, errors }) {
                 <Field label="Does your family own property?">
                     <div className="flex gap-4 mt-2">
                         {['Yes', 'No'].map(o => (
-                            <button key={o} type="button" onClick={() => updateHomeTies('family_owns_property', o)} className={`px-6 py-2 rounded-lg text-xs font-bold border ${data.home_ties_info.family_owns_property === o ? 'bg-[#282728] text-white' : 'bg-white text-gray-400'}`}>{o}</button>
+                            <button key={o} type="button" onClick={() => updateHomeTies('family_owns_property', o)} className={`px-6 py-2 rounded-lg text-xs font-bold border ${data.home_ties_info.family_owns_property === o ? 'bg-[#282728] text-white' : 'bg-white text-gray-500'}`}>{o}</button>
                         ))}
                     </div>
                 </Field>
@@ -1963,7 +1963,7 @@ function StepAdditional({ data, setData, errors }) {
                 <Field label="Does your family own a business?">
                     <div className="flex gap-4 mt-2">
                         {['Yes', 'No'].map(o => (
-                            <button key={o} type="button" onClick={() => updateHomeTies('family_owns_business', o)} className={`px-6 py-2 rounded-lg text-xs font-bold border ${data.home_ties_info.family_owns_business === o ? 'bg-[#282728] text-white' : 'bg-white text-gray-400'}`}>{o}</button>
+                            <button key={o} type="button" onClick={() => updateHomeTies('family_owns_business', o)} className={`px-6 py-2 rounded-lg text-xs font-bold border ${data.home_ties_info.family_owns_business === o ? 'bg-[#282728] text-white' : 'bg-white text-gray-500'}`}>{o}</button>
                         ))}
                     </div>
                 </Field>
@@ -1986,7 +1986,7 @@ function StepDeclaration({ data, setData, errors }) {
     return (
         <div className="space-y-12">
             <h2 className="text-3xl font-black text-[#282728] uppercase tracking-tighter mb-8 leading-tight">Declaration</h2>
-            <div className="bg-gray-50/50 rounded-3xl p-10 text-base text-gray-400 leading-[2] font-medium h-96 overflow-y-auto border border-gray-100/50">
+            <div className="bg-gray-50/50 rounded-3xl p-10 text-base text-gray-500 leading-[2] font-medium h-96 overflow-y-auto border border-gray-100/50">
                 <p className="mb-4">I declare that the above information I provide is true, correct and complete. I understand that I must inform Immigration New Zealand (INZ) of any relevant fact or change of circumstances that may affect this application, including changes that occur after this form is submitted and before the application is decided.</p>
                 <p className="mb-4">I understand that INZ may verify the information I have provided and may request further documentation to support my application.</p>
                 <p className="mb-4"><strong className="text-[#282728]">Examples of relevant facts include but are not limited to:</strong></p>
@@ -2024,7 +2024,7 @@ function Field({ label, error, children }) {
     return (
         <div className="space-y-2">
             <div className="flex justify-between items-end px-1">
-                <label className={`text-xs font-bold uppercase tracking-[0.2em] transition-colors ${hasError ? 'text-red-500' : 'text-gray-400'}`}>
+                <label className={`text-xs font-bold uppercase tracking-[0.2em] transition-colors ${hasError ? 'text-red-500' : 'text-gray-500'}`}>
                     {label}
                 </label>
             </div>
@@ -2050,7 +2050,7 @@ function SuccessMessage({ leadId }) {
                     <CheckCircle size={48} />
                 </motion.div>
                 <h2 className="text-3xl font-black text-[#282728] uppercase tracking-tighter mb-6">Success</h2>
-                <p className="text-gray-400 text-sm leading-[2] mb-12 font-medium px-4">
+                <p className="text-gray-500 text-sm leading-[2] mb-12 font-medium px-4">
                     Your profile has been securely received. Our AI is now analyzing your eligibility. View your results using the link below.
                 </p>
                 <div className="bg-gray-50/50 rounded-2xl p-8 mb-8 border border-gray-100/50">

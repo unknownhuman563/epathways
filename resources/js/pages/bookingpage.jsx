@@ -120,13 +120,13 @@ const consultants = {
             sessionFormat: 'Video Call or Phone',
             institutions: 'Nationwide Support',
             specialisesIn: ['Admissions', 'Course Matching', 'Pathway Planning', 'Student Support'],
-            bookingUrl: 'https://calendar.google.com/calendar/u/0/appointments/schedules/AcZssZ3t5XRly86tQbMNTzGHAGUyn1v-wJttaxqgFrCIAIWkKiiiwxZYSZE2TDMRy-5bHUdNz67ZpEuk'
+            bookingUrl: 'https://go.epathways.co.nz/widget/bookings/meet-with-bryll-emma'
         },
         {
             id: 6,
             readOnly: true,
             name: 'Emma Ceballo',
-            role: <>Head <br /> <span className="italic text-[8px] text-gray-400 font-medium mt-1 inline-block">Education Department</span></>,
+            role: <>Head <br /> <span className="italic text-[8px] text-gray-500 font-medium mt-1 inline-block">Education Department</span></>,
             image: emmaImg,
             bio: "Emma is a dedicated education consultant helping international students seamlessly transition into the New Zealand education system, with a focus on holistic student success and pathway planning.",
             tags: ['EDUCATION SPEC', '5 YRS EXP', 'EN'],
@@ -252,6 +252,58 @@ export default function BookingPage() {
         }
     };
 
+    // Listen to GoHighLevel iframe postMessage events to capture the user's details
+    useEffect(() => {
+        const handleIframeMessage = (event) => {
+            const isGHLArray = Array.isArray(event.data) && event.data.length >= 3;
+            const inputStr = isGHLArray ? event.data[2] : null;
+            
+            if (isGHLArray && typeof inputStr === 'string' && ['contact_id', 'first_name', 'email', 'name', 'full_name'].some(k => inputStr.includes(k))) {
+                try {
+                    const payload = JSON.parse(inputStr);
+                    const possibleName = payload.full_name || payload.fullName || payload.name || '';
+                    
+                    if (payload.first_name || payload.email || possibleName) {
+                        setSelection(prev => ({
+                            ...prev,
+                            info: {
+                                ...prev.info,
+                                firstName: payload.first_name || (possibleName ? possibleName.trim().split(' ')[0] : ''),
+                                lastName: payload.last_name || (possibleName ? possibleName.trim().split(' ').slice(1).join(' ') : ''),
+                                email: payload.email || '',
+                                phoneNumber: payload.phone || ''
+                            }
+                        }));
+                    }
+                } catch (e) {
+                    console.error('Error parsing GHL payload', e);
+                }
+            } else if (event.data && typeof event.data === 'object') {
+                const payload = event.data;
+                if (['booking_completed', 'ghl_booking_complete'].includes(payload.event || payload.action || payload.type)) {
+                     const data = payload.data || payload;
+                     const possibleName = data.full_name || data.fullName || data.name || '';
+                     
+                     if (data.first_name || data.email || possibleName) {
+                         setSelection(prev => ({
+                            ...prev,
+                            info: {
+                                ...prev.info,
+                                firstName: data.first_name || (possibleName ? possibleName.trim().split(' ')[0] : ''),
+                                lastName: data.last_name || (possibleName ? possibleName.trim().split(' ').slice(1).join(' ') : ''),
+                                email: data.email || '',
+                                phoneNumber: data.phone || ''
+                            }
+                        }));
+                     }
+                }
+            }
+        };
+
+        window.addEventListener('message', handleIframeMessage);
+        return () => window.removeEventListener('message', handleIframeMessage);
+    }, []);
+
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [bookingSuccess, setBookingSuccess] = useState(false);
     const [error, setError] = useState(null);
@@ -278,7 +330,10 @@ export default function BookingPage() {
     };
 
     const handleBookingSubmit = async (e) => {
-        if (e) e.preventDefault();
+        e?.preventDefault();
+        
+        if (!selection.info.firstName) return setError("Please complete the booking in the calendar widget above first. Once finished, we will safely capture your details.");
+
         setIsSubmitting(true);
         setError(null);
 
@@ -287,6 +342,7 @@ export default function BookingPage() {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
+                    'Accept': 'application/json',
                     'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content'),
                 },
                 body: JSON.stringify({
@@ -295,22 +351,25 @@ export default function BookingPage() {
                     email: selection.info.email,
                     phone: selection.info.phoneNumber,
                     current_country: selection.info.country,
-                    service_type: selection.category.title,
-                    consultant_name: selection.consultant.name,
+                    service_type: selection.category?.title,
+                    consultant_name: selection.consultant?.name,
                     inquiry_type: selection.info.inquiryType,
                     message: selection.info.message,
-                    platform: 'Google Calendar'
+                    platform: selection.consultant?.bookingUrl?.includes('go.epathways') ? 'GoHighLevel' : 'Google Calendar'
                 })
             });
 
             if (response.ok) {
                 setBookingSuccess(true);
             } else {
-                const data = await response.json();
-                setError(data.message || "Something went wrong. Please try again.");
+                try {
+                    const data = await response.json();
+                    setError(data.errors ? (Object.values(data.errors).flat()[0] || data.message) : (data.message || "Something went wrong. Please try again."));
+                } catch {
+                    setError("Something went wrong processing the server error.");
+                }
             }
         } catch (error) {
-            console.error("Booking failed:", error);
             setError("Network error. Please check your connection.");
         } finally {
             setIsSubmitting(false);
@@ -366,9 +425,9 @@ export default function BookingPage() {
                             {step === 1 && (
                                 <div>
                                     <div className="mb-16 text-center flex flex-col items-center">
-                                        <span className="text-[11px] font-bold tracking-widest text-gray-500 uppercase mb-4 block">Step one</span>
+                                        <span className="text-[11px] font-bold tracking-widest text-gray-600 uppercase mb-4 block">Step one</span>
                                         <h2 className="text-4xl md:text-5xl font-normal text-[#282728] mb-4">Select your service type</h2>
-                                        <p className="text-gray-500 text-sm max-w-md">
+                                        <p className="text-gray-600 text-sm max-w-md">
                                             Pick the path that matches your goals
                                         </p>
                                     </div>
@@ -401,16 +460,16 @@ export default function BookingPage() {
                                                 {/* Text Wrapper */}
                                                 <div className={`absolute left-0 top-1/2 w-full h-1/2 transition-all duration-500 ease-in-out p-6 md:p-8 flex flex-col justify-center bg-white ${cat.comingSoon ? '' : 'md:group-hover:left-1/2 md:group-hover:top-0 md:group-hover:w-1/2 md:group-hover:h-full'
                                                     }`}>
-                                                    <span className="text-[10px] font-bold tracking-[0.2em] text-gray-400 uppercase mb-2 block">{cat.label}</span>
+                                                    <span className="text-[10px] font-bold tracking-[0.2em] text-gray-500 uppercase mb-2 block">{cat.label}</span>
                                                     <h3 className="text-xl md:text-2xl font-black text-[#282728] mb-3 leading-tight">
                                                         {cat.title}
                                                     </h3>
-                                                    <p className="text-sm text-gray-500 leading-relaxed mb-6 line-clamp-3">
+                                                    <p className="text-sm text-gray-600 leading-relaxed mb-6 line-clamp-3">
                                                         {cat.description}
                                                     </p>
                                                     <div className="mt-auto">
                                                         {cat.comingSoon ? (
-                                                            <span className="flex items-center gap-2 text-gray-400 text-sm font-bold">
+                                                            <span className="flex items-center gap-2 text-gray-500 text-sm font-bold">
                                                                 Not available yet
                                                             </span>
                                                         ) : (
@@ -434,7 +493,7 @@ export default function BookingPage() {
                                                     <span className="text-xs font-bold tracking-[0.3em] text-[#436235] uppercase">FAQ</span>
                                                 </div>
                                                 <h2 className="text-4xl font-black text-[#282728] mb-6">Common <br />questions</h2>
-                                                <p className="text-gray-500 max-w-sm leading-relaxed">
+                                                <p className="text-gray-600 max-w-sm leading-relaxed">
                                                     Can't find an answer? Reach out and we'll get back to you within 3 hours.
                                                 </p>
                                             </div>
@@ -446,24 +505,24 @@ export default function BookingPage() {
 
                                                     <div className="space-y-4">
                                                         <a href="tel:+6491234567" className="flex items-center gap-3 group/item hover:text-[#436235] transition-colors duration-300">
-                                                            <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-gray-400 group-hover/item:text-[#436235] group-hover/item:bg-[#436235]/10">
+                                                            <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-gray-500 group-hover/item:text-[#436235] group-hover/item:bg-[#436235]/10">
                                                                 <Phone size={16} />
                                                             </div>
                                                             <span className="font-bold text-sm text-gray-200">+64 27 777 5586</span>
                                                         </a>
                                                         <a href="mailto:hello@epathways.co.nz" className="flex items-center gap-3 group/item hover:text-[#436235] transition-colors duration-300">
-                                                            <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-gray-400 group-hover/item:text-[#436235] group-hover/item:bg-[#436235]/10">
+                                                            <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-gray-500 group-hover/item:text-[#436235] group-hover/item:bg-[#436235]/10">
                                                                 <Mail size={16} />
                                                             </div>
                                                             <span className="font-bold text-sm text-gray-200">info@epathways.co.nz</span>
                                                         </a>
                                                         <div className="flex items-center gap-3">
-                                                            <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-gray-400">
+                                                            <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-gray-500">
                                                                 <Clock size={16} />
                                                             </div>
                                                             <div>
                                                                 <span className="font-bold text-sm text-gray-200 block">Mon–Fri, 9am – 6pm</span>
-                                                                <span className="text-[10px] text-gray-500 font-bold tracking-wider">NZST</span>
+                                                                <span className="text-[10px] text-gray-600 font-bold tracking-wider">NZST</span>
                                                             </div>
                                                         </div>
                                                     </div>
@@ -484,7 +543,7 @@ export default function BookingPage() {
                                                         <span className={`text-lg font-bold transition-all duration-300 ${openFaq === idx ? 'text-[#436235]' : 'text-[#282728] group-hover:pl-2'}`}>
                                                             {faq.question}
                                                         </span>
-                                                        <div className={`w-8 h-8 rounded-full border flex items-center justify-center transition-all duration-300 ${openFaq === idx ? 'bg-[#436235] border-[#436235] text-white rotate-45' : 'border-gray-200 text-gray-400 group-hover:border-[#436235] group-hover:text-[#436235]'}`}>
+                                                        <div className={`w-8 h-8 rounded-full border flex items-center justify-center transition-all duration-300 ${openFaq === idx ? 'bg-[#436235] border-[#436235] text-white rotate-45' : 'border-gray-200 text-gray-500 group-hover:border-[#436235] group-hover:text-[#436235]'}`}>
                                                             <Plus className="w-5 h-5" />
                                                         </div>
                                                     </button>
@@ -497,7 +556,7 @@ export default function BookingPage() {
                                                                 transition={{ duration: 0.3 }}
                                                                 className="overflow-hidden"
                                                             >
-                                                                <p className="pb-8 text-gray-500 leading-relaxed max-w-lg">
+                                                                <p className="pb-8 text-gray-600 leading-relaxed max-w-lg">
                                                                     {faq.answer}
                                                                 </p>
                                                             </motion.div>
@@ -513,12 +572,12 @@ export default function BookingPage() {
                             {step === 2 && (
                                 <div className="max-w-6xl mx-auto w-full">
                                     <div className="relative mb-16 text-center">
-                                        <button onClick={prevStep} className="absolute left-0 top-1/2 -translate-y-1/2 p-2 text-gray-400 hover:text-white transition-colors flex items-center gap-1">
+                                        <button onClick={prevStep} className="absolute left-0 top-1/2 -translate-y-1/2 p-2 text-gray-500 hover:text-white transition-colors flex items-center gap-1">
                                             <ChevronLeft className="w-5 h-5" /> <span className="text-sm font-bold uppercase tracking-widest">Back</span>
                                         </button>
-                                        <span className="text-[11px] font-bold tracking-widest text-gray-400 uppercase mb-4 block">Step two</span>
+                                        <span className="text-[11px] font-bold tracking-widest text-gray-500 uppercase mb-4 block">Step two</span>
                                         <h2 className="text-4xl md:text-5xl font-normal text-white mb-4">Meet your consultant</h2>
-                                        <p className="text-gray-400 text-sm">
+                                        <p className="text-gray-500 text-sm">
                                             Connect with the right expert for your needs
                                         </p>
                                     </div>
@@ -569,7 +628,7 @@ export default function BookingPage() {
                                                         </h3>
                                                         <div className="mt-auto">
                                                             {con.readOnly ? (
-                                                                <span className="flex items-center gap-2 text-gray-500 text-sm font-medium">
+                                                                <span className="flex items-center gap-2 text-gray-600 text-sm font-medium">
                                                                     See you soon !
                                                                 </span>
                                                             ) : (
@@ -609,7 +668,7 @@ export default function BookingPage() {
                                             {/* Left Column: Headings & Info */}
                                             <div className="lg:col-span-4 flex flex-col">
                                                 <div className="mb-12">
-                                                    <button onClick={prevStep} className="mb-6 p-2 -ml-2 text-gray-400 hover:text-black hover:bg-gray-100 rounded-full transition-colors flex items-center">
+                                                    <button onClick={prevStep} className="mb-6 p-2 -ml-2 text-gray-500 hover:text-black hover:bg-gray-100 rounded-full transition-colors flex items-center">
                                                         <ChevronLeft className="w-5 h-5 mr-1" /> <span className="text-sm font-bold uppercase tracking-widest text-black">Finalize</span>
                                                     </button>
                                                     <h2 className="text-4xl md:text-5xl font-light text-black mb-6">Schedule your time</h2>
@@ -617,22 +676,19 @@ export default function BookingPage() {
 
                                                     {/* Selection Summary */}
                                                     <div className="bg-gray-50 border border-gray-100 p-6 rounded-2xl mb-12">
-                                                        <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-1">Service</p>
+                                                        <p className="text-[10px] text-gray-600 font-bold uppercase tracking-widest mb-1">Service</p>
                                                         <p className="font-bold text-gray-900 mb-6">{selection.category?.title}</p>
 
                                                         {selection.consultant && (
                                                             <>
-                                                                <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-1">Consultant</p>
-                                                                <div className="flex items-center gap-3 mt-2">
+                                                                <p className="text-[10px] text-gray-600 font-bold uppercase tracking-widest mb-1">Consultant</p>
+                                                                <div className="flex items-center gap-3 mt-2 mb-6">
                                                                     <img src={selection.consultant.image} alt="" className="w-12 h-12 rounded-full object-cover object-top border border-gray-200" />
                                                                     <div>
                                                                         <p className="font-bold text-gray-900">{selection.consultant.name}</p>
-                                                                        {selection.consultant.role && <p className="text-xs text-gray-500">{selection.consultant.role}</p>}
+                                                                        {selection.consultant.role && <p className="text-xs text-gray-600">{selection.consultant.role}</p>}
                                                                     </div>
                                                                 </div>
-                                                            </>
-                                                        )}
-                                                    </div>
 
                                                     <div className="space-y-6 text-gray-600">
                                                         {selection.consultant?.name === 'Fhilip Bryll Añabeza' ? (
@@ -644,6 +700,10 @@ export default function BookingPage() {
                                                                 <div className="flex items-center gap-4">
                                                                     <MessageSquare className="w-5 h-5 text-black" />
                                                                     <span>+63 939 586 3654 (WhatsApp)</span>
+                                                                </div>
+                                                                <div className="flex items-center gap-4">
+                                                                    <Mail className="w-5 h-5 text-black" />
+                                                                    <span>hello@epathways.ph</span>
                                                                 </div>
                                                             </>
                                                         ) : (
@@ -663,6 +723,9 @@ export default function BookingPage() {
                                                             </>
                                                         )}
                                                     </div>
+                                                            </>
+                                                        )}
+                                                    </div>
                                                 </div>
                                             </div>
 
@@ -670,7 +733,8 @@ export default function BookingPage() {
                                             <div className="lg:col-span-8">
                                                 <form className="space-y-8" onSubmit={handleBookingSubmit}>
 
-                                                    {/* Row 1 */}
+                                                    {/* Row 1 - Commented Out */}
+                                                    {/*
                                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                                         <div>
                                                             <label className="block text-sm font-light text-gray-800 mb-2">First name</label>
@@ -695,8 +759,10 @@ export default function BookingPage() {
                                                             />
                                                         </div>
                                                     </div>
+                                                    */}
 
-                                                    {/* Row 2 */}
+                                                    {/* Row 2 - Commented Out */}
+                                                    {/*
                                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                                         <div>
                                                             <label className="block text-sm font-light text-gray-800 mb-2">Email</label>
@@ -721,8 +787,10 @@ export default function BookingPage() {
                                                             />
                                                         </div>
                                                     </div>
+                                                    */}
 
-                                                    {/* Row 3 */}
+                                                    {/* Row 3 - Commented Out */}
+                                                    {/*
                                                     <div>
                                                         <label className="block text-sm font-light text-gray-800 mb-2">Your country of residence</label>
                                                         <select
@@ -730,7 +798,7 @@ export default function BookingPage() {
                                                             value={selection.info.country}
                                                             onChange={handleInputChange}
                                                             required
-                                                            className="w-full bg-[#F3F4F6] border-none py-3 px-4 rounded-sm focus:ring-1 focus:ring-gray-300 text-gray-500"
+                                                            className="w-full bg-[#F3F4F6] border-none py-3 px-4 rounded-sm focus:ring-1 focus:ring-gray-300 text-gray-600"
                                                         >
                                                             <option value="" disabled>Select your country</option>
                                                             <option value="ph">Philippines</option>
@@ -740,8 +808,10 @@ export default function BookingPage() {
                                                             <option value="other">Other</option>
                                                         </select>
                                                     </div>
+                                                    */}
 
-                                                    {/* Row 4 */}
+                                                    {/* Row 4 - Commented Out */}
+                                                    {/*
                                                     <div>
                                                         <label className="block text-sm font-light text-gray-800 mb-4">What brings you here?</label>
                                                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-4 gap-x-8">
@@ -763,11 +833,12 @@ export default function BookingPage() {
                                                             ))}
                                                         </div>
                                                     </div>
+                                                    */}
 
-                                                    {/* Google Calendar */}
+                                                    {/* Booking Widget Calendar */}
                                                     <div>
-                                                        <label className="block text-sm font-light text-gray-800 mb-2">Select a time for your consultation</label>
-                                                        <div className="w-full bg-white rounded-sm border border-gray-200 overflow-hidden h-[500px]">
+                                                        <label className="block text-sm font-light text-gray-800 mb-2">Book your consultation below</label>
+                                                        <div className="w-full bg-white rounded-sm border border-gray-200 overflow-hidden h-[850px]">
                                                             <iframe
                                                                 src={selection.consultant?.bookingUrl}
                                                                 style={{ border: 0 }}
@@ -778,7 +849,8 @@ export default function BookingPage() {
                                                         </div>
                                                     </div>
 
-                                                    {/* Row 5 */}
+                                                    {/* Row 5 - Commented Out */}
+                                                    {/*
                                                     <div>
                                                         <label className="block text-sm font-light text-gray-800 mb-2">Additional details</label>
                                                         <textarea
@@ -790,22 +862,7 @@ export default function BookingPage() {
                                                             placeholder="Tell us anything else we should know"
                                                         ></textarea>
                                                     </div>
-
-                                                    {/* Checkbox */}
-                                                    <label className="flex items-start gap-3 cursor-pointer group pt-2">
-                                                        <div className={`w-5 h-5 mt-0.5 border flex flex-shrink-0 items-center justify-center transition-colors ${selection.info.agreeTerms ? 'bg-[#436235] border-[#436235]' : 'bg-[#F3F4F6] border-gray-300 group-hover:border-gray-400'}`}>
-                                                            {selection.info.agreeTerms && <CheckCircle className="w-3 h-3 text-white" />}
-                                                        </div>
-                                                        <input
-                                                            type="checkbox"
-                                                            name="agreeTerms"
-                                                            checked={selection.info.agreeTerms}
-                                                            onChange={handleInputChange}
-                                                            required
-                                                            className="hidden"
-                                                        />
-                                                        <span className="text-sm text-gray-700 font-light">I agree to the terms and conditions</span>
-                                                    </label>
+                                                    */}
 
                                                     {/* Submit & Error */}
                                                     <div className="pt-6">
@@ -816,10 +873,10 @@ export default function BookingPage() {
                                                         )}
                                                         <button
                                                             type="submit"
-                                                            disabled={isSubmitting || !selection.info.agreeTerms}
+                                                            disabled={isSubmitting}
                                                             className="bg-[#436235] text-white px-8 py-3 rounded-sm font-medium hover:bg-black transition-all flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed w-fit"
                                                         >
-                                                            {isSubmitting ? 'Processing...' : 'Book now'}
+                                                            {isSubmitting ? 'Processing...' : 'Done'}
                                                         </button>
                                                     </div>
                                                 </form>
@@ -835,14 +892,14 @@ export default function BookingPage() {
 
                                             <h3 className="text-5xl md:text-6xl font-light text-black mb-6 tracking-tight">Booking Confirmed.</h3>
 
-                                            <p className="text-gray-500 text-xl font-light max-w-4xl mx-auto leading-relaxed mb-16 px-4">
+                                            <p className="text-gray-600 text-xl font-light max-w-4xl mx-auto leading-relaxed mb-16 px-4">
                                                 We've successfully saved your details. You will receive an email shortly regarding your consultation with <span className="font-medium text-black">{selection.consultant?.name}</span>.
                                             </p>
 
                                             <div className="mt-12 text-center">
                                                 <button
                                                     onClick={() => window.location.reload()}
-                                                    className="inline-flex items-center gap-2 text-gray-400 hover:text-black text-sm font-bold tracking-widest uppercase transition-colors group"
+                                                    className="inline-flex items-center gap-2 text-gray-500 hover:text-black text-sm font-bold tracking-widest uppercase transition-colors group"
                                                 >
                                                     <ChevronLeft className="w-4 h-4 transition-transform group-hover:-translate-x-1" />
                                                     Start a new booking
