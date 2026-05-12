@@ -3,11 +3,13 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Str;
 
 class Program extends Model
 {
     protected $fillable = [
         'title',
+        'slug',
         'institution',
         'location',
         'level',
@@ -42,4 +44,35 @@ class Program extends Model
         'employment_outcomes' => 'array',
         'other_benefits' => 'array',
     ];
+
+    public function getRouteKeyName(): string
+    {
+        return 'slug';
+    }
+
+    protected static function booted(): void
+    {
+        static::saving(function (Program $program) {
+            if (empty($program->slug) && ! empty($program->title)) {
+                $program->slug = static::generateUniqueSlug($program->title, $program->id);
+            }
+        });
+    }
+
+    public static function generateUniqueSlug(string $title, ?int $ignoreId = null): string
+    {
+        $base = Str::slug($title) ?: 'program';
+        $slug = $base;
+        $i = 2;
+        while (
+            static::where('slug', $slug)
+                ->when($ignoreId, fn ($q) => $q->where('id', '!=', $ignoreId))
+                ->exists()
+        ) {
+            $slug = $base.'-'.$i;
+            $i++;
+        }
+
+        return $slug;
+    }
 }

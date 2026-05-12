@@ -162,8 +162,8 @@ export default function EducationJourney() {
                         transition={{ delay: 0.3, duration: 0.8 }}
                         className="flex flex-col sm:flex-row items-center justify-center gap-5 w-full sm:w-auto"
                     >
-                        <a 
-                            href="#services" 
+                        <a
+                            href="/programs-levels"
                             className="w-full sm:w-auto bg-[#436235] text-white text-[11px] font-bold px-10 py-4 rounded-none hover:bg-[#436235]/80 transition-all duration-300 uppercase tracking-[0.2em] shadow-2xl text-center"
                         >
                             Explore
@@ -224,9 +224,9 @@ export default function EducationJourney() {
                                 </div>
                             </div>
 
-                            <a 
+                            <a
                                 href="/programs-levels"
-                                className="inline-flex items-center gap-3 border border-gray-200 px-8 py-3 text-[11px] font-bold uppercase tracking-widest hover:bg-[#282728] hover:text-white transition-all duration-500"
+                                className="inline-flex items-center gap-3 bg-[#436235] text-white border border-[#436235] px-8 py-3 text-[11px] font-bold uppercase tracking-widest hover:bg-[#436235]/90 transition-all duration-500"
                             >
                                 Browse Programs <ArrowRight size={14} />
                             </a>

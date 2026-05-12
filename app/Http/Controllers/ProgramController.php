@@ -132,9 +132,9 @@ class ProgramController extends Controller
         return $programs;
     }
 
-    public function publicShow($id)
+    public function publicShow(Program $program)
     {
-        $program = Program::where('status', 'published')->findOrFail($id);
+        abort_if($program->status !== 'published', 404);
         $this->appendImageUrl($program);
 
         return inertia('programs/ProgramDetails', ['program' => $program]);

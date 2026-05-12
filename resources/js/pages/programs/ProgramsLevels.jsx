@@ -185,48 +185,49 @@ export default function ProgramsLevels({ programs = [] }) {
                                 whileInView={{ opacity: 1, y: 0 }}
                                 viewport={{ once: true }}
                                 transition={{ delay: index * 0.05 }}
-                                className="bg-white p-3 rounded-2xl shadow-[0_2px_15px_-3px_rgba(0,0,0,0.07),0_10px_20px_-2px_rgba(0,0,0,0.04)] hover:shadow-[0_8px_30px_rgb(0,0,0,0.12)] transition-shadow duration-300 border border-gray-100 flex flex-col h-full group"
                             >
-                                {/* Program Image */}
-                                <div className="relative h-48 w-full rounded-xl overflow-hidden">
-                                    <img
-                                        src={program.image_url || placeholderImg}
-                                        alt={program.title}
-                                        className="w-full h-full object-cover transform group-hover:scale-105 transition-transform duration-500"
-                                    />
-                                    {/* Overlay - Matching Hero Section */}
-                                    <div className="absolute inset-0 bg-black/30 transition-all duration-300 group-hover:bg-black/10"></div>
+                                <Link
+                                    href={`/program-details/${program.slug}`}
+                                    className="bg-white p-3 rounded-2xl shadow-[0_2px_15px_-3px_rgba(0,0,0,0.07),0_10px_20px_-2px_rgba(0,0,0,0.04)] hover:shadow-[0_8px_30px_rgb(0,0,0,0.12)] hover:-translate-y-1 transition-all duration-300 border border-gray-100 flex flex-col h-full group cursor-pointer"
+                                >
+                                    {/* Program Image */}
+                                    <div className="relative h-48 w-full rounded-xl overflow-hidden">
+                                        <img
+                                            src={program.image_url || placeholderImg}
+                                            alt={program.title}
+                                            className="w-full h-full object-cover transform group-hover:scale-105 transition-transform duration-500"
+                                        />
+                                        {/* Overlay - Matching Hero Section */}
+                                        <div className="absolute inset-0 bg-black/30 transition-all duration-300 group-hover:bg-black/10"></div>
 
-                                    {/* Level Badge - Green Pill */}
-                                    <div className="absolute top-3 right-3 bg-[#436235] text-white text-[10px] font-medium px-2.5 py-1 rounded shadow-sm">
-                                        Level {program.level}
-                                    </div>
-                                </div>
-
-                                {/* Program Details */}
-                                <div className="mt-4 px-1 flex flex-col flex-grow">
-                                    <h4 className="text-lg font-bold text-gray-900 mb-0 leading-tight tracking-tight group-hover:text-[#436235] transition-colors">
-                                        {program.title}
-                                    </h4>
-
-                                    <p className="text-sm text-gray-600 mt-1">{program.institution}</p>
-
-                                    <div className="text-[10px] font-bold text-[#436235] mt-2 mb-4 leading-snug">
-                                        <p>Start from {program.intake_months || 'TBA'}</p>
-                                        {program.duration_months && (
-                                            <p className="font-normal text-gray-600 mt-0.5">{program.duration_months} months duration</p>
-                                        )}
+                                        {/* Level Badge - Green Pill */}
+                                        <div className="absolute top-3 right-3 bg-[#436235] text-white text-[10px] font-medium px-2.5 py-1 rounded shadow-sm">
+                                            Level {program.level}
+                                        </div>
                                     </div>
 
-                                    <div className="flex justify-end gap-2 mt-auto">
-                                        <Link href={`/program-details/${program.id}`} className="px-3 py-1.5 border border-gray-300 text-[10px] font-medium rounded text-gray-600 hover:bg-gray-50 transition-colors flex items-center justify-center">
-                                            Details
-                                        </Link>
-                                        <button className="px-3 py-1.5 bg-[#1a1a1a] text-white text-[10px] font-medium rounded hover:bg-black transition-colors shadow-sm">
-                                            Book Now
-                                        </button>
+                                    {/* Program Details */}
+                                    <div className="mt-4 px-1 flex flex-col flex-grow">
+                                        <h4 className="text-lg font-bold text-gray-900 mb-0 leading-tight tracking-tight group-hover:text-[#436235] transition-colors">
+                                            {program.title}
+                                        </h4>
+
+                                        <p className="text-sm text-gray-600 mt-1">{program.institution}</p>
+
+                                        <div className="text-[10px] font-bold text-[#436235] mt-2 mb-4 leading-snug">
+                                            <p>Start from {program.intake_months || 'TBA'}</p>
+                                            {program.duration_months && (
+                                                <p className="font-normal text-gray-600 mt-0.5">{program.duration_months} months duration</p>
+                                            )}
+                                        </div>
+
+                                        <div className="flex mt-auto">
+                                            <span className="w-full px-6 py-3 bg-[#436235] text-white text-sm font-bold uppercase tracking-widest rounded group-hover:bg-[#436235]/90 transition-colors shadow-sm flex items-center justify-center gap-2">
+                                                Details <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
+                                            </span>
+                                        </div>
                                     </div>
-                                </div>
+                                </Link>
                             </motion.div>
                         ))}
                     </div>

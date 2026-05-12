@@ -1,6 +1,7 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Check } from 'react-feather';
+import { Check, ChevronRight, ArrowLeft } from 'react-feather';
+import { Link } from '@inertiajs/react';
 import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
 import ScrollToTop from "@/components/ui/ScrollToTop";
@@ -90,6 +91,25 @@ export default function ProgramDetails({ program }) {
 
             {/* Main Content Container */}
             <div className="container mx-auto px-4 py-16 max-w-7xl">
+
+                {/* Breadcrumb / Back Navigation */}
+                <div className="mb-8 flex items-center justify-between gap-4 flex-wrap">
+                    <nav aria-label="Breadcrumb" className="flex items-center gap-3 text-xl md:text-2xl font-bold uppercase tracking-wider">
+                        <Link href="/programs-levels" className="text-gray-500 hover:text-[#436235] transition-colors">
+                            Programs
+                        </Link>
+                        <ChevronRight size={22} className="text-gray-300" />
+                        <span className="text-[#436235] truncate max-w-[260px] sm:max-w-md md:max-w-xl">
+                            {program?.title || 'Program'}
+                        </span>
+                    </nav>
+                    <Link
+                        href="/programs-levels"
+                        className="inline-flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-full text-[10px] font-bold uppercase tracking-widest text-gray-600 hover:text-white hover:bg-[#436235] hover:border-[#436235] transition-all"
+                    >
+                        <ArrowLeft size={14} /> Back to Programs
+                    </Link>
+                </div>
 
                 {/* About This Program Section - Card Style */}
                 <div className="mb-16">

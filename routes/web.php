@@ -23,7 +23,7 @@ Route::get("/education-journey", function (){
 });
 
 Route::get('/programs-levels', [ProgramController::class, 'publicIndex']);
-Route::get('/program-details/{id}', [ProgramController::class, 'publicShow']);
+Route::get('/program-details/{program}', [ProgramController::class, 'publicShow']);
 
 Route::get('/fee-guide', [ProgramController::class, 'feeGuideIndex']);
 
