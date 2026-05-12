@@ -9,7 +9,9 @@ export default defineConfig({
     },
     plugins: [
         laravel({
-            input: 'resources/js/app.jsx',
+            // app.jsx = Inertia/React admin app; app.css = standalone Tailwind bundle
+            // for the plain-Blade user dashboards under resources/views/users/<dept>/.
+            input: ['resources/js/app.jsx', 'resources/css/app.css'],
             refresh: true,
         }),
         react(),
