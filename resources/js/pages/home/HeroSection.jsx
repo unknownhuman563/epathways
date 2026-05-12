@@ -32,12 +32,12 @@ export default function HeroSection({ backgroundVideo }) {
             <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-[1px]"></div>
             
             {/* Centered Content (Pinned Higher) */}
-            <div className="relative z-10 flex h-full items-center justify-center container mx-auto px-4">
-                <motion.div 
+            <div className="relative z-10 flex h-full items-center justify-center w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 1, ease: "easeOut" }}
-                    className="max-w-7xl text-center flex flex-col items-center -mt-40"
+                    className="w-full text-center flex flex-col items-center -mt-12 sm:-mt-20 md:-mt-32 lg:-mt-40"
                 >
 
                     {/* Downsized Premium Social Proof Pill */}
@@ -62,37 +62,35 @@ export default function HeroSection({ backgroundVideo }) {
                         </div>
                     </motion.div>
 
-                    <div className="flex flex-col items-center mb-10">
-                        <span className="text-xl md:text-3xl font-bold text-white uppercase tracking-[0.6em] mb-4 opacity-70">
+                    <div className="flex flex-col items-center mb-6 sm:mb-10 w-full">
+                        <span className="text-[10px] sm:text-sm md:text-2xl lg:text-3xl font-bold text-white uppercase tracking-[0.3em] sm:tracking-[0.45em] md:tracking-[0.6em] mb-3 sm:mb-4 opacity-70">
                             Paving the Path Towards
                         </span>
-                        <h1 className="text-6xl sm:text-8xl md:text-[140px] lg:text-[230px] font-black leading-[0.75] tracking-[calc(-0.06em)] text-white uppercase flex flex-col items-center">
-                            <span className="relative">
-                                New Zealand
-                            </span>
+                        <h1 className="text-5xl sm:text-7xl md:text-[120px] lg:text-[180px] xl:text-[220px] 2xl:text-[240px] font-black leading-[0.85] sm:leading-[0.8] md:leading-[0.75] tracking-[calc(-0.05em)] sm:tracking-[calc(-0.06em)] text-white uppercase flex flex-col items-center">
+                            <span className="relative">New Zealand</span>
                             <span className="text-[#436235]">Future</span>
                         </h1>
                     </div>
 
-                    <p className="text-xs md:text-sm mb-12 text-white/60 max-w-5xl font-light leading-relaxed tracking-wider mx-auto px-4">
+                    <p className="text-xs md:text-sm mb-8 sm:mb-12 text-white/60 max-w-md sm:max-w-2xl md:max-w-3xl lg:max-w-5xl font-light leading-relaxed tracking-wider mx-auto px-2 sm:px-4">
                         ePathways is your trusted partner, providing expert guidance and end-to-end support—from assessment to success.
                     </p>
 
-                    {/* Smaller Premium Ghost Buttons */}
-                    <div className="flex flex-col sm:flex-row items-center justify-center gap-6 w-full sm:w-auto">
-                        <motion.a 
+                    {/* Premium Ghost Buttons */}
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-3 sm:gap-6 w-full sm:w-auto max-w-md sm:max-w-none mx-auto">
+                        <motion.a
                             whileHover={{ scale: 1.05, backgroundColor: "rgba(255, 255, 255, 1)", color: "#282728" }}
                             whileTap={{ scale: 0.95 }}
-                            href="/booking" 
-                            className="w-full sm:w-auto bg-transparent border border-white text-white px-7 py-2.5 rounded-none text-[9px] font-bold tracking-[0.2em] transition-all duration-300 uppercase text-center"
+                            href="/booking"
+                            className="w-full sm:w-auto bg-transparent border border-white text-white px-6 sm:px-7 py-3 sm:py-2.5 rounded-none text-[10px] sm:text-[10px] md:text-xs font-bold tracking-[0.15em] sm:tracking-[0.2em] transition-all duration-300 uppercase text-center"
                         >
                             Book Your Free Consultation
                         </motion.a>
-                        <motion.a 
+                        <motion.a
                             whileHover={{ scale: 1.05, backgroundColor: "rgba(255, 255, 255, 1)", color: "#282728" }}
                             whileTap={{ scale: 0.95 }}
-                            href="/free-assessment" 
-                            className="w-full sm:w-auto bg-transparent border border-white text-white px-7 py-2.5 rounded-none text-[9px] font-bold tracking-[0.2em] transition-all duration-300 uppercase text-center"
+                            href="/free-assessment"
+                            className="w-full sm:w-auto bg-transparent border border-white text-white px-6 sm:px-7 py-3 sm:py-2.5 rounded-none text-[10px] sm:text-[10px] md:text-xs font-bold tracking-[0.15em] sm:tracking-[0.2em] transition-all duration-300 uppercase text-center"
                         >
                             Assess your Eligibility
                         </motion.a>

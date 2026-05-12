@@ -31,19 +31,19 @@ export default function WhyUs() {
     const [activeTab, setActiveTab] = useState(0);
 
     return (
-        <section className="py-24 bg-white font-urbanist overflow-hidden">
-            <div className="max-w-7xl mx-auto px-6">
+        <section className="py-16 sm:py-20 md:py-24 bg-white font-urbanist overflow-hidden">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                 {/* Section Header */}
-                <div className="text-center mb-16 px-4">
+                <div className="text-center mb-10 sm:mb-14 md:mb-16">
                     <span className="text-[10px] font-bold text-[#436235] uppercase tracking-[0.3em] mb-4 block">Why</span>
-                    <h2 className="text-4xl md:text-5xl font-black text-[#282728] leading-tight mb-6">
+                    <h2 className="text-3xl sm:text-4xl md:text-5xl font-black text-[#282728] leading-tight mb-4 sm:mb-6">
                         We stand with you
                     </h2>
-                    <p className="text-gray-600 text-sm md:text-lg font-light max-w-5xl mx-auto leading-relaxed px-4">
+                    <p className="text-gray-600 text-sm md:text-lg font-light max-w-5xl mx-auto leading-relaxed">
                         Our approach is built on knowing your situation deeply and meeting you where you are. We've guided thousands through their transitions with care and precision.
                     </p>
-                    
-                    <div className="flex justify-center items-center gap-6 mt-10">
+
+                    <div className="flex flex-wrap justify-center items-center gap-4 sm:gap-6 mt-8 sm:mt-10">
                         <button className="px-10 py-3.5 bg-[#282728] text-white text-[11px] font-bold rounded-lg hover:bg-black transition-all uppercase tracking-[0.2em] shadow-lg active:scale-95">
                             Explore
                         </button>
@@ -54,7 +54,7 @@ export default function WhyUs() {
                 </div>
 
                 {/* Categories Tabs */}
-                <div className="flex flex-wrap justify-center gap-10 md:gap-16 border-b border-gray-100 pb-8 mb-16">
+                <div className="flex flex-wrap justify-center gap-6 sm:gap-10 md:gap-16 border-b border-gray-100 pb-6 sm:pb-8 mb-10 sm:mb-14 md:mb-16">
                     {tabContent.map((tab, idx) => (
                         <button 
                             key={idx}
@@ -73,7 +73,7 @@ export default function WhyUs() {
                 </div>
 
                 {/* Feature Content */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center min-h-[450px]">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 sm:gap-12 lg:gap-16 items-center lg:min-h-[450px]">
                     <AnimatePresence mode="wait">
                         <motion.div 
                             key={`content-${activeTab}`}
@@ -86,15 +86,15 @@ export default function WhyUs() {
                             <span className="text-[10px] font-bold text-gray-500 uppercase tracking-[0.3em] mb-4 block">
                                 {tabContent[activeTab].label}
                             </span>
-                            <h3 className="text-3xl md:text-4xl font-black text-[#282728] leading-tight mb-6">
+                            <h3 className="text-2xl sm:text-3xl md:text-4xl font-black text-[#282728] leading-tight mb-4 sm:mb-6">
                                 {tabContent[activeTab].heading}
                             </h3>
                             <p className="text-gray-600 text-sm md:text-base font-light leading-relaxed mb-10 text-justify">
                                 {tabContent[activeTab].description}
                             </p>
                             
-                            <div className="flex items-center gap-8">
-                                <button className="px-10 py-3.5 bg-gray-100 text-[#282728] text-[11px] font-bold rounded-lg hover:bg-gray-200 transition-all uppercase tracking-[0.2em] active:scale-95">
+                            <div className="flex flex-wrap items-center gap-4 sm:gap-8">
+                                <button className="px-8 sm:px-10 py-3 sm:py-3.5 bg-gray-100 text-[#282728] text-[11px] font-bold rounded-lg hover:bg-gray-200 transition-all uppercase tracking-[0.2em] active:scale-95">
                                     Learn
                                 </button>
                                 <button className="flex items-center gap-2 text-[#282728] text-[11px] font-bold uppercase tracking-[0.2em] hover:text-[#436235] group">

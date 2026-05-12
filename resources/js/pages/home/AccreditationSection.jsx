@@ -4,9 +4,9 @@ import ICEFLogo from "@assets/about_us/icef.png";
 
 const AccreditationSection = () => {
     return (
-        <section className="py-24 bg-white font-urbanist overflow-hidden">
-            <div className="max-w-7xl mx-auto px-6">
-                <div className="flex flex-col md:flex-row items-center gap-12 lg:gap-20">
+        <section className="py-16 sm:py-20 md:py-24 bg-white font-urbanist overflow-hidden">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div className="flex flex-col md:flex-row items-center gap-8 sm:gap-12 lg:gap-20">
                     {/* Left Content */}
                     <motion.div 
                         initial={{ opacity: 0, x: -30 }}
@@ -18,11 +18,11 @@ const AccreditationSection = () => {
                         <span className="text-[10px] font-bold text-[#436235] uppercase tracking-[0.3em] mb-4 block">
                             Quality Guaranteed
                         </span>
-                        <h2 className="text-4xl md:text-5xl font-black text-[#282728] leading-tight mb-8">
+                        <h2 className="text-3xl sm:text-4xl md:text-5xl font-black text-[#282728] leading-tight mb-6 sm:mb-8">
                             Global Standards, <br />
                             <span className="text-[#436235]">Local Expertise</span>
                         </h2>
-                        <p className="text-gray-600 text-lg font-light leading-relaxed mb-8">
+                        <p className="text-gray-600 text-base sm:text-lg font-light leading-relaxed mb-6 sm:mb-8">
                             ePathways is a recognized education and immigration agency. Our team includes ICEF-trained consultants and Licensed Immigration Advisers, ensuring that your journey is backed by professional knowledge and ethical standards.
                         </p>
                         <div className="flex items-center gap-4">

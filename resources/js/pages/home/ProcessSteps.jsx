@@ -31,12 +31,12 @@ const steps = [
 
 export default function ProcessSteps() {
     return (
-        <section className="py-24 bg-gray-50/50 font-urbanist overflow-hidden">
-            <div className="max-w-7xl mx-auto px-6">
+        <section className="py-16 sm:py-20 md:py-24 bg-gray-50/50 font-urbanist overflow-hidden">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                 {/* Section Header */}
-                <div className="text-center mb-20 px-4">
+                <div className="text-center mb-12 sm:mb-16 md:mb-20">
                     <span className="text-[10px] font-bold text-gray-600 uppercase tracking-[0.3em] mb-4 block">Service Trifecta</span>
-                    <h2 className="text-4xl md:text-5xl font-black text-[#282728] leading-tight mb-6">
+                    <h2 className="text-3xl sm:text-4xl md:text-5xl font-black text-[#282728] leading-tight mb-4 sm:mb-6">
                         3 Pillars
                     </h2>
                     <p className="text-gray-600 text-sm md:text-base max-w-xl mx-auto leading-relaxed">
@@ -45,7 +45,7 @@ export default function ProcessSteps() {
                 </div>
 
                 {/* Steps Grid */}
-                <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-3 gap-8">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 sm:gap-8">
                     {steps.map((step, idx) => (
                         <motion.div
                             key={idx}

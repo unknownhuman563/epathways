@@ -63,24 +63,24 @@ const ITEM_WIDTH = 280; // Total width for each timeline block
 
 export default function StudentVisaTimeline() {
     return (
-        <section className="py-24 bg-white font-urbanist overflow-hidden">
-            <div className="max-w-7xl mx-auto px-6 md:px-12">
+        <section className="py-16 sm:py-20 md:py-24 bg-white font-urbanist overflow-hidden">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 md:px-12">
 
                 {/* ── Header ─────────────────────────────────────────── */}
-                <div className="mb-20">
-                    <p className="text-xs font-bold text-[#1a1a1a] mb-6">
+                <div className="mb-12 sm:mb-16 md:mb-20">
+                    <p className="text-xs font-bold text-[#1a1a1a] mb-4 sm:mb-6">
                         Timeline
                     </p>
 
-                    <h2 className="text-3xl md:text-5xl font-normal text-[#1a1a1a] leading-tight tracking-tight mb-6 max-w-4xl">
-                        Your visa journey unfolds in clear <br /> stages
+                    <h2 className="text-2xl sm:text-3xl md:text-5xl font-normal text-[#1a1a1a] leading-tight tracking-tight mb-4 sm:mb-6 max-w-4xl">
+                        Your visa journey unfolds in clear <br className="hidden sm:block" /> stages
                     </h2>
-                    
-                    <p className="text-sm md:text-[15px] text-[#1a1a1a] leading-relaxed max-w-3xl mb-10">
+
+                    <p className="text-sm md:text-[15px] text-[#1a1a1a] leading-relaxed max-w-3xl mb-8 sm:mb-10">
                         We break down the student visa process into manageable milestones. Each day brings you closer <br className="hidden md:block" /> to your destination.
                     </p>
 
-                    <div className="flex items-center gap-6">
+                    <div className="flex flex-wrap items-center gap-4 sm:gap-6">
                         <a
                             href="/free-assessment"
                             className="px-6 py-2.5 border border-[#e5e7eb] text-[#1a1a1a] text-sm font-medium hover:bg-gray-50 transition-colors"

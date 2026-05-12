@@ -5,9 +5,9 @@ import AboutImg from "@assets/about_us/group_pic.png";
 
 export default function AboutBrief() {
     return (
-        <section className="py-24 bg-white font-urbanist overflow-hidden">
-            <div className="container mx-auto px-4 max-w-7xl">
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-20 items-stretch">
+        <section className="py-16 sm:py-20 md:py-24 bg-white font-urbanist overflow-hidden">
+            <div className="container mx-auto px-4 sm:px-6 lg:px-8 max-w-7xl">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 sm:gap-14 lg:gap-20 items-stretch">
                     
                     {/* Left Side: Content */}
                     <motion.div 
@@ -19,7 +19,7 @@ export default function AboutBrief() {
                     >
                         <span className="text-[10px] font-bold text-[#436235] uppercase tracking-[0.3em] mb-4">About</span>
                         
-                        <h2 className="text-4xl md:text-5xl font-black text-[#282728] leading-[1.1] mb-8 max-w-md">
+                        <h2 className="text-3xl sm:text-4xl md:text-5xl font-black text-[#282728] leading-[1.1] mb-6 sm:mb-8 max-w-md">
                             ePathways guides your <span className="text-[#436235]">journey forward</span>
                         </h2>
                         
@@ -42,15 +42,15 @@ export default function AboutBrief() {
                             ))}
                         </ul>
                         
-                        <div className="flex items-center gap-10">
-                            <a 
-                                href="/about-us" 
-                                className="px-10 py-4 bg-[#436235] text-white text-[11px] font-bold rounded hover:bg-[#344d29] transition-all uppercase tracking-[0.2em] shadow-lg active:scale-95"
+                        <div className="flex flex-wrap items-center gap-6 sm:gap-10">
+                            <a
+                                href="/about-us"
+                                className="px-8 sm:px-10 py-3.5 sm:py-4 bg-[#436235] text-white text-[11px] font-bold rounded hover:bg-[#344d29] transition-all uppercase tracking-[0.2em] shadow-lg active:scale-95"
                             >
                                 Learn
                             </a>
-                            <a 
-                                href="/about-us" 
+                            <a
+                                href="/about-us"
                                 className="flex items-center gap-2 text-[#282728] text-[11px] font-bold uppercase tracking-[0.2em] hover:text-[#436235] transition-colors group"
                             >
                                 More <ArrowRight size={14} className="transition-transform group-hover:translate-x-1" />
@@ -66,7 +66,7 @@ export default function AboutBrief() {
                         transition={{ duration: 0.8, ease: "easeOut" }}
                         className="relative h-full"
                     >
-                        <div className="h-full rounded-[2rem] overflow-hidden shadow-2xl relative group min-h-[450px]">
+                        <div className="h-full rounded-[2rem] overflow-hidden shadow-2xl relative group min-h-[300px] sm:min-h-[400px] lg:min-h-[450px]">
                             <img 
                                 src={AboutImg} 
                                 alt="ePathways Team" 
