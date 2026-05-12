@@ -6,6 +6,8 @@ use App\Http\Controllers\EventController;
 use App\Http\Controllers\LeadController;
 use App\Http\Controllers\BookingController;
 use App\Http\Controllers\ProgramController;
+use App\Http\Controllers\ResidentIntakeController;
+use App\Http\Controllers\UserReviewController;
 Route::get('/', function () {
     return inertia('home/HomePage');
 });
@@ -21,7 +23,7 @@ Route::get("/education-journey", function (){
 });
 
 Route::get('/programs-levels', [ProgramController::class, 'publicIndex']);
-Route::get('/program-details/{id}', [ProgramController::class, 'publicShow']);
+Route::get('/program-details/{program}', [ProgramController::class, 'publicShow']);
 
 Route::get('/fee-guide', [ProgramController::class, 'feeGuideIndex']);
 
@@ -55,6 +57,11 @@ Route::get("/immigration-assessment", function (){
 Route::get("/visa-assessment-form", function (){
    return inertia('visa/VisaAssessmentForm');
 });
+
+Route::get("/resident-intake", [ResidentIntakeController::class, 'showForm'])->name('resident-intake');
+Route::post("/resident-intake", [ResidentIntakeController::class, 'store']);
+
+Route::post('/user-reviews', [UserReviewController::class, 'store'])->name('user-reviews.store');
 
 Route::get('/activities', [EventController::class, 'activities']);
 
@@ -94,6 +101,12 @@ Route::middleware(['auth'])->group(function () {
     Route::post('/admin/programs', [ProgramController::class, 'store']);
     Route::post('/admin/programs/{id}', [ProgramController::class, 'update']);
     Route::delete('/admin/programs/{id}', [ProgramController::class, 'destroy']);
+
+    Route::get('/admin/immigration/resident-intakes', [ResidentIntakeController::class, 'adminIndex'])->name('admin.immigration.resident-intakes');
+    Route::get('/admin/immigration/resident-intakes/{id}', [ResidentIntakeController::class, 'adminShow'])->name('admin.immigration.resident-intakes.show');
+
+    Route::get('/admin/immigration/user-reviews', [UserReviewController::class, 'adminIndex'])->name('admin.immigration.user-reviews');
+    Route::get('/admin/immigration/user-reviews/{id}', [UserReviewController::class, 'adminShow'])->name('admin.immigration.user-reviews.show');
 
     Route::get("/admin/booking", [BookingController::class, 'index'])->name('admin.bookings');
     Route::post("/admin/bookings/{id}", [BookingController::class, 'update']);

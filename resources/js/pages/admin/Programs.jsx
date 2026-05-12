@@ -911,7 +911,7 @@ export default function Programs({ programs = [] }) {
                                                         <Edit2 size={16} className="text-gray-500" /> Edit
                                                     </button>
                                                     <a
-                                                        href={'/program-details/' + program.id}
+                                                        href={'/program-details/' + program.slug}
                                                         target="_blank"
                                                         rel="noreferrer"
                                                         className="flex w-full items-center gap-3 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"
