@@ -454,7 +454,7 @@ function ResidentIntakeSection() {
                                 {/* CTA — navigates to the full intake form page */}
                                 <div className="flex flex-col sm:flex-row gap-4">
                                     <Link
-                                        href="/resident-intake"
+                                        href="/resident-interest"
                                         className="group inline-flex items-center justify-center gap-3 bg-[#282728] text-white text-[11px] font-bold px-10 py-5 hover:bg-[#00A693] transition-all duration-300 uppercase tracking-[0.25em] shadow-xl"
                                     >
                                         Apply Resident Intake

@@ -50,7 +50,7 @@ class ResidentIntakeUploadTest extends TestCase
 
         $pdf = UploadedFile::fake()->create('passport.pdf', 200, 'application/pdf');
 
-        $response = $this->post('/resident-intake', $this->payload([
+        $response = $this->post('/resident-interest', $this->payload([
             'document_files' => ['passport' => [$pdf]],
         ]));
 
@@ -77,7 +77,7 @@ class ResidentIntakeUploadTest extends TestCase
         $b = UploadedFile::fake()->create('passport-b.pdf', 120, 'application/pdf');
         $other = UploadedFile::fake()->create('reference.pdf', 80, 'application/pdf');
 
-        $response = $this->post('/resident-intake', $this->payload([
+        $response = $this->post('/resident-interest', $this->payload([
             'document_files' => [
                 'passport' => [$a, $b],
                 'other'    => [$other],
@@ -102,7 +102,7 @@ class ResidentIntakeUploadTest extends TestCase
     {
         Storage::fake('local');
 
-        $response = $this->post('/resident-intake', $this->payload([
+        $response = $this->post('/resident-interest', $this->payload([
             'document_files' => [],
         ]));
 
