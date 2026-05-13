@@ -26,9 +26,117 @@ const TEAL = '#00A693';
 const TEAL_DARK = '#008c7c';
 const DARK = '#0c1611';
 
+const TOTAL_STEPS = 9;
+const DRAFT_STORAGE_KEY = 'epathways_resident_intake_draft';
+
+const freshDocumentFiles = () => ({
+    passport: null,
+    visa_copies: null,
+    contracts: null,
+    payslips: null,
+    ird_summary: null,
+    education_certs: null,
+    cv: null,
+});
+
+const FORM_DEFAULTS = {
+    terms_accepted: false,
+    // Personal
+    first_name: '',
+    last_name: '',
+    dob: '',
+    nationality: '',
+    email: '',
+    phone: '',
+    // Passport
+    passport_number: '',
+    passport_expiry: '',
+    issuing_country: '',
+    // Visa status
+    current_visa_type: '',
+    current_visa_other: '',
+    current_visa_expiry: '',
+    nz_arrival_date: '',
+    previous_nz_visa_history: '',
+    // Employment at Ergo
+    job_title: '',
+    employment_start: '',
+    employment_type: '',
+    hourly_rate: '',
+    // Qualifications
+    highest_qualification: '',
+    institution_name: '',
+    country_of_study: '',
+    nzqa_status: '',
+    nzqa_iqa_reference: '',
+    // Work experience
+    nz_skilled_years: '',
+    total_skilled_years: '',
+    career_summary: '',
+    // English
+    english_evidence: '',
+    english_test_score: '',
+    english_test_date: '',
+    // Family
+    include_family: '',
+    family_members: [],
+    // Documents checklist
+    documents: {
+        passport: false,
+        visa_copies: false,
+        contracts: false,
+        payslips: false,
+        ird_summary: false,
+        education_certs: false,
+        cv: false,
+    },
+    // Documents — actual uploaded PDFs (checklist key -> File). Never persisted.
+    document_files: freshDocumentFiles(),
+    // Disclosures
+    character_health_disclosure: '',
+    other_notes: '',
+};
+
+// Build the form's initial values, restoring a saved draft from this device if one exists.
+function buildInitialFormData() {
+    const base = {
+        ...FORM_DEFAULTS,
+        documents: { ...FORM_DEFAULTS.documents },
+        document_files: freshDocumentFiles(),
+        family_members: [],
+    };
+    try {
+        const raw = window.localStorage.getItem(DRAFT_STORAGE_KEY);
+        if (raw) {
+            const parsed = JSON.parse(raw);
+            if (parsed && typeof parsed === 'object' && parsed.data && typeof parsed.data === 'object') {
+                const { document_files, ...restorable } = parsed.data; // never restore File objects
+                return { ...base, ...restorable, document_files: freshDocumentFiles() };
+            }
+        }
+    } catch {
+        /* corrupt / unavailable storage — fall through to defaults */
+    }
+    return base;
+}
+
+function loadDraftStep() {
+    try {
+        const raw = window.localStorage.getItem(DRAFT_STORAGE_KEY);
+        if (raw) {
+            const parsed = JSON.parse(raw);
+            const s = parsed?.step;
+            if (Number.isInteger(s) && s >= 1 && s <= TOTAL_STEPS) return s;
+        }
+    } catch {
+        /* ignore */
+    }
+    return 1;
+}
+
 export default function ResidentIntakePage() {
     const { flash } = usePage().props;
-    const [step, setStep] = useState(1);
+    const [step, setStep] = useState(loadDraftStep);
     const [isSuccess, setIsSuccess] = useState(false);
     const [intakeId, setIntakeId] = useState(null);
     const [modal, setModal] = useState({ show: false, message: '' });
@@ -41,63 +149,37 @@ export default function ResidentIntakePage() {
         }
     }, [flash]);
 
-    const { data, setData, post, processing } = useForm({
-        terms_accepted: false,
-        // Personal
-        first_name: '',
-        last_name: '',
-        dob: '',
-        nationality: '',
-        email: '',
-        phone: '',
-        // Passport
-        passport_number: '',
-        passport_expiry: '',
-        issuing_country: '',
-        // Visa status
-        current_visa_type: '',
-        current_visa_other: '',
-        current_visa_expiry: '',
-        nz_arrival_date: '',
-        previous_nz_visa_history: '',
-        // Employment at Ergo
-        job_title: '',
-        employment_start: '',
-        employment_type: '',
-        hourly_rate: '',
-        // Qualifications
-        highest_qualification: '',
-        institution_name: '',
-        country_of_study: '',
-        nzqa_status: '',
-        nzqa_iqa_reference: '',
-        // Work experience
-        nz_skilled_years: '',
-        total_skilled_years: '',
-        career_summary: '',
-        // English
-        english_evidence: '',
-        english_test_score: '',
-        english_test_date: '',
-        // Family
-        include_family: '',
-        family_members: [],
-        // Documents
-        documents: {
-            passport: false,
-            visa_copies: false,
-            contracts: false,
-            payslips: false,
-            ird_summary: false,
-            education_certs: false,
-            cv: false,
-        },
-        // Disclosures
-        character_health_disclosure: '',
-        other_notes: '',
-    });
+    const [initialFormData] = useState(buildInitialFormData); // restored draft or defaults, computed once
+    const { data, setData, post, processing, transform } = useForm(initialFormData);
 
-    const TOTAL_STEPS = 9;
+    // Auto-save a draft to this device on every change so a refresh keeps everything.
+    // Uploaded PDF files can't be serialised, so they're left out (the checklist ticks are kept).
+    useEffect(() => {
+        if (isSuccess) {
+            try { window.localStorage.removeItem(DRAFT_STORAGE_KEY); } catch { /* ignore */ }
+            return;
+        }
+        try {
+            const { document_files, ...persistable } = data;
+            window.localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify({ data: persistable, step, savedAt: Date.now() }));
+        } catch {
+            /* storage full or unavailable — non-fatal */
+        }
+    }, [data, step, isSuccess]);
+
+    const handleStartOver = () => {
+        if (!window.confirm('Clear everything you have entered and start over?')) return;
+        try { window.localStorage.removeItem(DRAFT_STORAGE_KEY); } catch { /* ignore */ }
+        setData({
+            ...FORM_DEFAULTS,
+            documents: { ...FORM_DEFAULTS.documents },
+            document_files: freshDocumentFiles(),
+            family_members: [],
+        });
+        setStep(1);
+        setLocalErrors({});
+        setModal({ show: false, message: '' });
+    };
 
     const steps = [
         { id: 1, title: 'Terms', icon: ShieldCheck },
@@ -249,12 +331,23 @@ export default function ResidentIntakePage() {
         }
         setLocalErrors({});
 
+        // Only send document_files entries that actually hold a File.
+        transform((d) => ({
+            ...d,
+            document_files: Object.fromEntries(
+                Object.entries(d.document_files || {}).filter(([, f]) => f instanceof File)
+            ),
+        }));
+
         post('/resident-intake', {
+            forceFormData: true, // always multipart so attached PDFs are sent reliably
             onSuccess: () => setIsSuccess(true),
             onError: (errs) => {
                 setModal({
                     show: true,
-                    message: errs?.error || 'Submission failed. Please review your details and try again.',
+                    message: errs?.error
+                        || Object.values(errs || {})[0]
+                        || 'Submission failed. Please review your details and try again.',
                 });
             },
         });
@@ -361,6 +454,19 @@ export default function ResidentIntakePage() {
                                         </div>
                                     );
                                 })}
+
+                                <div className="mt-3 pt-3 px-2 border-t border-gray-100">
+                                    <button
+                                        type="button"
+                                        onClick={handleStartOver}
+                                        className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 hover:text-red-500 transition-colors"
+                                    >
+                                        Start over
+                                    </button>
+                                    <p className="text-[10px] text-gray-400 leading-relaxed mt-2">
+                                        Your answers are saved on this device automatically — you can close or refresh this page and pick up where you left off.
+                                    </p>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -939,41 +1045,118 @@ function StepDocuments({ data, setData, docChecked, docTotal }) {
         { key: 'cv', title: 'CV covering both NZ and overseas employment', desc: 'Dates, employer names, roles and key responsibilities' },
     ];
 
+    const MAX_BYTES = 10 * 1024 * 1024; // 10 MB
+    const [fileErrors, setFileErrors] = useState({});
+
     const toggle = (k) => setData('documents', { ...data.documents, [k]: !data.documents[k] });
+
+    const clearFileError = (k) => setFileErrors((p) => { const n = { ...p }; delete n[k]; return n; });
+
+    const handleFile = (k, fileList) => {
+        const file = fileList && fileList[0] ? fileList[0] : null;
+        if (!file) return;
+        const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+        if (!isPdf) {
+            setFileErrors((p) => ({ ...p, [k]: 'Only PDF files can be uploaded.' }));
+            return;
+        }
+        if (file.size > MAX_BYTES) {
+            setFileErrors((p) => ({ ...p, [k]: 'File is too large — maximum 10 MB.' }));
+            return;
+        }
+        clearFileError(k);
+        setData((prev) => ({
+            ...prev,
+            document_files: { ...prev.document_files, [k]: file },
+            documents: { ...prev.documents, [k]: true },
+        }));
+    };
+
+    const removeFile = (k) => {
+        clearFileError(k);
+        setData((prev) => ({ ...prev, document_files: { ...prev.document_files, [k]: null } }));
+    };
+
+    const formatSize = (bytes) => {
+        if (bytes < 1024) return `${bytes} B`;
+        if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+        return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+    };
+
+    const uploadedCount = Object.values(data.document_files || {}).filter(Boolean).length;
 
     return (
         <div className="space-y-8">
-            <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-3">
+            <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
                 <div>
                     <h2 className="text-3xl font-black text-[#282728] uppercase tracking-tighter mb-3">Document Checklist</h2>
-                    <p className="text-sm text-gray-500">Tick each item you currently have available.</p>
+                    <p className="text-sm text-gray-500">Tick each item you have, and attach a PDF where you can — uploads (max 10 MB each) speed up your assessment.</p>
                 </div>
-                <div className="flex items-center gap-3">
-                    <div className="text-3xl font-black text-[#00A693]">{docChecked}<span className="text-base text-gray-300"> / {docTotal}</span></div>
-                    <span className="text-[10px] font-bold uppercase tracking-[0.3em] text-gray-400">documents</span>
+                <div className="flex items-center gap-8">
+                    <div className="text-center">
+                        <div className="text-3xl font-black text-[#00A693]">{docChecked}<span className="text-base text-gray-300"> / {docTotal}</span></div>
+                        <span className="text-[10px] font-bold uppercase tracking-[0.3em] text-gray-400">ticked</span>
+                    </div>
+                    <div className="text-center">
+                        <div className="text-3xl font-black text-[#282728]">{uploadedCount}<span className="text-base text-gray-300"> / {docTotal}</span></div>
+                        <span className="text-[10px] font-bold uppercase tracking-[0.3em] text-gray-400">uploaded</span>
+                    </div>
                 </div>
             </div>
 
             <div className="space-y-3">
                 {items.map((it) => {
                     const checked = !!data.documents[it.key];
+                    const file = data.document_files?.[it.key] || null;
+                    const err = fileErrors[it.key];
+                    const active = checked || !!file;
                     return (
-                        <label
+                        <div
                             key={it.key}
-                            className={`flex items-start gap-4 p-5 border rounded-2xl cursor-pointer transition-all ${checked ? 'border-[#00A693] bg-[#00A693]/5' : 'border-gray-100 hover:border-gray-200 bg-white'}`}
+                            className={`p-5 border rounded-2xl transition-all ${active ? 'border-[#00A693] bg-[#00A693]/5' : 'border-gray-100 bg-white'}`}
                         >
-                            <input
-                                type="checkbox"
-                                className="w-5 h-5 mt-0.5 text-[#00A693] focus:ring-[#00A693] cursor-pointer rounded"
-                                checked={checked}
-                                onChange={() => toggle(it.key)}
-                            />
-                            <div className="flex-1 min-w-0">
-                                <div className={`text-sm font-bold uppercase tracking-wide leading-tight ${checked ? 'text-[#282728]' : 'text-[#282728]'}`}>{it.title}</div>
-                                <p className="text-xs text-gray-500 mt-1 leading-relaxed">{it.desc}</p>
+                            <div className="flex items-start gap-4">
+                                <input
+                                    type="checkbox"
+                                    className="w-5 h-5 mt-0.5 text-[#00A693] focus:ring-[#00A693] cursor-pointer rounded"
+                                    checked={checked}
+                                    onChange={() => toggle(it.key)}
+                                />
+                                <div className="flex-1 min-w-0">
+                                    <div className="text-sm font-bold uppercase tracking-wide leading-tight text-[#282728]">{it.title}</div>
+                                    <p className="text-xs text-gray-500 mt-1 leading-relaxed">{it.desc}</p>
+
+                                    <div className="mt-3">
+                                        {file ? (
+                                            <div className="inline-flex items-center gap-3 bg-white border border-gray-200 rounded-xl px-3 py-2 max-w-full">
+                                                <FileCheck2 size={14} className="text-[#00A693] flex-shrink-0" />
+                                                <span className="text-xs text-gray-700 truncate max-w-[200px]">{file.name}</span>
+                                                <span className="text-[10px] text-gray-400 flex-shrink-0">{formatSize(file.size)}</span>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => removeFile(it.key)}
+                                                    className="text-[10px] font-bold uppercase tracking-widest text-gray-400 hover:text-red-500 transition-colors flex-shrink-0"
+                                                >
+                                                    Remove
+                                                </button>
+                                            </div>
+                                        ) : (
+                                            <label className="inline-flex items-center gap-2 px-4 py-2 border border-dashed border-gray-300 rounded-xl text-[11px] font-bold uppercase tracking-[0.15em] text-gray-600 hover:border-[#00A693] hover:text-[#00A693] hover:bg-[#00A693]/5 cursor-pointer transition-all">
+                                                <Plus size={14} /> Attach PDF
+                                                <input
+                                                    type="file"
+                                                    accept="application/pdf,.pdf"
+                                                    className="hidden"
+                                                    onChange={(e) => { handleFile(it.key, e.target.files); e.target.value = ''; }}
+                                                />
+                                            </label>
+                                        )}
+                                        {err && <p className="text-[10px] font-black text-red-500 uppercase tracking-widest mt-2">{err}</p>}
+                                    </div>
+                                </div>
+                                {active && <CheckCircle size={18} className="text-[#00A693] flex-shrink-0 mt-0.5" />}
                             </div>
-                            {checked && <CheckCircle size={18} className="text-[#00A693] flex-shrink-0 mt-0.5" />}
-                        </label>
+                        </div>
                     );
                 })}
             </div>
@@ -1021,9 +1204,9 @@ function SuccessMessage({ intakeId }) {
                 >
                     <CheckCircle size={48} />
                 </motion.div>
-                <h2 className="text-3xl font-black text-[#282728] uppercase tracking-tighter mb-6">Intake Received</h2>
+                <h2 className="text-3xl font-black text-[#282728] uppercase tracking-tighter mb-6">Interest Received</h2>
                 <p className="text-gray-500 text-sm leading-[2] mb-10 font-medium px-4">
-                    Thank you. Your Resident Visa intake has been received. A licensed adviser will review your information
+                    Thank you. Your Resident Visa interest has been received. A licensed adviser will review your information
                     and follow up with your engagement agreement.
                 </p>
                 {intakeId && (

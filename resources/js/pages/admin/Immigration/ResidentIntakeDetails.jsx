@@ -3,11 +3,26 @@ import { Head, Link } from '@inertiajs/react';
 import {
     ArrowLeft, Mail, Phone, Calendar, Globe, FileText, BookOpen,
     Briefcase, GraduationCap, Award, Languages, Users, FileCheck2,
-    MessageSquare, CheckCircle, XCircle
+    MessageSquare, CheckCircle, XCircle, Printer, Download
 } from 'lucide-react';
 
 export default function ResidentIntakeDetails({ intake }) {
     const formatDate = (d) => d ? new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—';
+
+    const handlePrint = () => window.print();
+
+    const handleDownload = () => {
+        const { document_files, ...exportable } = intake; // file paths aren't useful in the export
+        const blob = new Blob([JSON.stringify(exportable, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${intake.intake_id || 'resident-intake'}.json`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+    };
 
     const qualificationLabels = {
         phd: 'Doctoral degree (PhD) — Level 10',
@@ -32,17 +47,60 @@ export default function ResidentIntakeDetails({ intake }) {
     const documents = intake.documents || {};
     const docKeys = Object.keys(docLabels);
     const docChecked = docKeys.filter((k) => !!documents[k]).length;
+    const uploadedFiles = intake.document_files || {};
+    const uploadedCount = docKeys.filter((k) => !!uploadedFiles[k]).length;
+    const docUrl = (key) => `/admin/immigration/resident-intakes/${intake.id}/documents/${key}`;
+
+    const ToolbarButtons = () => (
+        <div className="flex items-center gap-2 no-print">
+            <button
+                onClick={handlePrint}
+                className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl border border-gray-200 bg-white text-sm font-semibold text-gray-700 hover:bg-gray-50 hover:text-gray-900 transition-colors"
+            >
+                <Printer size={15} /> Print
+            </button>
+            <button
+                onClick={handleDownload}
+                className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl border border-gray-200 bg-white text-sm font-semibold text-gray-700 hover:bg-gray-50 hover:text-gray-900 transition-colors"
+            >
+                <Download size={15} /> Download
+            </button>
+        </div>
+    );
 
     return (
-        <div className="space-y-6 max-w-[1400px] mx-auto pb-12">
+        <div id="intake-print" className="space-y-6 max-w-[1400px] mx-auto pb-12">
             <Head title={`${intake.first_name} ${intake.last_name} — Resident Intake`} />
+
+            <style>{`
+                @media print {
+                    aside, header { display: none !important; }
+                    .no-print { display: none !important; }
+                    .h-screen { height: auto !important; }
+                    [class*="overflow-"] { overflow: visible !important; }
+                    main { padding: 0 !important; }
+                    body { background: #fff !important; }
+                    #intake-print { max-width: none !important; }
+                }
+            `}</style>
+
+            {/* Mobile toolbar */}
+            <div className="flex lg:hidden items-center justify-between gap-3">
+                <Link
+                    href="/admin/immigration/resident-intakes"
+                    className="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-gray-900 transition-colors no-print"
+                >
+                    <ArrowLeft size={14} /> Back
+                </Link>
+                <ToolbarButtons />
+            </div>
 
             {/* Header */}
             <div className="hidden lg:flex items-start justify-between gap-4 mb-2">
                 <div>
                     <Link
                         href="/admin/immigration/resident-intakes"
-                        className="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-gray-900 mb-3 transition-colors"
+                        className="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-gray-900 mb-3 transition-colors no-print"
                     >
                         <ArrowLeft size={14} />
                         Back to Resident Intakes
@@ -60,6 +118,7 @@ export default function ResidentIntakeDetails({ intake }) {
                     </div>
                 </div>
                 <div className="flex items-center gap-3 pt-12">
+                    <ToolbarButtons />
                     <span className="inline-flex items-center px-3 py-1.5 rounded-lg bg-blue-100 text-blue-700 border border-blue-200 text-xs font-bold uppercase tracking-wide">
                         {intake.status || 'New'}
                     </span>
@@ -178,21 +237,38 @@ export default function ResidentIntakeDetails({ intake }) {
                         )}
                     </Section>
 
-                    <Section icon={<FileCheck2 size={16} />} title={`Documents (${docChecked}/${docKeys.length})`}>
-                        <ul className="space-y-2">
-                            {docKeys.map((k) => (
-                                <li key={k} className="flex items-start gap-2.5 text-sm">
-                                    {documents[k] ? (
-                                        <CheckCircle size={16} className="text-emerald-500 mt-0.5 flex-shrink-0" />
-                                    ) : (
-                                        <XCircle size={16} className="text-gray-300 mt-0.5 flex-shrink-0" />
-                                    )}
-                                    <span className={documents[k] ? 'text-gray-800' : 'text-gray-400'}>
-                                        {docLabels[k]}
-                                    </span>
-                                </li>
-                            ))}
+                    <Section icon={<FileCheck2 size={16} />} title={`Documents — ${docChecked}/${docKeys.length} ticked · ${uploadedCount} uploaded`}>
+                        <ul className="space-y-2.5">
+                            {docKeys.map((k) => {
+                                const hasFile = !!uploadedFiles[k];
+                                const ticked = !!documents[k];
+                                return (
+                                    <li key={k} className="flex items-start gap-2.5 text-sm">
+                                        {ticked || hasFile ? (
+                                            <CheckCircle size={16} className="text-emerald-500 mt-0.5 flex-shrink-0" />
+                                        ) : (
+                                            <XCircle size={16} className="text-gray-300 mt-0.5 flex-shrink-0" />
+                                        )}
+                                        <div className="flex-1 min-w-0">
+                                            <span className={ticked || hasFile ? 'text-gray-800' : 'text-gray-400'}>
+                                                {docLabels[k]}
+                                            </span>
+                                            {hasFile && (
+                                                <a
+                                                    href={docUrl(k)}
+                                                    className="mt-1 inline-flex items-center gap-1.5 text-xs font-semibold text-[#00A693] hover:text-[#008c7c] transition-colors no-print"
+                                                >
+                                                    <Download size={13} /> Download PDF
+                                                </a>
+                                            )}
+                                        </div>
+                                    </li>
+                                );
+                            })}
                         </ul>
+                        {uploadedCount === 0 && (
+                            <p className="text-xs text-gray-400 mt-3">No documents were uploaded with this intake.</p>
+                        )}
                     </Section>
                 </div>
             </div>
