@@ -117,22 +117,22 @@ export default function EducationJourney() {
             <Navbar />
 
             {/* Hero Section */}
-            <section className="relative overflow-hidden min-h-[90vh] flex items-center justify-center py-24 bg-[#0a0f0a]">
+            <section className="relative overflow-hidden min-h-[90vh] flex items-center justify-center py-24 bg-white">
                 {/* Background Image with Light Overlay */}
                 <div className="absolute inset-0 z-0">
                     <img 
                         src={heroBg} 
                         alt="Education Journey" 
-                        className="w-full h-full object-cover scale-105 opacity-40 grayscale"
+                        className="w-full h-full object-cover scale-105 opacity-10 grayscale"
                     />
-                    <div className="absolute inset-0 bg-gradient-to-b from-[#0a0f0a]/90 via-[#0a0f0a]/60 to-[#0a0f0a]"></div>
+                    <div className="absolute inset-0 bg-gradient-to-b from-white/90 via-white/80 to-white"></div>
                 </div>
                 
                 <div className="container mx-auto px-6 md:px-12 max-w-5xl relative z-10 text-center font-urbanist">
                     <motion.div 
                         initial={{ opacity: 0, y: -10 }}
                         animate={{ opacity: 1, y: 0 }}
-                        className="text-[#436235] text-[10px] md:text-xs font-bold uppercase tracking-[0.4em] mb-6 drop-shadow-md"
+                        className="text-gray-500 text-[10px] md:text-xs font-bold uppercase tracking-[0.4em] mb-6 drop-shadow-sm"
                     >
                         Global Education
                     </motion.div>
@@ -141,17 +141,17 @@ export default function EducationJourney() {
                         initial={{ opacity: 0, y: 30 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: 0.1, duration: 0.8 }}
-                        className="text-6xl md:text-8xl lg:text-[130px] font-black text-white leading-[0.85] tracking-[calc(-0.05em)] mb-10 uppercase flex flex-col items-center drop-shadow-2xl"
+                        className="text-6xl md:text-8xl lg:text-[130px] font-black text-[#1a1a1a] leading-[0.85] tracking-[calc(-0.05em)] mb-10 uppercase flex flex-col items-center"
                     >
                         <span>Study</span>
-                        <span className="text-[#436235]">abroad</span>
+                        <span className="text-gray-400 font-light italic">abroad</span>
                     </motion.h1>
                     
                     <motion.p 
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: 0.2, duration: 0.8 }}
-                        className="text-white/60 text-sm md:text-base leading-relaxed max-w-2xl mx-auto mb-12 font-light tracking-wide"
+                        className="text-gray-600 text-sm md:text-base leading-relaxed max-w-2xl mx-auto mb-12 font-light tracking-wide"
                     >
                         Expert guidance through every step of your international education journey. We connect you with the world's leading institutions.
                     </motion.p>
@@ -164,13 +164,13 @@ export default function EducationJourney() {
                     >
                         <a
                             href="/programs-levels"
-                            className="w-full sm:w-auto bg-[#436235] text-white text-[11px] font-bold px-10 py-4 rounded-none hover:bg-[#436235]/80 transition-all duration-300 uppercase tracking-[0.2em] shadow-2xl text-center"
+                            className="w-full sm:w-auto bg-[#1a1a1a] text-white text-[11px] font-bold px-10 py-4 rounded-none hover:bg-black transition-all duration-300 uppercase tracking-[0.2em] shadow-xl text-center"
                         >
                             Explore
                         </a>
                         <a 
                             href="/booking" 
-                            className="w-full sm:w-auto bg-transparent border border-white/20 text-white text-[11px] font-bold px-10 py-4 rounded-none hover:bg-white/10 transition-all duration-300 uppercase tracking-[0.2em] text-center"
+                            className="w-full sm:w-auto bg-transparent border border-[#1a1a1a] text-[#1a1a1a] text-[11px] font-bold px-10 py-4 rounded-none hover:bg-[#1a1a1a] hover:text-white transition-all duration-300 uppercase tracking-[0.2em] text-center"
                         >
                             Consult
                         </a>
@@ -189,7 +189,7 @@ export default function EducationJourney() {
                             viewport={{ once: true }}
                             transition={{ duration: 0.8 }}
                         >
-                            <span className="text-[11px] font-bold tracking-[0.3em] uppercase text-[#436235] mb-6 block">
+                            <span className="text-[11px] font-bold tracking-[0.3em] uppercase text-gray-500 mb-6 block">
                                 Services
                             </span>
                             <h2 className="text-4xl md:text-5xl lg:text-6xl font-medium leading-tight mb-8">
@@ -202,21 +202,21 @@ export default function EducationJourney() {
 
                             <div className="flex flex-col gap-8 mb-12">
                                 <div className="flex gap-6 items-start">
-                                    <span className="text-xs font-bold font-mono text-[#436235] pt-1">01</span>
+                                    <span className="text-xs font-bold font-mono text-[#1a1a1a] pt-1">01</span>
                                     <div>
                                         <h3 className="text-xl font-medium mb-2">Study abroad programs</h3>
                                         <p className="text-gray-600 text-sm leading-relaxed">Access curated programs across universities in North America, Europe, Australia, and Asia.</p>
                                     </div>
                                 </div>
                                 <div className="flex gap-6 items-start">
-                                    <span className="text-xs font-bold font-mono text-[#436235] pt-1">02</span>
+                                    <span className="text-xs font-bold font-mono text-[#1a1a1a] pt-1">02</span>
                                     <div>
                                         <h3 className="text-xl font-medium mb-2">Partner universities</h3>
                                         <p className="text-gray-600 text-sm leading-relaxed">Work with institutions we've built trusted relationships with worldwide.</p>
                                     </div>
                                 </div>
                                 <div className="flex gap-6 items-start">
-                                    <span className="text-xs font-bold font-mono text-[#436235] pt-1">03</span>
+                                    <span className="text-xs font-bold font-mono text-[#1a1a1a] pt-1">03</span>
                                     <div>
                                         <h3 className="text-xl font-medium mb-2">Course selection</h3>
                                         <p className="text-gray-600 text-sm leading-relaxed">Find the right program and navigate the application and admission process.</p>
@@ -226,7 +226,7 @@ export default function EducationJourney() {
 
                             <a
                                 href="/programs-levels"
-                                className="inline-flex items-center gap-3 bg-[#436235] text-white border border-[#436235] px-8 py-3 text-[11px] font-bold uppercase tracking-widest hover:bg-[#436235]/90 transition-all duration-500"
+                                className="inline-flex items-center gap-3 bg-[#1a1a1a] text-white border border-[#1a1a1a] px-8 py-3 text-[11px] font-bold uppercase tracking-widest hover:bg-black transition-all duration-500"
                             >
                                 Browse Programs <ArrowRight size={14} />
                             </a>
@@ -263,7 +263,7 @@ export default function EducationJourney() {
                             initial={{ opacity: 0 }}
                             whileInView={{ opacity: 1 }}
                             viewport={{ once: true }}
-                            className="text-[11px] font-bold tracking-[0.4em] uppercase text-[#436235] mb-6 block"
+                            className="text-[11px] font-bold tracking-[0.4em] uppercase text-gray-500 mb-6 block"
                         >
                             Pathways
                         </motion.span>
@@ -296,7 +296,7 @@ export default function EducationJourney() {
                                     onMouseEnter={() => setActiveProgram(item.id)}
                                     className="cursor-pointer group flex items-center gap-6 py-2 border-b border-gray-100 last:border-b-0"
                                 >
-                                    <span className={`text-xs font-bold font-mono transition-colors duration-500 ${activeProgram === item.id ? "text-[#436235]" : "text-gray-300"}`}>
+                                    <span className={`text-xs font-bold font-mono transition-colors duration-500 ${activeProgram === item.id ? "text-[#1a1a1a]" : "text-gray-300"}`}>
                                         0{item.id + 1}
                                     </span>
                                     <h3 className={`text-2xl md:text-3xl font-light tracking-tight transition-all duration-500 ${activeProgram === item.id ? "text-[#282728] translate-x-2" : "text-gray-500 group-hover:text-gray-700"}`}>
@@ -327,7 +327,7 @@ export default function EducationJourney() {
                                         <div className="absolute inset-0 bg-gradient-to-t from-gray-900/60 to-transparent"></div>
                                         <div className="absolute bottom-6 left-8 flex gap-3">
                                             {demandPrograms[activeProgram].tags.map(t => (
-                                                <span key={t} className="px-3 py-1 bg-[#436235] text-white text-[10px] font-bold tracking-widest uppercase rounded-sm shadow-sm">
+                                                <span key={t} className="px-3 py-1 bg-[#1a1a1a] text-white text-[10px] font-bold tracking-widest uppercase rounded-none shadow-sm">
                                                     {t}
                                                 </span>
                                             ))}
@@ -341,11 +341,11 @@ export default function EducationJourney() {
                                         </p>
                                         
                                         <div className="mb-10">
-                                            <h4 className="text-[10px] font-bold tracking-[0.2em] uppercase text-[#436235] mb-4">Core Programs</h4>
+                                            <h4 className="text-[10px] font-bold tracking-[0.2em] uppercase text-gray-500 mb-4">Core Programs</h4>
                                             <ul className="space-y-3">
                                                 {demandPrograms[activeProgram].programs.map((prog, i) => (
                                                     <li key={i} className="flex items-center gap-3 text-sm text-gray-600">
-                                                        <div className="w-1 h-1 rounded-full bg-[#436235]"></div>
+                                                        <div className="w-1 h-1 rounded-full bg-[#1a1a1a]"></div>
                                                         {prog}
                                                     </li>
                                                 ))}
@@ -357,7 +357,7 @@ export default function EducationJourney() {
                                                 <span className="text-[10px] uppercase tracking-widest text-gray-500 block mb-1">Intakes</span>
                                                 <span className="text-xs font-medium text-[#282728]">{demandPrograms[activeProgram].intakes}</span>
                                             </div>
-                                            <a href="/programs-levels" className="w-10 h-10 rounded-sm border border-gray-300 flex items-center justify-center text-gray-600 hover:text-white hover:bg-[#436235] hover:border-[#436235] transition-all">
+                                            <a href="/programs-levels" className="w-10 h-10 rounded-none border border-gray-300 flex items-center justify-center text-gray-600 hover:text-white hover:bg-[#1a1a1a] hover:border-[#1a1a1a] transition-all">
                                                 <ArrowRight size={16} />
                                             </a>
                                         </div>
@@ -370,7 +370,7 @@ export default function EducationJourney() {
             </section>
 
             {/* Transparent Fees Section */}
-            <section className="py-32 bg-[#e8e8e6] font-urbanist border-y border-gray-200">
+            <section className="py-32 bg-[#fcfcfc] font-urbanist border-y border-gray-200">
                 <div className="container mx-auto px-6 md:px-12 max-w-7xl">
                     <div className="text-center mb-24">
                         <motion.span
@@ -398,15 +398,15 @@ export default function EducationJourney() {
                         <div className="p-12 md:p-16 border-b lg:border-b-0 lg:border-r border-gray-200 flex flex-col hover:bg-gray-50 transition-colors">
                             <h3 className="text-lg font-medium text-[#282728] mb-2">Diploma level</h3>
                             <p className="text-gray-500 text-xs tracking-widest uppercase mb-8">total school fees</p>
-                            <div className="text-5xl lg:text-6xl font-light text-[#436235] mb-12">$31k<span className="text-2xl text-gray-500">+</span></div>
+                            <div className="text-5xl lg:text-6xl font-light text-[#1a1a1a] mb-12">$31k<span className="text-2xl text-gray-500">+</span></div>
                             <ul className="space-y-4 mb-12 flex-1">
                                 {["Tuition across regions", "Health insurance included", "Visa processing covered"].map(item => (
                                     <li key={item} className="flex items-start gap-3 text-sm text-gray-600">
-                                        <CheckCircle size={16} className="text-[#436235] mt-0.5" /> {item}
+                                        <CheckCircle size={16} className="text-[#1a1a1a] mt-0.5" /> {item}
                                     </li>
                                 ))}
                             </ul>
-                            <a href="/fee-guide" className="text-[11px] font-bold uppercase tracking-widest flex items-center gap-2 text-[#282728] hover:text-[#436235] transition-colors group/link">
+                            <a href="/fee-guide" className="text-[11px] font-bold uppercase tracking-widest flex items-center gap-2 text-[#282728] hover:text-[#1a1a1a] transition-colors group/link">
                                 Explore <ArrowRight size={14} className="group-hover/link:translate-x-1 transition-transform" />
                             </a>
                         </div>
@@ -414,15 +414,15 @@ export default function EducationJourney() {
                         <div className="p-12 md:p-16 border-b lg:border-b-0 lg:border-r border-gray-200 flex flex-col hover:bg-gray-50 transition-colors">
                             <h3 className="text-lg font-medium text-[#282728] mb-2">Bachelor's degree</h3>
                             <p className="text-gray-500 text-xs tracking-widest uppercase mb-8">average per year</p>
-                            <div className="text-5xl lg:text-6xl font-light text-[#436235] mb-12">$45k<span className="text-2xl text-gray-500">+</span></div>
+                            <div className="text-5xl lg:text-6xl font-light text-[#1a1a1a] mb-12">$45k<span className="text-2xl text-gray-500">+</span></div>
                             <ul className="space-y-4 mb-12 flex-1">
                                 {["Full tuition and fees", "Housing assistance available", "Visa and travel support", "Scholarship matching service"].map(item => (
                                     <li key={item} className="flex items-start gap-3 text-sm text-gray-600">
-                                        <CheckCircle size={16} className="text-[#436235] mt-0.5" /> {item}
+                                        <CheckCircle size={16} className="text-[#1a1a1a] mt-0.5" /> {item}
                                     </li>
                                 ))}
                             </ul>
-                            <a href="/fee-guide" className="text-[11px] font-bold uppercase tracking-widest flex items-center gap-2 text-[#282728] hover:text-[#436235] transition-colors group/link">
+                            <a href="/fee-guide" className="text-[11px] font-bold uppercase tracking-widest flex items-center gap-2 text-[#282728] hover:text-[#1a1a1a] transition-colors group/link">
                                 View options <ArrowRight size={14} className="group-hover/link:translate-x-1 transition-transform" />
                             </a>
                         </div>
@@ -430,15 +430,15 @@ export default function EducationJourney() {
                         <div className="p-12 md:p-16 flex flex-col hover:bg-gray-50 transition-colors">
                             <h3 className="text-lg font-medium text-[#282728] mb-2">Master's program</h3>
                             <p className="text-gray-500 text-xs tracking-widest uppercase mb-8">average per year</p>
-                            <div className="text-5xl lg:text-6xl font-light text-[#436235] mb-12">$52k<span className="text-2xl text-gray-500">+</span></div>
+                            <div className="text-5xl lg:text-6xl font-light text-[#1a1a1a] mb-12">$52k<span className="text-2xl text-gray-500">+</span></div>
                             <ul className="space-y-4 mb-12 flex-1">
                                 {["Postgraduate tuition costs", "Research funding guidance", "Thesis and project support", "Career placement assistance"].map(item => (
                                     <li key={item} className="flex items-start gap-3 text-sm text-gray-600">
-                                        <CheckCircle size={16} className="text-[#436235] mt-0.5" /> {item}
+                                        <CheckCircle size={16} className="text-[#1a1a1a] mt-0.5" /> {item}
                                     </li>
                                 ))}
                             </ul>
-                            <a href="/fee-guide" className="text-[11px] font-bold uppercase tracking-widest flex items-center gap-2 text-[#282728] hover:text-[#436235] transition-colors group/link">
+                            <a href="/fee-guide" className="text-[11px] font-bold uppercase tracking-widest flex items-center gap-2 text-[#282728] hover:text-[#1a1a1a] transition-colors group/link">
                                 Start application <ArrowRight size={14} className="group-hover/link:translate-x-1 transition-transform" />
                             </a>
                         </div>
@@ -453,7 +453,7 @@ export default function EducationJourney() {
                     <div className="text-center mb-24">
                         <motion.span
                             initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true }}
-                            className="text-[11px] font-bold tracking-[0.4em] uppercase text-[#436235] mb-4 block"
+                            className="text-[11px] font-bold tracking-[0.4em] uppercase text-gray-500 mb-4 block"
                         >
                             Team
                         </motion.span>
@@ -481,7 +481,7 @@ export default function EducationJourney() {
                             <motion.div
                                 key={i}
                                 initial={{ opacity: 0, y: 30 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: i * 0.1 }}
-                                className="flex flex-col sm:flex-row bg-[#0a0f0a] text-white border border-[#1a251a] rounded-none overflow-hidden group hover:border-[#436235] transition-all duration-500"
+                                className="flex flex-col sm:flex-row bg-[#fcfcfc] text-[#1a1a1a] border border-gray-200 rounded-none overflow-hidden group hover:border-[#1a1a1a] hover:bg-white hover:shadow-lg transition-all duration-500"
                             >
                                 {/* Left: Image */}
                                 <div className="sm:w-[35%] lg:w-[25%] aspect-square sm:aspect-auto relative overflow-hidden bg-black/50">
@@ -493,18 +493,18 @@ export default function EducationJourney() {
                                 </div>
                                 {/* Right: Info */}
                                 <div className="sm:w-[65%] lg:w-[75%] p-10 md:p-14 flex flex-col justify-center">
-                                    <span className="text-[10px] font-bold tracking-widest uppercase text-[#436235] mb-3 block">
+                                    <span className="text-[10px] font-bold tracking-widest uppercase text-gray-500 mb-3 block">
                                         {c.role}
                                     </span>
-                                    <h3 className="text-2xl md:text-4xl font-light mb-6 text-white leading-tight">
+                                    <h3 className="text-2xl md:text-4xl font-light mb-6 text-[#1a1a1a] leading-tight">
                                         {c.name}
                                     </h3>
-                                    <p className="text-white/60 text-sm md:text-base leading-relaxed mb-10 max-w-2xl">
+                                    <p className="text-gray-600 text-sm md:text-base leading-relaxed mb-10 max-w-2xl">
                                         {c.bio}
                                     </p>
                                     <a 
                                         href="/booking" 
-                                        className="inline-flex items-center gap-3 border border-white/20 px-8 py-3 text-[11px] font-bold uppercase tracking-widest hover:bg-white hover:text-[#0a0f0a] transition-all duration-500 w-fit"
+                                        className="inline-flex items-center gap-3 border border-[#1a1a1a] px-8 py-3 text-[11px] font-bold uppercase tracking-widest text-[#1a1a1a] hover:bg-[#1a1a1a] hover:text-white transition-all duration-500 w-fit"
                                     >
                                         Book a session <ArrowRight size={14} />
                                     </a>
@@ -516,11 +516,11 @@ export default function EducationJourney() {
             </section>
 
             {/* Partner Universities Section */}
-            <section className="bg-[#0f1a0f] text-white py-32 font-urbanist border-t border-white/5 overflow-hidden">
+            <section className="bg-[#1a1a1a] text-white py-32 font-urbanist overflow-hidden">
                 <div className="container mx-auto px-6 md:px-12 max-w-7xl text-center">
                     <motion.span
                         initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true }}
-                        className="text-[11px] font-bold tracking-[0.4em] uppercase text-[#436235] mb-6 block"
+                        className="text-[11px] font-bold tracking-[0.4em] uppercase text-gray-400 mb-6 block"
                     >
                         Network
                     </motion.span>
@@ -583,7 +583,7 @@ export default function EducationJourney() {
                         className="text-4xl md:text-6xl lg:text-7xl font-light text-[#282728] mb-6 leading-tight"
                     >
                         Start your <br/>
-                        <span className="italic text-[#436235]">education journey</span> today
+                        <span className="italic text-gray-500">education journey</span> today
                     </motion.h2>
                     <motion.p
                         initial={{ opacity: 0 }}
@@ -603,7 +603,7 @@ export default function EducationJourney() {
                     >
                         <a
                             href="/booking"
-                            className="bg-[#436235] text-white px-10 py-4 rounded-none text-[11px] font-bold uppercase tracking-[0.2em] hover:bg-[#436235]/90 transition-all shadow-xl"
+                            className="bg-[#1a1a1a] text-white px-10 py-4 rounded-none text-[11px] font-bold uppercase tracking-[0.2em] hover:bg-black transition-all shadow-xl"
                         >
                             Book consultation
                         </a>

@@ -6,9 +6,26 @@ use App\Models\ResidentIntake;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 
 class ResidentIntakeController extends Controller
 {
+    /** Document-checklist keys that may carry an uploaded PDF. */
+    private const DOCUMENT_KEYS = [
+        'passport', 'visa_copies', 'contracts', 'payslips',
+        'ird_summary', 'education_certs', 'cv',
+    ];
+
+    private const DOCUMENT_LABELS = [
+        'passport'        => 'Passport (all pages)',
+        'visa_copies'     => 'All NZ visa copies',
+        'contracts'       => 'NZ employment contracts with Ergo + JD',
+        'payslips'        => 'Payslips — first 2 mo + latest 1 mo',
+        'ird_summary'     => 'IRD summary of earnings (monthly)',
+        'education_certs' => 'Education certificates / transcripts',
+        'cv'              => 'CV (NZ + overseas history)',
+    ];
+
     /**
      * Show the public Resident Intake form.
      */
@@ -69,19 +86,43 @@ class ResidentIntakeController extends Controller
             'family_members.*.passport_number'  => 'nullable|string|max:60',
 
             'documents'                => 'nullable|array',
+            'document_files'           => 'nullable|array',
+            'document_files.*'         => 'nullable|file|mimes:pdf|max:10240',
 
             'character_health_disclosure' => 'nullable|string',
             'other_notes'                 => 'nullable|string',
         ]);
 
+        // Uploaded PDFs are handled manually; keep them out of mass-assignment.
+        unset($validated['document_files']);
+
+        // FormData submissions (when files are attached) stringify booleans —
+        // normalise the checklist back to real booleans.
+        $documents = collect((array) $request->input('documents', []))
+            ->map(fn ($v) => filter_var($v, FILTER_VALIDATE_BOOLEAN))
+            ->all();
+
         try {
             DB::beginTransaction();
+
+            $intakeId = 'RI-' . strtoupper(uniqid());
+
+            // Store each uploaded document on the private disk under the intake's folder.
+            $storedFiles = [];
+            foreach ((array) $request->file('document_files', []) as $key => $file) {
+                if ($file && in_array($key, self::DOCUMENT_KEYS, true)) {
+                    $storedFiles[$key] = $file->store("resident-intakes/{$intakeId}", 'local');
+                    $documents[$key] = true; // an uploaded file implies "I have this"
+                }
+            }
 
             $intake = ResidentIntake::create(array_merge(
                 $validated,
                 [
-                    'intake_id' => 'RI-' . strtoupper(uniqid()),
-                    'status'    => 'New',
+                    'intake_id'      => $intakeId,
+                    'status'         => 'New',
+                    'documents'      => $documents ?: null,
+                    'document_files' => $storedFiles ?: null,
                 ]
             ));
 
@@ -119,6 +160,34 @@ class ResidentIntakeController extends Controller
         $intake = ResidentIntake::findOrFail($id);
         return inertia('admin/Immigration/ResidentIntakeDetails', [
             'intake' => $intake,
+        ]);
+    }
+
+    /**
+     * Admin: serve one of an intake's uploaded document PDFs.
+     *
+     * By default the PDF is streamed inline so it opens in the browser tab.
+     * Pass ?download=1 to force a file download instead.
+     */
+    public function downloadDocument(Request $request, $id, string $key)
+    {
+        $intake = ResidentIntake::findOrFail($id);
+
+        $files = $intake->document_files ?? [];
+        abort_unless(isset($files[$key]), 404);
+
+        $path = $files[$key];
+        abort_unless(Storage::disk('local')->exists($path), 404);
+
+        $label = self::DOCUMENT_LABELS[$key] ?? $key;
+        $filename = $intake->intake_id . ' - ' . $label . '.pdf';
+
+        if ($request->boolean('download')) {
+            return Storage::disk('local')->download($path, $filename);
+        }
+
+        return Storage::disk('local')->response($path, $filename, [
+            'Content-Type' => 'application/pdf',
         ]);
     }
 }
