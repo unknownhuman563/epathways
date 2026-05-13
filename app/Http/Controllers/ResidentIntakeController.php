@@ -164,9 +164,12 @@ class ResidentIntakeController extends Controller
     }
 
     /**
-     * Admin: download one of an intake's uploaded document PDFs.
+     * Admin: serve one of an intake's uploaded document PDFs.
+     *
+     * By default the PDF is streamed inline so it opens in the browser tab.
+     * Pass ?download=1 to force a file download instead.
      */
-    public function downloadDocument($id, string $key)
+    public function downloadDocument(Request $request, $id, string $key)
     {
         $intake = ResidentIntake::findOrFail($id);
 
@@ -179,6 +182,12 @@ class ResidentIntakeController extends Controller
         $label = self::DOCUMENT_LABELS[$key] ?? $key;
         $filename = $intake->intake_id . ' - ' . $label . '.pdf';
 
-        return Storage::disk('local')->download($path, $filename);
+        if ($request->boolean('download')) {
+            return Storage::disk('local')->download($path, $filename);
+        }
+
+        return Storage::disk('local')->response($path, $filename, [
+            'Content-Type' => 'application/pdf',
+        ]);
     }
 }

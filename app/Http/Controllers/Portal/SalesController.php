@@ -51,7 +51,7 @@ class SalesController extends Controller
                 ];
             })->all();
 
-            return view('users.sales.dashboard', [
+            return inertia('portal/sales/Dashboard', [
                 'portal' => 'sales',
                 'leadStats' => $leadStats,
                 'bookingStats' => $bookingStats,
@@ -65,7 +65,7 @@ class SalesController extends Controller
         } catch (\Throwable $e) {
             Log::error('Sales dashboard failed', ['error' => $e->getMessage()]);
 
-            return view('users.sales.dashboard', [
+            return inertia('portal/sales/Dashboard', [
                 'portal' => 'sales',
                 'leadStats' => array_fill_keys(['total', 'new', 'this_month', 'last_month', 'qualified', 'closed', 'ai_done', 'ai_pending'], 0),
                 'bookingStats' => array_fill_keys(['total', 'this_month', 'upcoming', 'pending'], 0),
@@ -80,7 +80,7 @@ class SalesController extends Controller
     public function leads()
     {
         try {
-            return view('users.sales.leads', [
+            return inertia('portal/sales/Leads', [
                 'portal' => 'sales',
                 'statuses' => self::LEAD_STATUSES,
                 'leads' => Lead::with(['studyPlans', 'event'])->latest()->get()->map(fn ($l) => $this->leadRow($l)),
@@ -88,7 +88,7 @@ class SalesController extends Controller
         } catch (\Throwable $e) {
             Log::error('Sales leads list failed', ['error' => $e->getMessage()]);
 
-            return view('users.sales.leads', ['portal' => 'sales', 'statuses' => self::LEAD_STATUSES, 'leads' => collect()]);
+            return inertia('portal/sales/Leads', ['portal' => 'sales', 'statuses' => self::LEAD_STATUSES, 'leads' => collect()]);
         }
     }
 
@@ -123,7 +123,7 @@ class SalesController extends Controller
     public function bookings()
     {
         try {
-            return view('users.sales.bookings', [
+            return inertia('portal/sales/Bookings', [
                 'portal' => 'sales',
                 'statuses' => self::BOOKING_STATUSES,
                 'bookings' => Booking::with('lead')->latest()->get()->map(fn ($b) => $this->bookingRow($b)),
@@ -131,7 +131,7 @@ class SalesController extends Controller
         } catch (\Throwable $e) {
             Log::error('Sales bookings list failed', ['error' => $e->getMessage()]);
 
-            return view('users.sales.bookings', ['portal' => 'sales', 'statuses' => self::BOOKING_STATUSES, 'bookings' => collect()]);
+            return inertia('portal/sales/Bookings', ['portal' => 'sales', 'statuses' => self::BOOKING_STATUSES, 'bookings' => collect()]);
         }
     }
 

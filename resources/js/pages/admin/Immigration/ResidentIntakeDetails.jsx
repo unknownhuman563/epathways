@@ -3,7 +3,7 @@ import { Head, Link } from '@inertiajs/react';
 import {
     ArrowLeft, Mail, Phone, Calendar, Globe, FileText, BookOpen,
     Briefcase, GraduationCap, Award, Languages, Users, FileCheck2,
-    MessageSquare, CheckCircle, XCircle, Printer, Download
+    MessageSquare, CheckCircle, XCircle, Printer, Download, Eye
 } from 'lucide-react';
 
 export default function ResidentIntakeDetails({ intake }) {
@@ -250,16 +250,38 @@ export default function ResidentIntakeDetails({ intake }) {
                                             <XCircle size={16} className="text-gray-300 mt-0.5 flex-shrink-0" />
                                         )}
                                         <div className="flex-1 min-w-0">
-                                            <span className={ticked || hasFile ? 'text-gray-800' : 'text-gray-400'}>
-                                                {docLabels[k]}
-                                            </span>
-                                            {hasFile && (
+                                            {hasFile ? (
                                                 <a
                                                     href={docUrl(k)}
-                                                    className="mt-1 inline-flex items-center gap-1.5 text-xs font-semibold text-[#00A693] hover:text-[#008c7c] transition-colors no-print"
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="text-gray-800 font-medium hover:text-[#00A693] underline decoration-gray-300 underline-offset-2 hover:decoration-[#00A693] transition-colors"
                                                 >
-                                                    <Download size={13} /> Download PDF
+                                                    {docLabels[k]}
                                                 </a>
+                                            ) : (
+                                                <span className={ticked ? 'text-gray-800' : 'text-gray-400'}>
+                                                    {docLabels[k]}
+                                                </span>
+                                            )}
+                                            {hasFile && (
+                                                <div className="mt-1.5 flex items-center gap-3 no-print">
+                                                    <a
+                                                        href={docUrl(k)}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#00A693] hover:text-[#008c7c] transition-colors"
+                                                    >
+                                                        <Eye size={13} /> View PDF
+                                                    </a>
+                                                    <span className="text-gray-200">·</span>
+                                                    <a
+                                                        href={`${docUrl(k)}?download=1`}
+                                                        className="inline-flex items-center gap-1.5 text-xs font-semibold text-gray-500 hover:text-gray-800 transition-colors"
+                                                    >
+                                                        <Download size={13} /> Download
+                                                    </a>
+                                                </div>
                                             )}
                                         </div>
                                     </li>

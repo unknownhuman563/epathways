@@ -131,8 +131,8 @@ Route::middleware(['auth'])->group(function () {
     });
 
     // Department portals — each staff member reaches only their own portal
-    // ('portal:<dept>'); admins may open any. Blade dashboards live under
-    // resources/views/users/<dept>/ and extend resources/views/layouts/dashboard.blade.php.
+    // ('portal:<dept>'); admins may open any. Inertia/React pages under
+    // resources/js/pages/portal/ rendered through DashboardLayout.
     Route::prefix('portal')->group(function () {
         Route::get('/', fn () => redirect(auth()->user()->homeRoute()))->name('portal');
 
@@ -145,14 +145,14 @@ Route::middleware(['auth'])->group(function () {
             Route::post('/bookings/{id}', [SalesController::class, 'updateBooking'])->name('bookings.update');
         });
 
-        // Other portals — scaffold dashboards for now (one Blade view each).
-        Route::get('/education/dashboard', fn () => view('users.education.dashboard', ['portal' => 'education']))
+        // Other portals — scaffold dashboards for now (generic Inertia page).
+        Route::get('/education/dashboard', fn () => inertia('portal/Dashboard', ['portal' => 'education']))
             ->middleware('portal:education')->name('portal.education');
-        Route::get('/english/dashboard', fn () => view('users.english.dashboard', ['portal' => 'english']))
+        Route::get('/english/dashboard', fn () => inertia('portal/Dashboard', ['portal' => 'english']))
             ->middleware('portal:english')->name('portal.english');
-        Route::get('/immigration/dashboard', fn () => view('users.immigration.dashboard', ['portal' => 'immigration']))
+        Route::get('/immigration/dashboard', fn () => inertia('portal/Dashboard', ['portal' => 'immigration']))
             ->middleware('portal:immigration')->name('portal.immigration');
-        Route::get('/accommodation/dashboard', fn () => view('users.accommodation.dashboard', ['portal' => 'accommodation']))
+        Route::get('/accommodation/dashboard', fn () => inertia('portal/Dashboard', ['portal' => 'accommodation']))
             ->middleware('portal:accommodation')->name('portal.accommodation');
     });
 });
