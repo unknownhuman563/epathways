@@ -4,6 +4,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\ActivityLogController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\EventController;
+use App\Http\Controllers\HomeController;
 use App\Http\Controllers\LeadController;
 use App\Http\Controllers\BookingController;
 use App\Http\Controllers\ProgramController;
@@ -11,9 +12,7 @@ use App\Http\Controllers\Portal\SalesController;
 use App\Http\Controllers\ResidentIntakeController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\UserReviewController;
-Route::get('/', function () {
-    return inertia('home/HomePage');
-});
+Route::get('/', [HomeController::class, 'index']);
 
 Route::get("/booking", function (){
    return inertia('booking/BookingPage');

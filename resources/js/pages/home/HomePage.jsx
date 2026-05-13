@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React from "react";
 import Navbar from "@/components/layout/Navbar";
 import HeroSection from "./HeroSection";
 import StatisticsBar from "./StatisticsBar";
@@ -18,16 +18,9 @@ import CTASection from "./CTASection";
 import AccreditationSection from "./AccreditationSection";
 import VisaApprovedShowcase from "./VisaApprovedShowcase";
 
-
 import HeroVideo from "@assets/Hero/02 - client epathway intro (1).mp4";
 
-export default function Home() {
-  const [showModal, setShowModal] = useState(false);
-
-  useEffect(() => {
-    setShowModal(true);
-  }, []);
-
+export default function Home({ events = [], programGroups = [] }) {
   return (
     <>
       <div className="bg-white" style={{ overflowX: 'clip' }}>
@@ -57,9 +50,8 @@ export default function Home() {
         <ProcessSteps />
         <VisaApprovedShowcase />
 
-
         {/* In-Demand Programs Section */}
-        <InDemandPrograms />
+        <InDemandPrograms programGroups={programGroups} />
 
         {/* Student Visa Timeline Section */}
         <StudentVisaTimeline />
@@ -71,12 +63,12 @@ export default function Home() {
         <CTASection />
 
         {/* Events and Announcements Section */}
-        <EventsAnnouncements />
+        <EventsAnnouncements events={events} />
 
         <ScrollToTop />
 
-        {/* Welcome Modal */}
-        <Modal isOpen={showModal} onClose={() => setShowModal(false)} />
+        {/* Welcome Modal (shows at most once per visitor per week) */}
+        <Modal />
 
         <Footer />
       </div>
