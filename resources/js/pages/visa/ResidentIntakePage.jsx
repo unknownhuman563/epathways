@@ -455,7 +455,7 @@ export default function ResidentIntakePage() {
             ),
         }));
 
-        post('/resident-intake', {
+        post('/resident-interest', {
             forceFormData: true, // always multipart so attached PDFs are sent reliably
             onSuccess: () => {
                 setShowConfirm(false);

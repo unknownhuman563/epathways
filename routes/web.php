@@ -60,8 +60,11 @@ Route::get("/visa-assessment-form", function (){
    return inertia('visa/VisaAssessmentForm');
 });
 
-Route::get("/resident-intake", [ResidentIntakeController::class, 'showForm'])->name('resident-intake');
-Route::post("/resident-intake", [ResidentIntakeController::class, 'store']);
+Route::get("/resident-interest", [ResidentIntakeController::class, 'showForm'])->name('resident-interest');
+Route::post("/resident-interest", [ResidentIntakeController::class, 'store']);
+
+// Keep the old path working for any in-flight bookmarks / external links.
+Route::permanentRedirect('/resident-intake', '/resident-interest');
 
 Route::post('/user-reviews', [UserReviewController::class, 'store'])->name('user-reviews.store');
 
