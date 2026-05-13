@@ -7,7 +7,11 @@ import {
 } from 'lucide-react';
 
 export default function ResidentIntakeDetails({ intake }) {
-    const formatDate = (d) => d ? new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—';
+    const formatDate = (d) => {
+        if (!d) return '—';
+        const date = new Date(d);
+        return isNaN(date) ? '—' : date.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    };
 
     const handlePrint = () => window.print();
 
@@ -37,19 +41,31 @@ export default function ResidentIntakeDetails({ intake }) {
     const docLabels = {
         passport: 'Passport (all pages)',
         visa_copies: 'All NZ visa copies',
-        contracts: 'NZ employment contracts with Ergo + JD',
+        contracts: 'NZ employment contracts + JD',
         payslips: 'Payslips — first 2 mo + latest 1 mo',
         ird_summary: 'IRD summary of earnings (monthly)',
         education_certs: 'Education certificates / transcripts',
         cv: 'CV (NZ + overseas history)',
     };
+    const otherLabel = 'Other supporting documents';
 
     const documents = intake.documents || {};
     const docKeys = Object.keys(docLabels);
     const docChecked = docKeys.filter((k) => !!documents[k]).length;
     const uploadedFiles = intake.document_files || {};
-    const uploadedCount = docKeys.filter((k) => !!uploadedFiles[k]).length;
-    const docUrl = (key) => `/admin/immigration/resident-intakes/${intake.id}/documents/${key}`;
+
+    // document_files[key] is an array of paths (with legacy support for a single string).
+    const filesFor = (key) => {
+        const entry = uploadedFiles[key];
+        if (!entry) return [];
+        return Array.isArray(entry) ? entry : [entry];
+    };
+
+    const uploadedCount = docKeys.filter((k) => filesFor(k).length > 0).length;
+    const otherFiles = filesFor('other');
+    const totalFiles = [...docKeys, 'other'].reduce((n, k) => n + filesFor(k).length, 0);
+
+    const docUrl = (key, index = 0) => `/admin/immigration/resident-intakes/${intake.id}/documents/${key}/${index}`;
 
     const ToolbarButtons = () => (
         <div className="flex items-center gap-2 no-print">
@@ -161,7 +177,7 @@ export default function ResidentIntakeDetails({ intake }) {
                         )}
                     </Section>
 
-                    <Section icon={<Briefcase size={16} />} title="Employment at Ergo">
+                    <Section icon={<Briefcase size={16} />} title="Employment">
                         <Grid>
                             <Item label="Job Title" value={intake.job_title} />
                             <Item label="Employment Start" value={formatDate(intake.employment_start)} />
@@ -237,10 +253,11 @@ export default function ResidentIntakeDetails({ intake }) {
                         )}
                     </Section>
 
-                    <Section icon={<FileCheck2 size={16} />} title={`Documents — ${docChecked}/${docKeys.length} ticked · ${uploadedCount} uploaded`}>
-                        <ul className="space-y-2.5">
+                    <Section icon={<FileCheck2 size={16} />} title={`Documents — ${docChecked}/${docKeys.length} ticked · ${totalFiles} ${totalFiles === 1 ? 'file' : 'files'}`}>
+                        <ul className="space-y-3">
                             {docKeys.map((k) => {
-                                const hasFile = !!uploadedFiles[k];
+                                const files = filesFor(k);
+                                const hasFile = files.length > 0;
                                 const ticked = !!documents[k];
                                 return (
                                     <li key={k} className="flex items-start gap-2.5 text-sm">
@@ -250,45 +267,80 @@ export default function ResidentIntakeDetails({ intake }) {
                                             <XCircle size={16} className="text-gray-300 mt-0.5 flex-shrink-0" />
                                         )}
                                         <div className="flex-1 min-w-0">
-                                            {hasFile ? (
-                                                <a
-                                                    href={docUrl(k)}
-                                                    target="_blank"
-                                                    rel="noopener noreferrer"
-                                                    className="text-gray-800 font-medium hover:text-[#00A693] underline decoration-gray-300 underline-offset-2 hover:decoration-[#00A693] transition-colors"
-                                                >
-                                                    {docLabels[k]}
-                                                </a>
-                                            ) : (
-                                                <span className={ticked ? 'text-gray-800' : 'text-gray-400'}>
-                                                    {docLabels[k]}
-                                                </span>
-                                            )}
+                                            <div className={hasFile ? 'text-gray-800 font-medium' : (ticked ? 'text-gray-800' : 'text-gray-400')}>
+                                                {docLabels[k]}
+                                                {hasFile && files.length > 1 && (
+                                                    <span className="ml-2 text-[10px] font-bold uppercase tracking-widest text-[#00A693]">
+                                                        {files.length} files
+                                                    </span>
+                                                )}
+                                            </div>
                                             {hasFile && (
-                                                <div className="mt-1.5 flex items-center gap-3 no-print">
-                                                    <a
-                                                        href={docUrl(k)}
-                                                        target="_blank"
-                                                        rel="noopener noreferrer"
-                                                        className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#00A693] hover:text-[#008c7c] transition-colors"
-                                                    >
-                                                        <Eye size={13} /> View PDF
-                                                    </a>
-                                                    <span className="text-gray-200">·</span>
-                                                    <a
-                                                        href={`${docUrl(k)}?download=1`}
-                                                        className="inline-flex items-center gap-1.5 text-xs font-semibold text-gray-500 hover:text-gray-800 transition-colors"
-                                                    >
-                                                        <Download size={13} /> Download
-                                                    </a>
-                                                </div>
+                                                <ul className="mt-1.5 space-y-1 no-print">
+                                                    {files.map((_, idx) => (
+                                                        <li key={idx} className="flex items-center gap-3">
+                                                            <a
+                                                                href={docUrl(k, idx)}
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                                className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#00A693] hover:text-[#008c7c] transition-colors"
+                                                            >
+                                                                <Eye size={13} /> View PDF{files.length > 1 ? ` ${idx + 1}` : ''}
+                                                            </a>
+                                                            <span className="text-gray-200">·</span>
+                                                            <a
+                                                                href={`${docUrl(k, idx)}?download=1`}
+                                                                className="inline-flex items-center gap-1.5 text-xs font-semibold text-gray-500 hover:text-gray-800 transition-colors"
+                                                            >
+                                                                <Download size={13} /> Download
+                                                            </a>
+                                                        </li>
+                                                    ))}
+                                                </ul>
                                             )}
                                         </div>
                                     </li>
                                 );
                             })}
                         </ul>
-                        {uploadedCount === 0 && (
+
+                        {/* Other supporting documents — free-form bucket */}
+                        {otherFiles.length > 0 && (
+                            <div className="mt-5 pt-5 border-t border-gray-100">
+                                <div className="flex items-center gap-2.5 mb-3">
+                                    <FileCheck2 size={14} className="text-[#00A693] flex-shrink-0" />
+                                    <div className="text-sm font-bold text-gray-800">
+                                        {otherLabel}
+                                        <span className="ml-2 text-[10px] font-bold uppercase tracking-widest text-[#00A693]">
+                                            {otherFiles.length} {otherFiles.length === 1 ? 'file' : 'files'}
+                                        </span>
+                                    </div>
+                                </div>
+                                <ul className="space-y-1 no-print pl-6">
+                                    {otherFiles.map((_, idx) => (
+                                        <li key={idx} className="flex items-center gap-3">
+                                            <a
+                                                href={docUrl('other', idx)}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#00A693] hover:text-[#008c7c] transition-colors"
+                                            >
+                                                <Eye size={13} /> View document {idx + 1}
+                                            </a>
+                                            <span className="text-gray-200">·</span>
+                                            <a
+                                                href={`${docUrl('other', idx)}?download=1`}
+                                                className="inline-flex items-center gap-1.5 text-xs font-semibold text-gray-500 hover:text-gray-800 transition-colors"
+                                            >
+                                                <Download size={13} /> Download
+                                            </a>
+                                        </li>
+                                    ))}
+                                </ul>
+                            </div>
+                        )}
+
+                        {totalFiles === 0 && (
                             <p className="text-xs text-gray-400 mt-3">No documents were uploaded with this intake.</p>
                         )}
                     </Section>

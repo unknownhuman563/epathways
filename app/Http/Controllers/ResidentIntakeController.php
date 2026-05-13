@@ -10,20 +10,21 @@ use Illuminate\Support\Facades\Storage;
 
 class ResidentIntakeController extends Controller
 {
-    /** Document-checklist keys that may carry an uploaded PDF. */
+    /** Document-checklist keys that may carry uploaded PDFs (plus an "other" bucket). */
     private const DOCUMENT_KEYS = [
         'passport', 'visa_copies', 'contracts', 'payslips',
-        'ird_summary', 'education_certs', 'cv',
+        'ird_summary', 'education_certs', 'cv', 'other',
     ];
 
     private const DOCUMENT_LABELS = [
         'passport'        => 'Passport (all pages)',
         'visa_copies'     => 'All NZ visa copies',
-        'contracts'       => 'NZ employment contracts with Ergo + JD',
+        'contracts'       => 'NZ employment contracts + JD',
         'payslips'        => 'Payslips — first 2 mo + latest 1 mo',
         'ird_summary'     => 'IRD summary of earnings (monthly)',
         'education_certs' => 'Education certificates / transcripts',
         'cv'              => 'CV (NZ + overseas history)',
+        'other'           => 'Other supporting documents',
     ];
 
     /**
@@ -87,7 +88,8 @@ class ResidentIntakeController extends Controller
 
             'documents'                => 'nullable|array',
             'document_files'           => 'nullable|array',
-            'document_files.*'         => 'nullable|file|mimes:pdf|max:10240',
+            'document_files.*'         => 'nullable|array',
+            'document_files.*.*'       => 'nullable|file|mimes:pdf|max:10240',
 
             'character_health_disclosure' => 'nullable|string',
             'other_notes'                 => 'nullable|string',
@@ -107,12 +109,24 @@ class ResidentIntakeController extends Controller
 
             $intakeId = 'RI-' . strtoupper(uniqid());
 
-            // Store each uploaded document on the private disk under the intake's folder.
+            // Store each uploaded document (one or more PDFs per key) on the private disk.
             $storedFiles = [];
-            foreach ((array) $request->file('document_files', []) as $key => $file) {
-                if ($file && in_array($key, self::DOCUMENT_KEYS, true)) {
-                    $storedFiles[$key] = $file->store("resident-intakes/{$intakeId}", 'local');
-                    $documents[$key] = true; // an uploaded file implies "I have this"
+            foreach ((array) $request->file('document_files', []) as $key => $files) {
+                if (!in_array($key, self::DOCUMENT_KEYS, true)) {
+                    continue;
+                }
+                $paths = [];
+                foreach ((array) $files as $file) {
+                    if ($file instanceof \Illuminate\Http\UploadedFile) {
+                        $paths[] = $file->store("resident-intakes/{$intakeId}", 'local');
+                    }
+                }
+                if (!empty($paths)) {
+                    $storedFiles[$key] = $paths;
+                    // Checklist keys (not the free-form "other" bucket) get auto-ticked when a file is attached.
+                    if ($key !== 'other') {
+                        $documents[$key] = true;
+                    }
                 }
             }
 
@@ -166,21 +180,30 @@ class ResidentIntakeController extends Controller
     /**
      * Admin: serve one of an intake's uploaded document PDFs.
      *
-     * By default the PDF is streamed inline so it opens in the browser tab.
+     * Each {key} may carry an array of file paths; {index} (default 0) picks one.
+     * The PDF is streamed inline so it opens in the browser tab.
      * Pass ?download=1 to force a file download instead.
      */
-    public function downloadDocument(Request $request, $id, string $key)
+    public function downloadDocument(Request $request, $id, string $key, $index = 0)
     {
         $intake = ResidentIntake::findOrFail($id);
 
         $files = $intake->document_files ?? [];
         abort_unless(isset($files[$key]), 404);
 
-        $path = $files[$key];
+        // Tolerate legacy single-string entries as well as the array-of-paths shape.
+        $entry = $files[$key];
+        $paths = is_array($entry) ? array_values($entry) : [$entry];
+
+        $i = (int) $index;
+        abort_unless(isset($paths[$i]), 404);
+        $path = $paths[$i];
+
         abort_unless(Storage::disk('local')->exists($path), 404);
 
         $label = self::DOCUMENT_LABELS[$key] ?? $key;
-        $filename = $intake->intake_id . ' - ' . $label . '.pdf';
+        $suffix = count($paths) > 1 ? ' (' . ($i + 1) . ')' : '';
+        $filename = $intake->intake_id . ' - ' . $label . $suffix . '.pdf';
 
         if ($request->boolean('download')) {
             return Storage::disk('local')->download($path, $filename);

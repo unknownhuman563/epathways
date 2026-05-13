@@ -432,7 +432,7 @@ function ResidentIntakeSection() {
                                 </h2>
 
                                 <p className="text-gray-600 text-base md:text-lg leading-relaxed mb-10 max-w-xl font-light">
-                                    Already on an AEWV, Essential Skills, or Work to Residence visa with Ergo? Complete our
+                                    Already on an AEWV, Essential Skills, or Work to Residence visa? Complete our
                                     Skilled Migrant Category intake — the initial step before we issue your engagement
                                     agreement.
                                 </p>
@@ -491,7 +491,7 @@ function ResidentIntakeSection() {
                                     {[
                                         "Valid passport (all pages)",
                                         "All NZ visa copies",
-                                        "Ergo employment contracts",
+                                        "NZ employment contracts",
                                         "Payslips — first 2 mo + latest",
                                         "IRD summary of earnings",
                                         "Education certificates",
