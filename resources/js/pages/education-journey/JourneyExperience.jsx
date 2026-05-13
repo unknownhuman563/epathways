@@ -151,13 +151,13 @@ export default function JourneyExperience() {
             <div className="max-w-7xl mx-auto px-6 grid grid-cols-1 lg:grid-cols-2 gap-16 h-[80vh] min-h-[600px] max-h-[900px]">
                 
                 {/* Left Column - Fixed Content vertically centered */}
-                <div className="relative flex items-center h-full bg-[#162016] p-10 lg:p-16 shadow-xl">
+                <div className="relative flex items-center h-full bg-[#1a1a1a] p-10 lg:p-16 shadow-xl">
                     <div className="flex flex-col">
                         <motion.span 
                             initial={{ opacity: 0, y: 20 }}
                             whileInView={{ opacity: 1, y: 0 }}
                             viewport={{ once: true }}
-                            className="text-[10px] font-bold tracking-widest uppercase text-[#436235] mb-4 block"
+                            className="text-[10px] font-bold tracking-widest uppercase text-gray-400 mb-4 block"
                         >
                             Progression
                         </motion.span>
@@ -189,11 +189,11 @@ export default function JourneyExperience() {
                         >
                             <a 
                                 href="/programs-levels" 
-                                className="bg-[#436235] text-white px-8 py-3 rounded-sm text-[11px] font-bold tracking-widest hover:bg-[#436235]/90 transition-all duration-300 shadow-lg"
+                                className="bg-white text-[#1a1a1a] px-8 py-3 rounded-none text-[11px] font-bold tracking-widest hover:bg-gray-200 transition-all duration-300 shadow-lg"
                             >
                                 EXPLORE
                             </a>
-                            <a href="/programs-levels" className="text-sm font-medium flex items-center gap-2 group/link text-white hover:text-[#436235] transition-colors">
+                            <a href="/programs-levels" className="text-sm font-medium flex items-center gap-2 group/link text-white hover:text-gray-300 transition-colors">
                                 Learn more <ArrowRight className="w-4 h-4 transition-transform group-hover/link:translate-x-1" />
                             </a>
                         </motion.div>
