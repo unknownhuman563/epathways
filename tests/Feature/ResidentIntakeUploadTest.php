@@ -51,7 +51,7 @@ class ResidentIntakeUploadTest extends TestCase
         $pdf = UploadedFile::fake()->create('passport.pdf', 200, 'application/pdf');
 
         $response = $this->post('/resident-intake', $this->payload([
-            'document_files' => ['passport' => $pdf],
+            'document_files' => ['passport' => [$pdf]],
         ]));
 
         $response->assertSessionHas('success', true);
@@ -61,10 +61,41 @@ class ResidentIntakeUploadTest extends TestCase
 
         $this->assertIsArray($intake->document_files);
         $this->assertArrayHasKey('passport', $intake->document_files);
+        $this->assertIsArray($intake->document_files['passport']);
+        $this->assertCount(1, $intake->document_files['passport']);
 
-        $path = $intake->document_files['passport'];
+        $path = $intake->document_files['passport'][0];
         Storage::disk('local')->assertExists($path);
         $this->assertStringContainsString("resident-intakes/{$intake->intake_id}", $path);
+    }
+
+    public function test_multiple_pdfs_per_key_and_other_bucket_are_stored(): void
+    {
+        Storage::fake('local');
+
+        $a = UploadedFile::fake()->create('passport-a.pdf', 100, 'application/pdf');
+        $b = UploadedFile::fake()->create('passport-b.pdf', 120, 'application/pdf');
+        $other = UploadedFile::fake()->create('reference.pdf', 80, 'application/pdf');
+
+        $response = $this->post('/resident-intake', $this->payload([
+            'document_files' => [
+                'passport' => [$a, $b],
+                'other'    => [$other],
+            ],
+        ]));
+
+        $response->assertSessionHas('success', true);
+        $response->assertSessionHasNoErrors();
+
+        $intake = ResidentIntake::firstOrFail();
+
+        $this->assertCount(2, $intake->document_files['passport']);
+        $this->assertCount(1, $intake->document_files['other']);
+
+        foreach ($intake->document_files['passport'] as $p) {
+            Storage::disk('local')->assertExists($p);
+        }
+        Storage::disk('local')->assertExists($intake->document_files['other'][0]);
     }
 
     public function test_submission_without_files_still_works(): void
