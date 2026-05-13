@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use Illuminate\Auth\Middleware\RedirectIfAuthenticated;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -19,6 +20,10 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        //
+        // Already-logged-in users hitting a 'guest' route (e.g. /login) land on
+        // their own home — admins on /admin/dashboard, portal staff on their portal.
+        RedirectIfAuthenticated::redirectUsing(
+            fn ($request) => $request->user()?->homeRoute() ?? '/'
+        );
     }
 }

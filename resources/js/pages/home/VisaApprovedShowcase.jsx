@@ -25,25 +25,25 @@ export default function VisaApprovedShowcase() {
     const displayedImages = approvedImages.slice(0, initialItems);
 
     return (
-        <section className="py-24 bg-white font-urbanist overflow-hidden">
-            <div className="max-w-7xl mx-auto px-6 text-left">
+        <section className="py-16 sm:py-20 md:py-24 bg-white font-urbanist overflow-hidden">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-left">
                 {/* Section Header */}
-                <div className="mb-20">
+                <div className="mb-12 sm:mb-16 md:mb-20">
                     <div className="flex items-center gap-2 mb-4">
                         <span className="text-[10px] font-bold text-[#436235] uppercase tracking-[0.3em]">Success Stories</span>
                         <div className="h-px w-8 bg-[#436235]"></div>
                     </div>
-                    <h2 className="text-4xl md:text-5xl font-black text-[#282728] leading-tight whitespace-nowrap mb-6">
+                    <h2 className="text-3xl sm:text-4xl md:text-5xl font-black text-[#282728] leading-tight mb-4 sm:mb-6">
                         Visa Approved <span className="text-[#436235]">Milestones</span>
                     </h2>
-                    <p className="text-gray-600 text-base font-light leading-relaxed">
-                        Every approval is a step towards a new life. We celebrate the success of our clients who<br />
+                    <p className="text-gray-600 text-sm sm:text-base font-light leading-relaxed">
+                        Every approval is a step towards a new life. We celebrate the success of our clients who
                         have successfully obtained their New Zealand visas through ePathways.
                     </p>
                 </div>
 
                 {/* Vertical Grid Layout */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 mb-16">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6 mb-12 sm:mb-16">
                     <AnimatePresence>
                         {displayedImages.map((image, idx) => (
                             <motion.div

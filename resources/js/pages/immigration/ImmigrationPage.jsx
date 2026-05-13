@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useForm, usePage } from '@inertiajs/react';
+import { Link, useForm, usePage } from '@inertiajs/react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowRight, ChevronDown, ChevronUp, Star, CheckCircle, Calendar, MapPin, Phone, Mail, Shield, MessageCircle, FileText } from 'react-feather';
 import Navbar from "@/components/layout/Navbar";
@@ -386,6 +386,138 @@ function FaqItem({ item, i }) {
                 )}
             </AnimatePresence>
         </motion.div>
+    );
+}
+
+// ─── Resident Intake Section ─────────────────────────────────────────────────
+
+function ResidentIntakeSection() {
+    return (
+        <section
+            id="resident-intake"
+            className="bg-white text-[#282728] relative overflow-hidden border-t border-gray-100"
+        >
+            {/* Top accent line */}
+            <div className="absolute top-0 left-0 right-0 h-1 bg-[#00A693] pointer-events-none" />
+            {/* Subtle grid texture */}
+            <div
+                className="absolute inset-0 opacity-[0.03] pointer-events-none"
+                style={{ backgroundImage: 'repeating-linear-gradient(0deg, transparent, transparent 40px, #282728 40px, #282728 41px), repeating-linear-gradient(90deg, transparent, transparent 80px, #282728 80px, #282728 81px)' }}
+            />
+            {/* Decorative elements */}
+            <div className="absolute -top-32 -right-32 w-[500px] h-[500px] rounded-full border border-[#00A693]/10 pointer-events-none" />
+            <div className="absolute -bottom-40 -left-40 w-[600px] h-[600px] rounded-full bg-[#00A693]/5 pointer-events-none" />
+
+            {/* ── Hero CTA Area ─────────────────────────────────────────── */}
+            <div className="py-28">
+                <div className="container mx-auto px-6 md:px-12 max-w-7xl relative z-10">
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
+                        {/* Left content */}
+                        <div className="lg:col-span-7">
+                            <motion.div
+                                initial={{ opacity: 0, y: 20 }}
+                                whileInView={{ opacity: 1, y: 0 }}
+                                viewport={{ once: true }}
+                            >
+                                <div className="flex items-center gap-3 mb-6">
+                                    <div className="w-10 h-[1px] bg-[#00A693]" />
+                                    <span className="text-[11px] font-bold tracking-[0.4em] uppercase text-[#00A693]">
+                                        Skilled Migrant Category
+                                    </span>
+                                </div>
+
+                                <h2 className="text-4xl md:text-5xl lg:text-6xl font-medium leading-[1.05] mb-8 tracking-tight text-[#282728]">
+                                    NZ Resident Visa <br />
+                                    <span className="text-[#00A693] italic font-light">client intake form</span>
+                                </h2>
+
+                                <p className="text-gray-600 text-base md:text-lg leading-relaxed mb-10 max-w-xl font-light">
+                                    Already on an AEWV, Essential Skills, or Work to Residence visa? Complete our
+                                    Skilled Migrant Category intake — the initial step before we issue your engagement
+                                    agreement.
+                                </p>
+
+                                {/* Highlight pills */}
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-12">
+                                    {[
+                                        { value: "$35.00", label: "Median wage / hr (2025)" },
+                                        { value: "9", label: "Guided sections" },
+                                        { value: "~10", label: "Minutes to complete" },
+                                    ].map((stat, i) => (
+                                        <div key={i} className="bg-gray-50 border border-gray-100 rounded-sm p-5">
+                                            <div className="text-2xl md:text-3xl font-semibold text-[#282728] mb-1">{stat.value}</div>
+                                            <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500">{stat.label}</div>
+                                        </div>
+                                    ))}
+                                </div>
+
+                                {/* CTA — navigates to the full intake form page */}
+                                <div className="flex flex-col sm:flex-row gap-4">
+                                    <Link
+                                        href="/resident-intake"
+                                        className="group inline-flex items-center justify-center gap-3 bg-[#282728] text-white text-[11px] font-bold px-10 py-5 hover:bg-[#00A693] transition-all duration-300 uppercase tracking-[0.25em] shadow-xl"
+                                    >
+                                        Apply Resident Intake
+                                        <ArrowRight size={14} className="transition-transform group-hover:translate-x-1" />
+                                    </Link>
+                                    <a
+                                        href="tel:+64277775586"
+                                        className="inline-flex items-center justify-center gap-3 bg-transparent border border-gray-300 text-[#282728] text-[11px] font-bold px-10 py-5 hover:border-[#282728] transition-all duration-300 uppercase tracking-[0.25em]"
+                                    >
+                                        <Phone size={14} /> Talk to an adviser
+                                    </a>
+                                </div>
+                            </motion.div>
+                        </div>
+
+                        {/* Right content — checklist preview card */}
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.95 }}
+                            whileInView={{ opacity: 1, scale: 1 }}
+                            viewport={{ once: true }}
+                            transition={{ delay: 0.2 }}
+                            className="lg:col-span-5"
+                        >
+                            <div className="bg-gray-50 border border-gray-100 rounded-sm p-8 md:p-10 relative overflow-hidden shadow-xl shadow-gray-100/80">
+                                {/* Card corner accent */}
+                                <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-[#00A693]/10 to-transparent pointer-events-none" />
+
+                                <div className="flex items-center justify-between mb-8 relative">
+                                    <span className="text-[10px] font-bold uppercase tracking-[0.3em] text-[#00A693]">Document checklist</span>
+                                    <span className="text-[10px] font-bold uppercase tracking-[0.3em] text-gray-400">7 items</span>
+                                </div>
+
+                                <div className="space-y-4 relative">
+                                    {[
+                                        "Valid passport (all pages)",
+                                        "All NZ visa copies",
+                                        "NZ employment contracts",
+                                        "Payslips — first 2 mo + latest",
+                                        "IRD summary of earnings",
+                                        "Education certificates",
+                                        "CV (NZ & overseas history)",
+                                    ].map((item, i) => (
+                                        <div key={i} className="flex items-start gap-3 group">
+                                            <div className="w-5 h-5 rounded-full border border-[#00A693]/50 flex items-center justify-center mt-0.5 flex-shrink-0 group-hover:bg-[#00A693]/10 transition-colors">
+                                                <CheckCircle size={11} className="text-[#00A693]" />
+                                            </div>
+                                            <span className="text-sm text-gray-700 leading-relaxed">{item}</span>
+                                        </div>
+                                    ))}
+                                </div>
+
+                                <div className="mt-8 pt-6 border-t border-gray-200 flex items-center gap-3 relative">
+                                    <Shield size={14} className="text-[#00A693]" />
+                                    <p className="text-[11px] text-gray-500 leading-relaxed">
+                                        Confidential — IAA Licensed advisers, secure submission
+                                    </p>
+                                </div>
+                            </div>
+                        </motion.div>
+                    </div>
+                </div>
+            </div>
+        </section>
     );
 }
 
@@ -779,111 +911,10 @@ export default function Immigration() {
             </section>
 
             {/* ══════════════════════════════════════════════════════════════
-                RESIDENT INTAKE CTA SECTION  —  Skilled Migrant Category
+                RESIDENT INTAKE SECTION  —  Skilled Migrant Category
+                Hero + Inline Registration Form
             ══════════════════════════════════════════════════════════════ */}
-            <section
-                id="resident-intake"
-                className="py-28 text-white relative overflow-hidden border-t border-white/5"
-                style={{ backgroundColor: '#0c1611', backgroundImage: 'linear-gradient(to bottom right, #0c1611, #0f1d17, #0c1611)' }}
-            >
-                {/* Decorative elements */}
-                <div className="absolute -top-32 -right-32 w-[500px] h-[500px] rounded-full border border-[#00A693]/10 pointer-events-none" />
-                <div className="absolute -bottom-40 -left-40 w-[600px] h-[600px] rounded-full bg-[#00A693]/5 pointer-events-none" />
-                <div className="absolute top-1/2 left-1/4 w-2 h-2 rounded-full bg-[#00A693]/40 pointer-events-none" />
-                <div className="absolute top-1/3 right-1/3 w-1.5 h-1.5 rounded-full bg-[#00A693]/30 pointer-events-none" />
-
-                <div className="container mx-auto px-6 md:px-12 max-w-7xl relative z-10">
-                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
-                        {/* Left content */}
-                        <div className="lg:col-span-7">
-                            <div className="flex items-center gap-3 mb-6">
-                                <div className="w-10 h-[1px] bg-[#00A693]" />
-                                <span className="text-[11px] font-bold tracking-[0.4em] uppercase text-[#00A693]">
-                                    Skilled Migrant Category
-                                </span>
-                            </div>
-
-                            <h2 className="text-4xl md:text-5xl lg:text-6xl font-medium leading-[1.05] mb-8 tracking-tight text-white">
-                                NZ Resident Visa <br />
-                                <span className="text-[#00A693] italic font-light">client intake form</span>
-                            </h2>
-
-                            <p className="text-white/80 text-base md:text-lg leading-relaxed mb-10 max-w-xl font-light">
-                                Already on an AEWV, Essential Skills, or Work to Residence visa with Ergo? Complete our
-                                Skilled Migrant Category intake — the initial step before we issue your engagement
-                                agreement.
-                            </p>
-
-                            {/* Highlight pills */}
-                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-12">
-                                {[
-                                    { value: "$35.00", label: "Median wage / hr (2025)" },
-                                    { value: "9", label: "Guided sections" },
-                                    { value: "~10", label: "Minutes to complete" },
-                                ].map((stat, i) => (
-                                    <div key={i} className="bg-white/10 border border-white/15 rounded-sm p-5 backdrop-blur-sm">
-                                        <div className="text-2xl md:text-3xl font-semibold text-white mb-1">{stat.value}</div>
-                                        <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/70">{stat.label}</div>
-                                    </div>
-                                ))}
-                            </div>
-
-                            {/* CTA */}
-                            <div className="flex">
-                                <a
-                                    href="/resident-intake"
-                                    className="group inline-flex items-center justify-center gap-3 bg-[#00A693] text-white text-[11px] font-bold px-10 py-5 hover:bg-[#008c7c] transition-all duration-300 uppercase tracking-[0.25em] shadow-2xl shadow-[#00A693]/20"
-                                >
-                                    Apply Resident Intake
-                                    <ArrowRight size={14} className="transition-transform group-hover:translate-x-1" />
-                                </a>
-                            </div>
-                        </div>
-
-                        {/* Right content — checklist preview card */}
-                        <div className="lg:col-span-5">
-                            <div className="bg-white/10 border border-white/15 rounded-sm p-8 md:p-10 backdrop-blur-sm relative overflow-hidden">
-                                {/* Card corner accent */}
-                                <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-[#00A693]/10 to-transparent pointer-events-none" />
-
-                                <div className="flex items-center justify-between mb-8 relative">
-                                    <span className="text-[10px] font-bold uppercase tracking-[0.3em] text-[#00A693]">Document checklist</span>
-                                    <span className="text-[10px] font-bold uppercase tracking-[0.3em] text-white/70">7 items</span>
-                                </div>
-
-                                <div className="space-y-4 relative">
-                                    {[
-                                        "Valid passport (all pages)",
-                                        "All NZ visa copies",
-                                        "Ergo employment contracts",
-                                        "Payslips — first 2 mo + latest",
-                                        "IRD summary of earnings",
-                                        "Education certificates",
-                                        "CV (NZ & overseas history)",
-                                    ].map((item, i) => (
-                                        <div
-                                            key={i}
-                                            className="flex items-start gap-3 group"
-                                        >
-                                            <div className="w-5 h-5 rounded-full border border-[#00A693]/60 flex items-center justify-center mt-0.5 flex-shrink-0 group-hover:bg-[#00A693]/20 transition-colors">
-                                                <CheckCircle size={11} className="text-[#00A693]" />
-                                            </div>
-                                            <span className="text-sm text-white/90 leading-relaxed">{item}</span>
-                                        </div>
-                                    ))}
-                                </div>
-
-                                <div className="mt-8 pt-6 border-t border-white/15 flex items-center gap-3 relative">
-                                    <Shield size={14} className="text-[#00A693]" />
-                                    <p className="text-[11px] text-white/70 leading-relaxed">
-                                        Confidential — IAA Licensed advisers, secure submission
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </section>
+            <ResidentIntakeSection />
 
             {/* ══════════════════════════════════════════════════════════════
                 USER REVIEW SECTION

@@ -56,16 +56,16 @@ const services = [
 
 export default function ServicesGrid() {
     return (
-        <section className="py-24 bg-[#fcfcfc] font-urbanist">
-            <div className="max-w-7xl mx-auto px-6">
+        <section className="py-16 sm:py-20 md:py-24 bg-[#fcfcfc] font-urbanist">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                 {/* Section Header */}
-                <div className="text-center mb-16">
+                <div className="text-center mb-10 sm:mb-14 md:mb-16">
                     <div className="max-w-4xl mx-auto">
                         <div className="flex items-center justify-center gap-3 mb-4">
                             <span className="text-[10px] font-bold text-[#436235] uppercase tracking-[0.3em]">Our Services</span>
                             <div className="h-[1px] w-8 bg-[#436235]"></div>
                         </div>
-                        <h2 className="text-4xl md:text-5xl font-black text-[#282728] leading-tight mb-6">
+                        <h2 className="text-3xl sm:text-4xl md:text-5xl font-black text-[#282728] leading-tight mb-4 sm:mb-6">
                             What We <span className="text-[#436235]">Offer</span>
                         </h2>
                         <p className="text-gray-600 text-sm md:text-base font-light mx-auto">
@@ -75,7 +75,7 @@ export default function ServicesGrid() {
                 </div>
 
                 {/* Services Collage Grid */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 auto-rows-[300px]">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 sm:gap-6 auto-rows-[260px] sm:auto-rows-[280px] md:auto-rows-[300px]">
                     {services.map((service, index) => (
                         <motion.div
                             key={index}
@@ -108,12 +108,12 @@ export default function ServicesGrid() {
                             <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent transition-opacity duration-500 group-hover:from-black/100"></div>
                             
                             {/* Content Overlay */}
-                            <div className="absolute inset-0 p-10 flex flex-col justify-end text-left">
+                            <div className="absolute inset-0 p-6 sm:p-8 md:p-10 flex flex-col justify-end text-left">
                                 <span className="text-[9px] font-bold text-white/50 uppercase tracking-[0.3em] mb-2 transform transition-all duration-500 group-hover:text-white/70">
                                     {service.tag}
                                 </span>
-                                
-                                <h3 className="text-white text-2xl md:text-3xl font-bold mb-3 leading-tight transform transition-transform duration-500 group-hover:-translate-y-1">
+
+                                <h3 className="text-white text-xl sm:text-2xl md:text-3xl font-bold mb-3 leading-tight transform transition-transform duration-500 group-hover:-translate-y-1">
                                     {service.title}
                                 </h3>
                                 

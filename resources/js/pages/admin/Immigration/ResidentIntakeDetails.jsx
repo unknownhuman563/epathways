@@ -3,11 +3,30 @@ import { Head, Link } from '@inertiajs/react';
 import {
     ArrowLeft, Mail, Phone, Calendar, Globe, FileText, BookOpen,
     Briefcase, GraduationCap, Award, Languages, Users, FileCheck2,
-    MessageSquare, CheckCircle, XCircle
+    MessageSquare, CheckCircle, XCircle, Printer, Download, Eye
 } from 'lucide-react';
 
 export default function ResidentIntakeDetails({ intake }) {
-    const formatDate = (d) => d ? new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—';
+    const formatDate = (d) => {
+        if (!d) return '—';
+        const date = new Date(d);
+        return isNaN(date) ? '—' : date.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    };
+
+    const handlePrint = () => window.print();
+
+    const handleDownload = () => {
+        const { document_files, ...exportable } = intake; // file paths aren't useful in the export
+        const blob = new Blob([JSON.stringify(exportable, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${intake.intake_id || 'resident-intake'}.json`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+    };
 
     const qualificationLabels = {
         phd: 'Doctoral degree (PhD) — Level 10',
@@ -22,27 +41,82 @@ export default function ResidentIntakeDetails({ intake }) {
     const docLabels = {
         passport: 'Passport (all pages)',
         visa_copies: 'All NZ visa copies',
-        contracts: 'NZ employment contracts with Ergo + JD',
+        contracts: 'NZ employment contracts + JD',
         payslips: 'Payslips — first 2 mo + latest 1 mo',
         ird_summary: 'IRD summary of earnings (monthly)',
         education_certs: 'Education certificates / transcripts',
         cv: 'CV (NZ + overseas history)',
     };
+    const otherLabel = 'Other supporting documents';
 
     const documents = intake.documents || {};
     const docKeys = Object.keys(docLabels);
     const docChecked = docKeys.filter((k) => !!documents[k]).length;
+    const uploadedFiles = intake.document_files || {};
+
+    // document_files[key] is an array of paths (with legacy support for a single string).
+    const filesFor = (key) => {
+        const entry = uploadedFiles[key];
+        if (!entry) return [];
+        return Array.isArray(entry) ? entry : [entry];
+    };
+
+    const uploadedCount = docKeys.filter((k) => filesFor(k).length > 0).length;
+    const otherFiles = filesFor('other');
+    const totalFiles = [...docKeys, 'other'].reduce((n, k) => n + filesFor(k).length, 0);
+
+    const docUrl = (key, index = 0) => `/admin/immigration/resident-intakes/${intake.id}/documents/${key}/${index}`;
+
+    const ToolbarButtons = () => (
+        <div className="flex items-center gap-2 no-print">
+            <button
+                onClick={handlePrint}
+                className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl border border-gray-200 bg-white text-sm font-semibold text-gray-700 hover:bg-gray-50 hover:text-gray-900 transition-colors"
+            >
+                <Printer size={15} /> Print
+            </button>
+            <button
+                onClick={handleDownload}
+                className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl border border-gray-200 bg-white text-sm font-semibold text-gray-700 hover:bg-gray-50 hover:text-gray-900 transition-colors"
+            >
+                <Download size={15} /> Download
+            </button>
+        </div>
+    );
 
     return (
-        <div className="space-y-6 max-w-[1400px] mx-auto pb-12">
+        <div id="intake-print" className="space-y-6 max-w-[1400px] mx-auto pb-12">
             <Head title={`${intake.first_name} ${intake.last_name} — Resident Intake`} />
+
+            <style>{`
+                @media print {
+                    aside, header { display: none !important; }
+                    .no-print { display: none !important; }
+                    .h-screen { height: auto !important; }
+                    [class*="overflow-"] { overflow: visible !important; }
+                    main { padding: 0 !important; }
+                    body { background: #fff !important; }
+                    #intake-print { max-width: none !important; }
+                }
+            `}</style>
+
+            {/* Mobile toolbar */}
+            <div className="flex lg:hidden items-center justify-between gap-3">
+                <Link
+                    href="/admin/immigration/resident-intakes"
+                    className="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-gray-900 transition-colors no-print"
+                >
+                    <ArrowLeft size={14} /> Back
+                </Link>
+                <ToolbarButtons />
+            </div>
 
             {/* Header */}
             <div className="hidden lg:flex items-start justify-between gap-4 mb-2">
                 <div>
                     <Link
                         href="/admin/immigration/resident-intakes"
-                        className="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-gray-900 mb-3 transition-colors"
+                        className="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-gray-900 mb-3 transition-colors no-print"
                     >
                         <ArrowLeft size={14} />
                         Back to Resident Intakes
@@ -60,6 +134,7 @@ export default function ResidentIntakeDetails({ intake }) {
                     </div>
                 </div>
                 <div className="flex items-center gap-3 pt-12">
+                    <ToolbarButtons />
                     <span className="inline-flex items-center px-3 py-1.5 rounded-lg bg-blue-100 text-blue-700 border border-blue-200 text-xs font-bold uppercase tracking-wide">
                         {intake.status || 'New'}
                     </span>
@@ -102,7 +177,7 @@ export default function ResidentIntakeDetails({ intake }) {
                         )}
                     </Section>
 
-                    <Section icon={<Briefcase size={16} />} title="Employment at Ergo">
+                    <Section icon={<Briefcase size={16} />} title="Employment">
                         <Grid>
                             <Item label="Job Title" value={intake.job_title} />
                             <Item label="Employment Start" value={formatDate(intake.employment_start)} />
@@ -178,21 +253,96 @@ export default function ResidentIntakeDetails({ intake }) {
                         )}
                     </Section>
 
-                    <Section icon={<FileCheck2 size={16} />} title={`Documents (${docChecked}/${docKeys.length})`}>
-                        <ul className="space-y-2">
-                            {docKeys.map((k) => (
-                                <li key={k} className="flex items-start gap-2.5 text-sm">
-                                    {documents[k] ? (
-                                        <CheckCircle size={16} className="text-emerald-500 mt-0.5 flex-shrink-0" />
-                                    ) : (
-                                        <XCircle size={16} className="text-gray-300 mt-0.5 flex-shrink-0" />
-                                    )}
-                                    <span className={documents[k] ? 'text-gray-800' : 'text-gray-400'}>
-                                        {docLabels[k]}
-                                    </span>
-                                </li>
-                            ))}
+                    <Section icon={<FileCheck2 size={16} />} title={`Documents — ${docChecked}/${docKeys.length} ticked · ${totalFiles} ${totalFiles === 1 ? 'file' : 'files'}`}>
+                        <ul className="space-y-3">
+                            {docKeys.map((k) => {
+                                const files = filesFor(k);
+                                const hasFile = files.length > 0;
+                                const ticked = !!documents[k];
+                                return (
+                                    <li key={k} className="flex items-start gap-2.5 text-sm">
+                                        {ticked || hasFile ? (
+                                            <CheckCircle size={16} className="text-emerald-500 mt-0.5 flex-shrink-0" />
+                                        ) : (
+                                            <XCircle size={16} className="text-gray-300 mt-0.5 flex-shrink-0" />
+                                        )}
+                                        <div className="flex-1 min-w-0">
+                                            <div className={hasFile ? 'text-gray-800 font-medium' : (ticked ? 'text-gray-800' : 'text-gray-400')}>
+                                                {docLabels[k]}
+                                                {hasFile && files.length > 1 && (
+                                                    <span className="ml-2 text-[10px] font-bold uppercase tracking-widest text-[#00A693]">
+                                                        {files.length} files
+                                                    </span>
+                                                )}
+                                            </div>
+                                            {hasFile && (
+                                                <ul className="mt-1.5 space-y-1 no-print">
+                                                    {files.map((_, idx) => (
+                                                        <li key={idx} className="flex items-center gap-3">
+                                                            <a
+                                                                href={docUrl(k, idx)}
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                                className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#00A693] hover:text-[#008c7c] transition-colors"
+                                                            >
+                                                                <Eye size={13} /> View PDF{files.length > 1 ? ` ${idx + 1}` : ''}
+                                                            </a>
+                                                            <span className="text-gray-200">·</span>
+                                                            <a
+                                                                href={`${docUrl(k, idx)}?download=1`}
+                                                                className="inline-flex items-center gap-1.5 text-xs font-semibold text-gray-500 hover:text-gray-800 transition-colors"
+                                                            >
+                                                                <Download size={13} /> Download
+                                                            </a>
+                                                        </li>
+                                                    ))}
+                                                </ul>
+                                            )}
+                                        </div>
+                                    </li>
+                                );
+                            })}
                         </ul>
+
+                        {/* Other supporting documents — free-form bucket */}
+                        {otherFiles.length > 0 && (
+                            <div className="mt-5 pt-5 border-t border-gray-100">
+                                <div className="flex items-center gap-2.5 mb-3">
+                                    <FileCheck2 size={14} className="text-[#00A693] flex-shrink-0" />
+                                    <div className="text-sm font-bold text-gray-800">
+                                        {otherLabel}
+                                        <span className="ml-2 text-[10px] font-bold uppercase tracking-widest text-[#00A693]">
+                                            {otherFiles.length} {otherFiles.length === 1 ? 'file' : 'files'}
+                                        </span>
+                                    </div>
+                                </div>
+                                <ul className="space-y-1 no-print pl-6">
+                                    {otherFiles.map((_, idx) => (
+                                        <li key={idx} className="flex items-center gap-3">
+                                            <a
+                                                href={docUrl('other', idx)}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#00A693] hover:text-[#008c7c] transition-colors"
+                                            >
+                                                <Eye size={13} /> View document {idx + 1}
+                                            </a>
+                                            <span className="text-gray-200">·</span>
+                                            <a
+                                                href={`${docUrl('other', idx)}?download=1`}
+                                                className="inline-flex items-center gap-1.5 text-xs font-semibold text-gray-500 hover:text-gray-800 transition-colors"
+                                            >
+                                                <Download size={13} /> Download
+                                            </a>
+                                        </li>
+                                    ))}
+                                </ul>
+                            </div>
+                        )}
+
+                        {totalFiles === 0 && (
+                            <p className="text-xs text-gray-400 mt-3">No documents were uploaded with this intake.</p>
+                        )}
                     </Section>
                 </div>
             </div>

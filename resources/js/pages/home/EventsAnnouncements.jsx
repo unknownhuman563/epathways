@@ -79,16 +79,16 @@ const cardVariants = {
 
 export default function EventsAnnouncements() {
     return (
-        <section className="py-24 bg-white font-urbanist overflow-hidden">
-            <div className="max-w-7xl mx-auto px-6">
+        <section className="py-16 sm:py-20 md:py-24 bg-white font-urbanist overflow-hidden">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                 {/* Section Header */}
-                <div className="flex flex-col md:flex-row md:items-end justify-between mb-16 gap-6">
+                <div className="flex flex-col md:flex-row md:items-end justify-between mb-10 sm:mb-14 md:mb-16 gap-6">
                     <div className="max-w-2xl">
                         <div className="flex items-center gap-3 mb-4">
                             <span className="text-[10px] font-bold text-[#436235] uppercase tracking-[0.3em]">Stay Informed</span>
                             <div className="h-[1px] w-8 bg-[#436235]"></div>
                         </div>
-                        <h2 className="text-4xl md:text-5xl font-black text-[#282728] leading-tight mb-2">
+                        <h2 className="text-3xl sm:text-4xl md:text-5xl font-black text-[#282728] leading-tight mb-2">
                              News & <span className="text-[#436235]">Announcements</span>
                         </h2>
                         <p className="text-gray-600 text-sm md:text-base font-light max-w-xl">
@@ -98,12 +98,12 @@ export default function EventsAnnouncements() {
                 </div>
 
                 {/* Grid Layout */}
-                <motion.div 
+                <motion.div
                     variants={containerVariants}
                     initial="hidden"
                     whileInView="visible"
                     viewport={{ once: true, margin: "-100px" }}
-                    className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8"
+                    className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8"
                 >
                     {articles.map((article, index) => (
                         <motion.div
@@ -112,7 +112,7 @@ export default function EventsAnnouncements() {
                             className="group flex flex-col bg-white rounded-3xl overflow-hidden border border-gray-100 shadow-sm hover:shadow-2xl transition-all duration-500 h-full"
                         >
                             {/* Image Container */}
-                            <div className="relative h-64 overflow-hidden">
+                            <div className="relative h-52 sm:h-60 md:h-64 overflow-hidden">
                                 <img
                                     src={article.image}
                                     alt={article.title}
@@ -127,7 +127,7 @@ export default function EventsAnnouncements() {
                             </div>
 
                             {/* Content Side */}
-                            <div className="p-8 flex flex-col flex-grow">
+                            <div className="p-6 sm:p-8 flex flex-col flex-grow">
                                 <h3 className="text-xl font-bold text-[#282728] mb-4 leading-tight group-hover:text-[#436235] transition-colors line-clamp-2">
                                     {article.title}
                                 </h3>

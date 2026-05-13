@@ -2,15 +2,35 @@ import { useState, useEffect } from "react";
 import PopUpImage from "@assets/Hero/pop_up.jpg";
 import EPathwaysLogo from "@assets/newlogosite.png";
 
+const DISMISS_KEY = "epathways_welcome_dismissed_at";
+const SHOW_AGAIN_AFTER_MS = 7 * 24 * 60 * 60 * 1000; // a week
+
 export default function WelcomeModal() {
-  const [isOpen, setIsOpen] = useState(true);
+  const [isOpen, setIsOpen] = useState(false);
+
+  // Only pop the modal if the visitor hasn't dismissed it recently.
+  useEffect(() => {
+    try {
+      const last = Number(window.localStorage.getItem(DISMISS_KEY) || 0);
+      if (!last || Date.now() - last > SHOW_AGAIN_AFTER_MS) {
+        setIsOpen(true);
+      }
+    } catch {
+      setIsOpen(true); // storage blocked (private mode) — fall back to showing it
+    }
+  }, []);
+
+  const dismiss = () => {
+    try {
+      window.localStorage.setItem(DISMISS_KEY, String(Date.now()));
+    } catch {
+      /* ignore — storage unavailable */
+    }
+    setIsOpen(false);
+  };
 
   useEffect(() => {
-    if (isOpen) {
-      document.body.style.overflow = "hidden";
-    } else {
-      document.body.style.overflow = "auto";
-    }
+    document.body.style.overflow = isOpen ? "hidden" : "auto";
     return () => {
       document.body.style.overflow = "auto";
     };
@@ -25,7 +45,7 @@ export default function WelcomeModal() {
 
         {/* Close Button: Simple white X top-right */}
         <button
-          onClick={() => setIsOpen(false)}
+          onClick={dismiss}
           className="absolute -top-8 -right-1 text-white hover:opacity-70 transition-opacity text-xl font-light cursor-pointer z-[60]"
           aria-label="Close"
         >
@@ -71,13 +91,14 @@ export default function WelcomeModal() {
             <div className="w-full flex flex-col items-center">
               <a
                 href="/booking"
+                onClick={dismiss}
                 className="w-full text-center text-white text-[11px] font-bold py-5 transition-all hover:bg-black/90 uppercase tracking-[0.2em]"
                 style={{ background: "#1a1a1a", display: "block" }}
               >
                 BOOK NOW - IT'S FREE
               </a>
               <button
-                onClick={() => setIsOpen(false)}
+                onClick={dismiss}
                 className="mt-5 text-[11px] text-gray-500 hover:text-gray-600 underline underline-offset-4 hover:cursor-pointer transition-colors"
               >
                 No thanks, maybe later
@@ -90,4 +111,3 @@ export default function WelcomeModal() {
     </div>
   );
 }
-

@@ -92,21 +92,21 @@ export default function InDemandPrograms() {
     };
 
     return (
-        <section className="py-24 bg-[#121613] text-white font-urbanist">
-            <div className="max-w-7xl mx-auto px-6">
+        <section className="py-16 sm:py-20 md:py-24 bg-[#121613] text-white font-urbanist">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
 
                 {/* Header */}
-                <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-12 gap-6">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-8 sm:mb-12 gap-6">
                     <div>
                         <p className="text-xs font-bold uppercase tracking-widest mb-3 text-gray-500">Programs</p>
-                        <h2 className="text-4xl md:text-5xl font-medium tracking-tight mb-2">
+                        <h2 className="text-3xl sm:text-4xl md:text-5xl font-medium tracking-tight mb-2">
                             Top In-Demand Programs
                         </h2>
                         <p className="text-sm md:text-base text-gray-300">
                             The most sought-after qualifications for NZ immigration and career pathways
                         </p>
                     </div>
-                    <div className="flex items-center gap-3">
+                    <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
                         <button
                             onClick={() => scroll('left')}
                             className="w-11 h-11 flex items-center justify-center rounded-full border border-white/20 hover:bg-white/10 transition-colors"
@@ -123,7 +123,7 @@ export default function InDemandPrograms() {
                         </button>
                         <a
                             href="/programs-levels"
-                            className="border border-white/20 px-6 py-2.5 text-sm hover:bg-white/10 transition-colors ml-2"
+                            className="border border-white/20 px-4 sm:px-6 py-2.5 text-xs sm:text-sm hover:bg-white/10 transition-colors sm:ml-2"
                         >
                             Explore all
                         </a>
@@ -139,7 +139,7 @@ export default function InDemandPrograms() {
                     {categories.map((cat) => (
                         <div
                             key={cat.id}
-                            className="flex-shrink-0 w-[320px] bg-white text-[#1a1a1a] rounded-xl overflow-hidden flex flex-col group hover:shadow-xl transition-all duration-300"
+                            className="flex-shrink-0 w-[280px] sm:w-[320px] bg-white text-[#1a1a1a] rounded-xl overflow-hidden flex flex-col group hover:shadow-xl transition-all duration-300"
                         >
                             {/* Image */}
                             <div className="relative h-48 w-full overflow-hidden bg-[#2a3a2a]">

@@ -19,7 +19,11 @@ export default function ResidentIntakes({ intakes = [] }) {
         });
     }, [intakes, query, visaFilter]);
 
-    const formatDate = (d) => d ? new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—';
+    const formatDate = (d) => {
+        if (!d) return '—';
+        const date = new Date(d);
+        return isNaN(date) ? '—' : date.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    };
 
     const statusStyle = (s) => {
         switch (s) {
@@ -47,7 +51,7 @@ export default function ResidentIntakes({ intakes = [] }) {
                         <span className="text-gray-900 font-semibold">Resident Visa Intake</span>
                     </div>
                     <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Resident Visa Intake Submissions</h1>
-                    <p className="text-sm text-gray-600 mt-1">Skilled Migrant Category client intake — pre-engagement records.</p>
+                    <p className="text-sm text-gray-600 mt-1">Skilled Migrant Category client interest — pre-engagement records.</p>
                 </div>
                 <div className="flex items-center gap-3">
                     <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Total</span>
@@ -92,7 +96,7 @@ export default function ResidentIntakes({ intakes = [] }) {
                                 <th className="px-6 py-4">Applicant</th>
                                 <th className="px-6 py-4">Contact</th>
                                 <th className="px-6 py-4">Current Visa</th>
-                                <th className="px-6 py-4">Role at Ergo</th>
+                                <th className="px-6 py-4">Job Title</th>
                                 <th className="px-6 py-4">NZ Experience</th>
                                 <th className="px-6 py-4">Submitted</th>
                                 <th className="px-6 py-4">Status</th>

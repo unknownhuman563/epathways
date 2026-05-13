@@ -16,7 +16,8 @@ import {
     MessageSquare,
     Send,
     Plus,
-    Trash2
+    Trash2,
+    Calendar
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Navbar from "@/components/layout/Navbar";
@@ -26,13 +27,217 @@ const TEAL = '#00A693';
 const TEAL_DARK = '#008c7c';
 const DARK = '#0c1611';
 
+const TOTAL_STEPS = 9;
+const DRAFT_STORAGE_KEY = 'epathways_resident_intake_draft';
+
+// ─── Date helpers (form uses DD/MM/YYYY; backend wants YYYY-MM-DD) ──────────
+const isoToDmy = (s) => {
+    if (!s) return '';
+    if (/^\d{2}\/\d{2}\/\d{4}$/.test(s)) return s;
+    const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(s));
+    return m ? `${m[3]}/${m[2]}/${m[1]}` : '';
+};
+
+const dmyToIso = (s) => {
+    if (!s) return '';
+    if (/^\d{4}-\d{2}-\d{2}/.test(String(s))) return String(s).slice(0, 10); // already ISO
+    const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(String(s));
+    return m ? `${m[3]}-${m[2]}-${m[1]}` : '';
+};
+
+const isValidDmy = (s) => {
+    if (typeof s !== 'string') return false;
+    const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(s);
+    if (!m) return false;
+    const d = +m[1], mo = +m[2], y = +m[3];
+    const dt = new Date(y, mo - 1, d);
+    return dt.getFullYear() === y && dt.getMonth() === mo - 1 && dt.getDate() === d;
+};
+
+// Typed dd/mm/yyyy field — auto-inserts slashes as the user types digits.
+// A trailing calendar icon opens the browser's native date picker so users
+// can choose visually instead of typing.
+function DateField({ value, onChange, className, ...rest }) {
+    const pickerRef = useRef(null);
+
+    const handleChange = (e) => {
+        const digits = e.target.value.replace(/\D/g, '').slice(0, 8);
+        let formatted = digits;
+        if (digits.length > 2) formatted = digits.slice(0, 2) + '/' + digits.slice(2);
+        if (digits.length > 4) formatted = digits.slice(0, 2) + '/' + digits.slice(2, 4) + '/' + digits.slice(4);
+        onChange(formatted);
+    };
+
+    const handlePick = (e) => {
+        onChange(isoToDmy(e.target.value));
+    };
+
+    const openPicker = () => {
+        const el = pickerRef.current;
+        if (!el) return;
+        // showPicker is the supported way in modern browsers; fall back to a click
+        // for older ones (the hidden date input still allows typing as a backstop).
+        if (typeof el.showPicker === 'function') {
+            try { el.showPicker(); return; } catch { /* user-activation lost — fall through */ }
+        }
+        el.focus();
+        el.click();
+    };
+
+    return (
+        <div className="relative flex items-center">
+            <input
+                type="text"
+                inputMode="numeric"
+                placeholder="DD/MM/YYYY"
+                maxLength={10}
+                // isoToDmy converts a stored ISO date for display; for in-progress typing
+                // (e.g. "15/05") it returns '', so fall back to the raw value so the input
+                // doesn't get cleared on every keystroke.
+                value={isoToDmy(value || '') || (value || '')}
+                onChange={handleChange}
+                className={`${className || ''} pr-10`}
+                {...rest}
+            />
+            <button
+                type="button"
+                onClick={openPicker}
+                aria-label="Open calendar"
+                tabIndex={-1}
+                className="absolute right-0 p-1.5 rounded-md text-gray-400 hover:text-[#00A693] hover:bg-[#00A693]/10 transition-colors"
+            >
+                <Calendar size={16} />
+            </button>
+            {/* Hidden native date input — driven by the calendar button, kept in sync
+                with the form value so the picker opens on the right date. */}
+            <input
+                ref={pickerRef}
+                type="date"
+                tabIndex={-1}
+                aria-hidden="true"
+                value={dmyToIso(value || '')}
+                onChange={handlePick}
+                className="absolute right-2 bottom-0 w-0 h-0 opacity-0 pointer-events-none"
+            />
+        </div>
+    );
+}
+
+// Each checklist key + the free-form "other" bucket holds an array of File objects.
+const freshDocumentFiles = () => ({
+    passport: [],
+    visa_copies: [],
+    contracts: [],
+    payslips: [],
+    ird_summary: [],
+    education_certs: [],
+    cv: [],
+    other: [],
+});
+
+const FORM_DEFAULTS = {
+    terms_accepted: false,
+    // Personal
+    first_name: '',
+    last_name: '',
+    dob: '',
+    nationality: '',
+    email: '',
+    phone: '',
+    // Passport
+    passport_number: '',
+    passport_expiry: '',
+    issuing_country: '',
+    // Visa status
+    current_visa_type: '',
+    current_visa_other: '',
+    current_visa_expiry: '',
+    nz_arrival_date: '',
+    previous_nz_visa_history: '',
+    // Employment
+    job_title: '',
+    employment_start: '',
+    employment_type: '',
+    hourly_rate: '',
+    // Qualifications
+    highest_qualification: '',
+    institution_name: '',
+    country_of_study: '',
+    nzqa_status: '',
+    nzqa_iqa_reference: '',
+    // Work experience
+    nz_skilled_years: '',
+    total_skilled_years: '',
+    career_summary: '',
+    // English
+    english_evidence: '',
+    english_test_score: '',
+    english_test_date: '',
+    // Family
+    include_family: '',
+    family_members: [],
+    // Documents checklist
+    documents: {
+        passport: false,
+        visa_copies: false,
+        contracts: false,
+        payslips: false,
+        ird_summary: false,
+        education_certs: false,
+        cv: false,
+    },
+    // Documents — actual uploaded PDFs (checklist key -> File). Never persisted.
+    document_files: freshDocumentFiles(),
+    // Disclosures
+    character_health_disclosure: '',
+    other_notes: '',
+};
+
+// Build the form's initial values, restoring a saved draft from this device if one exists.
+function buildInitialFormData() {
+    const base = {
+        ...FORM_DEFAULTS,
+        documents: { ...FORM_DEFAULTS.documents },
+        document_files: freshDocumentFiles(),
+        family_members: [],
+    };
+    try {
+        const raw = window.localStorage.getItem(DRAFT_STORAGE_KEY);
+        if (raw) {
+            const parsed = JSON.parse(raw);
+            if (parsed && typeof parsed === 'object' && parsed.data && typeof parsed.data === 'object') {
+                const { document_files, ...restorable } = parsed.data; // never restore File objects
+                return { ...base, ...restorable, document_files: freshDocumentFiles() };
+            }
+        }
+    } catch {
+        /* corrupt / unavailable storage — fall through to defaults */
+    }
+    return base;
+}
+
+function loadDraftStep() {
+    try {
+        const raw = window.localStorage.getItem(DRAFT_STORAGE_KEY);
+        if (raw) {
+            const parsed = JSON.parse(raw);
+            const s = parsed?.step;
+            if (Number.isInteger(s) && s >= 1 && s <= TOTAL_STEPS) return s;
+        }
+    } catch {
+        /* ignore */
+    }
+    return 1;
+}
+
 export default function ResidentIntakePage() {
     const { flash } = usePage().props;
-    const [step, setStep] = useState(1);
+    const [step, setStep] = useState(loadDraftStep);
     const [isSuccess, setIsSuccess] = useState(false);
     const [intakeId, setIntakeId] = useState(null);
     const [modal, setModal] = useState({ show: false, message: '' });
     const [localErrors, setLocalErrors] = useState({});
+    const [showConfirm, setShowConfirm] = useState(false);
 
     useEffect(() => {
         if (flash?.success) {
@@ -41,63 +246,37 @@ export default function ResidentIntakePage() {
         }
     }, [flash]);
 
-    const { data, setData, post, processing } = useForm({
-        terms_accepted: false,
-        // Personal
-        first_name: '',
-        last_name: '',
-        dob: '',
-        nationality: '',
-        email: '',
-        phone: '',
-        // Passport
-        passport_number: '',
-        passport_expiry: '',
-        issuing_country: '',
-        // Visa status
-        current_visa_type: '',
-        current_visa_other: '',
-        current_visa_expiry: '',
-        nz_arrival_date: '',
-        previous_nz_visa_history: '',
-        // Employment at Ergo
-        job_title: '',
-        employment_start: '',
-        employment_type: '',
-        hourly_rate: '',
-        // Qualifications
-        highest_qualification: '',
-        institution_name: '',
-        country_of_study: '',
-        nzqa_status: '',
-        nzqa_iqa_reference: '',
-        // Work experience
-        nz_skilled_years: '',
-        total_skilled_years: '',
-        career_summary: '',
-        // English
-        english_evidence: '',
-        english_test_score: '',
-        english_test_date: '',
-        // Family
-        include_family: '',
-        family_members: [],
-        // Documents
-        documents: {
-            passport: false,
-            visa_copies: false,
-            contracts: false,
-            payslips: false,
-            ird_summary: false,
-            education_certs: false,
-            cv: false,
-        },
-        // Disclosures
-        character_health_disclosure: '',
-        other_notes: '',
-    });
+    const [initialFormData] = useState(buildInitialFormData); // restored draft or defaults, computed once
+    const { data, setData, post, processing, transform } = useForm(initialFormData);
 
-    const TOTAL_STEPS = 9;
+    // Auto-save a draft to this device on every change so a refresh keeps everything.
+    // Uploaded PDF files can't be serialised, so they're left out (the checklist ticks are kept).
+    useEffect(() => {
+        if (isSuccess) {
+            try { window.localStorage.removeItem(DRAFT_STORAGE_KEY); } catch { /* ignore */ }
+            return;
+        }
+        try {
+            const { document_files, ...persistable } = data;
+            window.localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify({ data: persistable, step, savedAt: Date.now() }));
+        } catch {
+            /* storage full or unavailable — non-fatal */
+        }
+    }, [data, step, isSuccess]);
+
+    const handleStartOver = () => {
+        if (!window.confirm('Clear everything you have entered and start over?')) return;
+        try { window.localStorage.removeItem(DRAFT_STORAGE_KEY); } catch { /* ignore */ }
+        setData({
+            ...FORM_DEFAULTS,
+            documents: { ...FORM_DEFAULTS.documents },
+            document_files: freshDocumentFiles(),
+            family_members: [],
+        });
+        setStep(1);
+        setLocalErrors({});
+        setModal({ show: false, message: '' });
+    };
 
     const steps = [
         { id: 1, title: 'Terms', icon: ShieldCheck },
@@ -122,7 +301,7 @@ export default function ResidentIntakePage() {
             case 2:
                 if (!data.first_name.trim()) errs.first_name = 'First name is required';
                 if (!data.last_name.trim()) errs.last_name = 'Last name is required';
-                if (!data.dob) errs.dob = 'Date of birth is required';
+                if (!isValidDmy(isoToDmy(data.dob))) errs.dob = 'Date of birth is required (DD/MM/YYYY)';
                 if (!data.nationality.trim()) errs.nationality = 'Nationality is required';
                 if (!data.email.trim()) errs.email = 'Email is required';
                 else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email)) errs.email = 'Enter a valid email address';
@@ -130,16 +309,16 @@ export default function ResidentIntakePage() {
                 break;
             case 3:
                 if (!data.passport_number.trim()) errs.passport_number = 'Passport number is required';
-                if (!data.passport_expiry) errs.passport_expiry = 'Passport expiry is required';
+                if (!isValidDmy(isoToDmy(data.passport_expiry))) errs.passport_expiry = 'Passport expiry is required (DD/MM/YYYY)';
                 if (!data.issuing_country.trim()) errs.issuing_country = 'Issuing country is required';
                 if (!data.current_visa_type) errs.current_visa_type = 'Select your current NZ visa type';
                 if (data.current_visa_type === 'Other' && !data.current_visa_other.trim()) errs.current_visa_other = 'Please describe the visa type';
-                if (!data.current_visa_expiry) errs.current_visa_expiry = 'Current visa expiry is required';
-                if (!data.nz_arrival_date) errs.nz_arrival_date = 'NZ arrival date is required';
+                if (!isValidDmy(isoToDmy(data.current_visa_expiry))) errs.current_visa_expiry = 'Current visa expiry is required (DD/MM/YYYY)';
+                if (!isValidDmy(isoToDmy(data.nz_arrival_date))) errs.nz_arrival_date = 'NZ arrival date is required (DD/MM/YYYY)';
                 break;
             case 4:
                 if (!data.job_title.trim()) errs.job_title = 'Job title is required';
-                if (!data.employment_start) errs.employment_start = 'Employment start date is required';
+                if (!isValidDmy(isoToDmy(data.employment_start))) errs.employment_start = 'Employment start date is required (DD/MM/YYYY)';
                 if (!data.employment_type) errs.employment_type = 'Employment type is required';
                 if (!data.hourly_rate.toString().trim()) errs.hourly_rate = 'Hourly rate is required';
                 break;
@@ -157,7 +336,7 @@ export default function ResidentIntakePage() {
                 if (!data.english_evidence) errs.english_evidence = 'Please select an English evidence type';
                 if (['IELTS', 'TOEFL', 'PTE Academic'].includes(data.english_evidence)) {
                     if (!data.english_test_score.toString().trim()) errs.english_test_score = 'Test score is required';
-                    if (!data.english_test_date) errs.english_test_date = 'Test date is required';
+                    if (!isValidDmy(isoToDmy(data.english_test_date))) errs.english_test_date = 'Test date is required (DD/MM/YYYY)';
                 }
                 if (!data.include_family) errs.include_family = 'Please indicate whether family will be included';
                 if (data.include_family === 'Yes') {
@@ -238,6 +417,8 @@ export default function ResidentIntakePage() {
         setStep(id);
     };
 
+    // Clicking "Submit Intake Form" doesn't post immediately — it validates and
+    // then opens a confirmation modal so the user can review and explicitly confirm.
     const submitFinal = () => {
         const { aggregated, firstInvalid } = validateRange(1, TOTAL_STEPS);
         if (firstInvalid !== null) {
@@ -248,13 +429,45 @@ export default function ResidentIntakePage() {
             return;
         }
         setLocalErrors({});
+        setShowConfirm(true);
+    };
+
+    // Called from the confirmation modal's "Confirm & Submit" button.
+    const confirmSubmit = () => {
+        // Convert DD/MM/YYYY values to ISO (YYYY-MM-DD) for the server, and only
+        // send document_files entries that actually hold a File.
+        transform((d) => ({
+            ...d,
+            dob:                  dmyToIso(d.dob),
+            passport_expiry:      dmyToIso(d.passport_expiry),
+            current_visa_expiry:  dmyToIso(d.current_visa_expiry),
+            nz_arrival_date:      dmyToIso(d.nz_arrival_date),
+            employment_start:     dmyToIso(d.employment_start),
+            english_test_date:    dmyToIso(d.english_test_date),
+            family_members: (d.family_members || []).map((m) => ({
+                ...m,
+                dob: dmyToIso(m.dob),
+            })),
+            document_files: Object.fromEntries(
+                Object.entries(d.document_files || {})
+                    .map(([k, arr]) => [k, (Array.isArray(arr) ? arr : []).filter((f) => f instanceof File)])
+                    .filter(([, arr]) => arr.length > 0)
+            ),
+        }));
 
         post('/resident-intake', {
-            onSuccess: () => setIsSuccess(true),
+            forceFormData: true, // always multipart so attached PDFs are sent reliably
+            onSuccess: () => {
+                setShowConfirm(false);
+                setIsSuccess(true);
+            },
             onError: (errs) => {
+                setShowConfirm(false);
                 setModal({
                     show: true,
-                    message: errs?.error || 'Submission failed. Please review your details and try again.',
+                    message: errs?.error
+                        || Object.values(errs || {})[0]
+                        || 'Submission failed. Please review your details and try again.',
                 });
             },
         });
@@ -274,7 +487,7 @@ export default function ResidentIntakePage() {
 
     return (
         <div className="min-h-screen bg-white font-urbanist text-[#212121] overflow-x-hidden">
-            <Head title="NZ Resident Visa — Client Intake" />
+            <Head title="NZ Resident Visa — Client Interest" />
             <Navbar />
 
             {/* Hero Header */}
@@ -290,7 +503,7 @@ export default function ResidentIntakePage() {
                         <h1 className="text-5xl lg:text-7xl font-black text-[#282728] uppercase tracking-tighter leading-[0.9] mb-8">
                             New Zealand<br />
                             <span className="text-[#00A693]">Resident Visa</span><br />
-                            Client Intake
+                            Client Interest
                         </h1>
                         <div className="w-12 h-[2px] bg-[#282728]/20 my-8" />
                         <div className="flex flex-col md:flex-row md:items-end gap-10">
@@ -303,11 +516,11 @@ export default function ResidentIntakePage() {
                                     <div className="text-4xl font-black text-[#282728]">~10</div>
                                     <div className="text-xs text-gray-500 uppercase tracking-[0.3em] font-bold mt-1">Minutes</div>
                                 </div>
-                                <div className="w-[1px] h-10 bg-gray-200" />
+                                {/* <div className="w-[1px] h-10 bg-gray-200" />
                                 <div className="text-center">
                                     <div className="text-4xl font-black text-[#00A693]">$35</div>
                                     <div className="text-xs text-gray-500 uppercase tracking-[0.3em] font-bold mt-1">Median / hr</div>
-                                </div>
+                                </div> */}
                             </div>
                         </div>
                     </div>
@@ -361,6 +574,19 @@ export default function ResidentIntakePage() {
                                         </div>
                                     );
                                 })}
+
+                                <div className="mt-3 pt-3 px-2 border-t border-gray-100">
+                                    <button
+                                        type="button"
+                                        onClick={handleStartOver}
+                                        className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 hover:text-red-500 transition-colors"
+                                    >
+                                        Start over
+                                    </button>
+                                    <p className="text-[10px] text-gray-400 leading-relaxed mt-2">
+                                        Your answers are saved on this device automatically — you can close or refresh this page and pick up where you left off.
+                                    </p>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -481,6 +707,110 @@ export default function ResidentIntakePage() {
                     </div>
                 )}
             </AnimatePresence>
+
+            {/* ── Pre-submit confirmation modal ─────────────────────────── */}
+            <AnimatePresence>
+                {showConfirm && (
+                    <div
+                        className="fixed inset-0 z-[110] flex items-center justify-center p-4 sm:p-6 bg-[#282728]/60 backdrop-blur-sm"
+                        onClick={() => { if (!processing) setShowConfirm(false); }}
+                    >
+                        <motion.div
+                            initial={{ scale: 0.92, opacity: 0, y: 24 }}
+                            animate={{ scale: 1, opacity: 1, y: 0 }}
+                            exit={{ scale: 0.92, opacity: 0, y: 24 }}
+                            transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+                            onClick={(e) => e.stopPropagation()}
+                            className="w-full max-w-[520px] overflow-hidden max-h-[90vh] overflow-y-auto"
+                        >
+                            {/* ── Dark header ── */}
+                            <div className="bg-[#282728] px-8 pt-10 pb-8 text-center relative overflow-hidden">
+                                <div className="absolute inset-0 opacity-[0.04]" style={{ backgroundImage: 'repeating-linear-gradient(0deg, transparent, transparent 20px, #fff 20px, #fff 21px), repeating-linear-gradient(90deg, transparent, transparent 40px, #fff 40px, #fff 41px)' }} />
+                                <div className="relative z-10">
+                                    <div className="w-14 h-14 bg-[#00A693] rounded-xl flex items-center justify-center text-white mx-auto mb-5 shadow-lg shadow-[#00A693]/30">
+                                        <ShieldCheck size={28} />
+                                    </div>
+                                    <h3 className="text-lg font-black text-white uppercase tracking-[0.15em] mb-2">
+                                        Confirm Submission
+                                    </h3>
+                                    <p className="text-white/50 text-xs font-medium leading-relaxed max-w-xs mx-auto">
+                                        Please review the summary below before finalising your intake.
+                                    </p>
+                                </div>
+                            </div>
+
+                            {/* ── White body ── */}
+                            <div className="bg-white px-8 py-8">
+                                {/* Legal notice */}
+                                <div className="flex items-start gap-3 bg-gray-50 border border-gray-100 rounded-lg p-4 mb-6">
+                                    <AlertCircle size={16} className="text-[#00A693] flex-shrink-0 mt-0.5" />
+                                    <p className="text-xs text-gray-600 leading-relaxed">
+                                        By submitting this intake you confirm the information you have provided is{' '}
+                                        <span className="text-[#282728] font-bold">true, complete and accurate</span>.
+                                        Providing false or misleading information may affect your visa eligibility.
+                                    </p>
+                                </div>
+
+                                {/* Summary grid */}
+                                <div className="mb-6">
+                                    <span className="text-[9px] font-black uppercase tracking-[0.3em] text-gray-400 mb-3 block">Your details</span>
+                                    <div className="border border-gray-100 rounded-lg divide-y divide-gray-100">
+                                        {[
+                                            ['Name', `${data.first_name} ${data.last_name}`.trim()],
+                                            ['Email', data.email],
+                                            ['Phone', data.phone],
+                                            ['Visa Type', data.current_visa_type === 'Other' ? `Other — ${data.current_visa_other}` : data.current_visa_type],
+                                            ['Job Title', data.job_title],
+                                        ].map(([label, value]) => (
+                                            <div key={label} className="flex items-center justify-between gap-4 px-4 py-3">
+                                                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 flex-shrink-0">{label}</span>
+                                                <span className="text-sm text-[#282728] font-medium text-right truncate">{value || '—'}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                {/* Doc stats */}
+                                <div className="flex items-center gap-6 mb-8">
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-2 h-2 rounded-full bg-[#00A693]" />
+                                        <span className="text-[10px] font-bold uppercase tracking-widest text-gray-500">
+                                            {docChecked}/{docTotal} docs ticked
+                                        </span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-2 h-2 rounded-full bg-[#282728]" />
+                                        <span className="text-[10px] font-bold uppercase tracking-widest text-gray-500">
+                                            {Object.keys(data.document_files || {}).reduce((n, k) => n + ((data.document_files?.[k] || []).filter(f => f instanceof File)).length, 0)} files attached
+                                        </span>
+                                    </div>
+                                </div>
+
+                                {/* Action buttons */}
+                                <div className="flex flex-col-reverse sm:flex-row gap-3">
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowConfirm(false)}
+                                        disabled={processing}
+                                        className="flex-1 py-4 border border-gray-200 text-[#282728] text-[10px] font-black uppercase tracking-[0.25em] hover:border-[#282728] transition-all active:scale-[0.98] disabled:opacity-50"
+                                    >
+                                        Go back &amp; edit
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={confirmSubmit}
+                                        disabled={processing}
+                                        className="flex-1 py-4 bg-[#282728] text-white text-[10px] font-black uppercase tracking-[0.25em] hover:bg-[#00A693] transition-all active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2 shadow-xl shadow-[#282728]/15"
+                                    >
+                                        <Send size={12} />
+                                        {processing ? 'Submitting...' : 'Confirm & Submit'}
+                                    </button>
+                                </div>
+                            </div>
+                        </motion.div>
+                    </div>
+                )}
+            </AnimatePresence>
         </div>
     );
 }
@@ -528,7 +858,7 @@ function StepTerms({ data, setData, errors }) {
             <h2 className="text-3xl font-black text-[#282728] uppercase tracking-tighter leading-tight">Privacy & Terms</h2>
             <div className="bg-gray-50/50 rounded-3xl p-10 text-sm text-gray-600 leading-[2] font-medium h-80 overflow-y-auto border border-gray-100/50 space-y-4">
                 <p>This Skilled Migrant Category (SMC) Resident Visa intake form collects the information our licensed advisers need to assess your eligibility prior to engagement.</p>
-                <p>Information you provide will be held in confidence and used only to prepare your engagement agreement and assess your visa pathway. The current median wage benchmark is NZD $35.00/hr (2025).</p>
+                <p>Information you provide will be held in confidence and used only to prepare your engagement agreement and assess your visa pathway.</p>
                 <p>Submitting this form does not constitute legal advice or an engagement. A formal engagement agreement will be issued upon review.</p>
                 <p>All data is handled in line with our Privacy Policy and IAA Code of Conduct.</p>
             </div>
@@ -563,7 +893,7 @@ function StepPersonal({ data, setData, errors }) {
                     <input type="text" className={inputCls} value={data.last_name} onChange={e => setData('last_name', e.target.value)} />
                 </Field>
                 <Field label="Date of Birth *" error={errors.dob}>
-                    <input type="date" className={inputCls} value={data.dob} onChange={e => setData('dob', e.target.value)} />
+                    <DateField className={inputCls} value={data.dob} onChange={(v) => setData('dob', v)} />
                 </Field>
                 <Field label="Nationality *" error={errors.nationality} hint="Country of citizenship">
                     <input type="text" className={inputCls} value={data.nationality} onChange={e => setData('nationality', e.target.value)} />
@@ -593,7 +923,7 @@ function StepPassportVisa({ data, setData, errors }) {
                     <input type="text" className={inputCls} placeholder="e.g. A12345678" value={data.passport_number} onChange={e => setData('passport_number', e.target.value)} />
                 </Field>
                 <Field label="Passport Expiry *" error={errors.passport_expiry}>
-                    <input type="date" className={inputCls} value={data.passport_expiry} onChange={e => setData('passport_expiry', e.target.value)} />
+                    <DateField className={inputCls} value={data.passport_expiry} onChange={(v) => setData('passport_expiry', v)} />
                 </Field>
                 <Field label="Issuing Country *" error={errors.issuing_country} full>
                     <input type="text" className={inputCls} value={data.issuing_country} onChange={e => setData('issuing_country', e.target.value)} />
@@ -616,10 +946,10 @@ function StepPassportVisa({ data, setData, errors }) {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <Field label="Current Visa Expiry Date *" error={errors.current_visa_expiry}>
-                    <input type="date" className={inputCls} value={data.current_visa_expiry} onChange={e => setData('current_visa_expiry', e.target.value)} />
+                    <DateField className={inputCls} value={data.current_visa_expiry} onChange={(v) => setData('current_visa_expiry', v)} />
                 </Field>
                 <Field label="NZ Arrival Date *" error={errors.nz_arrival_date}>
-                    <input type="date" className={inputCls} value={data.nz_arrival_date} onChange={e => setData('nz_arrival_date', e.target.value)} />
+                    <DateField className={inputCls} value={data.nz_arrival_date} onChange={(v) => setData('nz_arrival_date', v)} />
                 </Field>
             </div>
 
@@ -640,15 +970,15 @@ function StepEmployment({ data, setData, errors }) {
     return (
         <div className="space-y-10">
             <div>
-                <h2 className="text-3xl font-black text-[#282728] uppercase tracking-tighter mb-3">Employment at Ergo</h2>
-                <p className="text-sm text-gray-500">Your current role with Ergo in New Zealand.</p>
+                <h2 className="text-3xl font-black text-[#282728] uppercase tracking-tighter mb-3">Employment</h2>
+                <p className="text-sm text-gray-500">Your current role in New Zealand.</p>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <Field label="Job Title *" error={errors.job_title}>
                     <input type="text" className={inputCls} value={data.job_title} onChange={e => setData('job_title', e.target.value)} />
                 </Field>
                 <Field label="Employment Start Date *" error={errors.employment_start}>
-                    <input type="date" className={inputCls} value={data.employment_start} onChange={e => setData('employment_start', e.target.value)} />
+                    <DateField className={inputCls} value={data.employment_start} onChange={(v) => setData('employment_start', v)} />
                 </Field>
                 <Field label="Employment Type *" error={errors.employment_type}>
                     <select className={inputCls} value={data.employment_type} onChange={e => setData('employment_type', e.target.value)}>
@@ -743,7 +1073,7 @@ function StepExperience({ data, setData, errors }) {
                 <textarea
                     rows={5}
                     className="w-full bg-gray-50/50 border border-gray-100 rounded-xl p-4 text-sm text-[#282728] focus:outline-none focus:border-[#00A693] transition-colors"
-                    placeholder="e.g. 3 years as software engineer in India, 2 years at Ergo as senior developer in Auckland..."
+                    placeholder="e.g. 3 years as software engineer in India, 2 years as senior developer in Auckland..."
                     value={data.career_summary}
                     onChange={e => setData('career_summary', e.target.value)}
                 />
@@ -781,11 +1111,10 @@ function StepEnglishFamily({ data, setData, errors }) {
                             />
                         </Field>
                         <Field label="Test Date *" error={errors.english_test_date}>
-                            <input
-                                type="date"
+                            <DateField
                                 className={inputCls}
                                 value={data.english_test_date}
-                                onChange={e => setData('english_test_date', e.target.value)}
+                                onChange={(v) => setData('english_test_date', v)}
                             />
                         </Field>
                     </div>
@@ -897,11 +1226,10 @@ function FamilyMembersList({ data, setData, errors }) {
                             </select>
                         </Field>
                         <Field label="Date of Birth">
-                            <input
-                                type="date"
+                            <DateField
                                 className={inputCls}
                                 value={m.dob || ''}
-                                onChange={(e) => updateMember(i, 'dob', e.target.value)}
+                                onChange={(v) => updateMember(i, 'dob', v)}
                             />
                         </Field>
                         <Field label="Passport Number">
@@ -932,50 +1260,190 @@ function StepDocuments({ data, setData, docChecked, docTotal }) {
     const items = [
         { key: 'passport', title: 'Passport', desc: 'Valid passport, all pages including blank pages' },
         { key: 'visa_copies', title: 'All NZ visa copies', desc: 'Every visa label or e-visa received in New Zealand' },
-        { key: 'contracts', title: 'All NZ employment contracts with Ergo + job description', desc: 'Original contract and any variations or renewals' },
-        { key: 'payslips', title: 'Payslips — first 2 months at Ergo + latest 1 month', desc: '3 payslips total showing gross/net pay and hours' },
+        { key: 'contracts', title: 'All NZ employment contracts + job description', desc: 'Original contract and any variations or renewals' },
+        { key: 'payslips', title: 'Payslips — first 2 months + latest 1 month', desc: '3 payslips total showing gross/net pay and hours' },
         { key: 'ird_summary', title: 'IRD summary of earnings (monthly breakdown)', desc: 'Available from myIR — select monthly breakdown version' },
         { key: 'education_certs', title: 'Education certificates, transcripts, graduation documents', desc: 'All degrees and postgraduate qualifications if applicable' },
         { key: 'cv', title: 'CV covering both NZ and overseas employment', desc: 'Dates, employer names, roles and key responsibilities' },
     ];
 
+    const MAX_BYTES = 10 * 1024 * 1024; // 10 MB per file
+    const [fileErrors, setFileErrors] = useState({});
+
     const toggle = (k) => setData('documents', { ...data.documents, [k]: !data.documents[k] });
+
+    const clearFileError = (k) => setFileErrors((p) => { const n = { ...p }; delete n[k]; return n; });
+
+    // Accept one *or more* PDFs and append them to whatever's already attached for that key.
+    const handleFiles = (k, fileList) => {
+        const incoming = Array.from(fileList || []);
+        if (incoming.length === 0) return;
+
+        const accepted = [];
+        let firstError = null;
+        for (const file of incoming) {
+            const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+            if (!isPdf) { firstError = firstError || `${file.name}: only PDFs are accepted.`; continue; }
+            if (file.size > MAX_BYTES) { firstError = firstError || `${file.name}: file is larger than 10 MB.`; continue; }
+            accepted.push(file);
+        }
+
+        if (firstError) setFileErrors((p) => ({ ...p, [k]: firstError }));
+        else clearFileError(k);
+
+        if (accepted.length === 0) return;
+
+        setData((prev) => ({
+            ...prev,
+            document_files: {
+                ...prev.document_files,
+                [k]: [...(prev.document_files?.[k] || []), ...accepted],
+            },
+            // a non-"other" upload also satisfies the checklist tick
+            ...(k !== 'other'
+                ? { documents: { ...prev.documents, [k]: true } }
+                : null),
+        }));
+    };
+
+    const removeFileAt = (k, index) => {
+        clearFileError(k);
+        setData((prev) => ({
+            ...prev,
+            document_files: {
+                ...prev.document_files,
+                [k]: (prev.document_files?.[k] || []).filter((_, i) => i !== index),
+            },
+        }));
+    };
+
+    const formatSize = (bytes) => {
+        if (bytes < 1024) return `${bytes} B`;
+        if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+        return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+    };
+
+    const filesOf = (k) => (data.document_files?.[k] || []).filter((f) => f instanceof File);
+    const uploadedCount = items.reduce((n, it) => n + (filesOf(it.key).length > 0 ? 1 : 0), 0);
+    const totalFiles = Object.keys(data.document_files || {}).reduce((n, k) => n + filesOf(k).length, 0);
+    const otherFiles = filesOf('other');
+
+    const renderFileChip = (k, f, index) => (
+        <div key={index} className="inline-flex items-center gap-3 bg-white border border-gray-200 rounded-xl px-3 py-2 max-w-full">
+            <FileCheck2 size={14} className="text-[#00A693] flex-shrink-0" />
+            <span className="text-xs text-gray-700 truncate max-w-[200px]">{f.name}</span>
+            <span className="text-[10px] text-gray-400 flex-shrink-0">{formatSize(f.size)}</span>
+            <button
+                type="button"
+                onClick={() => removeFileAt(k, index)}
+                className="text-[10px] font-bold uppercase tracking-widest text-gray-400 hover:text-red-500 transition-colors flex-shrink-0"
+            >
+                Remove
+            </button>
+        </div>
+    );
 
     return (
         <div className="space-y-8">
-            <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-3">
+            <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
                 <div>
                     <h2 className="text-3xl font-black text-[#282728] uppercase tracking-tighter mb-3">Document Checklist</h2>
-                    <p className="text-sm text-gray-500">Tick each item you currently have available.</p>
+                    <p className="text-sm text-gray-500">Tick each item you have, and attach one or more PDFs where you can — uploads (max 10 MB each) speed up your assessment.</p>
                 </div>
-                <div className="flex items-center gap-3">
-                    <div className="text-3xl font-black text-[#00A693]">{docChecked}<span className="text-base text-gray-300"> / {docTotal}</span></div>
-                    <span className="text-[10px] font-bold uppercase tracking-[0.3em] text-gray-400">documents</span>
+                <div className="flex items-center gap-8">
+                    <div className="text-center">
+                        <div className="text-3xl font-black text-[#00A693]">{docChecked}<span className="text-base text-gray-300"> / {docTotal}</span></div>
+                        <span className="text-[10px] font-bold uppercase tracking-[0.3em] text-gray-400">ticked</span>
+                    </div>
+                    <div className="text-center">
+                        <div className="text-3xl font-black text-[#282728]">{totalFiles}</div>
+                        <span className="text-[10px] font-bold uppercase tracking-[0.3em] text-gray-400">{totalFiles === 1 ? 'file' : 'files'}</span>
+                    </div>
                 </div>
             </div>
 
             <div className="space-y-3">
                 {items.map((it) => {
                     const checked = !!data.documents[it.key];
+                    const files = filesOf(it.key);
+                    const err = fileErrors[it.key];
+                    const active = checked || files.length > 0;
                     return (
-                        <label
+                        <div
                             key={it.key}
-                            className={`flex items-start gap-4 p-5 border rounded-2xl cursor-pointer transition-all ${checked ? 'border-[#00A693] bg-[#00A693]/5' : 'border-gray-100 hover:border-gray-200 bg-white'}`}
+                            className={`p-5 border rounded-2xl transition-all ${active ? 'border-[#00A693] bg-[#00A693]/5' : 'border-gray-100 bg-white'}`}
                         >
-                            <input
-                                type="checkbox"
-                                className="w-5 h-5 mt-0.5 text-[#00A693] focus:ring-[#00A693] cursor-pointer rounded"
-                                checked={checked}
-                                onChange={() => toggle(it.key)}
-                            />
-                            <div className="flex-1 min-w-0">
-                                <div className={`text-sm font-bold uppercase tracking-wide leading-tight ${checked ? 'text-[#282728]' : 'text-[#282728]'}`}>{it.title}</div>
-                                <p className="text-xs text-gray-500 mt-1 leading-relaxed">{it.desc}</p>
+                            <div className="flex items-start gap-4">
+                                <input
+                                    type="checkbox"
+                                    className="w-5 h-5 mt-0.5 text-[#00A693] focus:ring-[#00A693] cursor-pointer rounded"
+                                    checked={checked}
+                                    onChange={() => toggle(it.key)}
+                                />
+                                <div className="flex-1 min-w-0">
+                                    <div className="text-sm font-bold uppercase tracking-wide leading-tight text-[#282728]">{it.title}</div>
+                                    <p className="text-xs text-gray-500 mt-1 leading-relaxed">{it.desc}</p>
+
+                                    {files.length > 0 && (
+                                        <div className="mt-3 flex flex-wrap gap-2">
+                                            {files.map((f, i) => renderFileChip(it.key, f, i))}
+                                        </div>
+                                    )}
+
+                                    <div className="mt-3">
+                                        <label className="inline-flex items-center gap-2 px-4 py-2 border border-dashed border-gray-300 rounded-xl text-[11px] font-bold uppercase tracking-[0.15em] text-gray-600 hover:border-[#00A693] hover:text-[#00A693] hover:bg-[#00A693]/5 cursor-pointer transition-all">
+                                            <Plus size={14} /> {files.length > 0 ? 'Attach another PDF' : 'Attach PDF'}
+                                            <input
+                                                type="file"
+                                                accept="application/pdf,.pdf"
+                                                multiple
+                                                className="hidden"
+                                                onChange={(e) => { handleFiles(it.key, e.target.files); e.target.value = ''; }}
+                                            />
+                                        </label>
+                                        {err && <p className="text-[10px] font-black text-red-500 uppercase tracking-widest mt-2">{err}</p>}
+                                    </div>
+                                </div>
+                                {active && <CheckCircle size={18} className="text-[#00A693] flex-shrink-0 mt-0.5" />}
                             </div>
-                            {checked && <CheckCircle size={18} className="text-[#00A693] flex-shrink-0 mt-0.5" />}
-                        </label>
+                        </div>
                     );
                 })}
+            </div>
+
+            {/* ── Other supporting documents ───────────────────────────── */}
+            <div className={`rounded-2xl border-2 border-dashed p-5 ${otherFiles.length > 0 ? 'border-[#00A693] bg-[#00A693]/5' : 'border-gray-200 bg-gray-50/50'}`}>
+                <div className="flex items-start gap-4">
+                    <div className="w-9 h-9 rounded-xl bg-white border border-gray-200 flex items-center justify-center flex-shrink-0">
+                        <FileCheck2 size={16} className="text-[#00A693]" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                        <div className="text-sm font-bold uppercase tracking-wide text-[#282728]">Other supporting documents</div>
+                        <p className="text-xs text-gray-500 mt-1 leading-relaxed">
+                            Anything else worth sharing — reference letters, NZQA assessments, marriage / birth certificates, supplementary payslips, etc. PDFs only, max 10 MB each.
+                        </p>
+
+                        {otherFiles.length > 0 && (
+                            <div className="mt-3 flex flex-wrap gap-2">
+                                {otherFiles.map((f, i) => renderFileChip('other', f, i))}
+                            </div>
+                        )}
+
+                        <div className="mt-3">
+                            <label className="inline-flex items-center gap-2 px-4 py-2 border border-dashed border-gray-300 rounded-xl text-[11px] font-bold uppercase tracking-[0.15em] text-gray-600 hover:border-[#00A693] hover:text-[#00A693] hover:bg-[#00A693]/5 cursor-pointer transition-all bg-white">
+                                <Plus size={14} /> {otherFiles.length > 0 ? 'Add another document' : 'Add documents'}
+                                <input
+                                    type="file"
+                                    accept="application/pdf,.pdf"
+                                    multiple
+                                    className="hidden"
+                                    onChange={(e) => { handleFiles('other', e.target.files); e.target.value = ''; }}
+                                />
+                            </label>
+                            {fileErrors.other && <p className="text-[10px] font-black text-red-500 uppercase tracking-widest mt-2">{fileErrors.other}</p>}
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     );
@@ -1021,9 +1489,9 @@ function SuccessMessage({ intakeId }) {
                 >
                     <CheckCircle size={48} />
                 </motion.div>
-                <h2 className="text-3xl font-black text-[#282728] uppercase tracking-tighter mb-6">Intake Received</h2>
+                <h2 className="text-3xl font-black text-[#282728] uppercase tracking-tighter mb-6">Interest Received</h2>
                 <p className="text-gray-500 text-sm leading-[2] mb-10 font-medium px-4">
-                    Thank you. Your Resident Visa intake has been received. A licensed adviser will review your information
+                    Thank you. Your Resident Visa interest has been received. A licensed adviser will review your information
                     and follow up with your engagement agreement.
                 </p>
                 {intakeId && (

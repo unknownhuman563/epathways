@@ -11,8 +11,9 @@ class AdminSeeder extends Seeder
     {
         $password = env('ADMIN_SEED_PASSWORD');
 
-        if (!$password) {
+        if (! $password) {
             $this->command->error('ADMIN_SEED_PASSWORD is not set in .env — admin user NOT created.');
+
             return;
         }
 
@@ -21,6 +22,7 @@ class AdminSeeder extends Seeder
             [
                 'name' => 'Admin',
                 'password' => bcrypt($password),
+                'role' => User::ROLE_ADMIN,
             ]
         );
 
