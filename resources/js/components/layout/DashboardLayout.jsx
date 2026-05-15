@@ -1,6 +1,6 @@
 import { Link, usePage, router } from "@inertiajs/react";
 import { useState, useEffect } from "react";
-import { Menu, X, Search, Bell, Settings, LogOut, ChevronDown } from "lucide-react";
+import { Menu, X, Search, Bell, Settings, LogOut, ChevronDown, Eye, ArrowLeft } from "lucide-react";
 
 /**
  * The official ePathways dashboard shell — sidebar + topbar + content area.
@@ -243,6 +243,18 @@ export default function DashboardLayout({
 
                 {/* Content */}
                 <main className="flex-1 overflow-y-auto px-4 md:px-8 pb-8 pt-2">
+                    {/* Cross-portal admin banner — shown when an admin user is viewing a department portal. */}
+                    {user?.role === "admin" && url.startsWith("/portal/") && (
+                        <div className="mb-4 flex items-center justify-between gap-3 px-4 py-2.5 rounded-2xl bg-gray-900 text-white text-sm shadow-sm">
+                            <div className="flex items-center gap-2">
+                                <Eye size={15} className="text-gray-300" />
+                                <span className="text-gray-300">Viewing as <span className="text-white font-semibold capitalize">{subtitle || "portal"}</span> — admin access</span>
+                            </div>
+                            <Link href="/admin/dashboard" className="inline-flex items-center gap-1 px-3 py-1 rounded-lg bg-white/10 hover:bg-white/15 text-white text-xs font-semibold transition-colors">
+                                <ArrowLeft size={12} /> Back to admin
+                            </Link>
+                        </div>
+                    )}
                     <h1 className="text-2xl font-bold text-gray-900 lg:hidden mb-6 tracking-tight">{getPageTitle()}</h1>
                     {children}
                 </main>

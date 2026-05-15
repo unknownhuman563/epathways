@@ -9,6 +9,10 @@ use App\Http\Controllers\LeadController;
 use App\Http\Controllers\BookingController;
 use App\Http\Controllers\ProgramController;
 use App\Http\Controllers\Portal\SalesController;
+use App\Http\Controllers\Portal\EducationController;
+use App\Http\Controllers\Portal\EnglishController;
+use App\Http\Controllers\Portal\ImmigrationController;
+use App\Http\Controllers\Portal\AccommodationController;
 use App\Http\Controllers\ResidentIntakeController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\UserReviewController;
@@ -148,15 +152,24 @@ Route::middleware(['auth'])->group(function () {
             Route::post('/bookings/{id}', [SalesController::class, 'updateBooking'])->name('bookings.update');
         });
 
-        // Other portals — scaffold dashboards for now (generic Inertia page).
-        Route::get('/education/dashboard', fn () => inertia('portal/Dashboard', ['portal' => 'education']))
-            ->middleware('portal:education')->name('portal.education');
-        Route::get('/english/dashboard', fn () => inertia('portal/Dashboard', ['portal' => 'english']))
-            ->middleware('portal:english')->name('portal.english');
-        Route::get('/immigration/dashboard', fn () => inertia('portal/Dashboard', ['portal' => 'immigration']))
-            ->middleware('portal:immigration')->name('portal.immigration');
-        Route::get('/accommodation/dashboard', fn () => inertia('portal/Dashboard', ['portal' => 'accommodation']))
-            ->middleware('portal:accommodation')->name('portal.accommodation');
+        // Other portals — each has its own controller + dedicated dashboard
+        // page. Admins satisfy every portal:* check via canAccessPortal(), so
+        // they can view any role's dashboard.
+        Route::middleware('portal:education')->prefix('education')->name('portal.education.')->group(function () {
+            Route::get('/dashboard', [EducationController::class, 'dashboard'])->name('dashboard');
+        });
+
+        Route::middleware('portal:english')->prefix('english')->name('portal.english.')->group(function () {
+            Route::get('/dashboard', [EnglishController::class, 'dashboard'])->name('dashboard');
+        });
+
+        Route::middleware('portal:immigration')->prefix('immigration')->name('portal.immigration.')->group(function () {
+            Route::get('/dashboard', [ImmigrationController::class, 'dashboard'])->name('dashboard');
+        });
+
+        Route::middleware('portal:accommodation')->prefix('accommodation')->name('portal.accommodation.')->group(function () {
+            Route::get('/dashboard', [AccommodationController::class, 'dashboard'])->name('dashboard');
+        });
     });
 });
 
