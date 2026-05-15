@@ -3,7 +3,6 @@
 namespace App\Http\Controllers\Portal;
 
 use App\Http\Controllers\Controller;
-use App\Models\ActivityLog;
 use App\Models\Booking;
 use App\Models\Lead;
 use Illuminate\Http\Request;
@@ -101,15 +100,11 @@ class SalesController extends Controller
 
         try {
             $lead = Lead::findOrFail($id);
-            $from = $lead->status;
             $lead->status = $validated['status'];
             $lead->stage = ! empty($validated['stage']) ? $validated['stage'] : $lead->stage;
             $lead->save();
 
-            ActivityLog::record('lead.updated', [
-                'description' => "Lead {$lead->lead_id} ({$lead->first_name} {$lead->last_name}): {$from} → {$lead->status}",
-                'properties' => ['lead_id' => $lead->lead_id, 'from' => $from, 'to' => $lead->status, 'stage' => $lead->stage],
-            ]);
+            // Audited automatically by the LogsActivity trait on the Lead model.
 
             return back()->with('success', "Lead {$lead->lead_id} updated.");
         } catch (\Throwable $e) {
@@ -148,16 +143,7 @@ class SalesController extends Controller
             $booking = Booking::findOrFail($id);
             $booking->update($validated);
 
-            ActivityLog::record('booking.updated', [
-                'description' => "Booking #{$booking->id} ({$booking->first_name} {$booking->last_name}) — {$booking->status}",
-                'properties' => [
-                    'booking_id' => $booking->id,
-                    'status' => $booking->status,
-                    'appointment_date' => $booking->appointment_date,
-                    'appointment_time' => $booking->appointment_time,
-                    'consultant_name' => $booking->consultant_name,
-                ],
-            ]);
+            // Audited automatically by the LogsActivity trait on the Booking model.
 
             return back()->with('success', "Booking #{$booking->id} updated.");
         } catch (\Throwable $e) {

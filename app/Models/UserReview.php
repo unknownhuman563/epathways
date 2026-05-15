@@ -2,10 +2,13 @@
 
 namespace App\Models;
 
+use App\Traits\LogsActivity;
 use Illuminate\Database\Eloquent\Model;
 
 class UserReview extends Model
 {
+    use LogsActivity;
+
     protected $fillable = [
         'review_id',
         'name',

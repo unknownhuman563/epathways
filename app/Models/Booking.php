@@ -2,10 +2,13 @@
 
 namespace App\Models;
 
+use App\Traits\LogsActivity;
 use Illuminate\Database\Eloquent\Model;
 
 class Booking extends Model
 {
+    use LogsActivity;
+
     protected $fillable = [
         'first_name',
         'last_name',
