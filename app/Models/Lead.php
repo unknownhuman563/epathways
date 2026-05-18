@@ -2,11 +2,14 @@
 
 namespace App\Models;
 
+use App\Traits\LogsActivity;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Lead extends Model
 {
+    use LogsActivity;
+
     protected $fillable = [
         'lead_id', 'first_name', 'last_name', 'dob', 'other_names', 'email', 'phone',
         'gender', 'marital_status', 'branch', 'stage', 'status',
@@ -36,6 +39,12 @@ class Lead extends Model
         'ai_analysis' => 'array',
         'age' => 'integer',
     ];
+
+    /** AI analysis is written by a background job — don't log it as a user edit. */
+    public function activityIgnoredAttributes(): array
+    {
+        return ['ai_analysis', 'ai_analysis_status'];
+    }
 
     public function educationExps(): HasMany
     {
