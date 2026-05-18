@@ -5,6 +5,9 @@ import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
 import ScrollToTop from "@/components/ui/ScrollToTop";
 import JourneyExperience from "./JourneyExperience";
+import CrossPillarBundles from "@/components/ui/CrossPillarBundles";
+import BeforeFooterCTA from "@/components/ui/BeforeFooterCTA";
+import EducationCostCalculator from "@/components/ui/EducationCostCalculator";
 
 // Assets
 import heroBg from "@assets/Services/education.png";
@@ -446,11 +449,18 @@ export default function EducationJourney() {
                 </div>
             </section>
 
-            {/* Education Consultant Section */}
+            {/* Live cost calculator — sits right after the transparent-fees
+                section, letting visitors stress-test their budget before
+                they meet the team. Pure client-side math. */}
+            <EducationCostCalculator />
+
+            {/* Education Consultant Section — 1-row 3-column grid, ports the
+                horizontal-card pattern from the Immigration "Licensed
+                Advisers" section so both team sections feel consistent. */}
             <section id="education-consultants" className="py-32 bg-white text-[#282728] font-urbanist overflow-hidden">
-                <div className="container mx-auto px-6 md:px-12 max-w-5xl">
+                <div className="container mx-auto px-6 md:px-12 max-w-7xl">
                     {/* Header */}
-                    <div className="text-center mb-24">
+                    <div className="text-center mb-20 lg:mb-24">
                         <motion.span
                             initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true }}
                             className="text-[11px] font-bold tracking-[0.4em] uppercase text-gray-500 mb-4 block"
@@ -471,42 +481,47 @@ export default function EducationJourney() {
                         </motion.p>
                     </div>
 
-                    {/* Consultant Cards */}
-                    <div className="flex flex-col gap-6">
+                    {/* Consultant Grid — 3 vertical cards in a row. Big
+                        portrait image on top gives each card real presence
+                        (the horizontal-inside-card layout was too cramped
+                        when squeezed into 3 columns). */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 lg:gap-10">
                         {[
-                            { name: "Fhilip Bryll Añabeza", role: "Education Consultant", bio: "Fhilip provides expert guidance on matching students to the right programs and navigating the application process.", img: bryllImage },
-                            { name: "Emma Ceballo", role: "Head of Education Dept", bio: "Emma leads our education team, bringing extensive expertise in enrollment support and international student success.", img: emmaImage },
-                            { name: "Dinah Suarin", role: "CEO / Founder", bio: "With over a decade of experience, Dinah founded ePathways to help students navigate their global education journey.", img: dinaImage }
+                            { name: "Fhilip Bryll Añabeza", role: "Education Consultant", credential: "Student Enrolment Specialist", img: bryllImage },
+                            { name: "Emma Ceballo", role: "Head of Education Dept", credential: "Enrolment & Student Success", img: emmaImage },
+                            { name: "Dinah Suarin", role: "CEO / Founder", credential: "10+ years guiding journeys", img: dinaImage }
                         ].map((c, i) => (
                             <motion.div
                                 key={i}
                                 initial={{ opacity: 0, y: 30 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: i * 0.1 }}
-                                className="flex flex-col sm:flex-row bg-[#fcfcfc] text-[#1a1a1a] border border-gray-200 rounded-none overflow-hidden group hover:border-[#1a1a1a] hover:bg-white hover:shadow-lg transition-all duration-500"
+                                className="flex flex-col bg-white border border-gray-200 rounded-sm overflow-hidden group hover:border-[#282728] hover:shadow-xl transition-all duration-500"
                             >
-                                {/* Left: Image */}
-                                <div className="sm:w-[35%] lg:w-[25%] aspect-square sm:aspect-auto relative overflow-hidden bg-black/50">
-                                    <img 
-                                        src={c.img} 
-                                        alt={c.name} 
-                                        className="w-full h-full object-cover object-top group-hover:scale-105 transition-all duration-700 opacity-90" 
+                                {/* Top: Portrait image — full width, generous
+                                    aspect ratio for proper visual weight */}
+                                <div className="aspect-[4/5] relative overflow-hidden bg-gray-100">
+                                    <img
+                                        src={c.img}
+                                        alt={c.name}
+                                        className="w-full h-full object-cover object-top group-hover:scale-105 transition-all duration-700"
                                     />
                                 </div>
-                                {/* Right: Info */}
-                                <div className="sm:w-[65%] lg:w-[75%] p-10 md:p-14 flex flex-col justify-center">
+
+                                {/* Bottom: Info */}
+                                <div className="p-8 lg:p-10 flex flex-col">
                                     <span className="text-[10px] font-bold tracking-widest uppercase text-gray-500 mb-3 block">
                                         {c.role}
                                     </span>
-                                    <h3 className="text-2xl md:text-4xl font-light mb-6 text-[#1a1a1a] leading-tight">
+                                    <h3 className="text-2xl md:text-3xl font-medium mb-2 text-[#282728] leading-tight tracking-tight">
                                         {c.name}
                                     </h3>
-                                    <p className="text-gray-600 text-sm md:text-base leading-relaxed mb-10 max-w-2xl">
-                                        {c.bio}
-                                    </p>
-                                    <a 
-                                        href="/booking" 
-                                        className="inline-flex items-center gap-3 border border-[#1a1a1a] px-8 py-3 text-[11px] font-bold uppercase tracking-widest text-[#1a1a1a] hover:bg-[#1a1a1a] hover:text-white transition-all duration-500 w-fit"
+                                    <div className="text-gray-500 text-[10px] font-bold uppercase tracking-widest mb-6">
+                                        {c.credential}
+                                    </div>
+                                    <a
+                                        href="/booking"
+                                        className="text-[11px] font-bold uppercase tracking-[0.22em] flex items-center gap-2.5 text-[#282728] hover:text-[#436235] transition-colors group/link w-fit pt-5 border-t border-[#282728]/15"
                                     >
-                                        Book a session <ArrowRight size={14} />
+                                        Book a session <ArrowRight size={13} strokeWidth={2.5} className="group-hover/link:translate-x-1 transition-transform" />
                                     </a>
                                 </div>
                             </motion.div>
@@ -632,6 +647,16 @@ export default function EducationJourney() {
                     </motion.div>
                 </div>
             </section>
+
+            <CrossPillarBundles exclude="education" />
+
+            <BeforeFooterCTA
+                source="education-journey"
+                eyebrow="Education pathway"
+                headline="Plan your studies."
+                sublineAccent="From foundation to doctoral."
+                paragraph="Tell us where you're starting from and what you want to study — our education team replies within 24 hours with the right programme and intake."
+            />
 
             <ScrollToTop />
 

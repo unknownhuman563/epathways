@@ -244,6 +244,7 @@ class LeadController extends Controller
 
                 'status' => 'New',
                 'stage'  => 'Evaluation',
+                'source' => 'free-assessment',
             ]);
 
             // 4. Relational Data Mapping: Study Plans

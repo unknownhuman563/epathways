@@ -57,8 +57,8 @@ export default function HeroSection({ backgroundVideo }) {
                         </div>
                         <div className="h-3 w-[1px] bg-white/30"></div>
                         <div className="flex flex-col text-left leading-tight">
-                            <span className="text-[7px] md:text-[8px] text-white uppercase tracking-[0.2em] font-bold">Trusted by 500+</span>
-                            <span className="text-[7px] md:text-[8px] text-white/50 font-medium whitespace-nowrap">Successful Visa Applicants</span>
+                            <span className="text-[7px] md:text-[8px] text-white uppercase tracking-[0.2em] font-bold">Trusted by 500+ families</span>
+                            <span className="text-[7px] md:text-[8px] text-white/50 font-medium whitespace-nowrap">Philippines · India · Asia</span>
                         </div>
                     </motion.div>
 
@@ -76,23 +76,25 @@ export default function HeroSection({ backgroundVideo }) {
                         ePathways is your trusted partner, providing expert guidance and end-to-end support—from assessment to success.
                     </p>
 
-                    {/* Premium Ghost Buttons */}
+                    {/* Hierarchy: primary solid-green for the assessment funnel
+                        (highest-converting destination), secondary outline for
+                        the lower-friction booking calendar. */}
                     <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-3 sm:gap-6 w-full sm:w-auto max-w-md sm:max-w-none mx-auto">
+                        <motion.a
+                            whileHover={{ scale: 1.05 }}
+                            whileTap={{ scale: 0.95 }}
+                            href="/free-assessment"
+                            className="w-full sm:w-auto bg-[#436235] hover:bg-[#385029] border border-[#436235] text-white px-6 sm:px-7 py-3 sm:py-2.5 rounded-none text-[10px] sm:text-[10px] md:text-xs font-bold tracking-[0.15em] sm:tracking-[0.2em] transition-all duration-300 uppercase text-center shadow-lg"
+                        >
+                            Get my free assessment
+                        </motion.a>
                         <motion.a
                             whileHover={{ scale: 1.05, backgroundColor: "rgba(255, 255, 255, 1)", color: "#282728" }}
                             whileTap={{ scale: 0.95 }}
                             href="/booking"
                             className="w-full sm:w-auto bg-transparent border border-white text-white px-6 sm:px-7 py-3 sm:py-2.5 rounded-none text-[10px] sm:text-[10px] md:text-xs font-bold tracking-[0.15em] sm:tracking-[0.2em] transition-all duration-300 uppercase text-center"
                         >
-                            Book Your Free Consultation
-                        </motion.a>
-                        <motion.a
-                            whileHover={{ scale: 1.05, backgroundColor: "rgba(255, 255, 255, 1)", color: "#282728" }}
-                            whileTap={{ scale: 0.95 }}
-                            href="/free-assessment"
-                            className="w-full sm:w-auto bg-transparent border border-white text-white px-6 sm:px-7 py-3 sm:py-2.5 rounded-none text-[10px] sm:text-[10px] md:text-xs font-bold tracking-[0.15em] sm:tracking-[0.2em] transition-all duration-300 uppercase text-center"
-                        >
-                            Assess your Eligibility
+                            Book a 1:1 consultation
                         </motion.a>
                     </div>
                 </motion.div>

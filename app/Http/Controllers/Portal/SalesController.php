@@ -157,6 +157,13 @@ class SalesController extends Controller
     {
         $ai = is_array($l->ai_analysis) ? $l->ai_analysis : [];
 
+        // Prefer the new `source` column (free-assessment, hero-belowhero,
+        // success-stories, fee-guide, …) and fall back to the legacy event/
+        // branch heuristic for older rows where source is null.
+        $sourceLabel = $l->source
+            ? $this->prettifySource($l->source)
+            : ($l->event ? "Event: {$l->event->name}" : ($l->branch ?: 'Online form'));
+
         return [
             'id' => $l->id,
             'lead_id' => $l->lead_id,
@@ -165,7 +172,7 @@ class SalesController extends Controller
             'phone' => $l->phone,
             'country' => $l->residence_country ?: $l->country,
             'course' => optional($l->studyPlans->first())->preferred_course,
-            'source' => $l->event ? "Event: {$l->event->name}" : ($l->branch ?: 'Online form'),
+            'source' => $sourceLabel,
             'status' => $l->status ?: 'New',
             'stage' => $l->stage,
             'ai_status' => $l->ai_analysis_status,
@@ -173,6 +180,13 @@ class SalesController extends Controller
             'ai_pathway' => $ai['recommended_pathway'] ?? null,
             'created_at' => $l->created_at,
         ];
+    }
+
+    /** Turn a source slug (e.g. "program-details:bachelor-it") into a
+     *  human-readable label for the leads table. */
+    private function prettifySource(string $source): string
+    {
+        return ucwords(str_replace(['-', ':', '_'], [' ', ' / ', ' '], $source));
     }
 
     private function bookingRow(Booking $b): array

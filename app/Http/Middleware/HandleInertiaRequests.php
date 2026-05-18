@@ -50,6 +50,15 @@ class HandleInertiaRequests extends Middleware
                 'edit_link_url' => $request->session()->get('edit_link_url'),
                 'edit_link_intake_id' => $request->session()->get('edit_link_intake_id'),
             ],
+            // Public contact channels for the sticky CTA bar, floating contact
+            // widget, and footer. Components hide channels with empty values.
+            'contact' => [
+                'phone'     => config('services.contact.phone'),
+                'whatsapp'  => config('services.contact.whatsapp'),
+                'messenger' => config('services.contact.messenger'),
+                'facebook'  => config('services.contact.facebook'),
+                'email'     => config('services.contact.email'),
+            ],
         ];
     }
 }

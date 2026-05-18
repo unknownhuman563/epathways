@@ -1,5 +1,40 @@
 import React, { useRef } from 'react';
-import { ChevronLeft, ChevronRight } from 'react-feather';
+import { ChevronLeft, ChevronRight, Clock } from 'react-feather';
+
+// Given an array of month names ("February", "March", …), find the soonest
+// upcoming intake and return { label, urgent } where `urgent` is true when
+// the next intake is within ~6 weeks. Drives the "Next intake" urgency
+// badge so visitors see the deadline pressure rather than a generic list.
+const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+function nextIntake(months) {
+    if (!months?.length) return null;
+    const now = new Date();
+    const today = now.getDate();
+    const thisMonth = now.getMonth();
+    const thisYear = now.getFullYear();
+
+    const candidates = months
+        .map(name => MONTHS.indexOf(name))
+        .filter(i => i >= 0)
+        .map(i => {
+            // Treat each intake as opening on the 1st of the month. If this
+            // month's intake hasn't started yet, count it as upcoming.
+            const year = i < thisMonth || (i === thisMonth && today > 1) ? thisYear + 1 : thisYear;
+            return new Date(year, i, 1);
+        })
+        .sort((a, b) => a - b);
+
+    const next = candidates[0];
+    if (!next) return null;
+
+    const days = Math.ceil((next - now) / (1000 * 60 * 60 * 24));
+    const monthLabel = next.toLocaleDateString("en-US", { month: "long", year: next.getFullYear() === thisYear ? undefined : "numeric" });
+    return {
+        label: `Next intake: ${monthLabel}`,
+        days,
+        urgent: days <= 45,
+    };
+}
 import educationImg from "@assets/Services/education.png";
 import visaImg from "@assets/Services/visa.png";
 import settlementImg from "@assets/Services/settlement.png";
@@ -136,7 +171,9 @@ export default function InDemandPrograms() {
                     className="flex gap-6 overflow-x-auto pb-4 scroll-smooth"
                     style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
                 >
-                    {categories.map((cat) => (
+                    {categories.map((cat) => {
+                        const intake = nextIntake(cat.intakes);
+                        return (
                         <div
                             key={cat.id}
                             className="flex-shrink-0 w-[280px] sm:w-[320px] bg-white text-[#1a1a1a] rounded-xl overflow-hidden flex flex-col group hover:shadow-xl transition-all duration-300"
@@ -148,6 +185,21 @@ export default function InDemandPrograms() {
                                     alt={cat.title}
                                     className="w-full h-full object-cover opacity-70 group-hover:opacity-90 group-hover:scale-105 transition-all duration-500"
                                 />
+                                {intake && (
+                                    <div className={`absolute top-3 left-3 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest shadow-md ${
+                                        intake.urgent
+                                            ? 'bg-[#436235] text-white'
+                                            : 'bg-white/95 backdrop-blur-md text-[#282728]'
+                                    }`}>
+                                        <Clock size={10} strokeWidth={2.5} />
+                                        {intake.label}
+                                        {intake.urgent && (
+                                            <span className="ml-1 px-1.5 py-0.5 rounded-full bg-white text-[#436235] text-[8px] leading-none">
+                                                {intake.days}d
+                                            </span>
+                                        )}
+                                    </div>
+                                )}
                             </div>
 
                             {/* Card Body */}
@@ -190,7 +242,8 @@ export default function InDemandPrograms() {
                                 </a>
                             </div>
                         </div>
-                    ))}
+                    );
+                    })}
                 </div>
 
             </div>

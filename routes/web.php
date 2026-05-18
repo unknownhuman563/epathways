@@ -8,6 +8,7 @@ use App\Http\Controllers\HomeController;
 use App\Http\Controllers\LeadController;
 use App\Http\Controllers\BookingController;
 use App\Http\Controllers\ProgramController;
+use App\Http\Controllers\QuickLeadController;
 use App\Http\Controllers\Portal\ImmigrationController as PortalImmigrationController;
 use App\Http\Controllers\Portal\SalesController;
 use App\Http\Controllers\Portal\EducationController;
@@ -17,6 +18,7 @@ use App\Http\Controllers\Portal\AccommodationController;
 use App\Http\Controllers\ResidentIntakeController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\UserReviewController;
+use App\Services\NewsFeedService;
 Route::get('/', [HomeController::class, 'index']);
 
 Route::get("/booking", function (){
@@ -39,8 +41,15 @@ Route::get("/about-us", function (){
 });
 
 Route::get("/immigration", function (){
-   return inertia('immigration/ImmigrationPage');
+   return inertia('immigration/ImmigrationPage', array_merge(
+       UserReviewController::publicPayload(),
+       ['news' => NewsFeedService::latest(3)]
+   ));
 });
+
+// Admin moderation toggle for published / featured / status on a review.
+Route::middleware('auth')->post('/admin/immigration/user-reviews/{id}', [UserReviewController::class, 'adminUpdate'])
+    ->name('admin.immigration.user-reviews.update');
 
 Route::get("/accommodation", function (){
    return inertia('accommodation/AccommodationPage');
@@ -89,6 +98,11 @@ Route::post('/register/{event_code}', [EventController::class, 'registerLead']);
 Route::get('/free-assessment', [LeadController::class, 'showFreeAssessment'])->name('free-assessment');
 Route::post('/free-assessment', [LeadController::class, 'storeFreeAssessment']);
 Route::get('/assessment-result/{lead_id}', [LeadController::class, 'showAssessmentResult'])->name('assessment-result');
+
+// Lightweight inline lead capture (hero, exit-intent, fee-guide download,
+// footer newsletter, etc.) — writes into the same `leads` table with
+// source-tagging so the sales pipeline sees one funnel.
+Route::post('/quick-lead', [QuickLeadController::class, 'store'])->name('quick-lead');
 
 // Authentication Routes
 Route::get('/login', [AuthController::class, 'showLoginForm'])->name('login')->middleware('guest');

@@ -14,7 +14,7 @@ const articles = [
         title: "SB19's New Zealand Visas Approved with ePathways as Visa Partner",
         excerpt:
             "Great news! SB19's New Zealand visas have been approved! ePathways is honored to support this milestone as their trusted Visa Servicing Partner.",
-        link: "https://forms.clickup.com/8461429/f/6zflon9-5161/0k6qeptd",
+        link: "/free-assessment",
     },
     {
         image: garyVImage,
@@ -22,7 +22,7 @@ const articles = [
         title: "GaryVee's Insights on Immigration and Global Opportunities",
         excerpt:
             "Catch the latest insights from business mogul GaryVee on how immigration shapes global entrepreneurship and unlocks new pathways.",
-        link: "#",
+        link: "/activities",
     },
     {
         image: newRightsImage,
@@ -30,7 +30,7 @@ const articles = [
         title: "New Rights for Migrants: What You Need to Know",
         excerpt:
             "Stay up to date with the latest changes in migration law and understand how new rights affect your journey to New Zealand.",
-        link: "#",
+        link: "/activities",
     },
     {
         image: epathphImage,
@@ -38,7 +38,7 @@ const articles = [
         title: "ePathways Philippines: Expanding Our Reach",
         excerpt:
             "ePathways continues to grow its presence across the Philippines, connecting more families with trusted immigration services.",
-        link: "#",
+        link: "/activities",
     },
     {
         image: immigrationImage,
@@ -46,7 +46,7 @@ const articles = [
         title: "Immigration Updates: Key Policy Changes for 2025",
         excerpt:
             "A comprehensive look at the most important immigration policy shifts coming in 2025 and how they may impact your plans.",
-        link: "#",
+        link: "/activities",
     },
     {
         image: studentHoursImage,
@@ -54,7 +54,7 @@ const articles = [
         title: "Student Work Hours: Latest Updates from Immigration NZ",
         excerpt:
             "International students in New Zealand can now benefit from updated work hour allowances. Learn what this means for you.",
-        link: "#",
+        link: "/activities",
     },
 ];
 

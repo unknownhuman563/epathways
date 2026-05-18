@@ -126,7 +126,7 @@ export default function AboutUs() {
                             <a href="/programs-levels" className="px-10 py-4 bg-[#282728] text-white text-[12px] font-bold rounded flex items-center gap-4 hover:bg-black transition-all uppercase tracking-widest shadow-xl active:scale-95 group">
                                 Programs <ArrowRight size={16} className="transition-transform group-hover:translate-x-1" />
                             </a>
-                            <a href="/contact" className="px-10 py-4 bg-white border border-gray-300 text-[#282728] text-[12px] font-bold rounded hover:bg-gray-50 transition-all uppercase tracking-widest shadow-sm">
+                            <a href="/booking" className="px-10 py-4 bg-white border border-gray-300 text-[#282728] text-[12px] font-bold rounded hover:bg-gray-50 transition-all uppercase tracking-widest shadow-sm">
                                 Contact
                             </a>
                         </div>

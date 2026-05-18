@@ -222,9 +222,12 @@ export default function FeeGuide({ programs = [] }) {
                                                     >
                                                         Details
                                                     </Link>
-                                                    <button className="px-6 py-2 bg-[#1a1a1a] text-white text-[10px] font-bold rounded-lg hover:bg-black transition-all shadow-md active:scale-95 uppercase tracking-widest">
+                                                    <Link
+                                                        href="/booking"
+                                                        className="px-6 py-2 bg-[#436235] text-white text-[10px] font-bold rounded-lg hover:bg-[#385029] transition-all shadow-md active:scale-95 uppercase tracking-widest"
+                                                    >
                                                         Book Now
-                                                    </button>
+                                                    </Link>
                                                 </div>
                                             </div>
                                         </motion.div>

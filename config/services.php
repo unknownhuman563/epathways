@@ -49,4 +49,15 @@ return [
         'api_key' => env('GEMINI_API_KEY'),
     ],
 
+    // Public contact destinations surfaced in floating widgets, the mobile
+    // sticky CTA bar, and the footer. All optional — components hide a
+    // channel if its value is empty so the bar collapses gracefully.
+    'contact' => [
+        'phone'     => env('CONTACT_PHONE', '+64277775586'),
+        'whatsapp'  => env('CONTACT_WHATSAPP'),       // e.g. "63XXXXXXXXXX" — no +, no spaces
+        'messenger' => env('CONTACT_MESSENGER', 'https://m.me/epathwaysnz'),
+        'facebook'  => env('CONTACT_FACEBOOK', 'https://www.facebook.com/epathwaysnz'),
+        'email'     => env('CONTACT_EMAIL', 'info@epathways.co.nz'),
+    ],
+
 ];

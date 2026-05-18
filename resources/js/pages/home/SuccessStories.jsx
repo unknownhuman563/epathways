@@ -47,14 +47,23 @@ export default function SuccessStories() {
         <section className="py-16 bg-white font-urbanist">
             <div className="max-w-6xl mx-auto px-6 md:px-12">
 
-                {/* ── Section heading ───────────────────────────────── */}
-                <div className="mb-10">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-gray-500 mb-2">
-                        Testimonials
+                {/* ── Section heading — editorial, two-column */}
+                <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-6 mb-12 lg:mb-14">
+                    <div className="max-w-2xl">
+                        <div className="flex items-center gap-4 mb-5">
+                            <span className="text-[10px] font-bold text-[#436235] uppercase tracking-[0.35em]">
+                                Approvals
+                            </span>
+                            <div className="h-px w-12 bg-[#436235]/50"></div>
+                        </div>
+                        <h2 className="text-3xl sm:text-4xl lg:text-5xl font-medium text-[#282728] tracking-tight leading-[1.1]">
+                            Real families.<br />
+                            <span className="text-[#436235] font-light italic">Real approvals.</span>
+                        </h2>
+                    </div>
+                    <p className="text-sm sm:text-base text-gray-500 font-light leading-relaxed max-w-md">
+                        Filipino, Indian and other migrant families have built new lives in New Zealand with ePathways. Yours could be next.
                     </p>
-                    <h2 className="text-3xl md:text-4xl font-bold text-[#1a1a1a] leading-tight">
-                        What Our Clients Say
-                    </h2>
                 </div>
 
                 {/* ── Main row ──────────────────────────────────────── */}
@@ -204,6 +213,7 @@ export default function SuccessStories() {
                         </button>
                     </div>
                 </div>
+
             </div>
         </section>
     );

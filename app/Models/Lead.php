@@ -22,6 +22,7 @@ class Lead extends Model
         'nz_contacts_info', 'military_info', 'source_of_funds_info',
         'home_ties_info', 'declaration_accepted',
         'ai_analysis', 'ai_analysis_status',
+        'source',
     ];
 
     protected $casts = [
