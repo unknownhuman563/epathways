@@ -44,10 +44,22 @@ class UserReviewController extends Controller
         }
     }
 
+    /**
+     * Render under /admin chrome for admins; under the immigration portal for
+     * immigration-role staff. Both share the same React component (re-exported
+     * at portal/immigration/* — see resources/js/pages/portal/immigration/).
+     */
+    private function immigrationPagePath(string $page): string
+    {
+        return auth()->user()?->isAdmin()
+            ? "admin/Immigration/{$page}"
+            : "portal/immigration/{$page}";
+    }
+
     public function adminIndex()
     {
         $reviews = UserReview::latest()->get();
-        return inertia('admin/Immigration/UserReviews', [
+        return inertia($this->immigrationPagePath('UserReviews'), [
             'reviews' => $reviews,
         ]);
     }
@@ -55,7 +67,7 @@ class UserReviewController extends Controller
     public function adminShow($id)
     {
         $review = UserReview::findOrFail($id);
-        return inertia('admin/Immigration/UserReviewDetails', [
+        return inertia($this->immigrationPagePath('UserReviewDetails'), [
             'review' => $review,
         ]);
     }

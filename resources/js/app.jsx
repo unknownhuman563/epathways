@@ -7,6 +7,7 @@ import '../css/app.css';
 
 import AdminLayout from './components/layout/AdminLayout';
 import SalesLayout from './components/layout/SalesLayout';
+import ImmigrationLayout from './components/layout/ImmigrationLayout';
 import FlashToaster from './components/ui/FlashToaster';
 
 createInertiaApp({
@@ -18,6 +19,8 @@ createInertiaApp({
       page.default.layout = page.default.layout || ((page) => <AdminLayout>{page}</AdminLayout>);
     } else if (name.startsWith('portal/sales/')) {
       page.default.layout = page.default.layout || ((page) => <SalesLayout>{page}</SalesLayout>);
+    } else if (name.startsWith('portal/immigration/')) {
+      page.default.layout = page.default.layout || ((page) => <ImmigrationLayout>{page}</ImmigrationLayout>);
     }
 
     return page;

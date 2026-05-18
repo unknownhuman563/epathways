@@ -8,6 +8,7 @@ use App\Http\Controllers\HomeController;
 use App\Http\Controllers\LeadController;
 use App\Http\Controllers\BookingController;
 use App\Http\Controllers\ProgramController;
+use App\Http\Controllers\Portal\ImmigrationController as PortalImmigrationController;
 use App\Http\Controllers\Portal\SalesController;
 use App\Http\Controllers\ResidentIntakeController;
 use App\Http\Controllers\UserController;
@@ -63,6 +64,10 @@ Route::get("/visa-assessment-form", function (){
 Route::get("/resident-interest", [ResidentIntakeController::class, 'showForm'])->name('resident-interest');
 Route::post("/resident-interest", [ResidentIntakeController::class, 'store']);
 
+// Token-based edit links (no auth — the opaque token is the bearer credential).
+Route::get('/resident-interest/edit/{token}', [ResidentIntakeController::class, 'showEditForm'])->name('resident-interest.edit');
+Route::post('/resident-interest/edit/{token}', [ResidentIntakeController::class, 'updateFromEditLink']);
+
 // Keep the old path working for any in-flight bookmarks / external links.
 Route::permanentRedirect('/resident-intake', '/resident-interest');
 
@@ -115,13 +120,6 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/admin/programs/{id}', [ProgramController::class, 'update']);
         Route::delete('/admin/programs/{id}', [ProgramController::class, 'destroy']);
 
-        Route::get('/admin/immigration/resident-intakes', [ResidentIntakeController::class, 'adminIndex'])->name('admin.immigration.resident-intakes');
-        Route::get('/admin/immigration/resident-intakes/{id}', [ResidentIntakeController::class, 'adminShow'])->name('admin.immigration.resident-intakes.show');
-        Route::get('/admin/immigration/resident-intakes/{id}/documents/{key}/{index?}', [ResidentIntakeController::class, 'downloadDocument'])->name('admin.immigration.resident-intakes.document');
-
-        Route::get('/admin/immigration/user-reviews', [UserReviewController::class, 'adminIndex'])->name('admin.immigration.user-reviews');
-        Route::get('/admin/immigration/user-reviews/{id}', [UserReviewController::class, 'adminShow'])->name('admin.immigration.user-reviews.show');
-
         Route::get("/admin/booking", [BookingController::class, 'index'])->name('admin.bookings');
         Route::post("/admin/bookings/{id}", [BookingController::class, 'update']);
 
@@ -131,6 +129,19 @@ Route::middleware(['auth'])->group(function () {
         Route::delete('/admin/users/{id}', [UserController::class, 'destroy']);
 
         Route::get('/admin/activity-logs', [ActivityLogController::class, 'index'])->name('admin.activity-logs');
+    });
+
+    // Immigration management screens — shared between admins and immigration-role staff.
+    // They live under /admin/immigration/... for historical reasons; the immigration
+    // portal's sidebar deep-links here.
+    Route::middleware('portal:admin,immigration')->group(function () {
+        Route::get('/admin/immigration/resident-intakes', [ResidentIntakeController::class, 'adminIndex'])->name('admin.immigration.resident-intakes');
+        Route::get('/admin/immigration/resident-intakes/{id}', [ResidentIntakeController::class, 'adminShow'])->name('admin.immigration.resident-intakes.show');
+        Route::get('/admin/immigration/resident-intakes/{id}/documents/{key}/{index?}', [ResidentIntakeController::class, 'downloadDocument'])->name('admin.immigration.resident-intakes.document');
+        Route::post('/admin/immigration/resident-intakes/{id}/edit-link', [ResidentIntakeController::class, 'generateEditLink'])->name('admin.immigration.resident-intakes.edit-link');
+
+        Route::get('/admin/immigration/user-reviews', [UserReviewController::class, 'adminIndex'])->name('admin.immigration.user-reviews');
+        Route::get('/admin/immigration/user-reviews/{id}', [UserReviewController::class, 'adminShow'])->name('admin.immigration.user-reviews.show');
     });
 
     // Department portals — each staff member reaches only their own portal
@@ -153,8 +164,10 @@ Route::middleware(['auth'])->group(function () {
             ->middleware('portal:education')->name('portal.education');
         Route::get('/english/dashboard', fn () => inertia('portal/Dashboard', ['portal' => 'english']))
             ->middleware('portal:english')->name('portal.english');
-        Route::get('/immigration/dashboard', fn () => inertia('portal/Dashboard', ['portal' => 'immigration']))
-            ->middleware('portal:immigration')->name('portal.immigration');
+        // Immigration portal — dashboard + cross-links to admin management pages.
+        Route::middleware('portal:admin,immigration')->prefix('immigration')->name('portal.immigration.')->group(function () {
+            Route::get('/dashboard', [PortalImmigrationController::class, 'dashboard'])->name('dashboard');
+        });
         Route::get('/accommodation/dashboard', fn () => inertia('portal/Dashboard', ['portal' => 'accommodation']))
             ->middleware('portal:accommodation')->name('portal.accommodation');
     });

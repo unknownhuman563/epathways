@@ -47,6 +47,8 @@ class HandleInertiaRequests extends Middleware
                 'intake_id' => $request->session()->get('intake_id'),
                 'review_success' => $request->session()->get('review_success'),
                 'review_id' => $request->session()->get('review_id'),
+                'edit_link_url' => $request->session()->get('edit_link_url'),
+                'edit_link_intake_id' => $request->session()->get('edit_link_intake_id'),
             ],
         ];
     }
