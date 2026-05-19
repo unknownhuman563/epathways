@@ -18,6 +18,8 @@ use App\Http\Controllers\Portal\AccommodationController;
 use App\Http\Controllers\ResidentIntakeController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\UserReviewController;
+use App\Http\Controllers\LeadPortalInvitationController;
+use App\Http\Controllers\LeadDocumentController;
 use App\Services\NewsFeedService;
 Route::get('/', [HomeController::class, 'index']);
 
@@ -109,6 +111,13 @@ Route::get('/login', [AuthController::class, 'showLoginForm'])->name('login')->m
 Route::post('/login', [AuthController::class, 'login'])->middleware('guest');
 Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 
+// Lead Portal account setup — the invitation token itself acts as auth,
+// so these routes sit outside the auth middleware.
+Route::get('/lead-portal/setup/{token}', [LeadPortalInvitationController::class, 'setup'])
+    ->name('lead-portal.setup')->middleware('guest');
+Route::post('/lead-portal/setup/{token}', [LeadPortalInvitationController::class, 'store'])
+    ->middleware('guest');
+
 // External calendar sync — self-authenticates via the X-Sync-Token header
 // (see SyncController), so it must sit OUTSIDE the auth/admin group.
 Route::post("/api/sync-calendar", [App\Http\Controllers\SyncController::class, 'syncCalendar']);
@@ -147,6 +156,39 @@ Route::middleware(['auth'])->group(function () {
         Route::delete('/admin/users/{id}', [UserController::class, 'destroy']);
 
         Route::get('/admin/activity-logs', [ActivityLogController::class, 'index'])->name('admin.activity-logs');
+
+        // Lead Portal invitations — admin approval / rejection / revocation.
+        // Sales requests via /portal/sales/... (separate route below).
+        Route::get('/admin/portal-invitations', [LeadPortalInvitationController::class, 'adminIndex'])
+            ->name('admin.portal-invitations');
+        Route::post('/admin/leads/{id}/portal-invitation/approve', [LeadPortalInvitationController::class, 'approve'])
+            ->name('admin.portal-invitation.approve');
+        Route::post('/admin/leads/{id}/portal-invitation/reject', [LeadPortalInvitationController::class, 'reject'])
+            ->name('admin.portal-invitation.reject');
+        Route::post('/admin/leads/{id}/portal-invitation/revoke', [LeadPortalInvitationController::class, 'revoke'])
+            ->name('admin.portal-invitation.revoke');
+        Route::post('/admin/leads/{id}/portal-invitation/generate-credentials', [LeadPortalInvitationController::class, 'generateCredentials'])
+            ->name('admin.portal-invitation.generate-credentials');
+        Route::post('/admin/leads/{id}/portal-invitation/reset-password', [LeadPortalInvitationController::class, 'resetPassword'])
+            ->name('admin.portal-invitation.reset-password');
+    });
+
+    // Lead documents — admins AND sales agents both work these. The lead's
+    // own upload routes are under the lead-portal group below.
+    Route::middleware('portal:admin,sales')->group(function () {
+        Route::get('/admin/leads/{id}/documents', [LeadDocumentController::class, 'staffIndex'])
+            ->name('admin.leads.documents');
+        Route::post('/admin/leads/{id}/documents/requests', [LeadDocumentController::class, 'requestStore'])
+            ->name('admin.leads.documents.request');
+        Route::delete('/admin/leads/{leadId}/documents/requests/{requestId}', [LeadDocumentController::class, 'destroyRequest'])
+            ->name('admin.leads.documents.request.destroy');
+        Route::post('/admin/leads/{leadId}/documents/{docId}/status', [LeadDocumentController::class, 'updateStatus'])
+            ->name('admin.leads.documents.status');
+        Route::post('/admin/leads/{id}/documents/share', [LeadDocumentController::class, 'shareWithLead'])
+            ->name('admin.leads.documents.share');
+        // Staff download — same controller, role-gated inside.
+        Route::get('/admin/documents/{docId}/download', [LeadDocumentController::class, 'download'])
+            ->name('admin.documents.download');
     });
 
     // Immigration management screens — shared between admins and immigration-role staff.
@@ -175,6 +217,10 @@ Route::middleware(['auth'])->group(function () {
             Route::post('/leads/{id}', [SalesController::class, 'updateLead'])->name('leads.update');
             Route::get('/bookings', [SalesController::class, 'bookings'])->name('bookings');
             Route::post('/bookings/{id}', [SalesController::class, 'updateBooking'])->name('bookings.update');
+
+            // Sales initiates portal access; admin must approve (see admin routes).
+            Route::post('/leads/{id}/portal-invitation/request', [LeadPortalInvitationController::class, 'request'])
+                ->name('leads.portal-invitation.request');
         });
 
         // Other portals — each has its own controller + dedicated dashboard
@@ -194,6 +240,15 @@ Route::middleware(['auth'])->group(function () {
 
         Route::middleware('portal:accommodation')->prefix('accommodation')->name('portal.accommodation.')->group(function () {
             Route::get('/dashboard', [AccommodationController::class, 'dashboard'])->name('dashboard');
+        });
+
+        // Lead Portal — external client-facing dashboard. Each lead-role user
+        // is scoped to their own Lead record.
+        Route::middleware('portal:lead')->prefix('lead')->name('portal.lead.')->group(function () {
+            Route::get('/dashboard', [App\Http\Controllers\LeadPortalController::class, 'dashboard'])->name('dashboard');
+            Route::get('/documents', [LeadDocumentController::class, 'leadIndex'])->name('documents');
+            Route::post('/documents/upload', [LeadDocumentController::class, 'leadUpload'])->name('documents.upload');
+            Route::get('/documents/{docId}/download', [LeadDocumentController::class, 'download'])->name('documents.download');
         });
     });
 });

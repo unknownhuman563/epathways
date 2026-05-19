@@ -179,6 +179,7 @@ class SalesController extends Controller
             'ai_score' => $ai['overall_score'] ?? null,
             'ai_pathway' => $ai['recommended_pathway'] ?? null,
             'created_at' => $l->created_at,
+            'portal_invitation_status' => $l->portal_invitation_status ?: 'none',
         ];
     }
 

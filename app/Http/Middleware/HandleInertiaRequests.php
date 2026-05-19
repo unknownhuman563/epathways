@@ -49,6 +49,10 @@ class HandleInertiaRequests extends Middleware
                 'review_id' => $request->session()->get('review_id'),
                 'edit_link_url' => $request->session()->get('edit_link_url'),
                 'edit_link_intake_id' => $request->session()->get('edit_link_intake_id'),
+                // Admin Portal Invitations — single-shot credential surfacing.
+                'invitation_link' => $request->session()->get('invitation_link'),
+                'invitation_link_lead_id' => $request->session()->get('invitation_link_lead_id'),
+                'generated_credentials' => $request->session()->get('generated_credentials'),
             ],
             // Public contact channels for the sticky CTA bar, floating contact
             // widget, and footer. Components hide channels with empty values.

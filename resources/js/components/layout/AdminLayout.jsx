@@ -2,12 +2,13 @@ import DashboardLayout from "./DashboardLayout";
 import {
     Home, Users, UserCog, History, Calendar as CalendarIcon, BookOpen,
     GraduationCap, Video, Globe, FileText, Star, LayoutDashboard,
-    Briefcase, Languages, Building2,
+    Briefcase, Languages, Building2, KeyRound,
 } from "lucide-react";
 
 const ADMIN_NAV = [
     { name: "Dashboard", href: "/admin/dashboard", icon: <Home size={20} /> },
     { name: "Leads", href: "/admin/leads", icon: <Users size={20} /> },
+    { name: "Portal Invitations", href: "/admin/portal-invitations", icon: <KeyRound size={20} /> },
     { name: "Events", href: "/admin/events", icon: <CalendarIcon size={20} /> },
     { name: "Bookings", href: "/admin/booking", icon: <BookOpen size={20} /> },
     { name: "Programs", href: "/admin/programs", icon: <GraduationCap size={20} /> },

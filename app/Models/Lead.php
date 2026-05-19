@@ -23,6 +23,12 @@ class Lead extends Model
         'home_ties_info', 'declaration_accepted',
         'ai_analysis', 'ai_analysis_status',
         'source',
+        // Lead Portal invitation lifecycle
+        'portal_invitation_status',
+        'portal_invitation_requested_by', 'portal_invitation_requested_at',
+        'portal_invitation_approved_by',  'portal_invitation_approved_at',
+        'portal_invitation_token', 'portal_invitation_expires_at',
+        'portal_invitation_accepted_at',
     ];
 
     protected $casts = [
@@ -39,7 +45,27 @@ class Lead extends Model
         'home_ties_info' => 'array',
         'ai_analysis' => 'array',
         'age' => 'integer',
+        'portal_invitation_requested_at' => 'datetime',
+        'portal_invitation_approved_at'  => 'datetime',
+        'portal_invitation_expires_at'   => 'datetime',
+        'portal_invitation_accepted_at'  => 'datetime',
     ];
+
+    /** Portal account (User row with role='lead'), if one exists. */
+    public function portalUser()
+    {
+        return $this->hasOne(User::class, 'lead_id');
+    }
+
+    public function documentRequests()
+    {
+        return $this->hasMany(LeadDocumentRequest::class);
+    }
+
+    public function documents()
+    {
+        return $this->hasMany(LeadDocument::class);
+    }
 
     /** AI analysis is written by a background job — don't log it as a user edit. */
     public function activityIgnoredAttributes(): array

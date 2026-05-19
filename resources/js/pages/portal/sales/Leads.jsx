@@ -1,6 +1,14 @@
 import { useState, useMemo } from "react";
 import { Head, router } from "@inertiajs/react";
-import { Search } from "lucide-react";
+import { Search, KeyRound, Clock, Check, Mail, ShieldOff, FileText } from "lucide-react";
+
+const PORTAL_BADGE = {
+    none:     null,
+    pending:  { label: "Awaiting admin",  chip: "bg-amber-100 text-amber-700 border-amber-200",     icon: Clock },
+    sent:     { label: "Invitation sent", chip: "bg-blue-100 text-blue-700 border-blue-200",         icon: Mail },
+    accepted: { label: "Portal active",   chip: "bg-emerald-100 text-emerald-700 border-emerald-200", icon: Check },
+    revoked:  { label: "Revoked",         chip: "bg-gray-100 text-gray-500 border-gray-200",         icon: ShieldOff },
+};
 
 const STATUS_STYLES = {
     New: "bg-blue-100 text-blue-700 border-blue-200",
@@ -32,6 +40,15 @@ export default function SalesLeads({ leads = [], statuses = [] }) {
         if (status === lead.status) return;
         setSavingId(lead.id);
         router.post(`/portal/sales/leads/${lead.id}`, { status }, {
+            preserveScroll: true,
+            onFinish: () => setSavingId(null),
+        });
+    };
+
+    const requestPortal = (lead) => {
+        if (!confirm(`Request Lead Portal access for ${lead.name}? Admin will review and approve.`)) return;
+        setSavingId(lead.id);
+        router.post(`/portal/sales/leads/${lead.id}/portal-invitation/request`, {}, {
             preserveScroll: true,
             onFinish: () => setSavingId(null),
         });
@@ -82,13 +99,14 @@ export default function SalesLeads({ leads = [], statuses = [] }) {
                                 <th className="px-6 py-3">Course</th>
                                 <th className="px-6 py-3">AI score</th>
                                 <th className="px-6 py-3">Status</th>
+                                <th className="px-6 py-3">Portal</th>
                                 <th className="px-6 py-3">Created</th>
                                 <th className="px-6 py-3 text-right pr-6">Update</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-50">
                             {filtered.length === 0 ? (
-                                <tr><td colSpan={7} className="px-6 py-16 text-center text-gray-400 text-sm">No leads match your filters.</td></tr>
+                                <tr><td colSpan={8} className="px-6 py-16 text-center text-gray-400 text-sm">No leads match your filters.</td></tr>
                             ) : filtered.map((l) => (
                                 <tr key={l.id} className="hover:bg-gray-50/40">
                                     <td className="px-6 py-3">
@@ -104,16 +122,52 @@ export default function SalesLeads({ leads = [], statuses = [] }) {
                                             : <span className="text-xs text-gray-400">{l.ai_status === "processing" ? "analyzing…" : "—"}</span>}
                                     </td>
                                     <td className="px-6 py-3"><span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-bold border ${statusClass(l.status)}`}>{l.status}</span></td>
+                                    <td className="px-6 py-3">
+                                        {(() => {
+                                            const portalStatus = l.portal_invitation_status || "none";
+                                            const badge = PORTAL_BADGE[portalStatus];
+                                            if (portalStatus === "none" || portalStatus === "revoked") {
+                                                return (
+                                                    <button
+                                                        type="button"
+                                                        disabled={savingId === l.id || !l.email}
+                                                        onClick={() => requestPortal(l)}
+                                                        title={l.email ? "Request Lead Portal access (needs admin approval)" : "Add an email to this lead first"}
+                                                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold uppercase tracking-wider bg-gray-900 text-white hover:bg-gray-800 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                                                    >
+                                                        <KeyRound size={11} />
+                                                        Request
+                                                    </button>
+                                                );
+                                            }
+                                            const Icon = badge.icon;
+                                            return (
+                                                <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold border ${badge.chip}`}>
+                                                    <Icon size={11} strokeWidth={2.5} />
+                                                    {badge.label}
+                                                </span>
+                                            );
+                                        })()}
+                                    </td>
                                     <td className="px-6 py-3 text-sm text-gray-500">{fmtDate(l.created_at)}</td>
                                     <td className="px-6 py-3 text-right pr-6">
-                                        <select
-                                            value={l.status}
-                                            disabled={savingId === l.id}
-                                            onChange={(e) => changeStatus(l, e.target.value)}
-                                            className="text-xs rounded-lg border border-gray-200 bg-white py-1.5 pl-2 pr-7 outline-none hover:bg-gray-50 focus:ring-2 focus:ring-blue-500 cursor-pointer disabled:opacity-50"
-                                        >
-                                            {statuses.map((s) => <option key={s} value={s}>{s}</option>)}
-                                        </select>
+                                        <div className="inline-flex items-center gap-1.5">
+                                            <a
+                                                href={`/admin/leads/${l.id}/documents`}
+                                                title="Open documents"
+                                                className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors"
+                                            >
+                                                <FileText size={13} />
+                                            </a>
+                                            <select
+                                                value={l.status}
+                                                disabled={savingId === l.id}
+                                                onChange={(e) => changeStatus(l, e.target.value)}
+                                                className="text-xs rounded-lg border border-gray-200 bg-white py-1.5 pl-2 pr-7 outline-none hover:bg-gray-50 focus:ring-2 focus:ring-blue-500 cursor-pointer disabled:opacity-50"
+                                            >
+                                                {statuses.map((s) => <option key={s} value={s}>{s}</option>)}
+                                            </select>
+                                        </div>
                                     </td>
                                 </tr>
                             ))}
