@@ -245,8 +245,11 @@ Route::middleware(['auth'])->group(function () {
         // Lead Portal — external client-facing dashboard. Each lead-role user
         // is scoped to their own Lead record.
         Route::middleware('portal:lead')->prefix('lead')->name('portal.lead.')->group(function () {
-            Route::get('/dashboard', [App\Http\Controllers\LeadPortalController::class, 'dashboard'])->name('dashboard');
-            Route::get('/documents', [LeadDocumentController::class, 'leadIndex'])->name('documents');
+            Route::get('/dashboard',     [App\Http\Controllers\LeadPortalController::class, 'dashboard'])->name('dashboard');
+            Route::get('/submissions',   [App\Http\Controllers\LeadPortalController::class, 'submissions'])->name('submissions');
+            Route::get('/activities',    [App\Http\Controllers\LeadPortalController::class, 'activities'])->name('activities');
+            Route::get('/announcements', [App\Http\Controllers\LeadPortalController::class, 'announcements'])->name('announcements');
+            Route::get('/documents',     [LeadDocumentController::class, 'leadIndex'])->name('documents');
             Route::post('/documents/upload', [LeadDocumentController::class, 'leadUpload'])->name('documents.upload');
             Route::get('/documents/{docId}/download', [LeadDocumentController::class, 'download'])->name('documents.download');
         });
