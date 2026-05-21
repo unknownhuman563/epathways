@@ -3,6 +3,7 @@ import { Head } from '@inertiajs/react';
 import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
 import ScrollToTop from "@/components/ui/ScrollToTop";
+import QuickLeadForm from "@/components/ui/QuickLeadForm";
 // Announcements removed per minimalist redesign
 import FacebookLive from "./FacebookLive";
 
@@ -205,8 +206,26 @@ export default function Activities({ events, pastSessions = [], featuredSession 
                                 );
                             })
                         ) : (
-                            <div className="w-full py-20 text-center text-gray-600">
-                                No upcoming events found. Please check back later.
+                            <div className="w-full py-12 sm:py-16">
+                                <div className="max-w-2xl mx-auto text-center mb-6">
+                                    <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#436235] mb-2">
+                                        Nothing on the calendar right now
+                                    </p>
+                                    <h3 className="text-2xl md:text-3xl font-bold text-[#282728]">
+                                        Get notified about our next live session
+                                    </h3>
+                                    <p className="text-sm text-gray-500 mt-2">
+                                        Leave your details and we'll personally invite you when the next webinar or meetup opens.
+                                    </p>
+                                </div>
+                                <div className="max-w-2xl mx-auto">
+                                    <QuickLeadForm
+                                        source="activities-empty"
+                                        variant="card"
+                                        headline="Reserve a spot"
+                                        subtext="One short reply when our next event opens for registration."
+                                    />
+                                </div>
                             </div>
                         )}
                     </div>

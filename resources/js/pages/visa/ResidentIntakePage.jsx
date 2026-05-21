@@ -230,9 +230,61 @@ function loadDraftStep() {
     return 1;
 }
 
-export default function ResidentIntakePage() {
+// Project an existing intake record (from /resident-interest/edit/{token}) onto
+// the form's data shape. Document File objects can't be rehydrated — only the
+// checklist ticks and on-server file paths are kept (and the latter are shown
+// to the applicant as "already attached"; their own new uploads append on top).
+function editIntakeToFormData(intake) {
+    if (!intake) return null;
+    return {
+        terms_accepted: true,
+        first_name: intake.first_name || '',
+        last_name: intake.last_name || '',
+        dob: intake.dob || '',
+        nationality: intake.nationality || '',
+        email: intake.email || '',
+        phone: intake.phone || '',
+        passport_number: intake.passport_number || '',
+        passport_expiry: intake.passport_expiry || '',
+        issuing_country: intake.issuing_country || '',
+        current_visa_type: intake.current_visa_type || '',
+        current_visa_other: intake.current_visa_other || '',
+        current_visa_expiry: intake.current_visa_expiry || '',
+        nz_arrival_date: intake.nz_arrival_date || '',
+        previous_nz_visa_history: intake.previous_nz_visa_history || '',
+        job_title: intake.job_title || '',
+        employment_start: intake.employment_start || '',
+        employment_type: intake.employment_type || '',
+        hourly_rate: intake.hourly_rate != null ? String(intake.hourly_rate) : '',
+        highest_qualification: intake.highest_qualification || '',
+        institution_name: intake.institution_name || '',
+        country_of_study: intake.country_of_study || '',
+        nzqa_status: intake.nzqa_status || '',
+        nzqa_iqa_reference: intake.nzqa_iqa_reference || '',
+        nz_skilled_years: intake.nz_skilled_years != null ? String(intake.nz_skilled_years) : '',
+        total_skilled_years: intake.total_skilled_years != null ? String(intake.total_skilled_years) : '',
+        career_summary: intake.career_summary || '',
+        english_evidence: intake.english_evidence || '',
+        english_test_score: intake.english_test_score || '',
+        english_test_date: intake.english_test_date || '',
+        include_family: intake.include_family || '',
+        family_members: Array.isArray(intake.family_members) ? intake.family_members : [],
+        documents: { ...FORM_DEFAULTS.documents, ...(intake.documents || {}) },
+        document_files: freshDocumentFiles(), // never re-hydrate File objects
+        character_health_disclosure: intake.character_health_disclosure || '',
+        other_notes: intake.other_notes || '',
+    };
+}
+
+export default function ResidentIntakePage({ editIntake = null, editToken = null }) {
     const { flash } = usePage().props;
-    const [step, setStep] = useState(loadDraftStep);
+    const isEditing = !!editToken;
+    // Snapshot of files already on the server for this intake — shown to the
+    // applicant in Step 8 as "already attached" so they know what's on file.
+    const existingFiles = editIntake?.document_files && typeof editIntake.document_files === 'object'
+        ? editIntake.document_files
+        : {};
+    const [step, setStep] = useState(isEditing ? 1 : loadDraftStep);
     const [isSuccess, setIsSuccess] = useState(false);
     const [intakeId, setIntakeId] = useState(null);
     const [modal, setModal] = useState({ show: false, message: '' });
@@ -246,12 +298,20 @@ export default function ResidentIntakePage() {
         }
     }, [flash]);
 
-    const [initialFormData] = useState(buildInitialFormData); // restored draft or defaults, computed once
+    // In edit mode we pre-fill with the canonical intake record; otherwise we try
+    // to restore a draft from this device, falling back to defaults.
+    const [initialFormData] = useState(() => (
+        isEditing
+            ? { ...FORM_DEFAULTS, documents: { ...FORM_DEFAULTS.documents }, document_files: freshDocumentFiles(), family_members: [], ...editIntakeToFormData(editIntake) }
+            : buildInitialFormData()
+    ));
     const { data, setData, post, processing, transform } = useForm(initialFormData);
 
     // Auto-save a draft to this device on every change so a refresh keeps everything.
     // Uploaded PDF files can't be serialised, so they're left out (the checklist ticks are kept).
+    // Edit mode skips this entirely — the canonical record lives on the server.
     useEffect(() => {
+        if (isEditing) return;
         if (isSuccess) {
             try { window.localStorage.removeItem(DRAFT_STORAGE_KEY); } catch { /* ignore */ }
             return;
@@ -262,7 +322,7 @@ export default function ResidentIntakePage() {
         } catch {
             /* storage full or unavailable — non-fatal */
         }
-    }, [data, step, isSuccess]);
+    }, [data, step, isSuccess, isEditing]);
 
     const handleStartOver = () => {
         if (!window.confirm('Clear everything you have entered and start over?')) return;
@@ -455,7 +515,8 @@ export default function ResidentIntakePage() {
             ),
         }));
 
-        post('/resident-interest', {
+        const submitUrl = isEditing ? `/resident-interest/edit/${editToken}` : '/resident-interest';
+        post(submitUrl, {
             forceFormData: true, // always multipart so attached PDFs are sent reliably
             onSuccess: () => {
                 setShowConfirm(false);
@@ -479,7 +540,7 @@ export default function ResidentIntakePage() {
         submitFinal();
     };
 
-    if (isSuccess) return <SuccessMessage intakeId={intakeId} />;
+    if (isSuccess) return <SuccessMessage intakeId={intakeId} edited={isEditing} />;
 
     const stepLabel = step < 10 ? `0${step}` : `${step}`;
     const docTotal = Object.keys(data.documents).length;
@@ -576,15 +637,23 @@ export default function ResidentIntakePage() {
                                 })}
 
                                 <div className="mt-3 pt-3 px-2 border-t border-gray-100">
-                                    <button
-                                        type="button"
-                                        onClick={handleStartOver}
-                                        className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 hover:text-red-500 transition-colors"
-                                    >
-                                        Start over
-                                    </button>
+                                    {isEditing ? (
+                                        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#00A693]">
+                                            Edit mode
+                                        </p>
+                                    ) : (
+                                        <button
+                                            type="button"
+                                            onClick={handleStartOver}
+                                            className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 hover:text-red-500 transition-colors"
+                                        >
+                                            Start over
+                                        </button>
+                                    )}
                                     <p className="text-[10px] text-gray-400 leading-relaxed mt-2">
-                                        Your answers are saved on this device automatically — you can close or refresh this page and pick up where you left off.
+                                        {isEditing
+                                            ? 'Your intake is pre-filled. Any changes you save here update the original record on file.'
+                                            : 'Your answers are saved on this device automatically — you can close or refresh this page and pick up where you left off.'}
                                     </p>
                                 </div>
                             </div>
@@ -670,7 +739,9 @@ export default function ResidentIntakePage() {
                                                 className="flex items-center gap-2 px-8 py-2.5 bg-[#00A693] text-white text-xs font-bold uppercase tracking-[0.2em] transition-all hover:bg-[#008c7c] active:scale-95 disabled:opacity-60"
                                             >
                                                 <Send size={13} />
-                                                {processing ? 'Submitting...' : 'Submit Intake Form'}
+                                                {processing
+                                                    ? (isEditing ? 'Saving...' : 'Submitting...')
+                                                    : (isEditing ? 'Save Changes' : 'Submit Intake Form')}
                                             </button>
                                         )}
                                     </div>
@@ -731,10 +802,12 @@ export default function ResidentIntakePage() {
                                         <ShieldCheck size={28} />
                                     </div>
                                     <h3 className="text-lg font-black text-white uppercase tracking-[0.15em] mb-2">
-                                        Confirm Submission
+                                        {isEditing ? 'Confirm Changes' : 'Confirm Submission'}
                                     </h3>
                                     <p className="text-white/50 text-xs font-medium leading-relaxed max-w-xs mx-auto">
-                                        Please review the summary below before finalising your intake.
+                                        {isEditing
+                                            ? 'Please review the summary below before saving your changes.'
+                                            : 'Please review the summary below before finalising your intake.'}
                                     </p>
                                 </div>
                             </div>
@@ -803,7 +876,9 @@ export default function ResidentIntakePage() {
                                         className="flex-1 py-4 bg-[#282728] text-white text-[10px] font-black uppercase tracking-[0.25em] hover:bg-[#00A693] transition-all active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2 shadow-xl shadow-[#282728]/15"
                                     >
                                         <Send size={12} />
-                                        {processing ? 'Submitting...' : 'Confirm & Submit'}
+                                        {processing
+                                            ? (isEditing ? 'Saving...' : 'Submitting...')
+                                            : (isEditing ? 'Confirm & Save' : 'Confirm & Submit')}
                                     </button>
                                 </div>
                             </div>
@@ -1478,7 +1553,7 @@ function StepDisclosures({ data, setData }) {
     );
 }
 
-function SuccessMessage({ intakeId }) {
+function SuccessMessage({ intakeId, edited = false }) {
     return (
         <div className="min-h-screen bg-white flex items-center justify-center p-6 font-urbanist">
             <div className="max-w-[480px] w-full bg-white rounded-[3rem] shadow-[0_64px_128px_-24px_rgba(40,39,40,0.08)] p-16 text-center border border-[#282728]/5">
@@ -1489,10 +1564,13 @@ function SuccessMessage({ intakeId }) {
                 >
                     <CheckCircle size={48} />
                 </motion.div>
-                <h2 className="text-3xl font-black text-[#282728] uppercase tracking-tighter mb-6">Interest Received</h2>
+                <h2 className="text-3xl font-black text-[#282728] uppercase tracking-tighter mb-6">
+                    {edited ? 'Changes Saved' : 'Interest Received'}
+                </h2>
                 <p className="text-gray-500 text-sm leading-[2] mb-10 font-medium px-4">
-                    Thank you. Your Resident Visa interest has been received. A licensed adviser will review your information
-                    and follow up with your engagement agreement.
+                    {edited
+                        ? 'Thank you. Your updated details and any new documents have been saved. Your licensed adviser will see the latest information.'
+                        : 'Thank you. Your Resident Visa interest has been received. A licensed adviser will review your information and follow up with your engagement agreement.'}
                 </p>
                 {intakeId && (
                     <div className="bg-gray-50/50 rounded-2xl p-6 mb-8 border border-gray-100/50">

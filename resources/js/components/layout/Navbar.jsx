@@ -62,10 +62,10 @@ const Navbar = () => {
                 <div className="hidden lg:block flex-shrink-0">
                     {isShowingGetStarted && (
                         <a
-                            href="/booking"
+                            href="/login"
                             className="hover:bg-gray-700 bg-[#282728] text-white px-4 xl:px-5 py-2 xl:py-2.5 rounded text-xs xl:text-sm font-medium whitespace-nowrap"
                         >
-                            Book Free Consultation
+                            Log in
                         </a>
                     )}
                 </div>
@@ -117,11 +117,11 @@ const Navbar = () => {
                         {isShowingGetStarted && (
                             <div className="px-4 sm:px-6 pb-6">
                                 <a
-                                    href="/booking"
+                                    href="/login"
                                     onClick={closeMenu}
                                     className="block w-full text-center bg-[#282728] hover:bg-gray-700 text-white px-4 py-3 rounded text-sm font-medium"
                                 >
-                                    Book Free Consultation
+                                    Log in
                                 </a>
                             </div>
                         )}

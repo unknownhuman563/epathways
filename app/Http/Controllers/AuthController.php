@@ -30,10 +30,24 @@ class AuthController extends Controller
         if (Auth::attempt($credentials)) {
             $request->session()->regenerate();
 
-            ActivityLog::record('login', ['description' => Auth::user()->name.' signed in']);
+            $user = Auth::user();
 
-            return redirect()->intended(Auth::user()->homeRoute())
-                ->with('success', 'Welcome back, '.Auth::user()->name.'!');
+            // Stamp last_login_at so admins can see which lead accounts are
+            // dormant. Quiet update — no model events fire.
+            $user->forceFill(['last_login_at' => now()])->saveQuietly();
+
+            ActivityLog::record('login', ['description' => $user->name.' signed in']);
+
+            // Leads always land on their own dashboard — bypass intended()
+            // which can carry over an admin URL from a prior session and
+            // cause a misleading 403 immediately after login.
+            if ($user->isLead()) {
+                return redirect()->to($user->homeRoute())
+                    ->with('success', 'Welcome back, '.$user->name.'!');
+            }
+
+            return redirect()->intended($user->homeRoute())
+                ->with('success', 'Welcome back, '.$user->name.'!');
         }
 
         ActivityLog::record('login.failed', [

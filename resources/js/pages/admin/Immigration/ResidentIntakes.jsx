@@ -1,10 +1,46 @@
-import React, { useState, useMemo } from 'react';
-import { Head, Link } from '@inertiajs/react';
-import { Search, Filter, Eye, Mail, Phone, Briefcase, Globe, ChevronRight, FileText } from 'lucide-react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { Head, Link, router, usePage } from '@inertiajs/react';
+import { Search, Filter, Eye, Mail, Phone, Briefcase, Globe, ChevronRight, FileText, Link2, Copy, Check, X } from 'lucide-react';
 
 export default function ResidentIntakes({ intakes = [] }) {
+    const { flash } = usePage().props;
     const [query, setQuery] = useState('');
     const [visaFilter, setVisaFilter] = useState('');
+    const [linkModal, setLinkModal] = useState(null); // { intakeId, name, url }
+    const [generatingFor, setGeneratingFor] = useState(null);
+    const [copied, setCopied] = useState(false);
+
+    // After the controller flashes back an edit_link_url, pop the modal.
+    useEffect(() => {
+        if (flash?.edit_link_url) {
+            const intake = intakes.find((i) => i.id === flash.edit_link_intake_id);
+            setLinkModal({
+                intakeId: flash.edit_link_intake_id,
+                name: intake ? `${intake.first_name || ''} ${intake.last_name || ''}`.trim() : 'Applicant',
+                url: flash.edit_link_url,
+            });
+            setCopied(false);
+        }
+    }, [flash?.edit_link_url, flash?.edit_link_intake_id]);
+
+    const generateLink = (id) => {
+        setGeneratingFor(id);
+        router.post(`/admin/immigration/resident-intakes/${id}/edit-link`, {}, {
+            preserveScroll: true,
+            onFinish: () => setGeneratingFor(null),
+        });
+    };
+
+    const copyLink = async () => {
+        if (!linkModal?.url) return;
+        try {
+            await navigator.clipboard.writeText(linkModal.url);
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2000);
+        } catch {
+            // Fall back to selection — the URL is also rendered in a readable input.
+        }
+    };
 
     const filtered = useMemo(() => {
         const q = query.trim().toLowerCase();
@@ -163,13 +199,27 @@ export default function ResidentIntakes({ intakes = [] }) {
                                         </span>
                                     </td>
                                     <td className="px-6 py-4 text-right">
-                                        <Link
-                                            href={`/admin/immigration/resident-intakes/${i.id}`}
-                                            className="inline-flex items-center gap-2 px-3 py-2 bg-gray-900 text-white rounded-lg text-xs font-semibold hover:bg-gray-800 transition-colors"
-                                        >
-                                            <Eye size={13} />
-                                            View
-                                        </Link>
+                                        <div className="inline-flex items-center gap-2 justify-end">
+                                            <button
+                                                type="button"
+                                                onClick={() => generateLink(i.id)}
+                                                disabled={generatingFor === i.id}
+                                                title={i.edit_token ? 'Show the applicant edit link' : 'Generate an applicant edit link'}
+                                                className="inline-flex items-center gap-2 px-3 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg text-xs font-semibold hover:border-[#00A693] hover:text-[#00A693] transition-colors disabled:opacity-50"
+                                            >
+                                                <Link2 size={13} />
+                                                {generatingFor === i.id
+                                                    ? '...'
+                                                    : (i.edit_token ? 'Edit link' : 'Generate link')}
+                                            </button>
+                                            <Link
+                                                href={`/admin/immigration/resident-intakes/${i.id}`}
+                                                className="inline-flex items-center gap-2 px-3 py-2 bg-gray-900 text-white rounded-lg text-xs font-semibold hover:bg-gray-800 transition-colors"
+                                            >
+                                                <Eye size={13} />
+                                                View
+                                            </Link>
+                                        </div>
                                     </td>
                                 </tr>
                             ))}
@@ -177,6 +227,75 @@ export default function ResidentIntakes({ intakes = [] }) {
                     </table>
                 </div>
             </div>
+
+            {/* ── Edit-link modal ─────────────────────────────────────── */}
+            {linkModal && (
+                <div
+                    className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-[#282728]/50 backdrop-blur-sm"
+                    onClick={() => setLinkModal(null)}
+                >
+                    <div
+                        onClick={(e) => e.stopPropagation()}
+                        className="bg-white w-full max-w-[520px] rounded-3xl shadow-2xl p-8 md:p-10"
+                    >
+                        <div className="flex items-start justify-between mb-6">
+                            <div className="flex items-center gap-3">
+                                <div className="w-11 h-11 rounded-xl bg-[#00A693]/10 flex items-center justify-center text-[#00A693]">
+                                    <Link2 size={20} />
+                                </div>
+                                <div>
+                                    <div className="text-[10px] font-bold uppercase tracking-[0.25em] text-[#00A693]">Applicant edit link</div>
+                                    <h3 className="text-lg font-bold text-gray-900">{linkModal.name}</h3>
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setLinkModal(null)}
+                                className="text-gray-400 hover:text-gray-700 transition-colors"
+                                aria-label="Close"
+                            >
+                                <X size={18} />
+                            </button>
+                        </div>
+
+                        <p className="text-sm text-gray-600 leading-relaxed mb-5">
+                            Share this link with the applicant. Anyone with the URL can open their intake pre-filled,
+                            update details, and upload more PDFs — so treat it like a password.
+                        </p>
+
+                        <div className="flex items-center gap-2 mb-6">
+                            <input
+                                type="text"
+                                readOnly
+                                value={linkModal.url}
+                                onFocus={(e) => e.target.select()}
+                                className="flex-1 min-w-0 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-xs text-gray-700 font-mono focus:outline-none focus:border-[#00A693]"
+                            />
+                            <button
+                                type="button"
+                                onClick={copyLink}
+                                className={`inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-colors flex-shrink-0 ${
+                                    copied
+                                        ? 'bg-emerald-500 text-white'
+                                        : 'bg-[#282728] text-white hover:bg-black'
+                                }`}
+                            >
+                                {copied ? <><Check size={13} /> Copied</> : <><Copy size={13} /> Copy</>}
+                            </button>
+                        </div>
+
+                        <div className="flex justify-end">
+                            <button
+                                type="button"
+                                onClick={() => setLinkModal(null)}
+                                className="text-xs font-bold uppercase tracking-widest text-gray-500 hover:text-gray-900 transition-colors"
+                            >
+                                Done
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

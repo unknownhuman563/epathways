@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
@@ -21,7 +21,26 @@ const approvedImages = Object.keys(imageFiles).map((path) => {
     };
 }).sort((a, b) => a.id - b.id);
 
+// Filters that the underlying data actually supports — country + batch.
+// Previously buttons claimed "Student Visa / Work Visa / Immigration" which
+// the per-image metadata couldn't satisfy, so clicks did nothing.
+const FILTERS = [
+    { key: 'all', label: 'All' },
+    { key: 'country:Philippines', label: 'Philippines' },
+    { key: 'country:India', label: 'India' },
+    { key: 'batch:2026 Batch', label: '2026 Batch' },
+    { key: 'batch:2025 Batch', label: '2025 Batch' },
+];
+
 export default function VisaApproved() {
+    const [filter, setFilter] = useState('all');
+
+    const filteredImages = useMemo(() => {
+        if (filter === 'all') return approvedImages;
+        const [field, value] = filter.split(':');
+        return approvedImages.filter(img => img[field] === value);
+    }, [filter]);
+
     return (
         <div className="min-h-screen bg-white font-urbanist overflow-x-hidden">
             <Navbar />
@@ -59,42 +78,57 @@ export default function VisaApproved() {
                     <div className="mb-12">
                         <h2 className="text-4xl md:text-5xl font-medium text-[#1c2c26] mb-8 tracking-tight">Success Stories</h2>
                         <div className="flex flex-wrap gap-3">
-                            <button className="px-5 py-2 bg-[#1c2c26] text-white text-sm font-medium rounded-md">All</button>
-                            <button className="px-5 py-2 bg-white border border-gray-200 text-gray-600 hover:border-gray-300 text-sm font-medium rounded-md transition-colors">Student Visa</button>
-                            <button className="px-5 py-2 bg-white border border-gray-200 text-gray-600 hover:border-gray-300 text-sm font-medium rounded-md transition-colors">Work Visa</button>
-                            <button className="px-5 py-2 bg-white border border-gray-200 text-gray-600 hover:border-gray-300 text-sm font-medium rounded-md transition-colors">Immigration</button>
+                            {FILTERS.map(f => (
+                                <button
+                                    key={f.key}
+                                    onClick={() => setFilter(f.key)}
+                                    className={`px-5 py-2 text-sm font-medium rounded-md transition-colors ${
+                                        filter === f.key
+                                            ? 'bg-[#1c2c26] text-white'
+                                            : 'bg-white border border-gray-200 text-gray-600 hover:border-gray-300'
+                                    }`}
+                                >
+                                    {f.label}
+                                </button>
+                            ))}
                         </div>
                     </div>
 
-                    {/* Featured Post (First Image) */}
-                    {approvedImages.length > 0 && (
+                    {/* Featured Post (First filtered image) */}
+                    {filteredImages.length > 0 && (
                         <div className="flex flex-col lg:flex-row gap-10 lg:gap-16 items-center mb-24">
                             {/* Featured Image */}
                             <div className="w-full lg:w-3/5">
                                 <div className="w-full aspect-[4/3] rounded-2xl overflow-hidden shadow-sm">
-                                    <img 
-                                        src={approvedImages[0].src} 
-                                        alt={approvedImages[0].name}
+                                    <img
+                                        src={filteredImages[0].src}
+                                        alt={filteredImages[0].name}
                                         className="w-full h-full object-cover object-top"
                                     />
                                 </div>
                             </div>
-                            
+
                             {/* Featured Content */}
                             <div className="w-full lg:w-2/5 flex flex-col items-start">
                                 <span className="inline-block px-3 py-1 bg-gray-100 text-gray-600 text-xs font-bold uppercase tracking-wider rounded-sm mb-6">
                                     Featured
                                 </span>
                                 <h3 className="text-3xl md:text-4xl font-medium text-[#1c2c26] mb-6 leading-tight tracking-tight">
-                                    Latest Visa Approval from {approvedImages[0].country}
+                                    Latest Visa Approval from {filteredImages[0].country}
                                 </h3>
                                 <p className="text-gray-600 mb-8 leading-relaxed">
                                     We offer comprehensive guidance designed to meet your unique needs. From strategy development to document preparation, our expert team is dedicated to driving your success and securing your future in New Zealand.
                                 </p>
-                                <a href="/booking" className="px-8 py-3 bg-[#1c2c26] text-white text-sm font-medium rounded-md hover:bg-[#2a4038] transition-colors">
+                                <a href="/free-assessment" className="px-8 py-3 bg-[#436235] text-white text-sm font-medium rounded-md hover:bg-[#385029] transition-colors">
                                     Start Your Journey
                                 </a>
                             </div>
+                        </div>
+                    )}
+
+                    {filteredImages.length === 0 && (
+                        <div className="text-center py-16 text-gray-500 text-sm">
+                            No approvals match this filter yet — try another category.
                         </div>
                     )}
                 </div>
@@ -117,7 +151,7 @@ export default function VisaApproved() {
                     {/* 3-Column Grid */}
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-12">
                         <AnimatePresence>
-                            {approvedImages.slice(1).map((image, idx) => (
+                            {filteredImages.slice(1).map((image, idx) => (
                                 <motion.div
                                     key={image.id}
                                     initial={{ opacity: 0, y: 20 }}

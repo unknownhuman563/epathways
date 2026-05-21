@@ -5,9 +5,9 @@ const CTASection = () => {
     <section className="relative w-full py-16 sm:py-20 md:py-24 flex items-center justify-center overflow-hidden">
       {/* Background Image */}
       <div className="absolute inset-0 z-0">
-        <img 
-          src="/images/coffee-cta.png" 
-          alt="CTA Background" 
+        <img
+          src="/images/coffee-cta.png"
+          alt="CTA Background"
           className="w-full h-full object-cover"
         />
         <div className="absolute inset-0 bg-black bg-opacity-20"></div>

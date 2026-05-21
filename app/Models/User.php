@@ -15,6 +15,9 @@ class User extends Authenticatable
     /** Role with access to every department portal and the /admin area. */
     public const ROLE_ADMIN = 'admin';
 
+    /** Role for an external Lead who logs in to the Leads Portal. */
+    public const ROLE_LEAD = 'lead';
+
     /** Department portals a non-admin user can be assigned to. */
     public const PORTAL_ROLES = ['sales', 'education', 'english', 'immigration', 'accommodation'];
 
@@ -28,6 +31,7 @@ class User extends Authenticatable
         'email',
         'password',
         'role',
+        'lead_id',
     ];
 
     /**
@@ -49,6 +53,7 @@ class User extends Authenticatable
     {
         return [
             'email_verified_at' => 'datetime',
+            'last_login_at'     => 'datetime',
             'password' => 'hashed',
         ];
     }
@@ -59,6 +64,14 @@ class User extends Authenticatable
     public function isAdmin(): bool
     {
         return $this->role === self::ROLE_ADMIN;
+    }
+
+    /**
+     * Whether this user is an external lead logging into the Leads Portal.
+     */
+    public function isLead(): bool
+    {
+        return $this->role === self::ROLE_LEAD;
     }
 
     /**
@@ -75,8 +88,17 @@ class User extends Authenticatable
      */
     public function homeRoute(): string
     {
+        if ($this->isLead()) {
+            return '/portal/lead/dashboard';
+        }
         return in_array($this->role, self::PORTAL_ROLES, true)
             ? "/portal/{$this->role}/dashboard"
             : '/admin/dashboard';
+    }
+
+    /** The Lead record this account owns — only set for role='lead' users. */
+    public function lead()
+    {
+        return $this->belongsTo(Lead::class);
     }
 }
