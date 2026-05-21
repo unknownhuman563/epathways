@@ -3,73 +3,44 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\StoreQuickLeadRequest;
-use App\Models\Lead;
-use Illuminate\Support\Facades\DB;
+use App\Services\LeadIntakeService;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
 /**
  * Lightweight lead capture for inline quick-lead forms (hero, exit-intent,
- * fee-guide download, etc.). Intentionally narrow — name/email/phone only —
- * to keep friction low. Writes into the same `leads` table as the full free
- * assessment so sales sees both pipelines in one place; the `source` column
- * distinguishes entry points.
+ * fee-guide download, etc.). All dedupe + activity-on-resubmit logic now
+ * lives in LeadIntakeService so every public form behaves consistently.
  */
 class QuickLeadController extends Controller
 {
-    public function store(StoreQuickLeadRequest $request)
+    public function store(StoreQuickLeadRequest $request, LeadIntakeService $intake)
     {
         $validated = $request->validated();
 
         // Split "Full Name" into first/last for the existing leads schema.
-        $parts = preg_split('/\s+/', trim($validated['name']), 2);
+        $parts     = preg_split('/\s+/', trim($validated['name']), 2);
         $firstName = $parts[0];
         $lastName  = $parts[1] ?? '';
 
+        $formType = 'quick-lead:' . ($validated['source'] ?? 'general');
+
         try {
-            DB::beginTransaction();
-
-            // Dedupe by email to avoid spamming sales with the same person.
-            // If the email already belongs to a full assessment, leave its
-            // stage/source untouched so we don't downgrade a hotter lead.
-            $existing = Lead::where('email', $validated['email'])->first();
-
-            if ($existing) {
-                $existing->update([
-                    'first_name' => $existing->first_name ?: $firstName,
-                    'last_name'  => $existing->last_name ?: $lastName,
-                    'phone'      => $existing->phone ?: $validated['phone'],
-                ]);
-                $lead = $existing;
-            } else {
-                $lead = Lead::create([
-                    'lead_id'    => 'QL-' . strtoupper(uniqid()),
-                    'first_name' => $firstName,
-                    'last_name'  => $lastName,
-                    'email'      => $validated['email'],
-                    'phone'      => $validated['phone'],
-                    'status'     => 'New',
-                    'stage'      => 'Quick-Lead',
-                    'source'     => $validated['source'],
-                    'financial_info' => [
-                        // Lightweight metadata blob — we keep the interest tag
-                        // here rather than adding another column.
-                        'quick_lead' => [
-                            'interest'   => $validated['interest'] ?? 'General',
-                            'captured_at' => now()->toIso8601String(),
-                            'source'     => $validated['source'],
-                        ],
-                    ],
-                ]);
-            }
-
-            DB::commit();
+            $lead = $intake->ingest($formType, [
+                'lead_id'    => 'QL-' . strtoupper(uniqid()),
+                'first_name' => $firstName,
+                'last_name'  => $lastName,
+                'email'      => $validated['email'],
+                'phone'      => $validated['phone'],
+                'stage'      => 'Quick-Lead',
+            ], $request);
 
             return redirect()->back()->with([
-                'success'        => "Thanks {$firstName} — our team will reach out within 24 hours.",
-                'quick_lead_ok'  => true,
+                'success'       => "Thanks {$firstName} — our team will reach out within 24 hours.",
+                'quick_lead_ok' => true,
+                'lead_id'       => $lead->lead_id,
             ]);
-        } catch (\Exception $e) {
-            DB::rollBack();
+        } catch (\Throwable $e) {
             Log::error('Quick lead capture failed', ['error' => $e->getMessage()]);
 
             return redirect()->back()->withErrors([

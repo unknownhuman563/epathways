@@ -164,6 +164,64 @@ class LeadDocumentController extends Controller
         return back()->with('success', 'File shared with the lead.');
     }
 
+    /**
+     * Staff uploads a file (or files) for the lead against a specific
+     * checklist item — used by the agreements panel, or when staff helps
+     * the lead by uploading on their behalf.
+     */
+    public function staffChecklistUpload(Request $request, $leadId, $key)
+    {
+        $lead = Lead::findOrFail($leadId);
+
+        $request->validate([
+            'files'   => 'required|array|min:1|max:10',
+            'files.*' => 'file|max:20480', // 20MB each
+        ]);
+
+        try {
+            foreach ($request->file('files') as $file) {
+                $path = $file->store("lead-documents/{$lead->id}", self::DISK);
+
+                LeadDocument::create([
+                    'lead_id'       => $lead->id,
+                    'request_id'    => null,
+                    'checklist_key' => $key,
+                    'original_name' => $file->getClientOriginalName(),
+                    'file_path'     => $path,
+                    'mime'          => $file->getMimeType(),
+                    'size'          => $file->getSize(),
+                    'status'        => LeadDocument::STATUS_SUBMITTED,
+                    'uploaded_by'   => Auth::id(),
+                ]);
+            }
+
+            $n = count($request->file('files'));
+            return back()->with('success', "{$n} " . ($n === 1 ? 'file' : 'files') . " uploaded.");
+        } catch (\Throwable $e) {
+            Log::error('Staff checklist upload failed', ['lead_id' => $leadId, 'key' => $key, 'error' => $e->getMessage()]);
+            return back()->withErrors(['error' => 'Could not upload that file.']);
+        }
+    }
+
+    /**
+     * Delete a single uploaded file. Removes the storage object too so the
+     * lead's private folder doesn't bloat with orphan files.
+     */
+    public function destroyDocument(Request $request, $leadId, $docId)
+    {
+        $doc = LeadDocument::where('lead_id', $leadId)->findOrFail($docId);
+        try {
+            Storage::disk(self::DISK)->exists($doc->file_path)
+                ? Storage::disk(self::DISK)->delete($doc->file_path)
+                : null;
+            $doc->delete();
+            return back()->with('success', 'File removed.');
+        } catch (\Throwable $e) {
+            Log::error('Document delete failed', ['doc_id' => $docId, 'error' => $e->getMessage()]);
+            return back()->withErrors(['error' => 'Could not delete that file.']);
+        }
+    }
+
     // ── LEAD (own portal) ───────────────────────────────────────────────────
 
     public function leadIndex()
@@ -191,11 +249,99 @@ class LeadDocumentController extends Controller
             ->get()
             ->map(fn (LeadDocument $d) => $this->docSerialize($d));
 
+        // Files uploaded against Documents-tab checklist items, grouped by
+        // the item's frontend key so the gated section flow can render them.
+        $checklistFiles = LeadDocument::where('lead_id', $lead->id)
+            ->whereNotNull('checklist_key')
+            ->orderBy('created_at')
+            ->get()
+            ->groupBy('checklist_key')
+            ->map(fn ($files) => $files->map(fn ($f) => [
+                'id'            => $f->id,
+                'original_name' => $f->original_name,
+                'mime'          => $f->mime,
+                'size'          => $f->size,
+                'status'        => $f->status,
+                'created_at'    => $f->created_at,
+            ])->values());
+
         return inertia('portal/lead/Documents', [
-            'lead'           => ['lead_id' => $lead->lead_id, 'first_name' => $lead->first_name],
-            'requests'       => $requests,
-            'shared_by_staff' => $sharedByStaff,
+            'lead'                  => [
+                'id'         => $lead->id,
+                'lead_id'    => $lead->lead_id,
+                'first_name' => $lead->first_name,
+                'last_name'  => $lead->last_name,
+            ],
+            'requests'              => $requests,
+            'shared_by_staff'       => $sharedByStaff,
+            'checklistFiles'        => $checklistFiles,
+            'sectionVerifications'  => $lead->section_verifications ?? [],
         ]);
+    }
+
+    /**
+     * Lead uploads one-or-many files against a Documents-tab checklist
+     * item from their own portal.
+     */
+    public function leadChecklistUpload(Request $request, $key)
+    {
+        $user = Auth::user();
+        $lead = $user?->lead;
+        abort_unless($lead, 403);
+
+        $request->validate([
+            'files'   => 'required|array|min:1|max:10',
+            'files.*' => 'file|max:20480',
+        ]);
+
+        try {
+            foreach ($request->file('files') as $file) {
+                $path = $file->store("lead-documents/{$lead->id}", self::DISK);
+
+                LeadDocument::create([
+                    'lead_id'       => $lead->id,
+                    'request_id'    => null,
+                    'checklist_key' => $key,
+                    'original_name' => $file->getClientOriginalName(),
+                    'file_path'     => $path,
+                    'mime'          => $file->getMimeType(),
+                    'size'          => $file->getSize(),
+                    'status'        => LeadDocument::STATUS_SUBMITTED,
+                    'uploaded_by'   => $user->id,
+                ]);
+            }
+
+            return back()->with('success', 'Document uploaded. Our team will review it shortly.');
+        } catch (\Throwable $e) {
+            Log::error('Lead checklist upload failed', ['lead_id' => $lead->id, 'key' => $key, 'error' => $e->getMessage()]);
+            return back()->withErrors(['error' => 'Upload failed. Please try again.']);
+        }
+    }
+
+    /**
+     * Lead flips a checklist section into "in_review" so staff knows to
+     * verify it. Lead can only do this for their own lead record.
+     */
+    public function leadSubmitSection(Request $request, $sectionKey)
+    {
+        $user = Auth::user();
+        $lead = $user?->lead;
+        abort_unless($lead, 403);
+
+        try {
+            $sections = is_array($lead->section_verifications) ? $lead->section_verifications : [];
+            $sections[$sectionKey] = [
+                'status'       => 'in_review',
+                'submitted_at' => now()->toIso8601String(),
+            ];
+            $lead->section_verifications = $sections;
+            $lead->save();
+
+            return back()->with('success', 'Section submitted for review.');
+        } catch (\Throwable $e) {
+            Log::error('Lead section submit failed', ['lead_id' => $lead->id, 'section' => $sectionKey, 'error' => $e->getMessage()]);
+            return back()->withErrors(['error' => 'Could not submit section.']);
+        }
     }
 
     public function leadUpload(Request $request)

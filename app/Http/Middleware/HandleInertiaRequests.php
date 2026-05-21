@@ -63,6 +63,39 @@ class HandleInertiaRequests extends Middleware
                 'facebook'  => config('services.contact.facebook'),
                 'email'     => config('services.contact.email'),
             ],
+            // Portal-sidebar badge counts — surfaces "what needs my attention
+            // today" on the nav itself. Lazy so the queries only run for the
+            // portal that's actually loading.
+            'sidebarBadges' => fn () => $this->sidebarBadges($request),
         ];
+    }
+
+    /**
+     * Per-portal sidebar badge counts. Returns only the badges relevant to
+     * the current URL prefix so we never run sales queries on the lead
+     * portal etc.
+     */
+    private function sidebarBadges(Request $request): array
+    {
+        $user = $request->user();
+        if (! $user) return [];
+
+        $path = $request->path();
+        $out = [];
+
+        if (str_starts_with($path, 'portal/sales') || str_starts_with($path, 'admin')) {
+            $todayStart = now()->startOfDay();
+            $weekEnd    = now()->endOfWeek();
+
+            $out['sales'] = [
+                'new_leads_today'    => \App\Models\Lead::where('created_at', '>=', $todayStart)->count(),
+                'tasks_open'         => \App\Models\LeadTask::where('assignee_id', $user->id)->where('completed', false)->count(),
+                'tasks_overdue'      => \App\Models\LeadTask::where('assignee_id', $user->id)->where('completed', false)->whereNotNull('due_at')->where('due_at', '<', now())->count(),
+                'bookings_this_week' => \App\Models\Booking::whereBetween('appointment_date', [now()->startOfWeek(), $weekEnd])->count(),
+                'notifications_unread' => 0, // placeholder until notifications inbox ships
+            ];
+        }
+
+        return $out;
     }
 }

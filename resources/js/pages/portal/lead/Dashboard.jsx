@@ -2,7 +2,7 @@ import { Head, Link } from "@inertiajs/react";
 import {
     User, Mail, Phone, MapPin, Hash, Clock, FileText, ClipboardList,
     Calendar, Megaphone, ArrowRight, ChevronRight, Check, AlertCircle,
-    Sparkles,
+    Sparkles, MapPinned,
 } from "lucide-react";
 
 const STATUS_CHIP = {
@@ -25,6 +25,9 @@ export default function LeadDashboard({
     nextActivity = null,
     latestAnnouncement = null,
     documentSummary = { total: 0, pending: 0, approved: 0, rejected: 0 },
+    roadmap = [],
+    currentPhase = null,
+    preEngagement = false,
 }) {
     return (
         <div className="space-y-8 max-w-6xl mx-auto pb-16">
@@ -60,6 +63,14 @@ export default function LeadDashboard({
                     </div>
                 </div>
             </section>
+
+            {/* ── Your journey roadmap ───────────────────────────────────── */}
+            {roadmap.length > 0 && (
+                <>
+                    <SectionHeader title="Your journey" eyebrow="Where you are now" />
+                    <JourneyRoadmap roadmap={roadmap} currentPhase={currentPhase} preEngagement={preEngagement} />
+                </>
+            )}
 
             {/* ── My submissions ─────────────────────────────────────────── */}
             <SectionHeader title="My submissions" eyebrow="At a glance" href="/portal/lead/submissions" cta="View all" />
@@ -251,6 +262,139 @@ function TeaserCard({ eyebrow, icon, href, cta, empty, emptyText, children }) {
                 </span>
             </div>
         </Link>
+    );
+}
+
+function JourneyRoadmap({ roadmap = [], currentPhase = null, preEngagement = false }) {
+    // If the lead's stage is still in PROCESS (pre-engagement), they shouldn't
+    // really have portal access yet — but if they do, show a friendly "we're
+    // setting up your engagement" notice instead of pretending they're in
+    // phase 1 already.
+    if (preEngagement) {
+        return (
+            <section className="bg-white border border-[#436235]/30 rounded-2xl p-8 sm:p-10 text-center">
+                <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-[#436235]/10 text-[#436235] mb-4">
+                    <Sparkles size={20} />
+                </div>
+                <p className="text-[10px] font-bold uppercase tracking-[0.32em] text-[#436235] mb-2">
+                    Engagement being set up
+                </p>
+                <h3 className="text-2xl font-medium tracking-tight text-[#282728] mb-3">
+                    Welcome to ePathways
+                </h3>
+                <p className="text-sm text-[#282728]/70 font-light leading-relaxed max-w-xl mx-auto">
+                    We&apos;re still finalising your consultancy agreement and payment. Once those are sorted, your full journey roadmap — Agreement, Enrolment, and Visa — will unlock here. Your adviser will be in touch shortly.
+                </p>
+            </section>
+        );
+    }
+
+    return (
+        <div className="space-y-5">
+            {/* Current-phase callout — the friendly, plain-English summary of
+                where the lead actually is right now. */}
+            {currentPhase && (
+                <section className="bg-[#436235] text-white rounded-2xl overflow-hidden">
+                    <div className="p-7 sm:p-8 grid grid-cols-1 lg:grid-cols-12 gap-5 items-center">
+                        <div className="lg:col-span-9">
+                            <div className="flex items-center gap-2.5 mb-3">
+                                <MapPinned size={14} className="text-[#a8c89a]" />
+                                <p className="text-[10px] font-bold uppercase tracking-[0.32em] text-[#a8c89a]">
+                                    {currentPhase.department ? `With ${currentPhase.department}` : 'Outcome'}
+                                </p>
+                            </div>
+                            <h3 className="text-2xl sm:text-3xl font-medium tracking-tight text-white leading-tight">
+                                {currentPhase.label}
+                            </h3>
+                            <p className="text-sm sm:text-base text-white/80 font-light mt-3 leading-relaxed max-w-2xl">
+                                {currentPhase.lead_copy}
+                            </p>
+                        </div>
+                        <div className="lg:col-span-3 flex lg:justify-end">
+                            <div className="inline-flex items-center gap-2.5 px-4 py-2.5 rounded-xl bg-white/[0.08] border border-white/15">
+                                <span className="text-[10px] font-bold uppercase tracking-[0.22em] text-white/65">
+                                    Step
+                                </span>
+                                <span className="text-base font-medium text-white">
+                                    {currentPhase.index + 1} / {roadmap.length}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            )}
+
+            {/* Stepper — every phase as a node, with the current one swelled
+                up. Horizontal at lg+, stacks vertically below. */}
+            <ol className="grid grid-cols-1 lg:grid-cols-4 gap-3">
+                {roadmap.map((p, i) => {
+                    const isDone     = p.state === 'done';
+                    const isCurrent  = p.state === 'current';
+                    const isUpcoming = p.state === 'upcoming';
+
+                    return (
+                        <li
+                            key={p.key}
+                            className={`relative rounded-2xl p-5 border transition-all ${
+                                isCurrent
+                                    ? 'bg-white border-[#436235] shadow-[0_24px_48px_-24px_rgba(67,98,53,0.35)]'
+                                    : isDone
+                                        ? 'bg-[#436235]/5 border-[#436235]/20'
+                                        : 'bg-white border-[#282728]/10 opacity-70'
+                            }`}
+                        >
+                            {/* Node circle + connector */}
+                            <div className="flex items-center justify-between mb-3">
+                                <span
+                                    className={`w-8 h-8 rounded-full flex items-center justify-center text-[11px] font-bold ${
+                                        isDone
+                                            ? 'bg-[#436235] text-white'
+                                            : isCurrent
+                                                ? 'bg-[#436235] text-white ring-4 ring-[#436235]/15'
+                                                : 'bg-[#282728]/5 text-[#282728]/40 border border-[#282728]/15'
+                                    }`}
+                                >
+                                    {isDone ? <Check size={14} strokeWidth={3} /> : i + 1}
+                                </span>
+                                <span
+                                    className={`text-[9px] font-bold uppercase tracking-[0.22em] ${
+                                        isCurrent
+                                            ? 'text-[#436235]'
+                                            : isDone
+                                                ? 'text-[#436235]/70'
+                                                : 'text-[#282728]/30'
+                                    }`}
+                                >
+                                    {isCurrent ? 'You are here' : isDone ? 'Done' : 'Up next'}
+                                </span>
+                            </div>
+
+                            <p
+                                className={`text-[10px] font-bold uppercase tracking-[0.22em] mb-1 ${
+                                    isCurrent ? 'text-[#436235]' : 'text-[#282728]/40'
+                                }`}
+                            >
+                                {p.department || 'Outcome'}
+                            </p>
+                            <h4
+                                className={`text-base font-medium leading-snug tracking-tight ${
+                                    isCurrent ? 'text-[#282728]' : isUpcoming ? 'text-[#282728]/60' : 'text-[#282728]/80'
+                                }`}
+                            >
+                                {p.label}
+                            </h4>
+                            <p
+                                className={`text-[11px] mt-1.5 leading-relaxed ${
+                                    isCurrent ? 'text-[#282728]/70' : 'text-[#282728]/40'
+                                }`}
+                            >
+                                {p.description}
+                            </p>
+                        </li>
+                    );
+                })}
+            </ol>
+        </div>
     );
 }
 

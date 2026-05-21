@@ -3,11 +3,20 @@
 namespace App\Http\Controllers\Portal;
 
 use App\Http\Controllers\Controller;
+use App\Models\Lead;
 use App\Models\ResidentIntake;
 use App\Models\UserReview;
+use App\Traits\BuildsLeadRow;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\Rule;
 
 class ImmigrationController extends Controller
 {
+    use BuildsLeadRow;
+
+    private const LEAD_STATUSES = Lead::STAGES;
+
     /**
      * Immigration-portal dashboard — counts, monthly trend, recent activity.
      * Accessible to admins and 'immigration'-role staff.
@@ -63,5 +72,48 @@ class ImmigrationController extends Controller
                 'id', 'review_id', 'name', 'email', 'mode', 'status', 'created_at',
             ]),
         ]);
+    }
+
+    /**
+     * Leads queue for the Immigration portal — same shape as Sales so the
+     * shared Leads.jsx renders identically. Immigration staff use this to
+     * track leads moving into visa-process / consultancy stages.
+     */
+    public function leads()
+    {
+        try {
+            return inertia('portal/immigration/Leads', [
+                'portal'   => 'immigration',
+                'statuses' => self::LEAD_STATUSES,
+                'leads'    => Lead::with(['studyPlans', 'event', 'portalUser:id,lead_id,last_login_at'])->latest()->get()->map(fn ($l) => $this->leadRow($l)),
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('Immigration leads list failed', ['error' => $e->getMessage()]);
+
+            return inertia('portal/immigration/Leads', [
+                'portal'   => 'immigration',
+                'statuses' => self::LEAD_STATUSES,
+                'leads'    => collect(),
+            ]);
+        }
+    }
+
+    public function updateLead(Request $request, $id)
+    {
+        $validated = $request->validate([
+            'status' => ['required', Rule::in(self::LEAD_STATUSES)],
+        ]);
+
+        try {
+            $lead = Lead::findOrFail($id);
+            $lead->status = $validated['status'];
+            $lead->save();
+
+            return back()->with('success', "Lead {$lead->lead_id} updated.");
+        } catch (\Throwable $e) {
+            Log::error('Immigration lead update failed', ['id' => $id, 'error' => $e->getMessage()]);
+
+            return back()->with('error', 'Could not update that lead. Please try again.');
+        }
     }
 }

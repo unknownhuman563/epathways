@@ -1,8 +1,9 @@
 import DashboardLayout from "./DashboardLayout";
-import { LayoutDashboard, Globe, FileText, Star, FolderCheck } from "lucide-react";
+import { LayoutDashboard, Globe, FileText, Star, FolderCheck, UserSquare2 } from "lucide-react";
 
 const IMMIGRATION_NAV = [
     { name: "Dashboard", href: "/portal/immigration/dashboard", icon: <LayoutDashboard size={20} /> },
+    { name: "Leads", href: "/portal/immigration/leads", icon: <UserSquare2 size={20} /> },
     { name: "Cases", href: "/portal/immigration/cases", icon: <Globe size={20} /> },
     { name: "Resident Intakes", href: "/portal/immigration/resident-intakes", icon: <FileText size={20} /> },
     { name: "Documents", href: "/portal/immigration/documents", icon: <FolderCheck size={20} /> },

@@ -7,6 +7,7 @@ use App\Models\Event;
 use App\Models\FacebookLiveSession;
 use App\Models\Lead;
 use App\Models\LeadDocument;
+use App\Services\LeadPhaseService;
 use App\Services\NewsFeedService;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
@@ -37,6 +38,9 @@ class LeadPortalController extends Controller
             'nextActivity'      => $this->upcomingEvents()->first(),
             'latestAnnouncement'=> $this->announcementFeed(1)->first(),
             'documentSummary'   => $this->documentSummary($lead),
+            'roadmap'           => LeadPhaseService::roadmap($lead->status),
+            'currentPhase'      => LeadPhaseService::phaseFor($lead->status),
+            'preEngagement'     => LeadPhaseService::isPreEngagement($lead->status),
         ]);
     }
 
@@ -83,6 +87,116 @@ class LeadPortalController extends Controller
             'facebookLives'  => $this->facebookLives(8),
             'news'           => NewsFeedService::latest(6),
         ]);
+    }
+
+    /** Vertical timeline of every engagement step + current expanded. */
+    public function journey()
+    {
+        $lead = $this->resolveLeadOrLogout();
+        if (! $lead instanceof Lead) return $lead;
+
+        return inertia('portal/lead/Journey', [
+            'lead'         => $this->leadPayload($lead),
+            'roadmap'      => LeadPhaseService::roadmap($lead->status),
+            'currentPhase' => LeadPhaseService::phaseFor($lead->status),
+            'preEngagement'=> LeadPhaseService::isPreEngagement($lead->status),
+            'submissions'  => $this->submissionsTimeline($lead),
+        ]);
+    }
+
+    /** Checklist view — uses the same document_checklist + section verifications. */
+    public function checklist()
+    {
+        $lead = $this->resolveLeadOrLogout();
+        if (! $lead instanceof Lead) return $lead;
+
+        return inertia('portal/lead/Checklist', [
+            'lead'                 => $this->leadPayload($lead),
+            'documentChecklist'    => $lead->document_checklist ?? [],
+            'sectionVerifications' => $lead->section_verifications ?? [],
+        ]);
+    }
+
+    /** Multi-section Visa Forms — placeholder for the wizard. */
+    public function visaForms()
+    {
+        $lead = $this->resolveLeadOrLogout();
+        if (! $lead instanceof Lead) return $lead;
+
+        return inertia('portal/lead/VisaForms', ['lead' => $this->leadPayload($lead)]);
+    }
+
+    /** Appointments — upcoming + past, derived from Bookings on email match. */
+    public function appointments()
+    {
+        $lead = $this->resolveLeadOrLogout();
+        if (! $lead instanceof Lead) return $lead;
+
+        $bookings = Booking::where('email', $lead->email)->orderByDesc('appointment_date')->get();
+        $now = now()->toDateString();
+
+        return inertia('portal/lead/Appointments', [
+            'lead'     => $this->leadPayload($lead),
+            'upcoming' => $bookings->filter(fn ($b) => $b->appointment_date && $b->appointment_date->toDateString() >= $now)->values()->map(fn ($b) => $this->bookingRow($b)),
+            'past'     => $bookings->filter(fn ($b) => ! $b->appointment_date || $b->appointment_date->toDateString() < $now)->values()->map(fn ($b) => $this->bookingRow($b)),
+        ]);
+    }
+
+    public function proposals()
+    {
+        $lead = $this->resolveLeadOrLogout();
+        if (! $lead instanceof Lead) return $lead;
+        return inertia('portal/lead/Proposals', ['lead' => $this->leadPayload($lead)]);
+    }
+
+    public function agreements()
+    {
+        $lead = $this->resolveLeadOrLogout();
+        if (! $lead instanceof Lead) return $lead;
+        return inertia('portal/lead/Agreements', ['lead' => $this->leadPayload($lead)]);
+    }
+
+    public function payments()
+    {
+        $lead = $this->resolveLeadOrLogout();
+        if (! $lead instanceof Lead) return $lead;
+        return inertia('portal/lead/Payments', ['lead' => $this->leadPayload($lead)]);
+    }
+
+    public function messages()
+    {
+        $lead = $this->resolveLeadOrLogout();
+        if (! $lead instanceof Lead) return $lead;
+        return inertia('portal/lead/Messages', ['lead' => $this->leadPayload($lead)]);
+    }
+
+    public function profile()
+    {
+        $lead = $this->resolveLeadOrLogout();
+        if (! $lead instanceof Lead) return $lead;
+        return inertia('portal/lead/Profile', ['lead' => $this->leadPayload($lead)]);
+    }
+
+    public function settings()
+    {
+        $lead = $this->resolveLeadOrLogout();
+        if (! $lead instanceof Lead) return $lead;
+        return inertia('portal/lead/Settings', ['lead' => $this->leadPayload($lead)]);
+    }
+
+    private function bookingRow(Booking $b): array
+    {
+        return [
+            'id'               => $b->id,
+            'service_type'     => $b->service_type,
+            'consultant_name'  => $b->consultant_name,
+            'platform'         => $b->platform,
+            'status'           => $b->status ?: 'Pending',
+            'appointment_date' => $b->appointment_date ? \Illuminate\Support\Carbon::parse($b->appointment_date)->toDateString() : null,
+            'appointment_time' => $b->appointment_time,
+            'message'          => $b->message,
+            'created_at'       => $b->created_at,
+        ];
     }
 
     // ── Internals ───────────────────────────────────────────────────────────

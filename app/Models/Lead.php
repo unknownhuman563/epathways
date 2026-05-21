@@ -10,6 +10,33 @@ class Lead extends Model
 {
     use LogsActivity;
 
+    /**
+     * Canonical lead-pipeline stages. Single source of truth — referenced
+     * by SalesController validation and the LeadController stage-update
+     * endpoint. Order is the canonical pipeline order surfaced in the UI.
+     */
+    public const STAGES = [
+        'New Leads',
+        'Contact Attempted',
+        'Contacted for Booking',
+        'Booking Confirmation with Bryll',
+        'Missed the Meeting',
+        'Qualified but Not Ready',
+        'Qualified but No Funds',
+        'Qualified',
+        'Booked Consultation',
+        'Did Not Book Consultation',
+        'No Show',
+        'Consultation Done',
+        'Proposal Sent',
+        'Consultancy Agreement',
+        'English Pro',
+        'School Enrollment',
+        'Visa Process',
+        'Not Qualified',
+        'Work Pathway / Other',
+    ];
+
     protected $fillable = [
         'lead_id', 'first_name', 'last_name', 'dob', 'other_names', 'email', 'phone',
         'gender', 'marital_status', 'branch', 'stage', 'status',
@@ -23,12 +50,19 @@ class Lead extends Model
         'home_ties_info', 'declaration_accepted',
         'ai_analysis', 'ai_analysis_status',
         'source',
+        'utm_source', 'utm_medium', 'utm_campaign', 'utm_content',
         // Lead Portal invitation lifecycle
         'portal_invitation_status',
         'portal_invitation_requested_by', 'portal_invitation_requested_at',
         'portal_invitation_approved_by',  'portal_invitation_approved_at',
         'portal_invitation_token', 'portal_invitation_expires_at',
         'portal_invitation_accepted_at',
+        // Journey panel — pre-screening + goal-setting captures
+        'date_of_first_contact', 'date_of_engagement',
+        'prescreened_by', 'prescreened_notes',
+        'goal_setting_status', 'goal_setting_by', 'goal_setting_notes',
+        'document_checklist',
+        'section_verifications',
     ];
 
     protected $casts = [
@@ -49,6 +83,10 @@ class Lead extends Model
         'portal_invitation_approved_at'  => 'datetime',
         'portal_invitation_expires_at'   => 'datetime',
         'portal_invitation_accepted_at'  => 'datetime',
+        'date_of_first_contact'          => 'date',
+        'date_of_engagement'             => 'date',
+        'document_checklist'             => 'array',
+        'section_verifications'          => 'array',
     ];
 
     /** Portal account (User row with role='lead'), if one exists. */
@@ -60,6 +98,23 @@ class Lead extends Model
     public function documentRequests()
     {
         return $this->hasMany(LeadDocumentRequest::class);
+    }
+
+    public function tags()
+    {
+        return $this->belongsToMany(LeadTag::class, 'lead_tag_lead')
+            ->withTimestamps()
+            ->withPivot('user_id');
+    }
+
+    public function notes()
+    {
+        return $this->hasMany(LeadNote::class);
+    }
+
+    public function tasks()
+    {
+        return $this->hasMany(LeadTask::class);
     }
 
     public function documents()

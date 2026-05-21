@@ -133,7 +133,6 @@ Route::middleware(['auth'])->group(function () {
            return inertia('admin/Dashboard');
         });
         Route::get("/admin/leads", [LeadController::class, 'index'])->name('admin.leads');
-        Route::get("/admin/leads/{id}", [LeadController::class, 'show'])->name('admin.leads.show');
         Route::get("/admin/events", [EventController::class, 'index'])->name('admin.events');
         Route::post('/admin/events', [EventController::class, 'store']);
         Route::get('/admin/events/{id}', [EventController::class, 'show'])->name('admin.events.show');
@@ -173,6 +172,42 @@ Route::middleware(['auth'])->group(function () {
             ->name('admin.portal-invitation.reset-password');
     });
 
+    // Lead detail view + stage update — any logged-in staff (admin OR any
+    // department portal) can view a lead and advance its pipeline stage.
+    // Every change is audited via the LogsActivity trait on the Lead model.
+    Route::middleware('portal:admin,sales,education,english,immigration,accommodation')->group(function () {
+        Route::get("/admin/leads/{id}", [LeadController::class, 'show'])->name('admin.leads.show');
+        Route::post('/admin/leads/{id}/stage', [LeadController::class, 'updateStage'])->name('admin.leads.stage');
+        Route::post('/admin/leads/{id}/journey', [LeadController::class, 'updateJourney'])->name('admin.leads.journey');
+        Route::post('/admin/leads/{id}/documents/checklist', [LeadController::class, 'updateDocumentChecklist'])->name('admin.leads.documents.checklist');
+        Route::post('/admin/leads/{id}/documents/section-verification', [LeadController::class, 'updateSectionVerification'])->name('admin.leads.documents.section-verification');
+
+        // Internal notes — any staff role can add, only author or admin can edit/delete.
+        Route::post('/admin/leads/{id}/notes', [\App\Http\Controllers\LeadNoteController::class, 'store'])
+            ->name('admin.leads.notes.store');
+        Route::post('/admin/leads/{leadId}/notes/{noteId}', [\App\Http\Controllers\LeadNoteController::class, 'update'])
+            ->name('admin.leads.notes.update');
+        Route::delete('/admin/leads/{leadId}/notes/{noteId}', [\App\Http\Controllers\LeadNoteController::class, 'destroy'])
+            ->name('admin.leads.notes.destroy');
+
+        // Tags — free-form, auto-created on first use. /tags index feeds
+        // the client-side autocomplete.
+        Route::get('/admin/tags', [\App\Http\Controllers\LeadTagController::class, 'index'])
+            ->name('admin.tags.index');
+        Route::post('/admin/leads/{id}/tags', [\App\Http\Controllers\LeadTagController::class, 'attach'])
+            ->name('admin.leads.tags.attach');
+        Route::delete('/admin/leads/{leadId}/tags/{tagId}', [\App\Http\Controllers\LeadTagController::class, 'detach'])
+            ->name('admin.leads.tags.detach');
+
+        // Tasks — any staff can create + complete; only creator/admin can delete.
+        Route::post('/admin/leads/{id}/tasks', [\App\Http\Controllers\LeadTaskController::class, 'store'])
+            ->name('admin.leads.tasks.store');
+        Route::post('/admin/leads/{leadId}/tasks/{taskId}', [\App\Http\Controllers\LeadTaskController::class, 'update'])
+            ->name('admin.leads.tasks.update');
+        Route::delete('/admin/leads/{leadId}/tasks/{taskId}', [\App\Http\Controllers\LeadTaskController::class, 'destroy'])
+            ->name('admin.leads.tasks.destroy');
+    });
+
     // Lead documents — admins AND sales agents both work these. The lead's
     // own upload routes are under the lead-portal group below.
     Route::middleware('portal:admin,sales')->group(function () {
@@ -189,6 +224,15 @@ Route::middleware(['auth'])->group(function () {
         // Staff download — same controller, role-gated inside.
         Route::get('/admin/documents/{docId}/download', [LeadDocumentController::class, 'download'])
             ->name('admin.documents.download');
+    });
+
+    // Documents-tab checklist uploads + per-file delete — wider group so
+    // every department portal that sees the tab can also manage files.
+    Route::middleware('portal:admin,sales,education,english,immigration,accommodation')->group(function () {
+        Route::post('/admin/leads/{id}/documents/checklist/{key}/upload', [LeadDocumentController::class, 'staffChecklistUpload'])
+            ->name('admin.leads.documents.checklist.upload');
+        Route::delete('/admin/leads/{leadId}/documents/{docId}', [LeadDocumentController::class, 'destroyDocument'])
+            ->name('admin.leads.documents.destroy');
     });
 
     // Immigration management screens — shared between admins and immigration-role staff.
@@ -221,6 +265,28 @@ Route::middleware(['auth'])->group(function () {
             // Sales initiates portal access; admin must approve (see admin routes).
             Route::post('/leads/{id}/portal-invitation/request', [LeadPortalInvitationController::class, 'request'])
                 ->name('leads.portal-invitation.request');
+
+            // Tasks due-today widget feed for the sales dashboard.
+            Route::get('/tasks/due-today', [\App\Http\Controllers\LeadTaskController::class, 'dueToday'])
+                ->name('tasks.due-today');
+
+            // Tasks & Follow-ups — central inbox of every open task across leads.
+            Route::get('/tasks', [SalesController::class, 'tasks'])->name('tasks');
+
+            // Sales Weekly Report — 11 sections; ?week_start=YYYY-MM-DD steps weeks.
+            Route::get('/reports', [SalesController::class, 'report'])->name('reports');
+
+            // OUTREACH — placeholders until the email backbone ships.
+            Route::get('/bulk-email',      [SalesController::class, 'bulkEmail'])->name('bulk-email');
+            Route::get('/email-templates', [SalesController::class, 'emailTemplates'])->name('email-templates');
+            Route::get('/campaigns',       [SalesController::class, 'campaigns'])->name('campaigns');
+
+            // ACCOUNT
+            Route::get('/profile',       [SalesController::class, 'profile'])->name('profile');
+            Route::get('/notifications', [SalesController::class, 'notifications'])->name('notifications');
+
+            // Portal-scoped lead detail URL (sales user lands at /portal/sales/leads/{id})
+            Route::get('/leads/{id}', [LeadController::class, 'show'])->name('leads.show');
         });
 
         // Other portals — each has its own controller + dedicated dashboard
@@ -228,18 +294,32 @@ Route::middleware(['auth'])->group(function () {
         // they can view any role's dashboard.
         Route::middleware('portal:education')->prefix('education')->name('portal.education.')->group(function () {
             Route::get('/dashboard', [EducationController::class, 'dashboard'])->name('dashboard');
+            Route::get('/leads', [EducationController::class, 'leads'])->name('leads');
+            Route::post('/leads/{id}', [EducationController::class, 'updateLead'])->name('leads.update');
+            // Education staff can also request a Lead-Portal invitation; admin still approves.
+            Route::post('/leads/{id}/portal-invitation/request', [LeadPortalInvitationController::class, 'request'])
+                ->name('leads.portal-invitation.request');
+            Route::get('/leads/{id}', [LeadController::class, 'show'])->name('leads.show');
         });
 
         Route::middleware('portal:english')->prefix('english')->name('portal.english.')->group(function () {
             Route::get('/dashboard', [EnglishController::class, 'dashboard'])->name('dashboard');
+            Route::get('/leads/{id}', [LeadController::class, 'show'])->name('leads.show');
         });
 
         Route::middleware('portal:immigration')->prefix('immigration')->name('portal.immigration.')->group(function () {
             Route::get('/dashboard', [ImmigrationController::class, 'dashboard'])->name('dashboard');
+            Route::get('/leads', [ImmigrationController::class, 'leads'])->name('leads');
+            Route::post('/leads/{id}', [ImmigrationController::class, 'updateLead'])->name('leads.update');
+            // Immigration staff can also request a Lead-Portal invitation; admin still approves.
+            Route::post('/leads/{id}/portal-invitation/request', [LeadPortalInvitationController::class, 'request'])
+                ->name('leads.portal-invitation.request');
+            Route::get('/leads/{id}', [LeadController::class, 'show'])->name('leads.show');
         });
 
         Route::middleware('portal:accommodation')->prefix('accommodation')->name('portal.accommodation.')->group(function () {
             Route::get('/dashboard', [AccommodationController::class, 'dashboard'])->name('dashboard');
+            Route::get('/leads/{id}', [LeadController::class, 'show'])->name('leads.show');
         });
 
         // Lead Portal — external client-facing dashboard. Each lead-role user
@@ -249,8 +329,23 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/submissions',   [App\Http\Controllers\LeadPortalController::class, 'submissions'])->name('submissions');
             Route::get('/activities',    [App\Http\Controllers\LeadPortalController::class, 'activities'])->name('activities');
             Route::get('/announcements', [App\Http\Controllers\LeadPortalController::class, 'announcements'])->name('announcements');
+
+            // New sidebar sections — most are placeholders while the full
+            // workflow ships incrementally.
+            Route::get('/journey',       [App\Http\Controllers\LeadPortalController::class, 'journey'])->name('journey');
+            Route::get('/checklist',     [App\Http\Controllers\LeadPortalController::class, 'checklist'])->name('checklist');
+            Route::get('/visa-forms',    [App\Http\Controllers\LeadPortalController::class, 'visaForms'])->name('visa-forms');
+            Route::get('/appointments',  [App\Http\Controllers\LeadPortalController::class, 'appointments'])->name('appointments');
+            Route::get('/proposals',     [App\Http\Controllers\LeadPortalController::class, 'proposals'])->name('proposals');
+            Route::get('/agreements',    [App\Http\Controllers\LeadPortalController::class, 'agreements'])->name('agreements');
+            Route::get('/payments',      [App\Http\Controllers\LeadPortalController::class, 'payments'])->name('payments');
+            Route::get('/messages',      [App\Http\Controllers\LeadPortalController::class, 'messages'])->name('messages');
+            Route::get('/profile',       [App\Http\Controllers\LeadPortalController::class, 'profile'])->name('profile');
+            Route::get('/settings',      [App\Http\Controllers\LeadPortalController::class, 'settings'])->name('settings');
             Route::get('/documents',     [LeadDocumentController::class, 'leadIndex'])->name('documents');
             Route::post('/documents/upload', [LeadDocumentController::class, 'leadUpload'])->name('documents.upload');
+            Route::post('/documents/checklist/{key}/upload', [LeadDocumentController::class, 'leadChecklistUpload'])->name('documents.checklist.upload');
+            Route::post('/documents/section/{key}/submit', [LeadDocumentController::class, 'leadSubmitSection'])->name('documents.section.submit');
             Route::get('/documents/{docId}/download', [LeadDocumentController::class, 'download'])->name('documents.download');
         });
     });
