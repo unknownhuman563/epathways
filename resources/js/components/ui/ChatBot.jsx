@@ -50,7 +50,7 @@ const ChatBot = ({ isOpen, onClose }) => {
     };
 
     const quickActions = [
-        { label: 'Start Assessment', link: 'https://forms.clickup.com/9003110473/f/8ca1429-27476/ZFL0N95I6L0K6QEPTD' },
+        { label: 'Start Assessment', link: '/free-assessment' },
         { label: 'Book Consultation', link: '/booking' },
         { label: 'Explore Programs', link: '/programs' }
     ];

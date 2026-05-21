@@ -1,10 +1,26 @@
 import React, { useMemo, useState } from 'react';
-import { Head, Link } from '@inertiajs/react';
-import { Search, Filter, Eye, MessageCircle, FileText, Globe, ChevronRight, Mail } from 'lucide-react';
+import { Head, Link, router } from '@inertiajs/react';
+import { Search, Filter, Eye, MessageCircle, FileText, Globe, ChevronRight, Mail, Star, Check, X } from 'lucide-react';
 
 export default function UserReviews({ reviews = [] }) {
     const [query, setQuery] = useState('');
     const [modeFilter, setModeFilter] = useState('');
+    const [savingId, setSavingId] = useState(null);
+
+    // Inline POST to /admin/immigration/user-reviews/{id} flips a flag and
+    // optimistically updates via Inertia partial reload of the same page.
+    const toggle = (review, field, nextValue) => {
+        setSavingId(`${review.id}:${field}`);
+        router.post(
+            `/admin/immigration/user-reviews/${review.id}`,
+            { [field]: nextValue },
+            {
+                preserveScroll: true,
+                preserveState: true,
+                onFinish: () => setSavingId(null),
+            }
+        );
+    };
 
     const filtered = useMemo(() => {
         const q = query.trim().toLowerCase();
@@ -85,17 +101,18 @@ export default function UserReviews({ reviews = [] }) {
                         <thead className="bg-gray-50/80 border-b border-gray-100">
                             <tr className="text-left text-xs font-bold text-gray-500 uppercase tracking-wider">
                                 <th className="px-6 py-4">Name</th>
-                                <th className="px-6 py-4">Email</th>
+                                <th className="px-6 py-4">Rating</th>
                                 <th className="px-6 py-4">Share Mode</th>
                                 <th className="px-6 py-4">Submitted</th>
-                                <th className="px-6 py-4">Status</th>
+                                <th className="px-6 py-4 text-center">Published</th>
+                                <th className="px-6 py-4 text-center">Featured</th>
                                 <th className="px-6 py-4 text-right">Action</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-50">
                             {filtered.length === 0 && (
                                 <tr>
-                                    <td colSpan={6} className="py-20 text-center">
+                                    <td colSpan={7} className="py-20 text-center">
                                         <div className="flex flex-col items-center gap-3 text-gray-400">
                                             <div className="w-14 h-14 rounded-2xl bg-gray-50 flex items-center justify-center">
                                                 <MessageCircle size={24} />
@@ -123,13 +140,19 @@ export default function UserReviews({ reviews = [] }) {
                                         </div>
                                     </td>
                                     <td className="px-6 py-4">
-                                        {r.email ? (
-                                            <span className="inline-flex items-center gap-1.5 text-sm text-gray-700">
-                                                <Mail size={13} className="text-gray-400 flex-shrink-0" />
-                                                <span className="truncate max-w-[220px]">{r.email}</span>
-                                            </span>
+                                        {r.rating ? (
+                                            <div className="flex items-center gap-1">
+                                                {[1,2,3,4,5].map((n) => (
+                                                    <Star
+                                                        key={n}
+                                                        size={13}
+                                                        strokeWidth={1.5}
+                                                        className={n <= r.rating ? 'fill-amber-400 text-amber-400' : 'fill-transparent text-gray-200'}
+                                                    />
+                                                ))}
+                                            </div>
                                         ) : (
-                                            <span className="text-xs text-gray-400">Not provided</span>
+                                            <span className="text-xs text-gray-300">No rating</span>
                                         )}
                                     </td>
                                     <td className="px-6 py-4">
@@ -140,10 +163,37 @@ export default function UserReviews({ reviews = [] }) {
                                         </span>
                                     </td>
                                     <td className="px-6 py-4 text-gray-600 text-xs whitespace-nowrap">{formatDate(r.created_at)}</td>
-                                    <td className="px-6 py-4">
-                                        <span className={`inline-flex items-center px-2.5 py-1 rounded-md text-xs font-bold border ${statusStyle(r.status)}`}>
-                                            {r.status || 'New'}
-                                        </span>
+                                    <td className="px-6 py-4 text-center">
+                                        <button
+                                            type="button"
+                                            disabled={savingId === `${r.id}:is_published`}
+                                            onClick={() => toggle(r, 'is_published', !r.is_published)}
+                                            title={r.is_published ? 'Click to unpublish (hide from public page)' : 'Click to publish (show on public page)'}
+                                            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold uppercase tracking-[0.12em] transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
+                                                r.is_published
+                                                    ? 'bg-emerald-500 text-white hover:bg-emerald-600'
+                                                    : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                                            }`}
+                                        >
+                                            {r.is_published ? <Check size={12} strokeWidth={3} /> : <X size={12} strokeWidth={3} />}
+                                            {r.is_published ? 'Live' : 'Hidden'}
+                                        </button>
+                                    </td>
+                                    <td className="px-6 py-4 text-center">
+                                        <button
+                                            type="button"
+                                            disabled={savingId === `${r.id}:is_featured` || !r.is_published}
+                                            onClick={() => toggle(r, 'is_featured', !r.is_featured)}
+                                            title={!r.is_published ? 'Publish the review first' : (r.is_featured ? 'Remove from Featured Stories' : 'Promote to Featured Stories')}
+                                            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold uppercase tracking-[0.12em] transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
+                                                r.is_featured
+                                                    ? 'bg-amber-400 text-amber-900 hover:bg-amber-500'
+                                                    : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                                            }`}
+                                        >
+                                            <Star size={12} strokeWidth={2.5} className={r.is_featured ? 'fill-amber-900' : ''} />
+                                            {r.is_featured ? 'Featured' : 'Feature'}
+                                        </button>
                                     </td>
                                     <td className="px-6 py-4 text-right">
                                         <Link

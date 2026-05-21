@@ -13,6 +13,7 @@ import PartnerLogos from "./PartnerLogos";
 import AboutBrief from "./AboutBrief";
 import ScrollToTop from "@/components/ui/ScrollToTop";
 import Modal from "@/components/ui/Modal";
+import BeforeFooterCTA from "@/components/ui/BeforeFooterCTA";
 import Footer from "@/components/layout/Footer";
 import CTASection from "./CTASection";
 import AccreditationSection from "./AccreditationSection";
@@ -64,6 +65,10 @@ export default function Home({ events = [], programGroups = [] }) {
 
         {/* Events and Announcements Section */}
         <EventsAnnouncements events={events} />
+
+        {/* Single premium soft-capture, mounted just above the footer.
+            Replaces the previously-modal exit-intent prompt. */}
+        <BeforeFooterCTA source="home-beforefooter" />
 
         <ScrollToTop />
 

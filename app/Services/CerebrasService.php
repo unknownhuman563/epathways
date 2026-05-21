@@ -21,7 +21,7 @@ class CerebrasService
 
     public function analyze(Lead $lead): array
     {
-        $lead->loadMissing(['studyPlans', 'educationExps']);
+        $lead->loadMissing(['studyPlans', 'educationExps', 'tags', 'documents', 'documentRequests']);
 
         $response = Http::withHeaders([
             'Authorization' => 'Bearer ' . $this->apiKey,
@@ -138,6 +138,33 @@ You are an immigration education consultant AI for ePathways, a New Zealand educ
 - If NO Bachelor's but has managerial experience → recommend Level 8 or 9
 - If NO Bachelor's and NO managerial experience → recommend Level 7 only if they have equivalent qualifications
 
+## Department Routing Rules
+
+Recommend ONE primary department to take ownership of this lead next, based on the
+applicant data, documents, and stage. Use exactly one of these labels:
+
+- **Sales** — financially uncommitted, hasn't booked or paid; still needs persuasion
+  and budget/timeline clarification. Default for fresh leads with weak intent signals.
+- **Education** — has Bachelor's (or close to it), funds look workable, study pathway
+  is the natural next conversation. Use when academic + financial signals are solid
+  and the applicant is ready to choose a programme.
+- **English** — English test missing, low (IELTS < 6.0 / equivalent), or score breakdown
+  shows weakness; needs English Pro track before NZ application is realistic.
+- **Immigration** — already enrolled or near-enrolled; ready for visa lodgement,
+  needs immigration adviser to package the application. Also use when there are
+  immigration risk factors (refusals, character/health) that need expert handling.
+- **Accommodation** — visa work is done or imminent; lead is moving onto housing,
+  airport pickup, settlement support in NZ.
+
+Rules of thumb (apply in this order, take the FIRST that matches):
+1. Heavy immigration risk (refusals, character/health issues) → Immigration
+2. English missing/weak → English
+3. Bachelor's + funds look workable + study path unclear → Education
+4. Anything else (uncommitted, exploring, budget unclear) → Sales
+
+Also produce a 1-sentence `department_reasoning` explaining *why* this department
+should take it, referencing specific applicant data points.
+
 ## Output Format
 
 CRITICAL: Respond with ONLY a single valid JSON object. No markdown, no code fences, no preamble, no commentary. The output must start with `{` and end with `}` and be parseable by JSON.parse().
@@ -154,6 +181,9 @@ The JSON object must have exactly these fields with these types:
   },
   "recommended_pathway": "Master's Degree (Level 9)",
   "pathway_reasoning": "Strong Bachelor's foundation, relevant work experience, and adequate funding make Level 9 viable. Master's also opens stronger post-study work pathway for partner accompaniment.",
+  "recommended_department": "Education",
+  "department_reasoning": "Bachelor's in relevant field with documented funding — ready to choose a programme, so Education adviser should take ownership next.",
+  "next_steps": ["Send IELTS booking link", "Confirm sponsor documentation", "Schedule Education adviser consult"],
   "strengths": ["Bachelor's in relevant field", "Documented funding from multiple sources", "Strong home ties", "Relevant work experience"],
   "concerns": ["English test scores not yet provided", "Sponsor relationship documentation may need notarization"],
   "summary": "Applicant is a well-prepared candidate with solid academic, financial, and professional foundations for a Master's pathway in New Zealand. Minor documentation items remain. Overall low-risk, recommend proceeding."
@@ -169,6 +199,15 @@ PROMPT;
         $educationExps = $lead->educationExps;
 
         $data = [
+            'lead_status'  => $lead->status,
+            'staff_tags'   => $lead->tags->pluck('name')->all(),
+            'documents'    => [
+                'submitted_count' => $lead->documents->count(),
+                'requested_count' => $lead->documentRequests->count(),
+                'requested_labels'=> $lead->documentRequests->pluck('label')->filter()->unique()->values()->all(),
+                'approved_count'  => $lead->documents->where('status', 'Approved')->count(),
+                'rejected_count'  => $lead->documents->where('status', 'Rejected')->count(),
+            ],
             'personal' => [
                 'first_name' => $lead->first_name,
                 'last_name' => $lead->last_name,

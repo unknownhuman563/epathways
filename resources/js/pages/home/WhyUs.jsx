@@ -44,12 +44,12 @@ export default function WhyUs() {
                     </p>
 
                     <div className="flex flex-wrap justify-center items-center gap-4 sm:gap-6 mt-8 sm:mt-10">
-                        <button className="px-10 py-3.5 bg-[#282728] text-white text-[11px] font-bold rounded-lg hover:bg-black transition-all uppercase tracking-[0.2em] shadow-lg active:scale-95">
-                            Explore
-                        </button>
-                        <button className="flex items-center gap-2 text-[#282728] text-[11px] font-bold uppercase tracking-[0.2em] hover:text-[#436235] group">
-                            More <ArrowRight size={14} className="transition-transform group-hover:translate-x-1" />
-                        </button>
+                        <a href="/free-assessment" className="px-10 py-3.5 bg-[#436235] text-white text-[11px] font-bold rounded-lg hover:bg-[#385029] transition-all uppercase tracking-[0.2em] shadow-lg active:scale-95">
+                            Get my free check
+                        </a>
+                        <a href="/about-us" className="flex items-center gap-2 text-[#282728] text-[11px] font-bold uppercase tracking-[0.2em] hover:text-[#436235] group">
+                            About us <ArrowRight size={14} className="transition-transform group-hover:translate-x-1" />
+                        </a>
                     </div>
                 </div>
 
@@ -94,12 +94,12 @@ export default function WhyUs() {
                             </p>
                             
                             <div className="flex flex-wrap items-center gap-4 sm:gap-8">
-                                <button className="px-8 sm:px-10 py-3 sm:py-3.5 bg-gray-100 text-[#282728] text-[11px] font-bold rounded-lg hover:bg-gray-200 transition-all uppercase tracking-[0.2em] active:scale-95">
-                                    Learn
-                                </button>
-                                <button className="flex items-center gap-2 text-[#282728] text-[11px] font-bold uppercase tracking-[0.2em] hover:text-[#436235] group">
-                                    More <ArrowRight size={14} className="transition-transform group-hover:translate-x-1" />
-                                </button>
+                                <a href="/booking" className="px-8 sm:px-10 py-3 sm:py-3.5 bg-gray-100 text-[#282728] text-[11px] font-bold rounded-lg hover:bg-gray-200 transition-all uppercase tracking-[0.2em] active:scale-95">
+                                    Book a 1:1 call
+                                </a>
+                                <a href="/programs-levels" className="flex items-center gap-2 text-[#282728] text-[11px] font-bold uppercase tracking-[0.2em] hover:text-[#436235] group">
+                                    Programs <ArrowRight size={14} className="transition-transform group-hover:translate-x-1" />
+                                </a>
                             </div>
                         </motion.div>
                     </AnimatePresence>

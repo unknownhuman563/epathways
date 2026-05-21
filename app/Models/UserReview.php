@@ -18,6 +18,16 @@ class UserReview extends Model
         'answer_2',
         'answer_3',
         'paragraph',
+        'rating',
         'status',
+        'is_published',
+        'is_featured',
+        'visa_type',
+    ];
+
+    protected $casts = [
+        'rating'       => 'integer',
+        'is_published' => 'boolean',
+        'is_featured'  => 'boolean',
     ];
 }

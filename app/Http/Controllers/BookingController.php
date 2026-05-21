@@ -3,8 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Models\Booking;
-use App\Models\Lead;
+use App\Services\LeadIntakeService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 
 class BookingController extends Controller
@@ -17,40 +18,40 @@ class BookingController extends Controller
         ]);
     }
 
-    public function store(Request $request)
+    public function store(Request $request, LeadIntakeService $intake)
     {
         $validated = $request->validate([
-            'first_name' => 'required|string|max:255',
-            'last_name' => 'required|string|max:255',
-            'email' => 'required|email|max:255',
-            'phone' => 'nullable|string|max:20',
-            'service_type' => 'required|string',
+            'first_name'      => 'required|string|max:255',
+            'last_name'       => 'required|string|max:255',
+            'email'           => 'required|email|max:255',
+            'phone'           => 'nullable|string|max:20',
+            'service_type'    => 'required|string',
             'consultant_name' => 'required|string',
-            'message' => 'nullable|string',
-            'platform' => 'nullable|string',
+            'message'         => 'nullable|string',
+            'platform'        => 'nullable|string',
             'current_country' => 'nullable|string',
         ]);
 
-        // Smart Lead Matching & Creation
-        $lead = Lead::where('email', $validated['email'])->first();
-
-        if (!$lead) {
-            // Create a new lead if they don't exist
-            $lead = Lead::create([
-                'lead_id' => 'LP-' . rand(10000, 99999),
+        try {
+            // Find-or-create the lead through the unified intake. Resubmits
+            // by the same email log a `lead.resubmitted` activity entry.
+            $lead = $intake->ingest('booking', [
                 'first_name' => $validated['first_name'],
-                'last_name' => $validated['last_name'],
-                'email' => $validated['email'],
-                'phone' => $validated['phone'] ?? null,
-                'country' => $validated['current_country'] ?? null,
-                'status' => 'New',
-                'stage' => 'Booking'
-            ]);
-        }
+                'last_name'  => $validated['last_name'],
+                'email'      => $validated['email'],
+                'phone'      => $validated['phone']           ?? null,
+                'country'    => $validated['current_country'] ?? null,
+                'stage'      => 'Booking',
+            ], $request);
 
-        $validated['lead_id'] = $lead->id;
-        Booking::create($validated);
-        return response()->json(['message' => 'Booking created and lead linked successfully'], 201);
+            $validated['lead_id'] = $lead->id;
+            Booking::create($validated);
+
+            return response()->json(['message' => 'Booking created and lead linked successfully'], 201);
+        } catch (\Throwable $e) {
+            Log::error('Booking create failed', ['error' => $e->getMessage()]);
+            return response()->json(['message' => 'Could not create booking. Please try again.'], 500);
+        }
     }
 
     public function update(Request $request, $id)

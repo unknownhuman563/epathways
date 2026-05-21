@@ -1,6 +1,7 @@
 import React from 'react';
 import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
+import QuickLeadForm from '@/components/ui/QuickLeadForm';
 
 const PropertyDetails = ({ id }) => {
   // In a real app, you would fetch data based on the ID. Using dummy data for now.
@@ -149,6 +150,32 @@ const PropertyDetails = ({ id }) => {
           </div>
         </div>
       </main>
+
+      {/* Soft capture — Reserve button is high-friction; many visitors will
+          want to ask a question first. Routed to sales as an Accommodation
+          lead. */}
+      <section className="bg-[#f7f8f6] py-14 sm:py-20 border-t border-gray-100">
+        <div className="max-w-3xl mx-auto px-4">
+          <div className="text-center mb-6">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#436235] mb-2">
+              Have questions before booking?
+            </p>
+            <h3 className="text-2xl md:text-3xl font-bold text-[#282728]">
+              Talk to our accommodation team
+            </h3>
+            <p className="text-sm text-gray-500 mt-2 max-w-xl mx-auto">
+              Availability, group rates, student arrival support — leave a quick note and we'll be in touch within 24 hours.
+            </p>
+          </div>
+          <QuickLeadForm
+            source={`property-details:${id || 'unknown'}`}
+            defaultInterest="Accommodation"
+            variant="card"
+            headline="Your details"
+            subtext="No commitment. We never share your contact details."
+          />
+        </div>
+      </section>
 
       <Footer />
     </div>

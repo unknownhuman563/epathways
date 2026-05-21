@@ -11,7 +11,10 @@ import EducationLayout from './components/layout/EducationLayout';
 import EnglishLayout from './components/layout/EnglishLayout';
 import ImmigrationLayout from './components/layout/ImmigrationLayout';
 import AccommodationLayout from './components/layout/AccommodationLayout';
+import LeadLayout from './components/layout/LeadLayout';
 import FlashToaster from './components/ui/FlashToaster';
+import FloatingContact from './components/ui/FloatingContact';
+import MobileStickyCTA from './components/ui/MobileStickyCTA';
 
 // Map portal-path prefix → layout component. Pages under
 // resources/js/pages/portal/<role>/ are automatically wrapped.
@@ -21,6 +24,7 @@ const PORTAL_LAYOUTS = {
   'portal/english/': EnglishLayout,
   'portal/immigration/': ImmigrationLayout,
   'portal/accommodation/': AccommodationLayout,
+  'portal/lead/': LeadLayout,
 };
 
 createInertiaApp({
@@ -46,6 +50,8 @@ createInertiaApp({
       <>
         <App {...props} />
         <FlashToaster />
+        <FloatingContact />
+        <MobileStickyCTA />
         <Toaster position="top-right" richColors closeButton />
       </>
     )

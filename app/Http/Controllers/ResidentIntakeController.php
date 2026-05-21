@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 class ResidentIntakeController extends Controller
 {
@@ -36,12 +37,13 @@ class ResidentIntakeController extends Controller
     }
 
     /**
-     * Store a submitted Resident Intake.
+     * Validation rules shared by `store` (initial submission) and `updateFromEditLink`
+     * (applicant editing via a shareable token link).
      */
-    public function store(Request $request)
+    private function intakeRules(bool $requireTerms = true): array
     {
-        $validated = $request->validate([
-            'terms_accepted'           => 'required|accepted',
+        return [
+            'terms_accepted'           => ($requireTerms ? 'required|accepted' : 'nullable|boolean'),
 
             'first_name'               => 'required|string|max:255',
             'last_name'                => 'required|string|max:255',
@@ -93,7 +95,45 @@ class ResidentIntakeController extends Controller
 
             'character_health_disclosure' => 'nullable|string',
             'other_notes'                 => 'nullable|string',
-        ]);
+        ];
+    }
+
+    /**
+     * Store each uploaded document under the intake's folder on the private disk
+     * and return [key => [paths...]] alongside the new documents-checklist map.
+     */
+    private function persistUploadedFiles(Request $request, string $intakeId, array $existingFiles = [], array $documents = []): array
+    {
+        $files = $existingFiles;
+        foreach ((array) $request->file('document_files', []) as $key => $uploads) {
+            if (!in_array($key, self::DOCUMENT_KEYS, true)) {
+                continue;
+            }
+            $newPaths = [];
+            foreach ((array) $uploads as $file) {
+                if ($file instanceof \Illuminate\Http\UploadedFile) {
+                    $newPaths[] = $file->store("resident-intakes/{$intakeId}", 'local');
+                }
+            }
+            if (!empty($newPaths)) {
+                $existing = isset($files[$key])
+                    ? (is_array($files[$key]) ? $files[$key] : [$files[$key]])
+                    : [];
+                $files[$key] = array_merge($existing, $newPaths);
+                if ($key !== 'other') {
+                    $documents[$key] = true; // attached file implies "I have this"
+                }
+            }
+        }
+        return [$files, $documents];
+    }
+
+    /**
+     * Store a submitted Resident Intake.
+     */
+    public function store(Request $request)
+    {
+        $validated = $request->validate($this->intakeRules());
 
         // Uploaded PDFs are handled manually; keep them out of mass-assignment.
         unset($validated['document_files']);
@@ -109,26 +149,7 @@ class ResidentIntakeController extends Controller
 
             $intakeId = 'RI-' . strtoupper(uniqid());
 
-            // Store each uploaded document (one or more PDFs per key) on the private disk.
-            $storedFiles = [];
-            foreach ((array) $request->file('document_files', []) as $key => $files) {
-                if (!in_array($key, self::DOCUMENT_KEYS, true)) {
-                    continue;
-                }
-                $paths = [];
-                foreach ((array) $files as $file) {
-                    if ($file instanceof \Illuminate\Http\UploadedFile) {
-                        $paths[] = $file->store("resident-intakes/{$intakeId}", 'local');
-                    }
-                }
-                if (!empty($paths)) {
-                    $storedFiles[$key] = $paths;
-                    // Checklist keys (not the free-form "other" bucket) get auto-ticked when a file is attached.
-                    if ($key !== 'other') {
-                        $documents[$key] = true;
-                    }
-                }
-            }
+            [$storedFiles, $documents] = $this->persistUploadedFiles($request, $intakeId, [], $documents);
 
             $intake = ResidentIntake::create(array_merge(
                 $validated,
@@ -156,23 +177,112 @@ class ResidentIntakeController extends Controller
     }
 
     /**
-     * Admin: list all resident intakes.
+     * Admin: generate (or fetch) a shareable edit-link token for the given intake.
+     * The applicant uses this URL to open the form pre-filled with their data
+     * and submit revisions / additional PDFs without logging in.
+     */
+    public function generateEditLink($id)
+    {
+        $intake = ResidentIntake::findOrFail($id);
+
+        if (empty($intake->edit_token)) {
+            $intake->edit_token = Str::random(48);
+            $intake->save();
+        }
+
+        return back()->with([
+            'edit_link_intake_id' => $intake->id,
+            'edit_link_url'       => url('/resident-interest/edit/' . $intake->edit_token),
+        ]);
+    }
+
+    /**
+     * Public: render the intake form pre-filled with the intake referenced by {token}.
+     */
+    public function showEditForm(string $token)
+    {
+        $intake = ResidentIntake::where('edit_token', $token)->firstOrFail();
+
+        return inertia('visa/ResidentIntakePage', [
+            'editIntake' => $intake,
+            'editToken'  => $token,
+        ]);
+    }
+
+    /**
+     * Public: update the intake referenced by {token}.
+     * New PDF uploads are appended to whatever's already stored.
+     */
+    public function updateFromEditLink(Request $request, string $token)
+    {
+        $intake = ResidentIntake::where('edit_token', $token)->firstOrFail();
+
+        // Editing doesn't re-require the terms-accept checkbox — that's part of the
+        // original submission. Everything else is validated identically.
+        $validated = $request->validate($this->intakeRules(requireTerms: false));
+
+        unset($validated['document_files'], $validated['terms_accepted']);
+
+        $documents = collect((array) $request->input('documents', []))
+            ->map(fn ($v) => filter_var($v, FILTER_VALIDATE_BOOLEAN))
+            ->all();
+
+        try {
+            DB::beginTransaction();
+
+            $existingFiles = is_array($intake->document_files) ? $intake->document_files : [];
+            [$mergedFiles, $documents] = $this->persistUploadedFiles($request, $intake->intake_id, $existingFiles, $documents);
+
+            $intake->update(array_merge($validated, [
+                'documents'      => $documents ?: $intake->documents,
+                'document_files' => $mergedFiles ?: null,
+            ]));
+
+            DB::commit();
+
+            return redirect()->back()->with([
+                'success'   => true,
+                'intake_id' => $intake->intake_id,
+                'edited'    => true,
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Resident intake edit-link update failed', ['error' => $e->getMessage()]);
+            return redirect()->back()->withErrors([
+                'error' => 'Failed to save your changes. Please try again.',
+            ]);
+        }
+    }
+
+    /**
+     * Pick the Inertia page path based on whether the viewer is an admin
+     * (lives in /admin chrome) or an immigration-role user (immigration portal).
+     */
+    private function immigrationPagePath(string $page): string
+    {
+        return auth()->user()?->isAdmin()
+            ? "admin/Immigration/{$page}"
+            : "portal/immigration/{$page}";
+    }
+
+    /**
+     * List all resident intakes — shared by admins and immigration-role staff.
      */
     public function adminIndex()
     {
         $intakes = ResidentIntake::latest()->get();
-        return inertia('admin/Immigration/ResidentIntakes', [
+        return inertia($this->immigrationPagePath('ResidentIntakes'), [
             'intakes' => $intakes,
         ]);
     }
 
     /**
-     * Admin: show a single intake.
+     * Show a single intake — shared by admins and immigration-role staff.
      */
     public function adminShow($id)
     {
         $intake = ResidentIntake::findOrFail($id);
-        return inertia('admin/Immigration/ResidentIntakeDetails', [
+        return inertia($this->immigrationPagePath('ResidentIntakeDetails'), [
             'intake' => $intake,
         ]);
     }

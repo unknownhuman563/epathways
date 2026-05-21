@@ -98,6 +98,68 @@ class ResidentIntakeUploadTest extends TestCase
         Storage::disk('local')->assertExists($intake->document_files['other'][0]);
     }
 
+    public function test_edit_link_token_lets_applicant_update_and_append_files(): void
+    {
+        Storage::fake('local');
+
+        // Initial submission: one PDF on "passport".
+        $original = UploadedFile::fake()->create('passport-orig.pdf', 100, 'application/pdf');
+        $this->post('/resident-interest', $this->payload([
+            'document_files' => ['passport' => [$original]],
+        ]))->assertSessionHas('success', true);
+
+        /** @var ResidentIntake $intake */
+        $intake = ResidentIntake::firstOrFail();
+        $intake->edit_token = 'tok_test_' . bin2hex(random_bytes(8));
+        $intake->save();
+
+        // Applicant opens the token-bearing edit URL and POSTs new data + extra PDFs.
+        $additional = UploadedFile::fake()->create('passport-extra.pdf', 80, 'application/pdf');
+        $otherDoc = UploadedFile::fake()->create('reference.pdf', 60, 'application/pdf');
+
+        $response = $this->post("/resident-interest/edit/{$intake->edit_token}", $this->payload([
+            'phone'          => '+64211999888', // changed
+            'document_files' => [
+                'passport' => [$additional],
+                'other'    => [$otherDoc],
+            ],
+        ]));
+
+        $response->assertSessionHas('success', true);
+        $response->assertSessionHas('edited', true);
+        $response->assertSessionHasNoErrors();
+
+        $intake->refresh();
+        $this->assertSame('+64211999888', $intake->phone);
+        $this->assertCount(2, $intake->document_files['passport']); // appended, not replaced
+        $this->assertCount(1, $intake->document_files['other']);
+    }
+
+    public function test_admin_can_generate_edit_link(): void
+    {
+        Storage::fake('local');
+
+        $this->post('/resident-interest', $this->payload([
+            'document_files' => [],
+        ]))->assertSessionHas('success', true);
+
+        $intake = ResidentIntake::firstOrFail();
+        $this->assertNull($intake->edit_token);
+
+        // Authenticate as an admin to hit the protected route.
+        $admin = \App\Models\User::factory()->create(['role' => 'admin']);
+
+        $response = $this->actingAs($admin)->post("/admin/immigration/resident-intakes/{$intake->id}/edit-link");
+
+        $response->assertSessionHasNoErrors();
+        $response->assertSessionHas('edit_link_intake_id', $intake->id);
+        $response->assertSessionHas('edit_link_url');
+
+        $intake->refresh();
+        $this->assertNotEmpty($intake->edit_token);
+        $this->assertStringContainsString('/resident-interest/edit/' . $intake->edit_token, session('edit_link_url'));
+    }
+
     public function test_submission_without_files_still_works(): void
     {
         Storage::fake('local');

@@ -135,6 +135,20 @@ export default function DashboardLayout({
                         );
                     }
 
+                    // Allow non-link "section header" rows so the sidebar
+                    // can be grouped (e.g. WORK / OUTREACH / ACCOUNT). A
+                    // section is just an item with `section: true`.
+                    if (item.section) {
+                        return (
+                            <p
+                                key={item.name}
+                                className="px-4 pt-4 pb-1 text-[9px] font-bold uppercase tracking-[0.22em] text-gray-400"
+                            >
+                                {item.name}
+                            </p>
+                        );
+                    }
+
                     const isActive = url.startsWith(item.href);
                     return (
                         <Link
@@ -147,7 +161,20 @@ export default function DashboardLayout({
                             }`}
                         >
                             <div className={`${isActive ? "text-gray-900" : "text-gray-500 group-hover:text-gray-600"}`}>{item.icon}</div>
-                            {item.name}
+                            <span className="flex-1">{item.name}</span>
+                            {item.badge != null && item.badge !== 0 && (
+                                <span
+                                    className={`inline-flex items-center justify-center min-w-[20px] h-[20px] px-1.5 rounded-full text-[10px] font-bold tabular-nums ${
+                                        item.badgeTone === "danger"
+                                            ? "bg-red-500 text-white"
+                                            : item.badgeTone === "warning"
+                                                ? "bg-amber-500 text-white"
+                                                : "bg-gray-900 text-white"
+                                    }`}
+                                >
+                                    {item.badge}
+                                </span>
+                            )}
                         </Link>
                     );
                 })}

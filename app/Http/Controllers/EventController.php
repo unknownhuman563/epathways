@@ -173,28 +173,37 @@ class EventController extends Controller
         try {
             DB::beginTransaction();
 
-            // 1. Create Lead
-            $lead = \App\Models\Lead::create([
-                'lead_id' => 'LP-' . rand(10000, 99999),
+            // 1. Find-or-create the Lead through the unified intake — a
+            // repeat registrant by the same email no longer creates a
+            // duplicate row, instead a `lead.resubmitted` activity entry
+            // is appended to their history.
+            $intake = app(\App\Services\LeadIntakeService::class);
+            $lead = $intake->ingest("event:{$event->event_code}", [
                 'first_name' => $validated['first_name'],
-                'last_name' => $validated['last_name'],
-                'email' => $validated['email'],
-                'country' => $validated['country'],
-                'phone' => $validated['phone'],
-                'branch' => 'Online Registration',
-                'status' => 'New',
-                'stage' => $validated['interest'],
-                'work_info' => [
-                    'employment_status' => $validated['employment_status'],
-                    'city' => $validated['city'],
-                    'remarks' => $validated['remarks'] ?? null,
-                ],
-                'financial_info' => [
-                    'funding_source' => $validated['funding_source']
-                ],
-                'event_id' => $event->id,
+                'last_name'  => $validated['last_name'],
+                'email'      => $validated['email'],
+                'phone'      => $validated['phone'],
+                'country'    => $validated['country'],
+                'stage'      => $validated['interest'],
+            ], $request);
+
+            // Attach the event-specific context — branch, work_info,
+            // financial_info, event link — but only if this is a fresh
+            // intake or the existing lead doesn't already have them.
+            $eventAttrs = array_filter([
+                'branch'           => $lead->branch ?: 'Online Registration',
+                'event_id'         => $event->id,
                 'event_session_id' => $validated['event_session_id'] ?? null,
-            ]);
+                'work_info'        => $lead->work_info ?: [
+                    'employment_status' => $validated['employment_status'],
+                    'city'              => $validated['city'],
+                    'remarks'           => $validated['remarks'] ?? null,
+                ],
+                'financial_info'   => $lead->financial_info ?: [
+                    'funding_source' => $validated['funding_source'],
+                ],
+            ], fn ($v) => ! is_null($v));
+            $lead->update($eventAttrs);
 
             // 2. Add Education Experience
             $lead->educationExps()->create([

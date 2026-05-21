@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
+import CrossPillarBundles from '@/components/ui/CrossPillarBundles';
+import BeforeFooterCTA from '@/components/ui/BeforeFooterCTA';
 
 const Accommodation = () => {
   const [activeTab, setActiveTab] = useState('Villa');
@@ -84,12 +86,18 @@ const Accommodation = () => {
             </p>
 
             <div className="flex items-center space-x-4 pt-2">
-              <button className="px-8 py-3.5 bg-gray-200/60 hover:bg-gray-200 text-black rounded-full text-sm font-bold transition-colors">
-                Log in
-              </button>
-              <button className="px-8 py-3.5 bg-black hover:bg-gray-800 text-white rounded-full text-sm font-bold transition-colors flex items-center space-x-2">
-                <span>Get Started</span>
-              </button>
+              <a
+                href="#properties"
+                className="px-8 py-3.5 bg-gray-200/60 hover:bg-gray-200 text-black rounded-full text-sm font-bold transition-colors"
+              >
+                Browse stays
+              </a>
+              <a
+                href="/booking"
+                className="px-8 py-3.5 bg-[#436235] hover:bg-[#385029] text-white rounded-full text-sm font-bold transition-colors flex items-center space-x-2"
+              >
+                <span>Talk to us</span>
+              </a>
             </div>
 
             <div className="pt-10">
@@ -315,6 +323,21 @@ const Accommodation = () => {
           ))}
         </div>
       </section>
+
+      <CrossPillarBundles exclude="accommodation" />
+
+      <BeforeFooterCTA
+          source="accommodation-page"
+          eyebrow="Where you'll live"
+          headline="A home in Auckland."
+          sublineAccent="Sorted before you fly."
+          paragraph="Share your study city and arrival dates — our accommodation team will send a curated shortlist within 24 hours, plus airport pickup if you need it."
+          trust={[
+              "Hand-selected homestays, apartments and student halls",
+              "Free for students — no agency fees",
+              "Real arrival support, not just a booking link",
+          ]}
+      />
 
       <Footer />
     </div>

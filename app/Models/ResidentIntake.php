@@ -47,6 +47,7 @@ class ResidentIntake extends Model
         'character_health_disclosure',
         'other_notes',
         'status',
+        'edit_token',
     ];
 
     protected $casts = [

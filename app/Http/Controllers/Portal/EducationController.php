@@ -5,10 +5,17 @@ namespace App\Http\Controllers\Portal;
 use App\Http\Controllers\Controller;
 use App\Models\Lead;
 use App\Models\Program;
+use App\Traits\BuildsLeadRow;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\Rule;
 
 class EducationController extends Controller
 {
+    use BuildsLeadRow;
+
+    private const LEAD_STATUSES = Lead::STAGES;
+
     /** Education overview: programs, students (study-plan leads), recent intakes. */
     public function dashboard()
     {
@@ -61,6 +68,50 @@ class EducationController extends Controller
                 'recentStudents' => collect(),
                 'recentPrograms' => collect(),
             ]);
+        }
+    }
+
+    /**
+     * Leads queue for the Education portal — same shape as Sales so the
+     * Leads.jsx page renders identically. No server-side filtering yet;
+     * the page's status filter + search lets users narrow to their own
+     * department-relevant rows.
+     */
+    public function leads()
+    {
+        try {
+            return inertia('portal/education/Leads', [
+                'portal'   => 'education',
+                'statuses' => self::LEAD_STATUSES,
+                'leads'    => Lead::with(['studyPlans', 'event', 'portalUser:id,lead_id,last_login_at'])->latest()->get()->map(fn ($l) => $this->leadRow($l)),
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('Education leads list failed', ['error' => $e->getMessage()]);
+
+            return inertia('portal/education/Leads', [
+                'portal'   => 'education',
+                'statuses' => self::LEAD_STATUSES,
+                'leads'    => collect(),
+            ]);
+        }
+    }
+
+    public function updateLead(Request $request, $id)
+    {
+        $validated = $request->validate([
+            'status' => ['required', Rule::in(self::LEAD_STATUSES)],
+        ]);
+
+        try {
+            $lead = Lead::findOrFail($id);
+            $lead->status = $validated['status'];
+            $lead->save();
+
+            return back()->with('success', "Lead {$lead->lead_id} updated.");
+        } catch (\Throwable $e) {
+            Log::error('Education lead update failed', ['id' => $id, 'error' => $e->getMessage()]);
+
+            return back()->with('error', 'Could not update that lead. Please try again.');
         }
     }
 }

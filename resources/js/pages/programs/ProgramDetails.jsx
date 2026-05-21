@@ -5,6 +5,7 @@ import { Link } from '@inertiajs/react';
 import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
 import ScrollToTop from "@/components/ui/ScrollToTop";
+import QuickLeadForm from "@/components/ui/QuickLeadForm";
 
 // Assets (Using placeholders if exact ones not available, standardizing)
 import heroBg from "@assets/Services/education.png";
@@ -148,31 +149,32 @@ export default function ProgramDetails({ program }) {
                             </div>
                         </div>
 
-                        {/* Stats Bar - Elegant Footer of the Card */}
-                        <div className="bg-[#1a1a1a] text-white py-10 px-6">
-                            <div className="grid grid-cols-5 items-center">
-                                <div className="flex flex-col items-center border-r border-white/10 last:border-r-0">
-                                    <span className="text-3xl font-bold mb-1.5 tabular-nums">{program?.level ?? '—'}</span>
+                        {/* Stats Bar — 2-col on mobile so text isn't crammed,
+                            5-col on desktop. */}
+                        <div className="bg-[#1a1a1a] text-white py-7 sm:py-10 px-4 sm:px-6">
+                            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-y-5 items-center">
+                                <div className="flex flex-col items-center sm:border-r border-white/10 last:border-r-0 px-2">
+                                    <span className="text-2xl sm:text-3xl font-bold mb-1.5 tabular-nums">{program?.level ?? '—'}</span>
                                     <span className="text-[10px] text-gray-500 font-medium uppercase tracking-[0.2em]">Level</span>
                                 </div>
-                                <div className="flex flex-col items-center border-r border-white/10 last:border-r-0">
-                                    <span className="text-3xl font-bold mb-1.5 tabular-nums">{program?.duration_months ?? '—'}</span>
+                                <div className="flex flex-col items-center sm:border-r border-white/10 last:border-r-0 px-2">
+                                    <span className="text-2xl sm:text-3xl font-bold mb-1.5 tabular-nums">{program?.duration_months ?? '—'}</span>
                                     <div className="text-[10px] text-gray-500 font-medium uppercase tracking-[0.2em] text-center leading-relaxed">
                                         Months<br />(Duration)
                                     </div>
                                 </div>
-                                <div className="flex flex-col items-center border-r border-white/10 last:border-r-0">
-                                    <span className="text-3xl font-bold mb-1.5 tabular-nums">{program?.credits ?? '—'}</span>
+                                <div className="flex flex-col items-center sm:border-r border-white/10 last:border-r-0 px-2">
+                                    <span className="text-2xl sm:text-3xl font-bold mb-1.5 tabular-nums">{program?.credits ?? '—'}</span>
                                     <span className="text-[10px] text-gray-500 font-medium uppercase tracking-[0.2em]">Credits</span>
                                 </div>
-                                <div className="flex flex-col items-center border-r border-white/10 last:border-r-0">
-                                    <span className="text-3xl font-bold mb-1.5 tabular-nums">{program?.residency_points ?? '—'}</span>
-                                    <div className="text-[10px] text-gray-500 font-medium uppercase tracking-[0.2em] text-center leading-relaxed px-2">
+                                <div className="flex flex-col items-center sm:border-r border-white/10 last:border-r-0 px-2">
+                                    <span className="text-2xl sm:text-3xl font-bold mb-1.5 tabular-nums">{program?.residency_points ?? '—'}</span>
+                                    <div className="text-[10px] text-gray-500 font-medium uppercase tracking-[0.2em] text-center leading-relaxed">
                                         Points of Residency
                                     </div>
                                 </div>
-                                <div className="flex flex-col items-center border-r border-white/10 last:border-r-0">
-                                    <span className="text-3xl font-bold mb-1.5 tabular-nums">{program?.hours_per_week ?? '—'}</span>
+                                <div className="flex flex-col items-center sm:border-r border-white/10 last:border-r-0 px-2 col-span-2 sm:col-span-1">
+                                    <span className="text-2xl sm:text-3xl font-bold mb-1.5 tabular-nums">{program?.hours_per_week ?? '—'}</span>
                                     <div className="text-[10px] text-gray-500 font-medium uppercase tracking-[0.2em] text-center leading-relaxed">
                                         Hours per Week<br />(Works Right)
                                     </div>
@@ -340,6 +342,31 @@ export default function ProgramDetails({ program }) {
                 </div>
 
             </div>
+
+            {/* Soft capture — programme detail pages were dead-ends with no
+                next-step CTA. Sales gets a programme-tagged lead. */}
+            <section className="bg-white py-14 sm:py-20 border-t border-gray-100">
+                <div className="max-w-3xl mx-auto px-4">
+                    <div className="text-center mb-7">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#436235] mb-2">
+                            Interested in this programme?
+                        </p>
+                        <h3 className="text-2xl md:text-3xl font-bold text-[#282728]">
+                            Talk to a human about {program?.name || 'this programme'}
+                        </h3>
+                        <p className="text-sm text-gray-500 mt-2 max-w-xl mx-auto">
+                            Get personalised intake dates, fee breakdowns, and visa-pathway advice — straight from our education team.
+                        </p>
+                    </div>
+                    <QuickLeadForm
+                        source={`program-details:${program?.slug || program?.id || 'unknown'}`}
+                        defaultInterest="Education"
+                        variant="card"
+                        headline="Your details"
+                        subtext="We'll reply within 24 hours. No obligation."
+                    />
+                </div>
+            </section>
 
             <ScrollToTop />
             <Footer />

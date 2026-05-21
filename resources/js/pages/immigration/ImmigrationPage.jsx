@@ -1,11 +1,15 @@
-import React, { useState, useEffect } from 'react';
-import { Link, useForm, usePage } from '@inertiajs/react';
+import { useState } from 'react';
+import { Link } from '@inertiajs/react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowRight, ChevronDown, ChevronUp, Star, CheckCircle, Calendar, MapPin, Phone, Mail, Shield, MessageCircle, FileText } from 'react-feather';
+import { ArrowRight, ChevronDown, ChevronUp, Star, CheckCircle, Calendar, MapPin, Phone, Mail, Shield } from 'react-feather';
 import Navbar from "@/components/layout/Navbar";
 import ImmigrationServices from "./ImmigrationServices";
 import Footer from "@/components/layout/Footer";
 import ScrollToTop from "@/components/ui/ScrollToTop";
+import CrossPillarBundles from "@/components/ui/CrossPillarBundles";
+import BeforeFooterCTA from "@/components/ui/BeforeFooterCTA";
+import ReviewsSection from "@/components/ui/ReviewsSection";
+import { ReviewCard, StarRow } from "@/components/ui/ReviewsSection";
 
 // Assets
 import MigrationLogo  from "@assets/Immigration/migration_logo.png";
@@ -68,54 +72,6 @@ const consultants = [
     },
 ];
 
-const newsItems = [
-    {
-        tag: "Policy Update",
-        date: "Mar 2025",
-        title: "INZ Expands Green List Tier 2 Occupations",
-        body: "More health and construction roles added — broadening fast-track residence for skilled migrants.",
-        img: VisaImg,
-    },
-    {
-        tag: "Visa News",
-        date: "Feb 2025",
-        title: "AEWV Processing Down to 3 Weeks",
-        body: "INZ operational improvements dramatically cut Accredited Employer Work Visa processing times.",
-        img: AgentsImg,
-    },
-    {
-        tag: "Announcement",
-        date: "Jan 2025",
-        title: "ePathways Grows Its Advisory Team",
-        body: "Two new Licensed Immigration Advisers join our Auckland office to meet growing demand.",
-        img: SettlementImg,
-    },
-];
-
-const successStories = [
-    {
-        logo: "Webflow",
-        quote: "ePathways made the entire process clear and manageable. I went from uncertainty to approved in six months.",
-        name: "Priya Sharma",
-        detail: "Student visa, Auckland",
-        img: DevImg // Placeholder for avatar
-    },
-    {
-        logo: "Relume",
-        quote: "Their attention to detail saved me months of back-and-forth. Professional, responsive, and genuinely invested in my success.",
-        name: "Michael Torres",
-        detail: "Work visa, Wellington",
-        img: DaiImg // Placeholder for avatar
-    },
-    {
-        logo: "Webflow",
-        quote: "From initial assessment to permanent residency approval, ePathways guided me every step. Highly recommended.",
-        name: "Elena Kowalski",
-        detail: "PR application, Christchurch",
-        img: EmmaImg // Placeholder for avatar
-    }
-];
-
 const faqs = [
     { q: "What is a Licensed Immigration Adviser (LIA)?",  a: "A person licensed by the IAA to legally give immigration advice in NZ for a fee. Using a licensed adviser protects you." },
     { q: "How do I know which visa suits me?",              a: "It depends on your qualifications, job situation, and goals. Our assessment gives you a clear, personalised recommendation." },
@@ -128,230 +84,6 @@ const faqs = [
 const partners = ["INZ Accredited", "IAA Licensed", "NZQA Compliant", "Allianz Partner", "Southern Cross"];
 
 // ─── Sub-components ──────────────────────────────────────────────────────────
-
-function UserReviewSection() {
-    const { flash } = usePage().props;
-    const [submitted, setSubmitted] = useState(false);
-    const [reviewId, setReviewId] = useState(null);
-
-    const { data, setData, post, processing, errors, reset } = useForm({
-        name: '',
-        email: '',
-        mode: 'questions',
-        answer_1: '',
-        answer_2: '',
-        answer_3: '',
-        paragraph: '',
-    });
-
-    useEffect(() => {
-        if (flash?.review_success) {
-            setSubmitted(true);
-            if (flash?.review_id) setReviewId(flash.review_id);
-        }
-    }, [flash]);
-
-    const handleSubmit = (e) => {
-        e.preventDefault();
-        post('/user-reviews', {
-            preserveScroll: true,
-            onSuccess: () => {
-                setSubmitted(true);
-                reset();
-            },
-        });
-    };
-
-    const questions = [
-        'Lorem ipsum dolor sit amet, consectetur adipiscing elit?',
-        'Sed do eiusmod tempor incididunt ut labore et dolore magna?',
-        'Ut enim ad minim veniam, quis nostrud exercitation ullamco?',
-    ];
-
-    return (
-        <section id="user-review" className="py-28 bg-white border-t border-gray-100 relative overflow-hidden">
-            <div className="container mx-auto px-6 md:px-12 max-w-6xl">
-                {/* Header */}
-                <div className="text-center mb-16">
-                    <motion.span
-                        initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true }}
-                        className="text-[11px] font-bold tracking-[0.4em] uppercase text-[#00A693] mb-4 block"
-                    >
-                        Share your experience
-                    </motion.span>
-                    <motion.h2
-                        initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}
-                        className="text-4xl md:text-5xl font-medium mb-6 tracking-tight text-[#282728]"
-                    >
-                        Leave a User Review
-                    </motion.h2>
-                    <motion.p
-                        initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true }}
-                        className="text-gray-600 text-sm md:text-base max-w-2xl mx-auto leading-relaxed"
-                    >
-                        Help future clients by sharing your experience. Answer three quick questions or write a paragraph — your choice.
-                    </motion.p>
-                </div>
-
-                {submitted ? (
-                    <motion.div
-                        initial={{ opacity: 0, scale: 0.95 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        className="max-w-xl mx-auto bg-[#00A693]/5 border border-[#00A693]/20 rounded-2xl p-12 text-center"
-                    >
-                        <div className="w-16 h-16 bg-[#00A693] rounded-2xl flex items-center justify-center text-white mx-auto mb-6">
-                            <CheckCircle size={28} />
-                        </div>
-                        <h3 className="text-2xl font-bold text-[#282728] mb-3">Thank you for your review</h3>
-                        <p className="text-gray-600 text-sm leading-relaxed mb-6">
-                            Your feedback has been received and will help future clients on their journey.
-                        </p>
-                        {reviewId && (
-                            <div className="text-[10px] font-bold uppercase tracking-[0.3em] text-gray-400">
-                                Ref: <span className="font-mono text-gray-700">{reviewId}</span>
-                            </div>
-                        )}
-                        <button
-                            type="button"
-                            onClick={() => setSubmitted(false)}
-                            className="mt-8 text-[11px] font-bold uppercase tracking-[0.2em] text-[#00A693] hover:text-[#008c7c] transition-colors"
-                        >
-                            Submit another review →
-                        </button>
-                    </motion.div>
-                ) : (
-                    <motion.form
-                        initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}
-                        onSubmit={handleSubmit}
-                        className="max-w-3xl mx-auto bg-gray-50/40 border border-gray-100 rounded-3xl p-8 md:p-12"
-                    >
-                        {/* Identity row */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-                            <div>
-                                <label className="block text-[11px] font-bold uppercase tracking-[0.2em] text-gray-700 mb-2">Name *</label>
-                                <input
-                                    type="text"
-                                    value={data.name}
-                                    onChange={(e) => setData('name', e.target.value)}
-                                    className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-[#00A693] transition-colors"
-                                    placeholder="Your full name"
-                                />
-                                {errors.name && <p className="text-xs text-red-500 mt-1.5">{errors.name}</p>}
-                            </div>
-                            <div>
-                                <label className="block text-[11px] font-bold uppercase tracking-[0.2em] text-gray-700 mb-2">Email <span className="text-gray-300 normal-case tracking-normal">(optional)</span></label>
-                                <input
-                                    type="email"
-                                    value={data.email}
-                                    onChange={(e) => setData('email', e.target.value)}
-                                    className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-[#00A693] transition-colors"
-                                    placeholder="email@example.com"
-                                />
-                                {errors.email && <p className="text-xs text-red-500 mt-1.5">{errors.email}</p>}
-                            </div>
-                        </div>
-
-                        {/* Mode toggle */}
-                        <div className="mb-8">
-                            <label className="block text-[11px] font-bold uppercase tracking-[0.2em] text-gray-700 mb-3">How would you like to share?</label>
-                            <div className="grid grid-cols-2 gap-3 max-w-md">
-                                <button
-                                    type="button"
-                                    onClick={() => setData('mode', 'questions')}
-                                    className={`flex items-center justify-center gap-2 px-5 py-3.5 rounded-xl text-xs font-bold uppercase tracking-widest border transition-all ${
-                                        data.mode === 'questions'
-                                            ? 'bg-[#282728] text-white border-[#282728]'
-                                            : 'bg-white text-gray-500 border-gray-200 hover:border-[#00A693] hover:text-[#00A693]'
-                                    }`}
-                                >
-                                    <FileText size={14} /> 3 Questions
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => setData('mode', 'paragraph')}
-                                    className={`flex items-center justify-center gap-2 px-5 py-3.5 rounded-xl text-xs font-bold uppercase tracking-widest border transition-all ${
-                                        data.mode === 'paragraph'
-                                            ? 'bg-[#282728] text-white border-[#282728]'
-                                            : 'bg-white text-gray-500 border-gray-200 hover:border-[#00A693] hover:text-[#00A693]'
-                                    }`}
-                                >
-                                    <MessageCircle size={14} /> Paragraph
-                                </button>
-                            </div>
-                        </div>
-
-                        {/* Mode content */}
-                        <AnimatePresence mode="wait">
-                            {data.mode === 'questions' ? (
-                                <motion.div
-                                    key="questions"
-                                    initial={{ opacity: 0, y: 10 }}
-                                    animate={{ opacity: 1, y: 0 }}
-                                    exit={{ opacity: 0, y: -10 }}
-                                    transition={{ duration: 0.25 }}
-                                    className="space-y-6"
-                                >
-                                    {questions.map((q, idx) => {
-                                        const key = `answer_${idx + 1}`;
-                                        return (
-                                            <div key={key}>
-                                                <label className="flex items-center gap-2 text-sm font-semibold text-[#282728] mb-2">
-                                                    <span className="w-6 h-6 rounded-full bg-[#00A693] text-white flex items-center justify-center text-[11px] font-bold flex-shrink-0">{idx + 1}</span>
-                                                    {q} *
-                                                </label>
-                                                <textarea
-                                                    rows={3}
-                                                    value={data[key]}
-                                                    onChange={(e) => setData(key, e.target.value)}
-                                                    className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-[#00A693] transition-colors resize-none"
-                                                    placeholder="Your answer..."
-                                                />
-                                                {errors[key] && <p className="text-xs text-red-500 mt-1.5">{errors[key]}</p>}
-                                            </div>
-                                        );
-                                    })}
-                                </motion.div>
-                            ) : (
-                                <motion.div
-                                    key="paragraph"
-                                    initial={{ opacity: 0, y: 10 }}
-                                    animate={{ opacity: 1, y: 0 }}
-                                    exit={{ opacity: 0, y: -10 }}
-                                    transition={{ duration: 0.25 }}
-                                >
-                                    <label className="block text-sm font-semibold text-[#282728] mb-2">Your review *</label>
-                                    <textarea
-                                        rows={8}
-                                        value={data.paragraph}
-                                        onChange={(e) => setData('paragraph', e.target.value)}
-                                        className="w-full bg-white border border-gray-200 rounded-xl px-4 py-4 text-sm focus:outline-none focus:border-[#00A693] transition-colors resize-none leading-relaxed"
-                                        placeholder="Share your experience with ePathways in your own words..."
-                                    />
-                                    {errors.paragraph && <p className="text-xs text-red-500 mt-1.5">{errors.paragraph}</p>}
-                                </motion.div>
-                            )}
-                        </AnimatePresence>
-
-                        {/* Submit */}
-                        <div className="mt-10 flex flex-col sm:flex-row items-center justify-between gap-4 pt-8 border-t border-gray-100">
-                            <p className="text-[11px] text-gray-400 leading-relaxed">
-                                Your review may be published on our site. We will never share your email.
-                            </p>
-                            <button
-                                type="submit"
-                                disabled={processing}
-                                className="inline-flex items-center gap-3 bg-[#00A693] text-white text-[11px] font-bold px-10 py-4 hover:bg-[#008c7c] transition-all duration-300 uppercase tracking-[0.25em] disabled:opacity-60 disabled:cursor-not-allowed"
-                            >
-                                {processing ? 'Submitting...' : 'Submit Review'}
-                                <ArrowRight size={14} />
-                            </button>
-                        </div>
-                    </motion.form>
-                )}
-            </div>
-        </section>
-    );
-}
 
 function FaqItem({ item, i }) {
     const [open, setOpen] = useState(false);
@@ -523,8 +255,15 @@ function ResidentIntakeSection() {
 
 // ─── Page ────────────────────────────────────────────────────────────────────
 
-export default function Immigration() {
+export default function Immigration({ reviews = [], stats = { count: 0, average: 0 }, news = [] }) {
     const [activeTab, setActiveTab] = useState('Student');
+
+    // The 3 most recent featured reviews drive the "Featured stories" grid
+    // that used to be hardcoded `successStories`. If no published reviews
+    // exist yet, the grid hides and the section falls back gracefully.
+    const featuredReviews = (reviews || [])
+        .filter((r) => r.is_featured)
+        .slice(0, 3);
 
     const visaTabs = {
         Student: {
@@ -628,24 +367,43 @@ export default function Immigration() {
 
                         {/* Premium Hero Actions */}
                         <motion.div
-                            initial={{ opacity: 0, y: 20 }} 
-                            animate={{ opacity: 1, y: 0 }} 
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
                             transition={{ delay: 0.3, duration: 0.8 }}
                             className="flex flex-col sm:flex-row items-center gap-5 w-full sm:w-auto"
                         >
-                            <a 
-                                href="/free-assessment" 
+                            <a
+                                href="/free-assessment"
                                 className="w-full sm:w-auto bg-[#00A693] text-white text-[11px] font-bold px-10 py-4 rounded-none hover:bg-[#008c7c] transition-all duration-300 uppercase tracking-[0.2em] shadow-2xl text-center"
                             >
                                 Apply
                             </a>
-                            <a 
-                                href="/booking" 
+                            <a
+                                href="/booking"
                                 className="w-full sm:w-auto bg-transparent border border-white/20 text-white text-[11px] font-bold px-10 py-4 rounded-none hover:bg-white/10 transition-all duration-300 uppercase tracking-[0.2em] text-center"
                             >
                                 Consult
                             </a>
                         </motion.div>
+
+                        {/* Aggregate rating chip — hides until at least one
+                            published rated review exists, so it never lies. */}
+                        {stats.count > 0 && stats.average > 0 && (
+                            <motion.a
+                                href="#reviews"
+                                initial={{ opacity: 0, y: 16 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ delay: 0.5, duration: 0.7 }}
+                                className="mt-8 inline-flex items-center gap-3 bg-white/[0.08] backdrop-blur-md border border-white/[0.18] rounded-full pl-4 pr-5 py-2 hover:bg-white/[0.14] transition-colors"
+                            >
+                                <StarRow value={Math.round(stats.average)} size={13} />
+                                <div className="h-3.5 w-px bg-white/25"></div>
+                                <span className="text-[11px] text-white font-medium tracking-tight">
+                                    <span className="tabular-nums">{stats.average.toFixed(1)}</span>
+                                    <span className="text-white/55 font-light"> · {stats.count} client review{stats.count === 1 ? "" : "s"}</span>
+                                </span>
+                            </motion.a>
+                        )}
                     </div>
                 </div>
             </section>
@@ -917,11 +675,6 @@ export default function Immigration() {
             <ResidentIntakeSection />
 
             {/* ══════════════════════════════════════════════════════════════
-                USER REVIEW SECTION
-            ══════════════════════════════════════════════════════════════ */}
-            <UserReviewSection />
-
-            {/* ══════════════════════════════════════════════════════════════
                 ASSESSMENT VISAS SECTION
             ══════════════════════════════════════════════════════════════ */}
             <section className="py-32 bg-white">
@@ -1073,131 +826,217 @@ export default function Immigration() {
             </section>
 
             {/* ══════════════════════════════════════════════════════════════
-                SUCCESS STORIES  —  Testimonial Grid
+                CLIENT REVIEWS  —  public published reviews + write-modal CTA.
+                Sits right after the Team section so visitors see who they'd
+                work with, then immediately read what past clients say.
             ══════════════════════════════════════════════════════════════ */}
-            <section id="stories" className="py-32 bg-white">
-                <div className="container mx-auto px-6 md:px-12 max-w-7xl">
-                    {/* Header */}
-                    <div className="mb-20">
-                        <motion.h2
-                            initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}
-                            className="text-4xl md:text-5xl font-medium mb-4 tracking-tight text-[#282728]"
-                        >
-                            Success stories
-                        </motion.h2>
-                        <motion.p
-                            initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true }}
-                            className="text-gray-500 text-sm md:text-base max-w-lg leading-relaxed"
-                        >
-                            Real journeys, real outcomes
-                        </motion.p>
-                    </div>
+            <ReviewsSection reviews={reviews} stats={stats} />
 
-                    {/* Stories Grid */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                        {successStories.map((s, i) => (
-                            <motion.div
-                                key={i}
-                                initial={{ opacity: 0, y: 30 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: i * 0.1 }}
-                                className="bg-gray-50/50 border border-gray-100 p-10 flex flex-col min-h-[400px] group hover:bg-white hover:shadow-2xl hover:shadow-gray-200/50 transition-all duration-500"
-                            >
-                                {/* Logo Placeholder */}
-                                <div className="text-[#282728] font-black text-xl mb-10 flex items-center gap-2">
-                                    <div className="w-6 h-6 bg-[#282728] rounded-sm flex items-center justify-center">
-                                        <div className="w-3 h-3 border-2 border-white"></div>
-                                    </div>
-                                    {s.logo}
-                                </div>
-
-                                <p className="text-[#282728] text-lg leading-relaxed mb-12 flex-1 font-medium italic">
-                                    "{s.quote}"
-                                </p>
-
-                                <div className="flex items-center gap-4 mb-8">
-                                    <div className="w-12 h-12 rounded-full overflow-hidden bg-gray-200">
-                                        <img src={s.img} alt={s.name} className="w-full h-full object-cover" />
-                                    </div>
-                                    <div>
-                                        <h4 className="text-sm font-bold text-[#282728]">{s.name}</h4>
-                                        <p className="text-[11px] text-gray-500 font-medium uppercase tracking-widest">{s.detail}</p>
-                                    </div>
-                                </div>
-
-                                <a 
-                                    href="/stories" 
-                                    className="text-[11px] font-bold uppercase tracking-widest flex items-center gap-2 text-[#282728] hover:text-[#00A693] transition-colors group/link"
-                                >
-                                    Read story <ArrowRight size={12} className="group-hover/link:translate-x-1 transition-transform" />
-                                </a>
-                            </motion.div>
-                        ))}
-                    </div>
-                </div>
-            </section>
             {/* ══════════════════════════════════════════════════════════════
-                BLOG / NEWS SECTION
+                FEATURED STORIES  —  driven by admin-curated reviews
+                (is_featured = true). Section hides entirely if nothing
+                has been featured yet, so the page never shows fake stories.
             ══════════════════════════════════════════════════════════════ */}
-            <section id="news" className="py-32 bg-white border-t border-gray-100">
-                <div className="container mx-auto px-6 md:px-12 max-w-7xl">
-                    {/* Header */}
-                    <div className="flex flex-col md:flex-row md:items-end justify-between gap-8 mb-16">
-                        <div>
-                            <motion.span
-                                initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true }}
-                                className="text-[11px] font-bold tracking-[0.4em] uppercase text-gray-500 mb-4 block"
-                            >
-                                Blog
-                            </motion.span>
-                            <motion.h2
-                                initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}
-                                className="text-4xl md:text-5xl font-medium tracking-tight text-[#282728]"
-                            >
-                                Latest migration insights
-                            </motion.h2>
-                        </div>
-                        <motion.div
-                            initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true }}
-                        >
-                            <a 
-                                href="/news" 
-                                className="inline-flex items-center gap-3 border border-gray-200 px-8 py-3 text-[11px] font-bold uppercase tracking-widest hover:border-[#282728] transition-all duration-300"
-                            >
-                                View all
-                            </a>
-                        </motion.div>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                        {newsItems.map((n, i) => (
-                            <motion.div
-                                key={i}
-                                initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: i * 0.1 }}
-                                className="group flex flex-col"
-                            >
-                                <div className="aspect-video overflow-hidden bg-gray-100 mb-8 rounded-sm">
-                                    <img src={n.img} alt={n.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
+            {featuredReviews.length > 0 && (
+                <section id="stories" className="py-32 bg-white">
+                    <div className="container mx-auto px-6 md:px-12 max-w-7xl">
+                        {/* Header — editorial */}
+                        <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-8 mb-16">
+                            <div className="max-w-2xl">
+                                <div className="flex items-center gap-4 mb-5">
+                                    <span className="text-[10px] font-bold text-[#436235] uppercase tracking-[0.35em]">
+                                        Featured stories
+                                    </span>
+                                    <div className="h-px w-12 bg-[#436235]/50"></div>
                                 </div>
-                                <div className="flex items-center gap-4 mb-4">
-                                    <span className="text-[10px] font-bold uppercase tracking-widest text-[#00A693]">{n.tag}</span>
-                                    <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">5 min read</span>
-                                </div>
-                                <h3 className="text-xl md:text-2xl font-medium text-[#282728] leading-tight mb-4 group-hover:text-[#00A693] transition-colors">
-                                    {n.title}
-                                </h3>
-                                <p className="text-gray-500 text-sm leading-relaxed mb-6 flex-1">
-                                    {n.body}
-                                </p>
-                                <a 
-                                    href={`/news/${i}`} 
-                                    className="text-[10px] font-bold uppercase tracking-widest flex items-center gap-2 text-[#282728] hover:text-[#00A693] transition-colors group/link"
+                                <motion.h2
+                                    initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}
+                                    className="text-4xl md:text-5xl font-medium tracking-tight leading-[1.1] text-[#282728]"
                                 >
-                                    Read more <ArrowRight size={12} className="group-hover/link:translate-x-1 transition-transform" />
-                                </a>
-                            </motion.div>
-                        ))}
+                                    Real journeys.<br />
+                                    <span className="text-[#436235] font-light italic">Real outcomes.</span>
+                                </motion.h2>
+                            </div>
+                            <p className="text-sm text-gray-500 font-light leading-relaxed max-w-md">
+                                Hand-picked stories from the people our advisers worked with — each verified, each approved.
+                            </p>
+                        </div>
+
+                        {/* Featured grid — same card component used in the
+                            reviews section below, so the visual language is
+                            consistent. */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 lg:gap-6">
+                            {featuredReviews.map((r) => (
+                                <ReviewCard key={r.id} review={r} />
+                            ))}
+                        </div>
+
+                        <div className="mt-12 text-center">
+                            <a
+                                href="#reviews"
+                                className="inline-flex items-center gap-2.5 text-[11px] font-bold uppercase tracking-[0.22em] text-[#282728] border-b border-[#282728]/30 hover:border-[#436235] hover:text-[#436235] pb-1 transition-colors"
+                            >
+                                Read all client reviews
+                                <ArrowRight size={13} strokeWidth={2.5} />
+                            </a>
+                        </div>
                     </div>
-                </div>
-            </section>
+                </section>
+            )}
+            {/* ══════════════════════════════════════════════════════════════
+                NZ MIGRATION NEWS  —  auto-fetched from Google News RSS
+                (NewsFeedService). Cards are text-led editorial since the
+                RSS feed doesn't carry images. The whole section hides when
+                the cache is empty so visitors never see a blank grid.
+            ══════════════════════════════════════════════════════════════ */}
+            {news.length > 0 && (() => {
+                // Asymmetric editorial layout: 1 featured headline + the
+                // rest as a stacked sidebar list. Magazine-front-page feel
+                // instead of a uniform 3-card grid.
+                const [featured, ...others] = news;
+                const fmt = (iso) => iso ? new Date(iso).toLocaleDateString("en-NZ", { day: "numeric", month: "short", year: "numeric" }) : "";
+                const fmtBig = (iso) => {
+                    if (!iso) return { day: "", monthYear: "" };
+                    const d = new Date(iso);
+                    return {
+                        day: d.toLocaleDateString("en-NZ", { day: "2-digit" }),
+                        monthYear: d.toLocaleDateString("en-NZ", { month: "short", year: "numeric" }).toUpperCase(),
+                    };
+                };
+                const featuredDate = fmtBig(featured.published_at);
+
+                return (
+                    <section id="news" className="py-24 sm:py-28 lg:py-32 bg-white font-urbanist border-t border-gray-100">
+                        <div className="max-w-7xl mx-auto px-6 md:px-10 lg:px-16">
+
+                            {/* Header */}
+                            <div className="mb-14 lg:mb-16 flex flex-col lg:flex-row lg:items-end lg:justify-between gap-6">
+                                <div className="max-w-2xl">
+                                    <motion.div
+                                        initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true }}
+                                        className="flex items-center gap-4 mb-5"
+                                    >
+                                        <span className="text-[10px] font-bold text-[#436235] uppercase tracking-[0.35em]">
+                                            Migration news
+                                        </span>
+                                        <div className="h-px w-12 bg-[#436235]/50"></div>
+                                    </motion.div>
+                                    <motion.h2
+                                        initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}
+                                        className="text-3xl sm:text-4xl lg:text-5xl font-medium tracking-tight leading-[1.1] text-[#282728]"
+                                    >
+                                        Latest from NZ <span className="text-[#436235] font-light italic">immigration coverage.</span>
+                                    </motion.h2>
+                                </div>
+                                <motion.p
+                                    initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true }}
+                                    className="text-sm text-gray-500 font-light leading-relaxed max-w-sm"
+                                >
+                                    Auto-curated from NZ&apos;s leading news sources. Tap a story to read the full article.
+                                </motion.p>
+                            </div>
+
+                            <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-14">
+
+                                {/* ── FEATURED — masthead-style left column */}
+                                <motion.a
+                                    href={featured.link}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    initial={{ opacity: 0, y: 20 }}
+                                    whileInView={{ opacity: 1, y: 0 }}
+                                    viewport={{ once: true, margin: "-60px" }}
+                                    transition={{ duration: 0.6, ease: "easeOut" }}
+                                    className={`group block ${others.length > 0 ? "lg:col-span-7" : "lg:col-span-12 max-w-4xl mx-auto"}`}
+                                >
+                                    {/* Date masthead */}
+                                    <div className="flex items-baseline gap-4 mb-7 pb-7 border-b border-[#282728]/25">
+                                        <span className="text-[64px] sm:text-[72px] lg:text-[88px] font-light text-[#282728] tracking-[-0.04em] leading-none tabular-nums">
+                                            {featuredDate.day}
+                                        </span>
+                                        <div className="flex flex-col">
+                                            <span className="text-[10px] font-bold text-[#436235] uppercase tracking-[0.3em]">
+                                                Featured
+                                            </span>
+                                            <span className="text-[11px] font-semibold uppercase tracking-[0.22em] text-gray-400 mt-1">
+                                                {featuredDate.monthYear}
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    {/* Source + tag */}
+                                    <div className="flex items-center gap-3 mb-5 text-[10px] font-bold uppercase tracking-[0.3em]">
+                                        {featured.source && (
+                                            <span className="text-[#282728]">{featured.source}</span>
+                                        )}
+                                        {featured.source && featured.tag && (
+                                            <span className="w-1 h-1 rounded-full bg-gray-300"></span>
+                                        )}
+                                        {featured.tag && (
+                                            <span className="text-[#436235]">{featured.tag}</span>
+                                        )}
+                                    </div>
+
+                                    {/* Headline — the visual centerpiece */}
+                                    <h3 className="text-2xl sm:text-3xl lg:text-[40px] font-medium text-[#282728] tracking-tight leading-[1.15] mb-8 group-hover:text-[#436235] transition-colors">
+                                        {featured.title}
+                                    </h3>
+
+                                    <span className="inline-flex items-center gap-3 text-[11px] font-bold uppercase tracking-[0.25em] text-[#282728] border-b border-[#282728] pb-1.5 group-hover:text-[#436235] group-hover:border-[#436235] transition-colors">
+                                        Read the full story
+                                        <ArrowRight size={14} strokeWidth={2.5} className="group-hover:translate-x-1 transition-transform" />
+                                    </span>
+                                </motion.a>
+
+                                {/* ── SIDEBAR — vertical list of remaining stories */}
+                                {others.length > 0 && (
+                                    <div className="lg:col-span-5 lg:border-l lg:border-[#282728]/25 lg:pl-10">
+                                        <p className="text-[10px] font-bold text-[#436235] uppercase tracking-[0.3em] mb-7 pb-3 border-b border-[#282728]/25">
+                                            Also in the news
+                                        </p>
+                                        <div className="flex flex-col">
+                                            {others.map((n, i) => (
+                                                <motion.a
+                                                    key={i}
+                                                    href={n.link}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    initial={{ opacity: 0, y: 12 }}
+                                                    whileInView={{ opacity: 1, y: 0 }}
+                                                    viewport={{ once: true, margin: "-40px" }}
+                                                    transition={{ delay: i * 0.08, duration: 0.5 }}
+                                                    className={`group py-7 ${i < others.length - 1 ? "border-b border-[#282728]/25" : ""}`}
+                                                >
+                                                    <div className="flex items-center gap-2.5 mb-3 text-[10px] font-bold uppercase tracking-[0.22em] text-gray-400">
+                                                        <span className="tabular-nums">{fmt(n.published_at)}</span>
+                                                        {n.source && (
+                                                            <>
+                                                                <span className="w-0.5 h-0.5 rounded-full bg-gray-300"></span>
+                                                                <span className="truncate">{n.source}</span>
+                                                            </>
+                                                        )}
+                                                    </div>
+                                                    <h4 className="text-base sm:text-lg font-medium text-[#282728] leading-snug tracking-tight mb-3 group-hover:text-[#436235] transition-colors line-clamp-3">
+                                                        {n.title}
+                                                    </h4>
+                                                    <span className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.22em] text-gray-500 group-hover:text-[#436235] transition-colors">
+                                                        Read source
+                                                        <ArrowRight size={11} strokeWidth={2.5} className="group-hover:translate-x-0.5 transition-transform" />
+                                                    </span>
+                                                </motion.a>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
+                            <p className="mt-14 lg:mt-16 text-[10px] text-gray-400 font-light text-center uppercase tracking-[0.25em]">
+                                News aggregated from third-party publishers · Not editorial endorsement
+                            </p>
+                        </div>
+                    </section>
+                );
+            })()}
 
             {/* ══════════════════════════════════════════════════════════════
                 NEWSLETTER CTA SECTION
@@ -1355,6 +1194,21 @@ export default function Immigration() {
                     </div>
                 </div>
             </section>
+
+            <CrossPillarBundles exclude="immigration" />
+
+            <BeforeFooterCTA
+                source="immigration-page"
+                eyebrow="Visa & residency"
+                headline="Find your visa pathway."
+                sublineAccent="With a licensed adviser."
+                paragraph="Tell us your situation — student, worker, partner, family — and our licensed advisers will reply within 24 hours with the fastest legal route."
+                trust={[
+                    "Licensed by the Immigration Advisers Authority (IAA)",
+                    "Hundreds of approvals across Philippines, India and Asia",
+                    "Free and obligation-free first response",
+                ]}
+            />
 
             <ScrollToTop />
             <Footer />
