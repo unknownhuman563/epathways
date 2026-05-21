@@ -1,18 +1,40 @@
 import DashboardLayout from "./DashboardLayout";
-import { LayoutDashboard, Globe, FileText, Star, FolderCheck, UserSquare2 } from "lucide-react";
-
-const IMMIGRATION_NAV = [
-    { name: "Dashboard", href: "/portal/immigration/dashboard", icon: <LayoutDashboard size={20} /> },
-    { name: "Leads", href: "/portal/immigration/leads", icon: <UserSquare2 size={20} /> },
-    { name: "Cases", href: "/portal/immigration/cases", icon: <Globe size={20} /> },
-    { name: "Resident Intakes", href: "/portal/immigration/resident-intakes", icon: <FileText size={20} /> },
-    { name: "Documents", href: "/portal/immigration/documents", icon: <FolderCheck size={20} /> },
-    { name: "User Reviews", href: "/portal/immigration/user-reviews", icon: <Star size={20} /> },
-];
+import { usePage } from "@inertiajs/react";
+import {
+    LayoutDashboard, ClipboardCheck, UserSquare2, Globe, FolderOpen,
+    Calendar, FileBadge, CalendarDays, FileText, ListChecks, LineChart,
+    User, Bell,
+} from "lucide-react";
 
 export default function ImmigrationLayout({ children }) {
+    const { props } = usePage();
+    const badges = props?.sidebarBadges?.immigration || {};
+
+    const NAV = [
+        { name: "Dashboard", href: "/portal/immigration/dashboard", icon: <LayoutDashboard size={20} /> },
+
+        { name: "Work", section: true },
+        { name: "Assessments",  href: "/portal/immigration/assessments",  icon: <ClipboardCheck size={20} />, badge: badges.new_assessments, badgeTone: "default" },
+        { name: "Leads",        href: "/portal/immigration/leads",        icon: <UserSquare2 size={20} />,    badge: badges.new_leads_today, badgeTone: "default" },
+        { name: "Cases",        href: "/portal/immigration/cases",        icon: <Globe size={20} />,          badge: badges.active_cases, badgeTone: "default" },
+        { name: "Documents",    href: "/portal/immigration/documents",    icon: <FolderOpen size={20} />,     badge: badges.docs_pending_review, badgeTone: "warning" },
+        { name: "Appointments", href: "/portal/immigration/appointments", icon: <Calendar size={20} /> },
+
+        { name: "Setup", section: true },
+        { name: "Visa Types",          href: "/portal/immigration/visa-types",          icon: <FileBadge size={20} /> },
+        { name: "Intakes",             href: "/portal/immigration/intakes",             icon: <CalendarDays size={20} /> },
+        { name: "INZ Forms",           href: "/portal/immigration/inz-forms",           icon: <FileText size={20} /> },
+        { name: "Checklist Templates", href: "/portal/immigration/checklist-templates", icon: <ListChecks size={20} /> },
+
+        { name: "Reports", href: "/portal/immigration/reports", icon: <LineChart size={20} /> },
+
+        { name: "Account", section: true },
+        { name: "My Profile",    href: "/portal/immigration/profile",       icon: <User size={20} /> },
+        { name: "Notifications", href: "/portal/immigration/notifications", icon: <Bell size={20} />, badge: badges.notifications_unread, badgeTone: "warning" },
+    ];
+
     return (
-        <DashboardLayout brand="ePathways." subtitle="Immigration Portal" accent="bg-amber-600" nav={IMMIGRATION_NAV}>
+        <DashboardLayout brand="ePathways." subtitle="Immigration Portal" accent="bg-amber-600" nav={NAV}>
             {children}
         </DashboardLayout>
     );

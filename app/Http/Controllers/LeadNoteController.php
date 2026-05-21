@@ -18,8 +18,16 @@ class LeadNoteController extends Controller
     public function store(Request $request, $leadId)
     {
         $validated = $request->validate([
-            'body'   => 'required|string|max:2000',
-            'pinned' => 'nullable|boolean',
+            'body'                => 'required|string|max:2000',
+            'pinned'              => 'nullable|boolean',
+            'kind'                => ['nullable', \Illuminate\Validation\Rule::in(['general', 'pre_screen', 'goal_setting'])],
+            'pre_screened_by'     => 'nullable|string|max:80',
+            'pre_screen_mode'     => ['nullable', \Illuminate\Validation\Rule::in(['gmeet', 'call'])],
+            'pre_screen_date'     => 'nullable|date',
+            'goal_setting_status' => ['nullable', \Illuminate\Validation\Rule::in([
+                'Consultation Done', 'For Proposal', 'Proposal Sent', 'No Show',
+            ])],
+            'goal_setting_by'     => 'nullable|string|max:120',
         ]);
 
         try {
@@ -27,12 +35,18 @@ class LeadNoteController extends Controller
             $user = Auth::user();
 
             $note = LeadNote::create([
-                'lead_id'     => $lead->id,
-                'user_id'     => $user?->id,
-                'author_name' => $user?->name,
-                'author_role' => $user?->role,
-                'body'        => $validated['body'],
-                'pinned'      => (bool) ($validated['pinned'] ?? false),
+                'lead_id'             => $lead->id,
+                'user_id'             => $user?->id,
+                'author_name'         => $user?->name,
+                'author_role'         => $user?->role,
+                'body'                => $validated['body'],
+                'pinned'              => (bool) ($validated['pinned'] ?? false),
+                'kind'                => $validated['kind'] ?? 'general',
+                'pre_screened_by'     => $validated['pre_screened_by']     ?? null,
+                'pre_screen_mode'     => $validated['pre_screen_mode']     ?? null,
+                'pre_screen_date'     => $validated['pre_screen_date']     ?? null,
+                'goal_setting_status' => $validated['goal_setting_status'] ?? null,
+                'goal_setting_by'     => $validated['goal_setting_by']     ?? null,
             ]);
 
             return back()->with('success', 'Note added.');

@@ -1,240 +1,355 @@
 import { Head, Link } from "@inertiajs/react";
 import {
-    FileText, Sparkles, TrendingUp, TrendingDown, FileCheck2,
-    Star, ArrowUpRight,
+    Globe, ClipboardCheck, Calendar, FolderOpen, FileBadge, AlertTriangle,
+    CheckCircle2, Clock, TrendingUp, Star, ShieldCheck, FileCheck2, User,
 } from "lucide-react";
 
-const STATUS_STYLES = {
-    New:        "bg-blue-100 text-blue-700 border-blue-200",
-    "In Review":"bg-amber-100 text-amber-700 border-amber-200",
-    Engaged:    "bg-emerald-100 text-emerald-700 border-emerald-200",
-    Archived:   "bg-gray-100 text-gray-600 border-gray-200",
-};
-const statusClass = (s) => STATUS_STYLES[s] || "bg-gray-100 text-gray-700 border-gray-200";
-
-const STATUS_BAR_COLORS = {
-    New:        "bg-blue-500",
-    "In Review":"bg-amber-500",
-    Engaged:    "bg-emerald-500",
-    Archived:   "bg-gray-400",
-};
-
-const fmtDate = (iso) =>
-    iso ? new Date(iso).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "—";
+const fmtDate = (iso) => iso ? new Date(iso).toLocaleDateString("en-NZ", { day: "numeric", month: "short", year: "numeric" }) : "—";
 
 export default function ImmigrationDashboard({
-    stats = {},
-    status_breakdown = [],
-    monthly = [],
-    recent_intakes = [],
-    recent_reviews = [],
+    tiles = {}, pipeline = [], inz_aging = null, iaa = null,
+    monthly = [], urgent = {}, week_appointments = [],
+    recent_intakes = [], recent_reviews = [],
 }) {
-    const monthDelta = (() => {
-        const len = monthly.length;
-        if (len < 2) return 0;
-        return (monthly[len - 1].intakes || 0) - (monthly[len - 2].intakes || 0);
-    })();
-    const maxMonth = Math.max(1, ...monthly.map((m) => m.intakes || 0));
-    const statusTotal = status_breakdown.reduce((n, s) => n + (s.count || 0), 0);
-
-    const cards = [
-        {
-            label: "Total intakes",
-            value: stats.total_intakes ?? 0,
-            icon: <FileText className="w-5 h-5" />,
-            dark: true,
-            foot: (
-                <span className={`inline-flex items-center gap-1 text-xs font-semibold ${monthDelta >= 0 ? "text-emerald-400" : "text-red-400"}`}>
-                    {monthDelta >= 0 ? <TrendingUp size={13} /> : <TrendingDown size={13} />}
-                    {monthDelta >= 0 ? "+" : ""}{monthDelta} vs last month
-                </span>
-            ),
-        },
-        {
-            label: "New intakes",
-            value: status_breakdown.find((s) => s.status === "New")?.count ?? 0,
-            icon: <Sparkles className="w-5 h-5" />,
-            foot: <span className="text-xs text-gray-400">awaiting adviser review</span>,
-        },
-        {
-            label: "With documents",
-            value: stats.intakes_with_files ?? 0,
-            icon: <FileCheck2 className="w-5 h-5" />,
-            foot: <span className="text-xs text-gray-400">PDFs uploaded by applicants</span>,
-        },
-        {
-            label: "User reviews",
-            value: stats.total_reviews ?? 0,
-            icon: <Star className="w-5 h-5" />,
-            foot: <span className="text-xs text-gray-400">{stats.reviews_this_month ?? 0} this month</span>,
-        },
+    const tileSpecs = [
+        { label: "My active cases",       value: tiles.active_cases,              tone: "default", icon: <Globe size={14} />,           hint: "Visa cases in motion", href: "/portal/immigration/cases" },
+        { label: "New assessments / wk",  value: tiles.new_assessments_week,      tone: "default", icon: <ClipboardCheck size={14} />,  hint: "Public submissions to triage", href: "/portal/immigration/assessments" },
+        { label: "Paid, not yet seen",    value: tiles.bookings_paid_unseen,      tone: "warning", icon: <Calendar size={14} />,        hint: "Bookings without a slot", href: "/portal/immigration/appointments" },
+        { label: "Docs pending review",   value: tiles.docs_pending_review,       tone: "warning", icon: <FolderOpen size={14} />,      hint: "Across all my cases", href: "/portal/immigration/documents" },
+        { label: "Lodged with INZ",       value: tiles.cases_lodged,              tone: "default", icon: <FileBadge size={14} />,       hint: "Needs lodgement tracking", muted: tiles.cases_lodged == null },
+        { label: "INZ info requests",     value: tiles.info_requests_outstanding, tone: "danger",  icon: <AlertTriangle size={14} />,   hint: "Needs info-request tracking", muted: tiles.info_requests_outstanding == null },
     ];
 
+    const maxPipeline = Math.max(1, ...pipeline.map((p) => p.count || 0));
+    const maxMonth    = Math.max(1, ...monthly.map((m) => m.intakes || 0));
+
     return (
-        <div className="space-y-6 max-w-7xl mx-auto">
+        <div className="space-y-6 max-w-[1400px] mx-auto pb-12">
             <Head title="Immigration Dashboard" />
 
-            {/* Stat cards */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                {cards.map((c, i) => (
-                    <div key={i} className={`p-6 rounded-3xl ${c.dark ? "bg-gray-900 text-white shadow-lg" : "bg-white text-gray-900 border border-gray-50 shadow-sm"}`}>
-                        <div className="flex items-center justify-between mb-3">
-                            <span className={`text-sm font-medium ${c.dark ? "text-gray-300" : "text-gray-500"}`}>{c.label}</span>
-                            <span className={`p-1.5 rounded-lg ${c.dark ? "bg-white/10 text-white" : "bg-gray-100 text-gray-500"}`}>{c.icon}</span>
+            {/* Top tiles */}
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+                {tileSpecs.map((t, i) => <TopTile key={i} {...t} />)}
+            </div>
+
+            {/* Two-column: visa-case pipeline + INZ pipeline */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                {/* Visa case pipeline */}
+                <div className="lg:col-span-2 bg-white rounded-2xl border border-gray-100 p-5 sm:p-6">
+                    <div className="flex items-baseline justify-between mb-4">
+                        <div>
+                            <h2 className="text-lg font-bold text-gray-900 tracking-tight">Visa case pipeline</h2>
+                            <p className="text-[12px] text-gray-500 mt-0.5">Current count of leads in visa-touching stages.</p>
                         </div>
-                        <p className="text-3xl font-bold tracking-tight">{c.value}</p>
-                        <div className="mt-2">{c.foot}</div>
                     </div>
-                ))}
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* Intakes per month */}
-                <div className="lg:col-span-2 bg-white p-6 rounded-3xl border border-gray-50 shadow-sm">
-                    <h2 className="text-lg font-bold text-gray-900 mb-6">Intakes — last 6 months</h2>
-                    <div className="h-56 flex items-end gap-3">
-                        {monthly.length === 0 ? (
-                            <p className="text-sm text-gray-400">No data yet.</p>
-                        ) : (
-                            monthly.map((m, i) => (
-                                <div key={i} className="flex-1 flex flex-col items-center justify-end gap-2 h-full">
-                                    <span className="text-xs font-semibold text-gray-600">{m.intakes}</span>
-                                    <div
-                                        className="w-full rounded-t-xl bg-gray-900"
-                                        style={{ height: `${Math.max(4, Math.round(((m.intakes || 0) / maxMonth) * 100))}%` }}
-                                    />
-                                    <span className="text-xs text-gray-400">{m.label}</span>
+                    <ul className="space-y-3">
+                        {pipeline.map((p) => (
+                            <li key={p.stage} className="flex items-center gap-3">
+                                <span className="w-44 truncate text-[12px] font-semibold text-gray-700">{p.stage}</span>
+                                <div className="flex-1 h-3 bg-gray-100 rounded-full overflow-hidden">
+                                    <div className="h-full bg-amber-500 rounded-full transition-all" style={{ width: `${(p.count / maxPipeline) * 100}%` }} />
                                 </div>
-                            ))
-                        )}
-                    </div>
+                                <span className="w-10 text-right text-sm font-bold text-gray-800 tabular-nums">{p.count}</span>
+                            </li>
+                        ))}
+                    </ul>
                 </div>
 
-                {/* Status breakdown */}
-                <div className="bg-white p-6 rounded-3xl border border-gray-50 shadow-sm flex flex-col">
-                    <h2 className="text-lg font-bold text-gray-900 mb-4">By status</h2>
-                    <div className="space-y-3 text-sm flex-1">
-                        {status_breakdown.map((s) => {
-                            const pct = statusTotal > 0 ? Math.round((s.count / statusTotal) * 100) : 0;
-                            return (
-                                <div key={s.status}>
-                                    <div className="flex items-center justify-between mb-1">
-                                        <span className="text-gray-600">{s.status}</span>
-                                        <span className="font-bold text-gray-900">{s.count}</span>
-                                    </div>
-                                    <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                                        <div className={`h-full ${STATUS_BAR_COLORS[s.status] || "bg-gray-400"}`} style={{ width: `${pct}%` }} />
-                                    </div>
-                                </div>
-                            );
-                        })}
-                    </div>
-                    <Link
-                        href="/admin/immigration/resident-intakes"
-                        className="mt-5 inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-[#00A693] text-white text-sm font-semibold hover:bg-[#008c7c] transition-colors"
-                    >
-                        View all intakes <ArrowUpRight size={15} />
-                    </Link>
-                </div>
+                {/* INZ pipeline — real lodgement aging */}
+                <InzPipelineCard aging={inz_aging} />
             </div>
 
-            {/* Recent intakes */}
-            <div className="bg-white rounded-3xl border border-gray-50 shadow-sm overflow-hidden">
-                <div className="px-6 py-5 flex items-center justify-between">
-                    <h2 className="text-lg font-bold text-gray-900">Recent intakes</h2>
-                    <Link href="/admin/immigration/resident-intakes" className="text-sm font-semibold text-[#00A693] hover:text-[#008c7c]">
-                        All intakes →
-                    </Link>
+            {/* Urgent actions */}
+            <section className="bg-white rounded-2xl border border-gray-100 p-5">
+                <div className="flex items-center gap-2 mb-3">
+                    <AlertTriangle size={14} className="text-amber-600" />
+                    <h2 className="text-sm font-bold uppercase tracking-[0.18em] text-gray-800">Urgent actions</h2>
                 </div>
-                <div className="overflow-x-auto">
-                    <table className="w-full text-left">
-                        <thead>
-                            <tr className="bg-gray-50/50 border-y border-gray-100 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                                <th className="px-6 py-3">Applicant</th>
-                                <th className="px-6 py-3">Visa</th>
-                                <th className="px-6 py-3">Job title</th>
-                                <th className="px-6 py-3">Status</th>
-                                <th className="px-6 py-3">Submitted</th>
-                                <th className="px-6 py-3 text-right"></th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-50">
-                            {recent_intakes.length === 0 ? (
-                                <tr><td colSpan={6} className="px-6 py-12 text-center text-gray-400 text-sm">No intakes yet.</td></tr>
-                            ) : recent_intakes.map((i) => (
-                                <tr key={i.id} className="hover:bg-gray-50/40">
-                                    <td className="px-6 py-3">
-                                        <div className="font-semibold text-gray-900 text-sm">{i.first_name} {i.last_name}</div>
-                                        <div className="text-xs text-gray-400">{i.email || "—"}</div>
-                                    </td>
-                                    <td className="px-6 py-3 text-sm text-gray-600">{i.current_visa_type || "—"}</td>
-                                    <td className="px-6 py-3 text-sm text-gray-600 truncate max-w-[200px]">{i.job_title || "—"}</td>
-                                    <td className="px-6 py-3">
-                                        <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-bold border ${statusClass(i.status)}`}>{i.status || "New"}</span>
-                                    </td>
-                                    <td className="px-6 py-3 text-sm text-gray-500">{fmtDate(i.created_at)}</td>
-                                    <td className="px-6 py-3 text-right">
-                                        <Link
-                                            href={`/admin/immigration/resident-intakes/${i.id}`}
-                                            className="text-xs font-semibold text-[#00A693] hover:text-[#008c7c]"
-                                        >
-                                            Open →
-                                        </Link>
-                                    </td>
-                                </tr>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <UrgentTile label="Assessments to review" value={urgent.assessments_pending ?? 0} href="/portal/immigration/assessments" tone="amber" />
+                    <UrgentTile label="Paid, not scheduled"   value={urgent.paid_unscheduled ?? 0}    href="/portal/immigration/appointments" tone="orange" />
+                    <UrgentTile label="Docs rejected"         value={urgent.rejected_docs ?? 0}       href="/portal/immigration/documents"    tone="rose" />
+                    <UrgentTile label="Agreements pending"    value={urgent.agreements_pending ?? 0}  href="/portal/immigration/cases"        tone="violet" />
+                </div>
+            </section>
+
+            {/* Two-column: this week's appointments + IAA compliance stub */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                <section className="lg:col-span-2 bg-white rounded-2xl border border-gray-100 p-5">
+                    <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-2">
+                            <Calendar size={14} className="text-blue-600" />
+                            <h2 className="text-sm font-bold uppercase tracking-[0.18em] text-gray-800">This week's appointments</h2>
+                        </div>
+                        <Link href="/portal/immigration/appointments" className="text-[10px] font-bold uppercase tracking-widest text-blue-600 hover:underline">
+                            View all
+                        </Link>
+                    </div>
+                    {week_appointments.length === 0 ? (
+                        <p className="text-sm text-gray-400 italic text-center py-6">No appointments this week.</p>
+                    ) : (
+                        <ul className="divide-y divide-gray-100">
+                            {week_appointments.map((a) => (
+                                <li key={a.id} className="py-3 flex items-center gap-3">
+                                    <Calendar size={14} className="text-gray-400 flex-shrink-0" />
+                                    <div className="flex-1 min-w-0">
+                                        <p className="text-sm font-medium text-gray-900 truncate">{a.name}</p>
+                                        <p className="text-[11px] text-gray-500">
+                                            {a.service_type || 'Consultation'} · {fmtDate(a.appointment_date)}{a.appointment_time && ` · ${a.appointment_time}`}
+                                            {a.consultant_name && ` · ${a.consultant_name}`}
+                                        </p>
+                                    </div>
+                                    <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded ${
+                                        a.status === 'Confirmed' ? 'bg-emerald-100 text-emerald-700'
+                                            : a.status === 'Cancelled' ? 'bg-rose-100 text-rose-700'
+                                                : 'bg-amber-100 text-amber-700'
+                                    }`}>{a.status}</span>
+                                </li>
                             ))}
-                        </tbody>
-                    </table>
-                </div>
+                        </ul>
+                    )}
+                </section>
+
+                {/* IAA compliance — real, scoped to the current user. */}
+                <IaaComplianceCard iaa={iaa} />
             </div>
 
-            {/* Recent user reviews */}
-            <div className="bg-white rounded-3xl border border-gray-50 shadow-sm overflow-hidden">
-                <div className="px-6 py-5 flex items-center justify-between">
-                    <h2 className="text-lg font-bold text-gray-900">Recent user reviews</h2>
-                    <Link href="/admin/immigration/user-reviews" className="text-sm font-semibold text-[#00A693] hover:text-[#008c7c]">
-                        All reviews →
-                    </Link>
+            {/* 6-month trend (kept from old dashboard) */}
+            <section className="bg-white rounded-2xl border border-gray-100 p-5 sm:p-6">
+                <div className="flex items-center gap-2 mb-4">
+                    <TrendingUp size={14} className="text-amber-600" />
+                    <h2 className="text-sm font-bold uppercase tracking-[0.18em] text-gray-800">Public assessment intakes — last 6 months</h2>
                 </div>
-                <div className="overflow-x-auto">
-                    <table className="w-full text-left">
-                        <thead>
-                            <tr className="bg-gray-50/50 border-y border-gray-100 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                                <th className="px-6 py-3">Reviewer</th>
-                                <th className="px-6 py-3">Mode</th>
-                                <th className="px-6 py-3">Status</th>
-                                <th className="px-6 py-3">Submitted</th>
-                                <th className="px-6 py-3 text-right"></th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-50">
-                            {recent_reviews.length === 0 ? (
-                                <tr><td colSpan={5} className="px-6 py-12 text-center text-gray-400 text-sm">No reviews yet.</td></tr>
-                            ) : recent_reviews.map((r) => (
-                                <tr key={r.id} className="hover:bg-gray-50/40">
-                                    <td className="px-6 py-3">
-                                        <div className="font-semibold text-gray-900 text-sm">{r.name || "Anonymous"}</div>
-                                        <div className="text-xs text-gray-400">{r.email || "—"}</div>
-                                    </td>
-                                    <td className="px-6 py-3 text-sm text-gray-600 capitalize">{r.mode || "—"}</td>
-                                    <td className="px-6 py-3">
-                                        <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-bold border ${statusClass(r.status)}`}>{r.status || "New"}</span>
-                                    </td>
-                                    <td className="px-6 py-3 text-sm text-gray-500">{fmtDate(r.created_at)}</td>
-                                    <td className="px-6 py-3 text-right">
-                                        <Link
-                                            href={`/admin/immigration/user-reviews/${r.id}`}
-                                            className="text-xs font-semibold text-[#00A693] hover:text-[#008c7c]"
-                                        >
-                                            Open →
-                                        </Link>
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
+                <div className="h-48 flex items-end gap-3">
+                    {monthly.length === 0 ? (
+                        <p className="text-sm text-gray-400">No data yet.</p>
+                    ) : monthly.map((m, i) => (
+                        <div key={i} className="flex-1 flex flex-col items-center justify-end gap-2 h-full">
+                            <span className="text-xs font-semibold text-gray-600">{m.intakes}</span>
+                            <div className="w-full rounded-t-xl bg-amber-500" style={{ height: `${Math.max(4, Math.round(((m.intakes || 0) / maxMonth) * 100))}%` }} />
+                            <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">{m.label}</span>
+                        </div>
+                    ))}
                 </div>
+            </section>
+
+            {/* Recent public submissions — kept as a compact strip */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <RecentList title="Recent assessment submissions" icon={<ClipboardCheck size={14} />} href="/portal/immigration/assessments" rows={recent_intakes.map((r) => ({
+                    id: r.id,
+                    title: trim2(`${r.first_name} ${r.last_name}`),
+                    subtitle: `${r.current_visa_type || 'Visa enquiry'} · ${fmtDate(r.created_at)}`,
+                    badge: r.status,
+                }))} />
+                <RecentList title="Recent user reviews" icon={<Star size={14} />} href="#" rows={recent_reviews.map((r) => ({
+                    id: r.id,
+                    title: r.name || 'Anonymous',
+                    subtitle: `${r.mode || 'Migration review'} · ${fmtDate(r.created_at)}`,
+                    badge: r.status,
+                }))} />
             </div>
         </div>
+    );
+}
+
+function TopTile({ label, value, tone, icon, hint, muted = false, href = null }) {
+    const TONES = {
+        default: { ring: "border-gray-100",   glyph: "bg-gray-100 text-gray-600",     num: "text-gray-900" },
+        warning: { ring: "border-amber-200",  glyph: "bg-amber-100 text-amber-700",   num: "text-amber-700" },
+        danger:  { ring: "border-rose-200",   glyph: "bg-rose-100 text-rose-700",     num: "text-rose-700" },
+    };
+    const t = TONES[tone] || TONES.default;
+
+    const inner = (
+        <>
+            <div className="flex items-center justify-between mb-2">
+                <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-gray-400">{label}</p>
+                <span className={`w-7 h-7 rounded-lg flex items-center justify-center ${t.glyph}`}>{icon}</span>
+            </div>
+            <p className={`text-3xl font-bold tabular-nums ${t.num}`}>{value ?? "—"}</p>
+            <p className="text-[10px] text-gray-400 mt-1 italic">{hint}</p>
+        </>
+    );
+
+    const cls = `bg-white rounded-2xl border ${t.ring} p-4 transition-shadow ${muted ? "opacity-60" : "hover:shadow-md"} ${href && !muted ? "cursor-pointer" : ""}`;
+
+    return href && !muted
+        ? <Link href={href} className={`block ${cls}`}>{inner}</Link>
+        : <div className={cls}>{inner}</div>;
+}
+
+function UrgentTile({ label, value, href, tone }) {
+    const TONES = {
+        amber:  { num: "text-amber-700",  bg: "bg-amber-50 border-amber-200" },
+        orange: { num: "text-orange-700", bg: "bg-orange-50 border-orange-200" },
+        rose:   { num: "text-rose-700",   bg: "bg-rose-50 border-rose-200" },
+        violet: { num: "text-violet-700", bg: "bg-violet-50 border-violet-200" },
+    };
+    const t = TONES[tone];
+    return (
+        <Link href={href} className={`block rounded-xl border ${t.bg} p-4 hover:shadow-md transition-shadow`}>
+            <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-gray-500">{label}</p>
+            <p className={`text-2xl font-bold tabular-nums mt-1 ${t.num}`}>{value}</p>
+        </Link>
+    );
+}
+
+function RecentList({ title, icon, href, rows }) {
+    return (
+        <section className="bg-white rounded-2xl border border-gray-100 p-5">
+            <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                    {icon}
+                    <h3 className="text-sm font-bold uppercase tracking-[0.18em] text-gray-800">{title}</h3>
+                </div>
+                {href !== "#" && (
+                    <Link href={href} className="text-[10px] font-bold uppercase tracking-widest text-amber-600 hover:underline">
+                        View all
+                    </Link>
+                )}
+            </div>
+            {rows.length === 0 ? (
+                <p className="text-sm text-gray-400 italic text-center py-4">Nothing yet.</p>
+            ) : (
+                <ul className="divide-y divide-gray-100">
+                    {rows.map((r) => (
+                        <li key={r.id} className="py-2.5 flex items-center justify-between gap-2">
+                            <div className="min-w-0">
+                                <p className="text-sm font-medium text-gray-900 truncate">{r.title}</p>
+                                <p className="text-[11px] text-gray-500">{r.subtitle}</p>
+                            </div>
+                            {r.badge && (
+                                <span className="inline-flex px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-gray-100 text-gray-600 border border-gray-200">
+                                    {r.badge}
+                                </span>
+                            )}
+                        </li>
+                    ))}
+                </ul>
+            )}
+        </section>
+    );
+}
+
+function trim2(s) { return (s || '').trim() || 'Unknown'; }
+
+// Real INZ pipeline — counts + worst-aging cases. Green/amber/red driven
+// by visa-type expected processing windows (from visa_types seed).
+function InzPipelineCard({ aging }) {
+    const data = aging || { green: 0, amber: 0, red: 0, rows: [] };
+    const total = data.green + data.amber + data.red;
+    const max = Math.max(1, data.green, data.amber, data.red);
+
+    if (total === 0) {
+        return (
+            <div className="bg-white rounded-2xl border border-gray-100 p-5 sm:p-6 flex flex-col">
+                <div className="flex items-center gap-2 mb-2 text-gray-500">
+                    <FileBadge size={14} />
+                    <p className="text-[10px] font-bold uppercase tracking-[0.22em]">INZ pipeline</p>
+                </div>
+                <p className="text-sm font-bold text-gray-800 leading-snug">Nothing lodged with INZ</p>
+                <p className="text-[11px] text-gray-500 mt-2">
+                    Cases with INZ status Lodged / Decision Pending / Info Requested appear here, bucketed by lodgement age vs the visa type's expected window.
+                </p>
+            </div>
+        );
+    }
+
+    return (
+        <div className="bg-white rounded-2xl border border-gray-100 p-5 sm:p-6 flex flex-col">
+            <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2 text-gray-500">
+                    <FileBadge size={14} />
+                    <p className="text-[10px] font-bold uppercase tracking-[0.22em]">INZ pipeline</p>
+                </div>
+                <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 tabular-nums">{total} cases</span>
+            </div>
+
+            <ul className="space-y-2 mb-4">
+                <BucketRow label="On track"     value={data.green} max={max} color="bg-emerald-500" />
+                <BucketRow label="Approaching"  value={data.amber} max={max} color="bg-amber-500" />
+                <BucketRow label="Exceeded"     value={data.red}   max={max} color="bg-rose-500" />
+            </ul>
+
+            {data.rows.length > 0 && (
+                <>
+                    <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-gray-400 mb-1.5">Worst aging</p>
+                    <ul className="space-y-1">
+                        {data.rows.slice(0, 3).map((r) => (
+                            <li key={r.id} className="text-[11px] flex items-center justify-between gap-2">
+                                <span className="truncate text-gray-700">{r.name}</span>
+                                <span className={`tabular-nums font-bold ${r.bucket === 'red' ? 'text-rose-700' : r.bucket === 'amber' ? 'text-amber-700' : 'text-emerald-700'}`}>
+                                    {r.days_since}d / {r.expected_days}d
+                                </span>
+                            </li>
+                        ))}
+                    </ul>
+                </>
+            )}
+        </div>
+    );
+}
+
+function BucketRow({ label, value, max, color }) {
+    return (
+        <li className="flex items-center gap-3">
+            <span className="w-24 text-[11px] font-semibold text-gray-700">{label}</span>
+            <div className="flex-1 h-2.5 bg-gray-100 rounded-full overflow-hidden">
+                <div className={`h-full ${color} rounded-full`} style={{ width: `${(value / max) * 100}%` }} />
+            </div>
+            <span className="w-8 text-right text-sm font-bold tabular-nums text-gray-700">{value}</span>
+        </li>
+    );
+}
+
+// Real IAA compliance — scoped to the current adviser.
+function IaaComplianceCard({ iaa }) {
+    if (!iaa) return null;
+
+    const STATUS_META = {
+        ok:        { tone: "bg-emerald-50 border-emerald-200 text-emerald-700", icon: <CheckCircle2 size={14} />, label: "Licence current",     hint: "expiry is over 60 days away" },
+        expiring:  { tone: "bg-amber-50 border-amber-200 text-amber-700",       icon: <Clock size={14} />,        label: "Licence expiring soon", hint: "renew before the date below" },
+        expired:   { tone: "bg-rose-50 border-rose-200 text-rose-700",          icon: <AlertTriangle size={14} />,label: "Licence expired",      hint: "no client advice allowed until renewed" },
+        no_expiry: { tone: "bg-amber-50 border-amber-200 text-amber-700",       icon: <AlertTriangle size={14} />,label: "Expiry missing",       hint: "add the expiry date in your profile" },
+        missing:   { tone: "bg-rose-50 border-rose-200 text-rose-700",          icon: <AlertTriangle size={14} />,label: "IAA licence not on file", hint: "you'll need this on every case" },
+    };
+    const meta = STATUS_META[iaa.status] || STATUS_META.missing;
+
+    return (
+        <section className={`rounded-2xl border p-5 flex flex-col ${meta.tone.split(' ').slice(0,2).join(' ')}`}>
+            <div className="flex items-center gap-2 mb-2">
+                <ShieldCheck size={14} />
+                <p className="text-[10px] font-bold uppercase tracking-[0.22em]">Compliance</p>
+            </div>
+            <p className={`text-sm font-bold leading-snug inline-flex items-center gap-1.5 ${meta.tone.split(' ')[2]}`}>
+                {meta.icon} {meta.label}
+            </p>
+            <p className="text-[11px] text-gray-600 mt-2 italic">{meta.hint}</p>
+
+            <dl className="mt-4 space-y-1.5 text-[11px]">
+                <div className="flex items-center justify-between">
+                    <dt className="text-gray-500">IAA licence #</dt>
+                    <dd className="font-mono font-semibold text-gray-800">{iaa.licence_number || '—'}</dd>
+                </div>
+                <div className="flex items-center justify-between">
+                    <dt className="text-gray-500">Expires</dt>
+                    <dd className="font-semibold tabular-nums text-gray-800">
+                        {iaa.expiry ? new Date(iaa.expiry + 'T00:00:00').toLocaleDateString("en-NZ", { day: "numeric", month: "short", year: "numeric" }) : '—'}
+                    </dd>
+                </div>
+                {iaa.days_to_expiry != null && (
+                    <div className="flex items-center justify-between">
+                        <dt className="text-gray-500">Days remaining</dt>
+                        <dd className={`font-bold tabular-nums ${iaa.days_to_expiry < 0 ? "text-rose-700" : iaa.days_to_expiry <= 60 ? "text-amber-700" : "text-emerald-700"}`}>
+                            {iaa.days_to_expiry}
+                        </dd>
+                    </div>
+                )}
+            </dl>
+
+            <a href="/portal/immigration/profile" className="mt-4 text-[10px] font-bold uppercase tracking-widest text-gray-700 hover:text-gray-900 underline">
+                Update in profile →
+            </a>
+        </section>
     );
 }

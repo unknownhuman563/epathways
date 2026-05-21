@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Head, Link, router } from "@inertiajs/react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { Head, Link, router, usePage } from "@inertiajs/react";
 import {
     Search, KeyRound, Clock, Check, Mail, ShieldOff, FileText, Phone,
     Filter, ArrowUpDown, ArrowUp, ArrowDown, ChevronLeft, ChevronRight,
-    MoreHorizontal, ChevronDown, ExternalLink, UserCheck,
+    MoreHorizontal, ChevronDown, ChevronRight as ChevronRightIcon, ExternalLink, UserCheck,
+    Upload, Loader,
 } from "lucide-react";
 
 // ── Stage colour map ───────────────────────────────────────────────────────
@@ -38,6 +39,15 @@ const STAGE_STYLES = {
     "Closed":     "bg-green-100 text-green-800 border-green-200",
 };
 const stageClass = (s) => STAGE_STYLES[s] || "bg-gray-100 text-gray-700 border-gray-200";
+
+// Goal-setting status colours — kept in sync with LeadDetails.jsx so the
+// pill reads the same wherever it appears.
+const GOAL_STATUS_STYLE = {
+    "Consultation Done": "bg-purple-100 text-purple-800 border-purple-200",
+    "For Proposal":      "bg-amber-100 text-amber-800 border-amber-200",
+    "Proposal Sent":     "bg-sky-100 text-sky-800 border-sky-200",
+    "No Show":           "bg-red-100 text-red-700 border-red-200",
+};
 
 const PORTAL_BADGE = {
     none:     null,
@@ -115,6 +125,9 @@ export default function SalesLeads({ leads = [], statuses = [], portal = "sales"
     const [page, setPage] = useState(1);
     const [openStageMenuId, setOpenStageMenuId] = useState(null);
     const [openRowMenuId, setOpenRowMenuId] = useState(null);
+    const [expandedId, setExpandedId] = useState(null);
+
+    const toggleExpand = (id) => setExpandedId(expandedId === id ? null : id);
 
     const filtered = useMemo(() => {
         const q = search.toLowerCase().trim();
@@ -177,13 +190,14 @@ export default function SalesLeads({ leads = [], statuses = [], portal = "sales"
         <div className="space-y-4 max-w-[1600px] mx-auto">
             <Head title={`Leads — ${portalLabel} Portal`} />
 
-            <div className="flex items-end justify-between gap-4">
+            <div className="flex items-end justify-between gap-4 flex-wrap">
                 <div>
                     <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Leads</h1>
                     <p className="text-sm text-gray-500 mt-1">
                         Pipeline · {filtered.length} {filtered.length === 1 ? "opportunity" : "opportunities"}
                     </p>
                 </div>
+                <ImportLeadsButton />
             </div>
 
             {/* Toolbar */}
@@ -276,6 +290,8 @@ export default function SalesLeads({ leads = [], statuses = [], portal = "sales"
                                         className="w-3.5 h-3.5 rounded border-gray-300 text-gray-900 focus:ring-gray-400 cursor-pointer"
                                     />
                                 </th>
+                                {/* Expand toggle — narrow, no label. */}
+                                <th className="pr-2 py-3 w-6" />
                                 <SortableTh label="Lead" sortKey="name" current={sortKey} dir={sortDir} onSort={toggleSort} />
                                 <SortableTh label="Stage" sortKey="status" current={sortKey} dir={sortDir} onSort={toggleSort} />
                                 <th className="px-3 py-3">Email</th>
@@ -287,7 +303,7 @@ export default function SalesLeads({ leads = [], statuses = [], portal = "sales"
                         <tbody className="divide-y divide-gray-100">
                             {paged.length === 0 ? (
                                 <tr>
-                                    <td colSpan={7} className="px-6 py-20 text-center">
+                                    <td colSpan={8} className="px-6 py-20 text-center">
                                         <div className="flex flex-col items-center gap-2 text-gray-400">
                                             <Search size={22} />
                                             <p className="text-sm font-medium">No leads match your filters</p>
@@ -300,11 +316,18 @@ export default function SalesLeads({ leads = [], statuses = [], portal = "sales"
                                 const presence = presenceDot(portalStatus, l.portal_last_login_at);
                                 const isSaving = savingId === l.id;
                                 const isSelected = selectedIds.has(l.id);
+                                const goalChipClass = l.goal_setting_status && GOAL_STATUS_STYLE[l.goal_setting_status]
+                                    ? GOAL_STATUS_STYLE[l.goal_setting_status]
+                                    : "bg-gray-100 text-gray-600 border-gray-200";
+
+                                const isExpanded = expandedId === l.id;
 
                                 return (
+                                    <React.Fragment key={l.id}>
                                     <tr
-                                        key={l.id}
-                                        className={`group transition-colors ${isSelected ? "bg-amber-50/30" : "hover:bg-gray-50/50"}`}
+                                        className={`group transition-colors ${
+                                            isExpanded ? "bg-blue-50/30" : isSelected ? "bg-amber-50/30" : "hover:bg-gray-50/50"
+                                        }`}
                                     >
                                         <td className="pl-4 pr-2 py-2.5">
                                             <input
@@ -313,6 +336,21 @@ export default function SalesLeads({ leads = [], statuses = [], portal = "sales"
                                                 onChange={() => toggleSelect(l.id)}
                                                 className="w-3.5 h-3.5 rounded border-gray-300 text-gray-900 focus:ring-gray-400 cursor-pointer"
                                             />
+                                        </td>
+
+                                        {/* Expand toggle — chevron rotates when open. */}
+                                        <td className="pr-2 py-2.5">
+                                            <button
+                                                type="button"
+                                                onClick={() => toggleExpand(l.id)}
+                                                className="inline-flex items-center justify-center w-5 h-5 rounded text-gray-400 hover:text-gray-900 hover:bg-gray-100 transition-colors"
+                                                title={isExpanded ? "Collapse details" : "Expand details"}
+                                            >
+                                                <ChevronRightIcon
+                                                    size={14}
+                                                    className={`transition-transform ${isExpanded ? "rotate-90" : ""}`}
+                                                />
+                                            </button>
                                         </td>
 
                                         <td className="px-3 py-2.5">
@@ -402,6 +440,17 @@ export default function SalesLeads({ leads = [], statuses = [], portal = "sales"
                                             </div>
                                         </td>
                                     </tr>
+
+                                    {/* Expander row — all 9 dashboard-mirror fields
+                                        live here so the table itself stays compact. */}
+                                    {isExpanded && (
+                                        <tr className="bg-blue-50/20 border-t border-blue-100/60">
+                                            <td colSpan={8} className="px-6 py-4">
+                                                <LeadDashboardPanel lead={l} goalChipClass={goalChipClass} />
+                                            </td>
+                                        </tr>
+                                    )}
+                                    </React.Fragment>
                                 );
                             })}
                         </tbody>
@@ -438,6 +487,121 @@ export default function SalesLeads({ leads = [], statuses = [], portal = "sales"
                     </div>
                 )}
             </div>
+        </div>
+    );
+}
+
+// ── Import Leads from CSV ─────────────────────────────────────────────────
+
+function ImportLeadsButton() {
+    const fileRef = useRef(null);
+    const [uploading, setUploading] = useState(false);
+    const [showDetail, setShowDetail] = useState(false);
+    const summary = usePage().props?.flash?.import_summary;
+
+    const trigger = () => fileRef.current?.click();
+
+    const onChoose = (e) => {
+        const f = e.target.files?.[0];
+        if (!f) return;
+        if (!confirm(
+            `Import leads from "${f.name}"?\n\n`
+            + `• Existing leads will be matched by email or (name + phone).\n`
+            + `• Matched leads will only have empty fields backfilled — nothing overwritten.\n`
+            + `• Unknown columns go into the lead's family_info / work_info JSON.\n`
+            + `• Call Notes become real lead notes.\n\n`
+            + `Proceed?`
+        )) {
+            e.target.value = '';
+            return;
+        }
+
+        const fd = new FormData();
+        fd.append('file', f);
+        setUploading(true);
+        setShowDetail(false);
+        router.post('/admin/leads/import', fd, {
+            preserveScroll: true,
+            preserveState: true,
+            forceFormData: true,
+            onSuccess: () => setShowDetail(true),
+            onFinish: () => {
+                setUploading(false);
+                if (fileRef.current) fileRef.current.value = '';
+            },
+        });
+    };
+
+    const total = summary ? (summary.created || 0) + (summary.updated || 0) + (summary.skipped || 0) : 0;
+
+    return (
+        <div className="flex flex-col items-end gap-2">
+            <div className="inline-flex items-center gap-2">
+                <input
+                    ref={fileRef}
+                    type="file"
+                    accept=".csv,text/csv"
+                    onChange={onChoose}
+                    className="hidden"
+                />
+                <button
+                    type="button"
+                    onClick={trigger}
+                    disabled={uploading}
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-xl text-xs font-bold uppercase tracking-wider hover:bg-gray-800 transition-colors disabled:opacity-50"
+                >
+                    {uploading ? <Loader size={13} className="animate-spin" /> : <Upload size={13} />}
+                    {uploading ? 'Importing…' : 'Import CSV'}
+                </button>
+            </div>
+
+            {/* Detailed result card — shows exactly where the rows went so
+                "only 79 of 346 imported" isn't a mystery (most are likely
+                dedupe-matches, which is expected). */}
+            {summary && showDetail && (
+                <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4 w-[420px] max-w-full text-left space-y-3">
+                    <div className="flex items-center justify-between">
+                        <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-gray-500">Import result</p>
+                        <button
+                            type="button"
+                            onClick={() => setShowDetail(false)}
+                            className="text-[10px] uppercase tracking-widest font-bold text-gray-400 hover:text-gray-700"
+                        >
+                            Dismiss
+                        </button>
+                    </div>
+                    <p className="text-sm text-gray-700">
+                        Processed <span className="font-bold tabular-nums">{total}</span> row{total === 1 ? '' : 's'}.
+                    </p>
+                    <div className="grid grid-cols-3 gap-2 text-center">
+                        <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-2">
+                            <p className="text-[9px] font-bold uppercase tracking-widest text-emerald-700">New</p>
+                            <p className="text-2xl font-bold text-emerald-700 tabular-nums">{summary.created || 0}</p>
+                        </div>
+                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-2">
+                            <p className="text-[9px] font-bold uppercase tracking-widest text-blue-700">Updated</p>
+                            <p className="text-2xl font-bold text-blue-700 tabular-nums">{summary.updated || 0}</p>
+                        </div>
+                        <div className="bg-amber-50 border border-amber-200 rounded-lg p-2">
+                            <p className="text-[9px] font-bold uppercase tracking-widest text-amber-700">Skipped</p>
+                            <p className="text-2xl font-bold text-amber-700 tabular-nums">{summary.skipped || 0}</p>
+                        </div>
+                    </div>
+                    <p className="text-[11px] text-gray-500 leading-relaxed">
+                        <span className="font-semibold text-gray-700">Updated</span> means the row matched an existing lead by email or (name + phone) — empty fields were backfilled, nothing overwritten.
+                    </p>
+                    {(summary.errors || []).length > 0 && (
+                        <div className="border-t border-gray-100 pt-2">
+                            <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-amber-700 mb-1">Skip reasons (first {summary.errors.length})</p>
+                            <ul className="space-y-0.5 max-h-32 overflow-y-auto text-[11px] text-gray-600 leading-snug">
+                                {summary.errors.map((e, i) => (
+                                    <li key={i} className="font-mono">{e}</li>
+                                ))}
+                            </ul>
+                        </div>
+                    )}
+                </div>
+            )}
         </div>
     );
 }
@@ -564,6 +728,79 @@ function RowMenu({ lead, open, onToggle, onClose, onRequestPortal, isSaving, por
                     </>)}
                 </div>
             )}
+        </div>
+    );
+}
+
+// ── Expander panel — sales-dashboard mirror ───────────────────────────────
+// Renders all 9 fields from the team's Sales Dashboard sheet inside the
+// collapsed row so the table itself stays compact and scannable.
+
+function LeadDashboardPanel({ lead, goalChipClass }) {
+    return (
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+            <DashField label="Pre-screened by">
+                {lead.pre_screened_by
+                    ? <span className="inline-flex items-center gap-1 text-gray-800 font-medium"><UserCheck size={11} className="text-gray-400" />{lead.pre_screened_by}</span>
+                    : <span className="text-gray-300">—</span>}
+            </DashField>
+
+            <DashField label="Goal-setting by">
+                {lead.goal_setting_by
+                    ? <span className="text-gray-800 font-medium">{lead.goal_setting_by}</span>
+                    : <span className="text-gray-300">—</span>}
+            </DashField>
+
+            <DashField label="Goal-setting status">
+                {lead.goal_setting_status
+                    ? <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border ${goalChipClass}`}>{lead.goal_setting_status}</span>
+                    : <span className="text-gray-300">—</span>}
+            </DashField>
+
+            <DashField label="Program offered">
+                {lead.program_offered
+                    ? <span className="inline-flex items-center px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-100 text-[10px] font-bold uppercase tracking-wider">{lead.program_offered}</span>
+                    : <span className="text-gray-300">—</span>}
+            </DashField>
+
+            <DashField label="Calendar">
+                {lead.calendar_date
+                    ? <span className="inline-flex items-center gap-1 text-gray-800"><Clock size={11} className="text-gray-400" />{fmtDateShort(lead.calendar_date)}</span>
+                    : <span className="text-gray-300">—</span>}
+            </DashField>
+
+            <DashField label="Pre-screening notes" wide>
+                {lead.pre_screening_notes
+                    ? <p className="text-xs text-gray-700 whitespace-pre-wrap leading-relaxed">{lead.pre_screening_notes}</p>
+                    : <span className="text-gray-300">—</span>}
+            </DashField>
+
+            <DashField label="Goal-setting notes" wide>
+                {lead.goal_setting_notes
+                    ? <p className="text-xs text-gray-700 whitespace-pre-wrap leading-relaxed">{lead.goal_setting_notes}</p>
+                    : <span className="text-gray-300">—</span>}
+            </DashField>
+
+            <DashField label="Client info link">
+                {lead.client_info_link
+                    ? <a href={lead.client_info_link} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 font-medium"><ExternalLink size={11} /> Open</a>
+                    : <span className="text-gray-300">—</span>}
+            </DashField>
+
+            <DashField label="Call update form">
+                {lead.call_update_form_link
+                    ? <a href={lead.call_update_form_link} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 font-medium"><ExternalLink size={11} /> Open</a>
+                    : <span className="text-gray-300">—</span>}
+            </DashField>
+        </div>
+    );
+}
+
+function DashField({ label, wide = false, children }) {
+    return (
+        <div className={wide ? "md:col-span-2 lg:col-span-2 xl:col-span-2" : ""}>
+            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-gray-500 mb-1">{label}</p>
+            <div className="text-xs">{children}</div>
         </div>
     );
 }
