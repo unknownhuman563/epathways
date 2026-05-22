@@ -105,10 +105,24 @@ class SalesController extends Controller
     public function leads()
     {
         try {
+            // Eager-load the latest pre-screen / goal-setting notes so the
+            // index can render their summary chips and the expander panel
+            // without triggering N+1. `tasks_open_count` is a custom alias
+            // for incomplete tasks only.
+            $leads = Lead::with([
+                'studyPlans',
+                'event',
+                'portalUser:id,lead_id,last_login_at',
+                'notes' => fn ($q) => $q->whereIn('kind', ['pre_screen', 'goal_setting'])->latest(),
+            ])
+                ->withCount(['notes', 'documents'])
+                ->withCount(['tasks as tasks_open_count' => fn ($q) => $q->where('completed', false)])
+                ->latest()->get();
+
             return inertia('portal/sales/Leads', [
                 'portal' => 'sales',
                 'statuses' => self::LEAD_STATUSES,
-                'leads' => Lead::with(['studyPlans', 'event', 'portalUser:id,lead_id,last_login_at'])->latest()->get()->map(fn ($l) => $this->leadRow($l)),
+                'leads' => $leads->map(fn ($l) => $this->leadRow($l)),
             ]);
         } catch (\Throwable $e) {
             Log::error('Sales leads list failed', ['error' => $e->getMessage()]);

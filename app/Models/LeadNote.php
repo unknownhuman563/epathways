@@ -17,10 +17,13 @@ class LeadNote extends Model
 
     protected $fillable = [
         'lead_id', 'user_id', 'author_name', 'author_role', 'body', 'pinned',
+        'kind', 'pre_screened_by', 'pre_screen_mode', 'pre_screen_date',
+        'goal_setting_status', 'goal_setting_by',
     ];
 
     protected $casts = [
-        'pinned' => 'boolean',
+        'pinned'          => 'boolean',
+        'pre_screen_date' => 'date',
     ];
 
     public function lead(): BelongsTo

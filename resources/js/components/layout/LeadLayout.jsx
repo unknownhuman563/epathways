@@ -8,8 +8,9 @@ import {
 // Lead Portal sidebar — same clean grouped style as Sales. Plain text
 // section headers, no accordions, every item one click away.
 const LEAD_NAV = [
-    { name: "Work", section: true },
     { name: "Dashboard",  href: "/portal/lead/dashboard", icon: <LayoutDashboard size={20} /> },
+
+    { name: "Work", section: true },
     { name: "My Journey", href: "/portal/lead/journey",   icon: <Route size={20} /> },
 
     { name: "Submit", section: true },

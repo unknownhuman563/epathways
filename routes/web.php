@@ -179,6 +179,16 @@ Route::middleware(['auth'])->group(function () {
         Route::get("/admin/leads/{id}", [LeadController::class, 'show'])->name('admin.leads.show');
         Route::post('/admin/leads/{id}/stage', [LeadController::class, 'updateStage'])->name('admin.leads.stage');
         Route::post('/admin/leads/{id}/journey', [LeadController::class, 'updateJourney'])->name('admin.leads.journey');
+        Route::post('/admin/leads/{id}/convert-to-student',       [LeadController::class, 'convertToStudent'])->name('admin.leads.convert-student');
+        Route::post('/admin/leads/{id}/revert-student',           [LeadController::class, 'revertStudent'])->name('admin.leads.revert-student');
+        Route::post('/admin/leads/{id}/convert-to-case',          [LeadController::class, 'convertToCase'])->name('admin.leads.convert-case');
+        Route::post('/admin/leads/{id}/revert-case',              [LeadController::class, 'revertCase'])->name('admin.leads.revert-case');
+        Route::post('/admin/leads/{id}/convert-to-accommodation', [LeadController::class, 'convertToAccommodation'])->name('admin.leads.convert-accommodation');
+        Route::post('/admin/leads/{id}/revert-accommodation',     [LeadController::class, 'revertAccommodation'])->name('admin.leads.revert-accommodation');
+        Route::post('/admin/leads/{id}/inz',                      [LeadController::class, 'updateInz'])->name('admin.leads.inz');
+
+        // Bulk CSV import — duplicates detected by email or name+phone.
+        Route::post('/admin/leads/import', [LeadController::class, 'importLeads'])->name('admin.leads.import');
         Route::post('/admin/leads/{id}/documents/checklist', [LeadController::class, 'updateDocumentChecklist'])->name('admin.leads.documents.checklist');
         Route::post('/admin/leads/{id}/documents/section-verification', [LeadController::class, 'updateSectionVerification'])->name('admin.leads.documents.section-verification');
 
@@ -296,10 +306,25 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/dashboard', [EducationController::class, 'dashboard'])->name('dashboard');
             Route::get('/leads', [EducationController::class, 'leads'])->name('leads');
             Route::post('/leads/{id}', [EducationController::class, 'updateLead'])->name('leads.update');
-            // Education staff can also request a Lead-Portal invitation; admin still approves.
             Route::post('/leads/{id}/portal-invitation/request', [LeadPortalInvitationController::class, 'request'])
                 ->name('leads.portal-invitation.request');
             Route::get('/leads/{id}', [LeadController::class, 'show'])->name('leads.show');
+
+            // WORK
+            Route::get('/students',  [EducationController::class, 'students'])->name('students');
+            Route::get('/documents', [EducationController::class, 'documents'])->name('documents');
+
+            // SETUP
+            Route::get('/programs',            [EducationController::class, 'programs'])->name('programs');
+            Route::get('/checklist-templates', [EducationController::class, 'checklistTemplates'])->name('checklist-templates');
+
+            // REPORTS — single page; period (weekly|monthly|quarterly|custom)
+            // is a query param, sections stay the same.
+            Route::get('/reports', [EducationController::class, 'reports'])->name('reports');
+
+            // ACCOUNT
+            Route::get('/profile',       [EducationController::class, 'profile'])->name('profile');
+            Route::get('/notifications', [EducationController::class, 'notifications'])->name('notifications');
         });
 
         Route::middleware('portal:english')->prefix('english')->name('portal.english.')->group(function () {
@@ -311,10 +336,30 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/dashboard', [ImmigrationController::class, 'dashboard'])->name('dashboard');
             Route::get('/leads', [ImmigrationController::class, 'leads'])->name('leads');
             Route::post('/leads/{id}', [ImmigrationController::class, 'updateLead'])->name('leads.update');
-            // Immigration staff can also request a Lead-Portal invitation; admin still approves.
             Route::post('/leads/{id}/portal-invitation/request', [LeadPortalInvitationController::class, 'request'])
                 ->name('leads.portal-invitation.request');
             Route::get('/leads/{id}', [LeadController::class, 'show'])->name('leads.show');
+
+            // WORK
+            Route::get('/assessments',  [ImmigrationController::class, 'assessments'])->name('assessments');
+            Route::post('/assessments/{intakeId}/convert-to-case', [ImmigrationController::class, 'convertAssessmentToCase'])->name('assessments.convert');
+            Route::get('/cases',        [ImmigrationController::class, 'cases'])->name('cases');
+            Route::get('/documents',    [ImmigrationController::class, 'documents'])->name('documents');
+            Route::get('/appointments', [ImmigrationController::class, 'appointments'])->name('appointments');
+
+            // SETUP
+            Route::get('/visa-types',          [ImmigrationController::class, 'visaTypes'])->name('visa-types');
+            Route::get('/intakes',             [ImmigrationController::class, 'intakes'])->name('intakes');
+            Route::get('/inz-forms',           [ImmigrationController::class, 'inzForms'])->name('inz-forms');
+            Route::get('/checklist-templates', [ImmigrationController::class, 'checklistTemplates'])->name('checklist-templates');
+
+            // REPORTS
+            Route::get('/reports', [ImmigrationController::class, 'reports'])->name('reports');
+
+            // ACCOUNT
+            Route::get('/profile',       [ImmigrationController::class, 'profile'])->name('profile');
+            Route::post('/profile',      [ImmigrationController::class, 'updateProfile'])->name('profile.update');
+            Route::get('/notifications', [ImmigrationController::class, 'notifications'])->name('notifications');
         });
 
         Route::middleware('portal:accommodation')->prefix('accommodation')->name('portal.accommodation.')->group(function () {

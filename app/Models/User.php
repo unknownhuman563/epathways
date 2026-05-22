@@ -32,6 +32,8 @@ class User extends Authenticatable
         'password',
         'role',
         'lead_id',
+        'iaa_licence_number',
+        'iaa_licence_expiry',
     ];
 
     /**
@@ -52,8 +54,9 @@ class User extends Authenticatable
     protected function casts(): array
     {
         return [
-            'email_verified_at' => 'datetime',
-            'last_login_at'     => 'datetime',
+            'email_verified_at'  => 'datetime',
+            'last_login_at'      => 'datetime',
+            'iaa_licence_expiry' => 'date',
             'password' => 'hashed',
         ];
     }

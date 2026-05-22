@@ -349,6 +349,26 @@ class LeadController extends Controller
             ->with(['studyPlans', 'educationExps', 'event', 'tags'])
             ->firstOrFail();
 
+        // Privacy Act 2020 — record every immigration-case view by staff for
+        // the case-audit log. Lead-portal users (the client viewing their
+        // own record) are excluded since they're not "staff viewing a case".
+        if ($lead->is_immigration_case && auth()->check() && ! auth()->user()->isLead()) {
+            try {
+                \App\Models\CaseAuditView::create([
+                    'lead_id'     => $lead->id,
+                    'viewer_id'   => auth()->id(),
+                    'viewer_name' => auth()->user()->name,
+                    'viewer_role' => auth()->user()->role,
+                    'action'      => 'view',
+                    'context'     => 'lead detail',
+                    'ip'          => request()->ip(),
+                    'viewed_at'   => now(),
+                ]);
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning('Case audit view write failed', ['lead_id' => $lead->id, 'error' => $e->getMessage()]);
+            }
+        }
+
         // History — every Lead update logged by the LogsActivity trait,
         // surfaced on the "History" tab. We show all changes (stage, stage,
         // any field edit) so the audit trail is complete.
@@ -387,14 +407,20 @@ class LeadController extends Controller
             ->orderByDesc('created_at')
             ->get()
             ->map(fn ($n) => [
-                'id'          => $n->id,
-                'body'        => $n->body,
-                'author_name' => $n->author_name ?: 'Unknown',
-                'author_role' => $n->author_role ?: 'staff',
-                'user_id'     => $n->user_id,
-                'pinned'      => $n->pinned,
-                'created_at'  => $n->created_at,
-                'updated_at'  => $n->updated_at,
+                'id'                  => $n->id,
+                'body'                => $n->body,
+                'author_name'         => $n->author_name ?: 'Unknown',
+                'author_role'         => $n->author_role ?: 'staff',
+                'user_id'             => $n->user_id,
+                'pinned'              => $n->pinned,
+                'kind'                => $n->kind ?: 'general',
+                'pre_screened_by'     => $n->pre_screened_by,
+                'pre_screen_mode'     => $n->pre_screen_mode,
+                'pre_screen_date'     => $n->pre_screen_date,
+                'goal_setting_status' => $n->goal_setting_status,
+                'goal_setting_by'     => $n->goal_setting_by,
+                'created_at'          => $n->created_at,
+                'updated_at'          => $n->updated_at,
             ]);
 
         // Tags attached to this lead + a hint list of every tag in the
@@ -762,6 +788,447 @@ class LeadController extends Controller
         } catch (\Throwable $e) {
             \Illuminate\Support\Facades\Log::error('Lead journey update failed', ['id' => $id, 'error' => $e->getMessage()]);
             return back()->with('error', 'Could not save the journey changes.');
+        }
+    }
+
+    /**
+     * Convert a lead into a student — flip the is_student flag, stamp who
+     * and when. Same record stays; everything (documents, notes, history)
+     * remains attached. Reversible via revertStudent() below.
+     */
+    public function convertToStudent($id)
+    {
+        try {
+            $lead = Lead::findOrFail($id);
+            if ($lead->is_student) {
+                return back()->with('error', 'This lead is already a student.');
+            }
+            $lead->fill([
+                'is_student'           => true,
+                'student_converted_at' => now(),
+                'student_converted_by' => auth()->id(),
+            ])->save();
+            return back()->with('success', "Lead {$lead->lead_id} is now a student.");
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('Convert to student failed', ['id' => $id, 'error' => $e->getMessage()]);
+            return back()->with('error', 'Could not convert this lead.');
+        }
+    }
+
+    /**
+     * Bulk-import leads from a CSV. Tolerant header matching; unmapped
+     * columns fall into the family_info JSON. Duplicates are detected by
+     * email OR (first_name + last_name + phone); existing leads get
+     * empty-field backfill only, never overwrites.
+     */
+    public function importLeads(\Illuminate\Http\Request $request)
+    {
+        $request->validate([
+            'file' => 'required|file|max:20480', // 20 MB; many BOM-style CSVs trip the mime check
+        ]);
+
+        // Big imports can run long — give them room.
+        @set_time_limit(0);
+        @ini_set('memory_limit', '512M');
+
+        try {
+            $path = $request->file('file')->getRealPath();
+            $fh   = fopen($path, 'r');
+            if (! $fh) return back()->with('error', 'Could not read the file.');
+
+            // Strip a UTF-8 BOM if Excel left one in the first cell.
+            $bom = fread($fh, 3);
+            if ($bom !== "\xEF\xBB\xBF") rewind($fh);
+
+            $headerRaw = fgetcsv($fh);
+            if (! $headerRaw) return back()->with('error', 'The file appears to be empty.');
+
+            // Normalise headers: lowercase, alnum-only, used as the lookup key.
+            $headers = array_map(fn ($h) => preg_replace('/[^a-z0-9]/', '', strtolower((string) $h)), $headerRaw);
+
+            $created = 0; $updated = 0; $skipped = 0; $errors = [];
+            $rowNum = 1;
+
+            while (($row = fgetcsv($fh)) !== false) {
+                $rowNum++;
+                // Skip fully-empty rows.
+                if (collect($row)->filter(fn ($v) => trim((string) $v) !== '')->isEmpty()) {
+                    continue;
+                }
+
+                // Pre-declare so the row-level catch can reference them
+                // even if the throw happened before assignment.
+                $first = ''; $last = ''; $email = ''; $phone = '';
+
+                // Each row gets its own try/catch — one bad row no longer
+                // aborts the entire import. Errors land in the summary so
+                // staff can see exactly what failed and re-import just
+                // those rows after fixing.
+                try {
+
+                $raw = $this->mapRow($headers, $row);
+                $first = trim((string) ($raw['firstname'] ?? $raw['first'] ?? ''));
+                $last  = trim((string) ($raw['lastname']  ?? $raw['surname'] ?? $raw['familyname'] ?? $raw['last'] ?? ''));
+                $email = trim((string) ($raw['email'] ?? $raw['emailaddress'] ?? ''));
+                $phone = trim((string) ($raw['phone'] ?? $raw['mobile'] ?? $raw['phonenumber'] ?? ''));
+
+                // Need at least one of: email, OR (first + last + phone).
+                if (! $email && ! ($first && $last && $phone)) {
+                    $skipped++;
+                    $id = $first || $last ? trim("{$first} {$last}") : '(no name)';
+                    $missing = [];
+                    if (! $email) $missing[] = 'email';
+                    if (! $first || ! $last) $missing[] = 'name';
+                    if (! $phone) $missing[] = 'phone';
+                    $errors[] = "Row {$rowNum} [{$id}] — missing " . implode(' + ', $missing);
+                    continue;
+                }
+
+                // Normalise stage to the canonical Lead::STAGES casing so
+                // the pipeline filters and dashboards group these leads
+                // alongside everything else.
+                $normalisedStage = $this->normaliseStage($raw['stage'] ?? null);
+
+                // Build the payload from known direct mappings. first_name
+                // and last_name are NOT NULL in the schema; substitute ''
+                // when the CSV only has one half so the insert succeeds.
+                $optional = array_filter([
+                    'email'                 => $email ?: null,
+                    'phone'                 => $phone ?: null,
+                    'stage'                 => $normalisedStage,
+                    'dob'                   => $this->parseDate($raw['dateofbirth'] ?? $raw['dob'] ?? null),
+                    'age'                   => isset($raw['age']) && is_numeric($raw['age']) ? (int) $raw['age'] : null,
+                    'marital_status'        => $raw['maritalstatus'] ?? null,
+                    'residence_city'        => $raw['city'] ?? $raw['currentcity'] ?? null,
+                    'gender'                => $raw['gender'] ?? null,
+                    // Sales-dashboard mirror columns. Only set when the
+                    // value is a real link / parseable date so we don't
+                    // overwrite real data with the literal labels staff
+                    // sometimes type into the sheet ("ePathways PH Call
+                    // Update Form" etc).
+                    'calendar_date'         => $this->parseDate($raw['calendar'] ?? null),
+                    'client_info_link'      => filter_var($raw['clientinformationlink'] ?? '', FILTER_VALIDATE_URL) ?: null,
+                    'call_update_form_link' => filter_var($raw['callupdateformlink'] ?? '', FILTER_VALIDATE_URL) ?: null,
+                ], fn ($v) => $v !== null && $v !== '');
+
+                $payload = array_merge([
+                    'first_name' => $first,
+                    'last_name'  => $last,
+                ], $optional);
+
+                // JSON buckets — mapped against the actual normalised CSV
+                // headers. Falls back through several variants so an
+                // adjacent column name still maps cleanly.
+                $educationNotes = array_filter([
+                    'current_education_attainment' => $raw['currenteducationattainment'] ?? $raw['currenteducation'] ?? null,
+                    'bachelor_course'              => $raw['ifbachelorsdegreewhatcourse'] ?? $raw['ifbachelor'] ?? null,
+                ], fn ($v) => $v !== null && $v !== '');
+
+                $workInfo = array_filter([
+                    'current_job'      => $raw['currentjoboccupation'] ?? $raw['currentjob'] ?? null,
+                    'current_location' => $raw['currentlocation'] ?? null,
+                ], fn ($v) => $v !== null && $v !== '');
+
+                $familyInfo = array_filter([
+                    // Pathway / intent
+                    'pathway'                  => $raw['whatpathwayareyouinterestedin'] ?? $raw['whatpathway'] ?? $raw['whatpath'] ?? null,
+                    'willing_to_invest'        => $raw['areyouwillingtoinvestinstudyingabroad'] ?? null,
+                    'willing_to_proceed'       => $raw['areyouwillingtoproceedwithyourstudentvisaapplicationfornewzealand'] ?? null,
+                    'preferred_contact_time'   => $raw['preferredtimeforacallaftercompletingtheform'] ?? $raw['preferredtime'] ?? null,
+
+                    // Partner / spouse
+                    'partner_name'             => $raw['fullnameofpartnerspouse'] ?? $raw['partnersp'] ?? null,
+                    'partner_age'              => $raw['ageofpartnerspouse'] ?? $raw['ageofpartner'] ?? null,
+                    'partner_education'        => $raw['partnerspousecurrenteducationlevel'] ?? null,
+                    'partner_education_other'  => $raw['otherpartnerspousecurrenteducationlevel'] ?? $raw['otherpartnersp'] ?? null,
+                    'partner_work_experience'  => $raw['partnerspousecurrentworkexperience'] ?? null,
+                    'partner_years_experience' => $raw['partnerspouseyearsofexperience'] ?? $raw['partneryearsofexperience'] ?? $raw['yearsofexperience'] ?? null,
+
+                    // Children
+                    'number_of_children'       => $raw['numberofchildren'] ?? $raw['numberofchild'] ?? null,
+                    'children_ages'            => $raw['childage'] ?? $raw['childrenages'] ?? null,
+                    'will_bring_children'      => $raw['willyoubringyourchildren'] ?? $raw['willyoubring'] ?? null,
+                    'will_bring_children_other'=> $raw['otherwillyoubringyourchildren'] ?? $raw['otherwillpartnerspouse'] ?? null,
+                ], fn ($v) => $v !== null && $v !== '');
+
+                // Call Notes — write as a LeadNote row, NOT on the lead itself.
+                $callNotes = trim((string) ($raw['callnotes'] ?? ''));
+
+                // ── Dedupe ────────────────────────────────────────────────
+                $existing = Lead::where(function ($q) use ($email, $first, $last, $phone) {
+                    if ($email) $q->whereRaw('LOWER(email) = ?', [strtolower($email)]);
+                    if ($first && $last && $phone) {
+                        $q->orWhere(function ($q2) use ($first, $last, $phone) {
+                            $q2->whereRaw('LOWER(first_name) = ?', [strtolower($first)])
+                               ->whereRaw('LOWER(last_name)  = ?', [strtolower($last)])
+                               ->where('phone', $phone);
+                        });
+                    }
+                })->first();
+
+                if ($existing) {
+                    // Backfill only — don't overwrite filled fields.
+                    $backfill = collect($payload)->filter(fn ($v, $k) => empty($existing->{$k}))->all();
+
+                    // Status/stage casing-fix — if the existing lead's
+                    // status doesn't match a canonical Lead::STAGES value
+                    // (likely from a prior import with UPPERCASE), but the
+                    // normalised version of it does, snap it to canonical.
+                    if ($normalisedStage && in_array($normalisedStage, Lead::STAGES, true)) {
+                        if (! in_array($existing->status, Lead::STAGES, true)) {
+                            $backfill['status'] = $normalisedStage;
+                        }
+                        if (! in_array($existing->stage, Lead::STAGES, true)) {
+                            $backfill['stage'] = $normalisedStage;
+                        }
+                    }
+
+                    // Merge JSON columns rather than replacing.
+                    $existingEducation = is_array($existing->education_notes) ? $existing->education_notes : [];
+                    $existingWork      = is_array($existing->work_info) ? $existing->work_info : [];
+                    $existingFamily    = is_array($existing->family_info) ? $existing->family_info : [];
+
+                    $mergedEducation = array_merge($educationNotes, $existingEducation);
+                    $mergedWork      = array_merge($workInfo, $existingWork);
+                    $mergedFamily    = array_merge($familyInfo, $existingFamily);
+
+                    if ($mergedEducation !== $existingEducation) $backfill['education_notes'] = $mergedEducation;
+                    if ($mergedWork      !== $existingWork)      $backfill['work_info']       = $mergedWork;
+                    if ($mergedFamily    !== $existingFamily)    $backfill['family_info']     = $mergedFamily;
+
+                    if (! empty($backfill)) {
+                        $existing->fill($backfill)->save();
+                    }
+                    $leadForNote = $existing;
+                    $updated++;
+                } else {
+                    // Create new.
+                    $payload['lead_id']    = 'LP-' . str_pad((string) ((int) Lead::max('id') + 1001), 5, '0', STR_PAD_LEFT);
+                    $payload['source']     = 'csv-import';
+                    // status uses the canonical stage too — keeps the
+                    // pipeline filter chips matching after import.
+                    $payload['status']     = $normalisedStage ?: 'New Leads';
+                    $payload['education_notes'] = $educationNotes ?: null;
+                    $payload['work_info']       = $workInfo ?: null;
+                    $payload['family_info']     = $familyInfo ?: null;
+
+                    $leadForNote = Lead::create($payload);
+                    $created++;
+
+                    // Preserve the source-system's original Created /
+                    // Updated timestamps if the CSV provided them. Uses
+                    // saveQuietly so the LogsActivity trait doesn't fire
+                    // a spurious "lead.updated" entry for the back-dating.
+                    $csvCreated = $this->parseTs($raw['created'] ?? null);
+                    $csvUpdated = $this->parseTs($raw['updated'] ?? null);
+                    if ($csvCreated || $csvUpdated) {
+                        $leadForNote->forceFill([
+                            'created_at' => $csvCreated ?? $leadForNote->created_at,
+                            'updated_at' => $csvUpdated ?? $csvCreated ?? $leadForNote->updated_at,
+                        ])->saveQuietly();
+                    }
+                }
+
+                // Capture Call Notes as a real LeadNote row.
+                if ($callNotes && $leadForNote) {
+                    try {
+                        \App\Models\LeadNote::create([
+                            'lead_id'    => $leadForNote->id,
+                            'user_id'    => auth()->id(),
+                            'author_name'=> optional(auth()->user())->name ?: 'CSV Import',
+                            'author_role'=> optional(auth()->user())->role ?: 'system',
+                            'body'       => $callNotes,
+                        ]);
+                    } catch (\Throwable $e) {
+                        \Illuminate\Support\Facades\Log::warning('Import note create failed', ['lead_id' => $leadForNote->id, 'error' => $e->getMessage()]);
+                    }
+                }
+
+                } catch (\Throwable $e) {
+                    // One row failed — log it, continue with the rest.
+                    $skipped++;
+                    $id = ($first || $last) ? trim("{$first} {$last}") : ($email ?: '(no name)');
+                    $errors[] = "Row {$rowNum} [{$id}] — " . $e->getMessage();
+                    \Illuminate\Support\Facades\Log::warning('Lead import row failed', ['row' => $rowNum, 'error' => $e->getMessage()]);
+                }
+            }
+            fclose($fh);
+
+            $msg = "Import complete — created {$created}, updated {$updated}, skipped {$skipped}.";
+            return back()
+                ->with('success', $msg)
+                ->with('import_summary', ['created' => $created, 'updated' => $updated, 'skipped' => $skipped, 'errors' => array_slice($errors, 0, 50)]);
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('Lead import failed', ['error' => $e->getMessage()]);
+            return back()->with('error', 'Import failed: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Build a row payload keyed by the normalised header. When the CSV
+     * has duplicate column names (e.g. two "Marital Status" columns —
+     * one filled, one empty), keep whichever value is non-empty rather
+     * than letting the later occurrence wipe out the earlier one.
+     */
+    private function mapRow(array $headers, array $row): array
+    {
+        $out = [];
+        foreach ($headers as $i => $h) {
+            if ($h === '') continue;
+            $val = trim((string) ($row[$i] ?? ''));
+            if (! isset($out[$h]) || $out[$h] === '') {
+                $out[$h] = $val;
+            }
+        }
+        return $out;
+    }
+
+    /**
+     * Map a raw CSV stage value (often UPPERCASE or near-canonical) onto
+     * the closest entry in Lead::STAGES. Falls back to the raw value if
+     * no match — better to keep the original than to silently drop.
+     */
+    private function normaliseStage(?string $raw): ?string
+    {
+        $s = trim((string) $raw);
+        if ($s === '') return null;
+        $needle = preg_replace('/[^a-z0-9]/', '', strtolower($s));
+
+        // Build lookup once per request.
+        static $map = null;
+        if ($map === null) {
+            $map = [];
+            foreach (Lead::STAGES as $canonical) {
+                $map[preg_replace('/[^a-z0-9]/', '', strtolower($canonical))] = $canonical;
+            }
+        }
+
+        return $map[$needle] ?? $s;
+    }
+
+    /** Parse a date string in any common format — returns ISO or null. */
+    private function parseDate(?string $s): ?string
+    {
+        $s = trim((string) $s);
+        if (! $s) return null;
+        try {
+            return \Illuminate\Support\Carbon::parse($s)->toDateString();
+        } catch (\Throwable $e) {
+            return null;
+        }
+    }
+
+    /**
+     * Parse a full timestamp (date + time + offset) — returns a Carbon
+     * instance or null. Used to preserve the CSV's original Created /
+     * Updated timestamps when back-dating imported leads.
+     */
+    private function parseTs(?string $s)
+    {
+        $s = trim((string) $s);
+        if (! $s) return null;
+        try {
+            return \Illuminate\Support\Carbon::parse($s);
+        } catch (\Throwable $e) {
+            return null;
+        }
+    }
+
+    public function convertToCase($id)
+    {
+        try {
+            $lead = Lead::findOrFail($id);
+            if ($lead->is_immigration_case) return back()->with('error', 'Already an immigration case.');
+            $lead->fill([
+                'is_immigration_case'      => true,
+                'immigration_converted_at' => now(),
+                'immigration_converted_by' => auth()->id(),
+            ])->save();
+            return back()->with('success', "Lead {$lead->lead_id} is now an immigration case.");
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('Convert to case failed', ['id' => $id, 'error' => $e->getMessage()]);
+            return back()->with('error', 'Could not convert this lead.');
+        }
+    }
+
+    public function revertCase($id)
+    {
+        try {
+            $lead = Lead::findOrFail($id);
+            $lead->fill(['is_immigration_case' => false, 'immigration_converted_at' => null, 'immigration_converted_by' => null])->save();
+            return back()->with('success', "Lead {$lead->lead_id} reverted.");
+        } catch (\Throwable $e) {
+            return back()->with('error', 'Could not revert.');
+        }
+    }
+
+    public function convertToAccommodation($id)
+    {
+        try {
+            $lead = Lead::findOrFail($id);
+            if ($lead->is_accommodation_client) return back()->with('error', 'Already an accommodation client.');
+            $lead->fill([
+                'is_accommodation_client'    => true,
+                'accommodation_converted_at' => now(),
+                'accommodation_converted_by' => auth()->id(),
+            ])->save();
+            return back()->with('success', "Lead {$lead->lead_id} is now an accommodation client.");
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('Convert to accommodation failed', ['id' => $id, 'error' => $e->getMessage()]);
+            return back()->with('error', 'Could not convert this lead.');
+        }
+    }
+
+    public function revertAccommodation($id)
+    {
+        try {
+            $lead = Lead::findOrFail($id);
+            $lead->fill(['is_accommodation_client' => false, 'accommodation_converted_at' => null, 'accommodation_converted_by' => null])->save();
+            return back()->with('success', "Lead {$lead->lead_id} reverted.");
+        } catch (\Throwable $e) {
+            return back()->with('error', 'Could not revert.');
+        }
+    }
+
+    /**
+     * Update the INZ tracking fields on a lead — visa type, lodgement date,
+     * INZ reference number, current status, decision date.
+     */
+    public function updateInz(\Illuminate\Http\Request $request, $id)
+    {
+        $validated = $request->validate([
+            'inz_visa_type'   => 'nullable|string|max:120',
+            'inz_lodged_at'   => 'nullable|date',
+            'inz_reference'   => 'nullable|string|max:60',
+            'inz_status'      => ['nullable', \Illuminate\Validation\Rule::in([
+                'Lodged', 'Info Requested', 'Decision Pending', 'Approved', 'Declined', 'Withdrawn',
+            ])],
+            'inz_decision_at' => 'nullable|date',
+        ]);
+
+        try {
+            $lead = Lead::findOrFail($id);
+            $lead->fill($validated)->save();
+            return back()->with('success', 'INZ tracking updated.');
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('INZ update failed', ['id' => $id, 'error' => $e->getMessage()]);
+            return back()->with('error', 'Could not update INZ tracking.');
+        }
+    }
+
+    public function revertStudent($id)
+    {
+        try {
+            $lead = Lead::findOrFail($id);
+            $lead->fill([
+                'is_student'           => false,
+                'student_converted_at' => null,
+                'student_converted_by' => null,
+            ])->save();
+            return back()->with('success', "Lead {$lead->lead_id} reverted to non-student.");
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('Revert student failed', ['id' => $id, 'error' => $e->getMessage()]);
+            return back()->with('error', 'Could not revert this conversion.');
         }
     }
 
