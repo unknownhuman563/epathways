@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Head, Link, router, usePage } from "@inertiajs/react";
 import {
     Search, KeyRound, Clock, Check, Mail, ShieldOff, FileText, Phone,
     Filter, ArrowUpDown, ArrowUp, ArrowDown, ChevronLeft, ChevronRight,
     MoreHorizontal, ChevronDown, ChevronRight as ChevronRightIcon, ExternalLink, UserCheck,
-    Upload, Loader,
+    Upload, Loader, Plus, X,
 } from "lucide-react";
 
 // ── Stage colour map ───────────────────────────────────────────────────────
@@ -109,7 +110,7 @@ const PAGE_SIZE = 20;
 // prop is missing.
 const PORTAL_LABEL = { sales: "Sales", education: "Education", immigration: "Immigration" };
 
-export default function SalesLeads({ leads = [], statuses = [], portal = "sales" }) {
+export default function SalesLeads({ leads = [], statuses = [], programs = [], staffOptions = [], portal = "sales" }) {
     const portalBase = `/portal/${portal}`;
     const portalLabel = PORTAL_LABEL[portal] || "Sales";
     // Sales, Education, and Immigration can all request portal invitations
@@ -126,6 +127,12 @@ export default function SalesLeads({ leads = [], statuses = [], portal = "sales"
     const [openStageMenuId, setOpenStageMenuId] = useState(null);
     const [openRowMenuId, setOpenRowMenuId] = useState(null);
     const [expandedId, setExpandedId] = useState(null);
+    const [showFilters, setShowFilters] = useState(false);
+    const EMPTY_ADV = { goal_status: "", pre_screened_by: "", program: "", portal: "" };
+    const [adv, setAdv] = useState(EMPTY_ADV);
+    const activeAdvCount = Object.values(adv).filter(Boolean).length + (statusFilter !== "All" ? 1 : 0);
+    const clearAdv = () => { setAdv(EMPTY_ADV); setStatusFilter("All"); setPage(1); };
+    const setAdvFilter = (k) => (e) => { setAdv((a) => ({ ...a, [k]: e.target.value })); setPage(1); };
 
     const toggleExpand = (id) => setExpandedId(expandedId === id ? null : id);
 
@@ -133,9 +140,13 @@ export default function SalesLeads({ leads = [], statuses = [], portal = "sales"
         const q = search.toLowerCase().trim();
         const rows = leads.filter((l) => {
             const hay = `${l.name || ""} ${l.email || ""} ${l.lead_id || ""} ${l.phone || ""} ${l.source || ""}`.toLowerCase();
-            const matchSearch = !q || hay.includes(q);
-            const matchStatus = statusFilter === "All" || l.status === statusFilter;
-            return matchSearch && matchStatus;
+            const matchSearch  = !q || hay.includes(q);
+            const matchStatus  = statusFilter === "All" || l.status === statusFilter;
+            const matchGoal    = !adv.goal_status || l.goal_setting_status === adv.goal_status;
+            const matchPre     = !adv.pre_screened_by || l.pre_screened_by === adv.pre_screened_by;
+            const matchProgram = !adv.program || l.program_offered === adv.program;
+            const matchPortal  = !adv.portal || (l.portal_invitation_status || "none") === adv.portal;
+            return matchSearch && matchStatus && matchGoal && matchPre && matchProgram && matchPortal;
         });
 
         const dir = sortDir === "asc" ? 1 : -1;
@@ -146,7 +157,7 @@ export default function SalesLeads({ leads = [], statuses = [], portal = "sales"
             if (av > bv) return 1 * dir;
             return 0;
         });
-    }, [leads, search, statusFilter, sortKey, sortDir]);
+    }, [leads, search, statusFilter, adv, sortKey, sortDir]);
 
     const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
     const safePage = Math.min(page, totalPages);
@@ -197,7 +208,10 @@ export default function SalesLeads({ leads = [], statuses = [], portal = "sales"
                         Pipeline · {filtered.length} {filtered.length === 1 ? "opportunity" : "opportunities"}
                     </p>
                 </div>
-                <ImportLeadsButton />
+                <div className="flex items-center gap-2">
+                    <AddLeadButton portalBase={portalBase} statuses={statuses} programs={programs} staffOptions={staffOptions} />
+                    <ImportLeadsButton />
+                </div>
             </div>
 
             {/* Toolbar */}
@@ -243,14 +257,20 @@ export default function SalesLeads({ leads = [], statuses = [], portal = "sales"
                                 </button>
                             ))}
                         </div>
-                        <button
-                            type="button"
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold text-gray-600 bg-white border border-gray-200 hover:bg-gray-50"
-                            title="Advanced filters (coming soon)"
-                        >
-                            <Filter size={12} />
-                            Filters
-                        </button>
+                        <FiltersPopover
+                            open={showFilters}
+                            onToggle={() => setShowFilters((o) => !o)}
+                            onClose={() => setShowFilters(false)}
+                            activeCount={activeAdvCount}
+                            adv={adv}
+                            setAdvFilter={setAdvFilter}
+                            clearAdv={clearAdv}
+                            statuses={statuses}
+                            statusFilter={statusFilter}
+                            onStatusChange={(v) => { setStatusFilter(v); setPage(1); }}
+                            programs={programs}
+                            staffOptions={staffOptions}
+                        />
                         <button
                             type="button"
                             onClick={() => toggleSort(sortKey)}
@@ -487,6 +507,215 @@ export default function SalesLeads({ leads = [], statuses = [], portal = "sales"
                     </div>
                 )}
             </div>
+        </div>
+    );
+}
+
+// ── Add Lead — manual create with the dashboard-sheet fields ───────────────
+
+const GOAL_STATUS_OPTIONS = ["Consultation Done", "For Proposal", "Proposal Sent", "No Show"];
+
+const NAME_SUFFIXES = ["Jr.", "Sr.", "II", "III", "IV", "V"];
+
+function AddLeadButton({ portalBase, statuses = [], programs = [], staffOptions = [] }) {
+    const [open, setOpen] = useState(false);
+    const [saving, setSaving] = useState(false);
+    const blank = {
+        first_name: "", last_name: "", suffix: "", email: "", phone: "", status: statuses[0] || "New Leads", assessment_date: "",
+        pre_screened_by: "", pre_screening_notes: "", program_offered: "",
+        goal_setting_by: "", goal_setting_status: "", goal_setting_notes: "",
+        calendar_date: "", client_info_link: "", call_update_form_link: "",
+    };
+    const [form, setForm] = useState(blank);
+    const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
+
+    // Lock background scroll + close on Escape while the modal is open.
+    useEffect(() => {
+        if (!open) return;
+        const onKey = (e) => { if (e.key === "Escape") setOpen(false); };
+        document.addEventListener("keydown", onKey);
+        document.body.style.overflow = "hidden";
+        return () => {
+            document.removeEventListener("keydown", onKey);
+            document.body.style.overflow = "";
+        };
+    }, [open]);
+
+    const submit = (e) => {
+        e.preventDefault();
+        if (!form.first_name.trim()) return;
+        setSaving(true);
+        router.post(`${portalBase}/leads`, form, {
+            preserveScroll: true,
+            onSuccess: () => { setForm(blank); setOpen(false); },
+            onFinish: () => setSaving(false),
+        });
+    };
+
+    return (
+        <>
+            <button
+                type="button"
+                onClick={() => setOpen(true)}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-xl hover:bg-gray-800 text-sm font-semibold transition-colors shadow-sm"
+            >
+                <Plus size={16} /> Add Lead
+            </button>
+
+            {open && createPortal(
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4" onMouseDown={(e) => { if (e.target === e.currentTarget) setOpen(false); }}>
+                    <div className="relative w-full max-w-3xl bg-white rounded-2xl shadow-xl max-h-[92vh] flex flex-col">
+                        {/* Header */}
+                        <div className="flex items-center justify-between px-6 py-3 border-b border-gray-100">
+                            <div>
+                                <h2 className="text-base font-bold text-gray-900">Add Lead</h2>
+                                <p className="text-[11px] text-gray-500">Create a lead with the dashboard fields. Only the name is required.</p>
+                            </div>
+                            <button type="button" onClick={() => setOpen(false)} className="p-2 text-gray-400 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors">
+                                <X size={18} />
+                            </button>
+                        </div>
+
+                        <form onSubmit={submit} className="px-6 py-4 space-y-3 overflow-y-auto">
+                            {/* Core details — 3 across so they sit in tidy rows. */}
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-x-4 gap-y-3">
+                                <Field label="First name" required>
+                                    <input value={form.first_name} onChange={set("first_name")} required placeholder="First name" className={inputCls} />
+                                </Field>
+                                <Field label="Last name">
+                                    <input value={form.last_name} onChange={set("last_name")} placeholder="Last name" className={inputCls} />
+                                </Field>
+                                <Field label="Suffix">
+                                    <select value={form.suffix} onChange={set("suffix")} className={inputCls}>
+                                        <option value="">—</option>
+                                        {NAME_SUFFIXES.map((s) => <option key={s} value={s}>{s}</option>)}
+                                    </select>
+                                </Field>
+                                <Field label="Email">
+                                    <input type="email" value={form.email} onChange={set("email")} placeholder="name@email.com" className={inputCls} />
+                                </Field>
+                                <Field label="Contact number">
+                                    <input type="tel" value={form.phone} onChange={set("phone")} placeholder="e.g. (63977) 626-0738" className={inputCls} />
+                                </Field>
+                                <Field label="Status">
+                                    <select value={form.status} onChange={set("status")} className={inputCls}>
+                                        {statuses.map((s) => <option key={s} value={s}>{s}</option>)}
+                                    </select>
+                                </Field>
+                                <Field label="Program offered">
+                                    <select value={form.program_offered} onChange={set("program_offered")} className={inputCls}>
+                                        <option value="">— Select program —</option>
+                                        {programs.map((p) => <option key={p} value={p}>{p}</option>)}
+                                    </select>
+                                </Field>
+                                <Field label="Assessment date">
+                                    <input type="date" value={form.assessment_date} onChange={set("assessment_date")} className={inputCls} />
+                                </Field>
+                                <Field label="Calendar date">
+                                    <input type="date" value={form.calendar_date} onChange={set("calendar_date")} className={inputCls} />
+                                </Field>
+                            </div>
+
+                            {/* Pre-screening + goal-setting — styled like the
+                                Internal Notes composer: gray panel, tracked
+                                uppercase labels, status as toggle pills. */}
+                            <div className="rounded-xl border border-gray-200 bg-gray-50/60 p-4">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                                    {/* Pre-screening */}
+                                    <div className="space-y-3">
+                                        <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-gray-500">Pre-screening</p>
+                                        <div>
+                                            <p className={noteLabelCls}>Pre-screened by</p>
+                                            <select value={form.pre_screened_by} onChange={set("pre_screened_by")} className={noteInputCls}>
+                                                <option value="">— Select staff —</option>
+                                                {staffOptions.map((u) => <option key={u.id} value={u.name}>{u.name} · {u.role}</option>)}
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <p className={noteLabelCls}>Pre-screening notes</p>
+                                            <textarea value={form.pre_screening_notes} onChange={set("pre_screening_notes")} rows={3} placeholder="Type here" className={noteInputCls + " resize-none"} />
+                                        </div>
+                                    </div>
+
+                                    {/* Goal-setting */}
+                                    <div className="space-y-3">
+                                        <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-gray-500">Goal-setting</p>
+                                        <div>
+                                            <p className={noteLabelCls}>Goal-setting status</p>
+                                            <div className="flex flex-wrap gap-1.5">
+                                                {GOAL_STATUS_OPTIONS.map((s) => {
+                                                    const active = form.goal_setting_status === s;
+                                                    return (
+                                                        <button
+                                                            key={s}
+                                                            type="button"
+                                                            onClick={() => setForm((f) => ({ ...f, goal_setting_status: active ? "" : s }))}
+                                                            className={`inline-flex items-center px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider border transition-all ${
+                                                                active ? "bg-purple-600 text-white border-purple-600" : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"
+                                                            }`}
+                                                        >
+                                                            {s}
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <p className={noteLabelCls}>Goal-setting by</p>
+                                            <select value={form.goal_setting_by} onChange={set("goal_setting_by")} className={noteInputCls}>
+                                                <option value="">— Select staff —</option>
+                                                {staffOptions.map((u) => <option key={u.id} value={u.name}>{u.name} · {u.role}</option>)}
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <p className={noteLabelCls}>Goal-setting notes</p>
+                                            <textarea value={form.goal_setting_notes} onChange={set("goal_setting_notes")} rows={3} placeholder="Type here" className={noteInputCls + " resize-none"} />
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Links */}
+                            <div className="pt-3 border-t border-gray-100 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <Field label="Client information link">
+                                    <input type="url" value={form.client_info_link} onChange={set("client_info_link")} placeholder="https://…" className={inputCls} />
+                                </Field>
+                                <Field label="Call update form link">
+                                    <input type="url" value={form.call_update_form_link} onChange={set("call_update_form_link")} placeholder="https://…" className={inputCls} />
+                                </Field>
+                            </div>
+                        </form>
+
+                        {/* Footer — pinned so the actions are always visible. */}
+                        <div className="flex items-center justify-end gap-2 px-6 py-3 border-t border-gray-100">
+                            <button type="button" onClick={() => setOpen(false)} className="px-4 py-2 rounded-lg text-sm font-semibold text-gray-600 hover:bg-gray-100 transition-colors">
+                                Cancel
+                            </button>
+                            <button type="button" onClick={submit} disabled={saving || !form.first_name.trim()} className="inline-flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-lg text-sm font-semibold hover:bg-gray-800 transition-colors disabled:opacity-40">
+                                {saving ? <Loader size={15} className="animate-spin" /> : <Plus size={15} />}
+                                {saving ? "Saving…" : "Add Lead"}
+                            </button>
+                        </div>
+                    </div>
+                </div>,
+                document.body
+            )}
+        </>
+    );
+}
+
+const inputCls = "w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white outline-none focus:border-gray-900 transition-colors";
+// Internal-notes composer styling — used for the pre-screen / goal-setting block.
+const noteInputCls = "w-full px-3 py-1.5 border border-gray-200 rounded-md text-xs bg-white outline-none focus:border-gray-900 transition-colors";
+const noteLabelCls = "text-[10px] font-bold uppercase tracking-[0.22em] text-gray-500 mb-1.5";
+
+function Field({ label, required = false, wide = false, children }) {
+    return (
+        <div className={wide ? "sm:col-span-2" : ""}>
+            <label className="block text-[11px] font-semibold text-gray-600 mb-1">
+                {label}{required && <span className="text-red-500"> *</span>}
+            </label>
+            {children}
         </div>
     );
 }
@@ -801,6 +1030,105 @@ function DashField({ label, wide = false, children }) {
         <div className={wide ? "md:col-span-2 lg:col-span-2 xl:col-span-2" : ""}>
             <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-gray-500 mb-1">{label}</p>
             <div className="text-xs">{children}</div>
+        </div>
+    );
+}
+
+// ── Advanced filters popover ───────────────────────────────────────────────
+
+const PORTAL_FILTER_OPTIONS = [
+    { v: "none", label: "No portal" },
+    { v: "pending", label: "Awaiting admin" },
+    { v: "sent", label: "Invitation sent" },
+    { v: "accepted", label: "Portal active" },
+    { v: "revoked", label: "Revoked" },
+];
+
+function FiltersPopover({ open, onToggle, onClose, activeCount, adv, setAdvFilter, clearAdv, statuses = [], statusFilter = "All", onStatusChange, programs = [], staffOptions = [] }) {
+    const ref = useRef(null);
+
+    useEffect(() => {
+        if (!open) return;
+        const onDoc = (e) => { if (ref.current && !ref.current.contains(e.target)) onClose(); };
+        const onKey = (e) => { if (e.key === "Escape") onClose(); };
+        document.addEventListener("mousedown", onDoc);
+        document.addEventListener("keydown", onKey);
+        return () => { document.removeEventListener("mousedown", onDoc); document.removeEventListener("keydown", onKey); };
+    }, [open, onClose]);
+
+    const cls = "w-full px-2.5 py-1.5 border border-gray-200 rounded-md text-xs bg-white outline-none focus:border-gray-900";
+    const lbl = "block text-[10px] font-bold uppercase tracking-[0.18em] text-gray-500 mb-1";
+
+    return (
+        <div ref={ref} className="relative">
+            <button
+                type="button"
+                onClick={onToggle}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold border transition-all ${
+                    activeCount > 0 ? "bg-gray-900 text-white border-gray-900" : "text-gray-600 bg-white border-gray-200 hover:bg-gray-50"
+                }`}
+            >
+                <Filter size={12} />
+                Filters
+                {activeCount > 0 && (
+                    <span className="inline-flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full bg-white/25 text-[10px] font-bold tabular-nums">
+                        {activeCount}
+                    </span>
+                )}
+            </button>
+
+            {open && (
+                <div className="absolute left-0 mt-2 w-72 bg-white border border-gray-200 rounded-xl shadow-lg z-30 p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-gray-500">Advanced filters</p>
+                        {activeCount > 0 && (
+                            <button type="button" onClick={clearAdv} className="text-[10px] font-bold uppercase tracking-wider text-blue-600 hover:text-blue-800">
+                                Clear all
+                            </button>
+                        )}
+                    </div>
+
+                    <div>
+                        <label className={lbl}>Stage</label>
+                        <select value={statusFilter} onChange={(e) => onStatusChange(e.target.value)} className={cls}>
+                            <option value="All">All stages</option>
+                            {statuses.map((s) => <option key={s} value={s}>{s}</option>)}
+                        </select>
+                    </div>
+
+                    <div>
+                        <label className={lbl}>Goal-setting status</label>
+                        <select value={adv.goal_status} onChange={setAdvFilter("goal_status")} className={cls}>
+                            <option value="">Any</option>
+                            {GOAL_STATUS_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
+                        </select>
+                    </div>
+
+                    <div>
+                        <label className={lbl}>Pre-screened by</label>
+                        <select value={adv.pre_screened_by} onChange={setAdvFilter("pre_screened_by")} className={cls}>
+                            <option value="">Any</option>
+                            {staffOptions.map((u) => <option key={u.id} value={u.name}>{u.name}</option>)}
+                        </select>
+                    </div>
+
+                    <div>
+                        <label className={lbl}>Program offered</label>
+                        <select value={adv.program} onChange={setAdvFilter("program")} className={cls}>
+                            <option value="">Any</option>
+                            {programs.map((p) => <option key={p} value={p}>{p}</option>)}
+                        </select>
+                    </div>
+
+                    <div>
+                        <label className={lbl}>Portal status</label>
+                        <select value={adv.portal} onChange={setAdvFilter("portal")} className={cls}>
+                            <option value="">Any</option>
+                            {PORTAL_FILTER_OPTIONS.map((o) => <option key={o.v} value={o.v}>{o.label}</option>)}
+                        </select>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

@@ -2,7 +2,11 @@
   "permissions": {
     "allow": [
       "Bash(php artisan *)",
-      "Bash(npm run *)"
+      "Bash(npm run *)",
+      "Bash(findstr /C:\"leads.store\")",
+      "Bash(npx --no-install esbuild --loader:.jsx=jsx --bundle=false resources/js/pages/portal/sales/Leads.jsx)",
+      "Bash(echo \"esbuild exit: $?\")",
+      "PowerShell(npx --no-install esbuild --loader:.jsx=jsx --bundle=false resources/js/pages/portal/sales/Leads.jsx > $null 2>$null; Write-Output \"esbuild exit: $LASTEXITCODE\")"
     ]
   }
 }
