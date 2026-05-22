@@ -5,7 +5,8 @@ import {
     FileText, Download, Edit, Phone, Mail, MapPin,
     CheckCircle2, XCircle, FileQuestion, Calendar,
     TrendingUp, AlertTriangle, Clock, History, ChevronDown, Check,
-    User as UserIcon, ArrowRight, Sparkles, FolderOpen, Copy, Info,
+    User as UserIcon, ArrowRight, Sparkles, FolderOpen, Copy, Info, Undo2,
+    Globe, Home,
 } from 'lucide-react';
 import { CHECKLIST, STATUSES, STATUS_CHIP, STATUS_LABEL, SECTION_STATUSES, IMPORTANT_NOTES, renderFilename, currentSectionIndex } from '@/data/leadDocumentChecklist';
 
@@ -40,7 +41,17 @@ export default function LeadDetails({ lead: backendLead, activity = [], stageTim
     const currentUrl = usePage().url || '';
     const backToLeadsUrl = currentUrl.replace(/\/leads\/[^/?#]+.*$/, '/leads') || '/admin/leads';
 
-    const [activeTab, setActiveTab] = useState('stats');
+    // Honour ?tab=documents (or stats / personal / activity) in the URL so
+    // links from the Education Documents folder list land directly on the
+    // Documents tab instead of always opening on Lead Stats.
+    const initialTab = (() => {
+        const q = currentUrl.includes('?') ? currentUrl.split('?')[1] : '';
+        const params = new URLSearchParams(q);
+        const t = params.get('tab');
+        return ['stats', 'personal', 'activity', 'documents'].includes(t) ? t : 'stats';
+    })();
+
+    const [activeTab, setActiveTab] = useState(initialTab);
     const [stageOpen, setStageOpen] = useState(false);
     const [savingStage, setSavingStage] = useState(false);
     const stageRef = useRef(null);
@@ -110,6 +121,12 @@ export default function LeadDetails({ lead: backendLead, activity = [], stageTim
         e.level?.toLowerCase().includes('college') ||
         e.level?.toLowerCase().includes('tertiary')
     ) || {};
+
+    // Shortcuts to the JSON-bucketed fields imported from CSV / quick-lead
+    // forms. Used inline below to fill the relevant existing sections.
+    const importedEdu    = (backendLead.education_notes && !Array.isArray(backendLead.education_notes)) ? backendLead.education_notes : {};
+    const importedWork   = (backendLead.work_info && !Array.isArray(backendLead.work_info)) ? backendLead.work_info : {};
+    const importedFamily = (backendLead.family_info && !Array.isArray(backendLead.family_info)) ? backendLead.family_info : {};
 
     // Aggregate all education documents into one list
     let allDocuments = backendLead.education_notes?.education_docs || [];
@@ -375,7 +392,17 @@ export default function LeadDetails({ lead: backendLead, activity = [], stageTim
                     </div>
                 </div>
 
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 flex-wrap">
+                    {/* Multi-service conversion — three independent flags
+                        the lead can carry, collapsed into a single
+                        "Move to" menu. Active flags show as badges in
+                        the menu with an admin-only undo. */}
+                    <ConvertMenu
+                        lead={backendLead}
+                        canRevert={currentUser?.is_admin}
+                    />
+
+
                     <button className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 text-sm font-semibold transition-colors shadow-sm">
                         <Download size={16} /> Export PDF
                     </button>
@@ -412,20 +439,29 @@ export default function LeadDetails({ lead: backendLead, activity = [], stageTim
                 </div>
             </div>
 
-            {/* ── Journey tab — pre-screen + goal-setting capture on the left,
-                  internal notes on the right, full-width activity log below ── */}
+            {/* ── Journey tab — Key milestones strip on top, Internal
+                  Notes (left, wider) + Stage Timeline (right) below,
+                  full-width activity log at the bottom ── */}
             {activeTab === 'activity' && (
                 <div className="space-y-4">
+                    {/* INZ tracking — only when this lead is an immigration case. */}
+                    {backendLead.is_immigration_case && (
+                        <InzTrackingPanel lead={backendLead} />
+                    )}
+
+                    {/* Key milestones — full width above the 2-col row. */}
+                    <KeyMilestonesPanel lead={backendLead} />
+
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
                         <div className="lg:col-span-2">
-                            <JourneyPanel
-                                lead={backendLead}
-                                staffOptions={staffOptions}
-                                currentStage={backendLead.status}
-                                stageTimeline={stageTimeline}
-                            />
+                            <NotesPanel leadId={backendLead.id} notes={notes} currentUser={currentUser} staffOptions={staffOptions} />
                         </div>
-                        <NotesPanel leadId={backendLead.id} notes={notes} currentUser={currentUser} />
+                        <JourneyPanel
+                            lead={backendLead}
+                            staffOptions={staffOptions}
+                            currentStage={backendLead.status}
+                            stageTimeline={stageTimeline}
+                        />
                     </div>
                     <ActivityLogPanel activity={activity} />
                 </div>
@@ -447,7 +483,7 @@ export default function LeadDetails({ lead: backendLead, activity = [], stageTim
                     <TagsPanel leadId={backendLead.id} tags={tags} allTags={allTags} />
                 </div>
 
-                <NotesPanel leadId={backendLead.id} notes={notes} currentUser={currentUser} />
+                <NotesPanel leadId={backendLead.id} notes={notes} currentUser={currentUser} staffOptions={staffOptions} />
             </div>
 
             {/* ── Personal Info tab — full profile sections below ── */}
@@ -621,7 +657,10 @@ export default function LeadDetails({ lead: backendLead, activity = [], stageTim
                         <DataRow label="Country of Citizenship" value={lead.personal.citizenship} />
                         <DataRow label="Current Country" value={lead.country} />
                         <DataRow label="Current Residence" value={lead.personal.residence} fullWidth />
-                        
+                        {importedFamily.preferred_contact_time && (
+                            <DataRow label="Preferred Contact Time" value={importedFamily.preferred_contact_time} />
+                        )}
+
                         <div className="col-span-1 md:col-span-2 pt-4 border-t border-gray-100 mt-2">
                             <h3 className="text-sm font-bold text-gray-900 mb-4 flex items-center gap-2">
                                 Passport Details {lead.personal.hasPassport ? <CheckCircle2 size={16} className="text-emerald-500" /> : <XCircle size={16} className="text-red-500" />}
@@ -648,6 +687,15 @@ export default function LeadDetails({ lead: backendLead, activity = [], stageTim
                         <DataRow label="Preferred Qualification Level" value={lead.studyPlans.qualificationLevel} />
                         <DataRow label="Preferred City" value={lead.studyPlans.preferredCity} />
                         <DataRow label="Preferred Intake" value={lead.studyPlans.preferredIntake} />
+                        {importedFamily.pathway && (
+                            <DataRow label="Pathway Interested In" value={importedFamily.pathway} fullWidth />
+                        )}
+                        {importedFamily.willing_to_invest && (
+                            <DataRow label="Willing to Invest in Study Abroad" value={importedFamily.willing_to_invest} />
+                        )}
+                        {importedFamily.willing_to_proceed && (
+                            <DataRow label="Willing to Proceed with NZ Student Visa" value={importedFamily.willing_to_proceed} />
+                        )}
 
                         <div className="col-span-1 md:col-span-2 pt-4 border-t border-gray-100 mt-2">
                             <h3 className="text-sm font-bold text-gray-900 mb-4 flex items-center gap-2">
@@ -740,7 +788,22 @@ export default function LeadDetails({ lead: backendLead, activity = [], stageTim
                 {/* 4. Education Background */}
                 <SectionCard title="4. Education Background" icon={GraduationCap}>
                     <div className="space-y-6">
-                        
+
+                        {/* Self-reported summary (from CSV / quick-lead intake) */}
+                        {(importedEdu.current_education_attainment || importedEdu.bachelor_course) && (
+                            <div>
+                                <h3 className="text-sm font-bold text-gray-900 mb-3 border-b border-gray-100 pb-2">Self-reported Education</h3>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
+                                    {importedEdu.current_education_attainment && (
+                                        <DataRow label="Current Education Attainment" value={importedEdu.current_education_attainment} />
+                                    )}
+                                    {importedEdu.bachelor_course && (
+                                        <DataRow label="Bachelor's Degree Course" value={importedEdu.bachelor_course} />
+                                    )}
+                                </div>
+                            </div>
+                        )}
+
                         {/* High School */}
                         <div>
                             <h3 className="text-sm font-bold text-gray-900 mb-3 border-b border-gray-100 pb-2 flex justify-between items-center">
@@ -820,8 +883,393 @@ export default function LeadDetails({ lead: backendLead, activity = [], stageTim
                     </div>
                 </SectionCard>
 
+                {/* 5. Work Background — self-reported from CSV / quick-lead. */}
+                {(importedWork.current_job || importedWork.current_location) && (
+                    <SectionCard title="5. Work Background" icon={DollarSign}>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-5">
+                            {importedWork.current_job && (
+                                <DataRow label="Current Job / Occupation" value={importedWork.current_job} />
+                            )}
+                            {importedWork.current_location && (
+                                <DataRow label="Current Location" value={importedWork.current_location} />
+                            )}
+                        </div>
+                    </SectionCard>
+                )}
+
+                {/* 6. Family & Partner — partner/spouse + children. */}
+                {(importedFamily.partner_name || importedFamily.partner_age || importedFamily.partner_education
+                    || importedFamily.partner_work_experience || importedFamily.partner_years_experience
+                    || importedFamily.number_of_children || importedFamily.children_ages
+                    || importedFamily.will_bring_children) && (
+                    <SectionCard title="6. Family & Partner" icon={UserIcon}>
+                        <div className="space-y-6">
+                            {/* Partner */}
+                            {(importedFamily.partner_name || importedFamily.partner_age || importedFamily.partner_education
+                                || importedFamily.partner_education_other || importedFamily.partner_work_experience
+                                || importedFamily.partner_years_experience) && (
+                                <div>
+                                    <h3 className="text-sm font-bold text-gray-900 mb-3 border-b border-gray-100 pb-2">Partner / Spouse</h3>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
+                                        {importedFamily.partner_name             && <DataRow label="Full Name"            value={importedFamily.partner_name} />}
+                                        {importedFamily.partner_age              && <DataRow label="Age"                  value={importedFamily.partner_age} />}
+                                        {importedFamily.partner_education        && <DataRow label="Current Education"    value={importedFamily.partner_education} />}
+                                        {importedFamily.partner_education_other  && <DataRow label="Education (Other)"    value={importedFamily.partner_education_other} />}
+                                        {importedFamily.partner_work_experience  && <DataRow label="Current Work"         value={importedFamily.partner_work_experience} />}
+                                        {importedFamily.partner_years_experience && <DataRow label="Years of Experience"  value={importedFamily.partner_years_experience} />}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Children */}
+                            {(importedFamily.number_of_children || importedFamily.children_ages
+                                || importedFamily.will_bring_children || importedFamily.will_bring_children_other) && (
+                                <div>
+                                    <h3 className="text-sm font-bold text-gray-900 mb-3 border-b border-gray-100 pb-2">Children</h3>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
+                                        {importedFamily.number_of_children        && <DataRow label="Number of Children" value={importedFamily.number_of_children} />}
+                                        {importedFamily.children_ages             && <DataRow label="Children's Ages"   value={importedFamily.children_ages} />}
+                                        {importedFamily.will_bring_children       && <DataRow label="Will Bring Children" value={importedFamily.will_bring_children} />}
+                                        {importedFamily.will_bring_children_other && <DataRow label="Children — Other Answer" value={importedFamily.will_bring_children_other} />}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </SectionCard>
+                )}
+
             </div>
             </div>
+        </div>
+    );
+}
+
+// ── Imported profile sections — renders the JSON-bucketed fields from
+// the CSV import (education / work / partner / children / intent) inside
+// the Personal Info tab. Only sub-cards with actual data render.
+
+function ImportedProfileSections({ lead }) {
+    const edu    = lead?.education_notes || {};
+    const work   = lead?.work_info       || {};
+    const family = lead?.family_info     || {};
+
+    // Helpers — extract known keys + leave the original JSON visible
+    // (handy when the importer brings in fields we haven't named yet).
+    const eduFields = [
+        { k: 'current_education_attainment', label: 'Current education' },
+        { k: 'bachelor_course',              label: "Bachelor's degree course" },
+    ];
+    const workFields = [
+        { k: 'current_job',      label: 'Current job / occupation' },
+        { k: 'current_location', label: 'Current location' },
+    ];
+    const intentFields = [
+        { k: 'pathway',                label: 'Pathway interested in' },
+        { k: 'willing_to_invest',      label: 'Willing to invest in study abroad' },
+        { k: 'willing_to_proceed',     label: 'Willing to proceed with NZ student visa' },
+        { k: 'preferred_contact_time', label: 'Preferred contact time' },
+    ];
+    const partnerFields = [
+        { k: 'partner_name',             label: 'Partner / spouse name' },
+        { k: 'partner_age',              label: 'Partner age' },
+        { k: 'partner_education',        label: 'Partner education' },
+        { k: 'partner_education_other',  label: 'Partner education (other)' },
+        { k: 'partner_work_experience',  label: 'Partner work experience' },
+        { k: 'partner_years_experience', label: 'Partner years of experience' },
+    ];
+    const childrenFields = [
+        { k: 'number_of_children',         label: 'Number of children' },
+        { k: 'children_ages',              label: "Children's ages" },
+        { k: 'will_bring_children',        label: 'Will you bring your children' },
+        { k: 'will_bring_children_other', label: 'Children — other answer' },
+    ];
+
+    const has = (bag, fields) => fields.some((f) => bag[f.k]);
+
+    return (
+        <div className="space-y-6">
+            <SubSection title="Pathway & intent" show={has(family, intentFields)}>
+                <ProfileGrid bag={family} fields={intentFields} />
+            </SubSection>
+
+            <SubSection title="Education" show={has(edu, eduFields)}>
+                <ProfileGrid bag={edu} fields={eduFields} />
+            </SubSection>
+
+            <SubSection title="Work" show={has(work, workFields)}>
+                <ProfileGrid bag={work} fields={workFields} />
+            </SubSection>
+
+            <SubSection title="Partner / spouse" show={has(family, partnerFields)}>
+                <ProfileGrid bag={family} fields={partnerFields} />
+            </SubSection>
+
+            <SubSection title="Children" show={has(family, childrenFields)}>
+                <ProfileGrid bag={family} fields={childrenFields} />
+            </SubSection>
+
+            {/* Empty state — JSON is set but none of the named keys matched
+                (e.g. legacy data or a partially-mapped CSV). Show the raw
+                JSON keys so the data isn't invisible. */}
+            {!(has(family, intentFields) || has(edu, eduFields) || has(work, workFields) || has(family, partnerFields) || has(family, childrenFields)) && (
+                <p className="text-sm text-gray-400 italic">No profile fields captured yet.</p>
+            )}
+        </div>
+    );
+}
+
+function SubSection({ title, show, children }) {
+    if (!show) return null;
+    return (
+        <div className="pt-1">
+            <h3 className="text-[11px] font-bold uppercase tracking-[0.22em] text-gray-500 mb-3">{title}</h3>
+            {children}
+        </div>
+    );
+}
+
+function ProfileGrid({ bag, fields }) {
+    return (
+        <dl className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
+            {fields.filter((f) => bag[f.k] !== undefined && bag[f.k] !== null && bag[f.k] !== '').map((f) => (
+                <div key={f.k} className="flex flex-col gap-1">
+                    <dt className="text-xs font-semibold text-gray-500 tracking-wide uppercase">{f.label}</dt>
+                    <dd className="text-sm font-medium text-gray-900 bg-gray-50/50 px-3 py-2 rounded-lg border border-gray-100">
+                        {String(bag[f.k])}
+                    </dd>
+                </div>
+            ))}
+        </dl>
+    );
+}
+
+// ── INZ tracking panel — visible on the Journey tab for immigration cases.
+
+const INZ_STATUSES = ['Lodged', 'Info Requested', 'Decision Pending', 'Approved', 'Declined', 'Withdrawn'];
+
+function InzTrackingPanel({ lead }) {
+    const [form, setForm] = useState({
+        inz_visa_type:   lead.inz_visa_type   || '',
+        inz_lodged_at:   lead.inz_lodged_at   ? String(lead.inz_lodged_at).slice(0, 10) : '',
+        inz_reference:   lead.inz_reference   || '',
+        inz_status:      lead.inz_status      || '',
+        inz_decision_at: lead.inz_decision_at ? String(lead.inz_decision_at).slice(0, 10) : '',
+    });
+    const [saving, setSaving] = useState(false);
+
+    const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
+
+    const submit = (e) => {
+        e?.preventDefault?.();
+        setSaving(true);
+        router.post(`/admin/leads/${lead.id}/inz`, form, {
+            preserveScroll: true,
+            preserveState: true,
+            onFinish: () => setSaving(false),
+        });
+    };
+
+    return (
+        <form onSubmit={submit} className="bg-white rounded-2xl border border-amber-200 shadow-sm overflow-hidden">
+            <div className="px-6 py-4 border-b border-amber-100 bg-gradient-to-br from-amber-50 to-white flex items-center justify-between gap-3 flex-wrap">
+                <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center">
+                        <Globe size={15} />
+                    </div>
+                    <div>
+                        <h2 className="text-sm font-bold uppercase tracking-wider text-gray-800">INZ tracking</h2>
+                        <p className="text-[11px] text-gray-500 mt-0.5">Lodgement, reference, current INZ status, and decision date.</p>
+                    </div>
+                </div>
+                <button type="submit" disabled={saving} className="px-4 py-1.5 bg-amber-600 text-white rounded-lg text-[11px] font-bold uppercase tracking-wider hover:bg-amber-700 transition-colors disabled:opacity-40">
+                    {saving ? 'Saving…' : 'Save INZ'}
+                </button>
+            </div>
+
+            <div className="p-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+                <label className="block">
+                    <span className="block text-[11px] font-semibold text-gray-600 mb-1.5">Visa type</span>
+                    <input type="text" value={form.inz_visa_type} onChange={set('inz_visa_type')} placeholder="e.g. Student Visa"
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:border-amber-500" />
+                </label>
+                <label className="block">
+                    <span className="block text-[11px] font-semibold text-gray-600 mb-1.5">Lodged on</span>
+                    <input type="date" value={form.inz_lodged_at} onChange={set('inz_lodged_at')}
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:border-amber-500" />
+                </label>
+                <label className="block">
+                    <span className="block text-[11px] font-semibold text-gray-600 mb-1.5">INZ reference</span>
+                    <input type="text" value={form.inz_reference} onChange={set('inz_reference')} placeholder="e.g. APP1234567"
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:border-amber-500" />
+                </label>
+                <label className="block">
+                    <span className="block text-[11px] font-semibold text-gray-600 mb-1.5">INZ status</span>
+                    <select value={form.inz_status} onChange={set('inz_status')}
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:border-amber-500 bg-white">
+                        <option value="">—</option>
+                        {INZ_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                </label>
+                <label className="block">
+                    <span className="block text-[11px] font-semibold text-gray-600 mb-1.5">Decision date</span>
+                    <input type="date" value={form.inz_decision_at} onChange={set('inz_decision_at')}
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:border-amber-500" />
+                </label>
+            </div>
+        </form>
+    );
+}
+
+// ── Convert menu — single "Move to" dropdown listing all three flags
+//    (Student / Case / Accommodation) so the header stays compact. Active
+//    flags display a check + an admin-only revert affordance inline.
+
+const MENU_TONE = {
+    emerald: { dot: 'bg-emerald-500', icon: 'text-emerald-600', badge: 'bg-emerald-100 text-emerald-700 border-emerald-200' },
+    amber:   { dot: 'bg-amber-500',   icon: 'text-amber-600',   badge: 'bg-amber-100 text-amber-700 border-amber-200' },
+    cyan:    { dot: 'bg-cyan-500',    icon: 'text-cyan-600',    badge: 'bg-cyan-100 text-cyan-700 border-cyan-200' },
+};
+
+function ConvertMenu({ lead, canRevert }) {
+    const [open, setOpen] = useState(false);
+    const wrapRef = useRef(null);
+
+    // Close on outside click / Escape so the menu behaves like a normal
+    // disclosure widget.
+    useEffect(() => {
+        if (!open) return;
+        const onDocClick = (e) => {
+            if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false);
+        };
+        const onKey = (e) => { if (e.key === 'Escape') setOpen(false); };
+        document.addEventListener('mousedown', onDocClick);
+        document.addEventListener('keydown', onKey);
+        return () => {
+            document.removeEventListener('mousedown', onDocClick);
+            document.removeEventListener('keydown', onKey);
+        };
+    }, [open]);
+
+    const items = [
+        {
+            key: 'student',
+            label: 'Student',
+            sublabel: 'education',
+            icon: <GraduationCap size={14} />,
+            tone: 'emerald',
+            active: !!lead.is_student,
+            endpoint: `/admin/leads/${lead.id}/convert-to-student`,
+            revertEndpoint: `/admin/leads/${lead.id}/revert-student`,
+            confirmText: 'Convert to a student? They stay on the same record — all documents, notes and history come with them.',
+        },
+        {
+            key: 'case',
+            label: 'Case',
+            sublabel: 'immigration',
+            icon: <Globe size={14} />,
+            tone: 'amber',
+            active: !!lead.is_immigration_case,
+            endpoint: `/admin/leads/${lead.id}/convert-to-case`,
+            revertEndpoint: `/admin/leads/${lead.id}/revert-case`,
+            confirmText: "Open as an immigration case? Lands them in Immigration's Cases queue with full document folder access.",
+        },
+        {
+            key: 'accommodation',
+            label: 'Housing',
+            sublabel: 'accommodation',
+            icon: <Home size={14} />,
+            tone: 'cyan',
+            active: !!lead.is_accommodation_client,
+            endpoint: `/admin/leads/${lead.id}/convert-to-accommodation`,
+            revertEndpoint: `/admin/leads/${lead.id}/revert-accommodation`,
+            confirmText: "Open as an accommodation client? They appear in the Accommodation team's queue.",
+        },
+    ];
+
+    const activeCount = items.filter((i) => i.active).length;
+
+    const convert = (item) => {
+        if (!confirm(`${lead.first_name ? `${lead.first_name}: ` : ''}${item.confirmText}`)) return;
+        router.post(item.endpoint, {}, { preserveScroll: true, preserveState: true });
+        setOpen(false);
+    };
+
+    const revert = (item) => {
+        if (!confirm(`Revert this ${item.label.toLowerCase()} status? History stays attached.`)) return;
+        router.post(item.revertEndpoint, {}, { preserveScroll: true, preserveState: true });
+        setOpen(false);
+    };
+
+    return (
+        <div ref={wrapRef} className="relative">
+            <button
+                type="button"
+                onClick={() => setOpen((o) => !o)}
+                className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-xl hover:bg-gray-800 text-sm font-semibold transition-colors shadow-sm"
+            >
+                <ArrowRight size={15} />
+                Move to
+                {activeCount > 0 && (
+                    <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-white/20 text-[10px] font-bold tabular-nums">
+                        {activeCount}
+                    </span>
+                )}
+                <ChevronDown size={14} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
+            </button>
+
+            {open && (
+                <div className="absolute right-0 mt-2 w-72 bg-white border border-gray-200 rounded-xl shadow-lg z-30 overflow-hidden">
+                    <div className="px-3 py-2 border-b border-gray-100 bg-gray-50">
+                        <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-gray-500">Move this lead to…</p>
+                    </div>
+                    <ul className="py-1">
+                        {items.map((item) => {
+                            const t = MENU_TONE[item.tone] || MENU_TONE.emerald;
+                            return (
+                                <li key={item.key}>
+                                    <div className="flex items-center gap-2 px-3 py-2 hover:bg-gray-50 group">
+                                        <button
+                                            type="button"
+                                            onClick={() => !item.active && convert(item)}
+                                            disabled={item.active}
+                                            className={`flex-1 flex items-center gap-2.5 text-left text-sm ${
+                                                item.active ? 'cursor-default' : 'cursor-pointer'
+                                            }`}
+                                        >
+                                            <span className={`w-7 h-7 rounded-lg flex items-center justify-center ${t.badge}`}>
+                                                <span className={t.icon}>{item.icon}</span>
+                                            </span>
+                                            <span className="flex flex-col leading-tight">
+                                                <span className={`font-medium ${item.active ? 'text-gray-900' : 'text-gray-700'}`}>
+                                                    {item.label}
+                                                </span>
+                                                <span className="text-[10px] italic text-gray-400">
+                                                    {item.sublabel}
+                                                </span>
+                                            </span>
+                                            {item.active && (
+                                                <span className="ml-auto inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-emerald-700">
+                                                    <Check size={12} /> Active
+                                                </span>
+                                            )}
+                                        </button>
+                                        {item.active && canRevert && (
+                                            <button
+                                                type="button"
+                                                onClick={() => revert(item)}
+                                                className="inline-flex items-center justify-center w-7 h-7 text-gray-400 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-colors"
+                                                title={`Admin only — revert ${item.label}`}
+                                            >
+                                                <Undo2 size={12} />
+                                            </button>
+                                        )}
+                                    </div>
+                                </li>
+                            );
+                        })}
+                    </ul>
+                </div>
+            )}
         </div>
     );
 }
@@ -1170,186 +1618,28 @@ const ACTIVITY_KIND_STYLE = {
 const activityStyle = (kind) =>
     ACTIVITY_KIND_STYLE[kind] || { chip: "bg-gray-100 text-gray-700 border-gray-200", label: "Event" };
 
-// ── Journey panel — pre-screening + goal-setting capture ─────────────────
+// ── Journey panel — stage timeline only. Pre-screening/goal-setting are
+//    captured via Internal Notes ("kind" selector); key dates live in
+//    KeyMilestonesPanel above the two-column row.
 
-const PRESCREENERS    = ['Bryll', 'Emma', 'Dinah'];
-const GOAL_STATUSES   = ['Consultation Done', 'For Proposal', 'Proposal Sent', 'No Show'];
-const GOAL_STATUS_STYLE = {
-    'Consultation Done': 'bg-purple-100 text-purple-800 border-purple-200',
-    'For Proposal':      'bg-amber-100 text-amber-800 border-amber-200',
-    'Proposal Sent':     'bg-sky-100 text-sky-800 border-sky-200',
-    'No Show':           'bg-red-100 text-red-700 border-red-200',
-};
-
-function JourneyPanel({ lead, staffOptions = [], currentStage, stageTimeline = [] }) {
-    // Form state — initialise from the lead. Date columns come back as ISO
-    // strings; trim to YYYY-MM-DD for <input type="date">.
-    const dateOnly = (v) => (v ? String(v).slice(0, 10) : '');
-
-    const [form, setForm] = useState({
-        date_of_first_contact: dateOnly(lead?.date_of_first_contact),
-        date_of_engagement:    dateOnly(lead?.date_of_engagement),
-        prescreened_by:        lead?.prescreened_by || '',
-        prescreened_notes:     lead?.prescreened_notes || '',
-        goal_setting_status:   lead?.goal_setting_status || '',
-        goal_setting_by:       lead?.goal_setting_by || '',
-        goal_setting_notes:    lead?.goal_setting_notes || '',
-    });
-    const [saving, setSaving] = useState(false);
-
-    const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }));
-
-    const submit = (e) => {
-        e?.preventDefault?.();
-        setSaving(true);
-        router.post(`/admin/leads/${lead.id}/journey`, form, {
-            preserveScroll: true,
-            preserveState: true,
-            onFinish: () => setSaving(false),
-        });
-    };
-
+function JourneyPanel({ stageTimeline = [] }) {
     return (
-        <form onSubmit={submit} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-            {/* Header */}
-            <div className="px-6 py-4 border-b border-gray-100 bg-gradient-to-br from-[#436235]/5 to-white flex items-center justify-between">
-                <div className="flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-lg bg-[#436235]/10 text-[#436235] flex items-center justify-center">
-                        <TrendingUp size={15} />
-                    </div>
-                    <div>
-                        <h2 className="text-sm font-bold uppercase tracking-wider text-gray-800">Journey</h2>
-                        <p className="text-[11px] text-gray-500 mt-0.5">Pre-screening and goal-setting captures for this lead.</p>
-                    </div>
+        <section className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+            <div className="px-6 py-4 border-b border-gray-100 bg-gradient-to-br from-[#436235]/5 to-white flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-[#436235]/10 text-[#436235] flex items-center justify-center">
+                    <TrendingUp size={15} />
                 </div>
-                <button
-                    type="submit"
-                    disabled={saving}
-                    className="px-4 py-1.5 bg-gray-900 text-white rounded-lg text-[11px] font-bold uppercase tracking-wider hover:bg-gray-800 transition-colors disabled:opacity-40"
-                >
-                    {saving ? 'Saving…' : 'Save journey'}
-                </button>
+                <h2 className="text-sm font-bold uppercase tracking-wider text-gray-800">Journey</h2>
             </div>
 
-            <div className="p-6 space-y-7">
-                {/* Section 1 — stage timeline. Bold current stage so it
-                    visually anchors the lead's location in the pipeline. */}
-                <section>
-                    <SectionLabel>Stage timeline</SectionLabel>
-                    <p className="text-[11px] text-gray-500 mt-1 mb-4">
-                        Every stage this lead has moved through. The bold row is where they are right now.
-                    </p>
-                    <StageTimeline timeline={stageTimeline} />
-                </section>
-
-                {/* Section 2 — key dates (lead-level capture). */}
-                <section className="pt-6 border-t border-gray-100">
-                    <SectionLabel>Key dates</SectionLabel>
-                    <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <Field label="Date of first contact">
-                            <input
-                                type="date"
-                                value={form.date_of_first_contact}
-                                onChange={set('date_of_first_contact')}
-                                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white outline-none focus:border-gray-900 transition-colors"
-                            />
-                        </Field>
-                        <Field label="Date of engagement">
-                            <input
-                                type="date"
-                                value={form.date_of_engagement}
-                                onChange={set('date_of_engagement')}
-                                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white outline-none focus:border-gray-900 transition-colors"
-                            />
-                        </Field>
-                    </div>
-                </section>
-
-                {/* Section 2 — pre-screening */}
-                <section className="pt-6 border-t border-gray-100">
-                    <SectionLabel>Pre-screening</SectionLabel>
-                    <div className="mt-3 space-y-3">
-                        <Field label="Pre-screened by">
-                            <div className="flex flex-wrap gap-1.5">
-                                {PRESCREENERS.map((name) => {
-                                    const active = form.prescreened_by === name;
-                                    return (
-                                        <button
-                                            key={name}
-                                            type="button"
-                                            onClick={() => setForm((f) => ({ ...f, prescreened_by: active ? '' : name }))}
-                                            className={`px-3 py-1.5 rounded-lg text-[11px] font-bold border transition-all ${
-                                                active
-                                                    ? 'bg-gray-900 text-white border-gray-900'
-                                                    : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
-                                            }`}
-                                        >
-                                            {name}
-                                        </button>
-                                    );
-                                })}
-                            </div>
-                        </Field>
-                        <Field label="Pre-screened notes">
-                            <textarea
-                                value={form.prescreened_notes}
-                                onChange={set('prescreened_notes')}
-                                rows={3}
-                                placeholder="Initial screening observations — fit, budget signals, blockers spotted on first call."
-                                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white outline-none focus:border-gray-900 resize-none transition-colors"
-                            />
-                        </Field>
-                    </div>
-                </section>
-
-                {/* Section 3 — goal-setting */}
-                <section className="pt-6 border-t border-gray-100">
-                    <SectionLabel>Goal-setting</SectionLabel>
-                    <div className="mt-3 space-y-3">
-                        <Field label="Goal-setting status">
-                            <div className="flex flex-wrap gap-1.5">
-                                {GOAL_STATUSES.map((s) => {
-                                    const active = form.goal_setting_status === s;
-                                    return (
-                                        <button
-                                            key={s}
-                                            type="button"
-                                            onClick={() => setForm((f) => ({ ...f, goal_setting_status: active ? '' : s }))}
-                                            className={`inline-flex items-center px-2.5 py-1 rounded-md text-[10px] font-bold border uppercase tracking-wider transition-all ${
-                                                active ? GOAL_STATUS_STYLE[s] : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
-                                            }`}
-                                        >
-                                            {s}
-                                        </button>
-                                    );
-                                })}
-                            </div>
-                        </Field>
-                        <Field label="Goal-setting by">
-                            <select
-                                value={form.goal_setting_by}
-                                onChange={set('goal_setting_by')}
-                                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white outline-none focus:border-gray-900 transition-colors"
-                            >
-                                <option value="">— Select staff —</option>
-                                {staffOptions.map((u) => (
-                                    <option key={u.id} value={u.name}>{u.name}</option>
-                                ))}
-                            </select>
-                        </Field>
-                        <Field label="Goal-setting notes">
-                            <textarea
-                                value={form.goal_setting_notes}
-                                onChange={set('goal_setting_notes')}
-                                rows={3}
-                                placeholder="Outcome of the goal-setting session — agreed pathway, blockers, next steps."
-                                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white outline-none focus:border-gray-900 resize-none transition-colors"
-                            />
-                        </Field>
-                    </div>
-                </section>
+            <div className="p-6">
+                <SectionLabel>Stage timeline</SectionLabel>
+                <p className="text-[11px] text-gray-500 mt-1 mb-4">
+                    Every stage this lead has moved through. The bold row is where they are right now.
+                </p>
+                <StageTimeline timeline={stageTimeline} />
             </div>
-        </form>
+        </section>
     );
 }
 
@@ -1444,6 +1734,118 @@ function StageTimeline({ timeline = [] }) {
                 );
             })}
         </ol>
+    );
+}
+
+// Standalone Key Milestones strip — lives above the Notes / Timeline row
+// on the Journey tab so the two key dates pop as the lead's engagement
+// timeline. Posts directly to the journey endpoint with just the dates.
+function KeyMilestonesPanel({ lead }) {
+    const dateOnly = (v) => (v ? String(v).slice(0, 10) : '');
+    const [dates, setDates] = useState({
+        date_of_first_contact: dateOnly(lead?.date_of_first_contact),
+        date_of_engagement:    dateOnly(lead?.date_of_engagement),
+    });
+    const [saving, setSaving] = useState(false);
+
+    const save = (next) => {
+        setDates(next);
+        setSaving(true);
+        router.post(`/admin/leads/${lead.id}/journey`, next, {
+            preserveScroll: true,
+            preserveState: true,
+            onFinish: () => setSaving(false),
+        });
+    };
+
+    const daysBetween = (a, b) => Math.abs(Math.round((new Date(b) - new Date(a)) / 86400000));
+
+    return (
+        <section className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+            <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between gap-2 bg-gradient-to-r from-blue-50/40 via-white to-[#436235]/5">
+                <div className="flex items-center gap-2.5">
+                    <Calendar size={15} className="text-[#436235]" />
+                    <h2 className="text-xs font-bold uppercase tracking-wider text-gray-800">Key dates</h2>
+                </div>
+                {saving && <span className="text-[10px] uppercase tracking-widest text-gray-400 font-bold">Saving…</span>}
+            </div>
+
+            <div className="p-5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <MilestoneTile
+                        eyebrow="First contact"
+                        value={dates.date_of_first_contact}
+                        onChange={(e) => save({ ...dates, date_of_first_contact: e.target.value })}
+                        tone="blue"
+                    />
+                    <MilestoneTile
+                        eyebrow="Engagement"
+                        value={dates.date_of_engagement}
+                        onChange={(e) => save({ ...dates, date_of_engagement: e.target.value })}
+                        tone="brand"
+                    />
+                </div>
+                {dates.date_of_first_contact && dates.date_of_engagement && (
+                    <p className="text-[11px] text-gray-500 mt-3 text-center italic">
+                        Took {daysBetween(dates.date_of_first_contact, dates.date_of_engagement)} days to convert from first contact to engagement.
+                    </p>
+                )}
+            </div>
+        </section>
+    );
+}
+
+// Highlighted milestone card — big formatted date + "X days ago", with an
+// invisible <input type="date"> overlay so clicking the tile opens the
+// native date picker.
+function MilestoneTile({ eyebrow, value, onChange, tone = 'blue' }) {
+    const TONES = {
+        blue:  { ring: 'border-blue-200 bg-gradient-to-br from-blue-50 to-white', dot: 'bg-blue-500',           eyebrow: 'text-blue-700',  num: 'text-blue-700',  glyph: 'bg-blue-100 text-blue-700' },
+        brand: { ring: 'border-[#436235]/30 bg-gradient-to-br from-[#436235]/8 to-white', dot: 'bg-[#436235]', eyebrow: 'text-[#436235]', num: 'text-[#436235]', glyph: 'bg-[#436235]/10 text-[#436235]' },
+    };
+    const t = TONES[tone] || TONES.blue;
+
+    const dateObj = value ? new Date(value + 'T00:00:00') : null;
+    const formatted = dateObj && !isNaN(dateObj.getTime())
+        ? dateObj.toLocaleDateString('en-NZ', { day: 'numeric', month: 'long', year: 'numeric' })
+        : null;
+    const daysAgo = dateObj && !isNaN(dateObj.getTime())
+        ? Math.round((Date.now() - dateObj.getTime()) / 86400000)
+        : null;
+
+    return (
+        <label className={`relative block rounded-2xl border-2 ${t.ring} p-4 cursor-pointer hover:shadow-md transition-shadow group`}>
+            <div className="flex items-center gap-2 mb-2">
+                <span className={`w-7 h-7 rounded-lg flex items-center justify-center ${t.glyph}`}>
+                    <Calendar size={13} />
+                </span>
+                <p className={`text-[10px] font-bold uppercase tracking-[0.22em] ${t.eyebrow}`}>{eyebrow}</p>
+                <Edit size={10} className="ml-auto text-gray-300 group-hover:text-gray-600 transition-colors" />
+            </div>
+
+            {formatted ? (
+                <>
+                    <p className={`text-xl font-bold tracking-tight tabular-nums ${t.num}`}>{formatted}</p>
+                    <p className="text-[11px] text-gray-500 mt-0.5">
+                        {daysAgo === 0 ? 'Today'
+                            : daysAgo > 0 ? `${daysAgo} day${daysAgo === 1 ? '' : 's'} ago`
+                                : `In ${Math.abs(daysAgo)} day${Math.abs(daysAgo) === 1 ? '' : 's'}`}
+                    </p>
+                </>
+            ) : (
+                <p className="text-base font-medium text-gray-400 italic">Not set</p>
+            )}
+
+            {/* Invisible native picker — sits over the tile so clicking
+                anywhere opens the calendar. */}
+            <input
+                type="date"
+                value={value}
+                onChange={onChange}
+                className="absolute inset-0 opacity-0 cursor-pointer"
+                title={eyebrow}
+            />
+        </label>
     );
 }
 
@@ -2742,21 +3144,53 @@ function ChecklistCard({ item, lead, entry, onSave, files = [], currentUser = nu
     );
 }
 
-function NotesPanel({ leadId, notes, currentUser }) {
+const NOTE_KIND_META = {
+    general:      { label: 'General',       chip: 'bg-gray-100 text-gray-700 border-gray-200' },
+    pre_screen:   { label: 'Pre-screening', chip: 'bg-amber-100 text-amber-800 border-amber-200' },
+    goal_setting: { label: 'Goal-setting',  chip: 'bg-purple-100 text-purple-800 border-purple-200' },
+};
+const GOAL_STATUS_OPTS = ['Consultation Done', 'For Proposal', 'Proposal Sent', 'No Show'];
+// Pre-screeners are real staff users — sourced from the staffOptions
+// dropdown filtered to roles that legitimately pre-screen leads.
+const PRESCREEN_ROLES = ['sales', 'education', 'admin'];
+
+function NotesPanel({ leadId, notes, currentUser, staffOptions = [] }) {
     const [body, setBody] = useState('');
     const [pinned, setPinned] = useState(false);
+    const [kind, setKind] = useState('general');
+    const [preScreenedBy, setPreScreenedBy] = useState('');
+    const [preScreenMode, setPreScreenMode] = useState('');
+    const [preScreenDate, setPreScreenDate] = useState('');
+    const [goalStatus, setGoalStatus] = useState('');
+    const [goalBy, setGoalBy] = useState('');
     const [submitting, setSubmitting] = useState(false);
     const [editingId, setEditingId] = useState(null);
     const [editBody, setEditBody] = useState('');
+
+    const reset = () => {
+        setBody(''); setPinned(false); setKind('general');
+        setPreScreenedBy(''); setPreScreenMode(''); setPreScreenDate('');
+        setGoalStatus(''); setGoalBy('');
+    };
 
     const submit = (e) => {
         e.preventDefault();
         if (!body.trim()) return;
         setSubmitting(true);
-        router.post(`/admin/leads/${leadId}/notes`, { body: body.trim(), pinned }, {
+        const payload = {
+            body: body.trim(),
+            pinned,
+            kind,
+            pre_screened_by:     kind === 'pre_screen'   ? (preScreenedBy || null) : null,
+            pre_screen_mode:     kind === 'pre_screen'   ? (preScreenMode || null) : null,
+            pre_screen_date:     kind === 'pre_screen'   ? (preScreenDate || null) : null,
+            goal_setting_status: kind === 'goal_setting' ? (goalStatus    || null) : null,
+            goal_setting_by:     kind === 'goal_setting' ? (goalBy        || null) : null,
+        };
+        router.post(`/admin/leads/${leadId}/notes`, payload, {
             preserveScroll: true,
             preserveState: true,
-            onSuccess: () => { setBody(''); setPinned(false); },
+            onSuccess: reset,
             onFinish: () => setSubmitting(false),
         });
     };
@@ -2795,15 +3229,139 @@ function NotesPanel({ leadId, notes, currentUser }) {
             </div>
 
             {/* Compose */}
-            <form onSubmit={submit} className="px-5 py-4 border-b border-gray-100 bg-gray-50/50">
+            <form onSubmit={submit} className="px-5 py-4 border-b border-gray-100 bg-gray-50/50 space-y-4">
+                {/* Kind selector */}
+                <div className="flex items-center gap-1.5 flex-wrap">
+                    <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-gray-500 mr-1">Type</p>
+                    {Object.entries(NOTE_KIND_META).map(([k, meta]) => (
+                        <button
+                            key={k}
+                            type="button"
+                            onClick={() => setKind(k)}
+                            className={`inline-flex items-center px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider border transition-all ${
+                                kind === k ? meta.chip : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'
+                            }`}
+                        >
+                            {meta.label}
+                        </button>
+                    ))}
+                </div>
+
+                {/* Kind-specific fields */}
+                {kind === 'pre_screen' && (
+                    <div className="space-y-3.5">
+                        <div>
+                            <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-gray-500 mb-1.5">Pre-screened by</p>
+                            {(() => {
+                                const prescreeners = staffOptions.filter((u) => PRESCREEN_ROLES.includes(u.role));
+                                if (prescreeners.length === 0) {
+                                    return (
+                                        <p className="text-[11px] text-gray-400 italic">
+                                            No sales / education staff on file. Set a user&apos;s role to <span className="font-mono">sales</span>, <span className="font-mono">education</span>, or <span className="font-mono">admin</span> in Admin → Users.
+                                        </p>
+                                    );
+                                }
+                                return (
+                                    <select
+                                        value={preScreenedBy}
+                                        onChange={(e) => setPreScreenedBy(e.target.value)}
+                                        className="w-full px-3 py-1.5 border border-gray-200 rounded-md text-xs bg-white outline-none focus:border-gray-900"
+                                    >
+                                        <option value="">— Select staff —</option>
+                                        {prescreeners.map((u) => (
+                                            <option key={u.id} value={u.name}>{u.name} · {u.role}</option>
+                                        ))}
+                                    </select>
+                                );
+                            })()}
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                            {/* Mode — Google Meet vs phone call. */}
+                            <div>
+                                <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-gray-500 mb-1.5">Mode</p>
+                                <div className="flex gap-1.5">
+                                    {[
+                                        { k: 'gmeet', label: 'Google Meet' },
+                                        { k: 'call',  label: 'Phone Call' },
+                                    ].map((m) => {
+                                        const active = preScreenMode === m.k;
+                                        return (
+                                            <button
+                                                key={m.k}
+                                                type="button"
+                                                onClick={() => setPreScreenMode(active ? '' : m.k)}
+                                                className={`flex-1 px-3 py-1.5 rounded-md text-[11px] font-bold border transition-all ${
+                                                    active ? 'bg-amber-600 text-white border-amber-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+                                                }`}
+                                            >
+                                                {m.label}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+
+                            {/* Date the pre-screen happened. */}
+                            <div>
+                                <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-gray-500 mb-1.5">Date</p>
+                                <input
+                                    type="date"
+                                    value={preScreenDate}
+                                    onChange={(e) => setPreScreenDate(e.target.value)}
+                                    className="w-full px-3 py-1.5 border border-gray-200 rounded-md text-xs bg-white outline-none focus:border-gray-900"
+                                />
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {kind === 'goal_setting' && (
+                    <div className="space-y-3.5">
+                        <div>
+                            <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-gray-500 mb-1.5">Goal-setting status</p>
+                            <div className="flex flex-wrap gap-1.5">
+                                {GOAL_STATUS_OPTS.map((s) => {
+                                    const active = goalStatus === s;
+                                    return (
+                                        <button
+                                            key={s}
+                                            type="button"
+                                            onClick={() => setGoalStatus(active ? '' : s)}
+                                            className={`inline-flex items-center px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider border transition-all ${
+                                                active ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+                                            }`}
+                                        >
+                                            {s}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                        <div>
+                            <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-gray-500 mb-1.5">Goal-setting by</p>
+                            <select
+                                value={goalBy}
+                                onChange={(e) => setGoalBy(e.target.value)}
+                                className="w-full px-3 py-1.5 border border-gray-200 rounded-md text-xs bg-white outline-none focus:border-gray-900"
+                            >
+                                <option value="">— Select staff —</option>
+                                {staffOptions.map((u) => (
+                                    <option key={u.id} value={u.name}>{u.name}</option>
+                                ))}
+                            </select>
+                        </div>
+                    </div>
+                )}
+
                 <textarea
                     value={body}
                     onChange={(e) => setBody(e.target.value)}
-                    placeholder="Add an internal note (only staff can see this)…"
+                    placeholder="Type here"
                     rows={2}
                     className="w-full px-3.5 py-2.5 border border-gray-200 rounded-lg text-sm bg-white outline-none focus:border-gray-900 transition-colors resize-none"
                 />
-                <div className="flex items-center justify-between mt-2.5">
+                <div className="flex items-center justify-between">
                     <label className="inline-flex items-center gap-2 text-xs text-gray-500 cursor-pointer">
                         <input
                             type="checkbox"
@@ -2842,6 +3400,11 @@ function NotesPanel({ leadId, notes, currentUser }) {
                                         </div>
                                         <span className="text-xs font-semibold text-gray-900 truncate">{n.author_name}</span>
                                         <span className="text-[10px] text-gray-400 uppercase tracking-widest font-bold truncate">· {n.author_role}</span>
+                                        {n.kind && n.kind !== 'general' && NOTE_KIND_META[n.kind] && (
+                                            <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider border ${NOTE_KIND_META[n.kind].chip}`}>
+                                                {NOTE_KIND_META[n.kind].label}
+                                            </span>
+                                        )}
                                         {n.pinned && (
                                             <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-amber-100 text-amber-700 border border-amber-200">
                                                 Pinned
@@ -2850,6 +3413,39 @@ function NotesPanel({ leadId, notes, currentUser }) {
                                     </div>
                                     <span className="text-[10px] text-gray-400 whitespace-nowrap">{fmt(n.created_at)}</span>
                                 </div>
+
+                                {/* Kind-specific meta — pre-screener name,
+                                    mode, date, goal status + assigned staff,
+                                    rendered as small chips above the body. */}
+                                {(n.pre_screened_by || n.pre_screen_mode || n.pre_screen_date || n.goal_setting_status || n.goal_setting_by) && (
+                                    <div className="flex flex-wrap items-center gap-1.5 mb-2">
+                                        {n.pre_screened_by && (
+                                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-amber-50 text-amber-700 border border-amber-200">
+                                                By {n.pre_screened_by}
+                                            </span>
+                                        )}
+                                        {n.pre_screen_mode && (
+                                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-amber-50 text-amber-700 border border-amber-200">
+                                                {n.pre_screen_mode === 'gmeet' ? 'Google Meet' : 'Phone Call'}
+                                            </span>
+                                        )}
+                                        {n.pre_screen_date && (
+                                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-semibold tracking-wide bg-amber-50/60 text-amber-700 border border-amber-200 tabular-nums">
+                                                {new Date(String(n.pre_screen_date).slice(0, 10) + 'T00:00:00').toLocaleDateString('en-NZ', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                            </span>
+                                        )}
+                                        {n.goal_setting_status && (
+                                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-purple-50 text-purple-700 border border-purple-200">
+                                                {n.goal_setting_status}
+                                            </span>
+                                        )}
+                                        {n.goal_setting_by && (
+                                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-semibold tracking-wide bg-gray-50 text-gray-600 border border-gray-200">
+                                                with {n.goal_setting_by}
+                                            </span>
+                                        )}
+                                    </div>
+                                )}
 
                                 {isEditing ? (
                                     <div>

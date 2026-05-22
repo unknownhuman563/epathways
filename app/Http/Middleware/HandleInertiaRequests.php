@@ -53,6 +53,8 @@ class HandleInertiaRequests extends Middleware
                 'invitation_link' => $request->session()->get('invitation_link'),
                 'invitation_link_lead_id' => $request->session()->get('invitation_link_lead_id'),
                 'generated_credentials' => $request->session()->get('generated_credentials'),
+                // Lead CSV import summary — surfaces +N new / N updated / N skipped chip.
+                'import_summary' => $request->session()->get('import_summary'),
             ],
             // Public contact channels for the sticky CTA bar, floating contact
             // widget, and footer. Components hide channels with empty values.
@@ -82,6 +84,27 @@ class HandleInertiaRequests extends Middleware
 
         $path = $request->path();
         $out = [];
+
+        if (str_starts_with($path, 'portal/immigration')) {
+            $todayStart = now()->startOfDay();
+            $weekStart  = now()->startOfWeek();
+            $out['immigration'] = [
+                'new_assessments'      => \App\Models\ResidentIntake::where('created_at', '>=', $weekStart)->count(),
+                'new_leads_today'      => \App\Models\Lead::where('created_at', '>=', $todayStart)->count(),
+                'active_cases'         => \App\Models\Lead::where('status', 'Visa Process')->count(),
+                'docs_pending_review'  => \App\Models\LeadDocument::whereIn('status', ['Submitted', 'UnderReview'])->count(),
+                'notifications_unread' => 0,
+            ];
+        }
+
+        if (str_starts_with($path, 'portal/education')) {
+            $todayStart = now()->startOfDay();
+            $out['education'] = [
+                'new_leads_today'      => \App\Models\Lead::where('created_at', '>=', $todayStart)->count(),
+                'docs_pending_review'  => \App\Models\LeadDocument::whereIn('status', ['Submitted', 'UnderReview'])->count(),
+                'notifications_unread' => 0,
+            ];
+        }
 
         if (str_starts_with($path, 'portal/sales') || str_starts_with($path, 'admin')) {
             $todayStart = now()->startOfDay();

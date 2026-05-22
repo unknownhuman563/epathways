@@ -61,8 +61,19 @@ class Lead extends Model
         'date_of_first_contact', 'date_of_engagement',
         'prescreened_by', 'prescreened_notes',
         'goal_setting_status', 'goal_setting_by', 'goal_setting_notes',
+        // Sales-dashboard mirror columns
+        'calendar_date', 'client_info_link', 'call_update_form_link',
         'document_checklist',
         'section_verifications',
+        // Student conversion flag
+        'is_student', 'student_converted_at', 'student_converted_by',
+        // Multi-service flags
+        'is_immigration_case', 'immigration_converted_at', 'immigration_converted_by',
+        'is_accommodation_client', 'accommodation_converted_at', 'accommodation_converted_by',
+        // INZ lodgement tracking
+        'inz_visa_type', 'inz_lodged_at', 'inz_reference', 'inz_status', 'inz_decision_at',
+        // IAA / Privacy Act gating
+        'services_agreement_signed_at',
     ];
 
     protected $casts = [
@@ -85,8 +96,18 @@ class Lead extends Model
         'portal_invitation_accepted_at'  => 'datetime',
         'date_of_first_contact'          => 'date',
         'date_of_engagement'             => 'date',
+        'calendar_date'                  => 'date',
         'document_checklist'             => 'array',
         'section_verifications'          => 'array',
+        'is_student'                     => 'boolean',
+        'student_converted_at'           => 'datetime',
+        'is_immigration_case'            => 'boolean',
+        'immigration_converted_at'       => 'datetime',
+        'is_accommodation_client'        => 'boolean',
+        'accommodation_converted_at'     => 'datetime',
+        'inz_lodged_at'                  => 'datetime',
+        'inz_decision_at'                => 'datetime',
+        'services_agreement_signed_at'   => 'datetime',
     ];
 
     /** Portal account (User row with role='lead'), if one exists. */

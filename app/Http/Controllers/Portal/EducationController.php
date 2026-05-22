@@ -114,4 +114,245 @@ class EducationController extends Controller
             return back()->with('error', 'Could not update that lead. Please try again.');
         }
     }
+
+    /**
+     * Students — engaged leads with a study plan or in any post-engagement
+     * stage. The Leads page covers prospecting; this is the "in-flight" view.
+     */
+    public function students()
+    {
+        try {
+            // Students are leads explicitly flipped via "Convert to Student"
+            // on the lead detail page. The flag is the source of truth — no
+            // more guessing from status or study plans.
+            $students = Lead::with(['studyPlans', 'documents'])
+                ->where('is_student', true)
+                ->orderByDesc('student_converted_at')
+                ->limit(200)
+                ->get()
+                ->map(fn ($l) => [
+                    'id'       => $l->id,
+                    'lead_id'  => $l->lead_id,
+                    'name'     => trim("{$l->first_name} {$l->last_name}") ?: 'Unknown',
+                    'email'    => $l->email,
+                    'status'   => $l->status,
+                    'program'  => optional($l->studyPlans->first())->preferred_course,
+                    'level'    => optional($l->studyPlans->first())->qualification_level,
+                    'docs_total'    => $l->documents->count(),
+                    'docs_approved' => $l->documents->where('status', 'Approved')->count(),
+                ]);
+
+            return inertia('portal/education/Students', ['portal' => 'education', 'students' => $students]);
+        } catch (\Throwable $e) {
+            Log::error('Education students list failed', ['error' => $e->getMessage()]);
+            return inertia('portal/education/Students', ['portal' => 'education', 'students' => collect()]);
+        }
+    }
+
+    /**
+     * Documents — Queue view (what needs my attention) + Folders view
+     * (every student's folder with completion progress).
+     */
+    public function documents()
+    {
+        try {
+            $pending = \App\Models\LeadDocument::with('lead:id,first_name,last_name,lead_id')
+                ->whereIn('status', ['Submitted', 'UnderReview'])
+                ->orderBy('created_at')
+                ->limit(50)
+                ->get()
+                ->map(fn ($d) => $this->docQueueRow($d, 'pending'));
+
+            $stale = \App\Models\LeadDocument::with('lead:id,first_name,last_name,lead_id')
+                ->where('status', 'Submitted')
+                ->where('created_at', '<', now()->subDays(7))
+                ->orderBy('created_at')
+                ->limit(30)
+                ->get()
+                ->map(fn ($d) => $this->docQueueRow($d, 'stale'));
+
+            $rejected = \App\Models\LeadDocument::with('lead:id,first_name,last_name,lead_id')
+                ->where('status', 'Rejected')
+                ->where('reviewed_at', '>', now()->subDays(14))
+                ->orderByDesc('reviewed_at')
+                ->limit(30)
+                ->get()
+                ->map(fn ($d) => $this->docQueueRow($d, 'rejected'));
+
+            // Folders — every lead with at least one document, with progress.
+            $folders = Lead::has('documents')
+                ->with('documents:id,lead_id,status,checklist_key')
+                ->orderBy('first_name')
+                ->limit(200)
+                ->get()
+                ->map(fn ($l) => [
+                    'id'       => $l->id,
+                    'lead_id'  => $l->lead_id,
+                    'name'     => trim("{$l->first_name} {$l->last_name}") ?: 'Unknown',
+                    'total'    => $l->documents->count(),
+                    'approved' => $l->documents->where('status', 'Approved')->count(),
+                    'pending'  => $l->documents->whereIn('status', ['Submitted', 'UnderReview'])->count(),
+                    'rejected' => $l->documents->where('status', 'Rejected')->count(),
+                ]);
+
+            return inertia('portal/education/Documents', [
+                'portal'   => 'education',
+                'pending'  => $pending,
+                'stale'    => $stale,
+                'rejected' => $rejected,
+                'folders'  => $folders,
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('Education documents page failed', ['error' => $e->getMessage()]);
+            return inertia('portal/education/Documents', ['portal' => 'education', 'pending' => [], 'stale' => [], 'rejected' => [], 'folders' => []]);
+        }
+    }
+
+    private function docQueueRow($d, $bucket): array
+    {
+        return [
+            'id'            => $d->id,
+            'bucket'        => $bucket,
+            'original_name' => $d->original_name,
+            'status'        => $d->status,
+            'note'          => $d->note,
+            'created_at'    => $d->created_at,
+            'reviewed_at'   => $d->reviewed_at,
+            'checklist_key' => $d->checklist_key,
+            'lead' => $d->lead ? [
+                'id'      => $d->lead->id,
+                'lead_id' => $d->lead->lead_id,
+                'name'    => trim("{$d->lead->first_name} {$d->lead->last_name}") ?: 'Unknown',
+            ] : null,
+        ];
+    }
+
+    // Stubs — these get real content as we build each feature out.
+    public function checklistTemplates(){ return inertia('portal/education/ChecklistTemplates', ['portal' => 'education']); }
+    public function programs()          { return inertia('portal/education/Programs',           ['portal' => 'education']); }
+    /**
+     * Single Reports page — period is a query param (weekly / monthly /
+     * quarterly / custom). All 13 sections render regardless; only the
+     * data underneath changes. Filters (counselor / institution / intake
+     * / program) also come in via query so they persist across tab clicks.
+     */
+    public function reports(Request $request)
+    {
+        $period = $request->input('period', 'weekly');
+        $period = in_array($period, ['weekly', 'monthly', 'quarterly', 'custom'], true) ? $period : 'weekly';
+
+        // Anchor + range per period. Custom takes from/to as ISO dates.
+        $now = now();
+        switch ($period) {
+            case 'monthly':
+                $start = $request->filled('anchor') ? \Illuminate\Support\Carbon::parse($request->input('anchor'))->startOfMonth() : $now->copy()->startOfMonth();
+                $end   = $start->copy()->endOfMonth();
+                $prevStart = $start->copy()->subMonth();
+                $prevEnd   = $prevStart->copy()->endOfMonth();
+                break;
+            case 'quarterly':
+                $start = $request->filled('anchor') ? \Illuminate\Support\Carbon::parse($request->input('anchor'))->startOfQuarter() : $now->copy()->startOfQuarter();
+                $end   = $start->copy()->endOfQuarter();
+                $prevStart = $start->copy()->subQuarter();
+                $prevEnd   = $prevStart->copy()->endOfQuarter();
+                break;
+            case 'custom':
+                $start = $request->filled('from') ? \Illuminate\Support\Carbon::parse($request->input('from'))->startOfDay() : $now->copy()->subDays(30)->startOfDay();
+                $end   = $request->filled('to')   ? \Illuminate\Support\Carbon::parse($request->input('to'))->endOfDay()    : $now->copy()->endOfDay();
+                $prevSpan = $end->diffInDays($start) + 1;
+                $prevStart = $start->copy()->subDays($prevSpan);
+                $prevEnd   = $start->copy()->subDay()->endOfDay();
+                break;
+            case 'weekly':
+            default:
+                $start = $request->filled('anchor') ? \Illuminate\Support\Carbon::parse($request->input('anchor'))->startOfWeek() : $now->copy()->startOfWeek();
+                $end   = $start->copy()->endOfWeek();
+                $prevStart = $start->copy()->subWeek();
+                $prevEnd   = $prevStart->copy()->endOfWeek();
+        }
+
+        try {
+            // Real-data sections.
+            $newStudents  = Lead::where('is_student', true)->whereBetween('student_converted_at', [$start, $end])->count();
+            $newStudentsPrev = Lead::where('is_student', true)->whereBetween('student_converted_at', [$prevStart, $prevEnd])->count();
+
+            $totalStudents = Lead::where('is_student', true)->count();
+
+            // Document throughput
+            $docsApproved   = \App\Models\LeadDocument::where('status', 'Approved')->whereBetween('reviewed_at', [$start, $end])->count();
+            $docsRejected   = \App\Models\LeadDocument::where('status', 'Rejected')->whereBetween('reviewed_at', [$start, $end])->count();
+            $docsPending    = \App\Models\LeadDocument::whereIn('status', ['Submitted', 'UnderReview'])->count();
+            $docsUploaded   = \App\Models\LeadDocument::whereBetween('created_at', [$start, $end])->count();
+
+            // Programs & institutions — quick snapshot
+            $programCount   = \App\Models\Program::count();
+            $publishedProgs = \App\Models\Program::where('status', 'published')->count();
+
+            // 8-period trend (weeks / months / quarters / days for custom)
+            $trend = $this->buildEducationTrend($period, $start);
+
+            return inertia('portal/education/Reports', [
+                'portal'        => 'education',
+                'period'        => $period,
+                'range'         => ['start' => $start->toDateString(), 'end' => $end->toDateString()],
+                'filters'       => $request->only(['counselor', 'institution', 'intake', 'program']),
+
+                'glance' => [
+                    'new_students'   => ['value' => $newStudents, 'prev' => $newStudentsPrev],
+                    'total_students' => $totalStudents,
+                    'docs_approved'  => $docsApproved,
+                    'docs_rejected'  => $docsRejected,
+                    'docs_pending'   => $docsPending,
+                    'docs_uploaded'  => $docsUploaded,
+                ],
+                'programs' => [
+                    'total'     => $programCount,
+                    'published' => $publishedProgs,
+                ],
+                'trend' => $trend,
+                'generated_at' => now()->toIso8601String(),
+                'generated_by' => optional(auth()->user())->name,
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('Education reports failed', ['error' => $e->getMessage()]);
+            return inertia('portal/education/Reports', [
+                'portal' => 'education',
+                'period' => $period,
+                'error'  => 'Could not build the report.',
+            ]);
+        }
+    }
+
+    /** Build a period-appropriate trend array (8 buckets). */
+    private function buildEducationTrend(string $period, \Carbon\Carbon $anchor): array
+    {
+        $points = [];
+        for ($i = 7; $i >= 0; $i--) {
+            $b = $anchor->copy();
+            switch ($period) {
+                case 'monthly':
+                    $b->subMonths($i);  $start = $b->copy()->startOfMonth();  $end = $b->copy()->endOfMonth();  $label = $b->format('M Y'); break;
+                case 'quarterly':
+                    $b->subQuarters($i);$start = $b->copy()->startOfQuarter();$end = $b->copy()->endOfQuarter();$label = 'Q' . $b->quarter . ' ' . $b->year; break;
+                case 'custom':
+                    // For custom, just emit 8 equal slices of the range — best-effort.
+                    $start = $anchor->copy()->subDays($i * 7);
+                    $end   = $start->copy()->addDays(6);
+                    $label = $start->format('d M');
+                    break;
+                case 'weekly':
+                default:
+                    $b->subWeeks($i);   $start = $b->copy()->startOfWeek();   $end = $b->copy()->endOfWeek();   $label = $start->format('d M');
+            }
+            $points[] = [
+                'label'        => $label,
+                'new_students' => Lead::where('is_student', true)->whereBetween('student_converted_at', [$start, $end])->count(),
+                'docs_uploaded'=> \App\Models\LeadDocument::whereBetween('created_at', [$start, $end])->count(),
+                'docs_approved'=> \App\Models\LeadDocument::where('status', 'Approved')->whereBetween('reviewed_at', [$start, $end])->count(),
+            ];
+        }
+        return $points;
+    }
+    public function profile()           { return inertia('portal/education/Profile',  ['portal' => 'education', 'user' => auth()->user()->only(['id','name','email','role'])]); }
+    public function notifications()     { return inertia('portal/education/Notifications', ['portal' => 'education']); }
 }
