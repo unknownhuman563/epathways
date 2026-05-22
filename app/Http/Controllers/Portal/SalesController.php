@@ -5,7 +5,9 @@ namespace App\Http\Controllers\Portal;
 use App\Http\Controllers\Controller;
 use App\Models\Booking;
 use App\Models\Lead;
+use App\Models\Program;
 use App\Traits\BuildsLeadRow;
+use App\Traits\CreatesDashboardLead;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
@@ -13,6 +15,7 @@ use Illuminate\Validation\Rule;
 class SalesController extends Controller
 {
     use BuildsLeadRow;
+    use CreatesDashboardLead;
 
     // Unified lead-pipeline stages (merged from the old `status` + `stage`
     // concepts into one). Order matters — this is the canonical pipeline
@@ -122,12 +125,30 @@ class SalesController extends Controller
             return inertia('portal/sales/Leads', [
                 'portal' => 'sales',
                 'statuses' => self::LEAD_STATUSES,
+                'programs' => Program::orderBy('title')->pluck('title')->filter()->values(),
+                'staffOptions' => $this->dashboardStaff(),
                 'leads' => $leads->map(fn ($l) => $this->leadRow($l)),
             ]);
         } catch (\Throwable $e) {
             Log::error('Sales leads list failed', ['error' => $e->getMessage()]);
 
-            return inertia('portal/sales/Leads', ['portal' => 'sales', 'statuses' => self::LEAD_STATUSES, 'leads' => collect()]);
+            return inertia('portal/sales/Leads', ['portal' => 'sales', 'statuses' => self::LEAD_STATUSES, 'programs' => Program::orderBy('title')->pluck('title')->filter()->values(), 'staffOptions' => $this->dashboardStaff(), 'leads' => collect()]);
+        }
+    }
+
+    /** Manually add a lead from the dashboard "Add Lead" form. */
+    public function storeLead(Request $request)
+    {
+        $validated = $request->validate($this->dashboardLeadRules(self::LEAD_STATUSES));
+
+        try {
+            $lead = $this->createDashboardLead($validated);
+
+            return back()->with('success', "Lead {$lead->lead_id} added.");
+        } catch (\Throwable $e) {
+            Log::error('Sales add-lead failed', ['error' => $e->getMessage()]);
+
+            return back()->with('error', 'Could not add that lead. Please try again.');
         }
     }
 

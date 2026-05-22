@@ -178,6 +178,7 @@ Route::middleware(['auth'])->group(function () {
     Route::middleware('portal:admin,sales,education,english,immigration,accommodation')->group(function () {
         Route::get("/admin/leads/{id}", [LeadController::class, 'show'])->name('admin.leads.show');
         Route::post('/admin/leads/{id}/stage', [LeadController::class, 'updateStage'])->name('admin.leads.stage');
+        Route::post('/admin/leads/{id}/personal', [LeadController::class, 'updatePersonal'])->name('admin.leads.personal');
         Route::post('/admin/leads/{id}/journey', [LeadController::class, 'updateJourney'])->name('admin.leads.journey');
         Route::post('/admin/leads/{id}/convert-to-student',       [LeadController::class, 'convertToStudent'])->name('admin.leads.convert-student');
         Route::post('/admin/leads/{id}/revert-student',           [LeadController::class, 'revertStudent'])->name('admin.leads.revert-student');
@@ -268,6 +269,7 @@ Route::middleware(['auth'])->group(function () {
         Route::middleware('portal:sales')->prefix('sales')->name('portal.sales.')->group(function () {
             Route::get('/dashboard', [SalesController::class, 'dashboard'])->name('dashboard');
             Route::get('/leads', [SalesController::class, 'leads'])->name('leads');
+            Route::post('/leads', [SalesController::class, 'storeLead'])->name('leads.store');
             Route::post('/leads/{id}', [SalesController::class, 'updateLead'])->name('leads.update');
             Route::get('/bookings', [SalesController::class, 'bookings'])->name('bookings');
             Route::post('/bookings/{id}', [SalesController::class, 'updateBooking'])->name('bookings.update');
@@ -305,6 +307,7 @@ Route::middleware(['auth'])->group(function () {
         Route::middleware('portal:education')->prefix('education')->name('portal.education.')->group(function () {
             Route::get('/dashboard', [EducationController::class, 'dashboard'])->name('dashboard');
             Route::get('/leads', [EducationController::class, 'leads'])->name('leads');
+            Route::post('/leads', [EducationController::class, 'storeLead'])->name('leads.store');
             Route::post('/leads/{id}', [EducationController::class, 'updateLead'])->name('leads.update');
             Route::post('/leads/{id}/portal-invitation/request', [LeadPortalInvitationController::class, 'request'])
                 ->name('leads.portal-invitation.request');
