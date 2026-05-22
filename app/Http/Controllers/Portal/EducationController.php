@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Lead;
 use App\Models\Program;
 use App\Traits\BuildsLeadRow;
+use App\Traits\CreatesDashboardLead;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
@@ -13,6 +14,7 @@ use Illuminate\Validation\Rule;
 class EducationController extends Controller
 {
     use BuildsLeadRow;
+    use CreatesDashboardLead;
 
     private const LEAD_STATUSES = Lead::STAGES;
 
@@ -80,10 +82,22 @@ class EducationController extends Controller
     public function leads()
     {
         try {
+            $leads = Lead::with([
+                'studyPlans',
+                'event',
+                'portalUser:id,lead_id,last_login_at',
+                'notes' => fn ($q) => $q->whereIn('kind', ['pre_screen', 'goal_setting'])->latest(),
+            ])
+                ->withCount(['notes', 'documents'])
+                ->withCount(['tasks as tasks_open_count' => fn ($q) => $q->where('completed', false)])
+                ->latest()->get();
+
             return inertia('portal/education/Leads', [
                 'portal'   => 'education',
                 'statuses' => self::LEAD_STATUSES,
-                'leads'    => Lead::with(['studyPlans', 'event', 'portalUser:id,lead_id,last_login_at'])->latest()->get()->map(fn ($l) => $this->leadRow($l)),
+                'programs' => Program::orderBy('title')->pluck('title')->filter()->values(),
+                'staffOptions' => $this->dashboardStaff(),
+                'leads'    => $leads->map(fn ($l) => $this->leadRow($l)),
             ]);
         } catch (\Throwable $e) {
             Log::error('Education leads list failed', ['error' => $e->getMessage()]);
@@ -91,8 +105,26 @@ class EducationController extends Controller
             return inertia('portal/education/Leads', [
                 'portal'   => 'education',
                 'statuses' => self::LEAD_STATUSES,
+                'programs' => Program::orderBy('title')->pluck('title')->filter()->values(),
+                'staffOptions' => $this->dashboardStaff(),
                 'leads'    => collect(),
             ]);
+        }
+    }
+
+    /** Manually add a lead from the dashboard "Add Lead" form. */
+    public function storeLead(Request $request)
+    {
+        $validated = $request->validate($this->dashboardLeadRules(self::LEAD_STATUSES));
+
+        try {
+            $lead = $this->createDashboardLead($validated);
+
+            return back()->with('success', "Lead {$lead->lead_id} added.");
+        } catch (\Throwable $e) {
+            Log::error('Education add-lead failed', ['error' => $e->getMessage()]);
+
+            return back()->with('error', 'Could not add that lead. Please try again.');
         }
     }
 
@@ -229,7 +261,35 @@ class EducationController extends Controller
 
     // Stubs — these get real content as we build each feature out.
     public function checklistTemplates(){ return inertia('portal/education/ChecklistTemplates', ['portal' => 'education']); }
-    public function programs()          { return inertia('portal/education/Programs',           ['portal' => 'education']); }
+
+    /** Programs the Education team advises on — same catalogue admin manages. */
+    public function programs()
+    {
+        try {
+            $programs = Program::orderBy('title')->get()->map(fn ($p) => [
+                'id'              => $p->id,
+                'title'           => $p->title,
+                'slug'            => $p->slug,
+                'institution'     => $p->institution,
+                'location'        => $p->location,
+                'level'           => $p->level,
+                'category'        => $p->category,
+                'status'          => $p->status,
+                'duration_months' => $p->duration_months,
+                'intake_months'   => $p->intake_months,
+                'price_text'      => $p->price_text,
+                'enrolled'        => Lead::whereHas('studyPlans', fn ($q) => $q->where('preferred_course', $p->title))->count(),
+            ]);
+
+            return inertia('portal/education/Programs', [
+                'portal'   => 'education',
+                'programs' => $programs,
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('Education programs page failed', ['error' => $e->getMessage()]);
+            return inertia('portal/education/Programs', ['portal' => 'education', 'programs' => collect()]);
+        }
+    }
     /**
      * Single Reports page — period is a query param (weekly / monthly /
      * quarterly / custom). All 13 sections render regardless; only the

@@ -80,6 +80,40 @@ export default function LeadDetails({ lead: backendLead, activity = [], stageTim
         });
     };
 
+    // ── Inline Personal Information editing ────────────────────────────────
+    const [editingPersonal, setEditingPersonal] = useState(false);
+    const [savingPersonal, setSavingPersonal] = useState(false);
+    const [personalForm, setPersonalForm] = useState({});
+    const setPF = (k) => (e) => setPersonalForm((f) => ({ ...f, [k]: e.target.value }));
+
+    const startEditPersonal = () => {
+        const d = (v) => (v ? String(v).slice(0, 10) : '');
+        setPersonalForm({
+            first_name:        backendLead?.first_name || '',
+            last_name:         backendLead?.last_name || '',
+            other_names:       backendLead?.other_names || '',
+            gender:            backendLead?.gender || '',
+            marital_status:    backendLead?.marital_status || '',
+            dob:               d(backendLead?.dob),
+            country_of_birth:  backendLead?.country_of_birth || '',
+            place_of_birth:    backendLead?.place_of_birth || '',
+            citizenship:       backendLead?.citizenship || '',
+            residence_country: backendLead?.residence_country || backendLead?.country || '',
+            residence_city:    backendLead?.residence_city || '',
+        });
+        setEditingPersonal(true);
+    };
+
+    const savePersonal = () => {
+        if (!personalForm.first_name?.trim()) return;
+        setSavingPersonal(true);
+        router.post(`/admin/leads/${backendLead.id}/personal`, personalForm, {
+            preserveScroll: true,
+            onSuccess: () => setEditingPersonal(false),
+            onFinish: () => setSavingPersonal(false),
+        });
+    };
+
     // If no lead data is passed, show a loading or error state
     if (!backendLead) {
         return (
@@ -247,27 +281,6 @@ export default function LeadDetails({ lead: backendLead, activity = [], stageTim
             default: return 'bg-gray-100 text-gray-700 border-gray-200';
         }
     };
-
-    const DataRow = ({ label, value, fullWidth = false }) => (
-        <div className={`flex flex-col gap-1 ${fullWidth ? 'col-span-1 md:col-span-2' : ''}`}>
-            <span className="text-xs font-semibold text-gray-500 tracking-wide uppercase">{label}</span>
-            <span className="text-sm font-medium text-gray-900 bg-gray-50/50 px-3 py-2 rounded-lg border border-gray-100">{value || '-'}</span>
-        </div>
-    );
-
-    const SectionCard = ({ title, icon: Icon, children }) => (
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-            <div className="flex items-center gap-3 px-6 py-4 border-b border-gray-100 bg-gray-50/30">
-                <div className="w-8 h-8 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center">
-                    <Icon size={18} />
-                </div>
-                <h2 className="text-lg font-bold text-gray-900">{title}</h2>
-            </div>
-            <div className="p-6">
-                {children}
-            </div>
-        </div>
-    );
 
     const getScoreLevel = (pct) => {
         if (pct >= 75) return { label: 'Strong', color: 'text-emerald-600', bg: 'bg-emerald-500', badge: 'bg-emerald-50 text-emerald-700 border-emerald-200' };
@@ -644,19 +657,49 @@ export default function LeadDetails({ lead: backendLead, activity = [], stageTim
             <div className="grid grid-cols-1 gap-6">
 
                 {/* 1. Personal Information */}
-                <SectionCard title="1. Personal Information" icon={User}>
+                <SectionCard
+                    title="1. Personal Information"
+                    icon={User}
+                    action={editingPersonal ? (
+                        <div className="flex items-center gap-2">
+                            <button
+                                type="button"
+                                onClick={() => setEditingPersonal(false)}
+                                className="px-3 py-1.5 rounded-lg text-xs font-semibold text-gray-600 hover:bg-gray-100 transition-colors"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="button"
+                                onClick={savePersonal}
+                                disabled={savingPersonal || !personalForm.first_name?.trim()}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white bg-gray-900 hover:bg-gray-800 transition-colors disabled:opacity-40"
+                            >
+                                <Check size={13} /> {savingPersonal ? 'Saving…' : 'Save'}
+                            </button>
+                        </div>
+                    ) : (
+                        <button
+                            type="button"
+                            onClick={startEditPersonal}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 transition-colors"
+                        >
+                            <Edit size={13} /> Edit
+                        </button>
+                    )}
+                >
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-5">
-                        <DataRow label="Surname" value={lead.personal.surname} />
-                        <DataRow label="First Name" value={lead.personal.firstName} />
-                        <DataRow label="Other Names Used" value={lead.personal.otherNames} />
-                        <DataRow label="Gender" value={lead.personal.gender} />
-                        <DataRow label="Marital Status" value={lead.personal.maritalStatus} />
-                        <DataRow label="Date of Birth" value={lead.personal.dob} />
-                        <DataRow label="Country of Birth" value={lead.personal.countryOfBirth} />
-                        <DataRow label="Place of Birth" value={lead.personal.placeOfBirth} />
-                        <DataRow label="Country of Citizenship" value={lead.personal.citizenship} />
-                        <DataRow label="Current Country" value={lead.country} />
-                        <DataRow label="Current Residence" value={lead.personal.residence} fullWidth />
+                        <PersonalField editing={editingPersonal} form={personalForm} setPF={setPF} label="Surname" field="last_name" value={lead.personal.surname} />
+                        <PersonalField editing={editingPersonal} form={personalForm} setPF={setPF} label="First Name" field="first_name" value={lead.personal.firstName} />
+                        <PersonalField editing={editingPersonal} form={personalForm} setPF={setPF} label="Other Names Used" field="other_names" value={lead.personal.otherNames} />
+                        <PersonalField editing={editingPersonal} form={personalForm} setPF={setPF} label="Gender" field="gender" value={lead.personal.gender} options={GENDER_OPTIONS} />
+                        <PersonalField editing={editingPersonal} form={personalForm} setPF={setPF} label="Marital Status" field="marital_status" value={lead.personal.maritalStatus} options={MARITAL_OPTIONS} />
+                        <PersonalField editing={editingPersonal} form={personalForm} setPF={setPF} label="Date of Birth" field="dob" value={lead.personal.dob} type="date" />
+                        <PersonalField editing={editingPersonal} form={personalForm} setPF={setPF} label="Country of Birth" field="country_of_birth" value={lead.personal.countryOfBirth} />
+                        <PersonalField editing={editingPersonal} form={personalForm} setPF={setPF} label="Place of Birth" field="place_of_birth" value={lead.personal.placeOfBirth} />
+                        <PersonalField editing={editingPersonal} form={personalForm} setPF={setPF} label="Country of Citizenship" field="citizenship" value={lead.personal.citizenship} />
+                        <PersonalField editing={editingPersonal} form={personalForm} setPF={setPF} label="Current Country" field="residence_country" value={lead.country} />
+                        <PersonalField editing={editingPersonal} form={personalForm} setPF={setPF} label="Current Residence" field="residence_city" value={lead.personal.residence} fullWidth />
                         {importedFamily.preferred_contact_time && (
                             <DataRow label="Preferred Contact Time" value={importedFamily.preferred_contact_time} />
                         )}
@@ -1027,6 +1070,60 @@ function SubSection({ title, show, children }) {
         </div>
     );
 }
+
+// Presentational helpers — defined at module scope (NOT inside the page
+// component) so they keep a stable identity across re-renders. Defining them
+// inline would remount their subtree on every keystroke, stealing focus from
+// inputs in the inline Personal Information editor.
+
+function DataRow({ label, value, fullWidth = false }) {
+    return (
+        <div className={`flex flex-col gap-1 ${fullWidth ? 'col-span-1 md:col-span-2' : ''}`}>
+            <span className="text-xs font-semibold text-gray-500 tracking-wide uppercase">{label}</span>
+            <span className="text-sm font-medium text-gray-900 bg-gray-50/50 px-3 py-2 rounded-lg border border-gray-100">{value || '-'}</span>
+        </div>
+    );
+}
+
+function SectionCard({ title, icon: Icon, children, action = null }) {
+    return (
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+            <div className="flex items-center gap-3 px-6 py-4 border-b border-gray-100 bg-gray-50/30">
+                <div className="w-8 h-8 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center">
+                    <Icon size={18} />
+                </div>
+                <h2 className="text-lg font-bold text-gray-900">{title}</h2>
+                {action && <div className="ml-auto">{action}</div>}
+            </div>
+            <div className="p-6">{children}</div>
+        </div>
+    );
+}
+
+// Read-only DataRow normally; an inline input/select while the Personal
+// Information card is in edit mode. `form` + `setPF` come from the page.
+function PersonalField({ editing, label, field, value, form, setPF, type = 'text', options = null, fullWidth = false }) {
+    if (!editing) return <DataRow label={label} value={value} fullWidth={fullWidth} />;
+    const cls = "text-sm font-medium text-gray-900 bg-white px-3 py-2 rounded-lg border border-gray-300 outline-none focus:border-gray-900 transition-colors";
+    return (
+        <div className={`flex flex-col gap-1 ${fullWidth ? 'col-span-1 md:col-span-2' : ''}`}>
+            <span className="text-xs font-semibold text-gray-500 tracking-wide uppercase">{label}</span>
+            {options ? (
+                <select value={form[field] ?? ''} onChange={setPF(field)} className={cls}>
+                    <option value="">—</option>
+                    {options.map((o) => <option key={o} value={o}>{o}</option>)}
+                </select>
+            ) : (
+                <input type={type} value={form[field] ?? ''} onChange={setPF(field)} className={cls} />
+            )}
+        </div>
+    );
+}
+
+// Personal Information edit options — used by the inline editor on the
+// Personal Information card.
+const MARITAL_OPTIONS = ['Single', 'Married', 'De facto', 'Separated', 'Divorced', 'Widowed'];
+const GENDER_OPTIONS  = ['Male', 'Female', 'Other'];
 
 function ProfileGrid({ bag, fields }) {
     return (

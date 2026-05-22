@@ -761,6 +761,42 @@ class LeadController extends Controller
     }
 
     /**
+     * Edit the lead's Personal Information card — core bio + contact fields.
+     * Any logged-in staff can edit; changes are audited via LogsActivity.
+     */
+    public function updatePersonal(\Illuminate\Http\Request $request, $id)
+    {
+        $validated = $request->validate([
+            'first_name'        => 'required|string|max:120',
+            'last_name'         => 'nullable|string|max:120',
+            'other_names'       => 'nullable|string|max:200',
+            'email'             => 'nullable|email|max:200',
+            'phone'             => 'nullable|string|max:40',
+            'gender'            => 'nullable|string|max:30',
+            'marital_status'    => 'nullable|string|max:40',
+            'dob'               => 'nullable|date',
+            'country_of_birth'  => 'nullable|string|max:120',
+            'place_of_birth'    => 'nullable|string|max:120',
+            'citizenship'       => 'nullable|string|max:120',
+            'residence_city'    => 'nullable|string|max:160',
+            'residence_country' => 'nullable|string|max:120',
+        ]);
+
+        try {
+            $lead = Lead::findOrFail($id);
+            // Empty strings → null so we don't store blanks over real data.
+            $lead->fill(array_map(fn ($v) => $v === '' ? null : $v, $validated));
+            $lead->first_name = $validated['first_name'];
+            $lead->save();
+
+            return back()->with('success', 'Personal information updated.');
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('Lead personal update failed', ['id' => $id, 'error' => $e->getMessage()]);
+            return back()->with('error', 'Could not update personal information.');
+        }
+    }
+
+    /**
      * Save the lead's "Journey" panel — pre-screening + goal-setting captures
      * plus the two key dates. Any logged-in staff can edit (same scope as
      * stage updates); every change is audited via the LogsActivity trait.
