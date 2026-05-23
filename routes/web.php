@@ -270,6 +270,7 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/dashboard', [SalesController::class, 'dashboard'])->name('dashboard');
             Route::get('/leads', [SalesController::class, 'leads'])->name('leads');
             Route::post('/leads', [SalesController::class, 'storeLead'])->name('leads.store');
+            Route::post('/leads/{id}/notes', [\App\Http\Controllers\LeadNoteController::class, 'store'])->name('leads.notes.store');
             Route::post('/leads/{id}', [SalesController::class, 'updateLead'])->name('leads.update');
             Route::get('/bookings', [SalesController::class, 'bookings'])->name('bookings');
             Route::post('/bookings/{id}', [SalesController::class, 'updateBooking'])->name('bookings.update');
@@ -308,6 +309,7 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/dashboard', [EducationController::class, 'dashboard'])->name('dashboard');
             Route::get('/leads', [EducationController::class, 'leads'])->name('leads');
             Route::post('/leads', [EducationController::class, 'storeLead'])->name('leads.store');
+            Route::post('/leads/{id}/notes', [\App\Http\Controllers\LeadNoteController::class, 'store'])->name('leads.notes.store');
             Route::post('/leads/{id}', [EducationController::class, 'updateLead'])->name('leads.update');
             Route::post('/leads/{id}/portal-invitation/request', [LeadPortalInvitationController::class, 'request'])
                 ->name('leads.portal-invitation.request');

@@ -116,7 +116,7 @@ class SalesController extends Controller
                 'studyPlans',
                 'event',
                 'portalUser:id,lead_id,last_login_at',
-                'notes' => fn ($q) => $q->whereIn('kind', ['pre_screen', 'goal_setting'])->latest(),
+                'notes' => fn ($q) => $q->latest(),
             ])
                 ->withCount(['notes', 'documents'])
                 ->withCount(['tasks as tasks_open_count' => fn ($q) => $q->where('completed', false)])
