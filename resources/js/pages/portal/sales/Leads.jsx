@@ -5,7 +5,7 @@ import {
     Search, KeyRound, Clock, Check, Mail, ShieldOff, FileText, Phone,
     Filter, ArrowUpDown, ArrowUp, ArrowDown, ChevronLeft, ChevronRight,
     MoreHorizontal, ChevronDown, ChevronRight as ChevronRightIcon, ExternalLink, UserCheck,
-    Upload, Loader, Plus, X,
+    Upload, Loader, Plus, X, CalendarClock, Link2, FileText as FileTextIcon,
 } from "lucide-react";
 
 // ── Stage colour map ───────────────────────────────────────────────────────
@@ -466,7 +466,7 @@ export default function SalesLeads({ leads = [], statuses = [], programs = [], s
                                     {isExpanded && (
                                         <tr className="bg-blue-50/20 border-t border-blue-100/60">
                                             <td colSpan={8} className="px-6 py-4">
-                                                <LeadDashboardPanel lead={l} goalChipClass={goalChipClass} />
+                                                <LeadDashboardPanel lead={l} goalChipClass={goalChipClass} portalBase={portalBase} staffOptions={staffOptions} />
                                             </td>
                                         </tr>
                                     )}
@@ -965,72 +965,316 @@ function RowMenu({ lead, open, onToggle, onClose, onRequestPortal, isSaving, por
 // Renders all 9 fields from the team's Sales Dashboard sheet inside the
 // collapsed row so the table itself stays compact and scannable.
 
-function LeadDashboardPanel({ lead, goalChipClass }) {
+// Seven visual milestones the many pipeline stages roll up into, for the
+// journey stepper. Each pipeline status maps to one milestone group.
+const JOURNEY_MILESTONES = [
+    { key: "New",        label: "New",        statuses: ["New Leads", "Contact Attempted", "Contacted for Booking"] },
+    { key: "Screened",   label: "Screened",   statuses: ["Booking Confirmation with Bryll", "Qualified but Not Ready", "Qualified but No Funds", "Qualified", "Missed the Meeting"] },
+    { key: "Consult",    label: "Consult",    statuses: ["Booked Consultation", "Did Not Book Consultation", "No Show", "Consultation Done"] },
+    { key: "Proposal",   label: "Proposal",   statuses: ["Proposal Sent"] },
+    { key: "Engagement", label: "Engagement", statuses: ["Consultancy Agreement"] },
+    { key: "Enrolment",  label: "Enrolment",  statuses: ["English Pro", "School Enrollment"] },
+    { key: "Visa",       label: "Visa",       statuses: ["Visa Process"] },
+];
+const milestoneIndex = (status) => JOURNEY_MILESTONES.findIndex((m) => m.statuses.includes(status));
+
+function LeadDashboardPanel({ lead, goalChipClass, portalBase, staffOptions = [] }) {
+    const curIdx = milestoneIndex(lead.status);
+    const detailUrl = `${portalBase}/leads/${lead.id}`;
+
     return (
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-            <DashField label="Pre-screened by">
-                {lead.pre_screened_by
-                    ? <span className="inline-flex items-center gap-1 text-gray-800 font-medium"><UserCheck size={11} className="text-gray-400" />{lead.pre_screened_by}</span>
-                    : <span className="text-gray-300">—</span>}
-            </DashField>
+        <div className="space-y-4">
+            {/* 1 — Journey progress */}
+            <section>
+                <PanelTitle>Journey progress</PanelTitle>
+                <JourneyStepper currentIndex={curIdx} />
+            </section>
 
-            <DashField label="Goal-setting by">
-                {lead.goal_setting_by
-                    ? <span className="text-gray-800 font-medium">{lead.goal_setting_by}</span>
-                    : <span className="text-gray-300">—</span>}
-            </DashField>
+            {/* 2 — Current stage + program/schedule at a glance */}
+            <section>
+                <PanelTitle>
+                    Current stage:{" "}
+                    <span className="text-gray-900 normal-case tracking-normal font-bold">{lead.status}</span>
+                </PanelTitle>
+                <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5 text-xs">
+                    <span className="inline-flex items-center gap-1.5 text-gray-500">
+                        Program:
+                        {lead.program_offered
+                            ? <span className="font-semibold text-gray-800">{lead.program_offered}</span>
+                            : <EmptyDash />}
+                    </span>
+                    <span className="inline-flex items-center gap-1.5 text-gray-500">
+                        <CalendarClock size={12} className="text-gray-400" /> Calendar:
+                        {lead.calendar_date
+                            ? <span className="font-semibold text-gray-800">{fmtDateShort(lead.calendar_date)}</span>
+                            : <EmptyDash />}
+                    </span>
+                </div>
+            </section>
 
-            <DashField label="Goal-setting status">
-                {lead.goal_setting_status
-                    ? <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border ${goalChipClass}`}>{lead.goal_setting_status}</span>
-                    : <span className="text-gray-300">—</span>}
-            </DashField>
+            {/* 3 — Internal notes (all kinds; carry pre-screen / goal-setting) */}
+            <section>
+                <PanelTitle>
+                    Internal notes
+                    {lead.notes_count > 0 && <span className="ml-1.5 text-gray-400 font-bold">· {lead.notes_count}</span>}
+                </PanelTitle>
+                <AddNoteInline leadId={lead.id} portalBase={portalBase} staffOptions={staffOptions} />
+                {lead.recent_notes && lead.recent_notes.length > 0 ? (
+                    <div className="space-y-2.5 mt-3">
+                        {lead.recent_notes.map((n) => <NoteLine key={n.id} note={n} goalChipClass={goalChipClass} />)}
+                    </div>
+                ) : (
+                    <p className="text-xs text-gray-300 italic mt-3">No internal notes yet.</p>
+                )}
+            </section>
 
-            <DashField label="Program offered">
-                {lead.program_offered
-                    ? <span className="inline-flex items-center px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-100 text-[10px] font-bold uppercase tracking-wider">{lead.program_offered}</span>
-                    : <span className="text-gray-300">—</span>}
-            </DashField>
-
-            <DashField label="Calendar">
-                {lead.calendar_date
-                    ? <span className="inline-flex items-center gap-1 text-gray-800"><Clock size={11} className="text-gray-400" />{fmtDateShort(lead.calendar_date)}</span>
-                    : <span className="text-gray-300">—</span>}
-            </DashField>
-
-            <DashField label="Pre-screening notes" wide>
-                {lead.pre_screening_notes
-                    ? <p className="text-xs text-gray-700 whitespace-pre-wrap leading-relaxed">{lead.pre_screening_notes}</p>
-                    : <span className="text-gray-300">—</span>}
-            </DashField>
-
-            <DashField label="Goal-setting notes" wide>
-                {lead.goal_setting_notes
-                    ? <p className="text-xs text-gray-700 whitespace-pre-wrap leading-relaxed">{lead.goal_setting_notes}</p>
-                    : <span className="text-gray-300">—</span>}
-            </DashField>
-
-            <DashField label="Client info link">
-                {lead.client_info_link
-                    ? <a href={lead.client_info_link} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 font-medium"><ExternalLink size={11} /> Open</a>
-                    : <span className="text-gray-300">—</span>}
-            </DashField>
-
-            <DashField label="Call update form">
-                {lead.call_update_form_link
-                    ? <a href={lead.call_update_form_link} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 font-medium"><ExternalLink size={11} /> Open</a>
-                    : <span className="text-gray-300">—</span>}
-            </DashField>
+            {/* 4 — Next actions */}
+            <section>
+                <PanelTitle>Next actions</PanelTitle>
+                <div className="flex flex-wrap gap-2">
+                    <Link href={detailUrl} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-gray-900 text-white hover:bg-gray-800 transition-colors">
+                        <ExternalLink size={12} /> View lead
+                    </Link>
+                    <a href={`${detailUrl}/documents`} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors">
+                        <FileTextIcon size={12} /> Documents
+                    </a>
+                    {lead.email ? (
+                        <a href={`mailto:${lead.email}`} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors">
+                            <Mail size={12} /> Send email
+                        </a>
+                    ) : null}
+                    {lead.phone ? (
+                        <a href={`tel:${lead.phone}`} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors">
+                            <Phone size={12} /> Call
+                        </a>
+                    ) : null}
+                    <LinkChip href={lead.client_info_link} icon={Link2} label="Client info" />
+                    <LinkChip href={lead.call_update_form_link} icon={Link2} label="Call form" />
+                </div>
+            </section>
         </div>
     );
 }
 
-function DashField({ label, wide = false, children }) {
+function PanelTitle({ children }) {
+    return <h4 className="text-[10px] font-bold uppercase tracking-[0.18em] text-gray-500 mb-2.5">{children}</h4>;
+}
+
+// A single internal note in the expander — mirrors the lead-detail Internal
+// Notes styling: author avatar + role, a coloured kind badge, and the kind's
+// own captures (pre-screened by / goal-setting status + with whom).
+const NOTE_KIND_BADGE = {
+    pre_screen:   { label: "Pre-screening", cls: "bg-amber-100 text-amber-700 border-amber-200" },
+    goal_setting: { label: "Goal-setting",  cls: "bg-purple-100 text-purple-700 border-purple-200" },
+    general:      { label: "General",       cls: "bg-gray-100 text-gray-600 border-gray-200" },
+};
+function NoteLine({ note, goalChipClass }) {
+    const meta = NOTE_KIND_BADGE[note.kind] || NOTE_KIND_BADGE.general;
     return (
-        <div className={wide ? "md:col-span-2 lg:col-span-2 xl:col-span-2" : ""}>
-            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-gray-500 mb-1">{label}</p>
-            <div className="text-xs">{children}</div>
+        <div className="bg-white rounded-lg border border-gray-200/70 px-3 py-2.5">
+            <div className="flex items-center gap-2 mb-1.5">
+                <span className="w-6 h-6 rounded-full bg-gray-900 text-white flex items-center justify-center text-[10px] font-bold flex-shrink-0">
+                    {initials(note.author_name)}
+                </span>
+                <span className="text-xs font-semibold text-gray-900">{note.author_name}</span>
+                {note.author_role && (
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">· {note.author_role}</span>
+                )}
+                <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider border ${meta.cls}`}>
+                    {meta.label}
+                </span>
+                {note.pinned && <span className="text-[9px] font-bold uppercase tracking-wider text-amber-600">Pinned</span>}
+                <span className="ml-auto text-[10px] text-gray-400 whitespace-nowrap">{note.created_at ? fmtDateShort(note.created_at) : ""}</span>
+            </div>
+
+            {/* Kind-specific captures */}
+            {(note.kind === "pre_screen" && note.pre_screened_by) && (
+                <div className="mb-1.5">
+                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-amber-50 text-amber-700 border border-amber-200">
+                        By {note.pre_screened_by}
+                    </span>
+                </div>
+            )}
+            {note.kind === "goal_setting" && (note.goal_setting_status || note.goal_setting_by) && (
+                <div className="flex flex-wrap items-center gap-1.5 mb-1.5">
+                    {note.goal_setting_status && (
+                        <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider border ${goalChipClass}`}>
+                            {note.goal_setting_status}
+                        </span>
+                    )}
+                    {note.goal_setting_by && (
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-semibold text-gray-600 border border-gray-200 bg-white">
+                            with {note.goal_setting_by}
+                        </span>
+                    )}
+                </div>
+            )}
+
+            <p className="text-xs text-gray-700 leading-relaxed whitespace-pre-wrap">{note.body}</p>
         </div>
+    );
+}
+
+// Horizontal milestone stepper. Completed milestones show a filled check,
+// the current one is ringed + "here", future ones are hollow.
+function JourneyStepper({ currentIndex }) {
+    return (
+        <div className="flex items-start">
+            {JOURNEY_MILESTONES.map((m, i) => {
+                const done = currentIndex > i;
+                const current = currentIndex === i;
+                return (
+                    <div key={m.key} className="flex-1 flex flex-col items-center relative min-w-0">
+                        {i < JOURNEY_MILESTONES.length - 1 && (
+                            <span className={`absolute top-[7px] left-1/2 w-full h-0.5 ${done ? "bg-emerald-400" : "bg-gray-200"}`} />
+                        )}
+                        <span className={`relative z-10 w-3.5 h-3.5 rounded-full border-2 flex items-center justify-center ${
+                            done ? "bg-emerald-500 border-emerald-500" : current ? "bg-white border-purple-600" : "bg-white border-gray-300"
+                        }`}>
+                            {done && <Check size={8} strokeWidth={3} className="text-white" />}
+                            {current && <span className="w-1.5 h-1.5 rounded-full bg-purple-600" />}
+                        </span>
+                        <span className={`mt-1.5 text-[10px] font-semibold truncate max-w-full px-1 ${
+                            current ? "text-purple-700" : done ? "text-gray-700" : "text-gray-400"
+                        }`}>{m.label}</span>
+                        {current && <span className="text-[9px] text-purple-600 font-bold uppercase tracking-wide">← here</span>}
+                    </div>
+                );
+            })}
+        </div>
+    );
+}
+
+function EmptyDash() {
+    return <span className="text-gray-300">—</span>;
+}
+
+// Compact note composer inside the expander — mirrors the lead-detail
+// Internal Notes form (kind pills + kind-specific fields + body) and posts
+// to the portal's notes endpoint.
+const NOTE_KINDS = [
+    { k: "general",      label: "General" },
+    { k: "pre_screen",   label: "Pre-screening" },
+    { k: "goal_setting", label: "Goal-setting" },
+];
+function AddNoteInline({ leadId, portalBase, staffOptions = [] }) {
+    const [open, setOpen] = useState(false);
+    const [kind, setKind] = useState("general");
+    const [body, setBody] = useState("");
+    const [preBy, setPreBy] = useState("");
+    const [goalStatus, setGoalStatus] = useState("");
+    const [goalBy, setGoalBy] = useState("");
+    const [saving, setSaving] = useState(false);
+
+    const reset = () => { setKind("general"); setBody(""); setPreBy(""); setGoalStatus(""); setGoalBy(""); };
+
+    const submit = () => {
+        if (!body.trim()) return;
+        setSaving(true);
+        router.post(`${portalBase}/leads/${leadId}/notes`, {
+            body: body.trim(),
+            kind,
+            pre_screened_by:     kind === "pre_screen"   ? (preBy || null) : null,
+            goal_setting_status: kind === "goal_setting" ? (goalStatus || null) : null,
+            goal_setting_by:     kind === "goal_setting" ? (goalBy || null) : null,
+        }, {
+            preserveScroll: true,
+            onSuccess: () => { reset(); setOpen(false); },
+            onFinish: () => setSaving(false),
+        });
+    };
+
+    const fieldCls = "w-full px-2.5 py-1.5 border border-gray-200 rounded-md text-xs bg-white outline-none focus:border-gray-900";
+
+    if (!open) {
+        return (
+            <button
+                type="button"
+                onClick={() => setOpen(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 transition-colors"
+            >
+                <Plus size={13} /> Add note
+            </button>
+        );
+    }
+
+    return (
+        <div className="bg-white rounded-xl border border-gray-200 p-3 space-y-2.5">
+            {/* Kind pills */}
+            <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-gray-500 mr-1">Type</span>
+                {NOTE_KINDS.map((nk) => (
+                    <button
+                        key={nk.k}
+                        type="button"
+                        onClick={() => setKind(nk.k)}
+                        className={`inline-flex items-center px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider border transition-all ${
+                            kind === nk.k ? "bg-gray-900 text-white border-gray-900" : "bg-white text-gray-500 border-gray-200 hover:bg-gray-50"
+                        }`}
+                    >
+                        {nk.label}
+                    </button>
+                ))}
+            </div>
+
+            {kind === "pre_screen" && (
+                <select value={preBy} onChange={(e) => setPreBy(e.target.value)} className={fieldCls}>
+                    <option value="">Pre-screened by…</option>
+                    {staffOptions.map((u) => <option key={u.id} value={u.name}>{u.name}{u.role ? ` · ${u.role}` : ""}</option>)}
+                </select>
+            )}
+
+            {kind === "goal_setting" && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <select value={goalStatus} onChange={(e) => setGoalStatus(e.target.value)} className={fieldCls}>
+                        <option value="">Status…</option>
+                        {GOAL_STATUS_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                    <select value={goalBy} onChange={(e) => setGoalBy(e.target.value)} className={fieldCls}>
+                        <option value="">Set by…</option>
+                        {staffOptions.map((u) => <option key={u.id} value={u.name}>{u.name}</option>)}
+                    </select>
+                </div>
+            )}
+
+            <textarea
+                value={body}
+                onChange={(e) => setBody(e.target.value)}
+                rows={2}
+                placeholder="Type here"
+                className={fieldCls + " resize-none"}
+            />
+
+            <div className="flex items-center justify-end gap-2">
+                <button type="button" onClick={() => { reset(); setOpen(false); }} className="px-3 py-1.5 rounded-lg text-xs font-semibold text-gray-600 hover:bg-gray-100 transition-colors">
+                    Cancel
+                </button>
+                <button type="button" onClick={submit} disabled={saving || !body.trim()} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white bg-gray-900 hover:bg-gray-800 transition-colors disabled:opacity-40">
+                    {saving ? <Loader size={13} className="animate-spin" /> : <Plus size={13} />}
+                    {saving ? "Saving…" : "Add note"}
+                </button>
+            </div>
+        </div>
+    );
+}
+
+function LinkChip({ href, icon: Icon, label }) {
+    if (!href) {
+        return (
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-gray-50 border border-gray-200 text-[11px] font-semibold text-gray-300">
+                <Icon size={12} /> {label}
+            </span>
+        );
+    }
+    return (
+        <a
+            href={href}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-white border border-gray-200 text-[11px] font-semibold text-blue-600 hover:bg-blue-50 hover:border-blue-200 transition-colors"
+        >
+            <Icon size={12} /> {label} <ExternalLink size={10} className="opacity-60" />
+        </a>
     );
 }
 

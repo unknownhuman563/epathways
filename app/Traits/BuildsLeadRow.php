@@ -80,6 +80,23 @@ trait BuildsLeadRow
             'calendar_date'          => optional($l->calendar_date)->toDateString(),
             'client_info_link'       => $l->client_info_link,
             'call_update_form_link'  => $l->call_update_form_link,
+
+            // Recent internal notes (all kinds) for the expander — so staff
+            // see general notes alongside pre-screen / goal-setting captures.
+            'recent_notes' => ($l->relationLoaded('notes') ? $l->notes : $l->notes()->latest()->limit(6)->get())
+                ->sortByDesc('pinned')->sortByDesc('created_at')->take(6)->values()->map(fn ($n) => [
+                    'id'                  => $n->id,
+                    'kind'                => $n->kind ?: 'general',
+                    'body'                => $n->body,
+                    'author_name'         => $n->author_name ?: 'Unknown',
+                    'author_role'         => $n->author_role,
+                    'pinned'              => (bool) $n->pinned,
+                    'pre_screened_by'     => $n->pre_screened_by,
+                    'pre_screen_mode'     => $n->pre_screen_mode,
+                    'goal_setting_status' => $n->goal_setting_status,
+                    'goal_setting_by'     => $n->goal_setting_by,
+                    'created_at'          => optional($n->created_at)->toIso8601String(),
+                ]),
         ];
     }
 
