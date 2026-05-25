@@ -19,6 +19,122 @@ class CerebrasService
         $this->model = config('services.cerebras.model');
     }
 
+    public function generateAdCopy(array $brief): array
+    {
+        $response = Http::withHeaders([
+            'Authorization' => 'Bearer ' . $this->apiKey,
+            'Content-Type' => 'application/json',
+        ])->timeout(60)->post("{$this->baseUrl}/chat/completions", [
+            'model' => $this->model,
+            'messages' => [
+                ['role' => 'system', 'content' => $this->buildAdSystemPrompt($brief)],
+                ['role' => 'user', 'content' => $this->buildAdUserMessage($brief)],
+            ],
+            'temperature' => 0.8,
+        ]);
+
+        if (!$response->successful()) {
+            Log::error('Cerebras ad-copy API error', [
+                'status' => $response->status(),
+                'body' => $response->body(),
+            ]);
+            throw new \RuntimeException('Cerebras API request failed: ' . $response->status());
+        }
+
+        $content = $response->json('choices.0.message.content');
+
+        if (!$content) {
+            throw new \RuntimeException('Cerebras API returned empty content');
+        }
+
+        $jsonString = $this->extractJson($content);
+        $parsed = json_decode($jsonString, true);
+
+        if (json_last_error() !== JSON_ERROR_NONE || !isset($parsed['variants']) || !is_array($parsed['variants'])) {
+            Log::error('Cerebras ad-copy parse error', [
+                'error' => json_last_error_msg(),
+                'content' => $content,
+            ]);
+            throw new \RuntimeException('Failed to parse ad-copy response');
+        }
+
+        return $parsed;
+    }
+
+    private function buildAdSystemPrompt(array $brief): string
+    {
+        $type = $brief['ad_type'] ?? 'social';
+        $variantCount = max(1, min(5, (int) ($brief['variant_count'] ?? 3)));
+
+        if ($type === 'email') {
+            return <<<PROMPT
+You are a senior marketing copywriter for ePathways, a New Zealand education and immigration consultancy. Your job is to produce conversion-focused EMAIL CAMPAIGN copy for the marketing team.
+
+## Voice
+- Warm, supportive, expert. ePathways is the trusted guide for people moving to New Zealand to study or settle.
+- Concrete and specific. Reference real benefits (free assessment, NZQA-recognised programmes, licensed immigration advisers, end-to-end support).
+- No clickbait, no fake urgency, no excessive emojis (one or two tasteful ones in subject lines is fine).
+
+## Output Format
+CRITICAL: Respond with ONLY a single valid JSON object. No markdown, no code fences, no preamble.
+
+Produce exactly {$variantCount} variants. Each variant has:
+- "subject": string (40-65 chars ideal, must be compelling and specific)
+- "preheader": string (60-90 chars — the preview text after the subject in the inbox)
+- "body": string (the full email body in plain text, 120-220 words, with short paragraphs, one clear CTA line near the end, sign off "— The ePathways team")
+
+Shape:
+{
+  "variants": [
+    { "subject": "...", "preheader": "...", "body": "..." }
+  ]
+}
+PROMPT;
+        }
+
+        return <<<PROMPT
+You are a senior social-media copywriter for ePathways, a New Zealand education and immigration consultancy. Produce high-engagement SOCIAL POST copy for Facebook / Instagram / LinkedIn.
+
+## Voice
+- Warm, supportive, expert. ePathways guides people moving to New Zealand to study or settle.
+- Specific over generic. Mention real value props (free assessment, licensed immigration advisers, NZQA-recognised programmes, end-to-end support).
+- No fake urgency. Tasteful emojis are okay (1-4 per post, never spammy).
+- Match the requested tone exactly.
+
+## Output Format
+CRITICAL: Respond with ONLY a single valid JSON object. No markdown, no code fences, no preamble.
+
+Produce exactly {$variantCount} variants. Each variant has:
+- "post": string (the post copy, 60-180 words depending on platform; LinkedIn longer, Instagram/Facebook shorter; include one clear CTA line)
+- "hashtags": array of 6-12 lowercase hashtag strings WITHOUT the # symbol (e.g. ["studyinnz", "epathways"])
+
+Shape:
+{
+  "variants": [
+    { "post": "...", "hashtags": ["...", "..."] }
+  ]
+}
+PROMPT;
+    }
+
+    private function buildAdUserMessage(array $brief): string
+    {
+        $payload = [
+            'ad_type'       => $brief['ad_type']       ?? 'social',
+            'platform'      => $brief['platform']      ?? null,
+            'topic'         => $brief['topic']         ?? null,
+            'product'       => $brief['product']       ?? null,
+            'audience'      => $brief['audience']      ?? null,
+            'tone'          => $brief['tone']          ?? 'warm and professional',
+            'key_points'    => $brief['key_points']    ?? null,
+            'cta'           => $brief['cta']           ?? null,
+            'language'      => $brief['language']      ?? 'English',
+            'variant_count' => $brief['variant_count'] ?? 3,
+        ];
+
+        return "Write the ad copy for this brief:\n\n" . json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+    }
+
     public function analyze(Lead $lead): array
     {
         $lead->loadMissing(['studyPlans', 'educationExps', 'tags', 'documents', 'documentRequests']);

@@ -156,6 +156,14 @@ Route::middleware(['auth'])->group(function () {
 
         Route::get('/admin/activity-logs', [ActivityLogController::class, 'index'])->name('admin.activity-logs');
 
+        // AI Ads — Cerebras local copy brainstorming + PLAI Partner API for
+        // launching to FB/IG/Google/LinkedIn/TikTok/etc. PLAI launch is
+        // dormant until PLAI_API_KEY is set in .env (see config/services.php).
+        Route::get('/admin/ai-ads', [App\Http\Controllers\AiAdController::class, 'index'])->name('admin.ai-ads');
+        Route::get('/admin/ai-ads/plai/connection', [App\Http\Controllers\AiAdController::class, 'testConnection'])->name('admin.ai-ads.plai.connection');
+        Route::post('/admin/ai-ads/generate', [App\Http\Controllers\AiAdController::class, 'generateCopy'])->name('admin.ai-ads.generate');
+        Route::post('/admin/ai-ads/launch', [App\Http\Controllers\AiAdController::class, 'launch'])->name('admin.ai-ads.launch');
+
         // Lead Portal invitations — admin approval / rejection / revocation.
         // Sales requests via /portal/sales/... (separate route below).
         Route::get('/admin/portal-invitations', [LeadPortalInvitationController::class, 'adminIndex'])
