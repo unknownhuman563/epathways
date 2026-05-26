@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Event;
 use App\Models\Program;
+use App\Services\PromoFeed;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 
@@ -15,6 +16,7 @@ class HomeController extends Controller
         return inertia('home/HomePage', [
             'events' => $this->liveEvents(),
             'programGroups' => $this->programGroups(),
+            'activePromos' => PromoFeed::active(),
         ]);
     }
 

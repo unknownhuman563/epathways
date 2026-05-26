@@ -20,7 +20,9 @@ use App\Http\Controllers\UserController;
 use App\Http\Controllers\UserReviewController;
 use App\Http\Controllers\LeadPortalInvitationController;
 use App\Http\Controllers\LeadDocumentController;
+use App\Http\Controllers\ProgramPromoController;
 use App\Services\NewsFeedService;
+use App\Services\PromoFeed;
 Route::get('/', [HomeController::class, 'index']);
 
 Route::get("/booking", function (){
@@ -30,7 +32,9 @@ Route::post("/bookings", [BookingController::class, 'store']);
 
 
 Route::get("/education-journey", function (){
-   return inertia('education-journey/EducationJourneyPage');
+   return inertia('education-journey/EducationJourneyPage', [
+       'activePromos' => PromoFeed::active(),
+   ]);
 });
 
 Route::get('/programs-levels', [ProgramController::class, 'publicIndex']);
@@ -180,6 +184,16 @@ Route::middleware(['auth'])->group(function () {
             ->name('admin.portal-invitation.reset-password');
     });
 
+    // Program Promotions — admin / sales / education can manage time-bound
+    // discount campaigns shown on the public Home + Education Journey +
+    // Programs pages. Banner image uploads land in storage/app/public/promos.
+    Route::middleware('portal:admin,sales,education')->group(function () {
+        Route::get('/admin/promos', [ProgramPromoController::class, 'index'])->name('admin.promos');
+        Route::post('/admin/promos', [ProgramPromoController::class, 'store']);
+        Route::post('/admin/promos/{id}', [ProgramPromoController::class, 'update']);
+        Route::delete('/admin/promos/{id}', [ProgramPromoController::class, 'destroy']);
+    });
+
     // Lead detail view + stage update — any logged-in staff (admin OR any
     // department portal) can view a lead and advance its pipeline stage.
     // Every change is audited via the LogsActivity trait on the Lead model.
@@ -240,18 +254,25 @@ Route::middleware(['auth'])->group(function () {
             ->name('admin.leads.documents.status');
         Route::post('/admin/leads/{id}/documents/share', [LeadDocumentController::class, 'shareWithLead'])
             ->name('admin.leads.documents.share');
-        // Staff download — same controller, role-gated inside.
-        Route::get('/admin/documents/{docId}/download', [LeadDocumentController::class, 'download'])
-            ->name('admin.documents.download');
     });
 
-    // Documents-tab checklist uploads + per-file delete — wider group so
-    // every department portal that sees the tab can also manage files.
+    // Documents-tab checklist uploads + per-file delete + downloads — wider
+    // group so every department portal that can see the documents tab can
+    // also manage and download files. The download controller does its own
+    // role-gated check on the specific lead before streaming the file.
     Route::middleware('portal:admin,sales,education,english,immigration,accommodation')->group(function () {
         Route::post('/admin/leads/{id}/documents/checklist/{key}/upload', [LeadDocumentController::class, 'staffChecklistUpload'])
             ->name('admin.leads.documents.checklist.upload');
+        // Templated agreement generator — Blade -> PDF -> attached as a
+        // LeadDocument with source='generated'. Only agree.consultancy
+        // (single|partner variant) is wired up right now.
+        Route::post('/admin/leads/{id}/documents/checklist/{key}/generate', [LeadDocumentController::class, 'generateAgreement'])
+            ->name('admin.leads.documents.checklist.generate');
         Route::delete('/admin/leads/{leadId}/documents/{docId}', [LeadDocumentController::class, 'destroyDocument'])
             ->name('admin.leads.documents.destroy');
+        // Staff download — same controller, role-gated inside.
+        Route::get('/admin/documents/{docId}/download', [LeadDocumentController::class, 'download'])
+            ->name('admin.documents.download');
     });
 
     // Immigration management screens — shared between admins and immigration-role staff.

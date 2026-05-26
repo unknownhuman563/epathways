@@ -8,6 +8,8 @@ import JourneyExperience from "./JourneyExperience";
 import CrossPillarBundles from "@/components/ui/CrossPillarBundles";
 import BeforeFooterCTA from "@/components/ui/BeforeFooterCTA";
 import EducationCostCalculator from "@/components/ui/EducationCostCalculator";
+import PromoBanner from "@/components/ui/PromoBanner";
+import PromoModal from "@/components/ui/PromoModal";
 
 // Assets
 import heroBg from "@assets/Services/education.png";
@@ -39,7 +41,7 @@ import logoTawera from "@assets/Partners/tawera.png";
 import logoWhiteCliffe from "@assets/Partners/whitecligge.png";
 import logoWintec from "@assets/Partners/wintec.png";
 
-export default function EducationJourney() {
+export default function EducationJourney({ activePromos = [] }) {
     const [activeProgram, setActiveProgram] = useState(0);
 
     const demandPrograms = [
@@ -118,6 +120,10 @@ export default function EducationJourney() {
     return (
         <div className="min-h-screen bg-white font-urbanist overflow-x-hidden">
             <Navbar />
+
+            {/* Live programme promotions — strip below navbar (hidden when none) */}
+            <PromoBanner promos={activePromos} variant="strip" />
+            <PromoModal promos={activePromos} />
 
             {/* Hero Section */}
             <section className="relative overflow-hidden min-h-[90vh] flex items-center justify-center py-24 bg-white">

@@ -15,10 +15,13 @@ class LeadDocument extends Model
     public const STATUS_REJECTED     = 'Rejected';
     public const STATUS_STAFF_SHARED = 'StaffShared';
 
+    public const SOURCE_UPLOAD    = 'upload';
+    public const SOURCE_GENERATED = 'generated';
+
     protected $fillable = [
         'lead_id', 'request_id', 'checklist_key',
         'original_name', 'file_path', 'mime', 'size',
-        'status', 'note',
+        'status', 'source', 'source_variant', 'note',
         'uploaded_by', 'reviewed_by', 'reviewed_at',
     ];
 

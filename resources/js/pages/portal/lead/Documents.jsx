@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import { Head, router } from "@inertiajs/react";
 import {
-    FileText, Upload, Check, AlertTriangle, Clock, Download, Loader,
+    FileText, Upload, Check, AlertTriangle, Clock, Download, Loader, Wand2, Sparkles, Eye,
     Inbox, Share2, Lock, CheckCircle2, ChevronDown, ChevronRight, Send, Copy,
 } from "lucide-react";
 import { CHECKLIST, SECTION_STATUSES, renderFilename, currentSectionIndex } from "@/data/leadDocumentChecklist";
@@ -399,14 +399,35 @@ function ChecklistItemRow({ item, files, lead, sectionKey, readOnly = false }) {
                 <ul className="space-y-1">
                     {files.map((f) => (
                         <li key={f.id} className="flex items-center gap-2 px-2 py-1.5 rounded-md bg-gray-50 border border-gray-200">
-                            <FileText size={12} className={isStaffSent ? 'text-[#436235] flex-shrink-0' : 'text-gray-400 flex-shrink-0'} />
+                            {f.source === 'generated' ? (
+                                <Wand2 size={12} className="text-violet-500 flex-shrink-0" />
+                            ) : (
+                                <FileText size={12} className={isStaffSent ? 'text-[#436235] flex-shrink-0' : 'text-gray-400 flex-shrink-0'} />
+                            )}
                             <a
-                                href={`/portal/lead/documents/${f.id}/download`}
+                                href={`/portal/lead/documents/${f.id}/download?inline=1`}
+                                target="_blank"
+                                rel="noreferrer"
                                 className="flex-1 min-w-0 text-[11px] font-medium text-gray-800 hover:text-[#436235] truncate"
+                                title={`View ${f.original_name}`}
                             >
                                 {f.original_name}
                             </a>
+                            {f.source === 'generated' && (
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-widest bg-violet-100 text-violet-700 border border-violet-200">
+                                    <Sparkles size={9} /> Ready to sign
+                                </span>
+                            )}
                             <span className="text-[10px] text-gray-400 tabular-nums">{fmtSize(f.size)}</span>
+                            <a
+                                href={`/portal/lead/documents/${f.id}/download?inline=1`}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-flex items-center justify-center w-6 h-6 rounded text-gray-500 hover:text-[#436235] hover:bg-[#436235]/10 transition-colors"
+                                title="View"
+                            >
+                                <Eye size={11} />
+                            </a>
                             <a
                                 href={`/portal/lead/documents/${f.id}/download`}
                                 className="inline-flex items-center justify-center w-6 h-6 rounded text-gray-500 hover:text-[#436235] hover:bg-[#436235]/10 transition-colors"

@@ -2,7 +2,7 @@ import DashboardLayout from "./DashboardLayout";
 import { usePage } from "@inertiajs/react";
 import {
     LayoutDashboard, UserSquare2, Users, FolderOpen, GraduationCap,
-    ListChecks, LineChart, User, Bell,
+    ListChecks, LineChart, User, Bell, Tag,
 } from "lucide-react";
 
 export default function EducationLayout({ children }) {
@@ -19,6 +19,7 @@ export default function EducationLayout({ children }) {
 
         { name: "Setup", section: true },
         { name: "Programs",            href: "/portal/education/programs",            icon: <GraduationCap size={20} /> },
+        { name: "Promotions",          href: "/admin/promos",                         icon: <Tag size={20} /> },
         { name: "Checklist Templates", href: "/portal/education/checklist-templates", icon: <ListChecks size={20} /> },
 
         { name: "Reports", href: "/portal/education/reports", icon: <LineChart size={20} /> },

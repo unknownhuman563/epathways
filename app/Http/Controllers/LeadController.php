@@ -475,13 +475,15 @@ class LeadController extends Controller
             ->get()
             ->groupBy('checklist_key')
             ->map(fn ($files) => $files->map(fn ($f) => [
-                'id'            => $f->id,
-                'original_name' => $f->original_name,
-                'mime'          => $f->mime,
-                'size'          => $f->size,
-                'status'        => $f->status,
-                'uploaded_by'   => optional($f->uploader)->name,
-                'created_at'    => $f->created_at,
+                'id'             => $f->id,
+                'original_name'  => $f->original_name,
+                'mime'           => $f->mime,
+                'size'           => $f->size,
+                'status'         => $f->status,
+                'source'         => $f->source,
+                'source_variant' => $f->source_variant,
+                'uploaded_by'    => optional($f->uploader)->name,
+                'created_at'     => $f->created_at,
             ])->values());
 
         return inertia($page, [

@@ -18,14 +18,19 @@ import Footer from "@/components/layout/Footer";
 import CTASection from "./CTASection";
 import AccreditationSection from "./AccreditationSection";
 import VisaApprovedShowcase from "./VisaApprovedShowcase";
+import PromoBanner from "@/components/ui/PromoBanner";
+import PromoModal from "@/components/ui/PromoModal";
 
 import HeroVideo from "@assets/Hero/02 - client epathway intro (1).mp4";
 
-export default function Home({ events = [], programGroups = [] }) {
+export default function Home({ events = [], programGroups = [], activePromos = [] }) {
   return (
     <>
       <div className="bg-white" style={{ overflowX: 'clip' }}>
         <Navbar />
+
+        {/* Live promo strip — renders nothing if no promos are active */}
+        <PromoBanner promos={activePromos} variant="strip" />
 
         {/* Hero Section */}
         <HeroSection backgroundVideo={HeroVideo} />
@@ -71,6 +76,11 @@ export default function Home({ events = [], programGroups = [] }) {
         <BeforeFooterCTA source="home-beforefooter" />
 
         <ScrollToTop />
+
+        {/* Promo Modal — auto-opens once per week when there are live promos,
+            and is the target of the strip's "+N more" pill. Dismissing it
+            also suppresses the Welcome modal for the same visit. */}
+        <PromoModal promos={activePromos} />
 
         {/* Welcome Modal (shows at most once per visitor per week) */}
         <Modal />

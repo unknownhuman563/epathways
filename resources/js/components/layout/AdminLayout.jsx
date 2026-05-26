@@ -2,7 +2,7 @@ import DashboardLayout from "./DashboardLayout";
 import {
     Home, Users, UserCog, History, Calendar as CalendarIcon, BookOpen,
     GraduationCap, Video, Globe, FileText, Star, LayoutDashboard,
-    Briefcase, Languages, Building2, KeyRound, Sparkles,
+    Briefcase, Languages, Building2, KeyRound, Sparkles, Tag,
 } from "lucide-react";
 
 const ADMIN_NAV = [
@@ -12,6 +12,7 @@ const ADMIN_NAV = [
     { name: "Events", href: "/admin/events", icon: <CalendarIcon size={20} /> },
     { name: "Bookings", href: "/admin/booking", icon: <BookOpen size={20} /> },
     { name: "Programs", href: "/admin/programs", icon: <GraduationCap size={20} /> },
+    { name: "Promotions", href: "/admin/promos", icon: <Tag size={20} /> },
     { name: "Facebook Live", href: "/admin/facebook-live", icon: <Video size={20} /> },
     { name: "AI Ads", href: "/admin/ai-ads", icon: <Sparkles size={20} /> },
     {
