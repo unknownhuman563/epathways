@@ -438,6 +438,9 @@ Route::middleware(['auth'])->group(function () {
             Route::post('/documents/upload', [LeadDocumentController::class, 'leadUpload'])->name('documents.upload');
             Route::post('/documents/checklist/{key}/upload', [LeadDocumentController::class, 'leadChecklistUpload'])->name('documents.checklist.upload');
             Route::post('/documents/section/{key}/submit', [LeadDocumentController::class, 'leadSubmitSection'])->name('documents.section.submit');
+            // Lead ticks "I've read and agreed to the Consultancy + English
+            // Engagement Agreement terms" — sets / clears the timestamp.
+            Route::post('/documents/agreements/acknowledge', [LeadDocumentController::class, 'leadAcknowledgeAgreements'])->name('documents.agreements.acknowledge');
             Route::get('/documents/{docId}/download', [LeadDocumentController::class, 'download'])->name('documents.download');
         });
     });

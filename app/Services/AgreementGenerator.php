@@ -23,6 +23,48 @@ class AgreementGenerator
      * Consultancy Agreement — Single (PhP 100,000) or Partner (PhP 150,000).
      * Stored against checklist_key='agree.consultancy'.
      */
+    /**
+     * English Engagement Agreement — PTE preparation services. No variant
+     * (just one template). Stored against checklist_key='agree.engagement_english'.
+     */
+    public function englishEngagement(Lead $lead): LeadDocument
+    {
+        $clientName = trim("{$lead->first_name} {$lead->last_name}");
+        $clientReference = Str::slug($clientName ?: 'ClientName', '');
+        $today = now();
+        $dateLine = $today->format('jS') . ' day of ' . $today->format('F Y');
+
+        $payload = [
+            'client_name'            => $clientName,
+            'client_reference'       => $clientReference ?: 'ClientName',
+            'generated_at'           => $today,
+            'generated_at_formatted' => $dateLine,
+        ];
+
+        $pdf = Pdf::loadView('agreements.engagement-english', $payload)->setPaper('a4');
+        $binary = $pdf->output();
+
+        $safeName = $this->safeBaseName($clientName ?: 'Client');
+        $filename = "Eng-{$safeName}.pdf";
+        $path     = "lead-documents/{$lead->id}/" . Str::random(12) . "-{$filename}";
+
+        Storage::disk(self::DISK)->put($path, $binary);
+
+        return LeadDocument::create([
+            'lead_id'        => $lead->id,
+            'request_id'     => null,
+            'checklist_key'  => 'agree.engagement_english',
+            'original_name'  => $filename,
+            'file_path'      => $path,
+            'mime'           => 'application/pdf',
+            'size'           => strlen($binary),
+            'status'         => LeadDocument::STATUS_SUBMITTED,
+            'source'         => LeadDocument::SOURCE_GENERATED,
+            'source_variant' => 'engagement-english',
+            'uploaded_by'    => Auth::id(),
+        ]);
+    }
+
     public function consultancy(Lead $lead, string $variant): LeadDocument
     {
         $variant = $variant === 'partner' ? 'partner' : 'single';

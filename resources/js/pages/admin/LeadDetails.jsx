@@ -2931,6 +2931,29 @@ function FolderDetail({ section, lead, state, onSave, checklistFiles, currentUse
                         <p className="text-xs text-rose-900 italic leading-relaxed">{verification.notes}</p>
                     </div>
                 )}
+
+                {/* Lead's in-portal acknowledgment — only surfaced inside
+                    the Agreements folder. Shows green when ticked, gray
+                    when still awaiting. */}
+                {section.key === 'agreements' && (
+                    <div className="border-t border-gray-100 pt-4">
+                        {lead?.agreements_acknowledged_at ? (
+                            <div className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-emerald-50 border border-emerald-200">
+                                <CheckCircle2 size={14} className="text-emerald-600" />
+                                <p className="text-xs font-semibold text-emerald-800">
+                                    Lead acknowledged the agreements on {new Date(lead.agreements_acknowledged_at).toLocaleDateString('en-NZ', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                </p>
+                            </div>
+                        ) : (
+                            <div className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-50 border border-amber-200">
+                                <Clock size={14} className="text-amber-600" />
+                                <p className="text-xs font-semibold text-amber-800">
+                                    Waiting for the lead to acknowledge both agreements in their portal.
+                                </p>
+                            </div>
+                        )}
+                    </div>
+                )}
             </div>
 
             <ChecklistSection
@@ -3029,14 +3052,17 @@ function ChecklistCard({ item, lead, entry, onSave, files = [], currentUser = nu
     const status = entry.status || null;
     const fileCount = files.length;
 
-    // Only the Consultancy Agreement supports auto-generation today.
-    const canGenerate = item.id === 'agree.consultancy';
+    // Both checklist items support auto-generation:
+    //   agree.consultancy        — Single/Partner variant (opens a picker modal)
+    //   agree.engagement_english — Single template (generates directly)
+    const canGenerate = item.id === 'agree.consultancy' || item.id === 'agree.engagement_english';
+    const needsVariantPicker = item.id === 'agree.consultancy';
     const hasGenerated = files.some(f => f.source === 'generated');
 
     const runGenerate = (variant) => {
         setGenerating(true);
         const form = new FormData();
-        form.append('variant', variant);
+        if (variant) form.append('variant', variant);
         router.post(`/admin/leads/${lead.id}/documents/checklist/${item.id}/generate`, form, {
             preserveScroll: true,
             preserveState: true,
@@ -3046,6 +3072,16 @@ function ChecklistCard({ item, lead, entry, onSave, files = [], currentUser = nu
                 setGenerateOpen(false);
             },
         });
+    };
+
+    // Click handler — consultancy opens the variant picker, engagement
+    // generates inline since there's only one template.
+    const handleGenerateClick = () => {
+        if (needsVariantPicker) {
+            setGenerateOpen(true);
+        } else {
+            runGenerate(null);
+        }
     };
 
     const copyFilename = () => {
@@ -3225,7 +3261,7 @@ function ChecklistCard({ item, lead, entry, onSave, files = [], currentUser = nu
                 {canGenerate && (
                     <button
                         type="button"
-                        onClick={() => setGenerateOpen(true)}
+                        onClick={handleGenerateClick}
                         disabled={generating}
                         style={{ backgroundColor: '#7c3aed', color: '#ffffff' }}
                         className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-[11px] font-bold uppercase tracking-wider hover:opacity-90 transition-all disabled:opacity-60 shadow-sm"

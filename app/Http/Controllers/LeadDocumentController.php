@@ -206,30 +206,38 @@ class LeadDocumentController extends Controller
 
     /**
      * Generate a templated agreement (Blade -> PDF) and attach it to the
-     * lead's documents under the matching checklist key. Currently only
-     * agree.consultancy is supported; the English engagement agreement
-     * remains an upload-only item until a template is provided.
+     * lead's documents under the matching checklist key. Routes by key:
+     *   agree.consultancy        — Consultancy Agreement (Single | Partner)
+     *   agree.engagement_english — English Engagement Agreement (no variant)
      */
     public function generateAgreement(Request $request, AgreementGenerator $generator, $leadId, $key)
     {
         $lead = Lead::findOrFail($leadId);
 
         $data = $request->validate([
-            'variant' => 'required|in:single,partner',
+            // 'variant' only meaningful for consultancy. Optional so the
+            // engagement-english call doesn't need to include it.
+            'variant' => 'nullable|in:single,partner',
         ]);
 
-        if ($key !== 'agree.consultancy') {
-            return back()->withErrors(['error' => 'This checklist item does not support auto-generation.']);
-        }
-
         try {
-            $doc = $generator->consultancy($lead, $data['variant']);
-            return back()->with('success', "Consultancy Agreement generated ({$data['variant']}).");
+            if ($key === 'agree.consultancy') {
+                $variant = $data['variant'] ?? 'single';
+                $generator->consultancy($lead, $variant);
+                return back()->with('success', "Consultancy Agreement generated ({$variant}).");
+            }
+
+            if ($key === 'agree.engagement_english') {
+                $generator->englishEngagement($lead);
+                return back()->with('success', 'English Engagement Agreement generated.');
+            }
+
+            return back()->withErrors(['error' => 'This checklist item does not support auto-generation.']);
         } catch (\Throwable $e) {
             Log::error('Agreement generation failed', [
                 'lead_id' => $leadId,
                 'key'     => $key,
-                'variant' => $data['variant'],
+                'variant' => $data['variant'] ?? null,
                 'error'   => $e->getMessage(),
             ]);
             return back()->withErrors(['error' => 'Could not generate the agreement: ' . $e->getMessage()]);
@@ -253,6 +261,30 @@ class LeadDocumentController extends Controller
             Log::error('Document delete failed', ['doc_id' => $docId, 'error' => $e->getMessage()]);
             return back()->withErrors(['error' => 'Could not delete that file.']);
         }
+    }
+
+    /**
+     * Lead acknowledges they've read and agreed to the Consultancy +
+     * English Engagement Agreement terms. Sets / clears a single
+     * timestamp on the lead so staff can see when it happened.
+     */
+    public function leadAcknowledgeAgreements(Request $request)
+    {
+        $user = Auth::user();
+        $lead = $user?->lead;
+        abort_unless($lead, 403);
+
+        $data = $request->validate([
+            'acknowledged' => 'required|boolean',
+        ]);
+
+        $lead->update([
+            'agreements_acknowledged_at' => $data['acknowledged'] ? now() : null,
+        ]);
+
+        return back()->with('success', $data['acknowledged']
+            ? 'Agreements acknowledged.'
+            : 'Acknowledgment cleared.');
     }
 
     // ── LEAD (own portal) ───────────────────────────────────────────────────
@@ -306,6 +338,7 @@ class LeadDocumentController extends Controller
                 'lead_id'    => $lead->lead_id,
                 'first_name' => $lead->first_name,
                 'last_name'  => $lead->last_name,
+                'agreements_acknowledged_at' => $lead->agreements_acknowledged_at,
             ],
             'requests'              => $requests,
             'shared_by_staff'       => $sharedByStaff,
