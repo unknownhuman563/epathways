@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Lead;
 use App\Models\LeadDocument;
 use App\Models\LeadDocumentRequest;
+use App\Services\AgreementGenerator;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
@@ -204,6 +205,46 @@ class LeadDocumentController extends Controller
     }
 
     /**
+     * Generate a templated agreement (Blade -> PDF) and attach it to the
+     * lead's documents under the matching checklist key. Routes by key:
+     *   agree.consultancy        — Consultancy Agreement (Single | Partner)
+     *   agree.engagement_english — English Engagement Agreement (no variant)
+     */
+    public function generateAgreement(Request $request, AgreementGenerator $generator, $leadId, $key)
+    {
+        $lead = Lead::findOrFail($leadId);
+
+        $data = $request->validate([
+            // 'variant' only meaningful for consultancy. Optional so the
+            // engagement-english call doesn't need to include it.
+            'variant' => 'nullable|in:single,partner',
+        ]);
+
+        try {
+            if ($key === 'agree.consultancy') {
+                $variant = $data['variant'] ?? 'single';
+                $generator->consultancy($lead, $variant);
+                return back()->with('success', "Consultancy Agreement generated ({$variant}).");
+            }
+
+            if ($key === 'agree.engagement_english') {
+                $generator->englishEngagement($lead);
+                return back()->with('success', 'English Engagement Agreement generated.');
+            }
+
+            return back()->withErrors(['error' => 'This checklist item does not support auto-generation.']);
+        } catch (\Throwable $e) {
+            Log::error('Agreement generation failed', [
+                'lead_id' => $leadId,
+                'key'     => $key,
+                'variant' => $data['variant'] ?? null,
+                'error'   => $e->getMessage(),
+            ]);
+            return back()->withErrors(['error' => 'Could not generate the agreement: ' . $e->getMessage()]);
+        }
+    }
+
+    /**
      * Delete a single uploaded file. Removes the storage object too so the
      * lead's private folder doesn't bloat with orphan files.
      */
@@ -220,6 +261,30 @@ class LeadDocumentController extends Controller
             Log::error('Document delete failed', ['doc_id' => $docId, 'error' => $e->getMessage()]);
             return back()->withErrors(['error' => 'Could not delete that file.']);
         }
+    }
+
+    /**
+     * Lead acknowledges they've read and agreed to the Consultancy +
+     * English Engagement Agreement terms. Sets / clears a single
+     * timestamp on the lead so staff can see when it happened.
+     */
+    public function leadAcknowledgeAgreements(Request $request)
+    {
+        $user = Auth::user();
+        $lead = $user?->lead;
+        abort_unless($lead, 403);
+
+        $data = $request->validate([
+            'acknowledged' => 'required|boolean',
+        ]);
+
+        $lead->update([
+            'agreements_acknowledged_at' => $data['acknowledged'] ? now() : null,
+        ]);
+
+        return back()->with('success', $data['acknowledged']
+            ? 'Agreements acknowledged.'
+            : 'Acknowledgment cleared.');
     }
 
     // ── LEAD (own portal) ───────────────────────────────────────────────────
@@ -257,12 +322,14 @@ class LeadDocumentController extends Controller
             ->get()
             ->groupBy('checklist_key')
             ->map(fn ($files) => $files->map(fn ($f) => [
-                'id'            => $f->id,
-                'original_name' => $f->original_name,
-                'mime'          => $f->mime,
-                'size'          => $f->size,
-                'status'        => $f->status,
-                'created_at'    => $f->created_at,
+                'id'             => $f->id,
+                'original_name'  => $f->original_name,
+                'mime'           => $f->mime,
+                'size'           => $f->size,
+                'status'         => $f->status,
+                'source'         => $f->source,
+                'source_variant' => $f->source_variant,
+                'created_at'     => $f->created_at,
             ])->values());
 
         return inertia('portal/lead/Documents', [
@@ -271,6 +338,7 @@ class LeadDocumentController extends Controller
                 'lead_id'    => $lead->lead_id,
                 'first_name' => $lead->first_name,
                 'last_name'  => $lead->last_name,
+                'agreements_acknowledged_at' => $lead->agreements_acknowledged_at,
             ],
             'requests'              => $requests,
             'shared_by_staff'       => $sharedByStaff,
@@ -393,6 +461,16 @@ class LeadDocumentController extends Controller
 
         abort_unless(Storage::disk(self::DISK)->exists($doc->file_path), 404);
 
+        // ?inline=1 streams with Content-Disposition: inline so the browser
+        // renders the PDF in-tab instead of forcing a download — used by the
+        // "View" button on the agreements panel.
+        if ($request->boolean('inline')) {
+            return response()->file(Storage::disk(self::DISK)->path($doc->file_path), [
+                'Content-Type'        => $doc->mime ?: 'application/pdf',
+                'Content-Disposition' => 'inline; filename="' . $doc->original_name . '"',
+            ]);
+        }
+
         return Storage::disk(self::DISK)->download($doc->file_path, $doc->original_name);
     }
 
@@ -401,15 +479,17 @@ class LeadDocumentController extends Controller
     private function docSerialize(LeadDocument $d): array
     {
         return [
-            'id'           => $d->id,
-            'request_id'   => $d->request_id,
-            'original_name' => $d->original_name,
-            'mime'         => $d->mime,
-            'size'         => $d->size,
-            'status'       => $d->status,
-            'note'         => $d->note,
-            'reviewed_at'  => $d->reviewed_at,
-            'created_at'   => $d->created_at,
+            'id'             => $d->id,
+            'request_id'     => $d->request_id,
+            'original_name'  => $d->original_name,
+            'mime'           => $d->mime,
+            'size'           => $d->size,
+            'status'         => $d->status,
+            'source'         => $d->source,
+            'source_variant' => $d->source_variant,
+            'note'           => $d->note,
+            'reviewed_at'    => $d->reviewed_at,
+            'created_at'     => $d->created_at,
         ];
     }
 

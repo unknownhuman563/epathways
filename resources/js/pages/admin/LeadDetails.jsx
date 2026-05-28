@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import {
     ArrowLeft, User, BookOpen, DollarSign, GraduationCap,
@@ -6,7 +7,7 @@ import {
     CheckCircle2, XCircle, FileQuestion, Calendar,
     TrendingUp, AlertTriangle, Clock, History, ChevronDown, Check,
     User as UserIcon, ArrowRight, Sparkles, FolderOpen, Copy, Info, Undo2,
-    Globe, Home,
+    Globe, Home, Wand2, Users as UsersIcon, Eye,
 } from 'lucide-react';
 import { CHECKLIST, STATUSES, STATUS_CHIP, STATUS_LABEL, SECTION_STATUSES, IMPORTANT_NOTES, renderFilename, currentSectionIndex } from '@/data/leadDocumentChecklist';
 
@@ -2930,6 +2931,29 @@ function FolderDetail({ section, lead, state, onSave, checklistFiles, currentUse
                         <p className="text-xs text-rose-900 italic leading-relaxed">{verification.notes}</p>
                     </div>
                 )}
+
+                {/* Lead's in-portal acknowledgment — only surfaced inside
+                    the Agreements folder. Shows green when ticked, gray
+                    when still awaiting. */}
+                {section.key === 'agreements' && (
+                    <div className="border-t border-gray-100 pt-4">
+                        {lead?.agreements_acknowledged_at ? (
+                            <div className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-emerald-50 border border-emerald-200">
+                                <CheckCircle2 size={14} className="text-emerald-600" />
+                                <p className="text-xs font-semibold text-emerald-800">
+                                    Lead acknowledged the agreements on {new Date(lead.agreements_acknowledged_at).toLocaleDateString('en-NZ', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                </p>
+                            </div>
+                        ) : (
+                            <div className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-50 border border-amber-200">
+                                <Clock size={14} className="text-amber-600" />
+                                <p className="text-xs font-semibold text-amber-800">
+                                    Waiting for the lead to acknowledge both agreements in their portal.
+                                </p>
+                            </div>
+                        )}
+                    </div>
+                )}
             </div>
 
             <ChecklistSection
@@ -3021,10 +3045,44 @@ function ChecklistCard({ item, lead, entry, onSave, files = [], currentUser = nu
     const [notesDraft, setNotesDraft] = useState(entry.notes || "");
     const [statusOpen, setStatusOpen] = useState(false);
     const [uploading, setUploading] = useState(false);
+    const [generateOpen, setGenerateOpen] = useState(false);
+    const [generating, setGenerating] = useState(false);
     const fileInputRef = useRef(null);
     const filename = renderFilename(item.filename, lead);
     const status = entry.status || null;
     const fileCount = files.length;
+
+    // Both checklist items support auto-generation:
+    //   agree.consultancy        — Single/Partner variant (opens a picker modal)
+    //   agree.engagement_english — Single template (generates directly)
+    const canGenerate = item.id === 'agree.consultancy' || item.id === 'agree.engagement_english';
+    const needsVariantPicker = item.id === 'agree.consultancy';
+    const hasGenerated = files.some(f => f.source === 'generated');
+
+    const runGenerate = (variant) => {
+        setGenerating(true);
+        const form = new FormData();
+        if (variant) form.append('variant', variant);
+        router.post(`/admin/leads/${lead.id}/documents/checklist/${item.id}/generate`, form, {
+            preserveScroll: true,
+            preserveState: true,
+            forceFormData: true,
+            onFinish: () => {
+                setGenerating(false);
+                setGenerateOpen(false);
+            },
+        });
+    };
+
+    // Click handler — consultancy opens the variant picker, engagement
+    // generates inline since there's only one template.
+    const handleGenerateClick = () => {
+        if (needsVariantPicker) {
+            setGenerateOpen(true);
+        } else {
+            runGenerate(null);
+        }
+    };
 
     const copyFilename = () => {
         filename && navigator.clipboard?.writeText(filename);
@@ -3116,25 +3174,48 @@ function ChecklistCard({ item, lead, entry, onSave, files = [], currentUser = nu
                 )}
 
                 {/* Uploaded files list — each file is a row with download +
-                    delete. Uploaded by the lead OR by staff on their behalf. */}
+                    delete. Uploaded by the lead OR by staff on their behalf.
+                    Files with source='generated' get a violet pill so staff
+                    can tell auto-generated PDFs apart from manual uploads. */}
                 {fileCount > 0 && (
                     <ul className="space-y-1.5">
                         {files.map((f) => (
                             <li key={f.id} className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-gray-50 border border-gray-200 group/file">
-                                <FileText size={12} className="text-gray-400 flex-shrink-0" />
+                                {f.source === 'generated' ? (
+                                    <Wand2 size={12} className="text-violet-500 flex-shrink-0" />
+                                ) : (
+                                    <FileText size={12} className="text-gray-400 flex-shrink-0" />
+                                )}
                                 <a
-                                    href={`/admin/documents/${f.id}/download`}
+                                    href={`/admin/documents/${f.id}/download?inline=1`}
+                                    target="_blank"
+                                    rel="noreferrer"
                                     className="flex-1 min-w-0 text-[11px] font-medium text-gray-800 hover:text-blue-600 truncate"
-                                    title={f.original_name}
+                                    title={`View ${f.original_name}`}
                                 >
                                     {f.original_name}
                                 </a>
+                                {f.source === 'generated' && (
+                                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-widest bg-violet-100 text-violet-700 border border-violet-200">
+                                        <Sparkles size={9} />
+                                        {f.source_variant?.includes('partner') ? 'Generated · Partner' : f.source_variant?.includes('single') ? 'Generated · Single' : 'Generated'}
+                                    </span>
+                                )}
                                 <span className="text-[10px] text-gray-400 tabular-nums hidden sm:inline">
                                     {fmtSize(f.size)}
                                 </span>
                                 <span className="text-[10px] text-gray-400 tabular-nums hidden md:inline">
                                     {fmtDate(f.created_at)}
                                 </span>
+                                <a
+                                    href={`/admin/documents/${f.id}/download?inline=1`}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="inline-flex items-center justify-center w-6 h-6 rounded text-gray-500 hover:text-violet-600 hover:bg-violet-50 transition-colors"
+                                    title="View"
+                                >
+                                    <Eye size={11} />
+                                </a>
                                 <a
                                     href={`/admin/documents/${f.id}/download`}
                                     className="inline-flex items-center justify-center w-6 h-6 rounded text-gray-500 hover:text-blue-600 hover:bg-blue-50 transition-colors"
@@ -3172,6 +3253,23 @@ function ChecklistCard({ item, lead, entry, onSave, files = [], currentUser = nu
                     <Download size={12} className="rotate-180" />
                     {uploading ? 'Uploading…' : fileCount > 0 ? 'Upload another' : 'Upload file(s)'}
                 </button>
+
+                {/* Auto-generate (Consultancy Agreement only). Renders the
+                    Blade template -> PDF and attaches it to this checklist
+                    item. Solid violet so it's unmissable next to the dashed
+                    upload button. */}
+                {canGenerate && (
+                    <button
+                        type="button"
+                        onClick={handleGenerateClick}
+                        disabled={generating}
+                        style={{ backgroundColor: '#7c3aed', color: '#ffffff' }}
+                        className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-[11px] font-bold uppercase tracking-wider hover:opacity-90 transition-all disabled:opacity-60 shadow-sm"
+                    >
+                        <Wand2 size={12} />
+                        {generating ? 'Generating…' : hasGenerated ? 'Re-generate Agreement' : 'Generate Agreement'}
+                    </button>
+                )}
 
                 {/* Spacer pushes the footer to the card bottom */}
                 <div className="flex-1" />
@@ -3237,8 +3335,110 @@ function ChecklistCard({ item, lead, entry, onSave, files = [], currentUser = nu
                     />
                 </div>
             </div>
+
+            {generateOpen && (
+                <GenerateAgreementModal
+                    lead={lead}
+                    onClose={() => !generating && setGenerateOpen(false)}
+                    onConfirm={runGenerate}
+                    generating={generating}
+                />
+            )}
         </article>
     );
+}
+
+// Variant-picker modal for Consultancy Agreement generation. The lead's
+// marital_status pre-selects Partner when relevant ("Married", "Partnered",
+// "De Facto", etc.) but staff can always override.
+function GenerateAgreementModal({ lead, onClose, onConfirm, generating }) {
+    const suggestedPartner = /married|partner|de\s*facto|spouse/i.test(lead?.marital_status || '');
+    const [variant, setVariant] = useState(suggestedPartner ? 'partner' : 'single');
+    const clientName = `${lead?.first_name || ''} ${lead?.last_name || ''}`.trim() || 'this lead';
+
+    // Portal to document.body so the modal escapes any ancestor transforms
+    // (the checklist card sits in a grid with framer-motion higher up that
+    // creates a containing block, breaking position:fixed otherwise).
+    if (typeof document === 'undefined') return null;
+    return createPortal((
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[70] flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl overflow-hidden">
+                <div className="px-8 py-6 border-b border-gray-100 flex items-start justify-between gap-4">
+                    <div className="flex-1 min-w-0">
+                        <div className="inline-flex items-center gap-1.5 px-2 py-0.5 bg-violet-100 text-violet-700 rounded-md text-[10px] font-bold uppercase tracking-widest mb-2">
+                            <Wand2 size={11} /> AI-assisted
+                        </div>
+                        <h2 className="text-xl font-bold text-gray-900">Generate Consultancy Agreement</h2>
+                        <p className="text-sm text-gray-500 mt-1.5">Pick the variant for <span className="font-semibold text-gray-700">{clientName}</span>. The PDF is attached to this lead's documents and visible in their portal.</p>
+                    </div>
+                    <button onClick={onClose} disabled={generating} className="text-gray-400 hover:text-gray-700 p-1 rounded disabled:opacity-50 flex-shrink-0">
+                        <XCircle size={22} />
+                    </button>
+                </div>
+
+                <div className="p-8 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {[
+                        { key: 'single',  title: 'SINGLE',  sub: 'Applicant only',           fee: 'PhP 100,000', icon: <User size={22} /> },
+                        { key: 'partner', title: 'PARTNER', sub: 'Main applicant + partner', fee: 'PhP 150,000', icon: <UsersIcon size={22} /> },
+                    ].map(opt => (
+                        <button
+                            key={opt.key}
+                            type="button"
+                            onClick={() => setVariant(opt.key)}
+                            disabled={generating}
+                            className={`text-left rounded-2xl border-2 p-6 transition-all disabled:opacity-50 ${variant === opt.key ? 'border-violet-600 bg-violet-50' : 'border-gray-200 bg-white hover:border-gray-300'}`}
+                        >
+                            <div className="flex items-center justify-between mb-4">
+                                <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${variant === opt.key ? 'bg-violet-600 text-white' : 'bg-gray-100 text-gray-500'}`}>
+                                    {opt.icon}
+                                </div>
+                                {variant === opt.key && <CheckCircle2 size={20} className="text-violet-600" />}
+                            </div>
+                            <div className="text-[11px] font-bold tracking-[0.22em] uppercase text-gray-500 mb-1">{opt.title}</div>
+                            <div className="text-base font-semibold text-gray-900 mb-3">{opt.sub}</div>
+                            <div className="text-2xl font-bold text-gray-900 tracking-tight">{opt.fee}</div>
+                        </button>
+                    ))}
+                </div>
+
+                <div className="px-8 pb-3">
+                    {suggestedPartner ? (
+                        <p className="text-xs text-gray-500">Auto-suggested <span className="font-semibold text-violet-700">Partner</span> (lead marital status: {lead?.marital_status}).</p>
+                    ) : (
+                        <p className="text-xs text-gray-400">Default <span className="font-semibold text-gray-600">Single</span> — change if applicant has a partner.</p>
+                    )}
+                </div>
+
+                <div className="px-8 py-5 border-t border-gray-100 bg-gray-50/60 flex items-center justify-end gap-3">
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        disabled={generating}
+                        className="px-5 py-2.5 text-xs font-bold uppercase tracking-wider text-gray-700 hover:bg-gray-100 rounded-xl transition-colors disabled:opacity-50"
+                    >
+                        Cancel
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => onConfirm(variant)}
+                        disabled={generating}
+                        className="inline-flex items-center gap-2 px-6 py-2.5 bg-violet-600 hover:bg-violet-700 text-white text-xs font-bold uppercase tracking-wider rounded-xl transition-colors shadow-sm disabled:opacity-60 disabled:cursor-not-allowed whitespace-nowrap"
+                    >
+                        {generating ? (
+                            <>
+                                <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                Generating PDF…
+                            </>
+                        ) : (
+                            <>
+                                <Wand2 size={13} /> Generate {variant === 'partner' ? 'Partner' : 'Single'} variant
+                            </>
+                        )}
+                    </button>
+                </div>
+            </div>
+        </div>
+    ), document.body);
 }
 
 const NOTE_KIND_META = {

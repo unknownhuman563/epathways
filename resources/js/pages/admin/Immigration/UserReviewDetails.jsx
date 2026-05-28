@@ -2,7 +2,8 @@ import React from 'react';
 import { Head, Link } from '@inertiajs/react';
 import { ArrowLeft, Mail, MessageCircle, FileText, Calendar } from 'lucide-react';
 
-export default function UserReviewDetails({ review }) {
+export default function UserReviewDetails({ review, department = 'immigration' }) {
+    const backHref = `/admin/${department}/user-reviews`;
     const formatDate = (d) => d ? new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
 
     const questions = [
@@ -18,7 +19,7 @@ export default function UserReviewDetails({ review }) {
             <div className="hidden lg:flex items-start justify-between gap-4 mb-2">
                 <div>
                     <Link
-                        href="/admin/immigration/user-reviews"
+                        href={backHref}
                         className="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-gray-900 mb-3 transition-colors"
                     >
                         <ArrowLeft size={14} />

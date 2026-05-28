@@ -20,7 +20,9 @@ use App\Http\Controllers\UserController;
 use App\Http\Controllers\UserReviewController;
 use App\Http\Controllers\LeadPortalInvitationController;
 use App\Http\Controllers\LeadDocumentController;
+use App\Http\Controllers\ProgramPromoController;
 use App\Services\NewsFeedService;
+use App\Services\PromoFeed;
 Route::get('/', [HomeController::class, 'index']);
 
 Route::get("/booking", function (){
@@ -30,7 +32,10 @@ Route::post("/bookings", [BookingController::class, 'store']);
 
 
 Route::get("/education-journey", function (){
-   return inertia('education-journey/EducationJourneyPage');
+   return inertia('education-journey/EducationJourneyPage', array_merge(
+       UserReviewController::publicPayload(\App\Models\UserReview::DEPT_EDUCATION),
+       ['activePromos' => PromoFeed::active()]
+   ));
 });
 
 Route::get('/programs-levels', [ProgramController::class, 'publicIndex']);
@@ -50,8 +55,12 @@ Route::get("/immigration", function (){
 });
 
 // Admin moderation toggle for published / featured / status on a review.
+// Both departments hit the same controller method — the moderation
+// fields (is_published / is_featured / status / visa_type) are shared.
 Route::middleware('auth')->post('/admin/immigration/user-reviews/{id}', [UserReviewController::class, 'adminUpdate'])
     ->name('admin.immigration.user-reviews.update');
+Route::middleware('auth')->post('/admin/education/user-reviews/{id}', [UserReviewController::class, 'adminUpdate'])
+    ->name('admin.education.user-reviews.update');
 
 Route::get("/accommodation", function (){
    return inertia('accommodation/AccommodationPage');
@@ -156,6 +165,14 @@ Route::middleware(['auth'])->group(function () {
 
         Route::get('/admin/activity-logs', [ActivityLogController::class, 'index'])->name('admin.activity-logs');
 
+        // AI Ads — Cerebras local copy brainstorming + PLAI Partner API for
+        // launching to FB/IG/Google/LinkedIn/TikTok/etc. PLAI launch is
+        // dormant until PLAI_API_KEY is set in .env (see config/services.php).
+        Route::get('/admin/ai-ads', [App\Http\Controllers\AiAdController::class, 'index'])->name('admin.ai-ads');
+        Route::get('/admin/ai-ads/plai/connection', [App\Http\Controllers\AiAdController::class, 'testConnection'])->name('admin.ai-ads.plai.connection');
+        Route::post('/admin/ai-ads/generate', [App\Http\Controllers\AiAdController::class, 'generateCopy'])->name('admin.ai-ads.generate');
+        Route::post('/admin/ai-ads/launch', [App\Http\Controllers\AiAdController::class, 'launch'])->name('admin.ai-ads.launch');
+
         // Lead Portal invitations — admin approval / rejection / revocation.
         // Sales requests via /portal/sales/... (separate route below).
         Route::get('/admin/portal-invitations', [LeadPortalInvitationController::class, 'adminIndex'])
@@ -170,6 +187,16 @@ Route::middleware(['auth'])->group(function () {
             ->name('admin.portal-invitation.generate-credentials');
         Route::post('/admin/leads/{id}/portal-invitation/reset-password', [LeadPortalInvitationController::class, 'resetPassword'])
             ->name('admin.portal-invitation.reset-password');
+    });
+
+    // Program Promotions — admin / sales / education can manage time-bound
+    // discount campaigns shown on the public Home + Education Journey +
+    // Programs pages. Banner image uploads land in storage/app/public/promos.
+    Route::middleware('portal:admin,sales,education')->group(function () {
+        Route::get('/admin/promos', [ProgramPromoController::class, 'index'])->name('admin.promos');
+        Route::post('/admin/promos', [ProgramPromoController::class, 'store']);
+        Route::post('/admin/promos/{id}', [ProgramPromoController::class, 'update']);
+        Route::delete('/admin/promos/{id}', [ProgramPromoController::class, 'destroy']);
     });
 
     // Lead detail view + stage update — any logged-in staff (admin OR any
@@ -232,18 +259,25 @@ Route::middleware(['auth'])->group(function () {
             ->name('admin.leads.documents.status');
         Route::post('/admin/leads/{id}/documents/share', [LeadDocumentController::class, 'shareWithLead'])
             ->name('admin.leads.documents.share');
-        // Staff download — same controller, role-gated inside.
-        Route::get('/admin/documents/{docId}/download', [LeadDocumentController::class, 'download'])
-            ->name('admin.documents.download');
     });
 
-    // Documents-tab checklist uploads + per-file delete — wider group so
-    // every department portal that sees the tab can also manage files.
+    // Documents-tab checklist uploads + per-file delete + downloads — wider
+    // group so every department portal that can see the documents tab can
+    // also manage and download files. The download controller does its own
+    // role-gated check on the specific lead before streaming the file.
     Route::middleware('portal:admin,sales,education,english,immigration,accommodation')->group(function () {
         Route::post('/admin/leads/{id}/documents/checklist/{key}/upload', [LeadDocumentController::class, 'staffChecklistUpload'])
             ->name('admin.leads.documents.checklist.upload');
+        // Templated agreement generator — Blade -> PDF -> attached as a
+        // LeadDocument with source='generated'. Only agree.consultancy
+        // (single|partner variant) is wired up right now.
+        Route::post('/admin/leads/{id}/documents/checklist/{key}/generate', [LeadDocumentController::class, 'generateAgreement'])
+            ->name('admin.leads.documents.checklist.generate');
         Route::delete('/admin/leads/{leadId}/documents/{docId}', [LeadDocumentController::class, 'destroyDocument'])
             ->name('admin.leads.documents.destroy');
+        // Staff download — same controller, role-gated inside.
+        Route::get('/admin/documents/{docId}/download', [LeadDocumentController::class, 'download'])
+            ->name('admin.documents.download');
     });
 
     // Immigration management screens — shared between admins and immigration-role staff.
@@ -255,8 +289,16 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/admin/immigration/resident-intakes/{id}/documents/{key}/{index?}', [ResidentIntakeController::class, 'downloadDocument'])->name('admin.immigration.resident-intakes.document');
         Route::post('/admin/immigration/resident-intakes/{id}/edit-link', [ResidentIntakeController::class, 'generateEditLink'])->name('admin.immigration.resident-intakes.edit-link');
 
-        Route::get('/admin/immigration/user-reviews', [UserReviewController::class, 'adminIndex'])->name('admin.immigration.user-reviews');
-        Route::get('/admin/immigration/user-reviews/{id}', [UserReviewController::class, 'adminShow'])->name('admin.immigration.user-reviews.show');
+        Route::get('/admin/immigration/user-reviews', fn () => app(UserReviewController::class)->adminIndex('immigration'))->name('admin.immigration.user-reviews');
+        Route::get('/admin/immigration/user-reviews/{id}', fn ($id) => app(UserReviewController::class)->adminShow($id, 'immigration'))->name('admin.immigration.user-reviews.show');
+    });
+
+    // Education User Reviews — mirrors the immigration management screens.
+    // Same controller + React components; the department arg scopes the
+    // dataset to education-tagged reviews only.
+    Route::middleware('portal:admin,education')->group(function () {
+        Route::get('/admin/education/user-reviews', fn () => app(UserReviewController::class)->adminIndex('education'))->name('admin.education.user-reviews');
+        Route::get('/admin/education/user-reviews/{id}', fn ($id) => app(UserReviewController::class)->adminShow($id, 'education'))->name('admin.education.user-reviews.show');
     });
 
     // Department portals — each staff member reaches only their own portal
@@ -318,6 +360,12 @@ Route::middleware(['auth'])->group(function () {
             // WORK
             Route::get('/students',  [EducationController::class, 'students'])->name('students');
             Route::get('/documents', [EducationController::class, 'documents'])->name('documents');
+            // Tasks & follow-ups (mirror of /portal/sales/tasks). Reuses
+            // LeadTaskController::dueToday for the AJAX endpoint since
+            // tasks are not department-scoped server-side.
+            Route::get('/tasks/due-today', [\App\Http\Controllers\LeadTaskController::class, 'dueToday'])
+                ->name('tasks.due-today');
+            Route::get('/tasks', [EducationController::class, 'tasks'])->name('tasks');
 
             // SETUP
             Route::get('/programs',            [EducationController::class, 'programs'])->name('programs');
@@ -396,6 +444,9 @@ Route::middleware(['auth'])->group(function () {
             Route::post('/documents/upload', [LeadDocumentController::class, 'leadUpload'])->name('documents.upload');
             Route::post('/documents/checklist/{key}/upload', [LeadDocumentController::class, 'leadChecklistUpload'])->name('documents.checklist.upload');
             Route::post('/documents/section/{key}/submit', [LeadDocumentController::class, 'leadSubmitSection'])->name('documents.section.submit');
+            // Lead ticks "I've read and agreed to the Consultancy + English
+            // Engagement Agreement terms" — sets / clears the timestamp.
+            Route::post('/documents/agreements/acknowledge', [LeadDocumentController::class, 'leadAcknowledgeAgreements'])->name('documents.agreements.acknowledge');
             Route::get('/documents/{docId}/download', [LeadDocumentController::class, 'download'])->name('documents.download');
         });
     });

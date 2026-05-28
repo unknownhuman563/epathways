@@ -59,7 +59,7 @@ export default function WhyUs() {
                         <button 
                             key={idx}
                             onClick={() => setActiveTab(idx)}
-                            className={`text-[11px] font-bold uppercase tracking-[0.2em] pb-2 relative transition-colors ${idx === activeTab ? 'text-[#436235]' : 'text-gray-500 hover:text-[#282728]'}`}
+                            className={`text-[11px] font-bold uppercase tracking-[0.2em] pb-2 relative transition-colors ${idx === activeTab ? 'text-[#436235]' : 'text-gray-700 hover:text-[#282728]'}`}
                         >
                             {tab.title}
                             {idx === activeTab && (
@@ -83,7 +83,7 @@ export default function WhyUs() {
                             transition={{ duration: 0.4 }}
                             className="max-w-xl"
                         >
-                            <span className="text-[10px] font-bold text-gray-500 uppercase tracking-[0.3em] mb-4 block">
+                            <span className="text-[10px] font-bold text-gray-700 uppercase tracking-[0.3em] mb-4 block">
                                 {tabContent[activeTab].label}
                             </span>
                             <h3 className="text-2xl sm:text-3xl md:text-4xl font-black text-[#282728] leading-tight mb-4 sm:mb-6">

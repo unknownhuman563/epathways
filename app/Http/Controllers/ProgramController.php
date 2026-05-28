@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Program;
+use App\Services\PromoFeed;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 
@@ -116,7 +117,10 @@ class ProgramController extends Controller
 
     public function publicIndex()
     {
-        return inertia('programs/ProgramsLevels', ['programs' => $this->fetchPublishedPrograms()]);
+        return inertia('programs/ProgramsLevels', [
+            'programs' => $this->fetchPublishedPrograms(),
+            'activePromos' => PromoFeed::active(),
+        ]);
     }
 
     public function feeGuideIndex()

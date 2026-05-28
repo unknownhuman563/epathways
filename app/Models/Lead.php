@@ -74,6 +74,8 @@ class Lead extends Model
         'inz_visa_type', 'inz_lodged_at', 'inz_reference', 'inz_status', 'inz_decision_at',
         // IAA / Privacy Act gating
         'services_agreement_signed_at',
+        // Lead-portal acknowledgment of Consultancy + English Engagement
+        'agreements_acknowledged_at',
     ];
 
     protected $casts = [
@@ -99,6 +101,7 @@ class Lead extends Model
         'calendar_date'                  => 'date',
         'document_checklist'             => 'array',
         'section_verifications'          => 'array',
+        'agreements_acknowledged_at'     => 'datetime',
         'is_student'                     => 'boolean',
         'student_converted_at'           => 'datetime',
         'is_immigration_case'            => 'boolean',

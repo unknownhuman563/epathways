@@ -18,14 +18,20 @@ import Footer from "@/components/layout/Footer";
 import CTASection from "./CTASection";
 import AccreditationSection from "./AccreditationSection";
 import VisaApprovedShowcase from "./VisaApprovedShowcase";
+import PromoBanner from "@/components/ui/PromoBanner";
+import PromoModal from "@/components/ui/PromoModal";
+import ReviewsSection from "@/components/ui/ReviewsSection";
 
 import HeroVideo from "@assets/Hero/02 - client epathway intro (1).mp4";
 
-export default function Home({ events = [], programGroups = [] }) {
+export default function Home({ events = [], programGroups = [], activePromos = [], reviews = [], reviewStats = { count: 0, average: 0 } }) {
   return (
     <>
       <div className="bg-white" style={{ overflowX: 'clip' }}>
         <Navbar />
+
+        {/* Live promo strip — renders nothing if no promos are active */}
+        <PromoBanner promos={activePromos} variant="strip" />
 
         {/* Hero Section */}
         <HeroSection backgroundVideo={HeroVideo} />
@@ -49,16 +55,33 @@ export default function Home({ events = [], programGroups = [] }) {
 
         <WhyUs />
         <ProcessSteps />
+
+        {/* Student Visa Timeline Section — moved above Visa Approvals so
+            the journey timeline frames the approval stories. */}
+        <StudentVisaTimeline />
+
         <VisaApprovedShowcase />
 
         {/* In-Demand Programs Section */}
         <InDemandPrograms programGroups={programGroups} />
 
-        {/* Student Visa Timeline Section */}
-        <StudentVisaTimeline />
+        {/* Success Stories Section — hidden, superseded by the live
+            client-reviews section below which pulls from real published
+            reviews instead of the hard-coded Kent Dinfer testimonial. */}
+        {/* <SuccessStories /> */}
 
-        {/* Success Stories Section */}
-        <SuccessStories />
+        {/* All client reviews — merges immigration + education reviews into
+            one feed. Read-only on home (no "Write a review" CTA) since the
+            submission flow lives on each dept page so reviews get tagged
+            correctly. */}
+        <ReviewsSection
+            reviews={reviews}
+            stats={reviewStats}
+            eyebrow="Client reviews"
+            headline="What our clients say"
+            intro="Real voices from people across our immigration and education journeys. Every review here was submitted by a real client and approved by our team."
+            showWriteCta={false}
+        />
 
         {/* CTA Section */}
         <CTASection />
@@ -71,6 +94,11 @@ export default function Home({ events = [], programGroups = [] }) {
         <BeforeFooterCTA source="home-beforefooter" />
 
         <ScrollToTop />
+
+        {/* Promo Modal — auto-opens once per week when there are live promos,
+            and is the target of the strip's "+N more" pill. Dismissing it
+            also suppresses the Welcome modal for the same visit. */}
+        <PromoModal promos={activePromos} />
 
         {/* Welcome Modal (shows at most once per visitor per week) */}
         <Modal />

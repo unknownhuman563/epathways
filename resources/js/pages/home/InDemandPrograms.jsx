@@ -133,11 +133,11 @@ export default function InDemandPrograms() {
                 {/* Header */}
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-8 sm:mb-12 gap-6">
                     <div>
-                        <p className="text-xs font-bold uppercase tracking-widest mb-3 text-gray-500">Programs</p>
+                        <p className="text-xs font-bold uppercase tracking-widest mb-3 text-gray-400">Programs</p>
                         <h2 className="text-3xl sm:text-4xl md:text-5xl font-medium tracking-tight mb-2">
                             Top In-Demand Programs
                         </h2>
-                        <p className="text-sm md:text-base text-gray-300">
+                        <p className="text-sm md:text-base text-gray-200">
                             The most sought-after qualifications for NZ immigration and career pathways
                         </p>
                     </div>
