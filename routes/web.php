@@ -32,9 +32,10 @@ Route::post("/bookings", [BookingController::class, 'store']);
 
 
 Route::get("/education-journey", function (){
-   return inertia('education-journey/EducationJourneyPage', [
-       'activePromos' => PromoFeed::active(),
-   ]);
+   return inertia('education-journey/EducationJourneyPage', array_merge(
+       UserReviewController::publicPayload(\App\Models\UserReview::DEPT_EDUCATION),
+       ['activePromos' => PromoFeed::active()]
+   ));
 });
 
 Route::get('/programs-levels', [ProgramController::class, 'publicIndex']);
@@ -54,8 +55,12 @@ Route::get("/immigration", function (){
 });
 
 // Admin moderation toggle for published / featured / status on a review.
+// Both departments hit the same controller method — the moderation
+// fields (is_published / is_featured / status / visa_type) are shared.
 Route::middleware('auth')->post('/admin/immigration/user-reviews/{id}', [UserReviewController::class, 'adminUpdate'])
     ->name('admin.immigration.user-reviews.update');
+Route::middleware('auth')->post('/admin/education/user-reviews/{id}', [UserReviewController::class, 'adminUpdate'])
+    ->name('admin.education.user-reviews.update');
 
 Route::get("/accommodation", function (){
    return inertia('accommodation/AccommodationPage');
@@ -284,8 +289,16 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/admin/immigration/resident-intakes/{id}/documents/{key}/{index?}', [ResidentIntakeController::class, 'downloadDocument'])->name('admin.immigration.resident-intakes.document');
         Route::post('/admin/immigration/resident-intakes/{id}/edit-link', [ResidentIntakeController::class, 'generateEditLink'])->name('admin.immigration.resident-intakes.edit-link');
 
-        Route::get('/admin/immigration/user-reviews', [UserReviewController::class, 'adminIndex'])->name('admin.immigration.user-reviews');
-        Route::get('/admin/immigration/user-reviews/{id}', [UserReviewController::class, 'adminShow'])->name('admin.immigration.user-reviews.show');
+        Route::get('/admin/immigration/user-reviews', fn () => app(UserReviewController::class)->adminIndex('immigration'))->name('admin.immigration.user-reviews');
+        Route::get('/admin/immigration/user-reviews/{id}', fn ($id) => app(UserReviewController::class)->adminShow($id, 'immigration'))->name('admin.immigration.user-reviews.show');
+    });
+
+    // Education User Reviews — mirrors the immigration management screens.
+    // Same controller + React components; the department arg scopes the
+    // dataset to education-tagged reviews only.
+    Route::middleware('portal:admin,education')->group(function () {
+        Route::get('/admin/education/user-reviews', fn () => app(UserReviewController::class)->adminIndex('education'))->name('admin.education.user-reviews');
+        Route::get('/admin/education/user-reviews/{id}', fn ($id) => app(UserReviewController::class)->adminShow($id, 'education'))->name('admin.education.user-reviews.show');
     });
 
     // Department portals — each staff member reaches only their own portal

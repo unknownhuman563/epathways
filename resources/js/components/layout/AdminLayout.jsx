@@ -25,6 +25,14 @@ const ADMIN_NAV = [
         ],
     },
     {
+        name: "Education",
+        icon: <GraduationCap size={20} />,
+        children: [
+            { name: "Dashboard", href: "/portal/education/dashboard", icon: <LayoutDashboard size={16} /> },
+            { name: "User Reviews", href: "/admin/education/user-reviews", icon: <Star size={16} /> },
+        ],
+    },
+    {
         // Cross-portal view — admin can open any role's dashboard.
         name: "Portals",
         icon: <LayoutDashboard size={20} />,

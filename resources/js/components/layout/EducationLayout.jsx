@@ -2,7 +2,7 @@ import DashboardLayout from "./DashboardLayout";
 import { usePage } from "@inertiajs/react";
 import {
     LayoutDashboard, UserSquare2, Users, FolderOpen, GraduationCap,
-    ListChecks, LineChart, User, Bell, Tag,
+    ListChecks, LineChart, User, Bell, Tag, Star,
 } from "lucide-react";
 
 export default function EducationLayout({ children }) {
@@ -16,6 +16,7 @@ export default function EducationLayout({ children }) {
         { name: "Leads",     href: "/portal/education/leads",     icon: <UserSquare2 size={20} />, badge: badges.new_leads_today, badgeTone: "default" },
         { name: "Students",  href: "/portal/education/students",  icon: <Users size={20} /> },
         { name: "Documents", href: "/portal/education/documents", icon: <FolderOpen size={20} />, badge: badges.docs_pending_review, badgeTone: "warning" },
+        { name: "User Reviews", href: "/admin/education/user-reviews", icon: <Star size={20} /> },
 
         { name: "Setup", section: true },
         { name: "Programs",            href: "/portal/education/programs",            icon: <GraduationCap size={20} /> },

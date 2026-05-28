@@ -1,6 +1,7 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { motion } from "framer-motion";
 import { Star, ArrowRight, PenTool } from "react-feather";
+import { Quote } from "lucide-react";
 import ReviewModal from "./ReviewModal";
 
 const PAGE_SIZE = 6;
@@ -38,7 +39,7 @@ function StarRow({ value = 0, size = 14 }) {
                     strokeWidth={1.5}
                     className={
                         n <= value
-                            ? "fill-[#436235] text-[#436235]"
+                            ? "fill-amber-400 text-amber-400"
                             : "fill-transparent text-gray-200"
                     }
                 />
@@ -48,6 +49,8 @@ function StarRow({ value = 0, size = 14 }) {
 }
 
 function ReviewCard({ review, compact = false }) {
+    const [expanded, setExpanded] = useState(false);
+
     const initials = (review.name || "")
         .split(" ")
         .filter(Boolean)
@@ -56,62 +59,96 @@ function ReviewCard({ review, compact = false }) {
         .join("")
         .toUpperCase() || "—";
 
+    // Single body text — for "questions" mode we collapse the 3 answers
+    // into one passage so the new card layout (compact, single-paragraph)
+    // doesn't feel cramped. For "paragraph" mode just use it directly.
+    const bodyText = review.mode === "paragraph"
+        ? review.paragraph
+        : [review.answer_1, review.answer_2, review.answer_3].filter(Boolean).join(" ");
+
+    // Char threshold for "See more" — picked to roughly correlate with the
+    // 4–6 line clamp so it only appears when content is actually truncated.
+    const TRUNCATE_AT = compact ? 180 : 280;
+    const isLong = (bodyText || "").length > TRUNCATE_AT;
+
     return (
         <motion.article
-            initial={{ opacity: 0, y: 16 }}
+            initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true, margin: "-60px" }}
             transition={{ duration: 0.5, ease: "easeOut" }}
-            className="bg-white border border-gray-100 p-7 lg:p-8 flex flex-col group hover:border-[#436235]/30 hover:shadow-[0_24px_48px_-24px_rgba(40,39,40,0.18)] transition-all duration-300"
+            className="relative bg-white rounded-2xl shadow-[0_4px_24px_-12px_rgba(40,39,40,0.08)] hover:shadow-[0_24px_48px_-12px_rgba(40,39,40,0.15)] hover:-translate-y-1 p-8 flex flex-col group transition-all duration-300 overflow-hidden"
         >
-            {/* Top — rating + featured chip */}
-            <div className="flex items-start justify-between mb-6">
-                {review.rating ? <StarRow value={review.rating} /> : <span className="w-1" />}
-                {review.is_featured && (
-                    <span className="text-[9px] font-bold uppercase tracking-[0.25em] text-[#436235] mt-0.5">
-                        Featured
-                    </span>
+            {/* Olive accent bar at the top — same motif used in the section
+                eyebrows for visual cohesion. */}
+            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-[#436235] via-[#436235]/70 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+
+            {/* Oversized quote glyph as a watermark in the background —
+                amber-tinted so it picks up the star colour and adds warmth. */}
+            <Quote
+                size={80}
+                strokeWidth={1}
+                className="absolute -top-2 -right-4 text-amber-50 fill-amber-50/60 -rotate-12"
+                aria-hidden="true"
+            />
+
+            {/* Identity row — bigger avatar, clearer name + role hierarchy. */}
+            <div className="relative flex items-center gap-3.5 mb-4">
+                {review.photo_url ? (
+                    <img
+                        src={review.photo_url}
+                        alt={review.name}
+                        className="w-12 h-12 rounded-full object-cover flex-shrink-0 ring-2 ring-white shadow-md"
+                    />
+                ) : (
+                    <div className="w-12 h-12 rounded-full bg-gradient-to-br from-[#282728] to-[#3d3c3d] text-white flex items-center justify-center text-sm font-bold flex-shrink-0 shadow-md ring-2 ring-white">
+                        {initials}
+                    </div>
                 )}
+                <div className="min-w-0 flex-1">
+                    <p className="text-base font-bold text-[#282728] truncate leading-tight">{review.name}</p>
+                    {(review.visa_type || review.program_type) && (
+                        <p className="text-xs font-semibold text-rose-600 truncate leading-tight mt-1">
+                            {[review.visa_type, review.program_type].filter(Boolean).join(" · ")}
+                        </p>
+                    )}
+                </div>
             </div>
 
-            {/* Body — mode-aware */}
-            {review.mode === "paragraph" ? (
-                <p className={`text-[#282728] font-light italic leading-relaxed mb-6 flex-grow ${
-                    compact ? "text-sm line-clamp-6" : "text-[15px]"
-                }`}>
-                    &ldquo;{review.paragraph}&rdquo;
-                </p>
-            ) : (
-                <div className="space-y-4 mb-6 flex-grow">
-                    {[review.answer_1, review.answer_2, review.answer_3]
-                        .filter(Boolean)
-                        .slice(0, compact ? 1 : 3)
-                        .map((ans, i) => (
-                            <p
-                                key={i}
-                                className={`text-[#282728] font-light leading-relaxed ${
-                                    compact ? "text-sm line-clamp-4" : "text-[15px]"
-                                }`}
-                            >
-                                {i === 0 && <span className="text-[#436235] font-medium italic">&ldquo; </span>}
-                                {ans}
-                                {i === 0 && compact && <span className="text-[#436235] italic"> &rdquo;</span>}
-                            </p>
-                        ))}
+            {/* Stars + rating — bigger, more prominent. */}
+            {review.rating ? (
+                <div className="relative flex items-center gap-2.5 mb-5">
+                    <StarRow value={review.rating} size={16} />
+                    <span className="text-sm font-bold text-[#282728] tabular-nums">
+                        {Number(review.rating).toFixed(1)}
+                    </span>
                 </div>
+            ) : (
+                <div className="mb-5" />
             )}
 
-            {/* Footer — name + meta */}
-            <div className="pt-5 border-t border-gray-100 flex items-center gap-3.5">
-                <div className="w-10 h-10 rounded-full bg-[#282728] text-white flex items-center justify-center text-[11px] font-bold flex-shrink-0">
-                    {initials}
-                </div>
-                <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium text-[#282728] truncate">{review.name}</p>
-                    <p className="text-[10px] text-gray-400 font-light uppercase tracking-[0.15em] mt-0.5">
-                        {review.visa_type ? `${review.visa_type} · ` : ""}{timeAgo(review.created_at)}
-                    </p>
-                </div>
+            {/* Body — larger leading, slightly bigger type for older readers. */}
+            <p className={`relative text-[15px] text-gray-700 font-normal leading-relaxed flex-grow whitespace-pre-line ${
+                expanded ? "" : (compact ? "line-clamp-4" : "line-clamp-6")
+            }`}>
+                {bodyText}
+            </p>
+            {isLong && (
+                <button
+                    type="button"
+                    onClick={() => setExpanded((v) => !v)}
+                    className="relative mt-3 inline-flex items-center gap-1 text-[11px] font-bold uppercase tracking-[0.18em] text-[#436235] hover:text-[#385029] transition-colors self-start"
+                >
+                    {expanded ? "Show less" : "Read more"} <ArrowRight size={11} strokeWidth={2.5} />
+                </button>
+            )}
+
+            {/* Footer — divider line + meta, with a tiny olive dot for accent. */}
+            <div className="relative mt-6 pt-4 border-t border-gray-100 flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#436235]" />
+                <p className="text-[10px] text-gray-500 font-bold uppercase tracking-[0.2em]">
+                    {timeAgo(review.created_at)}{review.is_featured ? " · Featured" : ""}
+                </p>
             </div>
         </motion.article>
     );
@@ -131,34 +168,29 @@ export default function ReviewsSection({
     eyebrow = "Client reviews",
     headline = "What our clients say",
     intro = "Real voices from people who navigated their NZ journey with ePathways. Every review here was submitted by a real client and approved by our team.",
+    department = "immigration",
+    // Show the "Worked with our team? Write a review" CTA card under the
+    // grid. Off on /home (merged feed across departments — submission lives
+    // on each department's own page instead).
+    showWriteCta = true,
 }) {
     const [modalOpen, setModalOpen] = useState(false);
-    const [filter, setFilter] = useState("all");
     const [visible, setVisible] = useState(PAGE_SIZE);
 
-    // Build filter chips dynamically from the visa_type values that
-    // actually appear in the published reviews.
-    const visaTypes = useMemo(() => {
-        const set = new Set();
-        reviews.forEach((r) => r.visa_type && set.add(r.visa_type));
-        return Array.from(set).sort();
-    }, [reviews]);
-
-    const filtered = useMemo(() => {
-        if (filter === "all") return reviews;
-        return reviews.filter((r) => r.visa_type === filter);
-    }, [reviews, filter]);
-
-    const shown = filtered.slice(0, visible);
-    const hasMore = filtered.length > visible;
+    // Filter chips were removed — visitors see the full list, with each
+    // card carrying its own visa/programme tags. The 'filter' state is
+    // kept (unused by UI) so any downstream consumer relying on it stays
+    // intact, defaulting to "all".
+    const shown = reviews.slice(0, visible);
+    const hasMore = reviews.length > visible;
 
     return (
-        <section id="reviews" className="py-24 sm:py-28 lg:py-32 bg-[#f7f8f6] font-urbanist">
+        <section id="reviews" className="py-24 sm:py-28 lg:py-32 bg-gradient-to-b from-white via-[#fafaf9] to-white font-urbanist">
             <div className="max-w-7xl mx-auto px-6 md:px-10 lg:px-16">
 
-                {/* ── Header — single-column editorial. Aggregate stats +
-                    Write Review CTA moved to a dark premium panel below the
-                    grid so the reader sees what people said first. */}
+                {/* ── Header — same editorial pattern used by the visa
+                    pathway / visa journey sections: tiny olive eyebrow,
+                    oversized dark heading, soft gray intro. */}
                 <div className="max-w-3xl mb-14 lg:mb-16">
                     <div className="flex items-center gap-4 mb-5">
                         <span className="text-[10px] font-bold text-[#436235] uppercase tracking-[0.35em]">
@@ -169,44 +201,10 @@ export default function ReviewsSection({
                     <h2 className="text-3xl sm:text-4xl lg:text-5xl font-medium text-[#282728] tracking-tight leading-[1.1] mb-5">
                         {headline}
                     </h2>
-                    <p className="text-base text-gray-500 font-light leading-relaxed max-w-xl">
+                    <p className="text-base text-gray-700 font-normal leading-relaxed max-w-xl">
                         {intro}
                     </p>
                 </div>
-
-                {/* ── Filter chips */}
-                {visaTypes.length > 0 && (
-                    <div className="flex flex-wrap items-center gap-2 mb-10">
-                        <button
-                            type="button"
-                            onClick={() => { setFilter("all"); setVisible(PAGE_SIZE); }}
-                            className={`px-4 py-2 rounded-full text-[11px] font-semibold uppercase tracking-[0.18em] border transition-all ${
-                                filter === "all"
-                                    ? "bg-[#282728] text-white border-[#282728]"
-                                    : "bg-white text-gray-500 border-gray-200 hover:border-[#436235]/40 hover:text-[#282728]"
-                            }`}
-                        >
-                            All ({reviews.length})
-                        </button>
-                        {visaTypes.map((v) => {
-                            const count = reviews.filter((r) => r.visa_type === v).length;
-                            return (
-                                <button
-                                    key={v}
-                                    type="button"
-                                    onClick={() => { setFilter(v); setVisible(PAGE_SIZE); }}
-                                    className={`px-4 py-2 rounded-full text-[11px] font-semibold uppercase tracking-[0.18em] border transition-all ${
-                                        filter === v
-                                            ? "bg-[#282728] text-white border-[#282728]"
-                                            : "bg-white text-gray-500 border-gray-200 hover:border-[#436235]/40 hover:text-[#282728]"
-                                    }`}
-                                >
-                                    {v} ({count})
-                                </button>
-                            );
-                        })}
-                    </div>
-                )}
 
                 {/* ── Grid / empty state */}
                 {shown.length > 0 ? (
@@ -230,92 +228,41 @@ export default function ReviewsSection({
                             </div>
                         )}
 
-                        {/* ── Premium dark aggregate + Write Review panel.
-                            Sits below the grid as the section's confident
-                            close — readers see what people said, then are
-                            invited to add their own voice. */}
-                        <motion.div
-                            initial={{ opacity: 0, y: 24 }}
-                            whileInView={{ opacity: 1, y: 0 }}
-                            viewport={{ once: true, margin: "-60px" }}
-                            transition={{ duration: 0.7, ease: "easeOut" }}
-                            className="mt-16 lg:mt-20 bg-[#282728] text-white rounded-[24px] overflow-hidden relative"
-                        >
-                            {/* Hairline brand-green top edge for accent */}
-                            <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-[#436235]/60 to-transparent"></div>
-
-                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 p-10 sm:p-12 lg:p-16 items-center">
-                                {/* Left — aggregate stats */}
-                                <div>
-                                    <p className="text-[10px] font-bold text-[#436235] uppercase tracking-[0.35em] mb-7">
-                                        Trusted rating
-                                    </p>
-                                    <div className="flex items-end gap-8">
-                                        <div>
-                                            <div className="text-6xl lg:text-7xl font-light text-white tracking-tight leading-none mb-3 tabular-nums">
-                                                {stats.average ? stats.average.toFixed(1) : "—"}
-                                            </div>
-                                            <StarRow value={Math.round(stats.average || 0)} size={16} />
-                                        </div>
-                                        <div className="h-16 w-px bg-white/15"></div>
-                                        <div className="pb-2">
-                                            <div className="text-3xl lg:text-4xl font-light text-white tabular-nums leading-none mb-2">
-                                                {stats.count}
-                                            </div>
-                                            <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-white/45">
-                                                Published<br />reviews
-                                            </p>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* Right — invitation + CTA */}
-                                <div className="lg:border-l lg:border-white/10 lg:pl-16">
-                                    <h3 className="text-2xl sm:text-3xl font-medium tracking-tight text-white leading-tight mb-3">
-                                        Worked with our team?
-                                    </h3>
-                                    <p className="text-base text-white/55 font-light leading-relaxed mb-7 max-w-md">
-                                        Share your story. Your review helps the next family find clarity on their NZ journey.
-                                    </p>
-                                    <button
-                                        type="button"
-                                        onClick={() => setModalOpen(true)}
-                                        className="inline-flex items-center gap-3 bg-white text-[#282728] text-[11px] font-bold px-7 py-4 rounded-xl hover:bg-gray-100 active:scale-[0.99] transition-all uppercase tracking-[0.22em]"
-                                    >
-                                        <PenTool size={13} strokeWidth={2.5} />
-                                        Write a review
-                                        <ArrowRight size={14} strokeWidth={2.5} />
-                                    </button>
-                                </div>
+                        {/* Single small olive-green "Write a review" button —
+                            no card, no copy, no rating chip. Hidden on /home
+                            (showWriteCta=false) where reviews are read-only. */}
+                        {showWriteCta && (
+                            <div className="mt-12 flex justify-center">
+                                <button
+                                    type="button"
+                                    onClick={() => setModalOpen(true)}
+                                    className="inline-flex items-center gap-2 bg-[#436235] hover:bg-[#385029] text-white text-[10px] font-bold px-4 py-2 rounded-lg transition-colors uppercase tracking-[0.22em] shadow-sm"
+                                >
+                                    <PenTool size={11} strokeWidth={2.5} />
+                                    Write a review
+                                    <ArrowRight size={12} strokeWidth={2.5} />
+                                </button>
                             </div>
-                        </motion.div>
+                        )}
                     </>
-                ) : (
-                    <div className="bg-[#282728] text-white rounded-[24px] p-12 sm:p-16 text-center relative overflow-hidden">
-                        <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-[#436235]/60 to-transparent"></div>
-                        <p className="text-[10px] font-bold text-[#436235] uppercase tracking-[0.32em] mb-4">
-                            Be the first
-                        </p>
-                        <h3 className="text-2xl sm:text-3xl font-medium text-white tracking-tight mb-3">
-                            No published reviews yet
-                        </h3>
-                        <p className="text-sm text-white/55 font-light leading-relaxed max-w-md mx-auto mb-8">
-                            Worked with our team? Share your story — your review will appear here once approved.
-                        </p>
+                ) : showWriteCta ? (
+                    <div className="flex justify-center">
                         <button
                             type="button"
                             onClick={() => setModalOpen(true)}
-                            className="inline-flex items-center gap-3 bg-white text-[#282728] text-[11px] font-bold px-7 py-4 rounded-xl hover:bg-gray-100 transition-colors uppercase tracking-[0.22em]"
+                            className="inline-flex items-center gap-2 bg-[#436235] hover:bg-[#385029] text-white text-[10px] font-bold px-4 py-2 rounded-lg transition-colors uppercase tracking-[0.22em] shadow-sm"
                         >
-                            <PenTool size={13} strokeWidth={2.5} />
+                            <PenTool size={11} strokeWidth={2.5} />
                             Write the first review
-                            <ArrowRight size={14} strokeWidth={2.5} />
+                            <ArrowRight size={12} strokeWidth={2.5} />
                         </button>
                     </div>
-                )}
+                ) : null}
             </div>
 
-            <ReviewModal open={modalOpen} onClose={() => setModalOpen(false)} />
+            {showWriteCta && (
+                <ReviewModal open={modalOpen} onClose={() => setModalOpen(false)} department={department} />
+            )}
         </section>
     );
 }
