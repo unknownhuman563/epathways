@@ -360,6 +360,12 @@ Route::middleware(['auth'])->group(function () {
             // WORK
             Route::get('/students',  [EducationController::class, 'students'])->name('students');
             Route::get('/documents', [EducationController::class, 'documents'])->name('documents');
+            // Tasks & follow-ups (mirror of /portal/sales/tasks). Reuses
+            // LeadTaskController::dueToday for the AJAX endpoint since
+            // tasks are not department-scoped server-side.
+            Route::get('/tasks/due-today', [\App\Http\Controllers\LeadTaskController::class, 'dueToday'])
+                ->name('tasks.due-today');
+            Route::get('/tasks', [EducationController::class, 'tasks'])->name('tasks');
 
             // SETUP
             Route::get('/programs',            [EducationController::class, 'programs'])->name('programs');
