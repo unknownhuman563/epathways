@@ -49,6 +49,16 @@ return [
         'api_key' => env('GEMINI_API_KEY'),
     ],
 
+    // PLAI Partner API — AI ad platform that launches creatives to
+    // Facebook / Instagram / Google / LinkedIn / TikTok / YouTube / Bing.
+    // Requires an Enterprise account; key is generated under
+    // PLAI dashboard → profile → Developer Center → Generate API Key.
+    'plai' => [
+        'api_key'      => env('PLAI_API_KEY'),
+        'base_url'     => env('PLAI_BASE_URL', 'https://partner.plai.io'),
+        'workspace_id' => env('PLAI_WORKSPACE_ID'),
+    ],
+
     // Public contact destinations surfaced in floating widgets, the mobile
     // sticky CTA bar, and the footer. All optional — components hide a
     // channel if its value is empty so the bar collapses gracefully.

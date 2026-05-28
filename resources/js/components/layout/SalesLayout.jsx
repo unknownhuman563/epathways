@@ -2,7 +2,7 @@ import DashboardLayout from "./DashboardLayout";
 import { usePage } from "@inertiajs/react";
 import {
     LayoutDashboard, Users, CalendarCheck, CheckSquare,
-    Send, FileText, BarChart3, User, Bell, LineChart,
+    Send, FileText, BarChart3, User, Bell, LineChart, Tag,
 } from "lucide-react";
 
 // Sales Portal sidebar — grouped into WORK / OUTREACH / ACCOUNT. Sidebar
@@ -23,6 +23,7 @@ export default function SalesLayout({ children }) {
         { name: "Reports",   href: "/portal/sales/reports",   icon: <LineChart size={20} /> },
 
         { name: "Outreach", section: true },
+        { name: "Promotions",      href: "/admin/promos",                 icon: <Tag size={20} /> },
         { name: "Bulk Email",      href: "/portal/sales/bulk-email",      icon: <Send size={20} /> },
         { name: "Email Templates", href: "/portal/sales/email-templates", icon: <FileText size={20} /> },
         { name: "Campaigns",       href: "/portal/sales/campaigns",       icon: <BarChart3 size={20} /> },

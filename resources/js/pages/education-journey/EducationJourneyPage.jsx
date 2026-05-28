@@ -8,6 +8,9 @@ import JourneyExperience from "./JourneyExperience";
 import CrossPillarBundles from "@/components/ui/CrossPillarBundles";
 import BeforeFooterCTA from "@/components/ui/BeforeFooterCTA";
 import EducationCostCalculator from "@/components/ui/EducationCostCalculator";
+import PromoBanner from "@/components/ui/PromoBanner";
+import PromoModal from "@/components/ui/PromoModal";
+import ReviewsSection from "@/components/ui/ReviewsSection";
 
 // Assets
 import heroBg from "@assets/Services/education.png";
@@ -39,7 +42,7 @@ import logoTawera from "@assets/Partners/tawera.png";
 import logoWhiteCliffe from "@assets/Partners/whitecligge.png";
 import logoWintec from "@assets/Partners/wintec.png";
 
-export default function EducationJourney() {
+export default function EducationJourney({ activePromos = [], reviews = [], stats = { count: 0, average: 0 } }) {
     const [activeProgram, setActiveProgram] = useState(0);
 
     const demandPrograms = [
@@ -119,6 +122,10 @@ export default function EducationJourney() {
         <div className="min-h-screen bg-white font-urbanist overflow-x-hidden">
             <Navbar />
 
+            {/* Live programme promotions — strip below navbar (hidden when none) */}
+            <PromoBanner promos={activePromos} variant="strip" />
+            <PromoModal promos={activePromos} />
+
             {/* Hero Section */}
             <section className="relative overflow-hidden min-h-[90vh] flex items-center justify-center py-24 bg-white">
                 {/* Background Image with Light Overlay */}
@@ -135,7 +142,7 @@ export default function EducationJourney() {
                     <motion.div 
                         initial={{ opacity: 0, y: -10 }}
                         animate={{ opacity: 1, y: 0 }}
-                        className="text-gray-500 text-[10px] md:text-xs font-bold uppercase tracking-[0.4em] mb-6 drop-shadow-sm"
+                        className="text-gray-700 text-[10px] md:text-xs font-bold uppercase tracking-[0.4em] mb-6 drop-shadow-sm"
                     >
                         Global Education
                     </motion.div>
@@ -147,7 +154,7 @@ export default function EducationJourney() {
                         className="text-6xl md:text-8xl lg:text-[130px] font-black text-[#1a1a1a] leading-[0.85] tracking-[calc(-0.05em)] mb-10 uppercase flex flex-col items-center"
                     >
                         <span>Study</span>
-                        <span className="text-gray-400 font-light italic">abroad</span>
+                        <span className="text-gray-600 font-light italic">abroad</span>
                     </motion.h1>
                     
                     <motion.p 
@@ -192,12 +199,12 @@ export default function EducationJourney() {
                             viewport={{ once: true }}
                             transition={{ duration: 0.8 }}
                         >
-                            <span className="text-[11px] font-bold tracking-[0.3em] uppercase text-gray-500 mb-6 block">
+                            <span className="text-[11px] font-bold tracking-[0.3em] uppercase text-gray-700 mb-6 block">
                                 Services
                             </span>
                             <h2 className="text-4xl md:text-5xl lg:text-6xl font-medium leading-tight mb-8">
                                 What we <br />
-                                <span className="text-gray-300 italic">offer you</span>
+                                <span className="text-gray-500 italic">offer you</span>
                             </h2>
                             <p className="text-gray-600 text-base md:text-lg leading-relaxed mb-12 max-w-md">
                                 Comprehensive support for your education abroad. We help you find the right program, navigate admissions, and connect with trusted partner universities.
@@ -266,7 +273,7 @@ export default function EducationJourney() {
                             initial={{ opacity: 0 }}
                             whileInView={{ opacity: 1 }}
                             viewport={{ once: true }}
-                            className="text-[11px] font-bold tracking-[0.4em] uppercase text-gray-500 mb-6 block"
+                            className="text-[11px] font-bold tracking-[0.4em] uppercase text-gray-700 mb-6 block"
                         >
                             Pathways
                         </motion.span>
@@ -299,10 +306,10 @@ export default function EducationJourney() {
                                     onMouseEnter={() => setActiveProgram(item.id)}
                                     className="cursor-pointer group flex items-center gap-6 py-2 border-b border-gray-100 last:border-b-0"
                                 >
-                                    <span className={`text-xs font-bold font-mono transition-colors duration-500 ${activeProgram === item.id ? "text-[#1a1a1a]" : "text-gray-300"}`}>
+                                    <span className={`text-xs font-bold font-mono transition-colors duration-500 ${activeProgram === item.id ? "text-[#1a1a1a]" : "text-gray-500"}`}>
                                         0{item.id + 1}
                                     </span>
-                                    <h3 className={`text-2xl md:text-3xl font-light tracking-tight transition-all duration-500 ${activeProgram === item.id ? "text-[#282728] translate-x-2" : "text-gray-500 group-hover:text-gray-700"}`}>
+                                    <h3 className={`text-2xl md:text-3xl font-light tracking-tight transition-all duration-500 ${activeProgram === item.id ? "text-[#282728] translate-x-2" : "text-gray-700 group-hover:text-gray-700"}`}>
                                         {item.title}
                                     </h3>
                                 </div>
@@ -344,7 +351,7 @@ export default function EducationJourney() {
                                         </p>
                                         
                                         <div className="mb-10">
-                                            <h4 className="text-[10px] font-bold tracking-[0.2em] uppercase text-gray-500 mb-4">Core Programs</h4>
+                                            <h4 className="text-[10px] font-bold tracking-[0.2em] uppercase text-gray-700 mb-4">Core Programs</h4>
                                             <ul className="space-y-3">
                                                 {demandPrograms[activeProgram].programs.map((prog, i) => (
                                                     <li key={i} className="flex items-center gap-3 text-sm text-gray-600">
@@ -357,7 +364,7 @@ export default function EducationJourney() {
                                         
                                         <div className="mt-8 pt-6 border-t border-gray-100 flex items-center justify-between">
                                             <div>
-                                                <span className="text-[10px] uppercase tracking-widest text-gray-500 block mb-1">Intakes</span>
+                                                <span className="text-[10px] uppercase tracking-widest text-gray-700 block mb-1">Intakes</span>
                                                 <span className="text-xs font-medium text-[#282728]">{demandPrograms[activeProgram].intakes}</span>
                                             </div>
                                             <a href="/programs-levels" className="w-10 h-10 rounded-none border border-gray-300 flex items-center justify-center text-gray-600 hover:text-white hover:bg-[#1a1a1a] hover:border-[#1a1a1a] transition-all">
@@ -400,8 +407,8 @@ export default function EducationJourney() {
                         {/* Diploma */}
                         <div className="p-12 md:p-16 border-b lg:border-b-0 lg:border-r border-gray-200 flex flex-col hover:bg-gray-50 transition-colors">
                             <h3 className="text-lg font-medium text-[#282728] mb-2">Diploma level</h3>
-                            <p className="text-gray-500 text-xs tracking-widest uppercase mb-8">total school fees</p>
-                            <div className="text-5xl lg:text-6xl font-light text-[#1a1a1a] mb-12">$31k<span className="text-2xl text-gray-500">+</span></div>
+                            <p className="text-gray-700 text-xs tracking-widest uppercase mb-8">total school fees</p>
+                            <div className="text-5xl lg:text-6xl font-light text-[#1a1a1a] mb-12">$31k<span className="text-2xl text-gray-700">+</span></div>
                             <ul className="space-y-4 mb-12 flex-1">
                                 {["Tuition across regions", "Health insurance included", "Visa processing covered"].map(item => (
                                     <li key={item} className="flex items-start gap-3 text-sm text-gray-600">
@@ -416,8 +423,8 @@ export default function EducationJourney() {
                         {/* Bachelor's */}
                         <div className="p-12 md:p-16 border-b lg:border-b-0 lg:border-r border-gray-200 flex flex-col hover:bg-gray-50 transition-colors">
                             <h3 className="text-lg font-medium text-[#282728] mb-2">Bachelor's degree</h3>
-                            <p className="text-gray-500 text-xs tracking-widest uppercase mb-8">average per year</p>
-                            <div className="text-5xl lg:text-6xl font-light text-[#1a1a1a] mb-12">$45k<span className="text-2xl text-gray-500">+</span></div>
+                            <p className="text-gray-700 text-xs tracking-widest uppercase mb-8">average per year</p>
+                            <div className="text-5xl lg:text-6xl font-light text-[#1a1a1a] mb-12">$45k<span className="text-2xl text-gray-700">+</span></div>
                             <ul className="space-y-4 mb-12 flex-1">
                                 {["Full tuition and fees", "Housing assistance available", "Visa and travel support", "Scholarship matching service"].map(item => (
                                     <li key={item} className="flex items-start gap-3 text-sm text-gray-600">
@@ -432,8 +439,8 @@ export default function EducationJourney() {
                         {/* Master's */}
                         <div className="p-12 md:p-16 flex flex-col hover:bg-gray-50 transition-colors">
                             <h3 className="text-lg font-medium text-[#282728] mb-2">Master's program</h3>
-                            <p className="text-gray-500 text-xs tracking-widest uppercase mb-8">average per year</p>
-                            <div className="text-5xl lg:text-6xl font-light text-[#1a1a1a] mb-12">$52k<span className="text-2xl text-gray-500">+</span></div>
+                            <p className="text-gray-700 text-xs tracking-widest uppercase mb-8">average per year</p>
+                            <div className="text-5xl lg:text-6xl font-light text-[#1a1a1a] mb-12">$52k<span className="text-2xl text-gray-700">+</span></div>
                             <ul className="space-y-4 mb-12 flex-1">
                                 {["Postgraduate tuition costs", "Research funding guidance", "Thesis and project support", "Career placement assistance"].map(item => (
                                     <li key={item} className="flex items-start gap-3 text-sm text-gray-600">
@@ -463,7 +470,7 @@ export default function EducationJourney() {
                     <div className="text-center mb-20 lg:mb-24">
                         <motion.span
                             initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true }}
-                            className="text-[11px] font-bold tracking-[0.4em] uppercase text-gray-500 mb-4 block"
+                            className="text-[11px] font-bold tracking-[0.4em] uppercase text-gray-700 mb-4 block"
                         >
                             Team
                         </motion.span>
@@ -508,13 +515,13 @@ export default function EducationJourney() {
 
                                 {/* Bottom: Info */}
                                 <div className="p-8 lg:p-10 flex flex-col">
-                                    <span className="text-[10px] font-bold tracking-widest uppercase text-gray-500 mb-3 block">
+                                    <span className="text-[10px] font-bold tracking-widest uppercase text-gray-700 mb-3 block">
                                         {c.role}
                                     </span>
                                     <h3 className="text-2xl md:text-3xl font-medium mb-2 text-[#282728] leading-tight tracking-tight">
                                         {c.name}
                                     </h3>
-                                    <div className="text-gray-500 text-[10px] font-bold uppercase tracking-widest mb-6">
+                                    <div className="text-gray-700 text-[10px] font-bold uppercase tracking-widest mb-6">
                                         {c.credential}
                                     </div>
                                     <a
@@ -530,12 +537,25 @@ export default function EducationJourney() {
                 </div>
             </section>
 
+            {/* Client reviews — sits directly below "Meet our education
+                consultants" so visitors read the team intro then immediately
+                see what real students said. Submission modal scopes to
+                department='education' so reviews land in the right bucket. */}
+            <ReviewsSection
+                reviews={reviews}
+                stats={stats}
+                department="education"
+                eyebrow="Student stories"
+                headline="What our students say"
+                intro="Real voices from students who chose ePathways for their New Zealand education journey. Every review here was submitted by a real client and approved by our team."
+            />
+
             {/* Partner Universities Section */}
             <section className="bg-[#1a1a1a] text-white py-32 font-urbanist overflow-hidden">
                 <div className="container mx-auto px-6 md:px-12 max-w-7xl text-center">
                     <motion.span
                         initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true }}
-                        className="text-[11px] font-bold tracking-[0.4em] uppercase text-gray-400 mb-6 block"
+                        className="text-[11px] font-bold tracking-[0.4em] uppercase text-gray-600 mb-6 block"
                     >
                         Network
                     </motion.span>
@@ -547,7 +567,7 @@ export default function EducationJourney() {
                     </motion.h2>
                     <motion.p
                         initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true }}
-                        className="text-gray-500 text-sm md:text-base leading-relaxed mb-20 max-w-2xl mx-auto"
+                        className="text-gray-700 text-sm md:text-base leading-relaxed mb-20 max-w-2xl mx-auto"
                     >
                         These institutions trust ePathways to send serious students. That relationship works in your favor.
                     </motion.p>
@@ -598,7 +618,7 @@ export default function EducationJourney() {
                         className="text-4xl md:text-6xl lg:text-7xl font-light text-[#282728] mb-6 leading-tight"
                     >
                         Start your <br/>
-                        <span className="italic text-gray-500">education journey</span> today
+                        <span className="italic text-gray-700">education journey</span> today
                     </motion.h2>
                     <motion.p
                         initial={{ opacity: 0 }}

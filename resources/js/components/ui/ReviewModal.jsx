@@ -1,23 +1,66 @@
 import { useEffect, useState } from "react";
 import { useForm } from "@inertiajs/react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Star, FileText, MessageCircle, CheckCircle, ArrowRight, Loader } from "react-feather";
+import { X, Star, FileText, MessageCircle, CheckCircle, ArrowRight, Loader, Camera } from "react-feather";
 
 // Real questions replacing the lorem-ipsum placeholders that were in the
 // inline form. These match how the sales team frames their post-approval
-// debrief, so the answers actually map to publishable copy.
+// debrief, so the answers actually map to publishable copy. Q1 used to be
+// "What visa or service did we help you with?" but the dropdown above
+// already captures that, so it's been replaced with a story-driven prompt.
 const QUESTIONS = [
-    "What visa or service did we help you with?",
+    "What made you choose ePathways?",
     "How was your overall experience working with ePathways?",
     "Would you recommend us to friends and family — and why?",
 ];
+
+// Department-aware dropdown options. The DB column is `visa_type` regardless
+// of department — for education it's a programme/qualification type but
+// we reuse the same field so a single admin column / public payload covers
+// both. "Other" lets the user fall back to free text in the next field.
+const TYPE_OPTIONS = {
+    immigration: {
+        label: "Visa type",
+        placeholder: "Which visa did we help you with?",
+        options: [
+            "Student Visa",
+            "Work Visa (AEWV)",
+            "Skilled Migrant Category",
+            "Resident Visa",
+            "Partnership Visa",
+            "Visitor Visa",
+            "Post-Study Work Visa",
+            "Other",
+        ],
+    },
+    education: {
+        label: "Programme type",
+        placeholder: "Which programme did we help you with?",
+        options: [
+            "Diploma (Level 5–6)",
+            "Bachelor's Degree (Level 7)",
+            "Postgraduate Diploma (Level 8)",
+            "Master's Degree (Level 9)",
+            "PhD (Level 10)",
+            "Foundation / Pathway",
+            "English Proficiency (IELTS / PTE prep)",
+            "Other",
+        ],
+    },
+};
 
 // Modal-based review submission. Posts to the existing POST /user-reviews
 // endpoint (no backend changes to the route signature). New reviews land
 // with is_published=false and only appear publicly after an admin flips
 // the publish toggle on the admin Reviews page.
-export default function ReviewModal({ open, onClose }) {
-    const { data, setData, post, processing, errors, reset, clearErrors } = useForm({
+export default function ReviewModal({ open, onClose, department = "immigration" }) {
+    // The dept the visitor opened the modal from is the "primary" one.
+    // The other one is offered as a cross-dept opt-in checkbox.
+    const otherDept = department === "education" ? "immigration" : "education";
+    const primaryConfig = TYPE_OPTIONS[department] || TYPE_OPTIONS.immigration;
+    const otherConfig = TYPE_OPTIONS[otherDept] || TYPE_OPTIONS.immigration;
+
+    const { data, setData, post, processing, errors, reset, clearErrors, transform } = useForm({
         name: "",
         email: "",
         mode: "questions",
@@ -26,10 +69,40 @@ export default function ReviewModal({ open, onClose }) {
         answer_2: "",
         answer_3: "",
         paragraph: "",
+        department,
+        visa_type: "",
+        program_type: "",
+        photo: null,
+        also_other_dept: false,
     });
+
+    // Map the primary dropdown value into the right backend column based on
+    // which page the modal was opened from.
+    const primaryField = department === "education" ? "program_type" : "visa_type";
+    const otherField = department === "education" ? "visa_type" : "program_type";
+
+    // Tag the review as 'both' at submission time when the cross-dept
+    // checkbox is ticked, so a single review can surface on both pages.
+    transform((d) => ({
+        ...d,
+        department: d.also_other_dept ? "both" : department,
+    }));
 
     const [done, setDone] = useState(false);
     const [hoverStar, setHoverStar] = useState(0);
+    const [photoPreview, setPhotoPreview] = useState(null);
+
+    // Revoke the blob URL when the file changes or modal closes — leaks
+    // memory otherwise and the preview gets stale.
+    useEffect(() => {
+        if (!data.photo) {
+            setPhotoPreview(null);
+            return;
+        }
+        const url = URL.createObjectURL(data.photo);
+        setPhotoPreview(url);
+        return () => URL.revokeObjectURL(url);
+    }, [data.photo]);
 
     // Body scroll lock + ESC to close (only when not in success state — the
     // success card has its own dismiss button).
@@ -61,6 +134,10 @@ export default function ReviewModal({ open, onClose }) {
         e.preventDefault();
         post("/user-reviews", {
             preserveScroll: true,
+            // Forces multipart/form-data so the optional photo file
+            // actually gets sent. Inertia would otherwise serialise as JSON
+            // and the file would be dropped on the floor.
+            forceFormData: true,
             onSuccess: () => {
                 setDone(true);
             },
@@ -109,7 +186,7 @@ export default function ReviewModal({ open, onClose }) {
                             <h3 className="text-2xl sm:text-3xl font-medium tracking-tight text-[#282728] mb-3">
                                 Thank you for sharing
                             </h3>
-                            <p className="text-sm text-gray-500 font-light leading-relaxed max-w-md mx-auto mb-8">
+                            <p className="text-sm text-gray-700 font-normal leading-relaxed max-w-md mx-auto mb-8">
                                 Your review is in moderation. Once approved by our team it will appear here to help future clients on their journey.
                             </p>
                             <button
@@ -131,14 +208,14 @@ export default function ReviewModal({ open, onClose }) {
                                 <h3 className="text-2xl sm:text-3xl font-medium text-[#282728] tracking-tight mb-1.5">
                                     Write a review
                                 </h3>
-                                <p className="text-sm text-gray-500 font-light">
+                                <p className="text-sm text-gray-700 font-normal">
                                     Two minutes. Your honest experience helps future clients.
                                 </p>
                             </div>
 
                             {/* Rating */}
                             <div className="mb-7">
-                                <label className="block text-[10px] font-semibold uppercase tracking-[0.22em] text-gray-400 mb-3">
+                                <label className="block text-[10px] font-semibold uppercase tracking-[0.22em] text-gray-600 mb-3">
                                     Your rating
                                 </label>
                                 <div className="flex items-center gap-1.5">
@@ -180,7 +257,7 @@ export default function ReviewModal({ open, onClose }) {
                             {/* Identity */}
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-7">
                                 <div>
-                                    <label className="block text-[10px] font-semibold uppercase tracking-[0.22em] text-gray-400 mb-2">
+                                    <label className="block text-[10px] font-semibold uppercase tracking-[0.22em] text-gray-600 mb-2">
                                         Name <span className="text-red-500">*</span>
                                     </label>
                                     <input
@@ -196,8 +273,8 @@ export default function ReviewModal({ open, onClose }) {
                                     )}
                                 </div>
                                 <div>
-                                    <label className="block text-[10px] font-semibold uppercase tracking-[0.22em] text-gray-400 mb-2">
-                                        Email <span className="text-gray-300 normal-case tracking-normal font-light">(optional)</span>
+                                    <label className="block text-[10px] font-semibold uppercase tracking-[0.22em] text-gray-600 mb-2">
+                                        Email <span className="text-gray-500 normal-case tracking-normal font-light">(optional)</span>
                                     </label>
                                     <input
                                         type="email"
@@ -213,9 +290,124 @@ export default function ReviewModal({ open, onClose }) {
                                 </div>
                             </div>
 
+                            {/* Visa / programme type — labelled per department.
+                                Same DB column on the backend; just different
+                                option lists. Optional, so the placeholder is
+                                a "skip" affordance. */}
+                            {/* Primary dropdown — visa type on /immigration,
+                                programme type on /education-journey. */}
+                            <div className="mb-5">
+                                <label className="block text-[10px] font-semibold uppercase tracking-[0.22em] text-gray-600 mb-2">
+                                    {primaryConfig.label} <span className="text-gray-500 normal-case tracking-normal font-light">(optional)</span>
+                                </label>
+                                <select
+                                    value={data[primaryField]}
+                                    onChange={(e) => setData(primaryField, e.target.value)}
+                                    className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3.5 text-sm outline-none focus:border-[#436235] transition-colors cursor-pointer"
+                                >
+                                    <option value="">{primaryConfig.placeholder}</option>
+                                    {primaryConfig.options.map((opt) => (
+                                        <option key={opt} value={opt}>{opt}</option>
+                                    ))}
+                                </select>
+                                {errors[primaryField] && (
+                                    <p className="text-xs text-red-500 mt-1.5 font-light">{errors[primaryField]}</p>
+                                )}
+                            </div>
+
+                            {/* Cross-dept opt-in — if the client also used
+                                services from the OTHER department, expose
+                                the second dropdown and tag the submission
+                                so it shows on both public pages + home. */}
+                            <div className="mb-7">
+                                <label className="flex items-center gap-2 cursor-pointer select-none">
+                                    <input
+                                        type="checkbox"
+                                        checked={!!data.also_other_dept}
+                                        onChange={(e) => {
+                                            const next = e.target.checked;
+                                            setData("also_other_dept", next);
+                                            if (!next) setData(otherField, "");
+                                        }}
+                                        className="w-3.5 h-3.5 rounded border-gray-300 text-[#436235] focus:ring-[#436235]/30 focus:ring-2 cursor-pointer"
+                                    />
+                                    <span className="text-[11px] text-gray-700 font-normal">
+                                        I also used ePathways for {otherDept === "immigration" ? "my visa processing" : "my education programme"}
+                                    </span>
+                                </label>
+
+                                {data.also_other_dept && (
+                                    <div className="mt-3 pl-5 border-l-2 border-[#436235]/30">
+                                        <label className="block text-[10px] font-semibold uppercase tracking-[0.22em] text-gray-600 mb-2">
+                                            {otherConfig.label}
+                                        </label>
+                                        <select
+                                            value={data[otherField]}
+                                            onChange={(e) => setData(otherField, e.target.value)}
+                                            className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-[#436235] transition-colors cursor-pointer"
+                                        >
+                                            <option value="">{otherConfig.placeholder}</option>
+                                            {otherConfig.options.map((opt) => (
+                                                <option key={opt} value={opt}>{opt}</option>
+                                            ))}
+                                        </select>
+                                        {errors[otherField] && (
+                                            <p className="text-xs text-red-500 mt-1.5 font-light">{errors[otherField]}</p>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Optional photo upload — shows as the avatar on
+                                the public review card. JPG / PNG / WEBP up
+                                to 4MB. */}
+                            <div className="mb-7">
+                                <label className="block text-[10px] font-semibold uppercase tracking-[0.22em] text-gray-600 mb-2">
+                                    Your photo <span className="text-gray-500 normal-case tracking-normal font-light">(optional)</span>
+                                </label>
+                                <div className="flex items-center gap-4">
+                                    {photoPreview ? (
+                                        <div className="relative w-16 h-16 rounded-full overflow-hidden ring-2 ring-[#436235]/30 flex-shrink-0">
+                                            <img src={photoPreview} alt="Preview" className="w-full h-full object-cover" />
+                                            <button
+                                                type="button"
+                                                onClick={() => setData("photo", null)}
+                                                className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-gray-900 text-white flex items-center justify-center text-xs hover:bg-black transition-colors"
+                                                aria-label="Remove photo"
+                                            >
+                                                <X size={11} strokeWidth={2.5} />
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <label className="cursor-pointer w-16 h-16 rounded-full border-2 border-dashed border-gray-200 flex items-center justify-center text-gray-400 hover:border-[#436235]/50 hover:text-[#436235] hover:bg-[#436235]/5 transition-colors flex-shrink-0">
+                                            <Camera size={20} strokeWidth={1.5} />
+                                            <input
+                                                type="file"
+                                                accept="image/jpeg,image/png,image/webp"
+                                                className="hidden"
+                                                onChange={(e) => setData("photo", e.target.files?.[0] || null)}
+                                            />
+                                        </label>
+                                    )}
+                                    <div className="flex-1 min-w-0">
+                                        <p className="text-xs text-gray-700 font-normal leading-relaxed">
+                                            A square headshot looks best. JPG / PNG / WEBP, up to 4MB.
+                                        </p>
+                                        {data.photo && (
+                                            <p className="text-[10px] text-gray-600 mt-1 truncate">
+                                                {data.photo.name} · {(data.photo.size / 1024).toFixed(0)} KB
+                                            </p>
+                                        )}
+                                    </div>
+                                </div>
+                                {errors.photo && (
+                                    <p className="text-xs text-red-500 mt-1.5 font-light">{errors.photo}</p>
+                                )}
+                            </div>
+
                             {/* Mode toggle */}
                             <div className="mb-7">
-                                <label className="block text-[10px] font-semibold uppercase tracking-[0.22em] text-gray-400 mb-3">
+                                <label className="block text-[10px] font-semibold uppercase tracking-[0.22em] text-gray-600 mb-3">
                                     How would you like to share?
                                 </label>
                                 <div className="grid grid-cols-2 gap-2.5">
@@ -308,7 +500,7 @@ export default function ReviewModal({ open, onClose }) {
 
                             {/* Footer */}
                             <div className="mt-8 pt-6 border-t border-gray-100 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
-                                <p className="text-[10px] text-gray-400 font-light leading-relaxed max-w-xs">
+                                <p className="text-[10px] text-gray-600 font-normal leading-relaxed max-w-xs">
                                     Reviews are moderated before publishing. We never share your email.
                                 </p>
                                 <button

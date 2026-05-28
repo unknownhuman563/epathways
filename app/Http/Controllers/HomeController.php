@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Event;
 use App\Models\Program;
+use App\Services\PromoFeed;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 
@@ -12,9 +13,14 @@ class HomeController extends Controller
     /** Landing page — feeds live events + published programs into the marketing sections. */
     public function index()
     {
+        $allReviews = UserReviewController::homePayload();
+
         return inertia('home/HomePage', [
             'events' => $this->liveEvents(),
             'programGroups' => $this->programGroups(),
+            'activePromos' => PromoFeed::active(),
+            'reviews' => $allReviews['reviews'],
+            'reviewStats' => $allReviews['stats'],
         ]);
     }
 

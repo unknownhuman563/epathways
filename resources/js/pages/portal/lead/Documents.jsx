@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import { Head, router } from "@inertiajs/react";
 import {
-    FileText, Upload, Check, AlertTriangle, Clock, Download, Loader,
+    FileText, Upload, Check, AlertTriangle, Clock, Download, Loader, Wand2, Sparkles, Eye,
     Inbox, Share2, Lock, CheckCircle2, ChevronDown, ChevronRight, Send, Copy,
 } from "lucide-react";
 import { CHECKLIST, SECTION_STATUSES, renderFilename, currentSectionIndex } from "@/data/leadDocumentChecklist";
@@ -232,6 +232,13 @@ function SectionPanel({ section, sectionIndex, state, verification, verStatus, f
                         />
                     ))}
 
+                    {/* Lead acknowledgment — only on the Agreements section.
+                        Lead ticks "I have read and agreed to both agreements"
+                        once they've reviewed the generated PDFs above. */}
+                    {section.key === 'agreements' && (
+                        <AgreementsAcknowledgmentBox lead={lead} />
+                    )}
+
                     {/* CTA — differs for staff-sent vs lead-uploaded sections. */}
                     {isCurrent && verStatus !== 'in_review' && !isStaffSent && (
                         <div className="pt-3 border-t border-[#282728]/10 flex items-center justify-between gap-3 flex-wrap">
@@ -399,14 +406,35 @@ function ChecklistItemRow({ item, files, lead, sectionKey, readOnly = false }) {
                 <ul className="space-y-1">
                     {files.map((f) => (
                         <li key={f.id} className="flex items-center gap-2 px-2 py-1.5 rounded-md bg-gray-50 border border-gray-200">
-                            <FileText size={12} className={isStaffSent ? 'text-[#436235] flex-shrink-0' : 'text-gray-400 flex-shrink-0'} />
+                            {f.source === 'generated' ? (
+                                <Wand2 size={12} className="text-violet-500 flex-shrink-0" />
+                            ) : (
+                                <FileText size={12} className={isStaffSent ? 'text-[#436235] flex-shrink-0' : 'text-gray-400 flex-shrink-0'} />
+                            )}
                             <a
-                                href={`/portal/lead/documents/${f.id}/download`}
+                                href={`/portal/lead/documents/${f.id}/download?inline=1`}
+                                target="_blank"
+                                rel="noreferrer"
                                 className="flex-1 min-w-0 text-[11px] font-medium text-gray-800 hover:text-[#436235] truncate"
+                                title={`View ${f.original_name}`}
                             >
                                 {f.original_name}
                             </a>
+                            {f.source === 'generated' && (
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-widest bg-violet-100 text-violet-700 border border-violet-200">
+                                    <Sparkles size={9} /> Ready to sign
+                                </span>
+                            )}
                             <span className="text-[10px] text-gray-400 tabular-nums">{fmtSize(f.size)}</span>
+                            <a
+                                href={`/portal/lead/documents/${f.id}/download?inline=1`}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-flex items-center justify-center w-6 h-6 rounded text-gray-500 hover:text-[#436235] hover:bg-[#436235]/10 transition-colors"
+                                title="View"
+                            >
+                                <Eye size={11} />
+                            </a>
                             <a
                                 href={`/portal/lead/documents/${f.id}/download`}
                                 className="inline-flex items-center justify-center w-6 h-6 rounded text-gray-500 hover:text-[#436235] hover:bg-[#436235]/10 transition-colors"
@@ -492,5 +520,62 @@ function SharedByStaffPanel({ shared }) {
                 ))}
             </ul>
         </section>
+    );
+}
+
+// Lead's one-tick acknowledgment that they've read both agreements. POSTs
+// to /portal/lead/documents/agreements/acknowledge — server stamps
+// agreements_acknowledged_at on the lead row.
+function AgreementsAcknowledgmentBox({ lead }) {
+    const acknowledgedAt = lead?.agreements_acknowledged_at;
+    const isAcknowledged = !!acknowledgedAt;
+    const [busy, setBusy] = useState(false);
+
+    const toggle = () => {
+        setBusy(true);
+        router.post(
+            '/portal/lead/documents/agreements/acknowledge',
+            { acknowledged: !isAcknowledged },
+            {
+                preserveScroll: true,
+                preserveState: true,
+                onFinish: () => setBusy(false),
+            }
+        );
+    };
+
+    const formattedDate = acknowledgedAt
+        ? new Date(acknowledgedAt).toLocaleDateString('en-NZ', { day: '2-digit', month: 'short', year: 'numeric' })
+        : null;
+
+    return (
+        <div className={`mt-2 rounded-xl border-2 p-4 transition-colors ${
+            isAcknowledged ? 'bg-emerald-50 border-emerald-300' : 'bg-white border-[#436235]/30'
+        }`}>
+            <label className="flex items-start gap-3 cursor-pointer select-none">
+                <input
+                    type="checkbox"
+                    checked={isAcknowledged}
+                    onChange={toggle}
+                    disabled={busy}
+                    className="mt-0.5 w-5 h-5 rounded border-2 border-[#436235] text-[#436235] focus:ring-2 focus:ring-[#436235]/30 cursor-pointer disabled:opacity-50"
+                />
+                <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-[#282728] leading-snug">
+                        I have read and agreed to the Consultancy Agreement and English Engagement Agreement terms.
+                    </p>
+                    {isAcknowledged ? (
+                        <p className="text-[11px] text-emerald-700 font-semibold mt-1.5 flex items-center gap-1.5">
+                            <Check size={12} strokeWidth={2.5} />
+                            Acknowledged on {formattedDate}
+                        </p>
+                    ) : (
+                        <p className="text-[11px] text-gray-600 mt-1.5">
+                            Please download and review both agreement PDFs above, then tick this box to confirm you accept the terms.
+                        </p>
+                    )}
+                </div>
+            </label>
+        </div>
     );
 }

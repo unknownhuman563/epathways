@@ -17,7 +17,12 @@ const fmtTime = (iso) => iso ? new Date(iso).toLocaleString("en-NZ", { day: "2-d
 export default function SalesTasks({
     today = [], overdue = [], this_week = [], undated = [], recently_done = [],
     scope = "mine",
+    portal = "sales",
 }) {
+    // Page is shared between the Sales and Education portals — the prop
+    // drives which URL prefix each link / scope-change uses so the same
+    // component renders correctly under either layout.
+    const portalBase = `/portal/${portal}`;
     const [tab, setTab] = useState(overdue.length > 0 ? "overdue" : "today");
     const [savingId, setSavingId] = useState(null);
 
@@ -39,7 +44,7 @@ export default function SalesTasks({
     };
 
     const setScope = (s) => {
-        router.get('/portal/sales/tasks', { scope: s }, { preserveScroll: true });
+        router.get(`${portalBase}/tasks`, { scope: s }, { preserveScroll: true });
     };
 
     return (
@@ -133,6 +138,7 @@ export default function SalesTasks({
                                 task={t}
                                 onToggle={() => toggleComplete(t)}
                                 isSaving={savingId === t.id}
+                                portalBase={portalBase}
                             />
                         ))}
                     </ul>
@@ -161,7 +167,7 @@ function KpiTile({ label, value, icon, tone = "default" }) {
     );
 }
 
-function TaskRow({ task, onToggle, isSaving }) {
+function TaskRow({ task, onToggle, isSaving, portalBase = '/portal/sales' }) {
     const priorityStyle = PRIORITY_STYLE[task.priority] || PRIORITY_STYLE.normal;
     return (
         <li className={`group px-5 py-3 flex items-center gap-3 transition-colors hover:bg-gray-50/50 ${task.completed ? "opacity-60" : ""} ${task.overdue ? "bg-red-50/30" : ""}`}>
@@ -198,7 +204,7 @@ function TaskRow({ task, onToggle, isSaving }) {
                 <div className="flex items-center gap-3 mt-1 text-[11px] text-gray-500">
                     {task.lead && (
                         <Link
-                            href={`/portal/sales/leads/${task.lead.id}`}
+                            href={`${portalBase}/leads/${task.lead.id}`}
                             className="inline-flex items-center gap-1 hover:text-blue-600 font-medium"
                         >
                             <User size={10} />

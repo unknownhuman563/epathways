@@ -2,7 +2,7 @@ import DashboardLayout from "./DashboardLayout";
 import {
     Home, Users, UserCog, History, Calendar as CalendarIcon, BookOpen,
     GraduationCap, Video, Globe, FileText, Star, LayoutDashboard,
-    Briefcase, Languages, Building2, KeyRound,
+    Briefcase, Languages, Building2, KeyRound, Sparkles, Tag,
 } from "lucide-react";
 
 const ADMIN_NAV = [
@@ -12,7 +12,9 @@ const ADMIN_NAV = [
     { name: "Events", href: "/admin/events", icon: <CalendarIcon size={20} /> },
     { name: "Bookings", href: "/admin/booking", icon: <BookOpen size={20} /> },
     { name: "Programs", href: "/admin/programs", icon: <GraduationCap size={20} /> },
+    { name: "Promotions", href: "/admin/promos", icon: <Tag size={20} /> },
     { name: "Facebook Live", href: "/admin/facebook-live", icon: <Video size={20} /> },
+    { name: "AI Ads", href: "/admin/ai-ads", icon: <Sparkles size={20} /> },
     {
         name: "Immigration",
         icon: <Globe size={20} />,
@@ -20,6 +22,14 @@ const ADMIN_NAV = [
             { name: "Dashboard", href: "/portal/immigration/dashboard", icon: <LayoutDashboard size={16} /> },
             { name: "Resident Visa Intake", href: "/admin/immigration/resident-intakes", icon: <FileText size={16} /> },
             { name: "User Reviews", href: "/admin/immigration/user-reviews", icon: <Star size={16} /> },
+        ],
+    },
+    {
+        name: "Education",
+        icon: <GraduationCap size={20} />,
+        children: [
+            { name: "Dashboard", href: "/portal/education/dashboard", icon: <LayoutDashboard size={16} /> },
+            { name: "User Reviews", href: "/admin/education/user-reviews", icon: <Star size={16} /> },
         ],
     },
     {

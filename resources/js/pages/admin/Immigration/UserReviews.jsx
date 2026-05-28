@@ -2,17 +2,21 @@ import React, { useMemo, useState } from 'react';
 import { Head, Link, router } from '@inertiajs/react';
 import { Search, Filter, Eye, MessageCircle, FileText, Globe, ChevronRight, Mail, Star, Check, X } from 'lucide-react';
 
-export default function UserReviews({ reviews = [] }) {
+export default function UserReviews({ reviews = [], department = 'immigration' }) {
     const [query, setQuery] = useState('');
     const [modeFilter, setModeFilter] = useState('');
     const [savingId, setSavingId] = useState(null);
 
-    // Inline POST to /admin/immigration/user-reviews/{id} flips a flag and
-    // optimistically updates via Inertia partial reload of the same page.
+    // Both departments share the same admin page; the URL prefix swaps so
+    // the toggle hits the right named route. Same controller method on the
+    // backend (UserReviewController::adminUpdate is dept-agnostic).
+    const basePath = `/admin/${department}/user-reviews`;
+    const deptLabel = department.charAt(0).toUpperCase() + department.slice(1);
+
     const toggle = (review, field, nextValue) => {
         setSavingId(`${review.id}:${field}`);
         router.post(
-            `/admin/immigration/user-reviews/${review.id}`,
+            `${basePath}/${review.id}`,
             { [field]: nextValue },
             {
                 preserveScroll: true,
@@ -52,12 +56,12 @@ export default function UserReviews({ reviews = [] }) {
                 <div>
                     <div className="flex items-center gap-2 text-xs text-gray-500 mb-2">
                         <Globe size={14} />
-                        <span>Immigration</span>
+                        <span>{deptLabel}</span>
                         <ChevronRight size={12} />
                         <span className="text-gray-900 font-semibold">User Reviews</span>
                     </div>
                     <h1 className="text-2xl font-bold text-gray-900 tracking-tight">User Reviews</h1>
-                    <p className="text-sm text-gray-600 mt-1">Public reviews submitted from the immigration page.</p>
+                    <p className="text-sm text-gray-600 mt-1">Public reviews submitted from the {department === 'education' ? 'education journey' : 'immigration'} page.</p>
                 </div>
                 <div className="flex items-center gap-3">
                     <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Total</span>
@@ -197,7 +201,7 @@ export default function UserReviews({ reviews = [] }) {
                                     </td>
                                     <td className="px-6 py-4 text-right">
                                         <Link
-                                            href={`/admin/immigration/user-reviews/${r.id}`}
+                                            href={`${basePath}/${r.id}`}
                                             className="inline-flex items-center gap-2 px-3 py-2 bg-gray-900 text-white rounded-lg text-xs font-semibold hover:bg-gray-800 transition-colors"
                                         >
                                             <Eye size={13} />

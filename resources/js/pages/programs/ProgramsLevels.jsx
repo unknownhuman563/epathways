@@ -5,13 +5,15 @@ import { Link } from '@inertiajs/react';
 import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
 import ScrollToTop from "@/components/ui/ScrollToTop";
+import PromoBanner from "@/components/ui/PromoBanner";
+import PromoModal from "@/components/ui/PromoModal";
 
 // Assets
 import heroBg from "@assets/Services/education.png";
 import placeholderImg from "@assets/Services/education.png";
 
 
-export default function ProgramsLevels({ programs = [] }) {
+export default function ProgramsLevels({ programs = [], activePromos = [] }) {
     const [searchQuery, setSearchQuery] = useState('');
     const [activeFilter, setActiveFilter] = useState('all');
     const [visibleCount, setVisibleCount] = useState(8); // Start with 8 visible cards
@@ -32,6 +34,13 @@ export default function ProgramsLevels({ programs = [] }) {
     return (
         <div className="min-h-screen bg-white font-urbanist overflow-x-hidden">
             <Navbar />
+
+            {/* Live programme promotions — strip below navbar (hidden when none) */}
+            <PromoBanner promos={activePromos} variant="strip" />
+            <PromoModal promos={activePromos} />
+
+            {/* Featured promo card — only renders if there are active promos */}
+            {activePromos.length > 0 && <PromoBanner promos={activePromos} variant="card" />}
 
             {/* Hero Section with Overlaid Statistics */}
             <section className="relative h-[70vh] min-h-[500px] flex items-center justify-center overflow-visible mb-20">

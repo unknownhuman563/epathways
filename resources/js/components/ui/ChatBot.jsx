@@ -1,12 +1,104 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Send, X, User, Bot, Loader2, ArrowRight } from 'lucide-react';
-import axios from 'axios';
+
+// n8n Chat Trigger webhook — replaces the old Laravel /api/chat (Gemini)
+// pipeline. The workflow owns its own LLM, prompts and memory; we just
+// forward the user message + a stable sessionId so the workflow can keep
+// per-visitor conversation history.
+const N8N_CHAT_WEBHOOK = 'https://support-ep.app.n8n.cloud/webhook/74e66977-8daf-4b54-8a49-2079a22dea70/chat';
+const SESSION_KEY = 'epathways_chat_session';
+const MESSAGES_KEY = 'epathways_chat_messages';
+const WELCOME_MESSAGE = {
+    role: 'assistant',
+    content: 'Hi, I\'m Pathy — your ePathways guide. How can I help you navigate your New Zealand journey today?',
+};
+
+function getChatSessionId() {
+    try {
+        let id = window.localStorage.getItem(SESSION_KEY);
+        if (!id) {
+            id = 'ses-' + Math.random().toString(36).slice(2, 10) + '-' + Date.now().toString(36);
+            window.localStorage.setItem(SESSION_KEY, id);
+        }
+        return id;
+    } catch {
+        // Storage blocked (private mode) — fall back to a per-page id.
+        return 'ses-' + Math.random().toString(36).slice(2, 10) + '-' + Date.now().toString(36);
+    }
+}
+
+// Load the persisted message log. Survives Inertia page navigations (the
+// ChatBot remounts on every page) so the conversation doesn't reset when
+// the visitor clicks around the site. Falls back to the welcome message
+// when there's no saved history or storage is blocked.
+function loadMessages() {
+    try {
+        const raw = window.localStorage.getItem(MESSAGES_KEY);
+        if (!raw) return [WELCOME_MESSAGE];
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed) && parsed.length > 0 ? parsed : [WELCOME_MESSAGE];
+    } catch {
+        return [WELCOME_MESSAGE];
+    }
+}
+
+function saveMessages(messages) {
+    try {
+        window.localStorage.setItem(MESSAGES_KEY, JSON.stringify(messages));
+    } catch { /* storage blocked — ignore */ }
+}
+
+// Pull the assistant reply out of whatever the n8n workflow returns.
+// Different "Respond to Webhook" / "AI Agent" node configurations end up
+// shaped differently, so check the common keys then fall back to JSON.
+function extractAssistantReply(data) {
+    if (data == null) return null;
+    if (typeof data === 'string') return data;
+    if (Array.isArray(data)) return extractAssistantReply(data[0]);
+    return (
+        data.output ??
+        data.text ??
+        data.message ??
+        data.reply ??
+        data.response ??
+        data?.choices?.[0]?.message?.content ??
+        null
+    );
+}
+
+// The chat widget renders plain text — it does NOT do Markdown. Even though
+// the n8n prompt tells the model to skip Markdown, models slip sometimes and
+// the visible result ("**bold**", "* item") looks broken. This defensively
+// strips the common Markdown symbols so the reader sees clean text. Bullet
+// `* ` at line starts is converted to `- ` to keep list semantics.
+function sanitizeMarkdown(text) {
+    if (!text || typeof text !== 'string') return text || '';
+    return text
+        // Normalise line endings
+        .replace(/\r\n/g, '\n')
+        // Strip ATX headings (## Heading)
+        .replace(/^[ \t]*#{1,6}[ \t]+/gm, '')
+        // Bold **text** or __text__ -> text
+        .replace(/\*\*([^*]+?)\*\*/g, '$1')
+        .replace(/__([^_]+?)__/g, '$1')
+        // Inline code `text` -> text
+        .replace(/`([^`]+?)`/g, '$1')
+        // Italic *text* / _text_ -> text, but only when wrapping a word
+        // (don't eat bullet `* item` or arithmetic underscores in slugs).
+        .replace(/(^|[\s(])\*(\S[^*\n]*?\S|\S)\*(?=[\s.,!?)\]:;]|$)/g, '$1$2')
+        .replace(/(^|[\s(])_(\S[^_\n]*?\S|\S)_(?=[\s.,!?)\]:;]|$)/g, '$1$2')
+        // Convert bullet "* item" or "+ item" at line start to "- item"
+        .replace(/^[ \t]*[*+][ \t]+/gm, '- ')
+        // Collapse 3+ blank lines down to 2
+        .replace(/\n{3,}/g, '\n\n')
+        .trim();
+}
 
 const ChatBot = ({ isOpen, onClose }) => {
-    const [messages, setMessages] = useState([
-        { role: 'assistant', content: 'Hello! I am your ePathways assistant. How can I help you navigate your New Zealand journey today?' }
-    ]);
+    // Lazy initialiser reads the saved log so the conversation survives
+    // Inertia page navigations (which remount this component).
+    const [messages, setMessages] = useState(loadMessages);
     const [input, setInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const messagesEndRef = useRef(null);
@@ -21,28 +113,50 @@ const ChatBot = ({ isOpen, onClose }) => {
         }
     }, [messages, isOpen]);
 
+    // Persist the conversation so it's restored on the next mount.
+    useEffect(() => {
+        saveMessages(messages);
+    }, [messages]);
+
     const handleSend = async (e) => {
         e.preventDefault();
         if (!input.trim() || isLoading) return;
 
         const userMsg = { role: 'user', content: input };
+        const currentInput = input;
         setMessages(prev => [...prev, userMsg]);
         setInput('');
         setIsLoading(true);
 
         try {
-            const response = await axios.post('/api/chat', {
-                message: input,
-                history: messages.slice(1) // Send history excluding the initial welcome
+            const res = await fetch(N8N_CHAT_WEBHOOK, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                body: JSON.stringify({
+                    action: 'sendMessage',
+                    sessionId: getChatSessionId(),
+                    chatInput: currentInput,
+                }),
             });
 
-            setMessages(prev => [...prev, { role: 'assistant', content: response.data.message }]);
+            if (!res.ok) {
+                throw new Error(`n8n webhook returned ${res.status}`);
+            }
+
+            const raw = await res.text();
+            let data = null;
+            try { data = JSON.parse(raw); } catch { data = raw; }
+
+            const rawReply = extractAssistantReply(data)
+                || 'Sorry, I did not get a response. Please try again.';
+            const reply = sanitizeMarkdown(rawReply);
+
+            setMessages(prev => [...prev, { role: 'assistant', content: reply }]);
         } catch (error) {
             console.error('Chat error:', error);
-            const errorMsg = error.response?.data?.error || 'I apologize, but I am having trouble connecting right now. Please try again or book a consultation if you need immediate help.';
-            setMessages(prev => [...prev, { 
-                role: 'assistant', 
-                content: errorMsg 
+            setMessages(prev => [...prev, {
+                role: 'assistant',
+                content: 'I apologize, but I am having trouble connecting right now. Please try again or book a consultation if you need immediate help.',
             }]);
         } finally {
             setIsLoading(false);
@@ -78,8 +192,8 @@ const ChatBot = ({ isOpen, onClose }) => {
                                 <span className="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-green-500 border-2 border-slate-900 animate-pulse"></span>
                             </div>
                             <div>
-                                <h3 className="text-white font-black text-[10px] uppercase tracking-[0.2em]">ePathways Assistant</h3>
-                                <p className="text-[10px] text-white/40 font-medium tracking-wider">Expert Consultant</p>
+                                <h3 className="text-white font-black text-sm tracking-tight">Pathy</h3>
+                                <p className="text-[10px] text-white/50 font-medium tracking-wider">Your ePathways Guide.</p>
                             </div>
                         </div>
                         <button 
@@ -101,9 +215,9 @@ const ChatBot = ({ isOpen, onClose }) => {
                                 className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
                             >
                                 <div className={`max-w-[85%] flex gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
-                                    <div className={`p-4 rounded-3xl text-[13px] leading-relaxed shadow-sm ${
-                                        msg.role === 'user' 
-                                            ? 'bg-[#436235] text-white rounded-tr-none shadow-[0_8px_16px_rgba(67,98,53,0.2)]' 
+                                    <div className={`p-4 rounded-3xl text-[13px] leading-relaxed shadow-sm whitespace-pre-line break-words ${
+                                        msg.role === 'user'
+                                            ? 'bg-[#436235] text-white rounded-tr-none shadow-[0_8px_16px_rgba(67,98,53,0.2)]'
                                             : 'bg-slate-100 text-slate-700 rounded-tl-none border border-slate-200'
                                     }`}>
                                         {msg.content}
@@ -168,7 +282,6 @@ const ChatBot = ({ isOpen, onClose }) => {
                                 <Send size={16} />
                             </button>
                         </div>
-                        <p className="text-center text-[9px] text-slate-300 uppercase tracking-[0.3em] mt-4 font-bold">Powered by ePathways AI</p>
                     </form>
                 </motion.div>
             )}

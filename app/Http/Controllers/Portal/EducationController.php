@@ -415,4 +415,61 @@ class EducationController extends Controller
     }
     public function profile()           { return inertia('portal/education/Profile',  ['portal' => 'education', 'user' => auth()->user()->only(['id','name','email','role'])]); }
     public function notifications()     { return inertia('portal/education/Notifications', ['portal' => 'education']); }
+
+    /**
+     * Tasks & follow-ups across every lead, bucketed Today / This Week /
+     * Overdue / All. Mirrors SalesController::tasks — same data, same
+     * serialisation. Rendered via the shared Tasks page (Education portal
+     * re-exports the sales component verbatim).
+     */
+    public function tasks(Request $request)
+    {
+        try {
+            $userId   = $request->user()->id;
+            $scope    = $request->input('scope', 'mine');
+            $now      = now();
+            $todayEnd = $now->copy()->endOfDay();
+            $weekEnd  = $now->copy()->endOfWeek();
+
+            $base = \App\Models\LeadTask::with(['lead:id,lead_id,first_name,last_name,email,status', 'assignee:id,name'])
+                ->when($scope === 'mine', fn ($q) => $q->where('assignee_id', $userId));
+
+            $serialize = fn ($t) => [
+                'id'           => $t->id,
+                'title'        => $t->title,
+                'priority'     => $t->priority,
+                'due_at'       => $t->due_at,
+                'completed'    => $t->completed,
+                'completed_at' => $t->completed_at,
+                'overdue'      => ! $t->completed && $t->due_at && $t->due_at->isPast(),
+                'assignee'     => $t->assignee ? ['id' => $t->assignee->id, 'name' => $t->assignee->name] : null,
+                'lead'         => $t->lead ? [
+                    'id'      => $t->lead->id,
+                    'lead_id' => $t->lead->lead_id,
+                    'name'    => trim("{$t->lead->first_name} {$t->lead->last_name}"),
+                    'status'  => $t->lead->status,
+                ] : null,
+            ];
+
+            $today        = (clone $base)->where('completed', false)->whereBetween('due_at', [$now, $todayEnd])->orderBy('due_at')->get()->map($serialize);
+            $overdue      = (clone $base)->where('completed', false)->whereNotNull('due_at')->where('due_at', '<', $now)->orderBy('due_at')->get()->map($serialize);
+            $thisWeek     = (clone $base)->where('completed', false)->whereBetween('due_at', [$todayEnd, $weekEnd])->orderBy('due_at')->get()->map($serialize);
+            $undated      = (clone $base)->where('completed', false)->whereNull('due_at')->orderByDesc('created_at')->limit(50)->get()->map($serialize);
+            $recentlyDone = (clone $base)->where('completed', true)->orderByDesc('completed_at')->limit(20)->get()->map($serialize);
+
+            return inertia('portal/education/Tasks', [
+                'portal'        => 'education',
+                'scope'         => $scope,
+                'today'         => $today,
+                'overdue'       => $overdue,
+                'this_week'     => $thisWeek,
+                'undated'       => $undated,
+                'recently_done' => $recentlyDone,
+                'staffOptions'  => \App\Models\User::whereNotIn('role', ['lead', 'revoked_lead'])->orderBy('name')->get(['id', 'name']),
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('Education tasks page failed', ['error' => $e->getMessage()]);
+            return inertia('portal/education/Tasks', ['portal' => 'education', 'scope' => 'mine', 'today' => [], 'overdue' => [], 'this_week' => [], 'undated' => [], 'recently_done' => [], 'staffOptions' => []]);
+        }
+    }
 }
