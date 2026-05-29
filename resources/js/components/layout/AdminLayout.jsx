@@ -15,21 +15,15 @@ const ADMIN_NAV = [
     { name: "Promotions", href: "/admin/promos", icon: <Tag size={20} /> },
     { name: "Facebook Live", href: "/admin/facebook-live", icon: <Video size={20} /> },
     { name: "AI Ads", href: "/admin/ai-ads", icon: <Sparkles size={20} /> },
+    // Single User Reviews page — tabs between Immigration and Education
+    // inside the page so staff doesn't have to bounce between sidebar links.
+    { name: "User Reviews", href: "/admin/user-reviews", icon: <Star size={20} /> },
     {
         name: "Immigration",
         icon: <Globe size={20} />,
         children: [
             { name: "Dashboard", href: "/portal/immigration/dashboard", icon: <LayoutDashboard size={16} /> },
             { name: "Resident Visa Intake", href: "/admin/immigration/resident-intakes", icon: <FileText size={16} /> },
-            { name: "User Reviews", href: "/admin/immigration/user-reviews", icon: <Star size={16} /> },
-        ],
-    },
-    {
-        name: "Education",
-        icon: <GraduationCap size={20} />,
-        children: [
-            { name: "Dashboard", href: "/portal/education/dashboard", icon: <LayoutDashboard size={16} /> },
-            { name: "User Reviews", href: "/admin/education/user-reviews", icon: <Star size={16} /> },
         ],
     },
     {

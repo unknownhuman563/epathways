@@ -12,6 +12,7 @@ export default function Footer() {
     ? `https://wa.me/${String(contact.whatsapp).replace(/[^\d]/g, "")}`
     : null;
   const facebookHref = contact.facebook || "https://www.facebook.com/epathwaysnz";
+  const messengerHref = contact.messenger || "https://m.me/epathwaysnz";
 
   return (
     <footer className="font-urbanist">
@@ -34,6 +35,16 @@ export default function Footer() {
                 <a href={facebookHref} target="_blank" rel="noopener noreferrer" aria-label="Facebook" className="hover:text-green-600 transition-colors">
                   <Facebook size={24} strokeWidth={1.5} />
                 </a>
+                {messengerHref && (
+                  <a href={messengerHref} target="_blank" rel="noopener noreferrer" aria-label="Messenger" title="Chat on Messenger" className="hover:text-green-600 transition-colors">
+                    {/* Outline-style Messenger glyph at the same visual
+                        weight as the other lucide icons (24px, stroke 1.5). */}
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M12 2C6.48 2 2 6.1 2 11.21c0 2.92 1.43 5.51 3.66 7.2V22l3.36-1.84c.9.25 1.86.38 2.85.38 5.52 0 10-4.1 10-9.21S17.52 2 12 2z" />
+                      <path d="M6.96 14.36l3.05-3.24 2.36 2.36 4.84-2.6-3.05 3.24-2.36-2.36-4.84 2.6z" />
+                    </svg>
+                  </a>
+                )}
                 {whatsappHref && (
                   <a href={whatsappHref} target="_blank" rel="noopener noreferrer" aria-label="WhatsApp" className="hover:text-green-600 transition-colors">
                     <MessageCircle size={24} strokeWidth={1.5} />

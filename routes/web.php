@@ -97,6 +97,22 @@ Route::permanentRedirect('/resident-intake', '/resident-interest');
 
 Route::post('/user-reviews', [UserReviewController::class, 'store'])->name('user-reviews.store');
 
+// Shareable client-review submission page. Staff send this link to clients
+// who have completed their service so they can leave a review without
+// hunting through the immigration / education-journey pages. Accepts
+// ?dept=education|immigration|both and ?name= / ?email= for prefill.
+Route::get('/leave-review', function () {
+    $allowed = ['immigration', 'education', 'both'];
+    $dept = request('dept');
+    return inertia('leave-review/LeaveReviewPage', [
+        'department' => in_array($dept, $allowed, true) ? $dept : 'immigration',
+        'prefill'    => [
+            'name'  => request('name'),
+            'email' => request('email'),
+        ],
+    ]);
+})->name('leave-review');
+
 Route::get('/activities', [EventController::class, 'activities']);
 
 Route::get("/visa-approved", function (){
@@ -299,6 +315,12 @@ Route::middleware(['auth'])->group(function () {
     Route::middleware('portal:admin,education')->group(function () {
         Route::get('/admin/education/user-reviews', fn () => app(UserReviewController::class)->adminIndex('education'))->name('admin.education.user-reviews');
         Route::get('/admin/education/user-reviews/{id}', fn ($id) => app(UserReviewController::class)->adminShow($id, 'education'))->name('admin.education.user-reviews.show');
+    });
+
+    // Unified User Reviews — single page with Immigration / Education
+    // tabs. Replaces the two separate sidebar entries.
+    Route::middleware('portal:admin,education,immigration')->group(function () {
+        Route::get('/admin/user-reviews', [UserReviewController::class, 'adminUnifiedIndex'])->name('admin.user-reviews');
     });
 
     // Department portals — each staff member reaches only their own portal
