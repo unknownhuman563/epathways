@@ -157,6 +157,23 @@ class UserReviewController extends Controller
         ]);
     }
 
+    /**
+     * Unified moderation page — returns every review (immigration +
+     * education + cross-dept 'both'). The React page tabs between
+     * departments client-side so staff doesn't have to bounce between two
+     * sidebar links.
+     */
+    public function adminUnifiedIndex()
+    {
+        $reviews = UserReview::latest()->get();
+        $page = auth()->user()?->isAdmin()
+            ? 'admin/UserReviewsAll'
+            : 'admin/UserReviewsAll';
+        return inertia($page, [
+            'reviews' => $reviews,
+        ]);
+    }
+
     public function adminShow($id, string $department = UserReview::DEPT_IMMIGRATION)
     {
         $review = UserReview::department($department)->findOrFail($id);

@@ -33,8 +33,9 @@ export default function Home({ events = [], programGroups = [], activePromos = [
         {/* Live promo strip — renders nothing if no promos are active */}
         <PromoBanner promos={activePromos} variant="strip" />
 
-        {/* Hero Section */}
-        <HeroSection backgroundVideo={HeroVideo} />
+        {/* Hero Section — knows about the promo strip so it can reserve
+            the right amount of vertical room without leaving a blank band. */}
+        <HeroSection backgroundVideo={HeroVideo} hasPromo={activePromos.length > 0} />
 
         {/* Statistics Bar */}
         <StatisticsBar />

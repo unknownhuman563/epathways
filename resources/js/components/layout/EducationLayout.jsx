@@ -17,7 +17,7 @@ export default function EducationLayout({ children }) {
         { name: "Tasks & Follow-ups", href: "/portal/education/tasks", icon: <CheckSquare size={20} />, badge: badges.tasks_open, badgeTone: badges.tasks_overdue > 0 ? "danger" : "default" },
         { name: "Students",  href: "/portal/education/students",  icon: <Users size={20} /> },
         { name: "Documents", href: "/portal/education/documents", icon: <FolderOpen size={20} />, badge: badges.docs_pending_review, badgeTone: "warning" },
-        { name: "User Reviews", href: "/admin/education/user-reviews", icon: <Star size={20} /> },
+        { name: "User Reviews", href: "/admin/user-reviews", icon: <Star size={20} /> },
 
         { name: "Setup", section: true },
         { name: "Programs",            href: "/portal/education/programs",            icon: <GraduationCap size={20} /> },
