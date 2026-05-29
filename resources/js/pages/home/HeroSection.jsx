@@ -1,10 +1,7 @@
 import React, { useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import testi1 from "@assets/Testimonies/testi1.png";
-import testi2 from "@assets/Testimonies/testi2.png";
-import testi3 from "@assets/Testimonies/testi3.png";
 
-export default function HeroSection({ backgroundVideo }) {
+export default function HeroSection({ backgroundVideo, hasPromo = false }) {
     const videoRef = useRef(null);
 
     useEffect(() => {
@@ -13,8 +10,14 @@ export default function HeroSection({ backgroundVideo }) {
         }
     }, []);
 
+    // Reserve only as much vertical room as the chrome above actually
+    // takes. Promo strip adds ~40px, navbar is ~72px. Without a promo
+    // we'd leave a blank dark band at the bottom of the hero if we kept
+    // the larger reservation, so the height shrinks back to navbar-only.
+    const heightClass = hasPromo ? 'h-[calc(100vh-7rem)]' : 'h-[calc(100vh-4.5rem)]';
+
     return (
-        <div className="relative h-screen w-full overflow-hidden font-urbanist">
+        <div className={`relative ${heightClass} min-h-[600px] w-full overflow-hidden font-urbanist`}>
             {/* Background Video with Overlay */}
             <video
                 ref={videoRef}
@@ -32,59 +35,29 @@ export default function HeroSection({ backgroundVideo }) {
             <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-[1px]"></div>
             
             {/* Centered Content (Pinned Higher) */}
-            <div className="relative z-10 flex h-full items-center justify-center w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            {/* Anchor the content to the BOTTOM of the hero so the CTAs sit
+                low in the viewport (video carries the upper two-thirds). */}
+            <div className="relative z-10 flex h-full items-end justify-center w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-16 sm:pb-24 md:pb-28">
                 <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 1, ease: "easeOut" }}
-                    className="w-full text-center flex flex-col items-center -mt-12 sm:-mt-20 md:-mt-32 lg:-mt-40"
+                    className="w-full text-center flex flex-col items-center"
                 >
 
-                    {/* Downsized Premium Social Proof Pill */}
-                    <motion.div 
-                        initial={{ opacity: 0, scale: 0.9 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        transition={{ delay: 0.2, duration: 0.8 }}
-                        className="inline-flex items-center gap-3 mb-10 bg-white/10 backdrop-blur-xl px-4 py-2 rounded-full border border-white/20 shadow-[0_8px_32px_0_rgba(0,0,0,0.3)]"
-                    >
-                        <div className="flex -space-x-2">
-                            <img src={testi1} alt="Client 1" className="w-5 h-5 md:w-6 md:h-6 rounded-full border-2 border-white/30 object-cover" />
-                            <img src={testi2} alt="Client 2" className="w-5 h-5 md:w-6 md:h-6 rounded-full border-2 border-white/30 object-cover" />
-                            <img src={testi3} alt="Client 3" className="w-5 h-5 md:w-6 md:h-6 rounded-full border-2 border-white/30 object-cover" />
-                            <div className="relative w-5 h-5 md:w-6 md:h-6 rounded-full overflow-hidden flex items-center justify-center bg-white/20 border-2 border-white/30">
-                                <span className="text-[7px] md:text-[8px] font-bold text-white">+97</span>
-                            </div>
-                        </div>
-                        <div className="h-3 w-[1px] bg-white/30"></div>
-                        <div className="flex flex-col text-left leading-tight">
-                            <span className="text-[7px] md:text-[8px] text-white uppercase tracking-[0.2em] font-bold">Trusted by 500+ families</span>
-                            <span className="text-[7px] md:text-[8px] text-white/50 font-medium whitespace-nowrap">Philippines · India · Asia</span>
-                        </div>
-                    </motion.div>
+                    {/* Hero headline, supporting copy, and "Trusted by 500+"
+                        social-proof pill all removed — only the CTAs remain,
+                        so the video carries the entire visual story. */}
 
-                    <div className="flex flex-col items-center mb-6 sm:mb-10 w-full">
-                        <span className="text-[10px] sm:text-sm md:text-2xl lg:text-3xl font-bold text-white uppercase tracking-[0.3em] sm:tracking-[0.45em] md:tracking-[0.6em] mb-3 sm:mb-4 opacity-70">
-                            Paving the Path Towards
-                        </span>
-                        <h1 className="text-5xl sm:text-7xl md:text-[120px] lg:text-[180px] xl:text-[220px] 2xl:text-[240px] font-black leading-[0.85] sm:leading-[0.8] md:leading-[0.75] tracking-[calc(-0.05em)] sm:tracking-[calc(-0.06em)] text-white uppercase flex flex-col items-center">
-                            <span className="relative">New Zealand</span>
-                            <span className="text-[#436235]">Future</span>
-                        </h1>
-                    </div>
-
-                    <p className="text-xs md:text-sm mb-8 sm:mb-12 text-white/60 max-w-md sm:max-w-2xl md:max-w-3xl lg:max-w-5xl font-light leading-relaxed tracking-wider mx-auto px-2 sm:px-4">
-                        ePathways is your trusted partner, providing expert guidance and end-to-end support—from assessment to success.
-                    </p>
-
-                    {/* Hierarchy: primary solid-green for the assessment funnel
-                        (highest-converting destination), secondary outline for
-                        the lower-friction booking calendar. */}
+                    {/* Hierarchy: primary solid dark-gray for the assessment
+                        funnel (highest-converting destination), secondary
+                        outline for the lower-friction booking calendar. */}
                     <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-3 sm:gap-6 w-full sm:w-auto max-w-md sm:max-w-none mx-auto">
                         <motion.a
                             whileHover={{ scale: 1.05 }}
                             whileTap={{ scale: 0.95 }}
                             href="/free-assessment"
-                            className="w-full sm:w-auto bg-[#436235] hover:bg-[#385029] border border-[#436235] text-white px-6 sm:px-7 py-3 sm:py-2.5 rounded-none text-[10px] sm:text-[10px] md:text-xs font-bold tracking-[0.15em] sm:tracking-[0.2em] transition-all duration-300 uppercase text-center shadow-lg"
+                            className="w-full sm:w-auto bg-[#282728] hover:bg-black border border-[#282728] text-white px-6 sm:px-7 py-3 sm:py-2.5 rounded-none text-[10px] sm:text-[10px] md:text-xs font-bold tracking-[0.15em] sm:tracking-[0.2em] transition-all duration-300 uppercase text-center shadow-lg"
                         >
                             Get my free assessment
                         </motion.a>

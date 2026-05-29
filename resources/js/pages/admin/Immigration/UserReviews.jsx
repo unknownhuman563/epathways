@@ -1,11 +1,27 @@
 import React, { useMemo, useState } from 'react';
 import { Head, Link, router } from '@inertiajs/react';
-import { Search, Filter, Eye, MessageCircle, FileText, Globe, ChevronRight, Mail, Star, Check, X } from 'lucide-react';
+import { Search, Filter, Eye, MessageCircle, FileText, Globe, ChevronRight, Mail, Star, Check, X, Link as LinkIcon, Copy } from 'lucide-react';
 
 export default function UserReviews({ reviews = [], department = 'immigration' }) {
     const [query, setQuery] = useState('');
     const [modeFilter, setModeFilter] = useState('');
     const [savingId, setSavingId] = useState(null);
+    const [copied, setCopied] = useState(false);
+
+    // Build the public review-submission URL scoped to this department.
+    // Staff copy this and send it directly to clients (email / WhatsApp).
+    const shareUrl = (() => {
+        if (typeof window === 'undefined') return '';
+        return `${window.location.origin}/leave-review?dept=${department}`;
+    })();
+
+    const copyShareLink = async () => {
+        try {
+            await navigator.clipboard.writeText(shareUrl);
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2000);
+        } catch { /* clipboard unavailable */ }
+    };
 
     // Both departments share the same admin page; the URL prefix swaps so
     // the toggle hits the right named route. Same controller method on the
@@ -63,9 +79,26 @@ export default function UserReviews({ reviews = [], department = 'immigration' }
                     <h1 className="text-2xl font-bold text-gray-900 tracking-tight">User Reviews</h1>
                     <p className="text-sm text-gray-600 mt-1">Public reviews submitted from the {department === 'education' ? 'education journey' : 'immigration'} page.</p>
                 </div>
-                <div className="flex items-center gap-3">
-                    <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Total</span>
-                    <span className="text-2xl font-black text-gray-900">{reviews.length}</span>
+                <div className="flex items-center gap-4">
+                    {/* Shareable client-review link — staff copies this and
+                        sends it directly to clients via email / WhatsApp. */}
+                    <button
+                        type="button"
+                        onClick={copyShareLink}
+                        title={shareUrl}
+                        className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl border text-xs font-bold uppercase tracking-wider transition-colors ${
+                            copied
+                                ? 'bg-emerald-50 border-emerald-300 text-emerald-700'
+                                : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50 hover:border-gray-300'
+                        }`}
+                    >
+                        {copied ? <Check size={14} /> : <LinkIcon size={14} />}
+                        {copied ? 'Link copied' : 'Copy share link'}
+                    </button>
+                    <div className="flex items-center gap-3">
+                        <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Total</span>
+                        <span className="text-2xl font-black text-gray-900">{reviews.length}</span>
+                    </div>
                 </div>
             </div>
 

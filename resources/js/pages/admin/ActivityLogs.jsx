@@ -5,26 +5,20 @@ import {
     Globe, MapPin,
 } from 'lucide-react';
 
-const ROLE_STYLES = {
-    admin:         'bg-purple-100 text-purple-700 border-purple-200',
-    sales:         'bg-blue-100 text-blue-700 border-blue-200',
-    education:     'bg-emerald-100 text-emerald-700 border-emerald-200',
-    english:       'bg-amber-100 text-amber-700 border-amber-200',
-    immigration:   'bg-rose-100 text-rose-700 border-rose-200',
-    accommodation: 'bg-cyan-100 text-cyan-700 border-cyan-200',
-    public:        'bg-gray-100 text-gray-500 border-gray-200',
-};
-const tagStyle = (key) => ROLE_STYLES[key] || 'bg-gray-100 text-gray-600 border-gray-200';
+// Single neutral chip style for every role / portal / action. The visual
+// system stays monochrome (dark gray + white + soft gray); scannability
+// comes from layout and clear labels rather than colour coding. Severe
+// actions (failed sign-ins, deletes) get an inverted dark chip to draw
+// the eye without breaking the palette.
+const NEUTRAL_CHIP = 'bg-gray-100 text-gray-700 border-gray-200';
+const DARK_CHIP    = 'bg-gray-900 text-white border-gray-900';
+
+const tagStyle = (_key) => NEUTRAL_CHIP;
 const cap = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : '—');
 
 function actionStyle(action = '') {
-    if (action === 'login.failed') return 'bg-red-100 text-red-700 border-red-200';
-    if (action.startsWith('login')) return 'bg-emerald-100 text-emerald-700 border-emerald-200';
-    if (action === 'logout') return 'bg-gray-100 text-gray-600 border-gray-200';
-    if (action.endsWith('.created')) return 'bg-blue-100 text-blue-700 border-blue-200';
-    if (action.endsWith('.updated')) return 'bg-amber-100 text-amber-700 border-amber-200';
-    if (action.endsWith('.deleted')) return 'bg-red-100 text-red-700 border-red-200';
-    return 'bg-indigo-100 text-indigo-700 border-indigo-200';
+    if (action === 'login.failed' || action.endsWith('.deleted')) return DARK_CHIP;
+    return NEUTRAL_CHIP;
 }
 const actionLabel = (a = '') => a.replace(/[._]/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 
@@ -195,7 +189,7 @@ export default function ActivityLogs({ logs = [], actions = [], portals = [] }) 
                                 return (
                                     <React.Fragment key={log.id}>
                                         <tr
-                                            className={`transition-colors ${hasProps ? 'cursor-pointer hover:bg-blue-50/30' : 'hover:bg-gray-50/40'}`}
+                                            className={`transition-colors ${hasProps ? 'cursor-pointer hover:bg-gray-50' : 'hover:bg-gray-50/60'}`}
                                             onClick={() => hasProps && setExpanded(isOpen ? null : log.id)}
                                         >
                                             <td className="px-4 py-3 text-gray-300">
