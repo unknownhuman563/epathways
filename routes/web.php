@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AccommodationController as PublicAccommodationController;
 use App\Http\Controllers\ActivityLogController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\BookingController;
@@ -12,6 +13,7 @@ use App\Http\Controllers\Portal\AccommodationController;
 use App\Http\Controllers\Portal\EducationController;
 use App\Http\Controllers\Portal\EnglishController;
 use App\Http\Controllers\Portal\ImmigrationController;
+use App\Http\Controllers\Portal\PropertyController;
 use App\Http\Controllers\Portal\SalesController;
 use App\Http\Controllers\ProgramController;
 use App\Http\Controllers\ProgramPromoController;
@@ -65,13 +67,8 @@ Route::middleware('auth')->post('/admin/immigration/user-reviews/{id}', [UserRev
 Route::middleware('auth')->post('/admin/education/user-reviews/{id}', [UserReviewController::class, 'adminUpdate'])
     ->name('admin.education.user-reviews.update');
 
-Route::get('/accommodation', function () {
-    return inertia('accommodation/AccommodationPage');
-});
-
-Route::get('/accommodation/{id}', function ($id) {
-    return inertia('accommodation/PropertyDetails', ['id' => $id]);
-});
+Route::get('/accommodation', [PublicAccommodationController::class, 'index']);
+Route::get('/accommodation/{id}', [PublicAccommodationController::class, 'show']);
 
 Route::get('/accommodation/{id}/checkout', function ($id) {
     return inertia('accommodation/Checkout', ['id' => $id]);
@@ -447,6 +444,15 @@ Route::middleware(['auth'])->group(function () {
         Route::middleware('portal:accommodation')->prefix('accommodation')->name('portal.accommodation.')->group(function () {
             Route::get('/dashboard', [AccommodationController::class, 'dashboard'])->name('dashboard');
             Route::get('/leads/{id}', [LeadController::class, 'show'])->name('leads.show');
+
+            // Property listings CRUD (multipart: update is POST + _method=PUT).
+            Route::get('/properties', [PropertyController::class, 'index'])->name('properties.index');
+            Route::get('/properties/create', [PropertyController::class, 'create'])->name('properties.create');
+            Route::post('/properties', [PropertyController::class, 'store'])->name('properties.store');
+            Route::get('/properties/{property}/edit', [PropertyController::class, 'edit'])->name('properties.edit');
+            Route::match(['POST', 'PUT'], '/properties/{property}', [PropertyController::class, 'update'])->name('properties.update');
+            Route::delete('/properties/{property}', [PropertyController::class, 'destroy'])->name('properties.destroy');
+            Route::delete('/properties/{property}/images/{image}', [PropertyController::class, 'destroyImage'])->name('properties.images.destroy');
         });
 
         // Lead Portal — external client-facing dashboard. Each lead-role user
