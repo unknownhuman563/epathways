@@ -25,8 +25,8 @@ const PropertyDetails = ({ property }) => {
           <div>
             <div className="flex items-center space-x-3 mb-3">
               <span className="px-3 py-1 bg-gray-100 text-xs font-bold uppercase tracking-wider rounded-full capitalize">{property?.room_type} room</span>
-              {property?.location && (
-                <span className="text-sm text-gray-500 font-medium">{property.location}</span>
+              {(property?.suburb || property?.location) && (
+                <span className="text-sm text-gray-500 font-medium">{[property?.suburb, property?.location].filter(Boolean).join(' · ')}</span>
               )}
             </div>
             <h1 className="text-4xl md:text-5xl font-bold tracking-tight mb-2">{property?.name}</h1>
@@ -94,17 +94,17 @@ const PropertyDetails = ({ property }) => {
                 </div>
               )}
 
-              <a href={`/accommodation/${id}/checkout`} className="w-full py-4 bg-black text-white rounded-full font-bold hover:bg-gray-800 transition-colors shadow-lg shadow-black/20 text-center block">
-                Reserve
+              <a href="#inquire" className="w-full py-4 bg-black text-white rounded-full font-bold hover:bg-gray-800 transition-colors shadow-lg shadow-black/20 text-center block">
+                Interested? Click here
               </a>
-              <p className="text-center text-xs text-gray-500 mt-4">You won't be charged yet</p>
+              <p className="text-center text-xs text-gray-500 mt-4">We'll get back to you within 24 hours</p>
             </div>
           </div>
         </div>
       </main>
 
       {/* Soft capture — routed to sales as an Accommodation lead. */}
-      <section className="bg-[#f7f8f6] py-14 sm:py-20 border-t border-gray-100">
+      <section id="inquire" className="bg-[#f7f8f6] py-14 sm:py-20 border-t border-gray-100 scroll-mt-24">
         <div className="max-w-3xl mx-auto px-4">
           <div className="text-center mb-6">
             <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#436235] mb-2">Have questions before booking?</p>

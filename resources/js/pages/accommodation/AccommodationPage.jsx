@@ -6,14 +6,22 @@ import BeforeFooterCTA from '@/components/ui/BeforeFooterCTA';
 
 const Accommodation = ({ properties = [] }) => {
   const [activeTab, setActiveTab] = useState('All');
+  const [bedFilter, setBedFilter] = useState('all');
+  const [suburbFilter, setSuburbFilter] = useState('all');
 
   const tabs = ['All', 'Single', 'Ensuite'];
 
   const money = (v) => (v == null ? null : `$${Number(v).toFixed(0)}`);
 
-  const filtered = activeTab === 'All'
-    ? properties
-    : properties.filter((p) => p.room_type === activeTab.toLowerCase());
+  // Suburbs present in the current listings (drives the suburb dropdown).
+  const suburbs = [...new Set(properties.map((p) => p.suburb).filter(Boolean))].sort();
+
+  const filtered = properties.filter((p) => {
+    const roomOk = activeTab === 'All' || p.room_type === activeTab.toLowerCase();
+    const bedOk = bedFilter === 'all' || p.bed_type === bedFilter;
+    const suburbOk = suburbFilter === 'all' || p.suburb === suburbFilter;
+    return roomOk && bedOk && suburbOk;
+  });
 
   return (
     <div className="bg-[#fafafa] min-h-screen font-urbanist text-black">
@@ -171,15 +179,15 @@ const Accommodation = ({ properties = [] }) => {
         <h2 className="text-5xl md:text-6xl font-bold tracking-tight mb-16">accommodation</h2>
 
         {/* Tabs */}
-        <div className="flex justify-center mb-16 overflow-x-auto">
+        <div className="flex justify-center mb-8 overflow-x-auto">
           <div className="flex space-x-2 bg-gray-50/80 p-1.5 rounded-2xl">
             {tabs.map((tab) => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
                 className={`px-12 py-4 rounded-xl text-xs font-bold transition-all ${
-                  activeTab === tab 
-                    ? 'bg-white shadow-[0_2px_10px_-4px_rgba(0,0,0,0.1)] text-black' 
+                  activeTab === tab
+                    ? 'bg-white shadow-[0_2px_10px_-4px_rgba(0,0,0,0.1)] text-black'
                     : 'text-gray-400 hover:text-black'
                 }`}
               >
@@ -187,6 +195,30 @@ const Accommodation = ({ properties = [] }) => {
               </button>
             ))}
           </div>
+        </div>
+
+        {/* Dropdown filters */}
+        <div className="flex flex-wrap justify-center gap-3 mb-16">
+          <select
+            value={bedFilter}
+            onChange={(e) => setBedFilter(e.target.value)}
+            className="rounded-full border border-gray-200 bg-white px-5 py-3 text-xs font-bold text-gray-600 cursor-pointer focus:border-black focus:ring-black"
+          >
+            <option value="all">All bed types</option>
+            <option value="single">Single bed mattress</option>
+            <option value="double">Double bed mattress</option>
+          </select>
+
+          <select
+            value={suburbFilter}
+            onChange={(e) => setSuburbFilter(e.target.value)}
+            className="rounded-full border border-gray-200 bg-white px-5 py-3 text-xs font-bold text-gray-600 cursor-pointer focus:border-black focus:ring-black"
+          >
+            <option value="all">All locations</option>
+            {suburbs.map((s) => (
+              <option key={s} value={s}>{s}</option>
+            ))}
+          </select>
         </div>
 
         {/* List of Properties */}
@@ -214,7 +246,7 @@ const Accommodation = ({ properties = [] }) => {
                 {/* Column 2: Title */}
                 <div className="flex flex-col justify-between h-full py-4 lg:pr-8 lg:border-r border-gray-100">
                   <div>
-                    <p className="text-[10px] font-bold tracking-[0.2em] text-gray-400 mb-2 uppercase">{acc.location || 'New Zealand'}</p>
+                    <p className="text-[10px] font-bold tracking-[0.2em] text-gray-400 mb-2 uppercase">{[acc.suburb, acc.location].filter(Boolean).join(' · ') || 'New Zealand'}</p>
                     <h3 className="text-xl font-bold leading-snug">{acc.name}</h3>
                     {acc.includes && (
                       <p className="text-[11px] text-gray-400 mt-3 leading-relaxed line-clamp-3">{acc.includes}</p>

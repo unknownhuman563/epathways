@@ -1,5 +1,6 @@
+import { useEffect, useMemo } from "react";
 import { Head, Link, useForm, router } from "@inertiajs/react";
-import { ArrowLeft, Trash2, Upload } from "lucide-react";
+import { ArrowLeft, Trash2, Upload, X } from "lucide-react";
 
 export default function PropertyForm({ property = null }) {
     const isEdit = Boolean(property);
@@ -7,6 +8,7 @@ export default function PropertyForm({ property = null }) {
     const { data, setData, post, transform, processing, errors } = useForm({
         name: property?.name ?? "",
         location: property?.location ?? "",
+        suburb: property?.suburb ?? "",
         room_type: property?.room_type ?? "single",
         has_wardrobe: property?.has_wardrobe ?? false,
         bed_type: property?.bed_type ?? "single",
@@ -42,6 +44,20 @@ export default function PropertyForm({ property = null }) {
         }
     };
 
+    // Object-URL previews for files the user just picked (revoked on change/unmount).
+    const previews = useMemo(
+        () => data.images.map((file) => ({ file, url: URL.createObjectURL(file) })),
+        [data.images]
+    );
+
+    useEffect(() => {
+        return () => previews.forEach((p) => URL.revokeObjectURL(p.url));
+    }, [previews]);
+
+    const removeNewImage = (index) => {
+        setData("images", data.images.filter((_, i) => i !== index));
+    };
+
     const field = "w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:border-rose-500 focus:ring-rose-500";
     const label = "block text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1.5";
     const err = (k) => errors[k] && <p className="mt-1 text-xs text-rose-600">{errors[k]}</p>;
@@ -68,6 +84,19 @@ export default function PropertyForm({ property = null }) {
                         <label className={label}>Area / city (subtitle)</label>
                         <input className={field} value={data.location} onChange={(e) => setData("location", e.target.value)} placeholder="Auckland, NZ" />
                         {err("location")}
+                    </div>
+
+                    <div className="md:col-span-2">
+                        <label className={label}>Suburb</label>
+                        <select className={field} value={data.suburb} onChange={(e) => setData("suburb", e.target.value)}>
+                            <option value="">Select a suburb</option>
+                            <option value="Hobsonville">Hobsonville</option>
+                            <option value="Glenfield">Glenfield</option>
+                            <option value="Kelston">Kelston</option>
+                            <option value="Hillsborough">Hillsborough</option>
+                            <option value="Sunnynook">Sunnynook</option>
+                        </select>
+                        {err("suburb")}
                     </div>
 
                     <div>
@@ -163,10 +192,23 @@ export default function PropertyForm({ property = null }) {
                     <label className={label}>{isEdit ? "Add more images" : "Images"}</label>
                     <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-gray-300 px-4 py-6 text-sm text-gray-500 hover:border-rose-400 hover:text-rose-600">
                         <Upload size={18} />
-                        <span>{data.images.length > 0 ? `${data.images.length} file(s) selected` : "Click to choose images"}</span>
-                        <input type="file" multiple accept="image/*" className="hidden" onChange={(e) => setData("images", Array.from(e.target.files))} />
+                        <span>{data.images.length > 0 ? `${data.images.length} file(s) selected — add more` : "Click to choose images"}</span>
+                        <input type="file" multiple accept="image/*" className="hidden" onChange={(e) => { setData("images", [...data.images, ...Array.from(e.target.files)]); e.target.value = ""; }} />
                     </label>
                     {err("images")}
+
+                    {previews.length > 0 && (
+                        <div className="mt-3 grid grid-cols-3 gap-3 sm:grid-cols-4">
+                            {previews.map((p, i) => (
+                                <div key={i} className="group relative overflow-hidden rounded-xl border border-gray-100">
+                                    <img src={p.url} alt={p.file.name} className="h-24 w-full object-cover" />
+                                    <button type="button" onClick={() => removeNewImage(i)} className="absolute right-1.5 top-1.5 rounded-lg bg-white/90 p-1.5 text-rose-600 opacity-0 transition group-hover:opacity-100">
+                                        <X size={14} />
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                    )}
                 </div>
 
                 <div className="flex justify-end gap-3 pt-2">

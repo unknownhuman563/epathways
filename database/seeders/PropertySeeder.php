@@ -13,6 +13,7 @@ class PropertySeeder extends Seeder
             [
                 'name' => 'Mt Roskill Student House',
                 'location' => 'Auckland, NZ',
+                'suburb' => 'Hillsborough',
                 'room_type' => 'single',
                 'has_wardrobe' => true,
                 'bed_type' => 'single',
@@ -27,6 +28,7 @@ class PropertySeeder extends Seeder
             [
                 'name' => 'Epsom Ensuite Room',
                 'location' => 'Auckland, NZ',
+                'suburb' => 'Glenfield',
                 'room_type' => 'ensuite',
                 'has_wardrobe' => true,
                 'bed_type' => 'double',

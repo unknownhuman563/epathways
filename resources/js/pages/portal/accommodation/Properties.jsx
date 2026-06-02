@@ -63,7 +63,7 @@ export default function Properties({ properties = [] }) {
                                             </div>
                                             <div>
                                                 <p className="font-semibold text-gray-900">{p.name}</p>
-                                                <p className="text-xs text-gray-500">{p.location || "—"}</p>
+                                                <p className="text-xs text-gray-500">{[p.suburb, p.location].filter(Boolean).join(" · ") || "—"}</p>
                                             </div>
                                         </div>
                                     </td>

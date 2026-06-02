@@ -15,6 +15,7 @@ class PropertyController extends Controller
         return [
             'name' => 'required|string|max:255',
             'location' => 'nullable|string|max:255',
+            'suburb' => ['nullable', Rule::in(['Hobsonville', 'Glenfield', 'Kelston', 'Hillsborough', 'Sunnynook'])],
             'room_type' => ['required', Rule::in(['single', 'ensuite'])],
             'has_wardrobe' => 'boolean',
             'bed_type' => ['required', Rule::in(['single', 'double'])],

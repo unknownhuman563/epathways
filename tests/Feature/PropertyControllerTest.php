@@ -23,6 +23,7 @@ class PropertyControllerTest extends TestCase
         return array_merge([
             'name' => 'Sunnyvale House',
             'location' => 'Auckland, NZ',
+            'suburb' => 'Glenfield',
             'room_type' => 'ensuite',
             'has_wardrobe' => true,
             'bed_type' => 'double',

@@ -72,7 +72,7 @@ export default function AccommodationDashboard({ propertyStats = {}, recentPrope
                                             </div>
                                             <div>
                                                 <p className="font-semibold text-gray-900">{p.name}</p>
-                                                <p className="text-xs text-gray-500 capitalize">{p.room_type} · {p.location || "—"}</p>
+                                                <p className="text-xs text-gray-500 capitalize">{p.room_type} · {p.suburb || p.location || "—"}</p>
                                             </div>
                                         </div>
                                     </td>

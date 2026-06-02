@@ -13,7 +13,7 @@ class Property extends Model
     protected $table = 'accommodation_properties';
 
     protected $fillable = [
-        'name', 'location', 'room_type', 'has_wardrobe', 'bed_type',
+        'name', 'location', 'suburb', 'room_type', 'has_wardrobe', 'bed_type',
         'bathroom_type', 'includes', 'rent_single', 'rent_couple',
         'bills_excluded', 'description', 'status',
     ];
