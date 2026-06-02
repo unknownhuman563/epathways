@@ -1,6 +1,7 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Head, Link, useForm, router } from "@inertiajs/react";
-import { ArrowLeft, Trash2, Upload, X } from "lucide-react";
+import { ArrowLeft, Trash2, Upload, X, Loader2 } from "lucide-react";
+import { compressImage } from "@/lib/compressImage";
 
 export default function PropertyForm({ property = null }) {
     const isEdit = Boolean(property);
@@ -56,6 +57,24 @@ export default function PropertyForm({ property = null }) {
 
     const removeNewImage = (index) => {
         setData("images", data.images.filter((_, i) => i !== index));
+    };
+
+    // Compress each picked image in the browser before adding it to the upload,
+    // so large phone photos don't exceed the server's request-size limit (413).
+    const [compressing, setCompressing] = useState(false);
+
+    const handleFiles = async (e) => {
+        const files = Array.from(e.target.files);
+        e.target.value = ""; // reset so the same file can be re-picked after removal
+        if (files.length === 0) return;
+
+        setCompressing(true);
+        try {
+            const processed = await Promise.all(files.map((f) => compressImage(f)));
+            setData("images", [...data.images, ...processed]);
+        } finally {
+            setCompressing(false);
+        }
     };
 
     const field = "w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:border-rose-500 focus:ring-rose-500";
@@ -191,10 +210,17 @@ export default function PropertyForm({ property = null }) {
                 <div>
                     <label className={label}>{isEdit ? "Add more images" : "Images"}</label>
                     <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-gray-300 px-4 py-6 text-sm text-gray-500 hover:border-rose-400 hover:text-rose-600">
-                        <Upload size={18} />
-                        <span>{data.images.length > 0 ? `${data.images.length} file(s) selected — add more` : "Click to choose images"}</span>
-                        <input type="file" multiple accept="image/*" className="hidden" onChange={(e) => { setData("images", [...data.images, ...Array.from(e.target.files)]); e.target.value = ""; }} />
+                        {compressing ? <Loader2 size={18} className="animate-spin" /> : <Upload size={18} />}
+                        <span>
+                            {compressing
+                                ? "Optimizing images…"
+                                : data.images.length > 0
+                                    ? `${data.images.length} file(s) selected — add more`
+                                    : "Click to choose images"}
+                        </span>
+                        <input type="file" multiple accept="image/*" className="hidden" disabled={compressing} onChange={handleFiles} />
                     </label>
+                    <p className="mt-1.5 text-xs text-gray-400">Images are automatically resized before upload.</p>
                     {err("images")}
 
                     {previews.length > 0 && (
@@ -213,7 +239,7 @@ export default function PropertyForm({ property = null }) {
 
                 <div className="flex justify-end gap-3 pt-2">
                     <Link href="/portal/accommodation/properties" className="rounded-full px-5 py-2.5 text-sm font-semibold text-gray-600 hover:bg-gray-100">Cancel</Link>
-                    <button type="submit" disabled={processing} className="rounded-full bg-rose-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-rose-700 disabled:opacity-50">
+                    <button type="submit" disabled={processing || compressing} className="rounded-full bg-rose-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-rose-700 disabled:opacity-50">
                         {processing ? "Saving…" : isEdit ? "Save changes" : "Create property"}
                     </button>
                 </div>

@@ -12,6 +12,7 @@ use App\Http\Controllers\LeadPortalInvitationController;
 use App\Http\Controllers\Portal\AccommodationController;
 use App\Http\Controllers\Portal\EducationController;
 use App\Http\Controllers\Portal\EnglishController;
+use App\Http\Controllers\Portal\EoiSubmissionController;
 use App\Http\Controllers\Portal\ImmigrationController;
 use App\Http\Controllers\Portal\PropertyController;
 use App\Http\Controllers\Portal\SalesController;
@@ -68,6 +69,10 @@ Route::middleware('auth')->post('/admin/education/user-reviews/{id}', [UserRevie
     ->name('admin.education.user-reviews.update');
 
 Route::get('/accommodation', [PublicAccommodationController::class, 'index']);
+// Expression of Interest — must be declared BEFORE /accommodation/{id} so the
+// literal path isn't captured as an {id}.
+Route::get('/accommodation/expression-of-interest', [PublicAccommodationController::class, 'eoiForm'])->name('accommodation.eoi');
+Route::post('/accommodation/expression-of-interest', [PublicAccommodationController::class, 'eoiStore'])->name('accommodation.eoi.store');
 Route::get('/accommodation/{id}', [PublicAccommodationController::class, 'show']);
 
 Route::get('/accommodation/{id}/checkout', function ($id) {
@@ -453,6 +458,12 @@ Route::middleware(['auth'])->group(function () {
             Route::match(['POST', 'PUT'], '/properties/{property}', [PropertyController::class, 'update'])->name('properties.update');
             Route::delete('/properties/{property}', [PropertyController::class, 'destroy'])->name('properties.destroy');
             Route::delete('/properties/{property}/images/{image}', [PropertyController::class, 'destroyImage'])->name('properties.images.destroy');
+
+            // Expression of Interest submissions (Applications).
+            Route::get('/applications', [EoiSubmissionController::class, 'index'])->name('applications.index');
+            Route::get('/applications/{submission}', [EoiSubmissionController::class, 'show'])->name('applications.show');
+            Route::patch('/applications/{submission}/status', [EoiSubmissionController::class, 'updateStatus'])->name('applications.update-status');
+            Route::delete('/applications/{submission}', [EoiSubmissionController::class, 'destroy'])->name('applications.destroy');
         });
 
         // Lead Portal — external client-facing dashboard. Each lead-role user

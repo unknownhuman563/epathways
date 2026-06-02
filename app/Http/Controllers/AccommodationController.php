@@ -2,7 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\EoiSubmission;
 use App\Models\Property;
+use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 class AccommodationController extends Controller
 {
@@ -24,4 +27,115 @@ class AccommodationController extends Controller
 
         return inertia('accommodation/PropertyDetails', ['property' => $property]);
     }
+
+    /**
+     * Exalt Property Management — Expression of Interest (COLD) form.
+     */
+    public function eoiForm()
+    {
+        return inertia('accommodation/ExpressionOfInterest');
+    }
+
+    public function eoiStore(Request $request)
+    {
+        $data = $request->validate([
+            // Section 1 — Personal
+            'full_legal_name' => 'required|string|max:255',
+            'id_number' => 'required|string|max:255',
+            'visa_status' => ['required', Rule::in(self::VISA_STATUSES)],
+            'visa_status_other' => 'nullable|required_if:visa_status,Other|string|max:255',
+            'nationality' => ['required', Rule::in(self::NATIONALITIES)],
+            'nationality_other' => 'nullable|required_if:nationality,Other|string|max:255',
+            'preferred_name' => 'required|string|max:255',
+            'email' => 'required|email|max:255',
+            'mobile' => 'required|string|max:50',
+            'age' => 'required|integer|min:16|max:120',
+
+            // Section 2 — Property & Room Interest
+            'room_type_interest' => ['required', Rule::in(self::ROOM_TYPES)],
+            'tenancy_start_date' => 'required|date',
+            'stay_duration' => ['required', Rule::in(self::STAY_DURATIONS)],
+
+            // Section 3 — Occupancy
+            'occupants' => ['required', Rule::in(self::OCCUPANTS)],
+            'occupant_ages' => 'required|string|max:255',
+            'has_children' => 'required|boolean',
+            'children_ages' => 'nullable|string|max:255',
+            'has_pets' => 'required|boolean',
+            'pet_details' => 'nullable|string|max:255',
+
+            // Section 4 — Employment / Study
+            'rent_funding' => ['nullable', Rule::in(self::RENT_FUNDING)],
+            'rent_funding_other' => 'nullable|required_if:rent_funding,Other|string|max:255',
+            'employment_status' => ['required', Rule::in(self::EMPLOYMENT_STATUSES)],
+            'employment_status_other' => 'nullable|required_if:employment_status,Other|string|max:255',
+
+            // Section 5 — Rental Background
+            'current_address' => 'required|string|max:500',
+            'has_rented_before' => 'required|boolean',
+            'current_address_duration' => 'required|string|max:255',
+            'living_situation' => ['required', Rule::in(self::LIVING_SITUATIONS)],
+            'reason_for_moving' => 'required|string|max:1000',
+
+            // Section 6 — Lifestyle & Compatibility
+            'smokes_or_vapes' => 'required|boolean',
+            'drinks_alcohol' => ['required', Rule::in(self::DRINKS)],
+            'work_hours' => ['required', Rule::in(self::WORK_HOURS)],
+            'flatmate_description' => 'required|string|max:1000',
+
+            // Section 7 — Viewing Availability
+            'viewing_available_7days' => 'required|boolean',
+            'preferred_viewing_time' => ['required', Rule::in(self::VIEWING_TIMES)],
+
+            // Section 8 — Declaration & Consent
+            'confirm_accurate' => 'accepted',
+            'consent_collection' => 'accepted',
+        ]);
+
+        // This is the COLD expression-of-interest form. A separate HOT form may
+        // set form_type='hot' later; submissions are otherwise identical.
+        $data['form_type'] = 'cold';
+
+        EoiSubmission::create($data);
+
+        return redirect()->route('accommodation.eoi')
+            ->with('success', 'Thank you for registering with Exalt Property Management LTD.');
+    }
+
+    // Allowed option values — shared by validation and surfaced to the React form.
+    public const VISA_STATUSES = [
+        'New Zealand Citizen', 'Permanent Resident', 'Resident Visa',
+        'Work Visa', 'Student Visa', 'Visitor Visa', 'Other',
+    ];
+
+    public const NATIONALITIES = [
+        'New Zealander/Kiwi', 'Australian', 'Filipino', 'Indian', 'Chinese',
+        'Korean', 'Japanese', 'British', 'American', 'South African', 'Brazilian', 'Other',
+    ];
+
+    public const ROOM_TYPES = [
+        'One Single Room (shared toilet and bathroom)',
+        'One Ensuite Room (private toilet and bathroom)',
+        'Two Single Room (shared toilet and bathroom)',
+        'Two Ensuite Room (private toilet and bathroom)',
+        'One Single Room (shared toilet and bathroom) & One Ensuite Room (private toilet and bathroom)',
+    ];
+
+    public const STAY_DURATIONS = ['3 Months', '6 months', '12 months', '12+ months'];
+
+    public const OCCUPANTS = ['Just me', 'Me and My Partner'];
+
+    public const RENT_FUNDING = ['Employment / Work Income', 'Family Funded', 'Savings', 'Other'];
+
+    public const EMPLOYMENT_STATUSES = [
+        'Full-time employment', 'Part-time employment', 'Student', 'Self-employed', 'Other',
+    ];
+
+    public const LIVING_SITUATIONS = ['Renting', 'Boarding', 'Living with family'];
+
+    public const DRINKS = ['No', 'Socially', 'Regularly'];
+
+    public const WORK_HOURS = ['Day', 'Night', 'Shift Variables'];
+
+    public const VIEWING_TIMES = ['Weekdays', 'Weekends', 'Flexible'];
 }
