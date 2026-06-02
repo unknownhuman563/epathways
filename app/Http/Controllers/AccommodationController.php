@@ -29,16 +29,12 @@ class AccommodationController extends Controller
     }
 
     /**
-     * Exalt Property Management — Expression of Interest (COLD) form.
+     * Shared validation rules for both the COLD and HOT EOI forms.
+     * The HOT form adds 'property_interested' on top of these.
      */
-    public function eoiForm()
+    private function eoiRules(): array
     {
-        return inertia('accommodation/ExpressionOfInterest');
-    }
-
-    public function eoiStore(Request $request)
-    {
-        $data = $request->validate([
+        return [
             // Section 1 — Personal
             'full_legal_name' => 'required|string|max:255',
             'id_number' => 'required|string|max:255',
@@ -90,15 +86,50 @@ class AccommodationController extends Controller
             // Section 8 — Declaration & Consent
             'confirm_accurate' => 'accepted',
             'consent_collection' => 'accepted',
-        ]);
+        ];
+    }
 
-        // This is the COLD expression-of-interest form. A separate HOT form may
-        // set form_type='hot' later; submissions are otherwise identical.
+    /**
+     * Expression of Interest — COLD form (general registration).
+     */
+    public function eoiForm()
+    {
+        return inertia('accommodation/ExpressionOfInterest', ['variant' => 'cold']);
+    }
+
+    public function eoiStore(Request $request)
+    {
+        $data = $request->validate($this->eoiRules());
         $data['form_type'] = 'cold';
 
         EoiSubmission::create($data);
 
         return redirect()->route('accommodation.eoi')
+            ->with('success', 'Thank you for registering with Exalt Property Management LTD.');
+    }
+
+    /**
+     * Expression of Interest — HOT form (applicant ready to view a specific room).
+     * Optionally prefilled with the property the applicant came from.
+     */
+    public function eoiHotForm(Request $request)
+    {
+        return inertia('accommodation/ExpressionOfInterest', [
+            'variant' => 'hot',
+            'propertyPrefill' => $request->query('property'),
+        ]);
+    }
+
+    public function eoiHotStore(Request $request)
+    {
+        $data = $request->validate(array_merge($this->eoiRules(), [
+            'property_interested' => 'required|string|max:255',
+        ]));
+        $data['form_type'] = 'hot';
+
+        EoiSubmission::create($data);
+
+        return redirect()->route('accommodation.eoi-hot')
             ->with('success', 'Thank you for registering with Exalt Property Management LTD.');
     }
 

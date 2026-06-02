@@ -79,6 +79,26 @@ class EoiSubmissionTest extends TestCase
             ->assertSessionHasErrors(['visa_status_other']);
     }
 
+    public function test_hot_form_submits_with_property_interested(): void
+    {
+        $this->post('/accommodation/expression-of-interest-hot', $this->payload([
+            'property_interested' => 'Epsom Ensuite Room — Glenfield',
+        ]))->assertRedirect('/accommodation/expression-of-interest-hot');
+
+        $this->assertDatabaseHas('accommodation_eoi_submissions', [
+            'email' => 'jane@example.com',
+            'form_type' => 'hot',
+            'property_interested' => 'Epsom Ensuite Room — Glenfield',
+        ]);
+    }
+
+    public function test_hot_form_requires_property_interested(): void
+    {
+        $this->from('/accommodation/expression-of-interest-hot')
+            ->post('/accommodation/expression-of-interest-hot', $this->payload())
+            ->assertSessionHasErrors(['property_interested']);
+    }
+
     public function test_applications_index_requires_portal_access(): void
     {
         $this->get('/portal/accommodation/applications')->assertRedirect('/login');

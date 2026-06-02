@@ -16,7 +16,7 @@ class EoiSubmission extends Model
         'full_legal_name', 'id_number', 'visa_status', 'visa_status_other',
         'nationality', 'nationality_other', 'preferred_name', 'email', 'mobile', 'age',
         // Section 2
-        'room_type_interest', 'tenancy_start_date', 'stay_duration',
+        'room_type_interest', 'property_interested', 'tenancy_start_date', 'stay_duration',
         // Section 3
         'occupants', 'occupant_ages', 'has_children', 'children_ages', 'has_pets', 'pet_details',
         // Section 4

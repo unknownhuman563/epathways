@@ -94,7 +94,7 @@ const PropertyDetails = ({ property }) => {
                 </div>
               )}
 
-              <a href="#inquire" className="w-full py-4 bg-black text-white rounded-full font-bold hover:bg-gray-800 transition-colors shadow-lg shadow-black/20 text-center block">
+              <a href={`/accommodation/expression-of-interest-hot?property=${encodeURIComponent([property?.name, property?.suburb].filter(Boolean).join(' — '))}`} className="w-full py-4 bg-black text-white rounded-full font-bold hover:bg-gray-800 transition-colors shadow-lg shadow-black/20 text-center block">
                 Interested? Click here
               </a>
               <p className="text-center text-xs text-gray-500 mt-4">We'll get back to you within 24 hours</p>

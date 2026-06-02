@@ -23,7 +23,7 @@ const SECTIONS = [
 const SECTION_REQUIRED = [
     // Section 0 — Personal Details
     ['full_legal_name', 'id_number', 'visa_status', 'nationality', 'preferred_name', 'email', 'mobile', 'age'],
-    // Section 1 — Property & Room Interest
+    // Section 1 — Property & Room Interest (property_interested added conditionally via validateSection)
     ['room_type_interest', 'tenancy_start_date', 'stay_duration'],
     // Section 2 — Occupancy Details
     ['occupants', 'occupant_ages', 'has_children', 'has_pets'],
@@ -50,10 +50,13 @@ const ROOM_OPTIONS = [
 // ---------------------------------------------------------------------------
 // Validate a single section; returns error map { fieldName: message }
 // ---------------------------------------------------------------------------
-function validateSection(sectionIndex, data) {
+function validateSection(sectionIndex, data, isHot = false) {
     const errors = {};
 
-    const required = SECTION_REQUIRED[sectionIndex];
+    const required = [
+        ...SECTION_REQUIRED[sectionIndex],
+        ...(sectionIndex === 1 && isHot ? ['property_interested'] : []),
+    ];
 
     const isEmpty = (val) => {
         if (val === null || val === undefined) return true;
@@ -335,12 +338,35 @@ function Section1({ data, setData, localErrors, serverErrors }) {
     );
 }
 
-function Section2({ data, setData, localErrors, serverErrors }) {
+function Section2({ data, setData, localErrors, serverErrors, isHot }) {
     const err = (f) => localErrors[f] || serverErrors[f];
     const stayOptions = ['3 Months', '6 months', '12 months', '12+ months'];
 
     return (
         <div className="space-y-6">
+            {/* property_interested — HOT only */}
+            {isHot && (
+                <div>
+                    <Label required>Which property/accommodation are you interested in viewing?</Label>
+                    <HelpText>
+                        If you are unsure which property to select, please view our current available Auckland
+                        accommodation listings first.{" "}
+                        <a
+                            href="/accommodation"
+                            className="underline"
+                            style={{ color: PRIMARY }}
+                        >
+                            Click here to view available rooms for rent
+                        </a>
+                    </HelpText>
+                    <TextInput
+                        value={data.property_interested}
+                        onChange={(e) => setData('property_interested', e.target.value)}
+                    />
+                    <FieldError msg={err('property_interested')} />
+                </div>
+            )}
+
             {/* room_type_interest */}
             <div>
                 <Label required>Room type Interested in</Label>
@@ -721,7 +747,8 @@ function Section8({ data, setData, localErrors, serverErrors }) {
 // ---------------------------------------------------------------------------
 // Main component
 // ---------------------------------------------------------------------------
-export default function ExpressionOfInterest() {
+export default function ExpressionOfInterest({ variant = "cold", propertyPrefill = null }) {
+    const isHot = variant === "hot";
     const { flash } = usePage().props;
 
     const [currentStep, setCurrentStep] = useState(0); // 0-indexed
@@ -740,6 +767,7 @@ export default function ExpressionOfInterest() {
         mobile: '',
         age: '',
         // Section 2 — Property & Room Interest
+        property_interested: propertyPrefill ?? "",
         room_type_interest: '',
         tenancy_start_date: '',
         stay_duration: '',
@@ -778,7 +806,7 @@ export default function ExpressionOfInterest() {
     const progressPercent = Math.round(((currentStep + 1) / totalSteps) * 100);
 
     function handleNext() {
-        const errs = validateSection(currentStep, data);
+        const errs = validateSection(currentStep, data, isHot);
         if (Object.keys(errs).length > 0) {
             setLocalErrors(errs);
             return;
@@ -796,20 +824,20 @@ export default function ExpressionOfInterest() {
 
     function handleSubmit(e) {
         e.preventDefault();
-        const errs = validateSection(currentStep, data);
+        const errs = validateSection(currentStep, data, isHot);
         if (Object.keys(errs).length > 0) {
             setLocalErrors(errs);
             return;
         }
         setLocalErrors({});
-        post('/accommodation/expression-of-interest-cold');
+        post(isHot ? '/accommodation/expression-of-interest-hot' : '/accommodation/expression-of-interest-cold');
     }
 
     const sectionProps = { data, setData, localErrors, serverErrors };
 
     const sectionComponents = [
         <Section1 {...sectionProps} />,
-        <Section2 {...sectionProps} />,
+        <Section2 {...sectionProps} isHot={isHot} />,
         <Section3 {...sectionProps} />,
         <Section4 {...sectionProps} />,
         <Section5 {...sectionProps} />,
@@ -875,12 +903,38 @@ export default function ExpressionOfInterest() {
             {/* Page header */}
             <div className="mx-auto w-full max-w-3xl px-4 pt-16 pb-4">
                 <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-3">
-                    Exalt Property Management LTD – Expression of Interest (COLD)
+                    Exalt Property Management LTD – Expression of Interest ({isHot ? "HOT" : "COLD"})
                 </h1>
-                <p className="text-gray-500 text-sm leading-relaxed">
-                    Thank you for your interest in renting with Exalt Property Management. Please complete this
-                    registration form so we can assess suitability and arrange a viewing if applicable.
-                </p>
+                {isHot ? (
+                    <div className="text-gray-500 text-sm leading-relaxed space-y-2">
+                        <p>Thank you for your interest in renting with Exalt Property Management.</p>
+                        <p>
+                            Please do not continue with this form unless you already know which property has a room
+                            available that you are interested in viewing. This registration form is intended for
+                            applicants who are ready to proceed with a specific room viewing.
+                        </p>
+                        <p>
+                            Once submitted, our team will review your details and send a direct calendar booking
+                            link for your selected room/property if suitable.
+                        </p>
+                        <p>
+                            If you have not yet viewed our available Auckland accommodation listings and rooms for
+                            rent, please check our current available rooms first before completing this form:{" "}
+                            <a
+                                href="/accommodation"
+                                className="font-semibold underline"
+                                style={{ color: PRIMARY }}
+                            >
+                                View available rooms →
+                            </a>
+                        </p>
+                    </div>
+                ) : (
+                    <p className="text-gray-500 text-sm leading-relaxed">
+                        Thank you for your interest in renting with Exalt Property Management. Please complete this
+                        registration form so we can assess suitability and arrange a viewing if applicable.
+                    </p>
+                )}
             </div>
 
             {/* Wizard card */}

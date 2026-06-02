@@ -175,6 +175,9 @@ export default function ApplicationDetails({ submission, statuses = [] }) {
 
             {/* Section 2 — Property & Room Interest */}
             <Section title="Property & Room Interest">
+                {submission.property_interested && (
+                    <Row label="Property of interest" value={submission.property_interested} />
+                )}
                 <Row label="Room type" value={displayValue(submission.room_type_interest)} />
                 <Row label="Preferred start date" value={formatDate(submission.tenancy_start_date)} />
                 <Row label="Stay duration" value={displayValue(submission.stay_duration)} />
