@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Check, ArrowRight } from 'react-feather';
+import { Check, ArrowRight, Calendar, MessageCircle, Mail, Facebook, Linkedin } from 'react-feather';
+import { Link } from "@inertiajs/react";
 import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
 import ScrollToTop from "@/components/ui/ScrollToTop";
 import LearnAbout from "./LearnAbout";
 import ThreePillars from "./ThreePillars";
+import { team as teamMembers } from "@/data/team";
 
 // Import assets
 import GroupPic from "@assets/about_us/group_pic.png";
@@ -14,23 +16,19 @@ import DevLIA from "@assets/team/Dev.png";
 import LogoBackdrop from "@assets/newlogosite.png";
 import LogoBlack from "@assets/newlogosite.png";
 
-// Team Members Data
+// Team Members Data (images still needed for the world-map locations panels)
 import DevImg from "@assets/team/Dev.png";
 import DinaImg from "@assets/team/dina.png";
 import EmmaImg from "@assets/team/emma.png";
 import DaiImg from "@assets/team/dai.png";
 import EmilyImg from "@assets/team/emily.png";
-import NovaImg from "@assets/team/nova.png";
 import BryllImg from "@assets/team/bryll.png";
 
-const teamMembers = [
-    { name: "DAVID BHAGEERUTTY", role: "LICENCE IMMIGRATION ADVISER (PROVISIONAL) - 202401351", image: DevImg },
-    { name: "DINAH SUARIN", role: "CO, FOUNDING MEMBER", image: DinaImg },
-    { name: "EMMA CEBALLO", role: "PEOPLE JOURNEY EXPERIENCE CHAMPION", image: EmmaImg },
-    { name: "HENDRY DAI", role: "LICENCE IMMIGRATION ADVISER - IAA: 201500074", image: DaiImg },
-    { name: "EMILY DELA PENA", role: "FINANCE ADMIN CHAMPION", image: EmilyImg },
-    { name: "NOVA PALACA", role: "ADMIN CHAMPION", image: NovaImg }
-];
+// Quick-link icon button styling for the team grid (sits on the dark photo).
+const QUICK_ICON_CLASS =
+    "pointer-events-auto flex h-8 w-8 items-center justify-center rounded-full bg-white/15 text-white backdrop-blur-sm transition-all duration-200 hover:scale-110 hover:bg-[#436235]";
+// Strip non-digits for the wa.me link.
+const waNumber = (raw) => (raw || "").replace(/\D/g, "");
 
 export default function AboutUs() {
     const [activeLocation, setActiveLocation] = useState(null);
@@ -218,20 +216,65 @@ export default function AboutUs() {
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
-                        {teamMembers.map((member, index) => (
-                            <div key={index} className="group relative rounded-2xl overflow-hidden shadow-2xl bg-white aspect-[4/5] overflow-hidden">
+                        {teamMembers.map((member) => (
+                            <div
+                                key={member.slug}
+                                className="group relative rounded-2xl overflow-hidden shadow-2xl bg-white aspect-[4/5] transition-all duration-500 hover:-translate-y-1.5 hover:shadow-[0_25px_50px_-12px_rgba(67,98,53,0.45)]"
+                            >
                                 <img
                                     src={member.image}
                                     alt={member.name}
-                                    className="w-full h-full object-cover transition-all duration-700 group-hover:scale-105"
+                                    className="absolute inset-0 w-full h-full object-cover transition-all duration-700 group-hover:scale-105"
                                 />
-                                <div className="absolute inset-x-0 bottom-0 p-8 pt-20 bg-gradient-to-t from-black/80 via-black/40 to-transparent">
+
+                                {/* Whole-card click target → full profile (sits behind the quick icons) */}
+                                <Link
+                                    href={`/team/${member.slug}`}
+                                    aria-label={`View ${member.name}'s profile`}
+                                    className="absolute inset-0 z-10"
+                                />
+
+                                {/* Overlay: non-interactive except the quick-link icons */}
+                                <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 p-7 pt-20 bg-gradient-to-t from-black/85 via-black/45 to-transparent">
                                     <h3 className="text-lg font-bold text-white mb-1 uppercase tracking-tight leading-tight">
                                         {member.name}
                                     </h3>
-                                    <p className="text-[10px] text-gray-300 font-medium uppercase tracking-widest opacity-80 group-hover:opacity-100 transition-opacity">
+                                    <p className="text-[10px] text-gray-300 font-medium uppercase tracking-widest">
                                         {member.role}
                                     </p>
+
+                                    {/* Quick links */}
+                                    <div className="mt-4 flex items-center gap-2">
+                                        {member.links.booking ? (
+                                            <a href={member.links.booking} target="_blank" rel="noopener noreferrer" aria-label="Book a call" className={QUICK_ICON_CLASS}>
+                                                <Calendar className="w-3.5 h-3.5" />
+                                            </a>
+                                        ) : null}
+                                        {member.links.whatsapp ? (
+                                            <a href={`https://wa.me/${waNumber(member.links.whatsapp)}`} target="_blank" rel="noopener noreferrer" aria-label="WhatsApp" className={QUICK_ICON_CLASS}>
+                                                <MessageCircle className="w-3.5 h-3.5" />
+                                            </a>
+                                        ) : null}
+                                        {member.links.email ? (
+                                            <a href={`mailto:${member.links.email}`} aria-label="Email" className={QUICK_ICON_CLASS}>
+                                                <Mail className="w-3.5 h-3.5" />
+                                            </a>
+                                        ) : null}
+                                        {member.links.facebook ? (
+                                            <a href={member.links.facebook} target="_blank" rel="noopener noreferrer" aria-label="Facebook" className={QUICK_ICON_CLASS}>
+                                                <Facebook className="w-3.5 h-3.5" />
+                                            </a>
+                                        ) : null}
+                                        {member.links.linkedin ? (
+                                            <a href={member.links.linkedin} target="_blank" rel="noopener noreferrer" aria-label="LinkedIn" className={QUICK_ICON_CLASS}>
+                                                <Linkedin className="w-3.5 h-3.5" />
+                                            </a>
+                                        ) : null}
+                                    </div>
+
+                                    <span className="mt-3 inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-white/70 transition-colors group-hover:text-white">
+                                        View profile <ArrowRight className="w-3 h-3" />
+                                    </span>
                                 </div>
                             </div>
                         ))}
