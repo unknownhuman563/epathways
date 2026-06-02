@@ -71,8 +71,8 @@ Route::middleware('auth')->post('/admin/education/user-reviews/{id}', [UserRevie
 Route::get('/accommodation', [PublicAccommodationController::class, 'index']);
 // Expression of Interest — must be declared BEFORE /accommodation/{id} so the
 // literal path isn't captured as an {id}.
-Route::get('/accommodation/expression-of-interest', [PublicAccommodationController::class, 'eoiForm'])->name('accommodation.eoi');
-Route::post('/accommodation/expression-of-interest', [PublicAccommodationController::class, 'eoiStore'])->name('accommodation.eoi.store');
+Route::get('/accommodation/expression-of-interest-cold', [PublicAccommodationController::class, 'eoiForm'])->name('accommodation.eoi');
+Route::post('/accommodation/expression-of-interest-cold', [PublicAccommodationController::class, 'eoiStore'])->name('accommodation.eoi.store');
 Route::get('/accommodation/{id}', [PublicAccommodationController::class, 'show']);
 
 Route::get('/accommodation/{id}/checkout', function ($id) {

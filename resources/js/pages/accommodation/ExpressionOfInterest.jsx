@@ -802,7 +802,7 @@ export default function ExpressionOfInterest() {
             return;
         }
         setLocalErrors({});
-        post('/accommodation/expression-of-interest');
+        post('/accommodation/expression-of-interest-cold');
     }
 
     const sectionProps = { data, setData, localErrors, serverErrors };

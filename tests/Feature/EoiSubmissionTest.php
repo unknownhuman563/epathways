@@ -53,8 +53,8 @@ class EoiSubmissionTest extends TestCase
 
     public function test_public_can_submit_expression_of_interest(): void
     {
-        $this->post('/accommodation/expression-of-interest', $this->payload())
-            ->assertRedirect('/accommodation/expression-of-interest');
+        $this->post('/accommodation/expression-of-interest-cold', $this->payload())
+            ->assertRedirect('/accommodation/expression-of-interest-cold');
 
         $this->assertDatabaseHas('accommodation_eoi_submissions', [
             'email' => 'jane@example.com',
@@ -65,8 +65,8 @@ class EoiSubmissionTest extends TestCase
 
     public function test_submission_rejects_missing_required_fields(): void
     {
-        $this->from('/accommodation/expression-of-interest')
-            ->post('/accommodation/expression-of-interest', [])
+        $this->from('/accommodation/expression-of-interest-cold')
+            ->post('/accommodation/expression-of-interest-cold', [])
             ->assertSessionHasErrors(['full_legal_name', 'visa_status', 'email', 'confirm_accurate', 'consent_collection']);
 
         $this->assertDatabaseCount('accommodation_eoi_submissions', 0);
@@ -74,8 +74,8 @@ class EoiSubmissionTest extends TestCase
 
     public function test_other_visa_status_requires_detail(): void
     {
-        $this->from('/accommodation/expression-of-interest')
-            ->post('/accommodation/expression-of-interest', $this->payload(['visa_status' => 'Other', 'visa_status_other' => '']))
+        $this->from('/accommodation/expression-of-interest-cold')
+            ->post('/accommodation/expression-of-interest-cold', $this->payload(['visa_status' => 'Other', 'visa_status_other' => '']))
             ->assertSessionHasErrors(['visa_status_other']);
     }
 
