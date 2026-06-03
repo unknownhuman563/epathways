@@ -21,6 +21,7 @@ class PropertyController extends Controller
             'bed_type' => ['required', Rule::in(['single', 'double'])],
             'bathroom_type' => ['required', Rule::in(['shared', 'private'])],
             'includes' => 'nullable|string',
+            'map_url' => 'nullable|string|max:2000',
             'rent_single' => 'required|numeric|min:0',
             'rent_couple' => 'nullable|numeric|min:0',
             'bills_excluded' => 'boolean',

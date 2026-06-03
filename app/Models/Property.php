@@ -16,7 +16,7 @@ class Property extends Model
     protected $fillable = [
         'name', 'slug', 'location', 'suburb', 'room_type', 'has_wardrobe', 'bed_type',
         'bathroom_type', 'includes', 'rent_single', 'rent_couple',
-        'bills_excluded', 'description', 'status',
+        'bills_excluded', 'description', 'map_url', 'status',
     ];
 
     protected $casts = [

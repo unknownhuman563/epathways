@@ -122,9 +122,13 @@ const Accommodation = ({ properties = [] }) => {
             <div className="flex items-center space-x-4 pt-2">
               <a
                 href="#properties"
+                onClick={(e) => {
+                  e.preventDefault();
+                  document.getElementById('properties')?.scrollIntoView({ behavior: 'smooth' });
+                }}
                 className="px-8 py-3.5 bg-gray-200/60 hover:bg-gray-200 text-black rounded-full text-sm font-bold transition-colors"
               >
-                Browse stays
+                Browse Properties
               </a>
               <a
                 href="/booking"
@@ -254,7 +258,7 @@ const Accommodation = ({ properties = [] }) => {
       </section>
 
       {/* Main Accommodation Section */}
-      <section className="container mx-auto px-4 py-24 max-w-7xl text-center" id="properties">
+      <section className="container mx-auto px-4 py-24 max-w-7xl text-center scroll-mt-24" id="properties">
         <p className="text-[10px] font-bold tracking-[0.3em] text-gray-400 mb-6 uppercase">Accommodation Layout Pack</p>
         <h2 className="text-5xl md:text-6xl font-bold tracking-tight mb-16">accommodation</h2>
 
