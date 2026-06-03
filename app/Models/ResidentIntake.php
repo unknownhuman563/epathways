@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Traits\LogsActivity;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class ResidentIntake extends Model
 {
@@ -11,6 +12,12 @@ class ResidentIntake extends Model
 
     protected $fillable = [
         'intake_id',
+        'payment_status',
+        'payment_session_id',
+        'payment_amount_cents',
+        'payment_currency',
+        'paid_at',
+        'booking_id',
         'first_name',
         'last_name',
         'dob',
@@ -63,5 +70,17 @@ class ResidentIntake extends Model
         'hourly_rate' => 'decimal:2',
         'nz_skilled_years' => 'decimal:1',
         'total_skilled_years' => 'decimal:1',
+        'paid_at' => 'datetime',
+        'payment_amount_cents' => 'int',
     ];
+
+    public function booking(): BelongsTo
+    {
+        return $this->belongsTo(Booking::class);
+    }
+
+    public function isPaid(): bool
+    {
+        return $this->payment_status === 'paid';
+    }
 }

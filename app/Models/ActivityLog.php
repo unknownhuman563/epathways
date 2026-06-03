@@ -16,12 +16,18 @@ class ActivityLog extends Model
         'description',
         'properties',
         'ip_address',
+        'entity_type',
+        'entity_id',
+        'changes',
+        'metadata',
     ];
 
     protected function casts(): array
     {
         return [
             'properties' => 'array',
+            'changes'    => 'array',
+            'metadata'   => 'array',
         ];
     }
 

@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Assessment;
 use App\Models\ResidentIntake;
+use App\Models\VisaType;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -161,12 +163,33 @@ class ResidentIntakeController extends Controller
                 ]
             ));
 
+            // Wrap the form submission in an Assessment record — the
+            // visa-type-agnostic "applicant journey" shell that owns locked
+            // pricing + payment + booking. Resident intake = SMC visa type.
+            $visaType = VisaType::query()
+                ->where('code', 'SMC')
+                ->orWhere('category', 'Resident')
+                ->first();
+
+            $assessment = Assessment::create([
+                'visa_type_id'         => $visaType?->id,
+                'intakeable_type'      => ResidentIntake::class,
+                'intakeable_id'        => $intake->id,
+                'applicant_first_name' => $intake->first_name,
+                'applicant_last_name'  => $intake->last_name,
+                'applicant_email'      => $intake->email,
+                'applicant_phone'      => $intake->phone,
+                'status'               => 'submitted',
+            ]);
+            if ($visaType) {
+                $assessment->lockCurrentPrice();
+            }
+
             DB::commit();
 
-            return redirect()->back()->with([
-                'success'   => true,
-                'intake_id' => $intake->intake_id,
-            ]);
+            // Pay → Book runs off the assessment token, not the intake_id —
+            // future visa types reuse the exact same flow.
+            return redirect()->route('assessment.pay', $assessment->token);
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error('Resident intake storage failed', ['error' => $e->getMessage()]);

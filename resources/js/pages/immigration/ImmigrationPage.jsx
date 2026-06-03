@@ -668,11 +668,10 @@ export default function Immigration({ reviews = [], stats = { count: 0, average:
                 </div>
             </section>
 
-            {/* ══════════════════════════════════════════════════════════════
-                RESIDENT INTAKE SECTION  —  Skilled Migrant Category
-                Hero + Inline Registration Form
-            ══════════════════════════════════════════════════════════════ */}
-            <ResidentIntakeSection />
+            {/* Resident Intake hero section removed — the Residency Visa
+                card in the "Select your visa pathway" grid below routes
+                directly to /resident-interest, so the duplicate CTA hero
+                is no longer needed. */}
 
             {/* ══════════════════════════════════════════════════════════════
                 ASSESSMENT VISAS SECTION
@@ -691,42 +690,60 @@ export default function Immigration({ reviews = [], stats = { count: 0, average:
                         </p>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
                         {[
-                            { title: "Student Visa", desc: "Study at leading institutions with full support for admissions and visa processing.", img: StudentVisaImg, link: "/visa-assessment-form?type=student" },
-                            { title: "Work Visa", desc: "Secure international employment through skilled migration and employer programs.", img: WorkVisaImg, link: "/visa-assessment-form?type=work" },
-                            { title: "Visitor Visa", desc: "Experience new destinations for tourism, business, or visiting family and friends.", img: VisitorVisaImg, link: "/visa-assessment-form?type=visitor" },
-                            { title: "Family Visa", desc: "Reunite with your loved ones through partner, parent, and dependent child pathways.", img: SettleVisaImg, link: "/visa-assessment-form?type=family" },
-                            { title: "Residency Visa", desc: "Navigate the complex path to permanent residency with end-to-end expert guidance.", img: ResidencyImg, link: "/visa-assessment-form?type=residency" },
-                            { title: "General Assessment", desc: "Unsure which visa suits you? Let our experts evaluate your profile and find the best option.", img: GuidanceImg, link: "/visa-assessment-form?type=general" },
+                            { title: "Student Visa",      desc: "Study at leading institutions with full support for admissions and visa processing.",        img: StudentVisaImg, link: "/student-interest" },
+                            { title: "Work Visa",         desc: "Secure international employment through skilled migration and employer programs.",            img: WorkVisaImg,    link: "/work-interest" },
+                            { title: "Visitor Visa",      desc: "Experience new destinations for tourism, business, or visiting family and friends.",          img: VisitorVisaImg, link: "/visitor-interest" },
+                            { title: "Residency Visa",    desc: "Navigate the complex path to permanent residency with end-to-end expert guidance.",           img: ResidencyImg,   link: "/resident-interest" },
+                            { title: "Family Visa",       desc: "Reunite with your loved ones through partner, parent, and dependent child pathways.",         img: SettleVisaImg,  comingSoon: true },
+                            { title: "General Assessment", desc: "Unsure which visa suits you? Let our experts evaluate your profile and find the best option.", img: GuidanceImg,    comingSoon: true },
                         ].map((visa, idx) => (
-                            <motion.div 
+                            <motion.div
                                 key={idx}
                                 initial={{ opacity: 0, y: 20 }}
                                 whileInView={{ opacity: 1, y: 0 }}
                                 viewport={{ once: true }}
-                                transition={{ delay: idx * 0.1 }}
-                                className="group relative h-[400px] md:h-[450px] rounded-sm overflow-hidden bg-[#282728]"
+                                transition={{ delay: idx * 0.08 }}
+                                className={`group relative h-[280px] md:h-[300px] rounded-2xl overflow-hidden bg-[#282728] ${visa.comingSoon ? 'opacity-90' : ''}`}
                             >
-                                <img 
-                                    src={visa.img} 
-                                    alt={visa.title} 
-                                    className="absolute inset-0 w-full h-full object-cover opacity-60 group-hover:opacity-40 group-hover:scale-105 transition-all duration-700"
+                                <img
+                                    src={visa.img}
+                                    alt={visa.title}
+                                    className={`absolute inset-0 w-full h-full object-cover transition-all duration-700 ${
+                                        visa.comingSoon
+                                            ? 'opacity-40 grayscale'
+                                            : 'opacity-60 group-hover:opacity-40 group-hover:scale-105'
+                                    }`}
                                 />
                                 <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent"></div>
-                                <div className="absolute inset-0 p-8 flex flex-col justify-end items-start">
-                                    <h3 className="text-2xl font-medium text-white mb-3">
+
+                                {visa.comingSoon && (
+                                    <span className="absolute top-4 right-4 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-400/90 text-amber-950 text-[10px] font-black uppercase tracking-[0.2em] shadow-md">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-amber-900" />
+                                        Coming soon
+                                    </span>
+                                )}
+
+                                <div className="absolute inset-0 p-6 flex flex-col justify-end items-start">
+                                    <h3 className="text-xl font-semibold text-white mb-2">
                                         {visa.title}
                                     </h3>
-                                    <p className="text-gray-300 text-sm leading-relaxed mb-6 max-w-[90%] group-hover:text-white transition-colors duration-300">
+                                    <p className="text-gray-300 text-xs leading-relaxed mb-4 max-w-[95%] group-hover:text-white transition-colors duration-300">
                                         {visa.desc}
                                     </p>
-                                    <a 
-                                        href={visa.link}
-                                        className="inline-flex items-center gap-3 bg-white text-[#282728] px-6 py-3 text-[11px] font-bold uppercase tracking-widest hover:bg-[#00A693] hover:text-white transition-all duration-300"
-                                    >
-                                        Assess now <ArrowRight size={14} />
-                                    </a>
+                                    {visa.comingSoon ? (
+                                        <span className="inline-flex items-center gap-2 bg-white/15 backdrop-blur-sm text-white/80 px-4 py-2 rounded-lg text-[10px] font-bold uppercase tracking-[0.2em] cursor-not-allowed">
+                                            Available soon
+                                        </span>
+                                    ) : (
+                                        <a
+                                            href={visa.link}
+                                            className="inline-flex items-center gap-2 bg-white text-[#282728] px-4 py-2 rounded-lg text-[10px] font-bold uppercase tracking-[0.2em] hover:bg-[#00A693] hover:text-white transition-all duration-300"
+                                        >
+                                            Assess now <ArrowRight size={12} />
+                                        </a>
+                                    )}
                                 </div>
                             </motion.div>
                         ))}

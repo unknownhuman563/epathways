@@ -18,7 +18,7 @@ export default function SalesLayout({ children }) {
 
         { name: "Work", section: true },
         { name: "Leads",     href: "/portal/sales/leads",     icon: <Users size={20} />,        badge: badges.new_leads_today, badgeTone: "default" },
-        { name: "Tasks & Follow-ups", href: "/portal/sales/tasks", icon: <CheckSquare size={20} />, badge: badges.tasks_open, badgeTone: badges.tasks_overdue > 0 ? "danger" : "default" },
+        { name: "Task Board", href: "/portal/sales/tasks", icon: <CheckSquare size={20} />, badge: badges.tasks_open, badgeTone: badges.tasks_overdue > 0 ? "danger" : "default" },
         { name: "Bookings",  href: "/portal/sales/bookings",  icon: <CalendarCheck size={20} />, badge: badges.bookings_this_week, badgeTone: "default" },
         { name: "Reports",   href: "/portal/sales/reports",   icon: <LineChart size={20} /> },
 
