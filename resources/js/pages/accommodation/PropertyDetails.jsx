@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Head } from '@inertiajs/react';
+import { motion, AnimatePresence } from 'framer-motion';
 import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
 
@@ -104,10 +105,10 @@ const PropertyDetails = ({ property }) => {
               <button
                 type="button"
                 onClick={() => setLightboxOpen(true)}
-                className="absolute bottom-4 left-4 inline-flex items-center gap-2 bg-white/90 backdrop-blur text-black text-xs font-bold px-4 py-2 rounded-full shadow-md hover:bg-white transition-colors"
+                className="absolute bottom-5 left-5 inline-flex items-center gap-2.5 bg-white text-black text-sm font-bold px-5 py-3 rounded-full shadow-lg hover:scale-105 hover:shadow-xl transition-all duration-200"
               >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M4 8V4h4M16 4h4v4M20 16v4h-4M8 20H4v-4" /></svg>
-                View gallery
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M4 8V4h4M16 4h4v4M20 16v4h-4M8 20H4v-4" /></svg>
+                View all {images.length} photo{images.length === 1 ? '' : 's'}
               </button>
 
               {images.length > 1 && (
@@ -228,8 +229,16 @@ const PropertyDetails = ({ property }) => {
       <Footer />
 
       {/* Fullscreen gallery (lightbox) */}
-      {lightboxOpen && images.length > 0 && (
-        <div className="fixed inset-0 z-[100] bg-black/95 flex flex-col" onClick={() => setLightboxOpen(false)}>
+      <AnimatePresence>
+        {lightboxOpen && images.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="fixed inset-0 z-[100] bg-black/95 flex flex-col"
+            onClick={() => setLightboxOpen(false)}
+          >
           {/* Top bar */}
           <div className="flex items-center justify-between px-4 sm:px-6 py-4 text-white" onClick={(e) => e.stopPropagation()}>
             <span className="text-sm font-semibold">{activeImage + 1} / {images.length}</span>
@@ -246,7 +255,11 @@ const PropertyDetails = ({ property }) => {
               </button>
             )}
 
-            <img
+            <motion.img
+              key={activeImage}
+              initial={{ opacity: 0, scale: 0.97 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.25 }}
               src={images[activeImage]}
               alt={property?.name}
               onClick={(e) => e.stopPropagation()}
@@ -277,8 +290,9 @@ const PropertyDetails = ({ property }) => {
               ))}
             </div>
           )}
-        </div>
-      )}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };
