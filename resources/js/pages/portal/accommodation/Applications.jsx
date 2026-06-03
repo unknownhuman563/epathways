@@ -1,6 +1,7 @@
-import { useState } from "react";
-import { Head, Link } from "@inertiajs/react";
-import { ClipboardList, Eye } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Head, Link, router } from "@inertiajs/react";
+import { ClipboardList, Eye, Search } from "lucide-react";
+import Pagination from "@/components/ui/Pagination";
 
 function formTypeBadgeClass(type) {
     return type === "hot" ? "bg-rose-50 text-rose-700" : "bg-sky-50 text-sky-700";
@@ -27,49 +28,89 @@ function formatDate(value) {
     return isNaN(d.getTime()) ? "—" : d.toLocaleDateString();
 }
 
-export default function Applications({ submissions = [], statuses = [] }) {
-    const [filterStatus, setFilterStatus] = useState("all");
+export default function Applications({ submissions = {}, statuses = [], filters = {} }) {
+    const rows = submissions.data ?? [];
+    const currentStatus = filters.status ?? "all";
+    const formType = filters.form_type ?? "all";
+    const [search, setSearch] = useState(filters.search ?? "");
 
-    const visible =
-        filterStatus === "all"
-            ? submissions
-            : submissions.filter((s) => s.status === filterStatus);
+    const applyFilters = (next = {}) => {
+        const merged = {
+            search: next.search !== undefined ? next.search : search,
+            status: next.status !== undefined ? next.status : currentStatus,
+            form_type: next.form_type !== undefined ? next.form_type : formType,
+        };
+        const query = {};
+        if (merged.search) query.search = merged.search;
+        if (merged.status !== "all") query.status = merged.status;
+        if (merged.form_type !== "all") query.form_type = merged.form_type;
+        router.get("/portal/accommodation/applications", query, {
+            preserveScroll: true,
+            preserveState: true,
+            replace: true,
+        });
+    };
+
+    // Debounce the search box.
+    useEffect(() => {
+        const t = setTimeout(() => {
+            if ((filters.search ?? "") !== search) applyFilters({ search });
+        }, 400);
+        return () => clearTimeout(t);
+    }, [search]);
 
     return (
         <div className="space-y-6 max-w-7xl mx-auto">
-            <Head title="Applications" />
+            <Head title="Leads" />
 
             {/* Header */}
-            <div className="flex items-center justify-between">
-                <div>
-                    <h1 className="text-2xl font-bold text-gray-900">Applications</h1>
-                    <p className="text-sm text-gray-500">
-                        Expression of Interest submissions from the public form.
-                    </p>
-                </div>
+            <div>
+                <h1 className="text-2xl font-bold text-gray-900">Leads</h1>
+                <p className="text-sm text-gray-500">
+                    Expression of Interest submissions from the public form.
+                </p>
+            </div>
 
-                {/* Status filter */}
-                <div>
-                    <select
-                        value={filterStatus}
-                        onChange={(e) => setFilterStatus(e.target.value)}
-                        className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm text-gray-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-rose-500"
-                    >
-                        <option value="all">All statuses</option>
-                        {statuses.map((s) => (
-                            <option key={s} value={s} className="capitalize">
-                                {s.charAt(0).toUpperCase() + s.slice(1)}
-                            </option>
-                        ))}
-                    </select>
+            {/* Filters */}
+            <div className="flex flex-col sm:flex-row gap-3">
+                <div className="relative flex-1">
+                    <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <input
+                        type="text"
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                        placeholder="Search name, email or mobile…"
+                        className="w-full rounded-xl border border-gray-200 bg-white pl-9 pr-4 py-2 text-sm text-gray-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-rose-500"
+                    />
                 </div>
+                <select
+                    value={currentStatus}
+                    onChange={(e) => applyFilters({ status: e.target.value })}
+                    className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm text-gray-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-rose-500"
+                >
+                    <option value="all">All statuses</option>
+                    {statuses.map((s) => (
+                        <option key={s} value={s} className="capitalize">
+                            {s.charAt(0).toUpperCase() + s.slice(1)}
+                        </option>
+                    ))}
+                </select>
+                <select
+                    value={formType}
+                    onChange={(e) => applyFilters({ form_type: e.target.value })}
+                    className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm text-gray-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-rose-500"
+                >
+                    <option value="all">All types</option>
+                    <option value="hot">Hot</option>
+                    <option value="cold">Cold</option>
+                </select>
             </div>
 
             {/* Empty state */}
-            {visible.length === 0 ? (
+            {rows.length === 0 ? (
                 <div className="rounded-3xl border border-dashed border-gray-200 bg-white p-16 text-center">
                     <ClipboardList className="mx-auto mb-3 text-gray-300" size={40} />
-                    <p className="font-semibold text-gray-900">No applications yet</p>
+                    <p className="font-semibold text-gray-900">No leads yet</p>
                     <p className="text-sm text-gray-500">
                         Submissions from the public Expression of Interest form will appear here.
                     </p>
@@ -89,7 +130,7 @@ export default function Applications({ submissions = [], statuses = [] }) {
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-50">
-                            {visible.map((sub) => (
+                            {rows.map((sub) => (
                                 <tr key={sub.id} className="hover:bg-gray-50/50">
                                     <td className="px-6 py-4">
                                         <p className="font-semibold text-gray-900">
@@ -138,6 +179,8 @@ export default function Applications({ submissions = [], statuses = [] }) {
                     </table>
                 </div>
             )}
+
+            <Pagination links={submissions.links} />
         </div>
     );
 }

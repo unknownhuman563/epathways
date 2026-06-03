@@ -44,7 +44,7 @@ class AccommodationPublicTest extends TestCase
     {
         $property = $this->make();
 
-        $this->get("/accommodation/{$property->id}")
+        $this->get("/accommodation/{$property->slug}")
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
                 ->component('accommodation/PropertyDetails')
@@ -55,6 +55,6 @@ class AccommodationPublicTest extends TestCase
     {
         $property = $this->make(['status' => 'unavailable']);
 
-        $this->get("/accommodation/{$property->id}")->assertNotFound();
+        $this->get("/accommodation/{$property->slug}")->assertNotFound();
     }
 }

@@ -1,26 +1,97 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Swiper, SwiperSlide } from 'swiper/react';
+import { Autoplay } from 'swiper';
+import 'swiper/css';
 import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
 import CrossPillarBundles from '@/components/ui/CrossPillarBundles';
 import BeforeFooterCTA from '@/components/ui/BeforeFooterCTA';
 
+// Split the free-text "includes" into bullets on commas — but ignore commas
+// inside parentheses, e.g. "Shared common areas (fridge, dining table)" stays one item.
+function splitIncludes(text) {
+  if (!text) return [];
+  const items = [];
+  let depth = 0;
+  let current = '';
+  for (const ch of text) {
+    if (ch === '(') depth++;
+    else if (ch === ')') depth = Math.max(0, depth - 1);
+    if (ch === ',' && depth === 0) {
+      if (current.trim()) items.push(current.trim());
+      current = '';
+    } else {
+      current += ch;
+    }
+  }
+  if (current.trim()) items.push(current.trim());
+  return items;
+}
+
 const Accommodation = ({ properties = [] }) => {
-  const [activeTab, setActiveTab] = useState('All');
+  const [search, setSearch] = useState('');
+  const [roomFilter, setRoomFilter] = useState('all');
   const [bedFilter, setBedFilter] = useState('all');
   const [suburbFilter, setSuburbFilter] = useState('all');
 
-  const tabs = ['All', 'Single', 'Ensuite'];
-
   const money = (v) => (v == null ? null : `$${Number(v).toFixed(0)}`);
 
-  // Suburbs present in the current listings (drives the suburb dropdown).
+  // Suburbs present in the current listings (drives the location dropdown).
   const suburbs = [...new Set(properties.map((p) => p.suburb).filter(Boolean))].sort();
 
+  // Hero carousel — ALL property images, randomized (falls back to a stock photo).
+  const heroImages = useMemo(() => {
+    const imgs = properties.flatMap((p) => (p.images?.map((i) => i.url) ?? [])).filter(Boolean);
+    const pool = imgs.length > 0 ? imgs : ['https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?ixlib=rb-4.0.3&auto=format&fit=crop&w=1200&q=80'];
+    return pool
+      .map((url) => ({ url, sort: Math.random() }))
+      .sort((a, b) => a.sort - b.sort)
+      .map((x) => x.url);
+  }, [properties]);
+
+  const [heroIndex, setHeroIndex] = useState(0);
+  useEffect(() => {
+    if (heroImages.length <= 1) return;
+    const t = setInterval(() => setHeroIndex((i) => (i + 1) % heroImages.length), 3500);
+    return () => clearInterval(t);
+  }, [heroImages]);
+
+  const [swiperRef, setSwiperRef] = useState(null);
+
+  // Repeat the list so Swiper's loop always has enough slides (>= 8) to cycle
+  // smoothly even with only a few listings — otherwise it sticks at the end.
+  const carouselItems = useMemo(() => {
+    if (properties.length === 0) return [];
+    const items = [...properties];
+    while (items.length < 8) items.push(...properties);
+    return items;
+  }, [properties]);
+
+  const GridImageCard = ({ property }) => (
+    <a href={`/accommodation/${property.slug}`} className="space-y-4 cursor-pointer group block">
+      <div className="relative rounded-[2rem] overflow-hidden h-64 bg-gray-100">
+        {property.cover_image ? (
+          <img src={property.cover_image} alt={property.name} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center text-gray-300 text-sm">No image</div>
+        )}
+      </div>
+      <div className="flex justify-between items-center px-1 gap-2">
+        <span className="font-bold text-sm truncate">{property.name}</span>
+        <span className="text-gray-400 text-[11px] font-medium shrink-0">{property.suburb || property.location || 'New Zealand'}</span>
+      </div>
+    </a>
+  );
+
   const filtered = properties.filter((p) => {
-    const roomOk = activeTab === 'All' || p.room_type === activeTab.toLowerCase();
+    const roomOk = roomFilter === 'all' || p.room_type === roomFilter;
     const bedOk = bedFilter === 'all' || p.bed_type === bedFilter;
     const suburbOk = suburbFilter === 'all' || p.suburb === suburbFilter;
-    return roomOk && bedOk && suburbOk;
+    const q = search.trim().toLowerCase();
+    const searchOk = !q || [p.name, p.suburb, p.location, p.includes]
+      .filter(Boolean)
+      .some((v) => v.toLowerCase().includes(q));
+    return roomOk && bedOk && suburbOk && searchOk;
   });
 
   return (
@@ -80,63 +151,72 @@ const Accommodation = ({ properties = [] }) => {
             </div>
           </div>
 
-          {/* Right Image */}
+          {/* Right Image — auto-rotating carousel of property images */}
           <div className="lg:w-7/12">
-            <img 
-              src="https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?ixlib=rb-4.0.3&auto=format&fit=crop&w=1200&q=80" 
-              alt="Beautiful living room" 
-              className="w-full h-[550px] object-cover rounded-[2.5rem]"
-            />
+            <div className="relative w-full h-[550px] rounded-[2.5rem] overflow-hidden bg-gray-100">
+              {heroImages.map((url, i) => (
+                <img
+                  key={i}
+                  src={url}
+                  alt="Featured accommodation"
+                  className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-1000 ease-in-out ${i === heroIndex ? 'opacity-100' : 'opacity-0'}`}
+                />
+              ))}
+            </div>
           </div>
         </div>
       </section>
 
       {/* Grid Images Section */}
       <section className="container mx-auto px-4 py-8 max-w-7xl">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-          <div className="space-y-4 cursor-pointer group">
-            <div className="relative rounded-[2rem] overflow-hidden">
-                <img src="https://images.unsplash.com/photo-1540518614846-7eded433c457?ixlib=rb-4.0.3&auto=format&fit=crop&w=600&q=80" alt="Room 1" className="w-full h-64 object-cover transition-transform duration-700 group-hover:scale-105" />
-                <div className="absolute top-4 right-4 bg-white/90 p-2 rounded-full backdrop-blur-sm">
-                    <svg className="w-4 h-4 text-black" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" /></svg>
-                </div>
-            </div>
-            <div className="flex justify-between items-center px-1">
-              <span className="font-bold text-xs">3BHK Flat</span>
-              <span className="text-gray-400 text-[10px] font-medium">Auckland, New Zealand</span>
-            </div>
-          </div>
-          
-          <div className="space-y-4 cursor-pointer group">
-            <div className="relative rounded-[2rem] overflow-hidden">
-                <img src="https://images.unsplash.com/photo-1554995207-c18c203602cb?ixlib=rb-4.0.3&auto=format&fit=crop&w=600&q=80" alt="Room 2" className="w-full h-64 object-cover transition-transform duration-700 group-hover:scale-105" />
-                <div className="absolute top-4 right-4 bg-white/90 p-2 rounded-full backdrop-blur-sm">
-                    <svg className="w-4 h-4 text-black" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" /></svg>
-                </div>
-            </div>
-            <div className="flex justify-between items-center px-1">
-              <span className="font-bold text-xs">3BHK Flat</span>
-              <span className="text-gray-400 text-[10px] font-medium">Auckland, New Zealand</span>
-            </div>
-          </div>
+        {properties.length > 0 ? (
+          <div className="relative">
+            <Swiper
+              onSwiper={setSwiperRef}
+              modules={[Autoplay]}
+              spaceBetween={24}
+              slidesPerView={1.2}
+              loop={true}
+              loopAdditionalSlides={4}
+              speed={800}
+              autoplay={{ delay: 2500, disableOnInteraction: false, pauseOnMouseEnter: true }}
+              breakpoints={{
+                640: { slidesPerView: 2 },
+                768: { slidesPerView: 3 },
+                1024: { slidesPerView: 4 },
+              }}
+            >
+              {carouselItems.map((p, i) => (
+                <SwiperSlide key={i}>
+                  <GridImageCard property={p} />
+                </SwiperSlide>
+              ))}
+            </Swiper>
 
-          <div className="flex flex-col justify-center space-y-4 p-4 pl-8">
-            <p className="text-[10px] font-bold tracking-[0.15em] text-gray-400 uppercase">Divi Pixel Layout Pack</p>
-            <h3 className="text-xl font-bold leading-snug">Best option to stay here for your summer vacations</h3>
-            <div className="pt-4">
-                <a href="#properties" className="flex items-center space-x-2 text-xs font-bold w-fit hover:text-gray-600 transition-colors group">
-                  <span>Explore More</span>
-                  <div className="bg-black text-white p-1 rounded-full group-hover:scale-110 transition-transform">
-                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7"></path></svg>
-                  </div>
-                </a>
-            </div>
+            {properties.length > 1 && (
+              <>
+                <button
+                  type="button"
+                  aria-label="Previous"
+                  onClick={() => swiperRef?.slidePrev()}
+                  className="absolute left-0 top-32 -translate-y-1/2 z-10 -ml-2 lg:-ml-5 w-11 h-11 rounded-full bg-white shadow-[0_4px_20px_-4px_rgba(0,0,0,0.2)] flex items-center justify-center text-black hover:bg-gray-50 transition-colors"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
+                </button>
+                <button
+                  type="button"
+                  aria-label="Next"
+                  onClick={() => swiperRef?.slideNext()}
+                  className="absolute right-0 top-32 -translate-y-1/2 z-10 -mr-2 lg:-mr-5 w-11 h-11 rounded-full bg-white shadow-[0_4px_20px_-4px_rgba(0,0,0,0.2)] flex items-center justify-center text-black hover:bg-gray-50 transition-colors"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
+                </button>
+              </>
+            )}
           </div>
-
-          <div className="rounded-[2rem] overflow-hidden">
-             <img src="https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?ixlib=rb-4.0.3&auto=format&fit=crop&w=600&q=80" className="w-full h-64 object-cover" alt="Room 3" />
-          </div>
-        </div>
+        ) : (
+          <p className="text-center text-gray-400 py-8">No properties to show yet.</p>
+        )}
       </section>
 
       {/* Amenities Overview Section */}
@@ -178,27 +258,31 @@ const Accommodation = ({ properties = [] }) => {
         <p className="text-[10px] font-bold tracking-[0.3em] text-gray-400 mb-6 uppercase">Accommodation Layout Pack</p>
         <h2 className="text-5xl md:text-6xl font-bold tracking-tight mb-16">accommodation</h2>
 
-        {/* Tabs */}
-        <div className="flex justify-center mb-8 overflow-x-auto">
-          <div className="flex space-x-2 bg-gray-50/80 p-1.5 rounded-2xl">
-            {tabs.map((tab) => (
-              <button
-                key={tab}
-                onClick={() => setActiveTab(tab)}
-                className={`px-12 py-4 rounded-xl text-xs font-bold transition-all ${
-                  activeTab === tab
-                    ? 'bg-white shadow-[0_2px_10px_-4px_rgba(0,0,0,0.1)] text-black'
-                    : 'text-gray-400 hover:text-black'
-                }`}
-              >
-                {tab}
-              </button>
-            ))}
+        {/* Filters */}
+        <div className="max-w-4xl mx-auto mb-16 flex flex-col sm:flex-row flex-wrap justify-center gap-3">
+          <div className="relative flex-1 min-w-[200px]">
+            <svg className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M11 19a8 8 0 100-16 8 8 0 000 16z" />
+            </svg>
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search by name, location or features…"
+              className="w-full rounded-full border border-gray-200 bg-white pl-11 pr-5 py-3 text-xs font-bold text-gray-600 focus:border-black focus:ring-black"
+            />
           </div>
-        </div>
 
-        {/* Dropdown filters */}
-        <div className="flex flex-wrap justify-center gap-3 mb-16">
+          <select
+            value={roomFilter}
+            onChange={(e) => setRoomFilter(e.target.value)}
+            className="rounded-full border border-gray-200 bg-white px-5 py-3 text-xs font-bold text-gray-600 cursor-pointer focus:border-black focus:ring-black"
+          >
+            <option value="all">All room types</option>
+            <option value="single">Single</option>
+            <option value="ensuite">Ensuite</option>
+          </select>
+
           <select
             value={bedFilter}
             onChange={(e) => setBedFilter(e.target.value)}
@@ -229,7 +313,7 @@ const Accommodation = ({ properties = [] }) => {
             </div>
           ) : (
             filtered.map((acc) => (
-              <div key={acc.id} className="bg-white rounded-[2rem] p-4 lg:p-6 grid grid-cols-1 lg:grid-cols-4 gap-8 items-center shadow-[0_4px_20px_-4px_rgba(0,0,0,0.03)] hover:shadow-[0_8px_30px_-4px_rgba(0,0,0,0.08)] transition-shadow">
+              <div key={acc.id} className="bg-white rounded-[2rem] p-4 lg:p-6 grid grid-cols-1 lg:grid-cols-4 gap-5 items-center shadow-[0_4px_20px_-4px_rgba(0,0,0,0.03)] hover:shadow-[0_8px_30px_-4px_rgba(0,0,0,0.08)] transition-shadow">
 
                 {/* Column 1: Image */}
                 <div className="relative w-full h-64 lg:h-full min-h-[260px]">
@@ -244,10 +328,10 @@ const Accommodation = ({ properties = [] }) => {
                 </div>
 
                 {/* Column 2: Title */}
-                <div className="flex flex-col justify-between h-full py-4 lg:pr-8 lg:border-r border-gray-100">
+                <div className="flex flex-col justify-between h-full py-4 lg:pr-6 lg:border-r border-gray-100">
                   <div>
                     <p className="text-[10px] font-bold tracking-[0.2em] text-gray-400 mb-2 uppercase">{[acc.suburb, acc.location].filter(Boolean).join(' · ') || 'New Zealand'}</p>
-                    <h3 className="text-xl font-bold leading-snug">{acc.name}</h3>
+                    <h3 className="text-2xl lg:text-3xl font-bold leading-tight tracking-tight">{acc.name}</h3>
                     {acc.includes && (
                       <p className="text-[11px] text-gray-400 mt-3 leading-relaxed line-clamp-3">{acc.includes}</p>
                     )}
@@ -255,13 +339,23 @@ const Accommodation = ({ properties = [] }) => {
                 </div>
 
                 {/* Column 3: Rent & Info */}
-                <div className="h-full py-4 lg:px-8 lg:border-r border-gray-100">
-                  <div className="mb-6">
-                    <h4 className="text-3xl font-bold">{money(acc.rent_single)}<span className="text-sm text-gray-400 font-medium">/week</span></h4>
-                    <p className="text-[10px] text-gray-400 mt-1">single occupant{acc.bills_excluded ? ' · excl. bills' : ''}</p>
+                <div className="h-full py-4 lg:px-6 lg:border-r border-gray-100">
+                  <div className="mb-6 rounded-2xl border border-[#436235]/15 bg-[#436235]/5 p-4">
+                    <div className="flex items-baseline justify-between gap-2">
+                      <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-[#436235]">Single</span>
+                      <span className="text-3xl font-extrabold text-[#282728] leading-none">
+                        {money(acc.rent_single)}<span className="text-xs text-gray-400 font-medium">/wk</span>
+                      </span>
+                    </div>
                     {acc.rent_couple != null && (
-                      <p className="text-xs text-gray-500 mt-1">{money(acc.rent_couple)}/week for a couple</p>
+                      <div className="flex items-baseline justify-between gap-2 mt-3 pt-3 border-t border-[#436235]/15">
+                        <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-[#436235]">Couple</span>
+                        <span className="text-2xl font-extrabold text-[#282728] leading-none">
+                          {money(acc.rent_couple)}<span className="text-xs text-gray-400 font-medium">/wk</span>
+                        </span>
+                      </div>
                     )}
+                    <p className="text-[10px] text-gray-400 mt-3">{acc.bills_excluded ? 'Excludes bills' : 'Bills included'}</p>
                   </div>
 
                   <p className="text-[11px] font-bold mb-3">Room details</p>
@@ -274,12 +368,25 @@ const Accommodation = ({ properties = [] }) => {
                 </div>
 
                 {/* Column 4: CTA */}
-                <div className="flex flex-col justify-between h-full py-4 lg:pl-8">
-                  <div className="space-y-3 text-[11px] text-gray-500">
-                    <p className="font-bold text-sm text-black">What's included</p>
-                    <p className="leading-relaxed line-clamp-5">{acc.includes || 'Contact us for the full list of inclusions.'}</p>
+                <div className="flex flex-col justify-between h-full py-4 lg:pl-6">
+                  <div className="space-y-3">
+                    <p className="text-[10px] font-bold tracking-[0.2em] text-gray-400 uppercase">What's included</p>
+                    {splitIncludes(acc.includes).length > 0 ? (
+                      <ul className="space-y-2">
+                        {splitIncludes(acc.includes).map((item, i) => (
+                          <li key={i} className="flex items-start gap-2 text-[12px] text-gray-700 leading-snug">
+                            <svg className="w-4 h-4 text-[#436235] shrink-0 mt-0.5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                            </svg>
+                            <span>{item}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="text-[11px] text-gray-400 leading-relaxed">Contact us for the full list of inclusions.</p>
+                    )}
                   </div>
-                  <a href={`/accommodation/${acc.id}`} className="w-full mt-8 py-4 bg-black text-white rounded-full text-sm font-bold hover:bg-gray-800 transition-colors shadow-lg shadow-black/20 text-center block">
+                  <a href={`/accommodation/${acc.slug}`} className="w-full mt-8 py-4 bg-black text-white rounded-full text-sm font-bold hover:bg-gray-800 transition-colors shadow-lg shadow-black/20 text-center block">
                     View details
                   </a>
                 </div>

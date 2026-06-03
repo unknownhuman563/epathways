@@ -1,10 +1,21 @@
 import React from 'react';
+import { Head } from '@inertiajs/react';
 import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
 import QuickLeadForm from '@/components/ui/QuickLeadForm';
 
 const PropertyDetails = ({ property }) => {
   const id = property?.id;
+
+  // Return the user to where they were (preserves their scroll on the listing).
+  // Falls back to the listings section if they opened this page directly.
+  const goBack = () => {
+    if (window.history.length > 1) {
+      window.history.back();
+    } else {
+      window.location.href = '/accommodation#properties';
+    }
+  };
   const images = property?.images?.map((i) => i.url) ?? [];
   const money = (v) => (v == null ? null : `$${Number(v).toFixed(0)}`);
 
@@ -20,6 +31,18 @@ const PropertyDetails = ({ property }) => {
       <Navbar />
 
       <main className="container mx-auto px-4 py-12 max-w-7xl">
+        <Head title={property?.name ?? 'Accommodation'} />
+
+        {/* Back button */}
+        <button
+          type="button"
+          onClick={goBack}
+          className="inline-flex items-center gap-2 text-sm font-semibold text-gray-500 hover:text-black mb-6 transition-colors"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
+          Back to accommodation
+        </button>
+
         {/* Header */}
         <div className="mb-8 flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
           <div>

@@ -4,7 +4,7 @@ import { LayoutDashboard, Home, ClipboardList } from "lucide-react";
 const ACCOMMODATION_NAV = [
     { name: "Dashboard", href: "/portal/accommodation/dashboard", icon: <LayoutDashboard size={20} /> },
     { name: "Properties", href: "/portal/accommodation/properties", icon: <Home size={20} /> },
-    { name: "Applications", href: "/portal/accommodation/applications", icon: <ClipboardList size={20} /> },
+    { name: "Leads", href: "/portal/accommodation/applications", icon: <ClipboardList size={20} /> },
 ];
 
 export default function AccommodationLayout({ children }) {
