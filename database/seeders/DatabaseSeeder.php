@@ -18,5 +18,6 @@ class DatabaseSeeder extends Seeder
         $this->call(AdminSeeder::class);
         $this->call(PortalUsersSeeder::class);
         $this->call(ProgramSeeder::class);
+        $this->call(PropertySeeder::class);
     }
 }
