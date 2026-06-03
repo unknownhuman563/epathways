@@ -67,7 +67,7 @@ export default function ApplicationDetails({ submission, statuses = [] }) {
     };
 
     const handleDelete = () => {
-        if (confirm(`Delete application from "${submission.full_legal_name}"? This cannot be undone.`)) {
+        if (confirm(`Delete lead from "${submission.full_legal_name}"? This cannot be undone.`)) {
             router.delete(`/portal/accommodation/applications/${submission.id}`);
         }
     };
@@ -95,7 +95,7 @@ export default function ApplicationDetails({ submission, statuses = [] }) {
 
     return (
         <div className="space-y-6 max-w-4xl mx-auto">
-            <Head title={`Application — ${submission.full_legal_name}`} />
+            <Head title={`Lead — ${submission.full_legal_name}`} />
 
             {/* Back link */}
             <Link
@@ -103,7 +103,7 @@ export default function ApplicationDetails({ submission, statuses = [] }) {
                 className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-rose-600 transition-colors"
             >
                 <ArrowLeft size={15} />
-                Back to applications
+                Back to leads
             </Link>
 
             {/* Page header */}

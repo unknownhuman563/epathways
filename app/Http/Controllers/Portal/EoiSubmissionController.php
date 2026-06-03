@@ -11,13 +11,30 @@ class EoiSubmissionController extends Controller
 {
     public const STATUSES = ['new', 'reviewed', 'shortlisted', 'declined'];
 
-    public function index()
+    public function index(Request $request)
     {
-        $submissions = EoiSubmission::latest()->get();
+        $status = $request->query('status');
+        $search = $request->query('search');
+        $formType = $request->query('form_type');
+
+        $submissions = EoiSubmission::latest()
+            ->when(
+                in_array($status, self::STATUSES, true),
+                fn ($q) => $q->where('status', $status)
+            )
+            ->when(in_array($formType, ['hot', 'cold'], true), fn ($q) => $q->where('form_type', $formType))
+            ->when($search, fn ($q) => $q->where(fn ($w) => $w
+                ->where('full_legal_name', 'like', "%{$search}%")
+                ->orWhere('preferred_name', 'like', "%{$search}%")
+                ->orWhere('email', 'like', "%{$search}%")
+                ->orWhere('mobile', 'like', "%{$search}%")))
+            ->paginate(10)
+            ->withQueryString();
 
         return inertia('portal/accommodation/Applications', [
             'submissions' => $submissions,
             'statuses' => self::STATUSES,
+            'filters' => ['status' => $status, 'search' => $search, 'form_type' => $formType],
         ]);
     }
 

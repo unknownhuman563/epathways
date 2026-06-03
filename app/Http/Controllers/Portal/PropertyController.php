@@ -31,11 +31,34 @@ class PropertyController extends Controller
         ];
     }
 
-    public function index()
+    public function index(Request $request)
     {
-        $properties = Property::with('images')->latest()->get();
+        $search = $request->query('search');
+        $status = $request->query('status');
+        $roomType = $request->query('room_type');
+        $bedType = $request->query('bed_type');
 
-        return inertia('portal/accommodation/Properties', ['properties' => $properties]);
+        $properties = Property::with('images')
+            ->when($search, fn ($q) => $q->where(fn ($w) => $w
+                ->where('name', 'like', "%{$search}%")
+                ->orWhere('location', 'like', "%{$search}%")
+                ->orWhere('suburb', 'like', "%{$search}%")))
+            ->when(in_array($status, ['available', 'unavailable'], true), fn ($q) => $q->where('status', $status))
+            ->when(in_array($roomType, ['single', 'ensuite'], true), fn ($q) => $q->where('room_type', $roomType))
+            ->when(in_array($bedType, ['single', 'double'], true), fn ($q) => $q->where('bed_type', $bedType))
+            ->latest()
+            ->paginate(10)
+            ->withQueryString();
+
+        return inertia('portal/accommodation/Properties', [
+            'properties' => $properties,
+            'filters' => [
+                'search' => $search,
+                'status' => $status,
+                'room_type' => $roomType,
+                'bed_type' => $bedType,
+            ],
+        ]);
     }
 
     public function create()

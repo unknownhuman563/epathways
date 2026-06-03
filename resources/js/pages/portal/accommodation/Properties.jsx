@@ -1,7 +1,43 @@
+import { useState, useEffect } from "react";
 import { Head, Link, router } from "@inertiajs/react";
-import { Plus, Pencil, Trash2, Home } from "lucide-react";
+import { Plus, Pencil, Trash2, Home, Search } from "lucide-react";
+import Pagination from "@/components/ui/Pagination";
 
-export default function Properties({ properties = [] }) {
+export default function Properties({ properties = {}, filters = {} }) {
+    const rows = properties.data ?? [];
+    const [search, setSearch] = useState(filters.search ?? "");
+    const status = filters.status ?? "all";
+    const roomType = filters.room_type ?? "all";
+    const bedType = filters.bed_type ?? "all";
+    const hasFilters = Boolean(search) || status !== "all" || roomType !== "all" || bedType !== "all";
+
+    const applyFilters = (next = {}) => {
+        const merged = {
+            search: next.search !== undefined ? next.search : search,
+            status: next.status !== undefined ? next.status : status,
+            room_type: next.room_type !== undefined ? next.room_type : roomType,
+            bed_type: next.bed_type !== undefined ? next.bed_type : bedType,
+        };
+        const query = {};
+        if (merged.search) query.search = merged.search;
+        if (merged.status !== "all") query.status = merged.status;
+        if (merged.room_type !== "all") query.room_type = merged.room_type;
+        if (merged.bed_type !== "all") query.bed_type = merged.bed_type;
+        router.get("/portal/accommodation/properties", query, {
+            preserveState: true,
+            preserveScroll: true,
+            replace: true,
+        });
+    };
+
+    // Debounce the search box so we don't hit the server on every keystroke.
+    useEffect(() => {
+        const t = setTimeout(() => {
+            if ((filters.search ?? "") !== search) applyFilters({ search });
+        }, 400);
+        return () => clearTimeout(t);
+    }, [search]);
+
     const destroy = (property) => {
         if (confirm(`Delete "${property.name}"? This removes its images too.`)) {
             router.delete(`/portal/accommodation/properties/${property.id}`, {
@@ -29,11 +65,52 @@ export default function Properties({ properties = [] }) {
                 </Link>
             </div>
 
-            {properties.length === 0 ? (
+            {/* Filters */}
+            <div className="flex flex-col sm:flex-row gap-3">
+                <div className="relative flex-1">
+                    <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <input
+                        type="text"
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                        placeholder="Search by name, suburb or location…"
+                        className="w-full rounded-xl border border-gray-200 bg-white pl-9 pr-4 py-2 text-sm text-gray-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-rose-500"
+                    />
+                </div>
+                <select
+                    value={status}
+                    onChange={(e) => applyFilters({ status: e.target.value })}
+                    className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm text-gray-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-rose-500"
+                >
+                    <option value="all">All statuses</option>
+                    <option value="available">Available</option>
+                    <option value="unavailable">Unavailable</option>
+                </select>
+                <select
+                    value={roomType}
+                    onChange={(e) => applyFilters({ room_type: e.target.value })}
+                    className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm text-gray-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-rose-500"
+                >
+                    <option value="all">All room types</option>
+                    <option value="single">Single</option>
+                    <option value="ensuite">Ensuite</option>
+                </select>
+                <select
+                    value={bedType}
+                    onChange={(e) => applyFilters({ bed_type: e.target.value })}
+                    className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm text-gray-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-rose-500"
+                >
+                    <option value="all">All beds</option>
+                    <option value="single">Single bed</option>
+                    <option value="double">Double bed</option>
+                </select>
+            </div>
+
+            {rows.length === 0 ? (
                 <div className="rounded-3xl border border-dashed border-gray-200 bg-white p-16 text-center">
                     <Home className="mx-auto mb-3 text-gray-300" size={40} />
-                    <p className="font-semibold text-gray-900">No properties yet</p>
-                    <p className="text-sm text-gray-500">Add your first listing to populate the accommodation page.</p>
+                    <p className="font-semibold text-gray-900">{hasFilters ? "No matching properties" : "No properties yet"}</p>
+                    <p className="text-sm text-gray-500">{hasFilters ? "Try adjusting your search or filter." : "Add your first listing to populate the accommodation page."}</p>
                 </div>
             ) : (
                 <div className="overflow-hidden rounded-3xl border border-gray-50 bg-white shadow-sm">
@@ -48,7 +125,7 @@ export default function Properties({ properties = [] }) {
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-50">
-                            {properties.map((p) => (
+                            {rows.map((p) => (
                                 <tr key={p.id} className="hover:bg-gray-50/50">
                                     <td className="px-6 py-4">
                                         <div className="flex items-center gap-3">
@@ -102,6 +179,8 @@ export default function Properties({ properties = [] }) {
                     </table>
                 </div>
             )}
+
+            <Pagination links={properties.links} />
         </div>
     );
 }

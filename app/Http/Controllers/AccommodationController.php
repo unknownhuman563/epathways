@@ -19,11 +19,12 @@ class AccommodationController extends Controller
         return inertia('accommodation/AccommodationPage', ['properties' => $properties]);
     }
 
-    public function show($id)
+    public function show($slug)
     {
         $property = Property::with('images')
             ->where('status', 'available')
-            ->findOrFail($id);
+            ->where('slug', $slug)
+            ->firstOrFail();
 
         return inertia('accommodation/PropertyDetails', ['property' => $property]);
     }

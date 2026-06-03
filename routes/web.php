@@ -75,7 +75,7 @@ Route::get('/accommodation/expression-of-interest-cold', [PublicAccommodationCon
 Route::post('/accommodation/expression-of-interest-cold', [PublicAccommodationController::class, 'eoiStore'])->name('accommodation.eoi.store');
 Route::get('/accommodation/expression-of-interest-hot', [PublicAccommodationController::class, 'eoiHotForm'])->name('accommodation.eoi-hot');
 Route::post('/accommodation/expression-of-interest-hot', [PublicAccommodationController::class, 'eoiHotStore'])->name('accommodation.eoi-hot.store');
-Route::get('/accommodation/{id}', [PublicAccommodationController::class, 'show']);
+Route::get('/accommodation/{slug}', [PublicAccommodationController::class, 'show']);
 
 Route::get('/accommodation/{id}/checkout', function ($id) {
     return inertia('accommodation/Checkout', ['id' => $id]);
