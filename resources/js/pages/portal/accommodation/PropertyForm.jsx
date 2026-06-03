@@ -19,6 +19,7 @@ export default function PropertyForm({ property = null }) {
         rent_couple: property?.rent_couple ?? "",
         bills_excluded: property?.bills_excluded ?? true,
         description: property?.description ?? "",
+        map_url: property?.map_url ?? "",
         status: property?.status ?? "available",
         images: [],
     });
@@ -177,6 +178,12 @@ export default function PropertyForm({ property = null }) {
                         <label className={label}>Description (optional)</label>
                         <textarea rows={3} className={field} value={data.description} onChange={(e) => setData("description", e.target.value)} />
                         {err("description")}
+                    </div>
+
+                    <div className="md:col-span-2">
+                        <label className={label}>Google Maps link (optional)</label>
+                        <input className={field} value={data.map_url} onChange={(e) => setData("map_url", e.target.value)} placeholder="Paste a Google Maps link to show the location on the listing" />
+                        {err("map_url")}
                     </div>
 
                     <div>

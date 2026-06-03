@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import Logo from "@assets/newlogosite.png";
+import ExaltLogo from "@assets/accomodation/exaltlogo.jpg";
 
 const NAV_LINKS = [
     { href: "/", label: "Home" },
@@ -31,14 +32,19 @@ const Navbar = () => {
     const toggleMenu = () => setIsOpen((v) => !v);
     const closeMenu = () => setIsOpen(false);
     const isShowingGetStarted = currentPath !== "/booking";
+    const isAccommodation = currentPath.startsWith("/accommodation");
 
     return (
         <nav className="sticky top-0 z-50 bg-white text-black shadow-md font-urbanist">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 sm:py-4 flex items-center justify-between gap-4">
                 {/* Logo */}
                 <div className="w-20 sm:w-24 lg:w-28 xl:w-32 cursor-pointer flex-shrink-0">
-                    <a href="/" onClick={closeMenu}>
-                        <img src={Logo} alt="ePathways" className="w-full h-auto transition-transform duration-200 hover:scale-105" />
+                    <a href={isAccommodation ? "/accommodation" : "/"} onClick={closeMenu}>
+                        <img
+                            src={isAccommodation ? ExaltLogo : Logo}
+                            alt={isAccommodation ? "Exalt Property Management" : "ePathways"}
+                            className="w-full h-auto rounded transition-transform duration-200 hover:scale-105"
+                        />
                     </a>
                 </div>
 
