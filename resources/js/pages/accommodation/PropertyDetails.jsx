@@ -1,183 +1,298 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import { Head } from '@inertiajs/react';
+import { motion, AnimatePresence } from 'framer-motion';
 import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
-import QuickLeadForm from '@/components/ui/QuickLeadForm';
 
-const PropertyDetails = ({ id }) => {
-  // In a real app, you would fetch data based on the ID. Using dummy data for now.
-  const property = {
-    title: "Premium Villa Selection",
-    subtitle: "Luxurious stay with ocean views in Auckland",
-    rating: 4.8,
-    reviews: 124,
-    location: "Auckland, New Zealand",
-    price: "$250",
-    description: "Experience the ultimate luxury in the heart of Auckland. This stunning premium villa offers breathtaking ocean views, state-of-the-art amenities, and a serene environment perfect for your summer vacations or extended stays. Designed with modern aesthetics and comfort in mind.",
-    host: "Michael Doe",
-    images: [
-      "https://images.unsplash.com/photo-1512918728675-ed5a9ecdebfd?ixlib=rb-4.0.3&auto=format&fit=crop&w=1200&q=80",
-      "https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
-      "https://images.unsplash.com/photo-1505691938895-1758d7feb511?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
-    ],
-    features: [
-      { name: "Total Rooms", value: "2 King + 1 Queen" },
-      { name: "Bathrooms", value: "2 Attached" },
-      { name: "Internet", value: "500Mbps High Speed" },
-      { name: "Parking", value: "Yes Two Covered" },
-      { name: "Kitchen", value: "Fully Equipped" },
-      { name: "Pool", value: "Private Heated" },
-    ]
+const PropertyDetails = ({ property }) => {
+  // Return the user to where they were (preserves their scroll on the listing).
+  // Falls back to the listings section if they opened this page directly.
+  const goBack = () => {
+    if (window.history.length > 1) {
+      window.history.back();
+    } else {
+      window.location.href = '/accommodation#properties';
+    }
   };
+  const images = property?.images?.map((i) => i.url) ?? [];
+  const money = (v) => (v == null ? null : `$${Number(v).toFixed(0)}`);
+
+  const [activeImage, setActiveImage] = useState(0);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const prevImage = () => setActiveImage((i) => (i - 1 + images.length) % images.length);
+  const nextImage = () => setActiveImage((i) => (i + 1) % images.length);
+
+  // Keyboard controls + lock page scroll while the fullscreen gallery is open.
+  useEffect(() => {
+    if (!lightboxOpen) return;
+    const onKey = (e) => {
+      if (e.key === 'Escape') setLightboxOpen(false);
+      if (e.key === 'ArrowLeft') prevImage();
+      if (e.key === 'ArrowRight') nextImage();
+    };
+    document.addEventListener('keydown', onKey);
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.body.style.overflow = '';
+    };
+  }, [lightboxOpen, images.length]);
+
+  const features = [
+    { name: 'Room type', value: property?.room_type, cap: true },
+    { name: 'Bed', value: property?.bed_type ? `${property.bed_type} mattress` : null, cap: true },
+    { name: 'Wardrobe', value: property?.has_wardrobe ? 'Yes' : 'No' },
+    { name: 'Bathroom', value: property?.bathroom_type, cap: true },
+  ].filter((f) => f.value);
+
+  // Embeddable Google map — use the precise pin from a pasted Maps link if
+  // available, otherwise fall back to the suburb / location.
+  const mapSrc = (() => {
+    const url = property?.map_url;
+    if (url) {
+      const place = url.match(/!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)/);
+      const at = url.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
+      const coords = place ? `${place[1]},${place[2]}` : at ? `${at[1]},${at[2]}` : null;
+      if (coords) return `https://maps.google.com/maps?q=${coords}&z=16&output=embed`;
+    }
+    const q = [property?.location, property?.suburb].filter(Boolean).join(', ');
+    return q ? `https://maps.google.com/maps?q=${encodeURIComponent(q)}&z=14&output=embed` : null;
+  })();
 
   return (
     <div className="bg-[#fafafa] min-h-screen font-urbanist text-black selection:bg-[#436235] selection:text-white">
       <Navbar />
 
-      {/* Main Content */}
       <main className="container mx-auto px-4 py-12 max-w-7xl">
-        
-        {/* Header section */}
+        <Head title={property?.name ?? 'Accommodation'} />
+
+        {/* Back button */}
+        <button
+          type="button"
+          onClick={goBack}
+          className="inline-flex items-center gap-2 text-sm font-semibold text-gray-500 hover:text-black mb-6 transition-colors"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
+          Back to accommodation
+        </button>
+
+        {/* Header */}
         <div className="mb-8 flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
           <div>
             <div className="flex items-center space-x-3 mb-3">
-              <span className="px-3 py-1 bg-gray-100 text-xs font-bold uppercase tracking-wider rounded-full">Top Rated</span>
-              <div className="flex items-center space-x-1 text-sm font-semibold">
-                <svg className="w-4 h-4 text-black" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" /></svg>
-                <span>{property.rating} ({property.reviews} reviews)</span>
-              </div>
-              <span className="text-gray-400">•</span>
-              <span className="text-sm text-gray-500 font-medium underline cursor-pointer">{property.location}</span>
+              <span className="px-3 py-1 bg-gray-100 text-xs font-bold uppercase tracking-wider rounded-full capitalize">{property?.room_type} room</span>
+              {(property?.suburb || property?.location) && (
+                <span className="text-sm text-gray-500 font-medium">{[property?.suburb, property?.location].filter(Boolean).join(' · ')}</span>
+              )}
             </div>
-            <h1 className="text-4xl md:text-5xl font-bold tracking-tight mb-2">{property.title}</h1>
-            <p className="text-gray-500 text-lg">{property.subtitle}</p>
-          </div>
-
-          <div className="flex items-center space-x-4 shrink-0">
-            <button className="flex items-center space-x-2 text-sm font-bold border border-gray-200 px-4 py-2 rounded-full hover:bg-gray-50 transition-colors">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" /></svg>
-              <span>Share</span>
-            </button>
-            <button className="flex items-center space-x-2 text-sm font-bold border border-gray-200 px-4 py-2 rounded-full hover:bg-gray-50 transition-colors">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" /></svg>
-              <span>Save</span>
-            </button>
+            <h1 className="text-4xl md:text-5xl font-bold tracking-tight mb-2">{property?.name}</h1>
+            {property?.description && <p className="text-gray-500 text-lg">{property.description}</p>}
           </div>
         </div>
 
-        {/* Image Gallery */}
-        <div className="grid grid-cols-1 md:grid-cols-4 grid-rows-2 gap-4 h-[500px] md:h-[600px] mb-16">
-          <div className="md:col-span-2 row-span-2 rounded-[2rem] overflow-hidden group">
-            <img src={property.images[0]} alt="Main view" className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
-          </div>
-          <div className="rounded-[2rem] overflow-hidden group md:col-span-2 row-span-1">
-            <img src={property.images[1]} alt="View 2" className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
-          </div>
-          <div className="rounded-[2rem] overflow-hidden group md:col-span-2 row-span-1">
-            <img src={property.images[2]} alt="View 3" className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
-          </div>
-        </div>
+        {/* Image gallery — one large image + clickable thumbnails */}
+        {images.length > 0 && (
+          <div className="mb-16">
+            {/* Main image */}
+            <div className="relative w-full h-[360px] sm:h-[460px] md:h-[560px] rounded-[2rem] overflow-hidden bg-gray-100">
+              <img
+                src={images[activeImage]}
+                alt={property?.name}
+                onClick={() => setLightboxOpen(true)}
+                className="w-full h-full object-cover cursor-zoom-in"
+              />
 
-        {/* Content Section */}
+              <button
+                type="button"
+                onClick={() => setLightboxOpen(true)}
+                className="absolute bottom-5 left-5 inline-flex items-center gap-2.5 bg-white text-black text-sm font-bold px-5 py-3 rounded-full shadow-lg hover:scale-105 hover:shadow-xl transition-all duration-200"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M4 8V4h4M16 4h4v4M20 16v4h-4M8 20H4v-4" /></svg>
+                View all {images.length} photo{images.length === 1 ? '' : 's'}
+              </button>
+
+              {images.length > 1 && (
+                <>
+                  <button
+                    type="button"
+                    aria-label="Previous image"
+                    onClick={prevImage}
+                    className="absolute left-4 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-white/90 backdrop-blur shadow-md flex items-center justify-center text-black hover:bg-white transition-colors"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
+                  </button>
+                  <button
+                    type="button"
+                    aria-label="Next image"
+                    onClick={nextImage}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-white/90 backdrop-blur shadow-md flex items-center justify-center text-black hover:bg-white transition-colors"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
+                  </button>
+                  <div className="absolute bottom-4 right-4 bg-black/60 text-white text-xs font-semibold px-3 py-1.5 rounded-full">
+                    {activeImage + 1} / {images.length}
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Thumbnails */}
+            {images.length > 1 && (
+              <div className="mt-4 flex gap-3 overflow-x-auto pb-1">
+                {images.map((img, i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    onClick={() => setActiveImage(i)}
+                    className={`relative h-20 w-28 shrink-0 rounded-2xl overflow-hidden border-2 transition ${
+                      i === activeImage ? 'border-[#436235]' : 'border-transparent opacity-60 hover:opacity-100'
+                    }`}
+                  >
+                    <img src={img} alt={`View ${i + 1}`} className="w-full h-full object-cover" />
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Content */}
         <div className="flex flex-col lg:flex-row gap-16">
-          
-          {/* Left info */}
           <div className="lg:w-2/3 space-y-12">
-            
-            {/* Host info */}
-            <div className="flex justify-between items-center py-6 border-b border-gray-200">
+            {property?.includes && (
               <div>
-                <h3 className="text-xl font-bold mb-1">Hosted by {property.host}</h3>
-                <p className="text-sm text-gray-500">Superhost • 5 years hosting</p>
+                <h3 className="text-2xl font-bold mb-4">About this space</h3>
+                <p className="text-gray-600 leading-relaxed text-lg">{property.includes}</p>
               </div>
-              <div className="w-16 h-16 rounded-full bg-gray-200 overflow-hidden">
-                <img src="https://images.unsplash.com/photo-1560250097-0b93528c311a?ixlib=rb-4.0.3&auto=format&fit=crop&w=200&q=80" alt="Host" className="w-full h-full object-cover" />
-              </div>
-            </div>
+            )}
 
-            {/* Description */}
-            <div>
-              <h3 className="text-2xl font-bold mb-4">About this space</h3>
-              <p className="text-gray-600 leading-relaxed text-lg">{property.description}</p>
-            </div>
-
-            {/* Features Grid */}
             <div>
               <h3 className="text-2xl font-bold mb-6">What this place offers</h3>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
-                {property.features.map((feature, idx) => (
+                {features.map((feature, idx) => (
                   <div key={idx} className="flex flex-col space-y-1 p-4 bg-gray-50 rounded-2xl">
                     <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">{feature.name}</span>
-                    <span className="font-semibold">{feature.value}</span>
+                    <span className={`font-semibold ${feature.cap ? 'capitalize' : ''}`}>{feature.value}</span>
                   </div>
                 ))}
               </div>
             </div>
-
           </div>
 
-          {/* Right Sidebar */}
+          {/* Sidebar */}
           <div className="lg:w-1/3">
             <div className="sticky top-28 bg-white p-8 rounded-[2rem] shadow-[0_8px_30px_rgb(0,0,0,0.08)] border border-gray-100">
-              <div className="mb-6 flex items-end justify-between">
-                <div>
-                  <span className="text-4xl font-bold">{property.price}</span>
-                  <span className="text-gray-500 ml-1">/ week</span>
+              <div className="mb-6 rounded-2xl border border-[#436235]/15 bg-[#436235]/5 p-5">
+                <div className="flex items-baseline justify-between gap-2">
+                  <span className="text-[11px] font-bold uppercase tracking-[0.15em] text-[#436235]">Single</span>
+                  <span className="text-4xl font-extrabold text-[#282728] leading-none">
+                    {money(property?.rent_single)}<span className="text-sm text-gray-400 font-medium">/wk</span>
+                  </span>
                 </div>
-              </div>
-              
-              <div className="border border-gray-200 rounded-2xl overflow-hidden mb-6">
-                <div className="flex border-b border-gray-200">
-                  <div className="w-1/2 p-3 border-r border-gray-200 cursor-pointer hover:bg-gray-50 transition-colors">
-                    <div className="text-[10px] font-bold uppercase tracking-wider text-gray-500 mb-1">Check-in</div>
-                    <div className="text-sm font-semibold">Add date</div>
+                {property?.rent_couple != null && (
+                  <div className="mt-4 pt-4 border-t border-[#436235]/15 flex items-baseline justify-between gap-2">
+                    <span className="text-[11px] font-bold uppercase tracking-[0.15em] text-[#436235]">Couple</span>
+                    <span className="text-3xl font-extrabold text-[#282728] leading-none">
+                      {money(property.rent_couple)}<span className="text-sm text-gray-400 font-medium">/wk</span>
+                    </span>
                   </div>
-                  <div className="w-1/2 p-3 cursor-pointer hover:bg-gray-50 transition-colors">
-                    <div className="text-[10px] font-bold uppercase tracking-wider text-gray-500 mb-1">Checkout</div>
-                    <div className="text-sm font-semibold">Add date</div>
-                  </div>
-                </div>
-                <div className="p-3 cursor-pointer hover:bg-gray-50 transition-colors">
-                  <div className="text-[10px] font-bold uppercase tracking-wider text-gray-500 mb-1">Guests</div>
-                  <div className="text-sm font-semibold">1 guest</div>
-                </div>
+                )}
+                <p className="text-[11px] text-gray-400 mt-4">single occupant{property?.bills_excluded ? ' · excludes bills' : ''}</p>
               </div>
 
-              <a href={`/accommodation/${id}/checkout`} className="w-full py-4 bg-black text-white rounded-full font-bold hover:bg-gray-800 transition-colors shadow-lg shadow-black/20 text-center block">
-                Reserve
+              <a href={`/accommodation/expression-of-interest-hot?property=${encodeURIComponent([property?.name, property?.suburb].filter(Boolean).join(' — '))}`} className="w-full py-4 bg-black text-white rounded-full font-bold hover:bg-gray-800 transition-colors shadow-lg shadow-black/20 text-center block">
+                Interested? Click here
               </a>
-              <p className="text-center text-xs text-gray-500 mt-4">You won't be charged yet</p>
+              <p className="text-center text-xs text-gray-500 mt-4">We'll get back to you within 24 hours</p>
             </div>
           </div>
         </div>
+
+        {mapSrc && (
+          <div className="mt-16">
+            <h3 className="text-2xl font-bold mb-6">Location</h3>
+            <div className="rounded-[2rem] overflow-hidden border border-gray-100 h-[400px]">
+              <iframe
+                src={mapSrc}
+                title="Property location"
+                className="w-full h-full"
+                style={{ border: 0 }}
+                loading="lazy"
+                allowFullScreen
+                referrerPolicy="no-referrer-when-downgrade"
+              ></iframe>
+            </div>
+          </div>
+        )}
       </main>
 
-      {/* Soft capture — Reserve button is high-friction; many visitors will
-          want to ask a question first. Routed to sales as an Accommodation
-          lead. */}
-      <section className="bg-[#f7f8f6] py-14 sm:py-20 border-t border-gray-100">
-        <div className="max-w-3xl mx-auto px-4">
-          <div className="text-center mb-6">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#436235] mb-2">
-              Have questions before booking?
-            </p>
-            <h3 className="text-2xl md:text-3xl font-bold text-[#282728]">
-              Talk to our accommodation team
-            </h3>
-            <p className="text-sm text-gray-500 mt-2 max-w-xl mx-auto">
-              Availability, group rates, student arrival support — leave a quick note and we'll be in touch within 24 hours.
-            </p>
-          </div>
-          <QuickLeadForm
-            source={`property-details:${id || 'unknown'}`}
-            defaultInterest="Accommodation"
-            variant="card"
-            headline="Your details"
-            subtext="No commitment. We never share your contact details."
-          />
-        </div>
-      </section>
-
       <Footer />
+
+      {/* Fullscreen gallery (lightbox) */}
+      <AnimatePresence>
+        {lightboxOpen && images.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="fixed inset-0 z-[100] bg-black/95 flex flex-col"
+            onClick={() => setLightboxOpen(false)}
+          >
+          {/* Top bar */}
+          <div className="flex items-center justify-between px-4 sm:px-6 py-4 text-white" onClick={(e) => e.stopPropagation()}>
+            <span className="text-sm font-semibold">{activeImage + 1} / {images.length}</span>
+            <button type="button" aria-label="Close gallery" onClick={() => setLightboxOpen(false)} className="p-2 rounded-full hover:bg-white/10 transition-colors">
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+            </button>
+          </div>
+
+          {/* Main image */}
+          <div className="relative flex-1 flex items-center justify-center px-4 sm:px-16 min-h-0">
+            {images.length > 1 && (
+              <button type="button" aria-label="Previous image" onClick={(e) => { e.stopPropagation(); prevImage(); }} className="absolute left-3 sm:left-6 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-white/15 hover:bg-white/25 text-white flex items-center justify-center transition-colors">
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
+              </button>
+            )}
+
+            <motion.img
+              key={activeImage}
+              initial={{ opacity: 0, scale: 0.97 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.25 }}
+              src={images[activeImage]}
+              alt={property?.name}
+              onClick={(e) => e.stopPropagation()}
+              className="max-h-full max-w-full object-contain rounded-lg"
+            />
+
+            {images.length > 1 && (
+              <button type="button" aria-label="Next image" onClick={(e) => { e.stopPropagation(); nextImage(); }} className="absolute right-3 sm:right-6 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-white/15 hover:bg-white/25 text-white flex items-center justify-center transition-colors">
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
+              </button>
+            )}
+          </div>
+
+          {/* Thumbnail strip */}
+          {images.length > 1 && (
+            <div className="px-4 py-4 flex gap-2 overflow-x-auto sm:justify-center" onClick={(e) => e.stopPropagation()}>
+              {images.map((img, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => setActiveImage(i)}
+                  className={`h-14 w-20 shrink-0 rounded-lg overflow-hidden border-2 transition ${
+                    i === activeImage ? 'border-white' : 'border-transparent opacity-50 hover:opacity-100'
+                  }`}
+                >
+                  <img src={img} alt={`View ${i + 1}`} className="w-full h-full object-cover" />
+                </button>
+              ))}
+            </div>
+          )}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

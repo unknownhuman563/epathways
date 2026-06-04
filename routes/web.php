@@ -1,20 +1,24 @@
 <?php
 
-use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\AccommodationController as PublicAccommodationController;
 use App\Http\Controllers\ActivityLogController;
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\BookingController;
 use App\Http\Controllers\EventController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\LeadController;
-use App\Http\Controllers\BookingController;
-use App\Http\Controllers\ProgramController;
-use App\Http\Controllers\QuickLeadController;
-use App\Http\Controllers\Portal\ImmigrationController as PortalImmigrationController;
-use App\Http\Controllers\Portal\SalesController;
+use App\Http\Controllers\LeadDocumentController;
+use App\Http\Controllers\LeadPortalInvitationController;
+use App\Http\Controllers\Portal\AccommodationController;
 use App\Http\Controllers\Portal\EducationController;
 use App\Http\Controllers\Portal\EnglishController;
+use App\Http\Controllers\Portal\EoiSubmissionController;
 use App\Http\Controllers\Portal\ImmigrationController;
-use App\Http\Controllers\Portal\AccommodationController;
+use App\Http\Controllers\Portal\PropertyController;
+use App\Http\Controllers\Portal\SalesController;
+use App\Http\Controllers\ProgramController;
+use App\Http\Controllers\ProgramPromoController;
+use App\Http\Controllers\QuickLeadController;
 use App\Http\Controllers\ResidentIntakeController;
 use App\Http\Controllers\WorkIntakeController;
 use App\Http\Controllers\StudentIntakeController;
@@ -26,24 +30,22 @@ use App\Http\Controllers\AvailabilityController;
 use App\Http\Controllers\VisaTypeController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\UserReviewController;
-use App\Http\Controllers\LeadPortalInvitationController;
-use App\Http\Controllers\LeadDocumentController;
-use App\Http\Controllers\ProgramPromoController;
 use App\Services\NewsFeedService;
 use App\Services\PromoFeed;
+use Illuminate\Support\Facades\Route;
+
 Route::get('/', [HomeController::class, 'index']);
 
-Route::get("/booking", function (){
-   return inertia('booking/BookingPage');
+Route::get('/booking', function () {
+    return inertia('booking/BookingPage');
 });
-Route::post("/bookings", [BookingController::class, 'store']);
+Route::post('/bookings', [BookingController::class, 'store']);
 
-
-Route::get("/education-journey", function (){
-   return inertia('education-journey/EducationJourneyPage', array_merge(
-       UserReviewController::publicPayload(\App\Models\UserReview::DEPT_EDUCATION),
-       ['activePromos' => PromoFeed::active()]
-   ));
+Route::get('/education-journey', function () {
+    return inertia('education-journey/EducationJourneyPage', array_merge(
+        UserReviewController::publicPayload(\App\Models\UserReview::DEPT_EDUCATION),
+        ['activePromos' => PromoFeed::active()]
+    ));
 });
 
 Route::get('/programs-levels', [ProgramController::class, 'publicIndex']);
@@ -51,15 +53,19 @@ Route::get('/program-details/{program}', [ProgramController::class, 'publicShow'
 
 Route::get('/fee-guide', [ProgramController::class, 'feeGuideIndex']);
 
-Route::get("/about-us", function (){
-   return inertia('about-us/AboutUsPage');
+Route::get('/about-us', function () {
+    return inertia('about-us/AboutUsPage');
 });
 
-Route::get("/immigration", function (){
-   return inertia('immigration/ImmigrationPage', array_merge(
-       UserReviewController::publicPayload(),
-       ['news' => NewsFeedService::latest(3)]
-   ));
+Route::get('/team/{slug}', fn (string $slug) => inertia('team/TeamProfilePage', [
+    'slug' => $slug,
+]));
+
+Route::get('/immigration', function () {
+    return inertia('immigration/ImmigrationPage', array_merge(
+        UserReviewController::publicPayload(),
+        ['news' => NewsFeedService::latest(3)]
+    ));
 });
 
 // Admin moderation toggle for published / featured / status on a review.
@@ -70,27 +76,28 @@ Route::middleware('auth')->post('/admin/immigration/user-reviews/{id}', [UserRev
 Route::middleware('auth')->post('/admin/education/user-reviews/{id}', [UserReviewController::class, 'adminUpdate'])
     ->name('admin.education.user-reviews.update');
 
-Route::get("/accommodation", function (){
-   return inertia('accommodation/AccommodationPage');
+Route::get('/accommodation', [PublicAccommodationController::class, 'index']);
+// Expression of Interest — must be declared BEFORE /accommodation/{id} so the
+// literal path isn't captured as an {id}.
+Route::get('/accommodation/expression-of-interest-cold', [PublicAccommodationController::class, 'eoiForm'])->name('accommodation.eoi');
+Route::post('/accommodation/expression-of-interest-cold', [PublicAccommodationController::class, 'eoiStore'])->name('accommodation.eoi.store');
+Route::get('/accommodation/expression-of-interest-hot', [PublicAccommodationController::class, 'eoiHotForm'])->name('accommodation.eoi-hot');
+Route::post('/accommodation/expression-of-interest-hot', [PublicAccommodationController::class, 'eoiHotStore'])->name('accommodation.eoi-hot.store');
+Route::get('/accommodation/{slug}', [PublicAccommodationController::class, 'show']);
+
+Route::get('/accommodation/{id}/checkout', function ($id) {
+    return inertia('accommodation/Checkout', ['id' => $id]);
 });
 
-Route::get("/accommodation/{id}", function ($id){
-   return inertia('accommodation/PropertyDetails', ['id' => $id]);
+Route::get('/coming-soon', function () {
+    return inertia('coming-soon/ComingSoonPage');
+});
+Route::get('/immigration-assessment', function () {
+    return inertia('visa/ImmigrationAssessment');
 });
 
-Route::get("/accommodation/{id}/checkout", function ($id){
-   return inertia('accommodation/Checkout', ['id' => $id]);
-});
-
-Route::get("/coming-soon", function (){
-   return inertia('coming-soon/ComingSoonPage');
-});
-Route::get("/immigration-assessment", function (){
-   return inertia('visa/ImmigrationAssessment');
-});
-
-Route::get("/visa-assessment-form", function (){
-   return inertia('visa/VisaAssessmentForm');
+Route::get('/visa-assessment-form', function () {
+    return inertia('visa/VisaAssessmentForm');
 });
 
 Route::get("/resident-interest", [ResidentIntakeController::class, 'showForm'])->name('resident-interest');
@@ -131,10 +138,11 @@ Route::post('/user-reviews', [UserReviewController::class, 'store'])->name('user
 Route::get('/leave-review', function () {
     $allowed = ['immigration', 'education', 'both'];
     $dept = request('dept');
+
     return inertia('leave-review/LeaveReviewPage', [
         'department' => in_array($dept, $allowed, true) ? $dept : 'immigration',
-        'prefill'    => [
-            'name'  => request('name'),
+        'prefill' => [
+            'name' => request('name'),
             'email' => request('email'),
         ],
     ]);
@@ -142,8 +150,8 @@ Route::get('/leave-review', function () {
 
 Route::get('/activities', [EventController::class, 'activities']);
 
-Route::get("/visa-approved", function (){
-   return inertia('visa/VisaApproved');
+Route::get('/visa-approved', function () {
+    return inertia('visa/VisaApproved');
 });
 
 // Public Registration & Assessment Routes
@@ -182,7 +190,7 @@ Route::post('/lead-portal/setup/{token}', [LeadPortalInvitationController::class
 
 // External calendar sync — self-authenticates via the X-Sync-Token header
 // (see SyncController), so it must sit OUTSIDE the auth/admin group.
-Route::post("/api/sync-calendar", [App\Http\Controllers\SyncController::class, 'syncCalendar']);
+Route::post('/api/sync-calendar', [App\Http\Controllers\SyncController::class, 'syncCalendar']);
 
 // Authenticated areas — every staff user must be logged in ('auth'); role
 // middleware nested below narrows each section ('portal:admin', 'portal:sales', …).
@@ -191,11 +199,11 @@ Route::middleware(['auth'])->group(function () {
     // Admin area — admin role only; department-portal staff are kept out by 'portal:admin'.
     Route::middleware('portal:admin')->group(function () {
         Route::redirect('/admin', '/admin/dashboard');
-        Route::get("/admin/dashboard", function (){
-           return inertia('admin/Dashboard');
+        Route::get('/admin/dashboard', function () {
+            return inertia('admin/Dashboard');
         });
-        Route::get("/admin/leads", [LeadController::class, 'index'])->name('admin.leads');
-        Route::get("/admin/events", [EventController::class, 'index'])->name('admin.events');
+        Route::get('/admin/leads', [LeadController::class, 'index'])->name('admin.leads');
+        Route::get('/admin/events', [EventController::class, 'index'])->name('admin.events');
         Route::post('/admin/events', [EventController::class, 'store']);
         Route::get('/admin/events/{id}', [EventController::class, 'show'])->name('admin.events.show');
 
@@ -301,17 +309,17 @@ Route::middleware(['auth'])->group(function () {
     // department portal) can view a lead and advance its pipeline stage.
     // Every change is audited via the LogsActivity trait on the Lead model.
     Route::middleware('portal:admin,sales,education,english,immigration,accommodation')->group(function () {
-        Route::get("/admin/leads/{id}", [LeadController::class, 'show'])->name('admin.leads.show');
+        Route::get('/admin/leads/{id}', [LeadController::class, 'show'])->name('admin.leads.show');
         Route::post('/admin/leads/{id}/stage', [LeadController::class, 'updateStage'])->name('admin.leads.stage');
         Route::post('/admin/leads/{id}/personal', [LeadController::class, 'updatePersonal'])->name('admin.leads.personal');
         Route::post('/admin/leads/{id}/journey', [LeadController::class, 'updateJourney'])->name('admin.leads.journey');
-        Route::post('/admin/leads/{id}/convert-to-student',       [LeadController::class, 'convertToStudent'])->name('admin.leads.convert-student');
-        Route::post('/admin/leads/{id}/revert-student',           [LeadController::class, 'revertStudent'])->name('admin.leads.revert-student');
-        Route::post('/admin/leads/{id}/convert-to-case',          [LeadController::class, 'convertToCase'])->name('admin.leads.convert-case');
-        Route::post('/admin/leads/{id}/revert-case',              [LeadController::class, 'revertCase'])->name('admin.leads.revert-case');
+        Route::post('/admin/leads/{id}/convert-to-student', [LeadController::class, 'convertToStudent'])->name('admin.leads.convert-student');
+        Route::post('/admin/leads/{id}/revert-student', [LeadController::class, 'revertStudent'])->name('admin.leads.revert-student');
+        Route::post('/admin/leads/{id}/convert-to-case', [LeadController::class, 'convertToCase'])->name('admin.leads.convert-case');
+        Route::post('/admin/leads/{id}/revert-case', [LeadController::class, 'revertCase'])->name('admin.leads.revert-case');
         Route::post('/admin/leads/{id}/convert-to-accommodation', [LeadController::class, 'convertToAccommodation'])->name('admin.leads.convert-accommodation');
-        Route::post('/admin/leads/{id}/revert-accommodation',     [LeadController::class, 'revertAccommodation'])->name('admin.leads.revert-accommodation');
-        Route::post('/admin/leads/{id}/inz',                      [LeadController::class, 'updateInz'])->name('admin.leads.inz');
+        Route::post('/admin/leads/{id}/revert-accommodation', [LeadController::class, 'revertAccommodation'])->name('admin.leads.revert-accommodation');
+        Route::post('/admin/leads/{id}/inz', [LeadController::class, 'updateInz'])->name('admin.leads.inz');
 
         // Bulk CSV import — duplicates detected by email or name+phone.
         Route::post('/admin/leads/import', [LeadController::class, 'importLeads'])->name('admin.leads.import');
@@ -454,12 +462,12 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/assessments', [SalesController::class, 'assessments'])->name('assessments');
 
             // OUTREACH — placeholders until the email backbone ships.
-            Route::get('/bulk-email',      [SalesController::class, 'bulkEmail'])->name('bulk-email');
+            Route::get('/bulk-email', [SalesController::class, 'bulkEmail'])->name('bulk-email');
             Route::get('/email-templates', [SalesController::class, 'emailTemplates'])->name('email-templates');
-            Route::get('/campaigns',       [SalesController::class, 'campaigns'])->name('campaigns');
+            Route::get('/campaigns', [SalesController::class, 'campaigns'])->name('campaigns');
 
             // ACCOUNT
-            Route::get('/profile',       [SalesController::class, 'profile'])->name('profile');
+            Route::get('/profile', [SalesController::class, 'profile'])->name('profile');
             Route::get('/notifications', [SalesController::class, 'notifications'])->name('notifications');
 
             // Portal-scoped lead detail URL (sales user lands at /portal/sales/leads/{id})
@@ -492,7 +500,7 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/tasks', [EducationController::class, 'tasks'])->name('tasks');
 
             // SETUP
-            Route::get('/programs',            [EducationController::class, 'programs'])->name('programs');
+            Route::get('/programs', [EducationController::class, 'programs'])->name('programs');
             Route::get('/checklist-templates', [EducationController::class, 'checklistTemplates'])->name('checklist-templates');
 
             // REPORTS — single page; period (weekly|monthly|quarterly|custom)
@@ -500,7 +508,7 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/reports', [EducationController::class, 'reports'])->name('reports');
 
             // ACCOUNT
-            Route::get('/profile',       [EducationController::class, 'profile'])->name('profile');
+            Route::get('/profile', [EducationController::class, 'profile'])->name('profile');
             Route::get('/notifications', [EducationController::class, 'notifications'])->name('notifications');
         });
 
@@ -518,10 +526,10 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/leads/{id}', [LeadController::class, 'show'])->name('leads.show');
 
             // WORK
-            Route::get('/assessments',  [ImmigrationController::class, 'assessments'])->name('assessments');
+            Route::get('/assessments', [ImmigrationController::class, 'assessments'])->name('assessments');
             Route::post('/assessments/{intakeId}/convert-to-case', [ImmigrationController::class, 'convertAssessmentToCase'])->name('assessments.convert');
-            Route::get('/cases',        [ImmigrationController::class, 'cases'])->name('cases');
-            Route::get('/documents',    [ImmigrationController::class, 'documents'])->name('documents');
+            Route::get('/cases', [ImmigrationController::class, 'cases'])->name('cases');
+            Route::get('/documents', [ImmigrationController::class, 'documents'])->name('documents');
             Route::get('/appointments', [ImmigrationController::class, 'appointments'])->name('appointments');
 
             // SETUP — visa types are managed through VisaTypeController so
@@ -543,8 +551,8 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/reports', [ImmigrationController::class, 'reports'])->name('reports');
 
             // ACCOUNT
-            Route::get('/profile',       [ImmigrationController::class, 'profile'])->name('profile');
-            Route::post('/profile',      [ImmigrationController::class, 'updateProfile'])->name('profile.update');
+            Route::get('/profile', [ImmigrationController::class, 'profile'])->name('profile');
+            Route::post('/profile', [ImmigrationController::class, 'updateProfile'])->name('profile.update');
             Route::get('/notifications', [ImmigrationController::class, 'notifications'])->name('notifications');
         });
 
@@ -552,29 +560,44 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/dashboard', [AccommodationController::class, 'dashboard'])->name('dashboard');
             Route::get('/tasks',     [AccommodationController::class, 'tasks'])->name('tasks');
             Route::get('/leads/{id}', [LeadController::class, 'show'])->name('leads.show');
+
+            // Property listings CRUD (multipart: update is POST + _method=PUT).
+            Route::get('/properties', [PropertyController::class, 'index'])->name('properties.index');
+            Route::get('/properties/create', [PropertyController::class, 'create'])->name('properties.create');
+            Route::post('/properties', [PropertyController::class, 'store'])->name('properties.store');
+            Route::get('/properties/{property}/edit', [PropertyController::class, 'edit'])->name('properties.edit');
+            Route::match(['POST', 'PUT'], '/properties/{property}', [PropertyController::class, 'update'])->name('properties.update');
+            Route::delete('/properties/{property}', [PropertyController::class, 'destroy'])->name('properties.destroy');
+            Route::delete('/properties/{property}/images/{image}', [PropertyController::class, 'destroyImage'])->name('properties.images.destroy');
+
+            // Expression of Interest submissions (Applications).
+            Route::get('/applications', [EoiSubmissionController::class, 'index'])->name('applications.index');
+            Route::get('/applications/{submission}', [EoiSubmissionController::class, 'show'])->name('applications.show');
+            Route::patch('/applications/{submission}/status', [EoiSubmissionController::class, 'updateStatus'])->name('applications.update-status');
+            Route::delete('/applications/{submission}', [EoiSubmissionController::class, 'destroy'])->name('applications.destroy');
         });
 
         // Lead Portal — external client-facing dashboard. Each lead-role user
         // is scoped to their own Lead record.
         Route::middleware('portal:lead')->prefix('lead')->name('portal.lead.')->group(function () {
-            Route::get('/dashboard',     [App\Http\Controllers\LeadPortalController::class, 'dashboard'])->name('dashboard');
-            Route::get('/submissions',   [App\Http\Controllers\LeadPortalController::class, 'submissions'])->name('submissions');
-            Route::get('/activities',    [App\Http\Controllers\LeadPortalController::class, 'activities'])->name('activities');
+            Route::get('/dashboard', [App\Http\Controllers\LeadPortalController::class, 'dashboard'])->name('dashboard');
+            Route::get('/submissions', [App\Http\Controllers\LeadPortalController::class, 'submissions'])->name('submissions');
+            Route::get('/activities', [App\Http\Controllers\LeadPortalController::class, 'activities'])->name('activities');
             Route::get('/announcements', [App\Http\Controllers\LeadPortalController::class, 'announcements'])->name('announcements');
 
             // New sidebar sections — most are placeholders while the full
             // workflow ships incrementally.
-            Route::get('/journey',       [App\Http\Controllers\LeadPortalController::class, 'journey'])->name('journey');
-            Route::get('/checklist',     [App\Http\Controllers\LeadPortalController::class, 'checklist'])->name('checklist');
-            Route::get('/visa-forms',    [App\Http\Controllers\LeadPortalController::class, 'visaForms'])->name('visa-forms');
-            Route::get('/appointments',  [App\Http\Controllers\LeadPortalController::class, 'appointments'])->name('appointments');
-            Route::get('/proposals',     [App\Http\Controllers\LeadPortalController::class, 'proposals'])->name('proposals');
-            Route::get('/agreements',    [App\Http\Controllers\LeadPortalController::class, 'agreements'])->name('agreements');
-            Route::get('/payments',      [App\Http\Controllers\LeadPortalController::class, 'payments'])->name('payments');
-            Route::get('/messages',      [App\Http\Controllers\LeadPortalController::class, 'messages'])->name('messages');
-            Route::get('/profile',       [App\Http\Controllers\LeadPortalController::class, 'profile'])->name('profile');
-            Route::get('/settings',      [App\Http\Controllers\LeadPortalController::class, 'settings'])->name('settings');
-            Route::get('/documents',     [LeadDocumentController::class, 'leadIndex'])->name('documents');
+            Route::get('/journey', [App\Http\Controllers\LeadPortalController::class, 'journey'])->name('journey');
+            Route::get('/checklist', [App\Http\Controllers\LeadPortalController::class, 'checklist'])->name('checklist');
+            Route::get('/visa-forms', [App\Http\Controllers\LeadPortalController::class, 'visaForms'])->name('visa-forms');
+            Route::get('/appointments', [App\Http\Controllers\LeadPortalController::class, 'appointments'])->name('appointments');
+            Route::get('/proposals', [App\Http\Controllers\LeadPortalController::class, 'proposals'])->name('proposals');
+            Route::get('/agreements', [App\Http\Controllers\LeadPortalController::class, 'agreements'])->name('agreements');
+            Route::get('/payments', [App\Http\Controllers\LeadPortalController::class, 'payments'])->name('payments');
+            Route::get('/messages', [App\Http\Controllers\LeadPortalController::class, 'messages'])->name('messages');
+            Route::get('/profile', [App\Http\Controllers\LeadPortalController::class, 'profile'])->name('profile');
+            Route::get('/settings', [App\Http\Controllers\LeadPortalController::class, 'settings'])->name('settings');
+            Route::get('/documents', [LeadDocumentController::class, 'leadIndex'])->name('documents');
             Route::post('/documents/upload', [LeadDocumentController::class, 'leadUpload'])->name('documents.upload');
             Route::post('/documents/checklist/{key}/upload', [LeadDocumentController::class, 'leadChecklistUpload'])->name('documents.checklist.upload');
             Route::post('/documents/section/{key}/submit', [LeadDocumentController::class, 'leadSubmitSection'])->name('documents.section.submit');
@@ -585,4 +608,3 @@ Route::middleware(['auth'])->group(function () {
         });
     });
 });
-
