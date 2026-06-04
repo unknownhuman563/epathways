@@ -364,7 +364,7 @@ class TaskController extends Controller
      * Autocomplete feed for the "Related to" field. Searches Leads filtered
      * by the requested record types — Students / Cases / Accommodation
      * Clients are all `Lead` rows in this codebase, distinguished by the
-     * `is_student` / `is_immigration_case` / `is_accommodation_lead` flags.
+     * `is_student` / `is_immigration_case` / `is_accommodation_client` flags.
      */
     public function relatedRecords(Request $request)
     {
@@ -381,7 +381,7 @@ class TaskController extends Controller
         try {
             $query = Lead::query()->select(
                 'id', 'lead_id', 'first_name', 'last_name', 'email',
-                'is_student', 'is_immigration_case', 'is_accommodation_lead'
+                'is_student', 'is_immigration_case', 'is_accommodation_client'
             );
 
             if (! empty($idFilter)) {
@@ -398,12 +398,12 @@ class TaskController extends Controller
                 $query->where(function ($q2) use ($types) {
                     if (in_array('student', $types, true)) $q2->orWhere('is_student', true);
                     if (in_array('case',    $types, true)) $q2->orWhere('is_immigration_case', true);
-                    if (in_array('client',  $types, true)) $q2->orWhere('is_accommodation_lead', true);
+                    if (in_array('client',  $types, true)) $q2->orWhere('is_accommodation_client', true);
                     if (in_array('lead',    $types, true)) {
                         $q2->orWhere(function ($q3) {
                             $q3->where(fn ($w) => $w->where('is_student', false)->orWhereNull('is_student'))
                                 ->where(fn ($w) => $w->where('is_immigration_case', false)->orWhereNull('is_immigration_case'))
-                                ->where(fn ($w) => $w->where('is_accommodation_lead', false)->orWhereNull('is_accommodation_lead'));
+                                ->where(fn ($w) => $w->where('is_accommodation_client', false)->orWhereNull('is_accommodation_client'));
                         });
                     }
                 });
@@ -430,7 +430,7 @@ class TaskController extends Controller
                 'email'      => $l->email,
                 'record_type' => $l->is_student ? 'student'
                     : ($l->is_immigration_case ? 'case'
-                    : ($l->is_accommodation_lead ? 'client' : 'lead')),
+                    : ($l->is_accommodation_client ? 'client' : 'lead')),
             ]);
 
             return response()->json(['records' => $records]);
