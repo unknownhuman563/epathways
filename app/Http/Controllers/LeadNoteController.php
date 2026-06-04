@@ -15,6 +15,37 @@ use Illuminate\Support\Facades\Log;
  */
 class LeadNoteController extends Controller
 {
+    /**
+     * List notes for a lead, newest first. Used by the kanban edit modal
+     * to surface existing internal notes alongside the stage picker.
+     */
+    public function index(Request $request, $leadId)
+    {
+        try {
+            $lead = Lead::findOrFail($leadId);
+
+            $rows = $lead->notes()
+                ->orderByDesc('pinned')
+                ->orderByDesc('created_at')
+                ->get()
+                ->map(fn ($n) => [
+                    'id'          => $n->id,
+                    'body'        => $n->body,
+                    'kind'        => $n->kind,
+                    'pinned'      => (bool) $n->pinned,
+                    'author_name' => $n->author_name,
+                    'author_role' => $n->author_role,
+                    'created_at'  => $n->created_at,
+                ]);
+
+            return response()->json(['notes' => $rows]);
+        } catch (\Throwable $e) {
+            Log::error('Lead notes list failed', ['lead_id' => $leadId, 'error' => $e->getMessage()]);
+
+            return response()->json(['notes' => []], 500);
+        }
+    }
+
     public function store(Request $request, $leadId)
     {
         $validated = $request->validate([

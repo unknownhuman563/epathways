@@ -2,7 +2,7 @@ import DashboardLayout from "./DashboardLayout";
 import { usePage } from "@inertiajs/react";
 import {
     LayoutDashboard, UserSquare2, Users, FolderOpen, GraduationCap,
-    ListChecks, LineChart, User, Bell, Tag, Star, CheckSquare,
+    ListChecks, LineChart, User, Bell, Tag, Star, CheckSquare, ClipboardCheck,
 } from "lucide-react";
 
 export default function EducationLayout({ children }) {
@@ -14,7 +14,8 @@ export default function EducationLayout({ children }) {
 
         { name: "Work", section: true },
         { name: "Leads",     href: "/portal/education/leads",     icon: <UserSquare2 size={20} />, badge: badges.new_leads_today, badgeTone: "default" },
-        { name: "Tasks & Follow-ups", href: "/portal/education/tasks", icon: <CheckSquare size={20} />, badge: badges.tasks_open, badgeTone: badges.tasks_overdue > 0 ? "danger" : "default" },
+        { name: "Task Board", href: "/portal/education/tasks", icon: <CheckSquare size={20} />, badge: badges.tasks_open, badgeTone: badges.tasks_overdue > 0 ? "danger" : "default" },
+        { name: "Assessments", href: "/portal/education/assessments", icon: <ClipboardCheck size={20} /> },
         { name: "Students",  href: "/portal/education/students",  icon: <Users size={20} /> },
         { name: "Documents", href: "/portal/education/documents", icon: <FolderOpen size={20} />, badge: badges.docs_pending_review, badgeTone: "warning" },
         { name: "User Reviews", href: "/admin/user-reviews", icon: <Star size={20} /> },

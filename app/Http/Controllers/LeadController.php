@@ -83,6 +83,221 @@ class LeadController extends Controller
     }
 
     /**
+     * Show the Education Enrolment form — clean 7-step IntakeFormShell
+     * version, not the full free-assessment payload.
+     */
+    public function showEducationEnrolment()
+    {
+        return inertia('free-assessment/EducationEnrolmentPage');
+    }
+
+    /**
+     * Persist an in-progress assessment to the database so it shows up in
+     * the Education / Sales assessments queue as a Draft. Fires from the
+     * "Save draft" button on either /free-assessment or /education-enrolment.
+     *
+     * Lead dedupe runs through LeadIntakeService (same as every other
+     * public form) so resubmitting the same email just updates the
+     * existing draft row rather than creating duplicates.
+     */
+    public function saveAssessmentDraft(\Illuminate\Http\Request $request, \App\Services\LeadIntakeService $intake)
+    {
+        // Inertia + the browser send empty fields as "" — null them out so
+        // `nullable|email` doesn't trip on blank optional values.
+        $request->merge(collect($request->all())
+            ->map(fn ($v) => is_string($v) && trim($v) === '' ? null : $v)
+            ->all());
+
+        // The applicant must have entered enough to identify them before
+        // we'll create a database row. Less than this and a draft is just
+        // their device's local copy.
+        $validated = $request->validate([
+            'first_name' => 'required|string|max:255',
+            'last_name'  => 'nullable|string|max:255',
+            'email'      => 'required|email|max:255',
+            'phone'      => 'nullable|string|max:40',
+        ], [
+            'first_name.required' => 'Add your first name to save the draft online.',
+            'email.required'      => 'Add your email to save the draft online.',
+            'email.email'         => 'Enter a valid email to save the draft online.',
+        ]);
+
+        $isEnrolment = $request->is('education-enrolment*');
+        $source      = $isEnrolment ? 'education-enrolment' : 'free-assessment';
+
+        try {
+            $lead = $intake->ingest($source, [
+                'lead_id'    => ($isEnrolment ? 'EE-' : 'FA-') . strtoupper(uniqid()),
+                'first_name' => $validated['first_name'],
+                'last_name'  => $validated['last_name'] ?? '',
+                'email'      => $validated['email'],
+                'phone'      => $validated['phone'] ?? null,
+                'stage'      => 'Evaluation',
+            ], $request);
+
+            // Promote the lead to Draft only if it's not already further
+            // along — never demote a Submitted/Engaged lead back to Draft.
+            $shouldFlipToDraft = !in_array($lead->status, ['Submitted', 'Engaged', 'Converted', 'Completed', 'Closed'], true);
+
+            // The assessment form IS the freshest source of truth for the
+            // applicant's identity, so override the conservative "backfill
+            // only" behaviour of LeadIntakeService for these fields. This
+            // means staff see the current name/phone the applicant is using
+            // right now, not whatever they typed into a Quick-Lead months ago.
+            $lead->update(array_filter([
+                'first_name'         => $validated['first_name'],
+                'last_name'          => $validated['last_name'] ?? null,
+                'phone'              => $validated['phone'] ?? null,
+                'status'             => $shouldFlipToDraft ? 'Draft' : $lead->status,
+                'source'             => $source,
+                'ai_analysis'        => $request->except(['_token']),
+                'ai_analysis_status' => 'completed',
+            ], fn ($v) => $v !== null));
+
+            // Use a distinct flash key so the page can tell a draft save
+            // apart from the final submit — the latter sets `flash.success`
+            // and flips the page to the success screen, which is NOT what
+            // should happen on a save-draft click.
+            //
+            // For XHR auto-saves (Accept: application/json) we return a
+            // small JSON body instead of a redirect so the fetch can
+            // resolve quickly without re-rendering the whole page.
+            if ($request->expectsJson() || $request->wantsJson()) {
+                return response()->json([
+                    'draft_saved' => true,
+                    'draft_id'    => $lead->lead_id,
+                    'saved_at'    => now()->toIso8601String(),
+                ]);
+            }
+            return back()->with([
+                'draft_saved' => true,
+                'draft_id'    => $lead->lead_id,
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('Assessment draft save failed', ['error' => $e->getMessage()]);
+            if ($request->expectsJson() || $request->wantsJson()) {
+                return response()->json(['error' => 'Could not save draft.'], 500);
+            }
+            return back()->withErrors([
+                'error' => 'Could not save draft — please try again.',
+            ]);
+        }
+    }
+
+    /**
+     * Store the Education Enrolment payload — identical shape to the Free
+     * Assessment form (same Step components, same field names). Delegates
+     * straight to `storeFreeAssessment` so we get the full validation +
+     * relational mapping + AI-analysis dispatch for free. The source tag is
+     * picked from the request URL inside that method, so leads land tagged
+     * as `education-enrolment` instead of `free-assessment`.
+     */
+    public function storeEducationEnrolmentFull(\Illuminate\Http\Request $request)
+    {
+        return $this->storeFreeAssessment($request);
+    }
+
+    /**
+     * Legacy stub kept for any code path still referencing the old simpler
+     * payload — no longer used by the page itself.
+     */
+    public function storeEducationEnrolment(\Illuminate\Http\Request $request, \App\Services\LeadIntakeService $intake)
+    {
+        // Convert blank strings to null so optional fields with format rules
+        // (date/email) don't fail validation when left untouched.
+        $request->merge(collect($request->all())
+            ->map(fn ($v) => is_string($v) && trim($v) === '' ? null : $v)
+            ->all());
+
+        $validated = $request->validate([
+            'terms_accepted'        => 'required|accepted',
+            'first_name'            => 'required|string|max:120',
+            'last_name'             => 'required|string|max:120',
+            'dob'                   => 'required|date',
+            'gender'                => 'nullable|string|max:40',
+            'marital_status'        => 'nullable|string|max:40',
+            'email'                 => 'required|email|max:255',
+            'phone'                 => 'required|string|max:40',
+            'country_of_birth'      => 'nullable|string|max:120',
+            'place_of_birth'        => 'nullable|string|max:120',
+
+            'citizenship'           => 'required|string|max:120',
+            'residence_country'     => 'required|string|max:120',
+            'residence_city'        => 'nullable|string|max:120',
+            'has_passport'          => 'nullable|in:Yes,No',
+            'passport_number'       => 'nullable|string|max:60',
+            'passport_expiry'       => 'nullable|date',
+
+            'preferred_area'        => 'required|string|max:120',
+            'preferred_course'      => 'nullable|string|max:255',
+            'qualification_level'   => 'required|string|max:120',
+            'study_mode'            => 'nullable|string|max:60',
+            'preferred_intake'      => 'nullable|string|max:120',
+            'preferred_city'        => 'nullable|string|max:120',
+            'preferred_institution' => 'nullable|string|max:255',
+            'has_english_test'      => 'nullable|in:Yes,No',
+            'english_test_type'     => 'nullable|string|max:60',
+            'english_test_score'    => 'nullable|string|max:30',
+            'english_test_date'     => 'nullable|date',
+            'career_goals'          => 'nullable|string',
+
+            'highest_qualification' => 'required|string|max:120',
+            'institution_name'      => 'nullable|string|max:255',
+            'country_of_study'      => 'nullable|string|max:120',
+            'qualification_start'   => 'nullable|date',
+            'qualification_end'     => 'nullable|date',
+            'qualification_marks'   => 'nullable|string|max:30',
+            'education_notes'       => 'nullable|string',
+
+            'has_funds'             => 'required|in:Yes,No',
+            'funding_source'        => 'nullable|string|max:60',
+            'estimated_budget'      => 'required|string|max:60',
+            'has_sponsor'           => 'nullable|in:Yes,No',
+            'sponsor_relation'      => 'nullable|string|max:120',
+            'sponsor_occupation'    => 'nullable|string|max:120',
+            'sponsor_income'        => 'nullable|string|max:60',
+
+            'declaration_accepted'  => 'required|accepted',
+            'signature_name'        => 'nullable|string|max:255',
+            'signature_date'        => 'nullable|date',
+        ]);
+
+        try {
+            $lead = $intake->ingest('education-enrolment', [
+                'lead_id'    => 'EE-' . strtoupper(uniqid()),
+                'first_name' => $validated['first_name'],
+                'last_name'  => $validated['last_name'],
+                'email'      => $validated['email'],
+                'phone'      => $validated['phone'],
+                'country'    => $validated['residence_country'] ?? null,
+                'stage'      => 'Education-Enrolment',
+            ], $request);
+
+            // Persist the rich assessment payload on the lead so staff see
+            // the full picture without us adding a dedicated enrolment
+            // table. Same place storeFreeAssessment writes its analysis.
+            $lead->update([
+                'source'             => 'education-enrolment',
+                'status'             => 'New',
+                'ai_analysis'        => array_diff_key($validated, array_flip([
+                    'first_name', 'last_name', 'email', 'phone', 'residence_country',
+                ])),
+                'ai_analysis_status' => 'completed',
+            ]);
+
+            return redirect()->route('education-enrolment')->with([
+                'success' => "Thanks {$validated['first_name']} — our education team will reach out within 1–2 business days.",
+                'lead_id' => $lead->lead_id,
+            ]);
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('Education enrolment store failed', ['error' => $e->getMessage()]);
+            return redirect()->back()->withErrors([
+                'error' => 'Something went wrong submitting your enrolment. Please try again.',
+            ])->withInput();
+        }
+    }
+
+    /**
      * Store a free assessment submission.
      */
     public function storeFreeAssessment(\Illuminate\Http\Request $request)
@@ -259,9 +474,14 @@ class LeadController extends Controller
                 'home_ties_info'        => $data['home_ties_info'] ?? null,
                 'declaration_accepted'  => $request->boolean('declaration_accepted'),
 
-                'status' => 'New',
+                // The applicant has explicitly clicked "Submit" — flip the
+                // lead to 'Submitted' so the Education / Sales Assessments
+                // queues can render the progress bar at the right stage.
+                'status' => 'Submitted',
                 'stage'  => 'Evaluation',
-                'source' => 'free-assessment',
+                // Same form, two URLs — keep the source tag accurate so
+                // reporting can split free-assessment vs enrolment leads.
+                'source' => $request->is('education-enrolment') ? 'education-enrolment' : 'free-assessment',
             ];
 
             // Update the existing lead with the full assessment payload —

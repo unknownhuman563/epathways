@@ -212,6 +212,9 @@ export default function BookingPage() {
     const [selection, setSelection] = useState({
         category: null,
         consultant: null,
+        // For Education only: 'book' or 'enrol'. Other categories skip the
+        // intent picker and go straight to the booking form.
+        intent: null,
         info: {
             firstName: '',
             lastName: '',
@@ -236,13 +239,17 @@ export default function BookingPage() {
         }
     };
 
+    // Resize listener only needs to fire while the consultant carousel is
+    // mounted — that's step 2 for non-Education and step 3 for Education-Book.
     useEffect(() => {
-        if (step === 2) {
+        const onConsultant = (step === 2 && selection.category?.id !== 'education')
+            || (step === 3 && selection.category?.id === 'education' && selection.intent === 'book');
+        if (onConsultant) {
             checkScroll();
             window.addEventListener('resize', checkScroll);
             return () => window.removeEventListener('resize', checkScroll);
         }
-    }, [step, selection.category]);
+    }, [step, selection.category, selection.intent]);
 
     const scroll = (direction) => {
         if (scrollContainerRef.current) {
@@ -312,7 +319,9 @@ export default function BookingPage() {
     const prevStep = () => setStep(s => s - 1);
 
     const handleCategorySelect = (cat) => {
-        setSelection(prev => ({ ...prev, category: cat, consultant: null }));
+        // Resetting `intent` here keeps the Education branch clean if the
+        // applicant comes back to switch categories.
+        setSelection(prev => ({ ...prev, category: cat, consultant: null, intent: null }));
         nextStep();
     };
 
@@ -320,6 +329,34 @@ export default function BookingPage() {
         setSelection(prev => ({ ...prev, consultant: con }));
         nextStep();
     };
+
+    const handleIntentSelect = (intent) => {
+        if (intent === 'enrol') {
+            // Dedicated enrolment URL — same form as /free-assessment, but
+            // leads submitted from here are tagged source=education-enrolment.
+            window.location.href = '/education-enrolment';
+            return;
+        }
+        setSelection(prev => ({ ...prev, intent }));
+        nextStep(); // 2 → 3 (consultant for Education-Book branch)
+    };
+
+    // What should this step render? Education branch: 1=category, 2=intent,
+    // 3=consultant, 4=form. Every other branch: 1=category, 2=consultant,
+    // 3=form. Centralised here so step labels + background swaps stay in sync.
+    const isEducation = selection.category?.id === 'education';
+    const ui = (() => {
+        if (step === 1) return 'category';
+        if (isEducation) {
+            if (step === 2) return 'intent';
+            if (step === 3) return selection.intent === 'book' ? 'consultant' : null;
+            if (step === 4) return selection.intent === 'book' ? 'form' : null;
+        } else {
+            if (step === 2) return 'consultant';
+            if (step === 3) return 'form';
+        }
+        return null;
+    })();
 
     const handleInputChange = (e) => {
         const { name, value, type, checked } = e.target;
@@ -377,7 +414,7 @@ export default function BookingPage() {
     };
 
     return (
-        <div className={`min-h-screen font-urbanist transition-colors duration-500 ${step === 2 ? 'bg-[#121613]' : 'bg-[#F9F8F6]'}`}>
+        <div className={`min-h-screen font-urbanist transition-colors duration-500 ${ui === 'consultant' ? 'bg-[#121613]' : 'bg-[#F9F8F6]'}`}>
             <Navbar />
 
             {/* Hero Section - Matching EducationJourney */}
@@ -422,7 +459,7 @@ export default function BookingPage() {
                             exit={{ opacity: 0, y: -10 }}
                             transition={{ duration: 0.3 }}
                         >
-                            {step === 1 && (
+                            {ui === 'category' && (
                                 <div>
                                     <div className="mb-16 text-center flex flex-col items-center">
                                         <span className="text-[11px] font-bold tracking-widest text-gray-600 uppercase mb-4 block">Step one</span>
@@ -569,7 +606,7 @@ export default function BookingPage() {
                                 </div>
                             )}
 
-                            {step === 2 && (
+                            {ui === 'consultant' && (
                                 <div className="max-w-6xl mx-auto w-full">
                                     <div className="relative mb-16 text-center">
                                         <button onClick={prevStep} className="absolute left-0 top-1/2 -translate-y-1/2 p-2 text-gray-500 hover:text-white transition-colors flex items-center gap-1">
@@ -660,7 +697,69 @@ export default function BookingPage() {
                                 </div>
                             )}
 
-                            {step === 3 && (
+                            {/* Education-only intent picker — Book or Enrol.
+                                Sits between category selection and consultant
+                                selection. Other categories skip this entirely
+                                and go straight to consultant. */}
+                            {ui === 'intent' && (
+                                <div className="max-w-5xl mx-auto w-full px-4 lg:px-8">
+                                    <div className="text-center mb-12">
+                                        <button onClick={prevStep} className="mb-6 p-2 -ml-2 text-gray-500 hover:text-black hover:bg-gray-100 rounded-full transition-colors inline-flex items-center">
+                                            <ChevronLeft className="w-5 h-5 mr-1" /> <span className="text-sm font-bold uppercase tracking-widest text-black">Back</span>
+                                        </button>
+                                        <h2 className="text-4xl md:text-5xl font-light text-black mb-4">What would you like to do?</h2>
+                                        <p className="text-gray-600 text-lg max-w-2xl mx-auto">
+                                            With {selection.consultant?.name?.split(' ')[0]} as your education consultant, you can either book a consultation or jump straight to enrolment.
+                                        </p>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        <button
+                                            type="button"
+                                            onClick={() => handleIntentSelect('book')}
+                                            className="group relative bg-white rounded-3xl border border-gray-200 hover:border-[#436235] hover:shadow-2xl p-10 text-left transition-all duration-300 overflow-hidden"
+                                        >
+                                            <div className="absolute top-0 right-0 w-32 h-32 bg-[#436235]/5 blur-[60px] rounded-full -mr-12 -mt-12 group-hover:bg-[#436235]/10 transition-colors" />
+                                            <div className="relative">
+                                                <div className="w-14 h-14 rounded-2xl bg-[#436235]/10 group-hover:bg-[#436235] group-hover:text-white text-[#436235] flex items-center justify-center mb-6 transition-colors">
+                                                    <Calendar size={26} strokeWidth={1.5} />
+                                                </div>
+                                                <span className="text-[10px] font-bold tracking-[0.25em] text-[#436235] uppercase mb-2 block">Option 1</span>
+                                                <h3 className="text-2xl font-black text-[#282728] mb-3">Book a consultation</h3>
+                                                <p className="text-sm text-gray-600 leading-relaxed mb-8">
+                                                    Talk one-on-one with {selection.consultant?.name?.split(' ')[0]} about pathways, programmes, and visa options before committing to a programme.
+                                                </p>
+                                                <span className="inline-flex items-center gap-2 text-[#282728] text-sm font-bold transition-transform duration-300 group-hover:translate-x-2">
+                                                    Continue to booking <ChevronRight size={16} />
+                                                </span>
+                                            </div>
+                                        </button>
+
+                                        <button
+                                            type="button"
+                                            onClick={() => handleIntentSelect('enrol')}
+                                            className="group relative bg-white rounded-3xl border border-gray-200 hover:border-[#282728] hover:shadow-2xl p-10 text-left transition-all duration-300 overflow-hidden"
+                                        >
+                                            <div className="absolute top-0 right-0 w-32 h-32 bg-[#282728]/5 blur-[60px] rounded-full -mr-12 -mt-12 group-hover:bg-[#282728]/10 transition-colors" />
+                                            <div className="relative">
+                                                <div className="w-14 h-14 rounded-2xl bg-[#282728]/10 group-hover:bg-[#282728] group-hover:text-white text-[#282728] flex items-center justify-center mb-6 transition-colors">
+                                                    <BookOpen size={26} strokeWidth={1.5} />
+                                                </div>
+                                                <span className="text-[10px] font-bold tracking-[0.25em] text-[#282728] uppercase mb-2 block">Option 2</span>
+                                                <h3 className="text-2xl font-black text-[#282728] mb-3">Enrol in a programme</h3>
+                                                <p className="text-sm text-gray-600 leading-relaxed mb-8">
+                                                    Already know what you want to study? Complete a free assessment so our team can match you to the right programme and intake.
+                                                </p>
+                                                <span className="inline-flex items-center gap-2 text-[#282728] text-sm font-bold transition-transform duration-300 group-hover:translate-x-2">
+                                                    Start assessment <ChevronRight size={16} />
+                                                </span>
+                                            </div>
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+
+                            {ui === 'form' && (
                                 <div className="max-w-7xl mx-auto w-full px-4 lg:px-8">
                                     {!bookingSuccess ? (
                                         <div className="grid grid-cols-1 lg:grid-cols-12 gap-16">

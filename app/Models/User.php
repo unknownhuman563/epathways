@@ -12,14 +12,37 @@ class User extends Authenticatable
     /** @use HasFactory<\Database\Factories\UserFactory> */
     use HasFactory, Notifiable;
 
+    /** Highest tier — can hard-delete + edit anything across departments. */
+    public const ROLE_SUPER_ADMIN = 'super_admin';
+
     /** Role with access to every department portal and the /admin area. */
     public const ROLE_ADMIN = 'admin';
+
+    /** Immigration department-head — can edit visa types incl. price. */
+    public const ROLE_IMMIGRATION_MANAGER = 'immigration_manager';
+
+    /** Immigration adviser — read-only access to visa types + cases. */
+    public const ROLE_IMMIGRATION_ADVISER = 'immigration_adviser';
 
     /** Role for an external Lead who logs in to the Leads Portal. */
     public const ROLE_LEAD = 'lead';
 
     /** Department portals a non-admin user can be assigned to. */
     public const PORTAL_ROLES = ['sales', 'education', 'english', 'immigration', 'accommodation'];
+
+    /** Roles that resolve to the Immigration portal. */
+    public const IMMIGRATION_ROLES = [
+        self::ROLE_IMMIGRATION_MANAGER,
+        self::ROLE_IMMIGRATION_ADVISER,
+    ];
+
+    /** Tier names mapped to a numeric weight — bigger = more power. */
+    private const ROLE_RANK = [
+        self::ROLE_SUPER_ADMIN          => 100,
+        self::ROLE_ADMIN                => 80,
+        self::ROLE_IMMIGRATION_MANAGER  => 50,
+        self::ROLE_IMMIGRATION_ADVISER  => 20,
+    ];
 
     /**
      * The attributes that are mass assignable.
@@ -63,10 +86,27 @@ class User extends Authenticatable
 
     /**
      * Whether this user is an admin (full access to /admin and every portal).
+     * Super-admins implicitly satisfy any admin check.
      */
     public function isAdmin(): bool
     {
-        return $this->role === self::ROLE_ADMIN;
+        return $this->role === self::ROLE_ADMIN
+            || $this->role === self::ROLE_SUPER_ADMIN;
+    }
+
+    public function isSuperAdmin(): bool
+    {
+        return $this->role === self::ROLE_SUPER_ADMIN;
+    }
+
+    public function isImmigrationManager(): bool
+    {
+        return $this->role === self::ROLE_IMMIGRATION_MANAGER;
+    }
+
+    public function isImmigrationAdviser(): bool
+    {
+        return $this->role === self::ROLE_IMMIGRATION_ADVISER;
     }
 
     /**
@@ -78,12 +118,43 @@ class User extends Authenticatable
     }
 
     /**
+     * Exact-role check.
+     */
+    public function hasRole(string $role): bool
+    {
+        return $this->role === $role;
+    }
+
+    /**
+     * Any-of-the-listed-roles check — convenience for policies.
+     */
+    public function hasAnyRole(array $roles): bool
+    {
+        return in_array($this->role, $roles, true);
+    }
+
+    /**
+     * Numeric tier comparison — useful in helpers like `isAtLeast('admin')`.
+     */
+    public function isAtLeast(string $tier): bool
+    {
+        $mine   = self::ROLE_RANK[$this->role] ?? 0;
+        $needed = self::ROLE_RANK[$tier]       ?? PHP_INT_MAX;
+        return $mine >= $needed;
+    }
+
+    /**
      * Whether this user may open the given department portal.
-     * Admins may open any portal; everyone else only their own.
+     * Admins (and super-admins) may open any portal; immigration-specific
+     * roles resolve to the immigration portal; everyone else only their own.
      */
     public function canAccessPortal(string $portal): bool
     {
-        return $this->isAdmin() || $this->role === $portal;
+        if ($this->isAdmin()) return true;
+        if ($portal === 'immigration' && in_array($this->role, self::IMMIGRATION_ROLES, true)) {
+            return true;
+        }
+        return $this->role === $portal;
     }
 
     /**
@@ -93,6 +164,9 @@ class User extends Authenticatable
     {
         if ($this->isLead()) {
             return '/portal/lead/dashboard';
+        }
+        if (in_array($this->role, self::IMMIGRATION_ROLES, true)) {
+            return '/portal/immigration/dashboard';
         }
         return in_array($this->role, self::PORTAL_ROLES, true)
             ? "/portal/{$this->role}/dashboard"

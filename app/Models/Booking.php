@@ -22,10 +22,20 @@ class Booking extends Model
         'current_country',
         'appointment_date',
         'appointment_time',
+        'resident_intake_id',
+    ];
+
+    protected $casts = [
+        'appointment_date' => 'date',
     ];
 
     public function lead()
     {
         return $this->belongsTo(Lead::class);
+    }
+
+    public function residentIntake()
+    {
+        return $this->belongsTo(ResidentIntake::class);
     }
 }

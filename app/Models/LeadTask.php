@@ -12,22 +12,86 @@ class LeadTask extends Model
     use LogsActivity;
 
     public const PRIORITIES = ['low', 'normal', 'high', 'urgent'];
+    public const TYPES      = ['call', 'email', 'meeting', 'document', 'follow_up', 'internal', 'other'];
+    public const DEPARTMENTS = ['sales', 'education', 'immigration', 'accommodation', 'admin'];
+    public const STATUSES   = ['not_started', 'in_progress', 'in_review', 'completed'];
 
     protected $fillable = [
-        'lead_id', 'created_by', 'assignee_id',
-        'title', 'description', 'due_at', 'priority',
+        'lead_id', 'created_by', 'assignee_id', 'additional_assignee_ids',
+        'title', 'description', 'note', 'due_at', 'priority', 'progress',
         'completed', 'completed_at', 'completed_by',
+        'type', 'category', 'department', 'tags',
+        'recurrence_config', 'cross_dept_reason',
+        'status', 'completion_notes',
     ];
 
     protected $casts = [
-        'due_at'       => 'datetime',
-        'completed_at' => 'datetime',
-        'completed'    => 'boolean',
+        'due_at'                  => 'datetime',
+        'completed_at'            => 'datetime',
+        'completed'               => 'boolean',
+        'tags'                    => 'array',
+        'recurrence_config'       => 'array',
+        'additional_assignee_ids' => 'array',
     ];
+
+    /**
+     * Return every assigned user id — primary first, then co-assignees,
+     * de-duped and re-indexed. Use in views that want to render every
+     * avatar instead of just the primary.
+     */
+    public function allAssigneeIds(): array
+    {
+        $ids = array_merge(
+            $this->assignee_id ? [(int) $this->assignee_id] : [],
+            array_map('intval', $this->additional_assignee_ids ?? [])
+        );
+
+        return array_values(array_unique($ids));
+    }
+
+    /**
+     * Keep `status` and the legacy `completed` flag in lockstep regardless
+     * of which write path mutates the row. Lets the kanban PATCH endpoint
+     * use `status` while LeadTaskController::update keeps using `completed`
+     * — both paths produce coherent rows.
+     */
+    protected static function booted(): void
+    {
+        static::saving(function (self $task) {
+            $statusDirty    = $task->isDirty('status');
+            $completedDirty = $task->isDirty('completed');
+
+            if ($statusDirty && ! $completedDirty) {
+                $task->completed = $task->status === 'completed';
+            } elseif ($completedDirty && ! $statusDirty) {
+                $task->status = $task->completed ? 'completed' : 'not_started';
+            }
+            // If both were set explicitly, trust whatever the caller wrote.
+
+            // Timestamp/audit fields follow `completed` — historical
+            // behavior preserved so existing reports keep working.
+            if ($task->isDirty('completed')) {
+                $task->completed_at = $task->completed ? ($task->completed_at ?? now()) : null;
+                if (! $task->completed) {
+                    $task->completed_by = null;
+                }
+            }
+        });
+    }
 
     public function lead(): BelongsTo
     {
         return $this->belongsTo(Lead::class);
+    }
+
+    public function attachments()
+    {
+        return $this->hasMany(LeadTaskAttachment::class, 'lead_task_id');
+    }
+
+    public function comments()
+    {
+        return $this->hasMany(LeadTaskComment::class, 'lead_task_id');
     }
 
     public function assignee(): BelongsTo

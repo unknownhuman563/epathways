@@ -6,8 +6,12 @@ import UserReviews from '@/pages/admin/Immigration/UserReviews';
 // Education reviews client-side. The shared UserReviews table component
 // stays untouched; this page just slices the data + flips the department
 // prop based on which tab is active.
-export default function UserReviewsAll({ reviews = [] }) {
-    const [tab, setTab] = useState('immigration');
+//
+// When `restrictedDepartment` is set, the page is being viewed by a
+// department-scoped staff user (education or immigration). The other tab
+// is hidden and the visible tab is locked to their department.
+export default function UserReviewsAll({ reviews = [], restrictedDepartment = null }) {
+    const [tab, setTab] = useState(restrictedDepartment || 'immigration');
 
     const counts = useMemo(() => ({
         immigration: reviews.filter((r) => r.department === 'immigration' || r.department === 'both').length,
@@ -20,10 +24,13 @@ export default function UserReviewsAll({ reviews = [] }) {
         reviews.filter((r) => r.department === tab || r.department === 'both')
     ), [reviews, tab]);
 
-    const tabs = [
+    const allTabs = [
         { key: 'immigration', label: 'Immigration', icon: <Globe size={14} />, count: counts.immigration },
         { key: 'education',   label: 'Education',   icon: <GraduationCap size={14} />, count: counts.education },
     ];
+    const tabs = restrictedDepartment
+        ? allTabs.filter((t) => t.key === restrictedDepartment)
+        : allTabs;
 
     return (
         <div className="max-w-[1600px] mx-auto pb-12">

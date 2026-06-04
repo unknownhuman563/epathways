@@ -1,11 +1,18 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Head, Link, router, usePage } from "@inertiajs/react";
+import { toast } from "sonner";
+import {
+    DndContext, DragOverlay, KeyboardSensor, PointerSensor,
+    useDraggable, useDroppable, useSensor, useSensors,
+} from "@dnd-kit/core";
+import { CSS } from "@dnd-kit/utilities";
 import {
     Search, KeyRound, Clock, Check, Mail, ShieldOff, FileText, Phone,
     Filter, ArrowUpDown, ArrowUp, ArrowDown, ChevronLeft, ChevronRight,
     MoreHorizontal, ChevronDown, ChevronRight as ChevronRightIcon, ExternalLink, UserCheck,
     Upload, Loader, Plus, X, CalendarClock, Link2, FileText as FileTextIcon,
+    Pencil, StickyNote,
 } from "lucide-react";
 
 // ── Stage colour map ───────────────────────────────────────────────────────
@@ -119,6 +126,7 @@ export default function SalesLeads({ leads = [], statuses = [], programs = [], s
 
     const [search, setSearch] = useState("");
     const [statusFilter, setStatusFilter] = useState("All");
+    const [view, setView]                 = useState("table"); // table | kanban
     const [savingId, setSavingId] = useState(null);
     const [selectedIds, setSelectedIds] = useState(new Set());
     const [sortKey, setSortKey] = useState("created_at");
@@ -218,8 +226,27 @@ export default function SalesLeads({ leads = [], statuses = [], programs = [], s
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm">
                 <div className="flex items-center border-b border-gray-100 px-4 sm:px-5">
                     <div className="flex items-center gap-1">
-                        <button className="px-3 py-3 text-xs font-bold text-gray-900 border-b-2 border-gray-900 -mb-px">
+                        <button
+                            type="button"
+                            onClick={() => setView("table")}
+                            className={`px-3 py-3 text-xs font-bold transition-colors -mb-px ${
+                                view === "table"
+                                    ? "text-gray-900 border-b-2 border-gray-900"
+                                    : "text-gray-400 border-b-2 border-transparent hover:text-gray-700"
+                            }`}
+                        >
                             Open opportunities
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setView("kanban")}
+                            className={`px-3 py-3 text-xs font-bold transition-colors -mb-px ${
+                                view === "kanban"
+                                    ? "text-gray-900 border-b-2 border-gray-900"
+                                    : "text-gray-400 border-b-2 border-transparent hover:text-gray-700"
+                            }`}
+                        >
+                            Kanban
                         </button>
                         <button className="px-3 py-3 text-xs font-medium text-gray-400 hover:text-gray-700">
                             + List
@@ -297,6 +324,7 @@ export default function SalesLeads({ leads = [], statuses = [], programs = [], s
             </div>
 
             {/* Table */}
+            {view === "table" && (
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-visible">
                 <div className="overflow-x-auto overflow-y-visible">
                     <table className="w-full text-left text-xs">
@@ -507,6 +535,11 @@ export default function SalesLeads({ leads = [], statuses = [], programs = [], s
                     </div>
                 )}
             </div>
+            )}
+
+            {view === "kanban" && (
+                <LeadsKanban filtered={filtered} statuses={statuses} portalBase={portalBase} />
+            )}
         </div>
     );
 }
@@ -1463,5 +1496,578 @@ function StagePicker({ lead, stages, open, onToggle, onClose, onSelect, isSaving
                 </div>
             )}
         </>
+    );
+}
+
+// ── Leads Kanban — pipeline-stage swimlanes w/ drag-and-drop ───────────────
+// Each Lead::STAGES value is a column. Cards drag between columns to change
+// the lead's stage — optimistic UI update, POST to /portal/{role}/leads/{id}
+// with { status: newStage }, revert + toast on failure.
+//
+// Local state mirrors the `filtered` prop so we can flip a lead's stage
+// instantly before the server response. The parent re-renders with fresh
+// `filtered` (from Inertia's redirect) afterwards, which resyncs.
+
+function LeadsKanban({ filtered = [], statuses = [], portalBase }) {
+    const [local, setLocal] = useState(filtered);
+    useEffect(() => { setLocal(filtered); }, [filtered]);
+
+    const [activeId, setActiveId] = useState(null);
+
+    const sensors = useSensors(
+        useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+        useSensor(KeyboardSensor),
+    );
+
+    const grouped = useMemo(() => {
+        const out = {};
+        for (const s of statuses) out[s] = [];
+        for (const l of local) {
+            const k = l.status || "New Leads";
+            (out[k] = out[k] || []).push(l);
+        }
+        return out;
+    }, [local, statuses]);
+
+    const cols = statuses.length ? statuses : Object.keys(grouped);
+    const activeLead = activeId ? local.find((l) => String(l.id) === String(activeId)) : null;
+
+    // Shared between drag-end and the kebab menu's stage picker. Optimistic
+    // flip in local state → POST → revert + toast on failure.
+    const changeStage = (leadId, newStage) => {
+        const lead = local.find((l) => String(l.id) === String(leadId));
+        if (! lead) return;
+        if (! cols.includes(newStage)) return;
+        if (lead.status === newStage) return;
+
+        const previousStage = lead.status;
+
+        setLocal((prev) => prev.map((l) =>
+            l.id === lead.id ? { ...l, status: newStage } : l
+        ));
+
+        router.post(`${portalBase}/leads/${lead.id}`, { status: newStage }, {
+            preserveScroll: true,
+            preserveState: true,
+            onError: () => {
+                setLocal((prev) => prev.map((l) =>
+                    l.id === lead.id ? { ...l, status: previousStage } : l
+                ));
+                toast.error("Could not update stage");
+            },
+            onSuccess: () => {
+                toast.success(`Moved to ${newStage}`);
+            },
+        });
+    };
+
+    const handleDragEnd = ({ active, over }) => {
+        setActiveId(null);
+        if (! over) return;
+        changeStage(active.id, String(over.id));
+    };
+
+    return (
+        <DndContext
+            sensors={sensors}
+            onDragStart={(e) => setActiveId(e.active.id)}
+            onDragEnd={handleDragEnd}
+            onDragCancel={() => setActiveId(null)}
+        >
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-3">
+                <div className="flex gap-3 overflow-x-auto pb-2">
+                    {cols.map((stage) => (
+                        <LeadKanbanColumn
+                            key={stage}
+                            stage={stage}
+                            leads={grouped[stage] || []}
+                            portalBase={portalBase}
+                            statuses={cols}
+                            onStageChange={changeStage}
+                        />
+                    ))}
+                </div>
+            </div>
+
+            <DragOverlay dropAnimation={null}>
+                {activeLead && (
+                    <LeadKanbanCard lead={activeLead} portalBase={portalBase} isOverlay />
+                )}
+            </DragOverlay>
+        </DndContext>
+    );
+}
+
+function LeadKanbanColumn({ stage, leads, portalBase, statuses = [], onStageChange }) {
+    const { setNodeRef, isOver } = useDroppable({ id: stage });
+
+    return (
+        <div className="flex-shrink-0 w-[280px] flex flex-col">
+            <div className="flex items-center justify-between mb-2 px-1">
+                <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider border ${stageClass(stage)}`}>
+                    {stage}
+                </span>
+                <span className="text-[10px] font-bold tabular-nums text-gray-500 bg-gray-100 px-1.5 rounded-full">
+                    {leads.length}
+                </span>
+            </div>
+
+            <div
+                ref={setNodeRef}
+                className={`bg-gray-50 rounded-xl p-2 min-h-[160px] max-h-[68vh] overflow-visible space-y-2 transition-colors ${
+                    isOver ? "bg-blue-50 ring-2 ring-blue-200" : ""
+                }`}
+                role="region"
+                aria-label={`${stage} column`}
+            >
+                {leads.length === 0 ? (
+                    <p className="text-[11px] text-gray-400 text-center py-6">Drop a lead here</p>
+                ) : (
+                    leads.map((l) => (
+                        <LeadKanbanCard
+                            key={l.id}
+                            lead={l}
+                            portalBase={portalBase}
+                            statuses={statuses}
+                            onStageChange={onStageChange}
+                            draggable
+                        />
+                    ))
+                )}
+            </div>
+        </div>
+    );
+}
+
+function LeadKanbanCard({ lead, portalBase, statuses = [], onStageChange, draggable = false, isOverlay = false }) {
+    const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+        id: String(lead.id),
+        data: { lead },
+        disabled: ! draggable,
+    });
+
+    const [menuOpen, setMenuOpen] = useState(false);
+    const [editOpen, setEditOpen] = useState(false);
+    const menuRef = useRef(null);
+
+    // Click-outside / Esc to close the kebab menu.
+    useEffect(() => {
+        if (! menuOpen) return;
+        const onDown = (e) => {
+            if (menuRef.current && ! menuRef.current.contains(e.target)) {
+                setMenuOpen(false);
+            }
+        };
+        const onKey = (e) => { if (e.key === "Escape") setMenuOpen(false); };
+        document.addEventListener("pointerdown", onDown);
+        document.addEventListener("keydown", onKey);
+        return () => {
+            document.removeEventListener("pointerdown", onDown);
+            document.removeEventListener("keydown", onKey);
+        };
+    }, [menuOpen]);
+
+    const style = draggable
+        ? {
+              transform: CSS.Translate.toString(transform),
+              opacity: isDragging && ! isOverlay ? 0.35 : 1,
+          }
+        : undefined;
+
+    const inner = (
+        <div className="relative bg-white rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow p-3">
+            {/* Kebab menu — only on the in-board cards, not on the drag overlay. */}
+            {draggable && ! isOverlay && (
+                <div ref={menuRef} className="absolute top-2 right-2 z-30">
+                    <button
+                        type="button"
+                        onPointerDown={(e) => e.stopPropagation()}
+                        onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setMenuOpen((o) => ! o);
+                        }}
+                        className="p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-700"
+                        aria-label="Card menu"
+                        aria-expanded={menuOpen}
+                    >
+                        <MoreHorizontal size={14} />
+                    </button>
+
+                    {menuOpen && (
+                        <div
+                            className="absolute right-0 top-7 bg-white rounded-lg border border-gray-200 shadow-xl w-44 py-1"
+                            onPointerDown={(e) => e.stopPropagation()}
+                            onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                        >
+                            <button
+                                type="button"
+                                onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    setMenuOpen(false);
+                                    setEditOpen(true);
+                                }}
+                                className="w-full text-left px-3 py-2 text-[12px] hover:bg-gray-50 flex items-center gap-2"
+                            >
+                                <Pencil size={11} className="text-gray-500" />
+                                Edit
+                            </button>
+                            <Link
+                                href={`${portalBase}/leads/${lead.id}`}
+                                onPointerDown={(e) => e.stopPropagation()}
+                                onClick={(e) => { e.stopPropagation(); setMenuOpen(false); }}
+                                className="w-full text-left px-3 py-2 text-[12px] hover:bg-gray-50 flex items-center gap-2 text-gray-700"
+                            >
+                                <ExternalLink size={11} className="text-gray-500" />
+                                Open lead
+                            </Link>
+                        </div>
+                    )}
+                </div>
+            )}
+
+            <div className="flex items-start gap-2 pr-6">
+                <span className={`w-8 h-8 rounded-full inline-flex items-center justify-center text-[11px] font-bold flex-shrink-0 ${avatarColor(lead.id)}`}>
+                    {initials(lead.name)}
+                </span>
+                <div className="flex-1 min-w-0">
+                    <p className="text-[13px] font-semibold text-gray-900 truncate">{lead.name || "—"}</p>
+                    <p className="text-[10px] text-gray-500 font-mono">{lead.lead_id}</p>
+                </div>
+            </div>
+
+            {(lead.email || lead.phone) && (
+                <div className="mt-2 space-y-0.5">
+                    {lead.email && (
+                        <p className="text-[10.5px] text-gray-500 truncate inline-flex items-center gap-1">
+                            <Mail size={9} className="text-gray-400" />
+                            <span className="truncate">{lead.email}</span>
+                        </p>
+                    )}
+                    {lead.phone && (
+                        <p className="text-[10.5px] text-gray-500 truncate inline-flex items-center gap-1">
+                            <Phone size={9} className="text-gray-400" />
+                            {lead.phone}
+                        </p>
+                    )}
+                </div>
+            )}
+
+            <div className="mt-2 pt-2 border-t border-gray-50 flex items-center justify-between text-[10px] text-gray-400">
+                <span className="tabular-nums">{fmtDateShort(lead.created_at)}</span>
+                {lead.source && <span className="truncate max-w-[120px]">{lead.source}</span>}
+            </div>
+        </div>
+    );
+
+    if (! draggable) {
+        // DragOverlay rendering — bare card, no link wrapper.
+        return (
+            <div style={style} className={isOverlay ? "rotate-1 shadow-2xl" : ""}>
+                {inner}
+            </div>
+        );
+    }
+
+    // Draggable card wraps an Inertia Link so a plain click navigates to
+    // the detail page. The kebab + its menu live inside `inner` and stop
+    // both pointerdown and click propagation so they don't engage drag or
+    // bubble up to the Link.
+    return (
+        <>
+            <div
+                ref={setNodeRef}
+                {...attributes}
+                {...listeners}
+                style={style}
+                className="cursor-grab active:cursor-grabbing focus:outline-none focus:ring-2 focus:ring-gray-900 rounded-xl"
+                tabIndex={0}
+                role="button"
+                aria-label={`${lead.name || "Lead"} ${lead.lead_id || ""}, ${lead.status || ""}`}
+            >
+                <Link
+                    href={`${portalBase}/leads/${lead.id}`}
+                    onClick={(e) => {
+                        if (isDragging || menuOpen || editOpen) e.preventDefault();
+                    }}
+                    onPointerDown={(e) => e.stopPropagation()}
+                    className="block"
+                >
+                    {inner}
+                </Link>
+            </div>
+
+            <LeadEditModal
+                open={editOpen}
+                onClose={() => setEditOpen(false)}
+                lead={lead}
+                statuses={statuses}
+                portalBase={portalBase}
+            />
+        </>
+    );
+}
+
+// ── Lead Edit Modal — stage + add a note in one shot ───────────────────────
+// Opens from the kebab "Edit" item on a kanban card. Two updates run
+// sequentially: stage first (only if changed), then note (only if filled).
+// After both finish, Inertia's automatic re-render pulls fresh lead data
+// from the controller so the card lands in the right column on refresh.
+
+function LeadEditModal({ open, onClose, lead, statuses = [], portalBase }) {
+    const [stage, setStage]           = useState(lead?.status || "");
+    const [newNote, setNewNote]       = useState("");
+    const [notes, setNotes]           = useState([]);
+    const [loadingNotes, setLoading]  = useState(false);
+    const [saving, setSaving]         = useState(false);
+    const [error, setError]           = useState(null);
+
+    // Reset state and pull notes whenever the modal opens for a new lead.
+    useEffect(() => {
+        if (! open) return;
+        setStage(lead?.status || "");
+        setNewNote("");
+        setSaving(false);
+        setError(null);
+
+        setLoading(true);
+        fetch(`/admin/leads/${lead.id}/notes`, {
+            headers: { Accept: "application/json" },
+            credentials: "same-origin",
+        })
+            .then((r) => r.ok ? r.json() : { notes: [] })
+            .then((d) => setNotes(d.notes || []))
+            .catch(() => setNotes([]))
+            .finally(() => setLoading(false));
+    }, [open, lead?.id, lead?.status]);
+
+    if (! open) return null;
+
+    const stageChanged = stage && stage !== lead?.status;
+    const hasNote      = newNote.trim().length > 0;
+    const canSave      = ! saving && (stageChanged || hasNote);
+
+    const finish = () => {
+        setSaving(false);
+        toast.success("Lead updated");
+        onClose?.();
+    };
+
+    const postNote = () => {
+        if (! hasNote) {
+            finish();
+            return;
+        }
+        router.post(`${portalBase}/leads/${lead.id}/notes`, { body: newNote.trim() }, {
+            preserveScroll: true,
+            preserveState: true,
+            onError: () => {
+                setSaving(false);
+                setError(stageChanged
+                    ? "Stage saved, but the note failed."
+                    : "Could not save the note.");
+            },
+            onSuccess: finish,
+        });
+    };
+
+    const handleSave = () => {
+        if (! canSave) return;
+        setSaving(true);
+        setError(null);
+
+        if (stageChanged) {
+            router.post(`${portalBase}/leads/${lead.id}`, { status: stage }, {
+                preserveScroll: true,
+                preserveState: true,
+                onError: () => {
+                    setSaving(false);
+                    setError("Could not update the stage.");
+                },
+                onSuccess: postNote,
+            });
+        } else {
+            postNote();
+        }
+    };
+
+    const fmtWhen = (iso) =>
+        iso ? new Date(iso).toLocaleString("en-NZ", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "";
+
+    return (
+        <div
+            className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-0 sm:p-6"
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+                e.stopPropagation();
+                if (e.target === e.currentTarget) onClose?.();
+            }}
+        >
+            <div
+                className="bg-white w-full max-w-xl rounded-t-2xl sm:rounded-2xl shadow-2xl max-h-[90vh] overflow-hidden flex flex-col"
+                onClick={(e) => e.stopPropagation()}
+            >
+                {/* Header */}
+                <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+                    <div className="min-w-0 flex items-center gap-3">
+                        <span className={`w-10 h-10 rounded-full inline-flex items-center justify-center text-[12px] font-bold flex-shrink-0 ${avatarColor(lead?.id)}`}>
+                            {initials(lead?.name)}
+                        </span>
+                        <div className="min-w-0">
+                            <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Edit lead</p>
+                            <h3 className="text-sm font-semibold text-gray-900 truncate">
+                                {lead?.name || "—"}
+                                <span className="ml-2 font-mono text-[11px] text-gray-500">{lead?.lead_id}</span>
+                            </h3>
+                        </div>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        className="p-1.5 rounded-md hover:bg-gray-100 text-gray-500"
+                        aria-label="Close"
+                    >
+                        <X size={16} />
+                    </button>
+                </div>
+
+                {/* Body — scrollable */}
+                <div className="flex-1 overflow-y-auto px-5 py-4 space-y-5">
+                    {error && (
+                        <div className="px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-red-700 text-[12px]">
+                            {error}
+                        </div>
+                    )}
+
+                    {/* Lead info */}
+                    <section>
+                        <h4 className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-2">Lead info</h4>
+                        <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2 text-[12px]">
+                            <InfoRow icon={<Mail size={11} />}        label="Email"   value={lead?.email} />
+                            <InfoRow icon={<Phone size={11} />}       label="Phone"   value={lead?.phone} />
+                            <InfoRow icon={<FileTextIcon size={11}/>} label="Source"  value={lead?.source} />
+                            <InfoRow icon={<CalendarClock size={11}/>}label="Created" value={fmtWhen(lead?.created_at)} />
+                        </dl>
+                    </section>
+
+                    {/* Stage */}
+                    <section>
+                        <h4 className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-2">Stage</h4>
+                        <select
+                            value={stage}
+                            onChange={(e) => setStage(e.target.value)}
+                            disabled={saving}
+                            className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm bg-white"
+                        >
+                            {statuses.map((s) => (
+                                <option key={s} value={s}>{s}</option>
+                            ))}
+                        </select>
+                        {stageChanged && (
+                            <p className="mt-1.5 text-[10px] text-gray-500 inline-flex items-center gap-1">
+                                <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider border ${stageClass(lead?.status || "")}`}>
+                                    {lead?.status || "—"}
+                                </span>
+                                →
+                                <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider border ${stageClass(stage)}`}>
+                                    {stage}
+                                </span>
+                            </p>
+                        )}
+                    </section>
+
+                    {/* Internal notes */}
+                    <section>
+                        <h4 className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-2 inline-flex items-center gap-1.5">
+                            <StickyNote size={11} /> Internal notes
+                            <span className="text-gray-400 font-normal normal-case tracking-normal">({notes.length})</span>
+                        </h4>
+
+                        <div className="rounded-xl border border-gray-100 bg-gray-50/60 max-h-56 overflow-y-auto divide-y divide-gray-100">
+                            {loadingNotes ? (
+                                <p className="px-3 py-4 text-[11px] text-gray-400 text-center">Loading…</p>
+                            ) : notes.length === 0 ? (
+                                <p className="px-3 py-4 text-[11px] text-gray-400 text-center">No internal notes yet.</p>
+                            ) : (
+                                notes.map((n) => (
+                                    <div key={n.id} className="px-3 py-2.5">
+                                        <div className="flex items-baseline justify-between gap-2">
+                                            <div className="flex items-center gap-1.5 min-w-0">
+                                                {n.pinned && (
+                                                    <span className="text-[9px] font-bold uppercase tracking-wider text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded">
+                                                        Pinned
+                                                    </span>
+                                                )}
+                                                <span className="text-[11.5px] font-semibold text-gray-900 truncate">
+                                                    {n.author_name || "Unknown"}
+                                                </span>
+                                                {n.author_role && (
+                                                    <span className="text-[9px] font-bold uppercase tracking-wider text-gray-400">
+                                                        {n.author_role}
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <span className="text-[10px] text-gray-400 tabular-nums flex-shrink-0">
+                                                {fmtWhen(n.created_at)}
+                                            </span>
+                                        </div>
+                                        <p className="mt-1 text-[12px] text-gray-700 whitespace-pre-wrap leading-snug">
+                                            {n.body}
+                                        </p>
+                                    </div>
+                                ))
+                            )}
+                        </div>
+
+                        {/* Quick add */}
+                        <div className="mt-2">
+                            <label className="block text-[10px] font-bold uppercase tracking-wider text-gray-500 mb-1">
+                                Add a note <span className="font-normal text-gray-400 normal-case tracking-normal">(optional)</span>
+                            </label>
+                            <textarea
+                                value={newNote}
+                                onChange={(e) => setNewNote(e.target.value)}
+                                disabled={saving}
+                                rows={3}
+                                placeholder="Quick note — saved alongside the stage change."
+                                className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm resize-none"
+                            />
+                        </div>
+                    </section>
+                </div>
+
+                {/* Footer */}
+                <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-gray-100 bg-gray-50">
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        disabled={saving}
+                        className="px-4 py-2 rounded-lg text-[12px] font-bold uppercase tracking-wider text-gray-700 hover:bg-gray-200 disabled:opacity-40"
+                    >
+                        Cancel
+                    </button>
+                    <button
+                        type="button"
+                        onClick={handleSave}
+                        disabled={! canSave}
+                        className="px-4 py-2 rounded-lg bg-gray-900 text-white text-[12px] font-bold uppercase tracking-wider hover:bg-gray-800 transition-colors disabled:opacity-40"
+                    >
+                        {saving ? "Saving…" : "Save"}
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+function InfoRow({ icon, label, value }) {
+    return (
+        <div className="min-w-0">
+            <dt className="text-[10px] font-bold uppercase tracking-wider text-gray-400 inline-flex items-center gap-1 mb-0.5">
+                {icon} {label}
+            </dt>
+            <dd className="text-gray-800 truncate">{value || <span className="text-gray-400">—</span>}</dd>
+        </div>
     );
 }
