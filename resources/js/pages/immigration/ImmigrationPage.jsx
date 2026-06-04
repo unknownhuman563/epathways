@@ -28,6 +28,8 @@ import DevImg         from "@assets/team/Dev.png";
 import DaiImg         from "@assets/team/dai.png";
 import EmmaImg        from "@assets/team/emma.png";
 import EmilyImg       from "@assets/team/emily.png";
+import TarunImg       from "@assets/team/tarun.png";
+import LicensedBadge  from "@assets/banner/licensed.png";
 import VisaImg        from "@assets/Services/visa.png";
 import AgentsImg      from "@assets/Services/agents.png";
 import SettlementImg  from "@assets/Services/settlement.png";
@@ -49,26 +51,38 @@ const topVisas = [
 const services = []; // Removed in favor of ImmigrationServices component
 
 const consultants = [
-    { 
-        name: "Emily Dela Pena", 
-        license: "Finance Admin Champion", 
-        role: "Finance & Admin", 
+    {
+        // Emily — staff (not an IAA-licensed adviser). No role, no licence,
+        // no badge.
+        name: "Emily Dela Pena",
         bio: "Dedicated finance and administration champion ensuring smooth operations and a seamless client experience at ePathways.",
-        img: EmilyImg 
+        img: EmilyImg,
+        licensed: false,
     },
-    { 
-        name: "Dev Bhageerutty", 
-        license: "202401351", 
-        role: "Licence Immigration Adviser (Provisional)", 
-        bio: "Senior adviser with 15 years of immigration law expertise in New Zealand.",
-        img: DevImg 
+    {
+        // Tarun — team member, currently unlicensed. Sits in position 2.
+        name: "Tarun Patel",
+        bio: "Immigration team member supporting clients through every stage of their New Zealand visa journey.",
+        img: TarunImg,
+        licensed: false,
     },
-    { 
-        name: "Hendry Dai", 
-        license: "IAA: 201500074", 
-        role: "Licence Immigration Adviser", 
+    {
+        // Hendry — licensed adviser. The "Licence Immigration Adviser"
+        // role eyebrow is intentionally omitted; the IAA seal communicates
+        // the licensing status, so the label is redundant.
+        name: "Hendry Dai",
+        license: "IAA: 201500074",
         bio: "Specialist in skilled migration programs and employer accredited work visas.",
-        img: DaiImg 
+        img: DaiImg,
+        licensed: true,
+    },
+    {
+        // Dev — licensed (provisional) adviser. Same: badge replaces label.
+        name: "Dev Bhageerutty",
+        license: "202401351",
+        bio: "Senior adviser with 15 years of immigration law expertise in New Zealand.",
+        img: DevImg,
+        licensed: true,
     },
 ];
 
@@ -797,7 +811,7 @@ export default function Immigration({ reviews = [], stats = { count: 0, average:
                             initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}
                             className="text-4xl md:text-5xl font-medium mb-6 tracking-tight"
                         >
-                            Meet our licensed advisers
+                            Meet our immigration team
                         </motion.h2>
                         <motion.p
                             initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true }}
@@ -807,43 +821,61 @@ export default function Immigration({ reviews = [], stats = { count: 0, average:
                         </motion.p>
                     </div>
 
-                    {/* Consultant Grid — 1 row, 3 columns */}
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    {/* Consultant Grid — vertical stacked cards (portrait
+                        on top, info below). Sized to match the rest of
+                        the site's team cards (compact aspect-[4/5] inside
+                        a 4-up grid on lg) so the section doesn't dwarf
+                        adjacent content. */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 lg:gap-6">
                         {consultants.map((c, i) => (
                             <motion.div
                                 key={i}
                                 initial={{ opacity: 0, y: 30 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: i * 0.1 }}
-                                className="flex flex-col sm:flex-row bg-white/5 border border-white/10 rounded-sm overflow-hidden group hover:border-white/20 transition-all duration-500"
+                                className="flex flex-col bg-white/5 border border-white/10 rounded-sm overflow-hidden group hover:border-white/30 hover:shadow-xl transition-all duration-500"
                             >
-                                {/* Left: Image (45% approx) */}
-                                <div className="sm:w-[45%] aspect-[4/5] relative overflow-hidden bg-white/10">
-                                    <img 
-                                        src={c.img} 
-                                        alt={c.name} 
-                                        className="w-full h-full object-cover object-top group-hover:scale-105 transition-all duration-700" 
+                                {/* Top: Portrait image — full width,
+                                    aspect-[4/5] keeps the photo readable
+                                    without dominating the card. IAA seal
+                                    sits on the photo at the bottom-right
+                                    so it lands on the dark suit area
+                                    where it pops cleanly. */}
+                                <div className="aspect-[4/5] relative overflow-hidden bg-white/10">
+                                    <img
+                                        src={c.img}
+                                        alt={c.name}
+                                        className="w-full h-full object-cover object-top group-hover:scale-105 transition-all duration-700"
                                     />
-                                    {/* IAA badge */}
-                                    <div className="absolute top-4 left-4 w-10 h-10 rounded-full bg-[#00A693] flex items-center justify-center text-white text-[7px] font-bold text-center leading-tight">
-                                        Licensed<br />IAA
-                                    </div>
+                                    {c.licensed && (
+                                        <img
+                                            src={LicensedBadge}
+                                            alt="Licensed by Immigration Advisers Authority"
+                                            className="absolute bottom-3 right-3 w-20 h-20 object-contain drop-shadow-lg"
+                                        />
+                                    )}
                                 </div>
 
-                                {/* Right: Info (55%) */}
-                                <div className="sm:w-[55%] p-10 flex flex-col justify-center">
-                                    <span className="text-[10px] font-bold tracking-widest uppercase text-[#00A693] mb-3 block">
-                                        {c.role}
-                                    </span>
-                                    <h3 className="text-2xl md:text-3xl font-medium mb-1 text-white leading-tight">
+                                {/* Bottom: Info — tighter padding + smaller
+                                    type so cards stay compact in a 4-col
+                                    grid. */}
+                                <div className="p-5 flex flex-col relative">
+                                    {c.role && (
+                                        <span className="text-[9px] font-bold tracking-widest uppercase text-[#00A693] mb-2 block pr-12 leading-tight">
+                                            {c.role}
+                                        </span>
+                                    )}
+                                    <h3 className="text-lg md:text-xl font-medium mb-1 text-white leading-tight tracking-tight">
                                         {c.name}
                                     </h3>
-                                    <div className="text-white/60 text-[10px] font-bold uppercase tracking-widest mb-4">
-                                        {c.license}
-                                    </div>
-                                    <a 
-                                        href="/immigration-assessment" 
-                                        className="text-[10px] font-bold uppercase tracking-widest flex items-center gap-2 text-white hover:text-[#00A693] transition-colors group/link"
+                                    {c.license && (
+                                        <div className="text-white/60 text-[9px] font-bold uppercase tracking-widest mb-4">
+                                            {c.license}
+                                        </div>
+                                    )}
+                                    <a
+                                        href="/immigration-assessment"
+                                        className={`text-[10px] font-bold uppercase tracking-[0.2em] flex items-center gap-2 text-white hover:text-[#00A693] transition-colors group/link w-fit pt-3 border-t border-white/15 ${c.license ? '' : 'mt-2'}`}
                                     >
-                                        Connect <ArrowRight size={12} className="group-hover/link:translate-x-1 transition-transform" />
+                                        Connect <ArrowRight size={12} strokeWidth={2.5} className="group-hover/link:translate-x-1 transition-transform" />
                                     </a>
                                 </div>
                             </motion.div>
