@@ -712,8 +712,20 @@ class LeadController extends Controller
         $allTags = \App\Models\LeadTag::orderBy('name')->limit(50)->get(['id', 'name', 'color']);
 
         // Tasks — open first (sorted by due date), then completed.
-        $tasks = \App\Models\LeadTask::with(['assignee:id,name', 'creator:id,name'])
-            ->where('lead_id', $lead->id)
+        //
+        // We pull the same fields the Task Board renders (status, type,
+        // attachments, additional links) so the lead-detail Tasks card and
+        // the Task Board show the same row regardless of which surface the
+        // task was created from. Attachments are eager-loaded so the panel
+        // can render a paperclip + file list inline.
+        $tasks = \App\Models\LeadTask::with([
+                'assignee:id,name', 'creator:id,name',
+                'attachments', 'attachments.uploader:id,name',
+            ])
+            ->where(function ($q) use ($lead) {
+                $q->where('lead_id', $lead->id)
+                    ->orWhereJsonContains('additional_lead_ids', $lead->id);
+            })
             ->orderBy('completed')
             ->orderByRaw('due_at IS NULL, due_at ASC')
             ->orderByDesc('created_at')
@@ -722,14 +734,29 @@ class LeadController extends Controller
                 'id'           => $t->id,
                 'title'        => $t->title,
                 'description'  => $t->description,
+                'note'         => $t->note,
+                'status'       => $t->status,
+                'type'         => $t->type,
+                'progress'     => $t->progress,
                 'due_at'       => $t->due_at,
                 'priority'     => $t->priority,
                 'completed'    => $t->completed,
                 'completed_at' => $t->completed_at,
                 'overdue'      => ! $t->completed && $t->due_at && $t->due_at->isPast(),
                 'assignee'     => $t->assignee ? ['id' => $t->assignee->id, 'name' => $t->assignee->name] : null,
+                'additional_assignee_ids' => $t->additional_assignee_ids ?? [],
+                'additional_lead_ids'     => $t->additional_lead_ids ?? [],
                 'created_by'   => $t->created_by,
                 'creator'      => $t->creator ? ['id' => $t->creator->id, 'name' => $t->creator->name] : null,
+                'attachments'  => $t->attachments->map(fn ($a) => [
+                    'id'                => $a->id,
+                    'url'               => $a->url,
+                    'original_filename' => $a->original_filename,
+                    'mime_type'         => $a->mime_type,
+                    'size'              => $a->size,
+                    'is_image'          => $a->is_image,
+                    'uploader'          => $a->uploader ? ['id' => $a->uploader->id, 'name' => $a->uploader->name] : null,
+                ])->values(),
             ]);
 
         // Staff users available as task assignees (small list — could later

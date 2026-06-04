@@ -544,6 +544,7 @@ class ImmigrationController extends Controller
                 ])->values(),
                 'assignee'     => $t->assignee ? ['id' => $t->assignee->id, 'name' => $t->assignee->name] : null,
                 'additional_assignee_ids' => $t->additional_assignee_ids ?? [],
+                'additional_lead_ids'     => $t->additional_lead_ids ?? [],
                 'creator'      => $t->creator  ? ['id' => $t->creator->id,  'name' => $t->creator->name]  : null,
                 'lead'         => $t->lead ? [
                     'id'      => $t->lead->id,
