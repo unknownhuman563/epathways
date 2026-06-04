@@ -35,7 +35,7 @@ class VisitorIntakeController extends Controller
 
             $intake = VisitorIntake::create(array_merge($validated, [
                 'intake_id' => $intakeId,
-                'status'    => 'New',
+                'status'    => 'Submitted',
             ]));
 
             $visaType = VisaType::query()->where('code', 'VISITOR')->first()

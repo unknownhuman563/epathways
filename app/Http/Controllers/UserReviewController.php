@@ -162,15 +162,39 @@ class UserReviewController extends Controller
      * education + cross-dept 'both'). The React page tabs between
      * departments client-side so staff doesn't have to bounce between two
      * sidebar links.
+     *
+     * The page path is picked so the correct portal chrome wraps the same
+     * React component — admins land in AdminLayout, education staff in
+     * EducationLayout, immigration staff in ImmigrationLayout (via the
+     * thin re-export files in those portal/ directories).
      */
     public function adminUnifiedIndex()
     {
-        $reviews = UserReview::latest()->get();
-        $page = auth()->user()?->isAdmin()
-            ? 'admin/UserReviewsAll'
-            : 'admin/UserReviewsAll';
+        $user = auth()->user();
+
+        // Department-scoped staff (education / immigration) only see their
+        // own + cross-department ('both') reviews; admins see everything.
+        $restrict = null;
+        $page     = 'admin/UserReviewsAll';
+        if ($user && !$user->isAdmin()) {
+            if ($user->role === 'education') {
+                $page     = 'portal/education/UserReviewsAll';
+                $restrict = 'education';
+            }
+            if ($user->role === 'immigration') {
+                $page     = 'portal/immigration/UserReviewsAll';
+                $restrict = 'immigration';
+            }
+        }
+
+        $reviews = UserReview::query()
+            ->when($restrict, fn ($q) => $q->whereIn('department', [$restrict, 'both']))
+            ->latest()
+            ->get();
+
         return inertia($page, [
-            'reviews' => $reviews,
+            'reviews'              => $reviews,
+            'restrictedDepartment' => $restrict,
         ]);
     }
 

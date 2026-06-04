@@ -78,6 +78,11 @@ export default function KanbanBoard({
         overdue: PAGE_SIZE, not_started: PAGE_SIZE, in_progress: PAGE_SIZE,
         in_review: PAGE_SIZE, completed: PAGE_SIZE,
     });
+    // Done starts collapsed so the four active columns get more breathing
+    // room. Drop target still works while collapsed — drop expands.
+    const [collapsed, setCollapsed] = useState({ completed: true });
+    const toggleCollapsed = (id) =>
+        setCollapsed((c) => ({ ...c, [id]: ! c[id] }));
 
     const sensors = useSensors(
         useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -203,6 +208,8 @@ export default function KanbanBoard({
                         onNewTask={onNewTask}
                         currentDepartment={department}
                         portalBase={portalBase}
+                        collapsed={!! collapsed[col.id]}
+                        onToggleCollapsed={() => toggleCollapsed(col.id)}
                     />
                 ))}
             </div>
@@ -240,10 +247,44 @@ export default function KanbanBoard({
 
 // ─── Column ─────────────────────────────────────────────────────────────
 
-function Column({ column, tasks, shown, onShowMore, canDrag, onClickCard, onNewTask, currentDepartment, portalBase }) {
+function Column({ column, tasks, shown, onShowMore, canDrag, onClickCard, onNewTask, currentDepartment, portalBase, collapsed = false, onToggleCollapsed }) {
     const { setNodeRef, isOver } = useDroppable({ id: column.id });
     const visible = tasks.slice(0, shown);
     const hidden = tasks.length - shown;
+
+    // Collapsed rail — narrow vertical strip with the dot, sideways label,
+    // count, and an expand button. Stays a drop target so users can still
+    // drag a card onto Done; dropping expands so they see what happened.
+    if (collapsed) {
+        return (
+            <div
+                ref={setNodeRef}
+                className={`flex-shrink-0 w-[48px] flex flex-col items-center rounded-2xl ${column.colBg} p-2 transition-colors ${
+                    isOver ? "ring-2 ring-gray-900/15 bg-gray-50" : ""
+                }`}
+            >
+                <button
+                    type="button"
+                    onClick={onToggleCollapsed}
+                    className="w-8 h-8 rounded-md inline-flex items-center justify-center text-gray-500 hover:text-gray-900 hover:bg-gray-100"
+                    aria-label={`Expand ${column.label} column`}
+                    title={`Expand ${column.label}`}
+                >
+                    <ChevronDown size={14} className="rotate-90" />
+                </button>
+                <span className={`w-2 h-2 rounded-full ${column.dot} mt-3`} />
+                <span className="mt-2 text-[10px] font-bold tabular-nums text-gray-700 bg-white/70 rounded-full px-1.5 py-0.5 border border-gray-200">
+                    {tasks.length}
+                </span>
+                <span
+                    className="mt-3 text-[11px] font-semibold text-gray-600 whitespace-nowrap"
+                    style={{ writingMode: "vertical-rl", transform: "rotate(180deg)" }}
+                >
+                    {column.label}
+                </span>
+            </div>
+        );
+    }
 
     return (
         <div className={`flex-shrink-0 w-[280px] md:flex-1 md:min-w-0 flex flex-col rounded-2xl ${column.colBg} p-3 transition-colors ${
@@ -256,20 +297,33 @@ function Column({ column, tasks, shown, onShowMore, canDrag, onClickCard, onNewT
                     {column.label}
                     <span className="text-gray-400 font-normal">({tasks.length})</span>
                 </h3>
-                <button
-                    type="button"
-                    onClick={onNewTask}
-                    className="w-6 h-6 rounded-md inline-flex items-center justify-center text-gray-500 hover:text-gray-900 hover:bg-gray-100"
-                    aria-label={`Add task to ${column.label}`}
-                    title={`Add task to ${column.label}`}
-                >
-                    +
-                </button>
+                <div className="flex items-center gap-1">
+                    <button
+                        type="button"
+                        onClick={onNewTask}
+                        className="w-6 h-6 rounded-md inline-flex items-center justify-center text-gray-500 hover:text-gray-900 hover:bg-gray-100"
+                        aria-label={`Add task to ${column.label}`}
+                        title={`Add task to ${column.label}`}
+                    >
+                        +
+                    </button>
+                    {onToggleCollapsed && (
+                        <button
+                            type="button"
+                            onClick={onToggleCollapsed}
+                            className="w-6 h-6 rounded-md inline-flex items-center justify-center text-gray-500 hover:text-gray-900 hover:bg-gray-100"
+                            aria-label={`Collapse ${column.label} column`}
+                            title={`Collapse ${column.label}`}
+                        >
+                            <ChevronDown size={12} className="-rotate-90" />
+                        </button>
+                    )}
+                </div>
             </div>
 
             <div
                 ref={setNodeRef}
-                className="flex-1 min-h-[160px] max-h-[68vh] overflow-y-auto px-0.5 pb-1 space-y-3"
+                className="flex-1 min-h-[160px] px-0.5 pb-1 space-y-3"
                 role="region"
                 aria-label={`${column.label} column`}
             >

@@ -17,7 +17,7 @@ class LeadTask extends Model
     public const STATUSES   = ['not_started', 'in_progress', 'in_review', 'completed'];
 
     protected $fillable = [
-        'lead_id', 'created_by', 'assignee_id',
+        'lead_id', 'created_by', 'assignee_id', 'additional_assignee_ids',
         'title', 'description', 'note', 'due_at', 'priority', 'progress',
         'completed', 'completed_at', 'completed_by',
         'type', 'category', 'department', 'tags',
@@ -26,12 +26,28 @@ class LeadTask extends Model
     ];
 
     protected $casts = [
-        'due_at'            => 'datetime',
-        'completed_at'      => 'datetime',
-        'completed'         => 'boolean',
-        'tags'              => 'array',
-        'recurrence_config' => 'array',
+        'due_at'                  => 'datetime',
+        'completed_at'            => 'datetime',
+        'completed'               => 'boolean',
+        'tags'                    => 'array',
+        'recurrence_config'       => 'array',
+        'additional_assignee_ids' => 'array',
     ];
+
+    /**
+     * Return every assigned user id — primary first, then co-assignees,
+     * de-duped and re-indexed. Use in views that want to render every
+     * avatar instead of just the primary.
+     */
+    public function allAssigneeIds(): array
+    {
+        $ids = array_merge(
+            $this->assignee_id ? [(int) $this->assignee_id] : [],
+            array_map('intval', $this->additional_assignee_ids ?? [])
+        );
+
+        return array_values(array_unique($ids));
+    }
 
     /**
      * Keep `status` and the legacy `completed` flag in lockstep regardless

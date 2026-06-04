@@ -1,8 +1,13 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { router, usePage } from "@inertiajs/react";
+import { toast } from "sonner";
 import {
-    Building2, Calendar, Hash, Lock, MessageCircle, MoreVertical, Paperclip, User,
+    Building2, Calendar, Hash, Lock, MessageCircle, MoreVertical, Paperclip,
+    User, ArrowRightLeft, Check, Pencil, FileText, Film, Music, FileImage,
 } from "lucide-react";
 import CommentsPopover from "./CommentsPopover";
+import TaskDetailModal from "./TaskDetailModal";
+import AttachmentsModal from "./AttachmentsModal";
 
 // Pure presentational task card. Shared between the kanban (where it's
 // wrapped by useDraggable) and the list view (where it sits in a grid).
@@ -130,15 +135,80 @@ const TaskCard = function TaskCard({
 
     const priorityChip = PRIORITY_CHIP[task.priority];
 
-    const images = (task.attachments || []).filter((a) => a.is_image);
-    const firstImage = images[0];
-    const attachmentCount = (task.attachments || []).length;
+    // Prefer showing an image thumbnail if there is one, but fall back to
+    // the first attachment of any type so PDFs / videos / docs also get a
+    // visible tile on the card.
+    const attachmentsList = task.attachments || [];
+    const images = attachmentsList.filter((a) => a.is_image);
+    const firstAttachment = images[0] || attachmentsList[0] || null;
+    const attachmentCount = attachmentsList.length;
 
     // Comments badge / popover. `commentsCount` shadows the server-provided
     // count so it bumps live when the viewer adds one without needing a
     // full board refetch.
     const [commentsOpen, setCommentsOpen] = useState(false);
     const [commentsCount, setCommentsCount] = useState(Number(task.comments_count ?? 0));
+    const [menuOpen,     setMenuOpen]     = useState(false);
+    const [moving,       setMoving]       = useState(false);
+    const [detailOpen,   setDetailOpen]   = useState(false);
+    const [attachmentsOpen, setAttachmentsOpen] = useState(false);
+    const menuRef = useRef(null);
+
+    // Auth context for the cross-dept reason hint.
+    const { props: pageProps } = usePage();
+    const currentUser = pageProps?.auth?.user;
+
+    // Close menu on outside click or Esc.
+    useEffect(() => {
+        if (! menuOpen) return;
+        const onDown = (e) => {
+            if (menuRef.current && ! menuRef.current.contains(e.target)) {
+                setMenuOpen(false);
+            }
+        };
+        const onKey = (e) => { if (e.key === "Escape") setMenuOpen(false); };
+        document.addEventListener("pointerdown", onDown);
+        document.addEventListener("keydown", onKey);
+        return () => {
+            document.removeEventListener("pointerdown", onDown);
+            document.removeEventListener("keydown", onKey);
+        };
+    }, [menuOpen]);
+
+    const DEPT_LABELS = {
+        sales:         "Sales",
+        education:     "Education",
+        immigration:   "Immigration",
+        accommodation: "Accommodation",
+        admin:         "Admin",
+    };
+
+    const moveToDepartment = (dept) => {
+        if (dept === task.department) {
+            setMenuOpen(false);
+            return;
+        }
+        const fromMyDept = task.department === currentUser?.role;
+        const reason = (! currentUser?.role || currentUser?.role === "admin" || ! fromMyDept)
+            ? null
+            : prompt(`Why are you moving this task to ${DEPT_LABELS[dept] || dept}?`);
+        if (reason === "") return; // user cancelled the prompt explicitly with empty
+
+        setMoving(true);
+        router.patch(`/api/tasks/${task.id}`, {
+            department: dept,
+            ...(reason ? { cross_dept_reason: reason } : {}),
+        }, {
+            preserveScroll: true,
+            preserveState: true,
+            onSuccess: () => {
+                toast.success(`Moved to ${DEPT_LABELS[dept] || dept}`);
+                setMenuOpen(false);
+            },
+            onError: () => toast.error("Could not move the task"),
+            onFinish: () => setMoving(false),
+        });
+    };
 
     return (
         <>
@@ -161,7 +231,7 @@ const TaskCard = function TaskCard({
             } ${isOverlay ? "shadow-2xl rotate-1" : "hover:shadow-md transition-shadow"}`}
         >
             {/* Chip row + kebab */}
-            <div className="flex items-start justify-between gap-2 p-3 pb-2">
+            <div className="flex items-start justify-between gap-2 p-4 pb-2.5">
                 <div className="flex items-center gap-1 flex-wrap min-w-0">
                     {chips.map((c, i) => (
                         <span
@@ -177,7 +247,7 @@ const TaskCard = function TaskCard({
                         </span>
                     )}
                 </div>
-                <div className="flex items-center gap-1 flex-shrink-0">
+                <div ref={menuRef} className="flex items-center gap-1 flex-shrink-0 relative">
                     {locked && (
                         <span className="text-gray-400" title="Locked — you can't move tasks from other departments">
                             <Lock size={12} />
@@ -185,48 +255,94 @@ const TaskCard = function TaskCard({
                     )}
                     <button
                         type="button"
+                        onPointerDown={(e) => e.stopPropagation()}
                         onClick={(e) => {
+                            e.preventDefault();
                             e.stopPropagation();
+                            setMenuOpen((o) => ! o);
                             onMenuClick?.(task);
                         }}
                         className="text-gray-400 hover:text-gray-700 p-0.5 rounded hover:bg-gray-100"
                         aria-label="Task menu"
+                        aria-expanded={menuOpen}
                     >
                         <MoreVertical size={14} />
                     </button>
+
+                    {menuOpen && (
+                        <div
+                            className="absolute right-0 top-7 z-30 bg-white rounded-lg border border-gray-200 shadow-xl w-56"
+                            onPointerDown={(e) => e.stopPropagation()}
+                            onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                        >
+                            <button
+                                type="button"
+                                onClick={() => { setDetailOpen(true); setMenuOpen(false); }}
+                                className="w-full text-left px-3 py-2 text-[12px] font-semibold text-gray-900 hover:bg-gray-50 inline-flex items-center gap-2"
+                            >
+                                <Pencil size={11} className="text-gray-500" />
+                                Edit task
+                            </button>
+                            <div className="px-3 py-2 border-y border-gray-100 text-[10px] font-bold uppercase tracking-wider text-gray-400 inline-flex items-center gap-1.5">
+                                <ArrowRightLeft size={11} /> Move to department
+                            </div>
+                            {Object.keys(DEPT_LABELS).map((d) => {
+                                const current = d === task.department;
+                                return (
+                                    <button
+                                        key={d}
+                                        type="button"
+                                        disabled={current || moving}
+                                        onClick={() => moveToDepartment(d)}
+                                        className={`w-full text-left px-3 py-1.5 text-[12px] flex items-center gap-2 ${
+                                            current ? "text-gray-500 cursor-not-allowed bg-gray-50" : "text-gray-700 hover:bg-gray-50"
+                                        }`}
+                                    >
+                                        <Building2 size={11} className="text-gray-400" />
+                                        {DEPT_LABELS[d]}
+                                        {current && (
+                                            <span className="ml-auto inline-flex items-center gap-0.5 text-[9px] font-bold uppercase tracking-wider text-gray-400">
+                                                <Check size={9} /> Current
+                                            </span>
+                                        )}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    )}
                 </div>
             </div>
 
             {/* Title */}
-            <h4 className={`px-3 text-[14px] font-bold leading-snug ${task.completed ? "line-through text-gray-400" : "text-gray-900"}`}>
+            <h4 className={`px-4 text-[15px] font-bold leading-snug ${task.completed ? "line-through text-gray-400" : "text-gray-900"}`}>
                 {task.title}
             </h4>
 
             {/* Description preview — 3 lines max */}
             {task.description && (
-                <p className="px-3 mt-1 text-[11.5px] text-gray-500 leading-snug line-clamp-3">
+                <p className="px-4 mt-1.5 text-[12.5px] text-gray-500 leading-snug line-clamp-3">
                     {task.description}
                 </p>
             )}
 
             {/* Linked-record or category subtitle (only when no description) */}
             {! task.description && isLinked && (
-                <p className="px-3 mt-1 text-[10px] text-gray-500 truncate flex items-center gap-0.5">
-                    <User size={9} className="text-gray-400" /> Lead
-                    <Hash size={8} className="text-gray-300 ml-0.5" />
+                <p className="px-4 mt-1.5 text-[11px] text-gray-500 truncate flex items-center gap-0.5">
+                    <User size={10} className="text-gray-400" /> Lead
+                    <Hash size={9} className="text-gray-300 ml-0.5" />
                     <span className="font-mono">{task.lead.lead_id}</span>
                     <span className="ml-1 truncate">— {task.lead.name}</span>
                 </p>
             )}
             {! task.description && ! isLinked && task.category && (
-                <p className="px-3 mt-1 text-[10px] text-gray-500 truncate inline-flex items-center gap-1">
-                    <Building2 size={9} /> {task.category}
+                <p className="px-4 mt-1.5 text-[11px] text-gray-500 truncate inline-flex items-center gap-1">
+                    <Building2 size={10} /> {task.category}
                 </p>
             )}
 
             {/* Sticky note — prominent, separate from description. */}
             {task.note && (
-                <p className="mx-3 mt-2 text-[11px] text-gray-600 italic leading-snug">
+                <p className="mx-4 mt-2.5 text-[12px] text-gray-600 italic leading-snug">
                     <span className="font-bold not-italic text-gray-700">Note:</span> {task.note}
                 </p>
             )}
@@ -235,12 +351,12 @@ const TaskCard = function TaskCard({
                 set stay clean. The bar fill matches the card tone so it
                 doesn't fight the column color. */}
             {Number(task.progress) > 0 && (
-                <div className="px-3 mt-2">
-                    <div className="flex items-center justify-between mb-1">
-                        <span className="text-[9px] font-bold uppercase tracking-wider text-gray-500">Progress</span>
-                        <span className="text-[10px] font-bold tabular-nums text-gray-700">{task.progress}%</span>
+                <div className="px-4 mt-2.5">
+                    <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500">Progress</span>
+                        <span className="text-[11px] font-bold tabular-nums text-gray-700">{task.progress}%</span>
                     </div>
-                    <div className="h-1.5 w-full rounded-full bg-gray-200/70 overflow-hidden">
+                    <div className="h-2 w-full rounded-full bg-gray-200/70 overflow-hidden">
                         <div
                             className="h-full rounded-full bg-gray-700"
                             style={{ width: `${Math.min(100, Math.max(0, Number(task.progress)))}%` }}
@@ -249,20 +365,42 @@ const TaskCard = function TaskCard({
                 </div>
             )}
 
-            {/* Image thumbnail */}
-            {firstImage && (
-                <div className="mx-3 mt-2 rounded-xl overflow-hidden bg-gray-100 aspect-[16/10]">
-                    <img
-                        src={firstImage.url}
-                        alt={firstImage.original_filename}
-                        className="w-full h-full object-cover"
-                        draggable={false}
-                    />
-                </div>
+            {/* Attachment thumbnail — image when one exists, otherwise a
+                typed file tile (PDF, video, doc…). Click opens the
+                attachments modal so users can browse + download every file
+                on the task. */}
+            {firstAttachment && (
+                <button
+                    type="button"
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setAttachmentsOpen(true);
+                    }}
+                    className="mx-4 mt-2.5 rounded-xl overflow-hidden bg-gray-100 aspect-[16/10] block w-[calc(100%-2rem)] group relative cursor-pointer"
+                    title={firstAttachment.is_image ? "View attachments" : firstAttachment.original_filename}
+                >
+                    {firstAttachment.is_image ? (
+                        <img
+                            src={firstAttachment.url}
+                            alt={firstAttachment.original_filename}
+                            className="w-full h-full object-cover group-hover:opacity-90 transition-opacity"
+                            draggable={false}
+                        />
+                    ) : (
+                        <FileTile attachment={firstAttachment} />
+                    )}
+                    {attachmentCount > 1 && (
+                        <span className="absolute top-1.5 right-1.5 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-black/65 text-white text-[10px] font-bold backdrop-blur-sm">
+                            <Paperclip size={9} /> {attachmentCount}
+                        </span>
+                    )}
+                </button>
             )}
 
             {/* Bottom row */}
-            <div className="px-3 py-2.5 mt-2 flex items-center justify-between gap-2 border-t border-gray-50">
+            <div className="px-4 py-3 mt-2.5 flex items-center justify-between gap-2 border-t border-gray-50">
                 <div className="flex items-center gap-2 min-w-0">
                     {due && (
                         <span
@@ -293,9 +431,17 @@ const TaskCard = function TaskCard({
                         <MessageCircle size={10} /> {commentsCount}
                     </button>
                     {attachmentCount > 0 && (
-                        <span className="inline-flex items-center gap-0.5 text-[10px] font-medium text-gray-500">
+                        <button
+                            type="button"
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                setAttachmentsOpen(true);
+                            }}
+                            className="inline-flex items-center gap-0.5 text-[10px] font-medium text-gray-500 hover:text-gray-900"
+                            title="View attachments"
+                        >
                             <Paperclip size={10} /> {attachmentCount}
-                        </span>
+                        </button>
                     )}
                     {task.assignee && (
                         <span
@@ -316,8 +462,52 @@ const TaskCard = function TaskCard({
             taskTitle={task.title}
             onCountChange={(n) => setCommentsCount(n)}
         />
+
+        {detailOpen && (
+            <TaskDetailModal
+                task={task}
+                onClose={() => setDetailOpen(false)}
+            />
+        )}
+
+        <AttachmentsModal
+            open={attachmentsOpen}
+            onClose={() => setAttachmentsOpen(false)}
+            task={task}
+        />
         </>
     );
 };
 
 export default TaskCard;
+
+// Tile used as the card thumbnail when the first attachment isn't an image.
+// Visually matches the image tile (same aspect ratio + rounded container)
+// so cards stay consistent across attachment types.
+function FileTile({ attachment }) {
+    const mime = attachment.mime_type || "";
+    const name = attachment.original_filename || "attachment";
+    const isPdf   = mime === "application/pdf" || name.toLowerCase().endsWith(".pdf");
+    const isVideo = mime.startsWith("video/");
+    const isAudio = mime.startsWith("audio/");
+
+    const { tone, label, Icon } = isPdf
+        ? { tone: "from-rose-500 to-red-600",       label: "PDF",   Icon: FileText }
+        : isVideo
+            ? { tone: "from-indigo-500 to-purple-600", label: "VIDEO", Icon: Film }
+            : isAudio
+                ? { tone: "from-amber-500 to-orange-600", label: "AUDIO", Icon: Music }
+                : { tone: "from-slate-500 to-slate-700",  label: "FILE",  Icon: FileImage };
+
+    return (
+        <div className={`w-full h-full bg-gradient-to-br ${tone} text-white flex flex-col items-center justify-center px-3 group-hover:opacity-95 transition-opacity relative`}>
+            <Icon size={32} className="opacity-90 drop-shadow" />
+            <span className="mt-2 text-[10px] font-bold uppercase tracking-[0.18em] bg-white/20 backdrop-blur-sm px-2 py-0.5 rounded">
+                {label}
+            </span>
+            <p className="mt-2 text-[11px] font-semibold text-center leading-tight line-clamp-2 break-all max-w-full">
+                {name}
+            </p>
+        </div>
+    );
+}

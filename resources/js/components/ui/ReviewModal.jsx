@@ -30,6 +30,7 @@ const TYPE_OPTIONS = {
             "Partnership Visa",
             "Visitor Visa",
             "Post-Study Work Visa",
+            "English Proficiency Test",
             "Other",
         ],
     },
@@ -236,7 +237,7 @@ export default function ReviewModal({ open, onClose, department = "immigration" 
                                                     strokeWidth={1.5}
                                                     className={
                                                         active
-                                                            ? "fill-[#436235] text-[#436235]"
+                                                            ? "fill-amber-400 text-amber-400"
                                                             : "fill-transparent text-gray-300"
                                                     }
                                                 />
@@ -379,15 +380,51 @@ export default function ReviewModal({ open, onClose, department = "immigration" 
                                             </button>
                                         </div>
                                     ) : (
-                                        <label className="cursor-pointer w-16 h-16 rounded-full border-2 border-dashed border-gray-200 flex items-center justify-center text-gray-400 hover:border-[#436235]/50 hover:text-[#436235] hover:bg-[#436235]/5 transition-colors flex-shrink-0">
-                                            <Camera size={20} strokeWidth={1.5} />
-                                            <input
-                                                type="file"
-                                                accept="image/jpeg,image/png,image/webp"
-                                                className="hidden"
-                                                onChange={(e) => setData("photo", e.target.files?.[0] || null)}
-                                            />
-                                        </label>
+                                        // No photo yet — show a filled circle with
+                                        // the client's initials (computed from
+                                        // whatever they've typed into the name
+                                        // field) so the placeholder reads as a
+                                        // real avatar instead of an empty hole.
+                                        // Still a label, so clicking it opens the
+                                        // file picker.
+                                        (() => {
+                                            const initials = (data.name || "")
+                                                .split(" ")
+                                                .filter(Boolean)
+                                                .slice(0, 2)
+                                                .map((w) => w[0])
+                                                .join("")
+                                                .toUpperCase();
+                                            // Solid colour, not a Tailwind
+                                                // gradient — gradients with
+                                                // arbitrary hex stops have been
+                                                // flaking in the v4 build. The
+                                                // outline is rendered as a
+                                                // standard border so it always
+                                                // shows regardless of bg.
+                                                return (
+                                                    <label
+                                                        className="cursor-pointer relative w-16 h-16 rounded-full flex items-center justify-center font-bold text-xl text-white flex-shrink-0 group shadow-md border-2 border-white"
+                                                        style={{ backgroundColor: initials ? "#436235" : "#e5e7eb", color: initials ? "#ffffff" : "#9ca3af", boxShadow: "0 0 0 1px #d1d5db, 0 4px 12px -4px rgba(0,0,0,0.15)" }}
+                                                    >
+                                                        {initials || <Camera size={22} strokeWidth={1.5} />}
+                                                        {/* Tiny camera badge so
+                                                            it reads as an upload
+                                                            control even when
+                                                            initials fill the
+                                                            chip. */}
+                                                        <span className="absolute -bottom-0.5 -right-0.5 w-6 h-6 rounded-full bg-[#436235] text-white flex items-center justify-center shadow-sm border-2 border-white">
+                                                            <Camera size={11} strokeWidth={2.5} />
+                                                        </span>
+                                                        <input
+                                                            type="file"
+                                                            accept="image/jpeg,image/png,image/webp"
+                                                            className="hidden"
+                                                            onChange={(e) => setData("photo", e.target.files?.[0] || null)}
+                                                        />
+                                                    </label>
+                                                );
+                                        })()
                                     )}
                                     <div className="flex-1 min-w-0">
                                         <p className="text-xs text-gray-700 font-normal leading-relaxed">

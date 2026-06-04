@@ -7,7 +7,7 @@ import React from 'react';
 // Labels use sentence case as written in each form (not uppercase) — easier
 // to read at a glance, especially for long Yes/No questions.
 const labelCls = 'block text-[13px] font-semibold text-gray-700 mb-2';
-const baseInputCls = 'w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-[#00A693] transition-colors bg-white';
+const baseInputCls = 'w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-[var(--accent,#00A693)] transition-colors bg-white';
 
 export function Field({ label, hint, error, children }) {
     return (
@@ -93,8 +93,8 @@ export function YesNoField({ label, hint, error, value, onChange }) {
                             onClick={() => onChange(opt)}
                             className={`flex-1 px-4 py-3 rounded-xl border text-sm font-bold transition-colors ${
                                 active
-                                    ? 'bg-[#00A693] border-[#00A693] text-white'
-                                    : 'bg-white border-gray-200 text-[#282728] hover:border-[#00A693]'
+                                    ? 'bg-[var(--accent,#00A693)] border-[var(--accent,#00A693)] text-white'
+                                    : 'bg-white border-gray-200 text-[#282728] hover:border-[var(--accent,#00A693)]'
                             }`}
                         >
                             {opt}

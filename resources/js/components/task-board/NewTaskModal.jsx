@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { router } from "@inertiajs/react";
+import { router, usePage } from "@inertiajs/react";
 import { toast } from "sonner";
 import {
     X, User, Building2, ChevronLeft, AlertTriangle, Search, Tag, RotateCw,
-    Plus, ImagePlus,
+    Plus, Paperclip, FileText, Film, FileImage, Music,
 } from "lucide-react";
+import AssigneeMultiPicker from "./AssigneeMultiPicker";
 
 // New Task modal — used by every portal Task Board's "+ New Task" button.
 // The modal is fully department-aware via the `department` prop. See
@@ -18,11 +19,11 @@ import {
 // AND the server re-validates the reason so the UI can't be bypassed.
 
 const DEPARTMENT_LABEL = {
-    sales:         "Sales",
-    education:     "Education",
-    immigration:   "Immigration",
+    sales: "Sales",
+    education: "Education",
+    immigration: "Immigration",
     accommodation: "Accommodation",
-    admin:         "Admin",
+    admin: "Admin",
 };
 
 // Mirror of CATEGORIES_BY_DEPT in TaskBoardPage. Kept here on purpose:
@@ -56,13 +57,13 @@ const CATEGORIES_BY_DEPT = {
 };
 
 const TYPE_OPTIONS = [
-    ["call",      "Call"],
-    ["email",     "Email"],
-    ["meeting",   "Meeting"],
-    ["document",  "Document"],
+    ["call", "Call"],
+    ["email", "Email"],
+    ["meeting", "Meeting"],
+    ["document", "Document"],
     ["follow_up", "Follow-up"],
-    ["internal",  "Internal"],
-    ["other",     "Other"],
+    ["internal", "Internal"],
+    ["other", "Other"],
 ];
 
 const ALL_DEPARTMENTS = ["sales", "education", "immigration", "accommodation", "admin"];
@@ -78,49 +79,54 @@ export default function NewTaskModal({
     onCreated,          // optional callback after successful create
 }) {
     const isAdminPortal = department === "admin";
+    const currentUser   = usePage().props?.auth?.user || null;
 
     // Two-step wizard. If lockedRecord is supplied (opened from a record
     // detail page), skip Step 1 and go straight to record-linked Step 2.
     const initialStep = lockedRecord ? 2 : 1;
     const initialKind = lockedRecord ? "linked" : null;
 
-    const [step, setStep]   = useState(initialStep);
-    const [kind, setKind]   = useState(initialKind); // 'linked' | 'dept'
+    const [step, setStep] = useState(initialStep);
+    const [kind, setKind] = useState(initialKind); // 'linked' | 'dept'
     const [submitting, setSubmitting] = useState(false);
-    const [topError, setTopError]     = useState(null);
-    const [errors, setErrors]         = useState({});
+    const [topError, setTopError] = useState(null);
+    const [errors, setErrors] = useState({});
 
     // Step 2 form state
     const [taskDepartment, setTaskDepartment] = useState(isAdminPortal ? "sales" : department);
-    const [title, setTitle]                   = useState("");
-    const [description, setDescription]       = useState("");
-    const [note, setNote]                     = useState("");
-    const [type, setType]                     = useState("call");
-    const [priority, setPriority]             = useState("normal");
-    const [progress, setProgress]             = useState(0);
-    const [dueDate, setDueDate]               = useState(todayIso());
-    const [dueTime, setDueTime]               = useState("17:00");
-    const [assigneeId, setAssigneeId]         = useState(null);
-    const [showOtherDepts, setShowOtherDepts] = useState(false);
-    const [relatedRecord, setRelatedRecord]   = useState(lockedRecord);
-    const [category, setCategory]             = useState("");
-    const [tagsInput, setTagsInput]           = useState("");
-    const [recurring, setRecurring]           = useState(false);
-    const [recurFreq, setRecurFreq]           = useState("weekly");
-    const [recurDow, setRecurDow]             = useState("Monday");
-    const [recurDom, setRecurDom]             = useState(1);
-    const [recurTime, setRecurTime]           = useState("09:00");
-    const [recurEnd, setRecurEnd]             = useState("never"); // never | count | date
-    const [recurCount, setRecurCount]         = useState(10);
-    const [recurUntil, setRecurUntil]         = useState("");
-    const [crossDeptOpen, setCrossDeptOpen]   = useState(false);
-    const [crossDeptReason, setCrossDeptReason] = useState("");
-    const [files, setFiles]                   = useState([]); // File[]
-    const [filePreviews, setFilePreviews]     = useState([]); // matching object URLs
+    const [title, setTitle] = useState("");
+    const [description, setDescription] = useState("");
+    const [note, setNote] = useState("");
+    const [type, setType] = useState("call");
+    const [priority, setPriority] = useState("normal");
+    const [progress, setProgress] = useState(0);
+    const [dueDate, setDueDate] = useState(todayIso());
+    const [dueTime, setDueTime] = useState("17:00");
+    // Multi-assignee — first id is treated as the primary on the server.
+    const [assigneeIds, setAssigneeIds] = useState([]);
+    // Default ON so users see staff from every department — they can still
+    // narrow back to their own dept with the toggle.
+    const [showOtherDepts, setShowOtherDepts] = useState(true);
+    const [relatedRecord, setRelatedRecord] = useState(lockedRecord);
+    const [category, setCategory] = useState("");
+    // When category === "Other", we collect a free-form custom name and
+    // send that as the category on submit.
+    const [categoryOther, setCategoryOther] = useState("");
+    const [tagsInput, setTagsInput] = useState("");
+    const [recurring, setRecurring] = useState(false);
+    const [recurFreq, setRecurFreq] = useState("weekly");
+    const [recurDow, setRecurDow] = useState("Monday");
+    const [recurDom, setRecurDom] = useState(1);
+    const [recurTime, setRecurTime] = useState("09:00");
+    const [recurEnd, setRecurEnd] = useState("never"); // never | count | date
+    const [recurCount, setRecurCount] = useState(10);
+    const [recurUntil, setRecurUntil] = useState("");
+    const [files, setFiles] = useState([]); // File[]
+    const [filePreviews, setFilePreviews] = useState([]); // matching object URLs
 
     // Reset when the modal is closed-and-reopened to avoid stale state.
     useEffect(() => {
-        if (! open) return;
+        if (!open) return;
         setStep(initialStep);
         setKind(initialKind);
         setSubmitting(false);
@@ -135,10 +141,11 @@ export default function NewTaskModal({
         setProgress(0);
         setDueDate(todayIso());
         setDueTime("17:00");
-        setAssigneeId(null);
-        setShowOtherDepts(false);
+        setAssigneeIds([]);
+        setShowOtherDepts(true);
         setRelatedRecord(lockedRecord);
         setCategory("");
+        setCategoryOther("");
         setTagsInput("");
         setRecurring(false);
         setRecurFreq("weekly");
@@ -148,30 +155,33 @@ export default function NewTaskModal({
         setRecurEnd("never");
         setRecurCount(10);
         setRecurUntil("");
-        setCrossDeptOpen(false);
-        setCrossDeptReason("");
         // Revoke any leftover object URLs before clearing.
-        setFilePreviews((prev) => { prev.forEach(URL.revokeObjectURL); return []; });
+        setFilePreviews((prev) => { prev.forEach((u) => u && URL.revokeObjectURL(u)); return []; });
         setFiles([]);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [open]);
 
     // Object URLs are cheap but leak if not revoked — clean up on unmount.
     useEffect(() => () => {
-        filePreviews.forEach(URL.revokeObjectURL);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+        filePreviews.forEach((u) => u && URL.revokeObjectURL(u));
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
+    // Any file type — images, videos, PDFs, docs, audio, archives, …
+    // Object URLs are only created for image previews; other types render
+    // as a generic file card so we don't waste memory on big videos.
     const addFiles = (selected) => {
-        const list = Array.from(selected || []).filter((f) => f.type.startsWith("image/"));
+        const list = Array.from(selected || []);
         if (list.length === 0) return;
-        const newPreviews = list.map((f) => URL.createObjectURL(f));
+        const newPreviews = list.map((f) =>
+            f.type.startsWith("image/") ? URL.createObjectURL(f) : null
+        );
         setFiles((prev) => [...prev, ...list].slice(0, 8));
         setFilePreviews((prev) => [...prev, ...newPreviews].slice(0, 8));
     };
 
     const removeFile = (idx) => {
-        URL.revokeObjectURL(filePreviews[idx]);
+        if (filePreviews[idx]) URL.revokeObjectURL(filePreviews[idx]);
         setFiles((prev) => prev.filter((_, i) => i !== idx));
         setFilePreviews((prev) => prev.filter((_, i) => i !== idx));
     };
@@ -183,18 +193,12 @@ export default function NewTaskModal({
     // hook count stays stable when `open` flips from false → true.
     const visibleStaff = useMemo(() => {
         if (showOtherDepts || isAdminPortal) return staffOptions;
-        return staffOptions.filter((s) => ! s.role || s.role === department || s.role === "admin");
+        return staffOptions.filter((s) => !s.role || s.role === department || s.role === "admin");
     }, [staffOptions, showOtherDepts, department, isAdminPortal]);
 
-    if (! open) return null;
+    if (!open) return null;
 
-    const assignee = staffOptions.find((s) => String(s.id) === String(assigneeId));
     const effectiveDept = isAdminPortal ? taskDepartment : department;
-    const isCrossDept =
-        assignee
-        && assignee.role
-        && assignee.role !== "admin"
-        && assignee.role !== effectiveDept;
 
     // ── Submit ──────────────────────────────────────────────────────────
     const payload = () => {
@@ -206,14 +210,21 @@ export default function NewTaskModal({
 
         const recurrence_config = recurring
             ? {
-                  frequency: recurFreq,
-                  day_of_week:  recurFreq === "weekly"  ? recurDow : null,
-                  day_of_month: recurFreq === "monthly" ? recurDom : null,
-                  time: recurTime,
-                  end: recurEnd === "count" ? { type: "count", value: recurCount }
-                       : recurEnd === "date" ? { type: "date", value: recurUntil }
-                       : { type: "never" },
-              }
+                frequency: recurFreq,
+                day_of_week: recurFreq === "weekly" ? recurDow : null,
+                day_of_month: recurFreq === "monthly" ? recurDom : null,
+                time: recurTime,
+                end: recurEnd === "count" ? { type: "count", value: recurCount }
+                    : recurEnd === "date" ? { type: "date", value: recurUntil }
+                        : { type: "never" },
+            }
+            : null;
+
+        // Resolve category: when "Other" is picked we send the custom text
+        // (if any) so the saved category is human-readable; if they leave
+        // it blank we still send "Other" as-is.
+        const resolvedCategory = kind === "dept"
+            ? (category === "Other" && categoryOther.trim() ? categoryOther.trim() : category)
             : null;
 
         return {
@@ -226,12 +237,11 @@ export default function NewTaskModal({
             priority,
             progress,
             due_at: dueAt,
-            assignee_id: assigneeId || null,
+            assignee_ids: assigneeIds.length ? assigneeIds : null,
             department: effectiveDept,
-            category: kind === "dept" ? category : null,
+            category: resolvedCategory,
             tags: tags.length ? tags : null,
             recurrence_config,
-            cross_dept_reason: isCrossDept ? crossDeptReason : null,
             // Files trigger multipart submission via forceFormData below.
             // Empty array is harmless — Inertia just omits the key.
             attachments: files,
@@ -265,10 +275,6 @@ export default function NewTaskModal({
     };
 
     const handleCreate = () => {
-        if (isCrossDept) {
-            setCrossDeptOpen(true);
-            return;
-        }
         doSubmit();
     };
 
@@ -284,7 +290,7 @@ export default function NewTaskModal({
                 {/* Header */}
                 <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
                     <div className="flex items-center gap-3 min-w-0">
-                        {step === 2 && ! lockedRecord && (
+                        {step === 2 && !lockedRecord && (
                             <button
                                 type="button"
                                 onClick={() => { setStep(1); setKind(null); }}
@@ -333,14 +339,18 @@ export default function NewTaskModal({
                             progress={progress} setProgress={setProgress}
                             dueDate={dueDate} setDueDate={setDueDate}
                             dueTime={dueTime} setDueTime={setDueTime}
-                            assigneeId={assigneeId} setAssigneeId={setAssigneeId}
+                            assigneeIds={assigneeIds} setAssigneeIds={setAssigneeIds}
+                            currentUser={currentUser}
                             visibleStaff={visibleStaff}
+                            staffOptions={staffOptions}
                             showOtherDepts={showOtherDepts} setShowOtherDepts={setShowOtherDepts}
                             relatedRecord={relatedRecord} setRelatedRecord={setRelatedRecord}
                             lockedRecord={lockedRecord}
                             category={category} setCategory={setCategory}
+                            categoryOther={categoryOther} setCategoryOther={setCategoryOther}
                             categoryOptions={categoryOptions}
                             tagsInput={tagsInput} setTagsInput={setTagsInput}
+                            files={files}
                             filePreviews={filePreviews}
                             addFiles={addFiles}
                             removeFile={removeFile}
@@ -354,7 +364,6 @@ export default function NewTaskModal({
                             recurUntil={recurUntil} setRecurUntil={setRecurUntil}
                             errors={errors}
                             effectiveDept={effectiveDept}
-                            isCrossDept={isCrossDept}
                         />
                     )}
                 </div>
@@ -372,7 +381,7 @@ export default function NewTaskModal({
                         <button
                             type="button"
                             onClick={() => kind && setStep(2)}
-                            disabled={! kind}
+                            disabled={!kind}
                             className="px-4 py-2 rounded-lg bg-gray-900 text-white text-[12px] font-bold uppercase tracking-wider hover:bg-gray-800 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                         >
                             Continue →
@@ -390,16 +399,6 @@ export default function NewTaskModal({
                 </div>
             </div>
 
-            {crossDeptOpen && (
-                <CrossDeptConfirm
-                    departmentLabel={DEPARTMENT_LABEL[assignee?.role] || assignee?.role || "another team"}
-                    reason={crossDeptReason}
-                    setReason={setCrossDeptReason}
-                    onCancel={() => setCrossDeptOpen(false)}
-                    onConfirm={() => { setCrossDeptOpen(false); doSubmit(); }}
-                    submitting={submitting}
-                />
-            )}
         </div>
     );
 }
@@ -433,13 +432,11 @@ function RadioCard({ checked, onChange, icon, title, body }) {
         <button
             type="button"
             onClick={onChange}
-            className={`w-full text-left rounded-xl border-2 p-4 flex items-start gap-3 transition-all ${
-                checked ? "border-gray-900 bg-gray-50" : "border-gray-200 hover:border-gray-300 bg-white"
-            }`}
+            className={`w-full text-left rounded-xl border-2 p-4 flex items-start gap-3 transition-all ${checked ? "border-gray-900 bg-gray-50" : "border-gray-200 hover:border-gray-300 bg-white"
+                }`}
         >
-            <span className={`mt-0.5 w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
-                checked ? "border-gray-900" : "border-gray-300"
-            }`}>
+            <span className={`mt-0.5 w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${checked ? "border-gray-900" : "border-gray-300"
+                }`}>
                 {checked && <span className="w-2 h-2 rounded-full bg-gray-900" />}
             </span>
             <div className="w-9 h-9 rounded-lg bg-gray-100 text-gray-600 flex items-center justify-center flex-shrink-0">{icon}</div>
@@ -461,17 +458,20 @@ function StepTwo(props) {
         type, setType, priority, setPriority,
         progress, setProgress,
         dueDate, setDueDate, dueTime, setDueTime,
-        assigneeId, setAssigneeId, visibleStaff,
+        assigneeIds, setAssigneeIds, currentUser,
+        visibleStaff, staffOptions,
         showOtherDepts, setShowOtherDepts,
         relatedRecord, setRelatedRecord, lockedRecord,
-        category, setCategory, categoryOptions,
+        category, setCategory,
+        categoryOther, setCategoryOther,
+        categoryOptions,
         tagsInput, setTagsInput,
-        filePreviews, addFiles, removeFile,
+        files, filePreviews, addFiles, removeFile,
         recurring, setRecurring,
         recurFreq, setRecurFreq, recurDow, setRecurDow, recurDom, setRecurDom,
         recurTime, setRecurTime, recurEnd, setRecurEnd,
         recurCount, setRecurCount, recurUntil, setRecurUntil,
-        errors, effectiveDept, isCrossDept,
+        errors, effectiveDept,
     } = props;
 
     return (
@@ -575,20 +575,19 @@ function StepTwo(props) {
 
             {/* Assigned + Related/Category share a row on wider screens. */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                <FormRow label="Assigned to" error={errors.assignee_id}>
-                    <select
-                        value={assigneeId || ""}
-                        onChange={(e) => setAssigneeId(e.target.value || null)}
-                        className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm bg-white"
-                    >
-                        <option value="">Unassigned (current user defaults)</option>
-                        {visibleStaff.map((s) => (
-                            <option key={s.id} value={s.id}>
-                                {s.name}{s.role ? ` — ${DEPARTMENT_LABEL[s.role] || s.role}` : ""}
-                            </option>
-                        ))}
-                    </select>
-                    {! isAdminPortal && (
+                <FormRow
+                    label="Assigned to"
+                    hint="Pick myself, other staff, or a mix. Leave empty to default to me."
+                    error={errors.assignee_ids || errors["assignee_ids.0"] || errors.assignee_id}
+                >
+                    <AssigneeMultiPicker
+                        value={assigneeIds}
+                        onChange={setAssigneeIds}
+                        visibleStaff={visibleStaff}
+                        allStaff={staffOptions}
+                        currentUser={currentUser}
+                    />
+                    {!isAdminPortal && (
                         <label className="mt-2 inline-flex items-center gap-2 text-[11px] text-gray-600 cursor-pointer">
                             <input
                                 type="checkbox"
@@ -596,14 +595,8 @@ function StepTwo(props) {
                                 onChange={(e) => setShowOtherDepts(e.target.checked)}
                                 className="rounded"
                             />
-                            Show other departments
+                            Show staff from every department
                         </label>
-                    )}
-                    {isCrossDept && (
-                        <p className="mt-2 text-[11px] text-amber-700 inline-flex items-center gap-1">
-                            <AlertTriangle size={11} />
-                            Cross-department assignment — you'll be asked for a reason on save.
-                        </p>
                     )}
                 </FormRow>
 
@@ -635,6 +628,17 @@ function StepTwo(props) {
                                 <option key={c} value={c}>{c}</option>
                             ))}
                         </select>
+                        {category === "Other" && (
+                            <input
+                                type="text"
+                                value={categoryOther}
+                                onChange={(e) => setCategoryOther(e.target.value)}
+                                maxLength={100}
+                                placeholder="Type your custom category…"
+                                className="mt-2 w-full px-3 py-2 rounded-lg border border-gray-200 text-sm"
+                                autoFocus
+                            />
+                        )}
                     </FormRow>
                 )}
             </div>
@@ -653,35 +657,30 @@ function StepTwo(props) {
             </FormRow>
 
             <FormRow
-                label="Photos"
-                hint="JPG / PNG / GIF, up to 5 MB each, max 8 files"
+                label="Attachments"
+                hint="Any file — images, video, PDF, docs. Up to 20 MB each, max 8 files."
                 error={errors["attachments.0"] || errors.attachments}
             >
-                <div className="grid grid-cols-4 sm:grid-cols-6 lg:grid-cols-8 gap-2">
-                    {filePreviews.map((url, idx) => (
-                        <div key={idx} className="relative aspect-square rounded-lg overflow-hidden border border-gray-200 bg-gray-50">
-                            <img src={url} alt={`Attachment ${idx + 1}`} className="w-full h-full object-cover" />
-                            <button
-                                type="button"
-                                onClick={() => removeFile(idx)}
-                                className="absolute top-1 right-1 bg-black/60 hover:bg-black/80 text-white rounded p-0.5"
-                                aria-label="Remove image"
-                            >
-                                <X size={10} />
-                            </button>
-                        </div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+                    {files.map((file, idx) => (
+                        <FilePreviewCard
+                            key={idx}
+                            file={file}
+                            previewUrl={filePreviews[idx]}
+                            onRemove={() => removeFile(idx)}
+                        />
                     ))}
-                    {filePreviews.length < 8 && (
-                        <label className="aspect-square rounded-lg border-2 border-dashed border-gray-300 flex flex-col items-center justify-center cursor-pointer hover:border-gray-400 hover:bg-gray-50 transition-colors text-gray-400">
+                    {files.length < 8 && (
+                        <label className="min-h-[88px] rounded-lg border-2 border-dashed border-gray-300 flex flex-col items-center justify-center cursor-pointer hover:border-gray-400 hover:bg-gray-50 transition-colors text-gray-500 px-3 py-3">
                             <input
                                 type="file"
                                 multiple
-                                accept="image/*"
                                 onChange={(e) => { addFiles(e.target.files); e.target.value = ""; }}
                                 className="sr-only"
                             />
-                            <ImagePlus size={16} />
-                            <span className="text-[9px] font-bold uppercase tracking-wider mt-1">Add</span>
+                            <Paperclip size={16} />
+                            <span className="text-[10px] font-bold uppercase tracking-wider mt-1">Add file</span>
+                            <span className="text-[9px] text-gray-400 mt-0.5">image · video · pdf · any</span>
                         </label>
                     )}
                 </div>
@@ -714,7 +713,7 @@ function StepTwo(props) {
                             {recurFreq === "weekly" && (
                                 <FormRow label="Day of week" tight>
                                     <select value={recurDow} onChange={(e) => setRecurDow(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm bg-white">
-                                        {["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"].map((d) => (
+                                        {["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"].map((d) => (
                                             <option key={d} value={d}>{d}</option>
                                         ))}
                                     </select>
@@ -768,8 +767,60 @@ function FormRow({ label, required, error, hint, tight, children }) {
                 {label} {required && <span className="text-red-500">*</span>}
             </label>
             {children}
-            {hint && ! error && <p className="mt-1 text-[10px] text-gray-400">{hint}</p>}
+            {hint && !error && <p className="mt-1 text-[10px] text-gray-400">{hint}</p>}
             {error && <p className="mt-1 text-[11px] text-red-600">{error}</p>}
+        </div>
+    );
+}
+
+// ─── Attachment preview card ───────────────────────────────────────────
+// Renders an image thumbnail when `previewUrl` is set (image types) and a
+// generic file card otherwise. Always exposes a remove button.
+
+function fmtBytes(b) {
+    if (!b && b !== 0) return "";
+    if (b < 1024) return `${b} B`;
+    if (b < 1024 * 1024) return `${(b / 1024).toFixed(1)} KB`;
+    return `${(b / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function FileTypeIcon({ mime }) {
+    if (!mime) return <FileText size={20} />;
+    if (mime.startsWith("image/")) return <FileImage size={20} />;
+    if (mime.startsWith("video/")) return <Film size={20} />;
+    if (mime.startsWith("audio/")) return <Music size={20} />;
+    return <FileText size={20} />;
+}
+
+function FilePreviewCard({ file, previewUrl, onRemove }) {
+    const isImage = file.type?.startsWith("image/") && previewUrl;
+
+    return (
+        <div className="relative rounded-lg border border-gray-200 bg-gray-50 overflow-hidden group">
+            <button
+                type="button"
+                onClick={onRemove}
+                className="absolute top-1 right-1 z-10 bg-black/60 hover:bg-black/80 text-white rounded p-0.5"
+                aria-label="Remove attachment"
+            >
+                <X size={10} />
+            </button>
+
+            {isImage ? (
+                <div className="aspect-square">
+                    <img src={previewUrl} alt={file.name} className="w-full h-full object-cover" />
+                </div>
+            ) : (
+                <div className="aspect-square flex flex-col items-center justify-center text-gray-500 px-2 text-center">
+                    <FileTypeIcon mime={file.type} />
+                    <p className="mt-1.5 text-[10px] font-semibold text-gray-700 leading-tight line-clamp-2 break-all">
+                        {file.name}
+                    </p>
+                    <p className="mt-0.5 text-[9px] text-gray-400 tabular-nums">
+                        {fmtBytes(file.size)}
+                    </p>
+                </div>
+            )}
         </div>
     );
 }
@@ -777,10 +828,10 @@ function FormRow({ label, required, error, hint, tight, children }) {
 // ─── Related-record autocomplete ────────────────────────────────────────
 
 function RelatedRecordSearch({ value, onChange }) {
-    const [q, setQ]               = useState("");
-    const [results, setResults]   = useState([]);
-    const [open, setOpen]         = useState(false);
-    const [loading, setLoading]   = useState(false);
+    const [q, setQ] = useState("");
+    const [results, setResults] = useState([]);
+    const [open, setOpen] = useState(false);
+    const [loading, setLoading] = useState(false);
     const debounceRef = useRef(null);
 
     useEffect(() => {
@@ -788,7 +839,7 @@ function RelatedRecordSearch({ value, onChange }) {
         if (q.trim().length < 2) { setResults([]); return; }
         setLoading(true);
         debounceRef.current = setTimeout(() => {
-            fetch(`/api/tasks/related-records?q=${encodeURIComponent(q)}`, { headers: { Accept: "application/json" }})
+            fetch(`/api/tasks/related-records?q=${encodeURIComponent(q)}`, { headers: { Accept: "application/json" } })
                 .then((r) => r.ok ? r.json() : { records: [] })
                 .then((d) => setResults(d.records || []))
                 .catch(() => setResults([]))
@@ -828,7 +879,7 @@ function RelatedRecordSearch({ value, onChange }) {
             {open && q.trim().length >= 2 && (
                 <div className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-64 overflow-y-auto">
                     {loading && <div className="px-3 py-2 text-[11px] text-gray-500">Searching…</div>}
-                    {! loading && results.length === 0 && (
+                    {!loading && results.length === 0 && (
                         <div className="px-3 py-2 text-[11px] text-gray-500">No matches.</div>
                     )}
                     {results.map((r) => (
@@ -858,52 +909,3 @@ function RecordIcon({ type }) {
     );
 }
 
-// ─── Cross-department confirmation ──────────────────────────────────────
-
-function CrossDeptConfirm({ departmentLabel, reason, setReason, onCancel, onConfirm, submitting }) {
-    return (
-        <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/40 p-4">
-            <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden">
-                <div className="px-5 py-4 border-b border-gray-100">
-                    <h3 className="text-base font-bold text-gray-900 flex items-center gap-2">
-                        <AlertTriangle size={16} className="text-amber-600" />
-                        Assigning to {departmentLabel}
-                    </h3>
-                </div>
-                <div className="px-5 py-4">
-                    <p className="text-sm text-gray-600">
-                        You're creating a task for a different department. Please add context.
-                    </p>
-                    <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-500 mt-4 mb-1.5">
-                        Reason for cross-department assignment <span className="text-red-500">*</span>
-                    </label>
-                    <textarea
-                        value={reason}
-                        onChange={(e) => setReason(e.target.value)}
-                        rows={3}
-                        autoFocus
-                        className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm"
-                        placeholder="e.g. Spotted during sales review — needs immigration input"
-                    />
-                </div>
-                <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-gray-100 bg-gray-50">
-                    <button
-                        type="button"
-                        onClick={onCancel}
-                        className="px-4 py-2 rounded-lg text-[12px] font-bold uppercase tracking-wider text-gray-700 hover:bg-gray-200"
-                    >
-                        Back to edit
-                    </button>
-                    <button
-                        type="button"
-                        onClick={onConfirm}
-                        disabled={! reason.trim() || submitting}
-                        className="px-4 py-2 rounded-lg bg-gray-900 text-white text-[12px] font-bold uppercase tracking-wider hover:bg-gray-800 transition-colors disabled:opacity-40"
-                    >
-                        {submitting ? "Saving…" : "Confirm and assign"}
-                    </button>
-                </div>
-            </div>
-        </div>
-    );
-}

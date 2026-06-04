@@ -43,17 +43,21 @@ class TaskController extends Controller
             'priority'          => ['nullable', Rule::in(LeadTask::PRIORITIES)],
             'progress'          => 'nullable|integer|min:0|max:100',
             'due_at'            => 'required|date|after_or_equal:today',
+            // Multi-assignee: prefer `assignee_ids[]`, fall back to the
+            // legacy single `assignee_id` if the caller only supplies one.
             'assignee_id'       => 'nullable|exists:users,id',
+            'assignee_ids'      => 'nullable|array|max:20',
+            'assignee_ids.*'    => 'integer|exists:users,id',
             'department'        => ['nullable', Rule::in(LeadTask::DEPARTMENTS)],
             'tags'              => 'nullable|array',
             'tags.*'            => 'string|max:50',
             'recurrence_config' => 'nullable|array',
             'cross_dept_reason' => 'nullable|string|max:500',
-            // Images attached at creation time. Each file ≤ 5 MB; image
-            // mimes only — the kanban card renders the first as a
-            // thumbnail and the count on the bottom-right paperclip.
+            // Any file type up to 20 MB each (images, video, PDF, docs,
+            // audio). The kanban card renders the first image as a
+            // thumbnail and surfaces the total count on the paperclip.
             'attachments'   => 'nullable|array|max:8',
-            'attachments.*' => 'file|image|max:5120',
+            'attachments.*' => 'file|max:20480',
         ];
 
         if ($taskType === 'linked') {
@@ -72,39 +76,45 @@ class TaskController extends Controller
         $department = $validated['department']
             ?? ($user->isAdmin() ? null : $user->role);
 
-        // Cross-department guard — server-side enforcement of the modal's
-        // confirmation flow. If the chosen assignee's department differs
-        // from the task's department, require an explanatory reason.
-        $assignee = isset($validated['assignee_id'])
-            ? User::find($validated['assignee_id'])
-            : null;
-        $isCrossDept = $assignee
-            && $department
-            && ! $assignee->isAdmin()
-            && $assignee->role !== $department;
-        if ($isCrossDept && empty($validated['cross_dept_reason'])) {
-            return back()->withErrors([
-                'cross_dept_reason' => 'A reason is required when assigning to another department.',
-            ]);
+        // Resolve final assignee list — prefer the new multi-assignee
+        // `assignee_ids` array; fall back to the legacy single field; default
+        // to the current user if nothing was supplied. First id becomes the
+        // primary (kept on assignee_id for ownership / scope compatibility);
+        // the rest land in additional_assignee_ids.
+        $assigneeIds = array_values(array_unique(array_filter(array_map('intval',
+            $validated['assignee_ids'] ?? array_filter([$validated['assignee_id'] ?? null])
+        ))));
+        if (empty($assigneeIds)) {
+            $assigneeIds = [$user->id];
         }
+        $primaryAssigneeId = $assigneeIds[0];
+        $additionalIds     = array_slice($assigneeIds, 1);
+
+        // Cross-department assignment is allowed without justification —
+        // we still persist any reason the caller sends, but never require it.
+        $assignees   = User::whereIn('id', $assigneeIds)->get();
+        $isCrossDept = $department && $assignees->contains(
+            fn (User $u) => ! $u->isAdmin() && $u->role && $u->role !== $department
+        );
 
         try {
             $task = LeadTask::create([
-                'lead_id'           => $taskType === 'linked' ? $validated['lead_id'] : null,
-                'created_by'        => $user->id,
-                'assignee_id'       => $validated['assignee_id'] ?? $user->id,
-                'title'             => $validated['title'],
-                'description'       => $validated['description'] ?? null,
-                'note'              => $validated['note'] ?? null,
-                'type'              => $validated['type'] ?? null,
-                'category'          => $validated['category'] ?? null,
-                'department'        => $department,
-                'priority'          => $validated['priority'] ?? 'normal',
-                'progress'          => $validated['progress'] ?? 0,
-                'due_at'            => $validated['due_at'],
-                'tags'              => $validated['tags'] ?? null,
-                'recurrence_config' => $validated['recurrence_config'] ?? null,
-                'cross_dept_reason' => $isCrossDept ? ($validated['cross_dept_reason'] ?? null) : null,
+                'lead_id'                 => $taskType === 'linked' ? $validated['lead_id'] : null,
+                'created_by'              => $user->id,
+                'assignee_id'             => $primaryAssigneeId,
+                'additional_assignee_ids' => $additionalIds ?: null,
+                'title'                   => $validated['title'],
+                'description'             => $validated['description'] ?? null,
+                'note'                    => $validated['note'] ?? null,
+                'type'                    => $validated['type'] ?? null,
+                'category'                => $validated['category'] ?? null,
+                'department'              => $department,
+                'priority'                => $validated['priority'] ?? 'normal',
+                'progress'                => $validated['progress'] ?? 0,
+                'due_at'                  => $validated['due_at'],
+                'tags'                    => $validated['tags'] ?? null,
+                'recurrence_config'       => $validated['recurrence_config'] ?? null,
+                'cross_dept_reason'       => $isCrossDept ? ($validated['cross_dept_reason'] ?? null) : null,
             ]);
 
             $this->storeAttachments($request, $task, $user);
@@ -140,15 +150,23 @@ class TaskController extends Controller
         abort_unless($canEdit, 403, 'You do not have permission to update this task.');
 
         $validated = $request->validate([
-            'status'           => ['sometimes', Rule::in(LeadTask::STATUSES)],
-            'completion_notes' => 'sometimes|nullable|string|max:2000',
-            'priority'         => ['sometimes', Rule::in(LeadTask::PRIORITIES)],
-            'progress'         => 'sometimes|integer|min:0|max:100',
-            'title'            => 'sometimes|string|max:200',
-            'description'      => 'sometimes|nullable|string|max:2000',
-            'note'             => 'sometimes|nullable|string|max:500',
-            'due_at'           => 'sometimes|nullable|date',
-            'assignee_id'      => 'sometimes|nullable|exists:users,id',
+            'status'            => ['sometimes', Rule::in(LeadTask::STATUSES)],
+            'completion_notes'  => 'sometimes|nullable|string|max:2000',
+            'priority'          => ['sometimes', Rule::in(LeadTask::PRIORITIES)],
+            'progress'          => 'sometimes|integer|min:0|max:100',
+            'title'             => 'sometimes|string|max:200',
+            'description'       => 'sometimes|nullable|string|max:2000',
+            'note'              => 'sometimes|nullable|string|max:500',
+            'due_at'            => 'sometimes|nullable|date',
+            'assignee_id'       => 'sometimes|nullable|exists:users,id',
+            'assignee_ids'      => 'sometimes|nullable|array|max:20',
+            'assignee_ids.*'    => 'integer|exists:users,id',
+            'department'        => ['sometimes', Rule::in(LeadTask::DEPARTMENTS)],
+            'cross_dept_reason' => 'sometimes|nullable|string|max:500',
+            'tags'              => 'sometimes|nullable|array',
+            'tags.*'            => 'string|max:50',
+            'type'              => ['sometimes', 'nullable', Rule::in(LeadTask::TYPES)],
+            'category'          => 'sometimes|nullable|string|max:100',
         ]);
 
         try {
@@ -160,7 +178,18 @@ class TaskController extends Controller
                 }
             }
 
-            foreach (['completion_notes', 'priority', 'progress', 'title', 'description', 'note', 'due_at', 'assignee_id'] as $field) {
+            // Multi-assignee replace: an explicit `assignee_ids` overrides
+            // both columns. Otherwise fall back to setting the single
+            // `assignee_id` if it was sent.
+            if (array_key_exists('assignee_ids', $validated)) {
+                $ids = array_values(array_unique(array_filter(array_map('intval', $validated['assignee_ids'] ?? []))));
+                $task->assignee_id             = $ids[0] ?? null;
+                $task->additional_assignee_ids = count($ids) > 1 ? array_slice($ids, 1) : null;
+            } elseif (array_key_exists('assignee_id', $validated)) {
+                $task->assignee_id = $validated['assignee_id'];
+            }
+
+            foreach (['completion_notes', 'priority', 'progress', 'title', 'description', 'note', 'due_at', 'department', 'cross_dept_reason', 'tags', 'type', 'category'] as $field) {
                 if (array_key_exists($field, $validated)) {
                     $task->{$field} = $validated[$field];
                 }
@@ -256,7 +285,7 @@ class TaskController extends Controller
 
         $request->validate([
             'attachments'   => 'required|array|max:8',
-            'attachments.*' => 'file|image|max:5120',
+            'attachments.*' => 'file|max:20480',
         ]);
 
         try {

@@ -16,12 +16,15 @@ export default function IntakeConfirmModal({
     visaLabel,
     summaryItems = [],
     submitLabel = 'Submit intake',
+    accent = '#00A693',
+    accentDark = '#008c7c',
 }) {
     return (
         <AnimatePresence>
             {open && (
                 <div
                     className="fixed inset-0 z-[110] flex items-center justify-center p-4 sm:p-6 bg-[#282728]/60 backdrop-blur-sm"
+                    style={{ '--accent': accent, '--accent-dark': accentDark }}
                     onClick={() => { if (!processing) onClose(); }}
                 >
                     <motion.div
@@ -94,7 +97,7 @@ export default function IntakeConfirmModal({
                                     type="button"
                                     onClick={onConfirm}
                                     disabled={processing}
-                                    className="flex-1 py-4 rounded-xl bg-[#282728] text-white text-[10px] font-black uppercase tracking-[0.25em] hover:bg-[#00A693] transition-all active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2 shadow-xl shadow-[#282728]/15"
+                                    className="flex-1 py-4 rounded-xl bg-[#282728] text-white text-[10px] font-black uppercase tracking-[0.25em] hover:bg-[var(--accent)] transition-all active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2 shadow-xl shadow-[#282728]/15"
                                 >
                                     <Send size={12} />
                                     {processing ? 'Submitting…' : submitLabel}

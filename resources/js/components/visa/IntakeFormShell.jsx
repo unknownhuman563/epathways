@@ -42,6 +42,17 @@ export default function IntakeFormShell({
     setStep: setStepProp,
     visitedSteps,
     validateStep,
+    // CSS-variable accent — every internal use of "the brand colour" reads
+    // `var(--accent)` / `var(--accent-dark)`, so a page can pass a different
+    // shade (e.g. the green #436235 used by the Education brand) without
+    // rebuilding the shell.
+    accent = '#00A693',
+    accentDark = '#008c7c',
+    // Optional server-side draft save. When provided, the "Save draft"
+    // button calls this AFTER persisting locally — the page can use it to
+    // POST the in-progress data to a controller so the lead appears in
+    // staff dashboards.
+    onSaveDraft,
 }) {
     const [internalStep, setInternalStep] = useState(1);
     const step = stepProp ?? internalStep;
@@ -79,12 +90,17 @@ export default function IntakeFormShell({
     }, [data, draftKey]);
 
     const saveDraftNow = () => {
-        if (!draftKey || !data) return;
-        try {
-            window.localStorage.setItem(draftKey, JSON.stringify(data));
+        if (!data) return;
+        if (draftKey) {
+            try { window.localStorage.setItem(draftKey, JSON.stringify(data)); } catch {}
+        }
+        // If the parent wants to also persist to the server (so the draft
+        // appears in staff dashboards) it provides onSaveDraft. Otherwise
+        // fall back to a plain local-only confirmation toast.
+        if (typeof onSaveDraft === 'function') {
+            onSaveDraft(data);
+        } else {
             toast.success('Draft saved');
-        } catch {
-            toast.error('Could not save draft on this device.');
         }
     };
 
@@ -93,7 +109,10 @@ export default function IntakeFormShell({
     const goTo = (n) => setStep(Math.min(Math.max(1, n), total));
 
     return (
-        <div className="min-h-screen bg-[#f8f9fb] font-urbanist text-[#212121] overflow-x-hidden">
+        <div
+            className="min-h-screen bg-[#f8f9fb] font-urbanist text-[#212121] overflow-x-hidden"
+            style={{ '--accent': accent, '--accent-dark': accentDark }}
+        >
             <Head title={title} />
             <Navbar />
 
@@ -116,9 +135,9 @@ export default function IntakeFormShell({
                                                 onClick={() => goTo(idx + 1)}
                                                 className={`relative z-10 w-9 h-9 rounded-full flex items-center justify-center text-[11px] font-semibold transition-colors ${
                                                     isCompleted
-                                                        ? 'bg-[#00A693] text-white hover:bg-[#008c7c]'
+                                                        ? 'bg-[var(--accent)] text-white hover:bg-[var(--accent-dark)]'
                                                         : isActive
-                                                            ? 'bg-white border-2 border-[#00A693] text-[#00A693]'
+                                                            ? 'bg-white border-2 border-[var(--accent)] text-[var(--accent)]'
                                                             : 'bg-white border border-gray-200 text-gray-400 hover:border-gray-300'
                                                 }`}
                                             >
@@ -126,7 +145,7 @@ export default function IntakeFormShell({
                                             </button>
                                             <p className={`mt-2.5 text-[11px] leading-tight text-center px-1 transition-colors ${
                                                 isActive ? 'text-[#282728] font-semibold'
-                                                    : isCompleted ? 'text-[#00A693] font-medium'
+                                                    : isCompleted ? 'text-[var(--accent)] font-medium'
                                                         : 'text-gray-400'
                                             }`}>
                                                 {s.title}
@@ -136,7 +155,7 @@ export default function IntakeFormShell({
                                             <li
                                                 aria-hidden="true"
                                                 className={`flex-1 h-px mt-[18px] transition-colors ${
-                                                    isCompleted ? 'bg-[#00A693]' : 'bg-gray-200'
+                                                    isCompleted ? 'bg-[var(--accent)]' : 'bg-gray-200'
                                                 }`}
                                             />
                                         )}
@@ -195,7 +214,7 @@ export default function IntakeFormShell({
                                     <button
                                         type="button"
                                         onClick={saveDraftNow}
-                                        className="flex items-center gap-1.5 px-4 py-2.5 text-xs font-bold uppercase tracking-[0.2em] border border-gray-200 text-gray-600 hover:border-[#00A693] hover:text-[#00A693] transition-colors"
+                                        className="flex items-center gap-1.5 px-4 py-2.5 text-xs font-bold uppercase tracking-[0.2em] border border-gray-200 text-gray-600 hover:border-[var(--accent)] hover:text-[var(--accent)] transition-colors"
                                         title="Your progress is also auto-saved on this device"
                                     >
                                         <Save size={12} /> Save draft
@@ -205,7 +224,7 @@ export default function IntakeFormShell({
                                     <button
                                         type="button"
                                         onClick={next}
-                                        className="group flex items-center gap-2 px-8 py-2.5 bg-[#282728] text-white text-xs font-bold uppercase tracking-[0.2em] transition-all hover:bg-[#00A693] active:scale-95"
+                                        className="group flex items-center gap-2 px-8 py-2.5 bg-[#282728] text-white text-xs font-bold uppercase tracking-[0.2em] transition-all hover:bg-[var(--accent)] active:scale-95"
                                     >
                                         Continue <ChevronRight size={13} className="transition-transform group-hover:translate-x-0.5" />
                                     </button>
@@ -213,7 +232,7 @@ export default function IntakeFormShell({
                                     <button
                                         type="submit"
                                         disabled={processing}
-                                        className="flex items-center gap-2 px-8 py-2.5 bg-[#00A693] text-white text-xs font-bold uppercase tracking-[0.2em] transition-all hover:bg-[#008c7c] active:scale-95 disabled:opacity-60"
+                                        className="flex items-center gap-2 px-8 py-2.5 bg-[var(--accent)] text-white text-xs font-bold uppercase tracking-[0.2em] transition-all hover:bg-[var(--accent-dark)] active:scale-95 disabled:opacity-60"
                                     >
                                         <Send size={13} />
                                         {processing ? 'Submitting…' : submitLabel}

@@ -39,7 +39,7 @@ class WorkIntakeController extends Controller
 
             $intake = WorkIntake::create(array_merge($validated, [
                 'intake_id' => $intakeId,
-                'status'    => 'New',
+                'status'    => 'Submitted',
             ]));
 
             $visaType = VisaType::query()->where('code', 'WORK_AEWV')->first()

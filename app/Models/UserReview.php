@@ -40,6 +40,11 @@ class UserReview extends Model
         'is_featured'  => 'boolean',
     ];
 
+    // Surface the computed photo URL on every serialization so admin
+    // tables / detail pages / the public ReviewsSection all see it
+    // without each query having to remember to ->append('photo_url').
+    protected $appends = ['photo_url'];
+
     /**
      * Scope by department. Passing 'immigration' or 'education' includes
      * cross-dept reviews tagged 'both', so a client who used services from

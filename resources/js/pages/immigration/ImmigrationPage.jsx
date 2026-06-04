@@ -22,7 +22,7 @@ import VisitorVisaImg from "@assets/NewSections/visitor_visa.png";
 import WorkVisaImg    from "@assets/NewSections/work_visa.png";
 import SettleVisaImg  from "@assets/NewSections/settle_visa.png";
 import ResidencyImg   from "@assets/NewSections/residency_visa.png";
-import BrandBanner   from "@assets/NewSections/brand_banner.png";
+import BrandBanner   from "@assets/banner/team_immigration.png";
 
 import DevImg         from "@assets/team/Dev.png";
 import DaiImg         from "@assets/team/dai.png";
@@ -1104,48 +1104,19 @@ export default function Immigration({ reviews = [], stats = { count: 0, average:
                     <motion.div
                         initial={{ opacity: 0, scale: 0.95 }} whileInView={{ opacity: 1, scale: 1 }} viewport={{ once: true }}
                         transition={{ duration: 1.2 }}
-                        className="aspect-[21/9] rounded-sm overflow-hidden shadow-2xl"
+                        className="relative w-full overflow-hidden rounded-sm shadow-2xl group"
                     >
-                        <img src={BrandBanner} alt="New Zealand Landscape" className="w-full h-full object-cover" />
+                        <img
+                            src={BrandBanner}
+                            alt="Immigration Team"
+                            className="w-full h-auto transition-transform duration-1000 group-hover:scale-105"
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-[#0a0f0a]/30 to-transparent pointer-events-none"></div>
                     </motion.div>
                 </div>
             </section>
 
-            {/* ══════════════════════════════════════════════════════════════
-                FAQ
-            ══════════════════════════════════════════════════════════════ */}
-            <section id="faq" className="py-20">
-                <div className="container mx-auto px-6 md:px-12 max-w-7xl">
-                    <div className="grid grid-cols-1 lg:grid-cols-5 gap-16">
-                        {/* Left label */}
-                        <div className="lg:col-span-2">
-                            <motion.h2
-                                initial={{ opacity: 0, y: 16 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}
-                                className="text-2xl md:text-3xl font-bold text-[#282728] mb-4"
-                            >
-                                Frequently Asked Questions 💬
-                            </motion.h2>
-                            <motion.p
-                                initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true }} transition={{ delay: 0.1 }}
-                                className="text-sm text-gray-500 leading-relaxed mb-8"
-                            >
-                                Got more questions? Our licensed advisers are happy to help.
-                            </motion.p>
-                            <a
-                                href="/booking"
-                                className="inline-flex items-center gap-2 bg-[#282728] text-white text-xs font-bold px-6 py-3 rounded-full hover:bg-[#00A693] transition-colors duration-300"
-                            >
-                                Ask an adviser <ArrowRight size={13} />
-                            </a>
-                        </div>
-
-                        {/* Accordion */}
-                        <div className="lg:col-span-3">
-                            {faqs.map((f, i) => <FaqItem key={i} item={f} i={i} />)}
-                        </div>
-                    </div>
-                </div>
-            </section>
+            {/* FAQ section removed per request. */}
 
             {/* ══════════════════════════════════════════════════════════════
                 ASSESSMENT CTA  —  full-bleed teal

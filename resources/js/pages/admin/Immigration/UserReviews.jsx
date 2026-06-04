@@ -167,9 +167,17 @@ export default function UserReviews({ reviews = [], department = 'immigration' }
                                 <tr key={r.id} className="hover:bg-gray-50/60 transition-colors">
                                     <td className="px-6 py-4">
                                         <div className="flex items-center gap-3">
-                                            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#00A693] to-[#008c7c] text-white flex items-center justify-center font-bold text-sm shadow-sm flex-shrink-0">
-                                                {(r.name?.[0] || 'U').toUpperCase()}
-                                            </div>
+                                            {r.photo_url ? (
+                                                <img
+                                                    src={r.photo_url}
+                                                    alt={r.name}
+                                                    className="w-10 h-10 rounded-full object-cover ring-2 ring-white shadow-sm flex-shrink-0"
+                                                />
+                                            ) : (
+                                                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#00A693] to-[#008c7c] text-white flex items-center justify-center font-bold text-sm shadow-sm flex-shrink-0">
+                                                    {(r.name?.[0] || 'U').toUpperCase()}
+                                                </div>
+                                            )}
                                             <div className="min-w-0">
                                                 <div className="font-semibold text-gray-900 truncate">{r.name}</div>
                                                 <div className="text-[11px] text-gray-500 truncate">{r.review_id}</div>

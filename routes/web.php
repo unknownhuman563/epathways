@@ -151,6 +151,16 @@ Route::get('/register/{event_code}', [EventController::class, 'showRegistrationF
 Route::post('/register/{event_code}', [EventController::class, 'registerLead']);
 Route::get('/free-assessment', [LeadController::class, 'showFreeAssessment'])->name('free-assessment');
 Route::post('/free-assessment', [LeadController::class, 'storeFreeAssessment']);
+
+// Education Enrolment — clean IntakeFormShell-based 7-step assessment.
+// Separate controller method because the payload is simpler than the full
+// free-assessment shape and gets tagged as `education-enrolment`.
+Route::get('/education-enrolment',        [LeadController::class, 'showEducationEnrolment'])->name('education-enrolment');
+Route::post('/education-enrolment',       [LeadController::class, 'storeEducationEnrolmentFull']);
+Route::post('/education-enrolment/draft', [LeadController::class, 'saveAssessmentDraft'])->name('education-enrolment.draft');
+
+// Free Assessment draft endpoint — same handler, tagged via URL.
+Route::post('/free-assessment/draft', [LeadController::class, 'saveAssessmentDraft'])->name('free-assessment.draft');
 Route::get('/assessment-result/{lead_id}', [LeadController::class, 'showAssessmentResult'])->name('assessment-result');
 
 // Lightweight inline lead capture (hero, exit-intent, fee-guide download,
@@ -440,6 +450,9 @@ Route::middleware(['auth'])->group(function () {
             // Sales Weekly Report — 11 sections; ?week_start=YYYY-MM-DD steps weeks.
             Route::get('/reports', [SalesController::class, 'report'])->name('reports');
 
+            // Public assessment submissions (free-assessment + education-enrolment).
+            Route::get('/assessments', [SalesController::class, 'assessments'])->name('assessments');
+
             // OUTREACH — placeholders until the email backbone ships.
             Route::get('/bulk-email',      [SalesController::class, 'bulkEmail'])->name('bulk-email');
             Route::get('/email-templates', [SalesController::class, 'emailTemplates'])->name('email-templates');
@@ -467,8 +480,10 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/leads/{id}', [LeadController::class, 'show'])->name('leads.show');
 
             // WORK
-            Route::get('/students',  [EducationController::class, 'students'])->name('students');
-            Route::get('/documents', [EducationController::class, 'documents'])->name('documents');
+            Route::get('/students',    [EducationController::class, 'students'])->name('students');
+            Route::get('/documents',   [EducationController::class, 'documents'])->name('documents');
+            // Public assessment submissions (free-assessment + education-enrolment).
+            Route::get('/assessments', [EducationController::class, 'assessments'])->name('assessments');
             // Tasks & follow-ups (mirror of /portal/sales/tasks). Reuses
             // LeadTaskController::dueToday for the AJAX endpoint since
             // tasks are not department-scoped server-side.

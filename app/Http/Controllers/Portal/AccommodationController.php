@@ -62,6 +62,7 @@ class AccommodationController extends Controller
             $serialize = fn ($t) => [
                 'id'           => $t->id,
                 'title'        => $t->title,
+                'description'  => $t->description,
                 'note'         => $t->note,
                 'comments_count' => (int) ($t->comments_count ?? 0),
                 'priority'     => $t->priority,
@@ -81,8 +82,11 @@ class AccommodationController extends Controller
                     'url'               => $a->url,
                     'original_filename' => $a->original_filename,
                     'is_image'          => $a->is_image,
+                    'mime_type'         => $a->mime_type,
+                    'size'              => $a->size,
                 ])->values(),
                 'assignee'     => $t->assignee ? ['id' => $t->assignee->id, 'name' => $t->assignee->name] : null,
+                'additional_assignee_ids' => $t->additional_assignee_ids ?? [],
                 'creator'      => $t->creator  ? ['id' => $t->creator->id,  'name' => $t->creator->name]  : null,
                 'lead'         => $t->lead ? [
                     'id'      => $t->lead->id,
@@ -110,6 +114,9 @@ class AccommodationController extends Controller
                 'undated'       => $undated,
                 'recently_done' => $recentlyDone,
                 'staffOptions'  => \App\Models\User::whereNotIn('role', ['lead', 'revoked_lead'])->orderBy('name')->get(['id', 'name', 'role']),
+                'recent_activity' => \App\Models\ActivityLog::where('action', 'like', 'lead_task.%')
+                    ->latest()->limit(30)
+                    ->get(['id', 'action', 'description', 'actor_name', 'actor_role', 'properties', 'created_at']),
             ]);
         } catch (\Throwable $e) {
             Log::error('Accommodation tasks page failed', ['error' => $e->getMessage()]);

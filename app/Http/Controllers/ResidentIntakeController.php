@@ -157,7 +157,7 @@ class ResidentIntakeController extends Controller
                 $validated,
                 [
                     'intake_id'      => $intakeId,
-                    'status'         => 'New',
+                    'status'         => 'Submitted',
                     'documents'      => $documents ?: null,
                     'document_files' => $storedFiles ?: null,
                 ]

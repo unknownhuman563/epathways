@@ -1251,7 +1251,7 @@ function ConvertMenu({ lead, canRevert }) {
     const items = [
         {
             key: 'student',
-            label: 'Student',
+            label: 'Study',
             sublabel: 'education',
             icon: <GraduationCap size={14} />,
             tone: 'emerald',
