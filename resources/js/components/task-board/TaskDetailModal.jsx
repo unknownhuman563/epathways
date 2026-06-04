@@ -6,6 +6,7 @@ import {
     AlertTriangle, Save, Eye, Download, CheckCircle2, MessageCircle, Hash,
 } from "lucide-react";
 import AssigneeMultiPicker from "./AssigneeMultiPicker";
+import LeadMultiPicker from "./LeadMultiPicker";
 
 // Editable task detail modal — the same look as the New Task modal so the
 // create + edit flows feel identical. Pre-populated from the task on open;
@@ -118,6 +119,9 @@ export default function TaskDetailModal({ task, onClose }) {
     const [categoryOther, setCategoryOther] = useState("");
     const [tagsInput,   setTagsInput]   = useState("");
     const [showOtherDepts, setShowOtherDepts] = useState(true);
+    // Related leads — chip multi-picker, replaces the old single-locked
+    // chip. Hydrated on open from task.lead + task.additional_lead_ids.
+    const [relatedRecords, setRelatedRecords] = useState([]);
     const [newFiles,    setNewFiles]    = useState([]);     // File[]
     const [newPreviews, setNewPreviews] = useState([]);     // matching object URLs (null for non-image)
     const [saving,      setSaving]      = useState(false);
@@ -148,6 +152,43 @@ export default function TaskDetailModal({ task, onClose }) {
         setNewFiles([]);
         setSaving(false);
         setError(null);
+
+        // Hydrate the Related-to picker. The primary lead arrives as a full
+        // object on `task.lead`; additional leads come as bare ids — we fetch
+        // their display info from /api/tasks/related-records?ids=… so they
+        // render as proper chips. The primary lead stays at index 0 so the
+        // task keeps the same "primary" record after a save round-trip.
+        const primary = task.lead
+            ? [{
+                id: task.lead.id,
+                lead_id: task.lead.lead_id,
+                name: task.lead.name,
+                email: task.lead.email || null,
+                record_type: task.lead.record_type || "lead",
+            }]
+            : [];
+        const extraIds = Array.isArray(task.additional_lead_ids)
+            ? task.additional_lead_ids.filter((id) => id && Number(id) !== Number(task.lead?.id))
+            : [];
+        if (extraIds.length === 0) {
+            setRelatedRecords(primary);
+        } else {
+            // Tentatively show the primary chip; replace with the full list
+            // once the extras come back from the server.
+            setRelatedRecords(primary);
+            fetch(`/api/tasks/related-records?ids=${encodeURIComponent(extraIds.join(","))}`, {
+                headers: { Accept: "application/json" },
+                credentials: "same-origin",
+            })
+                .then((r) => r.ok ? r.json() : { records: [] })
+                .then((d) => {
+                    const extras = (d.records || []).filter(
+                        (r) => Number(r.id) !== Number(task.lead?.id),
+                    );
+                    setRelatedRecords([...primary, ...extras]);
+                })
+                .catch(() => { /* keep primary-only on failure */ });
+        }
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [task?.id]);
 
@@ -190,9 +231,11 @@ export default function TaskDetailModal({ task, onClose }) {
 
     if (! task) return null;
 
-    const isLinked       = !! task.lead;
     const existingFiles  = task.attachments || [];
     const effectiveCategoryOptions = CATEGORIES_BY_DEPT[department] || [];
+    // A task is considered "linked" when any record is in the picker —
+    // the primary link is whichever chip sits at index 0.
+    const isLinked = relatedRecords.length > 0;
 
     const onSave = () => {
         if (! title.trim()) {
@@ -211,6 +254,8 @@ export default function TaskDetailModal({ task, onClose }) {
                 ? categoryOther.trim()
                 : (category || null));
 
+        const leadIds = relatedRecords.map((r) => Number(r.id)).filter(Boolean);
+
         const payload = {
             title:        title.trim(),
             description:  description || null,
@@ -224,6 +269,9 @@ export default function TaskDetailModal({ task, onClose }) {
             department:   department || null,
             tags,
             category:     resolvedCategory,
+            // TaskController::update reads `lead_ids[]`; the first becomes
+            // the primary `lead_id`, the rest land in `additional_lead_ids`.
+            lead_ids:     leadIds,
         };
 
         router.patch(`/api/tasks/${task.id}`, payload, {
@@ -389,18 +437,21 @@ export default function TaskDetailModal({ task, onClose }) {
                                         {TYPE_OPTIONS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
                                     </select>
                                 </FormRow>
-                                {isLinked ? (
-                                    <FormRow label="Related to">
-                                        <div className="px-3 py-2 rounded-lg border border-gray-200 bg-gray-50 text-sm flex items-center gap-2 h-[38px]">
-                                            <User size={13} className="text-gray-500 flex-shrink-0" />
-                                            <span className="font-medium text-gray-900 truncate">{task.lead.name}</span>
-                                            <span className="font-mono text-[11px] text-gray-500">
-                                                <Hash size={9} className="inline mb-0.5" />{task.lead.lead_id}
-                                            </span>
-                                            <span className="ml-auto text-[10px] uppercase tracking-wider text-gray-400">Locked</span>
-                                        </div>
-                                    </FormRow>
-                                ) : (
+                                <FormRow label="Related to">
+                                    <LeadMultiPicker
+                                        value={relatedRecords}
+                                        onChange={setRelatedRecords}
+                                    />
+                                    <p className="text-[10px] text-gray-400 mt-1">
+                                        First chip is the primary link; add more to associate the task with extra leads, students, cases, or clients.
+                                    </p>
+                                </FormRow>
+                            </div>
+
+                            {/* Category is only meaningful for unlinked / department tasks
+                                (no related leads). Hide it once any record is picked. */}
+                            {relatedRecords.length === 0 && (
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                     <FormRow label="Category">
                                         <select
                                             value={category}
@@ -424,8 +475,8 @@ export default function TaskDetailModal({ task, onClose }) {
                                             />
                                         )}
                                     </FormRow>
-                                )}
-                            </div>
+                                </div>
+                            )}
 
                             <FormRow label="Tags" hint="Comma-separated (e.g. urgent, q3-launch)">
                                 <div className="relative">

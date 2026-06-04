@@ -8,6 +8,7 @@ import {
     TrendingUp, AlertTriangle, Clock, History, ChevronDown, Check,
     User as UserIcon, ArrowRight, Sparkles, FolderOpen, Copy, Info, Undo2,
     Globe, Home, Wand2, Users as UsersIcon, Eye,
+    Paperclip, FileImage, Film, Music,
 } from 'lucide-react';
 import { CHECKLIST, STATUSES, STATUS_CHIP, STATUS_LABEL, SECTION_STATUSES, IMPORTANT_NOTES, renderFilename, currentSectionIndex } from '@/data/leadDocumentChecklist';
 
@@ -2402,57 +2403,80 @@ function TasksPanel({ leadId, tasks, staffOptions, currentUser }) {
                     {ordered.map((t) => {
                         const canDelete = currentUser && (currentUser.is_admin || currentUser.id === t.created_by);
                         const priorityStyle = PRIORITY_STYLE[t.priority] || PRIORITY_STYLE.normal;
+                        const attachments = Array.isArray(t.attachments) ? t.attachments : [];
                         return (
                             <li
                                 key={t.id}
-                                className={`group px-5 py-2.5 flex items-center gap-3 transition-colors hover:bg-gray-50/50 ${t.completed ? 'opacity-50' : ''} ${t.overdue ? 'bg-red-50/30' : ''}`}
+                                className={`group px-5 py-2.5 transition-colors hover:bg-gray-50/50 ${t.completed ? 'opacity-50' : ''} ${t.overdue ? 'bg-red-50/30' : ''}`}
                             >
-                                {/* Checkbox */}
-                                <button
-                                    type="button"
-                                    onClick={() => toggleComplete(t)}
-                                    className={`w-[18px] h-[18px] rounded-md border-2 flex items-center justify-center flex-shrink-0 transition-colors ${t.completed ? 'bg-emerald-500 border-emerald-500 text-white' : 'border-gray-300 hover:border-gray-900'}`}
-                                    title={t.completed ? 'Mark incomplete' : 'Mark complete'}
-                                >
-                                    {t.completed && <Check size={11} strokeWidth={3} />}
-                                </button>
+                                <div className="flex items-center gap-3">
+                                    {/* Checkbox */}
+                                    <button
+                                        type="button"
+                                        onClick={() => toggleComplete(t)}
+                                        className={`w-[18px] h-[18px] rounded-md border-2 flex items-center justify-center flex-shrink-0 transition-colors ${t.completed ? 'bg-emerald-500 border-emerald-500 text-white' : 'border-gray-300 hover:border-gray-900'}`}
+                                        title={t.completed ? 'Mark incomplete' : 'Mark complete'}
+                                    >
+                                        {t.completed && <Check size={11} strokeWidth={3} />}
+                                    </button>
 
-                                {/* Title + inline meta */}
-                                <div className="flex-1 min-w-0 flex items-center gap-2.5 flex-wrap">
-                                    <span className={`text-sm ${t.completed ? 'line-through text-gray-400' : 'text-gray-900 font-medium'} truncate`}>
-                                        {t.title}
-                                    </span>
-                                    {t.priority !== 'normal' && (
-                                        <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider border ${priorityStyle}`}>
-                                            {t.priority}
+                                    {/* Title + inline meta */}
+                                    <div className="flex-1 min-w-0 flex items-center gap-2.5 flex-wrap">
+                                        <span className={`text-sm ${t.completed ? 'line-through text-gray-400' : 'text-gray-900 font-medium'} truncate`}>
+                                            {t.title}
+                                        </span>
+                                        {t.priority !== 'normal' && (
+                                            <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider border ${priorityStyle}`}>
+                                                {t.priority}
+                                            </span>
+                                        )}
+                                        {t.due_at && (
+                                            <span className={`text-[10px] font-semibold tabular-nums ${t.overdue ? 'text-red-600' : 'text-gray-400'}`}>
+                                                {t.overdue ? '⚠ ' : ''}{fmt(t.due_at)}
+                                            </span>
+                                        )}
+                                        {attachments.length > 0 && (
+                                            <span
+                                                className="inline-flex items-center gap-0.5 text-[10px] font-bold uppercase tracking-wider text-gray-400"
+                                                title={`${attachments.length} attachment${attachments.length === 1 ? '' : 's'}`}
+                                            >
+                                                <Paperclip size={10} /> {attachments.length}
+                                            </span>
+                                        )}
+                                    </div>
+
+                                    {/* Assignee avatar */}
+                                    {t.assignee && (
+                                        <span
+                                            className="w-6 h-6 rounded-full bg-gray-200 text-gray-700 text-[10px] font-bold flex items-center justify-center flex-shrink-0"
+                                            title={t.assignee.name}
+                                        >
+                                            {t.assignee.name.split(' ').slice(0, 2).map((w) => w[0]).join('').toUpperCase()}
                                         </span>
                                     )}
-                                    {t.due_at && (
-                                        <span className={`text-[10px] font-semibold tabular-nums ${t.overdue ? 'text-red-600' : 'text-gray-400'}`}>
-                                            {t.overdue ? '⚠ ' : ''}{fmt(t.due_at)}
-                                        </span>
+
+                                    {/* Hover-revealed delete */}
+                                    {canDelete && (
+                                        <button
+                                            type="button"
+                                            onClick={() => remove(t)}
+                                            className="text-[10px] uppercase tracking-widest font-bold text-gray-300 hover:text-red-600 transition-colors flex-shrink-0 opacity-0 group-hover:opacity-100"
+                                        >
+                                            ×
+                                        </button>
                                     )}
                                 </div>
 
-                                {/* Assignee avatar */}
-                                {t.assignee && (
-                                    <span
-                                        className="w-6 h-6 rounded-full bg-gray-200 text-gray-700 text-[10px] font-bold flex items-center justify-center flex-shrink-0"
-                                        title={t.assignee.name}
-                                    >
-                                        {t.assignee.name.split(' ').slice(0, 2).map((w) => w[0]).join('').toUpperCase()}
-                                    </span>
-                                )}
-
-                                {/* Hover-revealed delete */}
-                                {canDelete && (
-                                    <button
-                                        type="button"
-                                        onClick={() => remove(t)}
-                                        className="text-[10px] uppercase tracking-widest font-bold text-gray-300 hover:text-red-600 transition-colors flex-shrink-0 opacity-0 group-hover:opacity-100"
-                                    >
-                                        ×
-                                    </button>
+                                {/* Attachment thumbnails — visible when the task has files
+                                    uploaded via the Task Board. Images render as 40×40
+                                    previews, everything else as a typed pill with the
+                                    filename truncated. Clicking opens the file in a new tab. */}
+                                {attachments.length > 0 && (
+                                    <div className="mt-2 ml-[30px] flex flex-wrap items-center gap-2">
+                                        {attachments.map((a) => (
+                                            <TaskAttachmentChip key={a.id} attachment={a} />
+                                        ))}
+                                    </div>
                                 )}
                             </li>
                         );
@@ -2460,6 +2484,46 @@ function TasksPanel({ leadId, tasks, staffOptions, currentUser }) {
                 </ul>
             )}
         </section>
+    );
+}
+
+// Small typed chip for task attachments shown inline on the lead-detail
+// Tasks card. Images use a thumbnail; other file types fall back to a
+// content-type icon. Click opens the asset in a new tab — the storage url
+// (Storage::disk('public')) is public-readable per LeadTaskAttachment::$appends.
+function TaskAttachmentChip({ attachment: a }) {
+    const ext  = (a.original_filename || '').split('.').pop()?.toUpperCase().slice(0, 4) || 'FILE';
+    const mime = (a.mime_type || '').toLowerCase();
+    const Icon = a.is_image ? FileImage
+        : mime.startsWith('video/') ? Film
+        : mime.startsWith('audio/') ? Music
+        : FileText;
+
+    if (a.is_image) {
+        return (
+            <a
+                href={a.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                title={a.original_filename}
+                className="block w-10 h-10 rounded-md overflow-hidden border border-gray-200 hover:border-gray-400 transition-colors flex-shrink-0"
+            >
+                <img src={a.url} alt={a.original_filename} className="w-full h-full object-cover" />
+            </a>
+        );
+    }
+    return (
+        <a
+            href={a.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            title={a.original_filename}
+            className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md border border-gray-200 bg-white hover:bg-gray-50 hover:border-gray-400 text-[10px] font-semibold text-gray-700 max-w-[180px] transition-colors"
+        >
+            <Icon size={11} className="text-gray-400 flex-shrink-0" />
+            <span className="truncate">{a.original_filename}</span>
+            <span className="font-mono text-[9px] text-gray-400 flex-shrink-0">{ext}</span>
+        </a>
     );
 }
 
