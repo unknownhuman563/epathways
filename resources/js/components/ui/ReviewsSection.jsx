@@ -76,7 +76,7 @@ function ReviewCard({ review, compact = false }) {
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true, margin: "-60px" }}
             transition={{ duration: 0.5, ease: "easeOut" }}
-            className="relative bg-[#282728] rounded-2xl border border-white/5 shadow-[0_8px_32px_-12px_rgba(0,0,0,0.35)] hover:shadow-[0_24px_48px_-12px_rgba(0,0,0,0.55)] hover:-translate-y-1 hover:border-white/10 p-8 flex flex-col group transition-all duration-300 overflow-hidden"
+            className={`relative bg-[#282728] rounded-2xl border border-white/5 shadow-[0_8px_32px_-12px_rgba(0,0,0,0.35)] hover:shadow-[0_24px_48px_-12px_rgba(0,0,0,0.55)] hover:-translate-y-1 hover:border-white/10 ${compact ? "p-6" : "p-8"} flex flex-col group transition-all duration-300 overflow-hidden`}
         >
             {/* Olive accent bar at the top — same motif used in the section
                 eyebrows for visual cohesion. */}
@@ -163,6 +163,10 @@ export default function ReviewsSection({
     // grid. Off on /home (merged feed across departments — submission lives
     // on each department's own page instead).
     showWriteCta = true,
+    // Pass `compact` from pages that want a tighter, denser version of the
+    // section (smaller padding, smaller heading scale). Card layout itself
+    // stays the same so the visual language is consistent everywhere.
+    compact = false,
 }) {
     const [modalOpen, setModalOpen] = useState(false);
     const [visible, setVisible] = useState(PAGE_SIZE);
@@ -175,23 +179,26 @@ export default function ReviewsSection({
     const hasMore = reviews.length > visible;
 
     return (
-        <section id="reviews" className="py-24 sm:py-28 lg:py-32 bg-gradient-to-b from-white via-[#fafaf9] to-white font-urbanist">
+        <section
+            id="reviews"
+            className={`${compact ? "py-16 sm:py-20 lg:py-24" : "py-24 sm:py-28 lg:py-32"} bg-gradient-to-b from-white via-[#fafaf9] to-white font-urbanist`}
+        >
             <div className="max-w-7xl mx-auto px-6 md:px-10 lg:px-16">
 
                 {/* ── Header — same editorial pattern used by the visa
                     pathway / visa journey sections: tiny olive eyebrow,
                     oversized dark heading, soft gray intro. */}
-                <div className="max-w-3xl mb-14 lg:mb-16">
-                    <div className="flex items-center gap-4 mb-5">
+                <div className={`max-w-3xl ${compact ? "mb-10 lg:mb-12" : "mb-14 lg:mb-16"}`}>
+                    <div className="flex items-center gap-4 mb-4">
                         <span className="text-[10px] font-bold text-[#436235] uppercase tracking-[0.35em]">
                             {eyebrow}
                         </span>
                         <div className="h-px w-12 bg-[#436235]/50"></div>
                     </div>
-                    <h2 className="text-3xl sm:text-4xl lg:text-5xl font-medium text-[#282728] tracking-tight leading-[1.1] mb-5">
+                    <h2 className={`${compact ? "text-2xl sm:text-3xl lg:text-4xl" : "text-3xl sm:text-4xl lg:text-5xl"} font-medium text-[#282728] tracking-tight leading-[1.1] mb-4`}>
                         {headline}
                     </h2>
-                    <p className="text-base text-gray-700 font-normal leading-relaxed max-w-xl">
+                    <p className={`${compact ? "text-sm" : "text-base"} text-gray-700 font-normal leading-relaxed max-w-xl`}>
                         {intro}
                     </p>
                 </div>
@@ -199,9 +206,9 @@ export default function ReviewsSection({
                 {/* ── Grid / empty state */}
                 {shown.length > 0 ? (
                     <>
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 lg:gap-6">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-5">
                             {shown.map((r) => (
-                                <ReviewCard key={r.id} review={r} />
+                                <ReviewCard key={r.id} review={r} compact={compact} />
                             ))}
                         </div>
 

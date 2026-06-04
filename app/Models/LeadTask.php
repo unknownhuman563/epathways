@@ -17,7 +17,7 @@ class LeadTask extends Model
     public const STATUSES   = ['not_started', 'in_progress', 'in_review', 'completed'];
 
     protected $fillable = [
-        'lead_id', 'created_by', 'assignee_id', 'additional_assignee_ids',
+        'lead_id', 'additional_lead_ids', 'created_by', 'assignee_id', 'additional_assignee_ids',
         'title', 'description', 'note', 'due_at', 'priority', 'progress',
         'completed', 'completed_at', 'completed_by',
         'type', 'category', 'department', 'tags',
@@ -32,6 +32,7 @@ class LeadTask extends Model
         'tags'                    => 'array',
         'recurrence_config'       => 'array',
         'additional_assignee_ids' => 'array',
+        'additional_lead_ids'     => 'array',
     ];
 
     /**
@@ -44,6 +45,19 @@ class LeadTask extends Model
         $ids = array_merge(
             $this->assignee_id ? [(int) $this->assignee_id] : [],
             array_map('intval', $this->additional_assignee_ids ?? [])
+        );
+
+        return array_values(array_unique($ids));
+    }
+
+    /**
+     * Primary lead id (if any) plus every co-linked lead id, de-duped.
+     */
+    public function allLeadIds(): array
+    {
+        $ids = array_merge(
+            $this->lead_id ? [(int) $this->lead_id] : [],
+            array_map('intval', $this->additional_lead_ids ?? [])
         );
 
         return array_values(array_unique($ids));

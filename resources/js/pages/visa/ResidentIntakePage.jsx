@@ -25,6 +25,7 @@ import { toast } from 'sonner';
 import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
 import ResidentIntakeStepper from "@/components/visa/ResidentIntakeStepper";
+import IntakeSuccessModal from "@/components/visa/IntakeSuccessModal";
 
 const TEAL = '#00A693';
 const TEAL_DARK = '#008c7c';
@@ -287,32 +288,32 @@ export default function ResidentIntakePage({ editIntake = null, editToken = null
     const { flash } = usePage().props;
     const isEditing = !!editToken;
 
-    // If the user already submitted an intake and just hasn't paid/booked yet,
-    // bounce them straight to the next step in their flow rather than
-    // re-rendering an empty form. Skipped while in edit-mode (staff is
-    // explicitly editing an existing intake via a shareable token link).
-    const [resumeChecked, setResumeChecked] = useState(isEditing);
-    useEffect(() => {
-        if (isEditing) return;
-        try {
-            const raw = window.localStorage.getItem(PENDING_ASSESSMENT_KEY);
-            if (!raw) { setResumeChecked(true); return; }
-            const { token, status } = JSON.parse(raw);
-            if (!token) { setResumeChecked(true); return; }
-            // booked = journey complete; let the user start a new intake.
-            if (status === 'booked') {
-                window.localStorage.removeItem(PENDING_ASSESSMENT_KEY);
-                setResumeChecked(true);
-                return;
-            }
-            const target = status === 'paid'
-                ? `/assessment/${token}/book`
-                : `/assessment/${token}/pay`;
-            window.location.replace(target);
-        } catch {
-            setResumeChecked(true);
-        }
-    }, [isEditing]);
+    // ── PAYMENT + BOOKING TEMPORARILY DISABLED ────────────────────
+    // Resume-to-pay bounce is off while the pricing / Stripe / booking
+    // flow is paused; re-enable when the controllers wire the
+    // Assessment + assessment.pay redirect back in.
+    const [resumeChecked, setResumeChecked] = useState(true);
+    // useEffect(() => {
+    //     if (isEditing) return;
+    //     try {
+    //         const raw = window.localStorage.getItem(PENDING_ASSESSMENT_KEY);
+    //         if (!raw) { setResumeChecked(true); return; }
+    //         const { token, status } = JSON.parse(raw);
+    //         if (!token) { setResumeChecked(true); return; }
+    //         // booked = journey complete; let the user start a new intake.
+    //         if (status === 'booked') {
+    //             window.localStorage.removeItem(PENDING_ASSESSMENT_KEY);
+    //             setResumeChecked(true);
+    //             return;
+    //         }
+    //         const target = status === 'paid'
+    //             ? `/assessment/${token}/book`
+    //             : `/assessment/${token}/pay`;
+    //         window.location.replace(target);
+    //     } catch {
+    //         setResumeChecked(true);
+    //     }
+    // }, [isEditing]);
 
     // Snapshot of files already on the server for this intake — shown to the
     // applicant in Step 8 as "already attached" so they know what's on file.
@@ -329,6 +330,17 @@ export default function ResidentIntakePage({ editIntake = null, editToken = null
     const [intakeId, setIntakeId] = useState(null);
     const [localErrors, setLocalErrors] = useState({});
     const [showConfirm, setShowConfirm] = useState(false);
+    const [showSuccess, setShowSuccess] = useState(false);
+
+    // Persistent post-submit modal — driven by the controller's
+    // `intake_submitted` flash. Stays until the user manually dismisses
+    // it, so they don't think the submission silently failed.
+    useEffect(() => {
+        if (flash?.intake_submitted) {
+            setShowSuccess(true);
+            try { window.localStorage.removeItem(DRAFT_STORAGE_KEY); } catch {}
+        }
+    }, [flash?.intake_submitted]);
 
     useEffect(() => {
         if (flash?.success) {
@@ -726,6 +738,13 @@ export default function ResidentIntakePage({ editIntake = null, editToken = null
                     </div>
             </main>
             <Footer />
+
+            {/* ── Persistent post-submit thank-you modal ────────────────── */}
+            <IntakeSuccessModal
+                open={showSuccess}
+                onClose={() => setShowSuccess(false)}
+                visaLabel={flash?.intake_submitted || 'Resident Visa (SMC)'}
+            />
 
             {/* ── Pre-submit confirmation modal ─────────────────────────── */}
             <AnimatePresence>

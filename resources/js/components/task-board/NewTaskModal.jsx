@@ -2,10 +2,11 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { router, usePage } from "@inertiajs/react";
 import { toast } from "sonner";
 import {
-    X, User, Building2, ChevronLeft, AlertTriangle, Search, Tag, RotateCw,
+    X, User, Building2, ChevronLeft, ChevronDown, AlertTriangle, Search, Tag, RotateCw,
     Plus, Paperclip, FileText, Film, FileImage, Music,
 } from "lucide-react";
 import AssigneeMultiPicker from "./AssigneeMultiPicker";
+import LeadMultiPicker from "./LeadMultiPicker";
 
 // New Task modal — used by every portal Task Board's "+ New Task" button.
 // The modal is fully department-aware via the `department` prop. See
@@ -107,7 +108,9 @@ export default function NewTaskModal({
     // Default ON so users see staff from every department — they can still
     // narrow back to their own dept with the toggle.
     const [showOtherDepts, setShowOtherDepts] = useState(true);
-    const [relatedRecord, setRelatedRecord] = useState(lockedRecord);
+    // Multi-lead picker. lockedRecord (when set) seeds the list with one
+    // pre-picked record from the lead-detail "Add Task" entry point.
+    const [relatedRecords, setRelatedRecords] = useState(lockedRecord ? [lockedRecord] : []);
     const [category, setCategory] = useState("");
     // When category === "Other", we collect a free-form custom name and
     // send that as the category on submit.
@@ -143,7 +146,7 @@ export default function NewTaskModal({
         setDueTime("17:00");
         setAssigneeIds([]);
         setShowOtherDepts(true);
-        setRelatedRecord(lockedRecord);
+        setRelatedRecords(lockedRecord ? [lockedRecord] : []);
         setCategory("");
         setCategoryOther("");
         setTagsInput("");
@@ -229,7 +232,7 @@ export default function NewTaskModal({
 
         return {
             task_type: kind,
-            lead_id: kind === "linked" ? relatedRecord?.id : null,
+            lead_ids: kind === "linked" ? relatedRecords.map((r) => r.id) : null,
             title,
             description: description || null,
             note: note || null,
@@ -344,7 +347,7 @@ export default function NewTaskModal({
                             visibleStaff={visibleStaff}
                             staffOptions={staffOptions}
                             showOtherDepts={showOtherDepts} setShowOtherDepts={setShowOtherDepts}
-                            relatedRecord={relatedRecord} setRelatedRecord={setRelatedRecord}
+                            relatedRecords={relatedRecords} setRelatedRecords={setRelatedRecords}
                             lockedRecord={lockedRecord}
                             category={category} setCategory={setCategory}
                             categoryOther={categoryOther} setCategoryOther={setCategoryOther}
@@ -461,7 +464,7 @@ function StepTwo(props) {
         assigneeIds, setAssigneeIds, currentUser,
         visibleStaff, staffOptions,
         showOtherDepts, setShowOtherDepts,
-        relatedRecord, setRelatedRecord, lockedRecord,
+        relatedRecords, setRelatedRecords, lockedRecord,
         category, setCategory,
         categoryOther, setCategoryOther,
         categoryOptions,
@@ -475,146 +478,90 @@ function StepTwo(props) {
     } = props;
 
     return (
-        <div className="space-y-5">
-            {isAdminPortal && (
-                <FormRow label="Department this task belongs to" required error={errors.department}>
-                    <select
-                        value={taskDepartment}
-                        onChange={(e) => setTaskDepartment(e.target.value)}
-                        className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm bg-white"
-                    >
-                        {ALL_DEPARTMENTS.map((d) => (
-                            <option key={d} value={d}>{DEPARTMENT_LABEL[d]}</option>
-                        ))}
-                    </select>
-                </FormRow>
-            )}
+        <div className="space-y-6">
+            {/* Top sections sit in a 2-column grid so the form is wider
+                instead of taller — less scrolling. Drops back to a single
+                column below the lg breakpoint. */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-8 gap-y-6">
+            {/* ── Basics ──────────────────────────────────────────────── */}
+            <Section title="Basics" subtitle="What needs doing and why.">
+                {isAdminPortal && (
+                    <FormRow label="Department this task belongs to" required error={errors.department}>
+                        <select
+                            value={taskDepartment}
+                            onChange={(e) => setTaskDepartment(e.target.value)}
+                            className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm bg-white"
+                        >
+                            {ALL_DEPARTMENTS.map((d) => (
+                                <option key={d} value={d}>{DEPARTMENT_LABEL[d]}</option>
+                            ))}
+                        </select>
+                    </FormRow>
+                )}
 
-            <FormRow label="Title" required error={errors.title}>
-                <input
-                    type="text"
-                    value={title}
-                    onChange={(e) => setTitle(e.target.value)}
-                    maxLength={200}
-                    placeholder="What needs doing?"
-                    className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm"
-                />
-                <p className="mt-1 text-[10px] text-gray-400">{title.length}/200</p>
-            </FormRow>
-
-            <FormRow label="Description" error={errors.description}>
-                <textarea
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                    rows={3}
-                    placeholder="Optional context, links, instructions…"
-                    className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm"
-                />
-            </FormRow>
-
-            <FormRow label="Note" hint="Short reminder shown on the card (e.g. “Has to finish before weekend”)" error={errors.note}>
-                <input
-                    type="text"
-                    value={note}
-                    onChange={(e) => setNote(e.target.value)}
-                    maxLength={500}
-                    placeholder="add a quick note…"
-                    className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm"
-                />
-            </FormRow>
-
-            <div className="grid grid-cols-2 gap-4">
-                <FormRow label="Type" error={errors.type}>
-                    <select value={type} onChange={(e) => setType(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm bg-white">
-                        {TYPE_OPTIONS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-                    </select>
-                </FormRow>
-                <FormRow label="Priority" error={errors.priority}>
-                    <select value={priority} onChange={(e) => setPriority(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm bg-white">
-                        <option value="low">Low</option>
-                        <option value="normal">Normal</option>
-                        <option value="high">High</option>
-                        <option value="urgent">Urgent</option>
-                    </select>
-                </FormRow>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-                <FormRow label="Due date" required error={errors.due_at}>
+                <FormRow label="Title" required error={errors.title}>
                     <input
-                        type="date"
-                        value={dueDate}
-                        min={todayIso()}
-                        onChange={(e) => setDueDate(e.target.value)}
+                        type="text"
+                        value={title}
+                        onChange={(e) => setTitle(e.target.value)}
+                        maxLength={200}
+                        placeholder="What needs doing?"
+                        className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm"
+                    />
+                    <p className="mt-1 text-[10px] text-gray-400">{title.length}/200</p>
+                </FormRow>
+
+                <FormRow label="Description" error={errors.description}>
+                    <textarea
+                        value={description}
+                        onChange={(e) => setDescription(e.target.value)}
+                        rows={3}
+                        placeholder="Optional context, links, instructions…"
                         className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm"
                     />
                 </FormRow>
-                <FormRow label="Due time">
+
+                <FormRow label="Note" hint='Short reminder shown on the card (e.g. "Has to finish before weekend")' error={errors.note}>
                     <input
-                        type="time"
-                        value={dueTime}
-                        onChange={(e) => setDueTime(e.target.value)}
+                        type="text"
+                        value={note}
+                        onChange={(e) => setNote(e.target.value)}
+                        maxLength={500}
+                        placeholder="add a quick note…"
                         className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm"
                     />
                 </FormRow>
-            </div>
+            </Section>
 
-            {/* Progress — 0 means "no bar shown on card". Slider keeps it
-                quick to scrub; the number stays in sync. */}
-            <FormRow label={`Progress — ${progress}%`} error={errors.progress}>
-                <input
-                    type="range"
-                    min={0}
-                    max={100}
-                    step={5}
-                    value={progress}
-                    onChange={(e) => setProgress(Number(e.target.value))}
-                    className="w-full accent-gray-900"
-                />
-            </FormRow>
-
-            {/* Assigned + Related/Category share a row on wider screens. */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                <FormRow
-                    label="Assigned to"
-                    hint="Pick myself, other staff, or a mix. Leave empty to default to me."
-                    error={errors.assignee_ids || errors["assignee_ids.0"] || errors.assignee_id}
-                >
-                    <AssigneeMultiPicker
-                        value={assigneeIds}
-                        onChange={setAssigneeIds}
-                        visibleStaff={visibleStaff}
-                        allStaff={staffOptions}
-                        currentUser={currentUser}
-                    />
-                    {!isAdminPortal && (
-                        <label className="mt-2 inline-flex items-center gap-2 text-[11px] text-gray-600 cursor-pointer">
-                            <input
-                                type="checkbox"
-                                checked={showOtherDepts}
-                                onChange={(e) => setShowOtherDepts(e.target.checked)}
-                                className="rounded"
-                            />
-                            Show staff from every department
-                        </label>
-                    )}
-                </FormRow>
+            {/* ── Classification ──────────────────────────────────────── */}
+            <Section title="Classification" subtitle="How this task is grouped and tagged.">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <FormRow label="Type" error={errors.type}>
+                        <select value={type} onChange={(e) => setType(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm bg-white">
+                            {TYPE_OPTIONS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                        </select>
+                    </FormRow>
+                    <FormRow label="Priority" error={errors.priority}>
+                        <select value={priority} onChange={(e) => setPriority(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm bg-white">
+                            <option value="low">Low</option>
+                            <option value="normal">Normal</option>
+                            <option value="high">High</option>
+                            <option value="urgent">Urgent</option>
+                        </select>
+                    </FormRow>
+                </div>
 
                 {kind === "linked" ? (
-                    <FormRow label="Related to" required error={errors.lead_id}>
-                        {lockedRecord ? (
-                            <div className="px-3 py-2 rounded-lg border border-gray-200 bg-gray-50 text-sm flex items-center gap-2">
-                                <User size={13} className="text-gray-500" />
-                                <span className="font-medium text-gray-900">{lockedRecord.name}</span>
-                                <span className="font-mono text-[11px] text-gray-500">#{lockedRecord.lead_id}</span>
-                                <span className="ml-auto text-[10px] uppercase tracking-wider text-gray-400">Locked</span>
-                            </div>
-                        ) : (
-                            <RelatedRecordSearch
-                                value={relatedRecord}
-                                onChange={setRelatedRecord}
-                            />
-                        )}
+                    <FormRow
+                        label="Related leads"
+                        required
+                        hint="Pick one or many — searches the leads database."
+                        error={errors.lead_ids || errors["lead_ids.0"] || errors.lead_id}
+                    >
+                        <LeadMultiPicker
+                            value={relatedRecords}
+                            onChange={setRelatedRecords}
+                        />
                     </FormRow>
                 ) : (
                     <FormRow label="Category" required error={errors.category}>
@@ -641,122 +588,212 @@ function StepTwo(props) {
                         )}
                     </FormRow>
                 )}
-            </div>
 
-            <FormRow label="Tags" hint="Comma-separated (e.g. urgent, q3-launch)">
-                <div className="relative">
-                    <Tag size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                    <input
-                        type="text"
-                        value={tagsInput}
-                        onChange={(e) => setTagsInput(e.target.value)}
-                        placeholder="add tags…"
-                        className="w-full pl-8 pr-3 py-2 rounded-lg border border-gray-200 text-sm"
-                    />
-                </div>
-            </FormRow>
-
-            <FormRow
-                label="Attachments"
-                hint="Any file — images, video, PDF, docs. Up to 20 MB each, max 8 files."
-                error={errors["attachments.0"] || errors.attachments}
-            >
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
-                    {files.map((file, idx) => (
-                        <FilePreviewCard
-                            key={idx}
-                            file={file}
-                            previewUrl={filePreviews[idx]}
-                            onRemove={() => removeFile(idx)}
+                <FormRow label="Tags" hint="Comma-separated (e.g. urgent, q3-launch)">
+                    <div className="relative">
+                        <Tag size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                        <input
+                            type="text"
+                            value={tagsInput}
+                            onChange={(e) => setTagsInput(e.target.value)}
+                            placeholder="add tags…"
+                            className="w-full pl-8 pr-3 py-2 rounded-lg border border-gray-200 text-sm"
                         />
-                    ))}
-                    {files.length < 8 && (
-                        <label className="min-h-[88px] rounded-lg border-2 border-dashed border-gray-300 flex flex-col items-center justify-center cursor-pointer hover:border-gray-400 hover:bg-gray-50 transition-colors text-gray-500 px-3 py-3">
+                    </div>
+                </FormRow>
+            </Section>
+
+            {/* ── Schedule & progress ─────────────────────────────────── */}
+            <Section title="Schedule & progress" subtitle="When it's due and how far along you are.">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <FormRow label="Due date" required error={errors.due_at}>
+                        <input
+                            type="date"
+                            value={dueDate}
+                            min={todayIso()}
+                            onChange={(e) => setDueDate(e.target.value)}
+                            className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm"
+                        />
+                    </FormRow>
+                    <FormRow label="Due time">
+                        <input
+                            type="time"
+                            value={dueTime}
+                            onChange={(e) => setDueTime(e.target.value)}
+                            className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm"
+                        />
+                    </FormRow>
+                </div>
+
+                <FormRow label={`Progress — ${progress}%`} error={errors.progress}>
+                    <input
+                        type="range"
+                        min={0}
+                        max={100}
+                        step={5}
+                        value={progress}
+                        onChange={(e) => setProgress(Number(e.target.value))}
+                        className="w-full accent-gray-900"
+                    />
+                </FormRow>
+            </Section>
+
+            {/* ── People ─────────────────────────────────────────────── */}
+            <Section title="People" subtitle="Who's responsible.">
+                <FormRow
+                    label="Assigned to"
+                    hint="Pick myself, other staff, or a mix. Leave empty to default to me."
+                    error={errors.assignee_ids || errors["assignee_ids.0"] || errors.assignee_id}
+                >
+                    <AssigneeMultiPicker
+                        value={assigneeIds}
+                        onChange={setAssigneeIds}
+                        visibleStaff={visibleStaff}
+                        allStaff={staffOptions}
+                        currentUser={currentUser}
+                    />
+                    {! isAdminPortal && (
+                        <label className="mt-2 inline-flex items-center gap-2 text-[11px] text-gray-600 cursor-pointer">
                             <input
-                                type="file"
-                                multiple
-                                onChange={(e) => { addFiles(e.target.files); e.target.value = ""; }}
-                                className="sr-only"
+                                type="checkbox"
+                                checked={showOtherDepts}
+                                onChange={(e) => setShowOtherDepts(e.target.checked)}
+                                className="rounded"
                             />
-                            <Paperclip size={16} />
-                            <span className="text-[10px] font-bold uppercase tracking-wider mt-1">Add file</span>
-                            <span className="text-[9px] text-gray-400 mt-0.5">image · video · pdf · any</span>
+                            Show staff from every department
                         </label>
                     )}
-                </div>
-            </FormRow>
+                </FormRow>
+            </Section>
+            </div>
 
-            {/* Recurrence */}
-            <div className="rounded-xl border border-gray-200 p-3">
-                <label className="inline-flex items-center gap-2 text-sm font-medium text-gray-800 cursor-pointer">
-                    <input
-                        type="checkbox"
-                        checked={recurring}
-                        onChange={(e) => setRecurring(e.target.checked)}
-                        className="rounded"
-                    />
-                    <RotateCw size={13} className="text-gray-500" />
-                    Make this a recurring task
-                </label>
-
-                {recurring && (
-                    <div className="mt-4 space-y-3">
-                        <div className="grid grid-cols-2 gap-3">
-                            <FormRow label="Frequency" tight>
-                                <select value={recurFreq} onChange={(e) => setRecurFreq(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm bg-white">
-                                    <option value="weekly">Weekly</option>
-                                    <option value="monthly">Monthly</option>
-                                    <option value="quarterly">Quarterly</option>
-                                    <option value="custom">Custom</option>
-                                </select>
-                            </FormRow>
-                            {recurFreq === "weekly" && (
-                                <FormRow label="Day of week" tight>
-                                    <select value={recurDow} onChange={(e) => setRecurDow(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm bg-white">
-                                        {["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"].map((d) => (
-                                            <option key={d} value={d}>{d}</option>
-                                        ))}
-                                    </select>
-                                </FormRow>
-                            )}
-                            {recurFreq === "monthly" && (
-                                <FormRow label="Day of month" tight>
-                                    <input
-                                        type="number"
-                                        min={1} max={31}
-                                        value={recurDom}
-                                        onChange={(e) => setRecurDom(Math.max(1, Math.min(31, Number(e.target.value) || 1)))}
-                                        className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm"
-                                    />
-                                </FormRow>
-                            )}
-                        </div>
-                        <div className="grid grid-cols-2 gap-3">
-                            <FormRow label="Time of day" tight>
-                                <input type="time" value={recurTime} onChange={(e) => setRecurTime(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm" />
-                            </FormRow>
-                            <FormRow label="Ends" tight>
-                                <select value={recurEnd} onChange={(e) => setRecurEnd(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm bg-white">
-                                    <option value="never">Never</option>
-                                    <option value="count">After N occurrences</option>
-                                    <option value="date">On date</option>
-                                </select>
-                            </FormRow>
-                        </div>
-                        {recurEnd === "count" && (
-                            <FormRow label="Number of occurrences" tight>
-                                <input type="number" min={1} value={recurCount} onChange={(e) => setRecurCount(Math.max(1, Number(e.target.value) || 1))} className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm" />
-                            </FormRow>
-                        )}
-                        {recurEnd === "date" && (
-                            <FormRow label="End date" tight>
-                                <input type="date" min={dueDate || todayIso()} value={recurUntil} onChange={(e) => setRecurUntil(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm" />
-                            </FormRow>
+            {/* ── Attachments ────────────────────────────────────────── */}
+            <Section
+                title="Attachments"
+                subtitle="Any file — images, video, PDF, docs. Up to 20 MB each, max 8 files."
+            >
+                <FormRow
+                    label={`Files${files.length ? ` · ${files.length}/8` : ""}`}
+                    error={errors["attachments.0"] || errors.attachments}
+                >
+                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+                        {files.map((file, idx) => (
+                            <FilePreviewCard
+                                key={idx}
+                                file={file}
+                                previewUrl={filePreviews[idx]}
+                                onRemove={() => removeFile(idx)}
+                            />
+                        ))}
+                        {files.length < 8 && (
+                            <label className="min-h-[110px] rounded-lg border-2 border-dashed border-gray-300 flex flex-col items-center justify-center cursor-pointer hover:border-gray-400 hover:bg-gray-50 transition-colors text-gray-500 px-3 py-3">
+                                <input
+                                    type="file"
+                                    multiple
+                                    onChange={(e) => { addFiles(e.target.files); e.target.value = ""; }}
+                                    className="sr-only"
+                                />
+                                <Paperclip size={18} />
+                                <span className="text-[10px] font-bold uppercase tracking-wider mt-1.5">Add file</span>
+                                <span className="text-[9px] text-gray-400 mt-0.5">image · video · pdf · any</span>
+                            </label>
                         )}
                     </div>
-                )}
-            </div>
+                </FormRow>
+            </Section>
+
+            {/* ── Recurrence ─────────────────────────────────────────── */}
+            <Section title="Recurrence" subtitle="Optional — repeat this task on a schedule.">
+                <div className="rounded-xl border border-gray-200 bg-gray-50/40 p-4">
+                    <label className="inline-flex items-center gap-2 text-sm font-medium text-gray-800 cursor-pointer">
+                        <input
+                            type="checkbox"
+                            checked={recurring}
+                            onChange={(e) => setRecurring(e.target.checked)}
+                            className="rounded"
+                        />
+                        <RotateCw size={13} className="text-gray-500" />
+                        Make this a recurring task
+                    </label>
+
+                    {recurring && (
+                        <div className="mt-4 space-y-3">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <FormRow label="Frequency" tight>
+                                    <select value={recurFreq} onChange={(e) => setRecurFreq(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm bg-white">
+                                        <option value="weekly">Weekly</option>
+                                        <option value="monthly">Monthly</option>
+                                        <option value="quarterly">Quarterly</option>
+                                        <option value="custom">Custom</option>
+                                    </select>
+                                </FormRow>
+                                {recurFreq === "weekly" && (
+                                    <FormRow label="Day of week" tight>
+                                        <select value={recurDow} onChange={(e) => setRecurDow(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm bg-white">
+                                            {["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"].map((d) => (
+                                                <option key={d} value={d}>{d}</option>
+                                            ))}
+                                        </select>
+                                    </FormRow>
+                                )}
+                                {recurFreq === "monthly" && (
+                                    <FormRow label="Day of month" tight>
+                                        <input
+                                            type="number"
+                                            min={1} max={31}
+                                            value={recurDom}
+                                            onChange={(e) => setRecurDom(Math.max(1, Math.min(31, Number(e.target.value) || 1)))}
+                                            className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm"
+                                        />
+                                    </FormRow>
+                                )}
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <FormRow label="Time of day" tight>
+                                    <input type="time" value={recurTime} onChange={(e) => setRecurTime(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm" />
+                                </FormRow>
+                                <FormRow label="Ends" tight>
+                                    <select value={recurEnd} onChange={(e) => setRecurEnd(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm bg-white">
+                                        <option value="never">Never</option>
+                                        <option value="count">After N occurrences</option>
+                                        <option value="date">On date</option>
+                                    </select>
+                                </FormRow>
+                            </div>
+                            {recurEnd === "count" && (
+                                <FormRow label="Number of occurrences" tight>
+                                    <input type="number" min={1} value={recurCount} onChange={(e) => setRecurCount(Math.max(1, Number(e.target.value) || 1))} className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm" />
+                                </FormRow>
+                            )}
+                            {recurEnd === "date" && (
+                                <FormRow label="End date" tight>
+                                    <input type="date" min={dueDate || todayIso()} value={recurUntil} onChange={(e) => setRecurUntil(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm" />
+                                </FormRow>
+                            )}
+                        </div>
+                    )}
+                </div>
+            </Section>
         </div>
+    );
+}
+
+// Lightweight section wrapper used inside StepTwo. Adds a small uppercase
+// title with a subtitle line and a horizontal divider above each block so
+// the form reads as discrete chunks rather than one long column.
+function Section({ title, subtitle, children }) {
+    return (
+        <section className="space-y-3">
+            <header className="border-b border-gray-100 pb-2">
+                <h3 className="text-[11px] font-bold uppercase tracking-[0.15em] text-gray-900">
+                    {title}
+                </h3>
+                {subtitle && (
+                    <p className="mt-0.5 text-[11px] text-gray-500">{subtitle}</p>
+                )}
+            </header>
+            <div className="space-y-4">{children}</div>
+        </section>
     );
 }
 
@@ -828,15 +865,30 @@ function FilePreviewCard({ file, previewUrl, onRemove }) {
 // ─── Related-record autocomplete ────────────────────────────────────────
 
 function RelatedRecordSearch({ value, onChange }) {
-    const [q, setQ] = useState("");
+    const [q, setQ]             = useState("");
     const [results, setResults] = useState([]);
-    const [open, setOpen] = useState(false);
+    const [open, setOpen]       = useState(false);
     const [loading, setLoading] = useState(false);
-    const debounceRef = useRef(null);
+    const containerRef          = useRef(null);
+    const searchInputRef        = useRef(null);
+    const debounceRef           = useRef(null);
 
+    // Outside click closes the dropdown.
     useEffect(() => {
+        const onDoc = (e) => {
+            if (containerRef.current && ! containerRef.current.contains(e.target)) {
+                setOpen(false);
+            }
+        };
+        document.addEventListener("mousedown", onDoc);
+        return () => document.removeEventListener("mousedown", onDoc);
+    }, []);
+
+    // Fetch on open (q="") for an instant recent-leads list, and re-fetch
+    // as the user types (debounced).
+    useEffect(() => {
+        if (! open) return;
         if (debounceRef.current) clearTimeout(debounceRef.current);
-        if (q.trim().length < 2) { setResults([]); return; }
         setLoading(true);
         debounceRef.current = setTimeout(() => {
             fetch(`/api/tasks/related-records?q=${encodeURIComponent(q)}`, { headers: { Accept: "application/json" } })
@@ -844,57 +896,97 @@ function RelatedRecordSearch({ value, onChange }) {
                 .then((d) => setResults(d.records || []))
                 .catch(() => setResults([]))
                 .finally(() => setLoading(false));
-        }, 250);
+        }, q.trim() === "" ? 0 : 250);
         return () => debounceRef.current && clearTimeout(debounceRef.current);
-    }, [q]);
+    }, [q, open]);
 
-    if (value) {
-        return (
-            <div className="px-3 py-2 rounded-lg border border-gray-200 bg-gray-50 text-sm flex items-center gap-2">
-                <RecordIcon type={value.record_type} />
-                <span className="font-medium text-gray-900">{value.name}</span>
-                <span className="font-mono text-[11px] text-gray-500">#{value.lead_id}</span>
-                <button
-                    type="button"
-                    onClick={() => { onChange(null); setQ(""); }}
-                    className="ml-auto text-[11px] text-gray-500 hover:text-red-600"
-                >
-                    Change
-                </button>
-            </div>
-        );
-    }
+    const openAndFocus = () => {
+        setOpen(true);
+        // Defer so the input exists when we try to focus it.
+        setTimeout(() => searchInputRef.current?.focus(), 0);
+    };
 
     return (
-        <div className="relative">
-            <Search size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-            <input
-                type="text"
-                value={q}
-                onChange={(e) => { setQ(e.target.value); setOpen(true); }}
-                onFocus={() => setOpen(true)}
-                placeholder="Search leads, students, cases, clients…"
-                className="w-full pl-8 pr-3 py-2 rounded-lg border border-gray-200 text-sm"
-            />
-            {open && q.trim().length >= 2 && (
-                <div className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-64 overflow-y-auto">
-                    {loading && <div className="px-3 py-2 text-[11px] text-gray-500">Searching…</div>}
-                    {!loading && results.length === 0 && (
-                        <div className="px-3 py-2 text-[11px] text-gray-500">No matches.</div>
-                    )}
-                    {results.map((r) => (
-                        <button
-                            key={r.id}
-                            type="button"
-                            onClick={() => { onChange(r); setOpen(false); setQ(""); }}
-                            className="w-full text-left px-3 py-2 hover:bg-gray-50 flex items-center gap-2 text-sm"
-                        >
-                            <RecordIcon type={r.record_type} />
-                            <span className="font-medium text-gray-900 truncate">{r.name}</span>
-                            <span className="font-mono text-[10px] text-gray-500">#{r.lead_id}</span>
-                            <span className="ml-auto text-[9px] uppercase tracking-wider text-gray-400">{r.record_type}</span>
-                        </button>
-                    ))}
+        <div ref={containerRef} className="relative">
+            {/* Closed state — looks like a regular select. Clicking opens
+                the dropdown with the recent records ready to pick. */}
+            <button
+                type="button"
+                onClick={openAndFocus}
+                className={`w-full text-left px-3 py-2 rounded-lg border border-gray-200 bg-white text-sm flex items-center gap-2 ${open ? "ring-2 ring-gray-900/10" : ""}`}
+            >
+                {value ? (
+                    <>
+                        <RecordIcon type={value.record_type} />
+                        <span className="font-medium text-gray-900 truncate">{value.name}</span>
+                        <span className="font-mono text-[11px] text-gray-500">#{value.lead_id}</span>
+                        <span className="ml-auto inline-flex items-center gap-2">
+                            <button
+                                type="button"
+                                onClick={(e) => { e.stopPropagation(); onChange(null); setQ(""); }}
+                                className="text-[11px] text-gray-500 hover:text-red-600"
+                            >
+                                Clear
+                            </button>
+                            <ChevronDown size={14} className="text-gray-400" />
+                        </span>
+                    </>
+                ) : (
+                    <>
+                        <span className="text-gray-400 truncate flex-1">Pick a lead, student, case or client…</span>
+                        <ChevronDown size={14} className="text-gray-400" />
+                    </>
+                )}
+            </button>
+
+            {open && (
+                <div className="absolute z-20 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden">
+                    {/* Search field at the top of the dropdown */}
+                    <div className="relative border-b border-gray-100">
+                        <Search size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                        <input
+                            ref={searchInputRef}
+                            type="text"
+                            value={q}
+                            onChange={(e) => setQ(e.target.value)}
+                            placeholder="Search by name, email or lead id…"
+                            className="w-full pl-8 pr-3 py-2 text-sm outline-none"
+                        />
+                    </div>
+
+                    <div className="max-h-64 overflow-y-auto">
+                        {loading && (
+                            <div className="px-3 py-2 text-[11px] text-gray-500">Loading…</div>
+                        )}
+                        {! loading && results.length === 0 && (
+                            <div className="px-3 py-3 text-[12px] text-gray-500 text-center">
+                                {q.trim() ? "No matches." : "No records found."}
+                            </div>
+                        )}
+                        {! loading && q.trim() === "" && results.length > 0 && (
+                            <div className="px-3 py-1.5 text-[9px] font-bold uppercase tracking-wider text-gray-400 bg-gray-50/60">
+                                Recent
+                            </div>
+                        )}
+                        {results.map((r) => {
+                            const isSelected = value && value.id === r.id;
+                            return (
+                                <button
+                                    key={r.id}
+                                    type="button"
+                                    onClick={() => { onChange(r); setOpen(false); setQ(""); }}
+                                    className={`w-full text-left px-3 py-2 flex items-center gap-2 text-sm ${
+                                        isSelected ? "bg-gray-100" : "hover:bg-gray-50"
+                                    }`}
+                                >
+                                    <RecordIcon type={r.record_type} />
+                                    <span className="font-medium text-gray-900 truncate">{r.name}</span>
+                                    <span className="font-mono text-[10px] text-gray-500">#{r.lead_id}</span>
+                                    <span className="ml-auto text-[9px] uppercase tracking-wider text-gray-400">{r.record_type}</span>
+                                </button>
+                            );
+                        })}
+                    </div>
                 </div>
             )}
         </div>

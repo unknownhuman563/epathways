@@ -299,106 +299,169 @@ export default function TaskDetailModal({ task, onClose }) {
                         </div>
                     )}
 
-                    <div className="space-y-5">
-                        <FormRow label="Department this task belongs to">
-                            <select
-                                value={department}
-                                onChange={(e) => setDepartment(e.target.value)}
-                                className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm bg-white"
-                            >
-                                <option value="">Unset</option>
-                                {ALL_DEPARTMENTS.map((d) => (
-                                    <option key={d} value={d}>{DEPARTMENT_LABEL[d]}</option>
-                                ))}
-                            </select>
-                        </FormRow>
-
-                        <FormRow label="Title" required>
-                            <input
-                                type="text"
-                                value={title}
-                                onChange={(e) => setTitle(e.target.value)}
-                                maxLength={200}
-                                placeholder="What needs doing?"
-                                className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm"
-                            />
-                            <p className="mt-1 text-[10px] text-gray-400">{title.length}/200</p>
-                        </FormRow>
-
-                        <FormRow label="Description">
-                            <textarea
-                                value={description}
-                                onChange={(e) => setDescription(e.target.value)}
-                                rows={3}
-                                placeholder="Optional context, links, instructions…"
-                                className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm"
-                            />
-                        </FormRow>
-
-                        <FormRow label="Note" hint='Short reminder shown on the card (e.g. "Has to finish before weekend")'>
-                            <input
-                                type="text"
-                                value={note}
-                                onChange={(e) => setNote(e.target.value)}
-                                maxLength={500}
-                                placeholder="add a quick note…"
-                                className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm"
-                            />
-                        </FormRow>
-
-                        <div className="grid grid-cols-2 gap-4">
-                            <FormRow label="Status">
+                    <div className="space-y-6">
+                        {/* Top sections sit in a 2-column grid so the form
+                            is wider instead of taller — less scrolling.
+                            Collapses to a single column below lg. */}
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-8 gap-y-6">
+                        {/* ── Basics ──────────────────────────────────── */}
+                        <Section title="Basics" subtitle="What needs doing and where it lives.">
+                            <FormRow label="Department this task belongs to">
                                 <select
-                                    value={status}
-                                    onChange={(e) => setStatus(e.target.value)}
+                                    value={department}
+                                    onChange={(e) => setDepartment(e.target.value)}
                                     className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm bg-white"
                                 >
-                                    {STATUS_OPTIONS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                                    <option value="">Unset</option>
+                                    {ALL_DEPARTMENTS.map((d) => (
+                                        <option key={d} value={d}>{DEPARTMENT_LABEL[d]}</option>
+                                    ))}
                                 </select>
                             </FormRow>
-                            <FormRow label="Priority">
-                                <select
-                                    value={priority}
-                                    onChange={(e) => setPriority(e.target.value)}
-                                    className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm bg-white"
-                                >
-                                    <option value="low">Low</option>
-                                    <option value="normal">Normal</option>
-                                    <option value="high">High</option>
-                                    <option value="urgent">Urgent</option>
-                                </select>
-                            </FormRow>
-                        </div>
 
-                        <div className="grid grid-cols-2 gap-4">
-                            <FormRow label="Type">
-                                <select
-                                    value={type}
-                                    onChange={(e) => setType(e.target.value)}
-                                    className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm bg-white"
-                                >
-                                    {TYPE_OPTIONS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-                                </select>
-                            </FormRow>
-                            <FormRow label="Due date">
+                            <FormRow label="Title" required>
                                 <input
-                                    type="date"
-                                    value={dueDate}
-                                    onChange={(e) => setDueDate(e.target.value)}
+                                    type="text"
+                                    value={title}
+                                    onChange={(e) => setTitle(e.target.value)}
+                                    maxLength={200}
+                                    placeholder="What needs doing?"
+                                    className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm"
+                                />
+                                <p className="mt-1 text-[10px] text-gray-400">{title.length}/200</p>
+                            </FormRow>
+
+                            <FormRow label="Description">
+                                <textarea
+                                    value={description}
+                                    onChange={(e) => setDescription(e.target.value)}
+                                    rows={3}
+                                    placeholder="Optional context, links, instructions…"
                                     className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm"
                                 />
                             </FormRow>
-                        </div>
 
-                        <div className="grid grid-cols-2 gap-4">
-                            <FormRow label="Due time">
+                            <FormRow label="Note" hint='Short reminder shown on the card (e.g. "Has to finish before weekend")'>
                                 <input
-                                    type="time"
-                                    value={dueTime}
-                                    onChange={(e) => setDueTime(e.target.value)}
+                                    type="text"
+                                    value={note}
+                                    onChange={(e) => setNote(e.target.value)}
+                                    maxLength={500}
+                                    placeholder="add a quick note…"
                                     className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm"
                                 />
                             </FormRow>
+                        </Section>
+
+                        {/* ── Classification ──────────────────────────── */}
+                        <Section title="Classification" subtitle="How this task is grouped and tagged.">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <FormRow label="Status">
+                                    <select
+                                        value={status}
+                                        onChange={(e) => setStatus(e.target.value)}
+                                        className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm bg-white"
+                                    >
+                                        {STATUS_OPTIONS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                                    </select>
+                                </FormRow>
+                                <FormRow label="Priority">
+                                    <select
+                                        value={priority}
+                                        onChange={(e) => setPriority(e.target.value)}
+                                        className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm bg-white"
+                                    >
+                                        <option value="low">Low</option>
+                                        <option value="normal">Normal</option>
+                                        <option value="high">High</option>
+                                        <option value="urgent">Urgent</option>
+                                    </select>
+                                </FormRow>
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <FormRow label="Type">
+                                    <select
+                                        value={type}
+                                        onChange={(e) => setType(e.target.value)}
+                                        className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm bg-white"
+                                    >
+                                        {TYPE_OPTIONS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                                    </select>
+                                </FormRow>
+                                {isLinked ? (
+                                    <FormRow label="Related to">
+                                        <div className="px-3 py-2 rounded-lg border border-gray-200 bg-gray-50 text-sm flex items-center gap-2 h-[38px]">
+                                            <User size={13} className="text-gray-500 flex-shrink-0" />
+                                            <span className="font-medium text-gray-900 truncate">{task.lead.name}</span>
+                                            <span className="font-mono text-[11px] text-gray-500">
+                                                <Hash size={9} className="inline mb-0.5" />{task.lead.lead_id}
+                                            </span>
+                                            <span className="ml-auto text-[10px] uppercase tracking-wider text-gray-400">Locked</span>
+                                        </div>
+                                    </FormRow>
+                                ) : (
+                                    <FormRow label="Category">
+                                        <select
+                                            value={category}
+                                            onChange={(e) => setCategory(e.target.value)}
+                                            className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm bg-white"
+                                        >
+                                            <option value="">Pick a category…</option>
+                                            {effectiveCategoryOptions.map((c) => (
+                                                <option key={c} value={c}>{c}</option>
+                                            ))}
+                                        </select>
+                                        {category === "Other" && (
+                                            <input
+                                                type="text"
+                                                value={categoryOther}
+                                                onChange={(e) => setCategoryOther(e.target.value)}
+                                                maxLength={100}
+                                                placeholder="Type your custom category…"
+                                                className="mt-2 w-full px-3 py-2 rounded-lg border border-gray-200 text-sm"
+                                                autoFocus
+                                            />
+                                        )}
+                                    </FormRow>
+                                )}
+                            </div>
+
+                            <FormRow label="Tags" hint="Comma-separated (e.g. urgent, q3-launch)">
+                                <div className="relative">
+                                    <Tag size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                                    <input
+                                        type="text"
+                                        value={tagsInput}
+                                        onChange={(e) => setTagsInput(e.target.value)}
+                                        placeholder="add tags…"
+                                        className="w-full pl-8 pr-3 py-2 rounded-lg border border-gray-200 text-sm"
+                                    />
+                                </div>
+                            </FormRow>
+                        </Section>
+
+                        {/* ── Schedule & progress ─────────────────────── */}
+                        <Section title="Schedule & progress" subtitle="When it's due and how far along you are.">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <FormRow label="Due date">
+                                    <input
+                                        type="date"
+                                        value={dueDate}
+                                        onChange={(e) => setDueDate(e.target.value)}
+                                        className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm"
+                                    />
+                                </FormRow>
+                                <FormRow label="Due time">
+                                    <input
+                                        type="time"
+                                        value={dueTime}
+                                        onChange={(e) => setDueTime(e.target.value)}
+                                        className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm"
+                                    />
+                                </FormRow>
+                            </div>
+
                             <FormRow label={`Progress — ${progress}%`}>
                                 <input
                                     type="range"
@@ -410,9 +473,10 @@ export default function TaskDetailModal({ task, onClose }) {
                                     className="w-full accent-gray-900"
                                 />
                             </FormRow>
-                        </div>
+                        </Section>
 
-                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                        {/* ── People ──────────────────────────────────── */}
+                        <Section title="People" subtitle="Who's responsible.">
                             <FormRow
                                 label="Assigned to"
                                 hint="Pick myself, other staff, or a mix. Leave empty to default to me."
@@ -434,67 +498,18 @@ export default function TaskDetailModal({ task, onClose }) {
                                     Show staff from every department
                                 </label>
                             </FormRow>
-
-                            {isLinked ? (
-                                <FormRow label="Related to">
-                                    <div className="px-3 py-2 rounded-lg border border-gray-200 bg-gray-50 text-sm flex items-center gap-2">
-                                        <User size={13} className="text-gray-500" />
-                                        <span className="font-medium text-gray-900 truncate">{task.lead.name}</span>
-                                        <span className="font-mono text-[11px] text-gray-500">
-                                            <Hash size={9} className="inline mb-0.5" />{task.lead.lead_id}
-                                        </span>
-                                        <span className="ml-auto text-[10px] uppercase tracking-wider text-gray-400">Locked</span>
-                                    </div>
-                                </FormRow>
-                            ) : (
-                                <FormRow label="Category">
-                                    <select
-                                        value={category}
-                                        onChange={(e) => setCategory(e.target.value)}
-                                        className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm bg-white"
-                                    >
-                                        <option value="">Pick a category…</option>
-                                        {effectiveCategoryOptions.map((c) => (
-                                            <option key={c} value={c}>{c}</option>
-                                        ))}
-                                    </select>
-                                    {category === "Other" && (
-                                        <input
-                                            type="text"
-                                            value={categoryOther}
-                                            onChange={(e) => setCategoryOther(e.target.value)}
-                                            maxLength={100}
-                                            placeholder="Type your custom category…"
-                                            className="mt-2 w-full px-3 py-2 rounded-lg border border-gray-200 text-sm"
-                                            autoFocus
-                                        />
-                                    )}
-                                </FormRow>
-                            )}
+                        </Section>
                         </div>
 
-                        <FormRow label="Tags" hint="Comma-separated (e.g. urgent, q3-launch)">
-                            <div className="relative">
-                                <Tag size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                                <input
-                                    type="text"
-                                    value={tagsInput}
-                                    onChange={(e) => setTagsInput(e.target.value)}
-                                    placeholder="add tags…"
-                                    className="w-full pl-8 pr-3 py-2 rounded-lg border border-gray-200 text-sm"
-                                />
-                            </div>
-                        </FormRow>
-
-                        <FormRow
-                            label="Attachments"
-                            hint="Any file — images, video, PDF, docs. Up to 20 MB each, max 8 files."
+                        {/* ── Attachments ─────────────────────────────── */}
+                        <Section
+                            title="Attachments"
+                            subtitle="Any file — images, video, PDF, docs. Up to 20 MB each, max 8 files."
                         >
-                            {/* Existing attachments — View / Save */}
                             {existingFiles.length > 0 && (
-                                <div className="mb-3">
+                                <div>
                                     <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1.5">
-                                        Current ({existingFiles.length})
+                                        Current · {existingFiles.length}
                                     </p>
                                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
                                         {existingFiles.map((a) => (
@@ -504,58 +519,68 @@ export default function TaskDetailModal({ task, onClose }) {
                                 </div>
                             )}
 
-                            {/* New attachments picker */}
-                            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
-                                {newFiles.map((file, idx) => (
-                                    <FilePreviewCard
-                                        key={idx}
-                                        file={file}
-                                        previewUrl={newPreviews[idx]}
-                                        onRemove={() => removeNewFile(idx)}
-                                    />
-                                ))}
-                                {newFiles.length < 8 && (
-                                    <label className="min-h-[88px] rounded-lg border-2 border-dashed border-gray-300 flex flex-col items-center justify-center cursor-pointer hover:border-gray-400 hover:bg-gray-50 transition-colors text-gray-500 px-3 py-3">
-                                        <input
-                                            type="file"
-                                            multiple
-                                            onChange={(e) => { addFiles(e.target.files); e.target.value = ""; }}
-                                            className="sr-only"
+                            <div>
+                                {existingFiles.length > 0 && (
+                                    <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1.5">
+                                        Add new · {newFiles.length}/8
+                                    </p>
+                                )}
+                                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+                                    {newFiles.map((file, idx) => (
+                                        <FilePreviewCard
+                                            key={idx}
+                                            file={file}
+                                            previewUrl={newPreviews[idx]}
+                                            onRemove={() => removeNewFile(idx)}
                                         />
-                                        <Paperclip size={16} />
-                                        <span className="text-[10px] font-bold uppercase tracking-wider mt-1">Add file</span>
-                                        <span className="text-[9px] text-gray-400 mt-0.5">image · video · pdf · any</span>
-                                    </label>
-                                )}
+                                    ))}
+                                    {newFiles.length < 8 && (
+                                        <label className="min-h-[110px] rounded-lg border-2 border-dashed border-gray-300 flex flex-col items-center justify-center cursor-pointer hover:border-gray-400 hover:bg-gray-50 transition-colors text-gray-500 px-3 py-3">
+                                            <input
+                                                type="file"
+                                                multiple
+                                                onChange={(e) => { addFiles(e.target.files); e.target.value = ""; }}
+                                                className="sr-only"
+                                            />
+                                            <Paperclip size={18} />
+                                            <span className="text-[10px] font-bold uppercase tracking-wider mt-1.5">Add file</span>
+                                            <span className="text-[9px] text-gray-400 mt-0.5">image · video · pdf · any</span>
+                                        </label>
+                                    )}
+                                </div>
                             </div>
-                        </FormRow>
+                        </Section>
 
-                        {/* Read-only end-of-form info */}
-                        {Number(task.comments_count) > 0 && (
-                            <p className="text-[12px] text-gray-500 inline-flex items-center gap-1.5">
-                                <MessageCircle size={12} />
-                                {task.comments_count} comment{task.comments_count === 1 ? "" : "s"} — open the comments popover from the card for the full thread.
-                            </p>
-                        )}
-
-                        {task.completion_notes && (
-                            <FormRow label="Completion notes">
-                                <p className="text-[13px] text-gray-700 whitespace-pre-wrap leading-relaxed bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2 inline-flex items-start gap-2">
-                                    <CheckCircle2 size={14} className="text-emerald-600 mt-0.5 flex-shrink-0" />
-                                    {task.completion_notes}
-                                </p>
-                            </FormRow>
-                        )}
-
-                        {(task.creator || task.assignee) && (
-                            <div className="text-[10.5px] text-gray-400 pt-2 border-t border-gray-100 flex items-center gap-3 flex-wrap">
-                                {task.creator && (
-                                    <span>Created by <span className="font-semibold text-gray-600">{task.creator.name}</span></span>
+                        {/* ── Activity ────────────────────────────────── */}
+                        {(Number(task.comments_count) > 0 || task.completion_notes || task.creator || task.assignee) && (
+                            <Section title="Activity" subtitle="Read-only history for this task.">
+                                {Number(task.comments_count) > 0 && (
+                                    <p className="text-[12px] text-gray-500 inline-flex items-center gap-1.5">
+                                        <MessageCircle size={12} />
+                                        {task.comments_count} comment{task.comments_count === 1 ? "" : "s"} — open the comments popover from the card for the full thread.
+                                    </p>
                                 )}
-                                {task.assignee && (
-                                    <span>Primary assignee <span className="font-semibold text-gray-600">{task.assignee.name}</span></span>
+
+                                {task.completion_notes && (
+                                    <FormRow label="Completion notes">
+                                        <p className="text-[13px] text-gray-700 whitespace-pre-wrap leading-relaxed bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2 inline-flex items-start gap-2">
+                                            <CheckCircle2 size={14} className="text-emerald-600 mt-0.5 flex-shrink-0" />
+                                            {task.completion_notes}
+                                        </p>
+                                    </FormRow>
                                 )}
-                            </div>
+
+                                {(task.creator || task.assignee) && (
+                                    <div className="text-[10.5px] text-gray-400 flex items-center gap-3 flex-wrap">
+                                        {task.creator && (
+                                            <span>Created by <span className="font-semibold text-gray-600">{task.creator.name}</span></span>
+                                        )}
+                                        {task.assignee && (
+                                            <span>Primary assignee <span className="font-semibold text-gray-600">{task.assignee.name}</span></span>
+                                        )}
+                                    </div>
+                                )}
+                            </Section>
                         )}
                     </div>
                 </div>
@@ -586,6 +611,22 @@ export default function TaskDetailModal({ task, onClose }) {
 }
 
 // ─── Shared helpers ─────────────────────────────────────────────────────
+
+function Section({ title, subtitle, children }) {
+    return (
+        <section className="space-y-3">
+            <header className="border-b border-gray-100 pb-2">
+                <h3 className="text-[11px] font-bold uppercase tracking-[0.15em] text-gray-900">
+                    {title}
+                </h3>
+                {subtitle && (
+                    <p className="mt-0.5 text-[11px] text-gray-500">{subtitle}</p>
+                )}
+            </header>
+            <div className="space-y-4">{children}</div>
+        </section>
+    );
+}
 
 function FormRow({ label, required, hint, children }) {
     return (

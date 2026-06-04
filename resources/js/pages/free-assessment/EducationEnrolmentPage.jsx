@@ -3,6 +3,7 @@ import { Head, useForm, usePage, router } from '@inertiajs/react';
 import { toast } from 'sonner';
 import IntakeFormShell from '@/components/visa/IntakeFormShell';
 import IntakeConfirmModal from '@/components/visa/IntakeConfirmModal';
+import FileDropzone from '@/components/visa/FileDropzone';
 import {
     StepTerms, StepPersonal, StepStudyPlans, StepEducation, StepWork,
     StepFinancial, StepSourceOfFunds, StepImmigration, StepCharacterHealth,
@@ -33,7 +34,12 @@ const keyToStepNumber = (key) => {
     if (key.startsWith('character_info') || key.startsWith('health_info')) return 9;
     if (key.startsWith('family_info')) return 10;
     if (key.startsWith('nz_contacts_info') || key.startsWith('military_info') || key.startsWith('home_ties_info')) return 11;
-    if (key === 'declaration_accepted') return 12;
+    // Step 12 — Documents (CV / Passport / Diploma / Transcript file uploads).
+    if (key === 'cv_files' || key.startsWith('cv_files')
+        || key === 'passport_files' || key.startsWith('passport_files')
+        || key === 'diploma_files' || key.startsWith('diploma_files')
+        || key === 'transcript_files' || key.startsWith('transcript_files')) return 12;
+    if (key === 'declaration_accepted') return 13;
     return null;
 };
 
@@ -153,10 +159,25 @@ export default function EducationEnrolment() {
             property_owner: '', family_owns_business: '', business_type: '',
             business_involvement: ''
         },
+        // Documents — multi-file uploads collected on Step 12. File[] is held
+        // in state and serialised via flattenToFormData on submit. Files don't
+        // round-trip through localStorage drafts (File objects don't serialise);
+        // the spread below ignores them when restoring.
+        cv_files: [],
+        passport_files: [],
+        diploma_files: [],
+        transcript_files: [],
         // Declaration
         declaration_accepted: false,
         // Hydrate from saved draft last so it wins.
         ...(draft || {}),
+        // File arrays must come AFTER the draft spread — a saved draft will
+        // contain `[{}, {}]` placeholders (File doesn't JSON-serialise), and
+        // those would clobber the real File[] the user has in state.
+        cv_files: (draft?.cv_files instanceof Array && draft.cv_files.every((f) => f instanceof File)) ? draft.cv_files : [],
+        passport_files: (draft?.passport_files instanceof Array && draft.passport_files.every((f) => f instanceof File)) ? draft.passport_files : [],
+        diploma_files: (draft?.diploma_files instanceof Array && draft.diploma_files.every((f) => f instanceof File)) ? draft.diploma_files : [],
+        transcript_files: (draft?.transcript_files instanceof Array && draft.transcript_files.every((f) => f instanceof File)) ? draft.transcript_files : [],
     });
 
     const [step, setStep] = useState(1);
@@ -237,6 +258,13 @@ export default function EducationEnrolment() {
                 if (!data.immigration_info?.submission_country?.trim()) errs['immigration_info.submission_country'] = 'Country of submission is required';
                 break;
             case 12:
+                // Documents step — require at least one file per category.
+                if (!Array.isArray(data.cv_files) || data.cv_files.length === 0) errs.cv_files = 'Please attach your CV';
+                if (!Array.isArray(data.passport_files) || data.passport_files.length === 0) errs.passport_files = 'Please attach your passport';
+                if (!Array.isArray(data.diploma_files) || data.diploma_files.length === 0) errs.diploma_files = 'Please attach your diploma';
+                if (!Array.isArray(data.transcript_files) || data.transcript_files.length === 0) errs.transcript_files = 'Please attach your transcript of records';
+                break;
+            case 13:
                 if (!data.declaration_accepted) errs.declaration_accepted = 'You must accept the declaration to continue';
                 break;
         }
@@ -246,7 +274,7 @@ export default function EducationEnrolment() {
     const submit = () => {
         const aggregated = {};
         let firstInvalid = null;
-        for (let n = 1; n <= 12; n++) {
+        for (let n = 1; n <= 13; n++) {
             const errs = validateStep(n);
             if (Object.keys(errs).length && firstInvalid === null) firstInvalid = n;
             Object.assign(aggregated, errs);
@@ -285,7 +313,7 @@ export default function EducationEnrolment() {
     useEffect(() => {
         if (Object.keys(localErrors).length === 0) return;
         const fresh = {};
-        for (let n = 1; n <= 12; n++) Object.assign(fresh, validateStep(n));
+        for (let n = 1; n <= 13; n++) Object.assign(fresh, validateStep(n));
         const next = {};
         let changed = false;
         for (const k of Object.keys(localErrors)) {
@@ -337,8 +365,19 @@ export default function EducationEnrolment() {
 
         // Skip if nothing meaningful has changed since the last save —
         // hashing the JSON is cheap and avoids redundant network traffic.
+        // Strip file fields from the hash AND from the auto-save payload:
+        // they're only persisted on the final submit, so re-uploading them
+        // every 4s during draft saves would waste bandwidth.
+        const draftPayload = {
+            ...data,
+            passport_pdf: undefined,
+            cv_files: undefined,
+            passport_files: undefined,
+            diploma_files: undefined,
+            transcript_files: undefined,
+        };
         const hash = (() => {
-            try { return JSON.stringify({ ...data, passport_pdf: undefined }); }
+            try { return JSON.stringify(draftPayload); }
             catch { return Math.random().toString(); }
         })();
         if (hash === autoSaveRef.current.lastHash) return;
@@ -347,7 +386,7 @@ export default function EducationEnrolment() {
             if (autoSaveRef.current.inFlight) return;
             autoSaveRef.current.inFlight = true;
             try {
-                const fd = flattenToFormData(data);
+                const fd = flattenToFormData(draftPayload);
                 const csrf = document.querySelector('meta[name="csrf-token"]')?.content || '';
                 const res = await fetch('/education-enrolment/draft', {
                     method: 'POST',
@@ -382,6 +421,47 @@ export default function EducationEnrolment() {
         { title: 'Character',    render: () => <StepCharacterHealth data={data} setData={setData} errors={errors} /> },
         { title: 'Family',       render: () => <StepFamily         data={data} setData={setData} errors={errors} /> },
         { title: 'Additional',   render: () => <StepAdditional     data={data} setData={setData} errors={errors} /> },
+        {
+            title: 'Documents',
+            render: () => (
+                <div className="space-y-2">
+                    <div className="mb-2">
+                        <h2 className="text-2xl font-black text-[#282728] tracking-tight">Supporting Documents</h2>
+                        <p className="text-[13px] text-gray-500 mt-1">
+                            Attach your CV, passport, diploma, and transcript of records. You can upload up to 10 files per section.
+                        </p>
+                    </div>
+                    <FileDropzone
+                        label="Attach CV"
+                        files={data.cv_files}
+                        onFilesChange={(next) => setData('cv_files', next)}
+                        accent={ACCENT}
+                        error={errors.cv_files}
+                    />
+                    <FileDropzone
+                        label="Passport"
+                        files={data.passport_files}
+                        onFilesChange={(next) => setData('passport_files', next)}
+                        accent={ACCENT}
+                        error={errors.passport_files}
+                    />
+                    <FileDropzone
+                        label="Diploma"
+                        files={data.diploma_files}
+                        onFilesChange={(next) => setData('diploma_files', next)}
+                        accent={ACCENT}
+                        error={errors.diploma_files}
+                    />
+                    <FileDropzone
+                        label="Transcript of Record"
+                        files={data.transcript_files}
+                        onFilesChange={(next) => setData('transcript_files', next)}
+                        accent={ACCENT}
+                        error={errors.transcript_files}
+                    />
+                </div>
+            ),
+        },
         { title: 'Declaration',  render: () => <StepDeclaration    data={data} setData={setData} errors={errors} /> },
     ];
 

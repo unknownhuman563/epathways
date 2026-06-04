@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { useForm } from '@inertiajs/react';
+import { useForm, usePage } from '@inertiajs/react';
 import { toast } from 'sonner';
 import IntakeFormShell from '@/components/visa/IntakeFormShell';
 import IntakeConfirmModal from '@/components/visa/IntakeConfirmModal';
+import IntakeSuccessModal from '@/components/visa/IntakeSuccessModal';
+import IntakeTermsStep from '@/components/visa/IntakeTermsStep';
 import {
     TextField, TextareaField, DateField, SelectField, YesNoField, FieldGrid, SectionTitle,
 } from '@/components/visa/IntakeFields';
@@ -16,30 +18,32 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 // applicant to. (Client validation only tracks required fields — this map
 // covers every input.)
 const FIELD_TO_STEP = {
-    // Step 1 — Identity
-    family_name: 1, first_name: 1, other_names: 1, gender: 1, dob: 1,
-    country_of_birth: 1, place_of_birth: 1, country_of_citizenship: 1,
-    other_citizenships: 1, national_id: 1, passport_number: 1, passport_expiry: 1,
-    partnership_status: 1, current_address: 1, overseas_address: 1, email: 1, phone: 1,
-    // Step 2 — NZ Immigration
-    current_country: 2, travelled_nz: 2, last_nz_departure: 2, over_24_months: 2,
-    // Step 3 — Character & Health
-    character_convicted: 3, character_investigation: 3, character_deported: 3,
-    character_visa_refused: 3, lived_other_country_5y: 3, lived_other_country_details: 3,
-    health_tb: 3, health_renal: 3, health_hospital: 3, health_residential: 3, health_pregnant: 3,
-    // Step 4 — Employment
-    currently_working: 4, current_job_title: 4, current_job_duties: 4,
-    current_job_start: 4, current_job_finish: 4, current_job_country: 4, current_job_region: 4,
-    current_employer_name: 4, current_employer_address: 4,
-    current_employer_phone: 4, current_employer_email: 4,
-    // Step 5 — Study Plan
-    programmes: 5, study_period_from: 5, study_period_to: 5, school_name: 5, has_offer: 5,
-    // Step 6 — Funds
-    has_enough_funds: 6, tuition_fee_nzd: 6, living_expenses_nzd: 6,
-    has_sponsor: 6, sponsor_relationship: 6, sponsor_income_source: 6,
-    can_provide_statements: 6, has_other_assets: 6, other_assets_details: 6,
-    // Step 7 — Declaration
-    declaration_accepted: 7, signature_name: 7, signature_date: 7,
+    // Step 1 — Privacy & Terms
+    terms_accepted: 1,
+    // Step 2 — Identity
+    family_name: 2, first_name: 2, other_names: 2, gender: 2, dob: 2,
+    country_of_birth: 2, place_of_birth: 2, country_of_citizenship: 2,
+    other_citizenships: 2, national_id: 2, passport_number: 2, passport_expiry: 2,
+    partnership_status: 2, current_address: 2, overseas_address: 2, email: 2, phone: 2,
+    // Step 3 — NZ Immigration
+    current_country: 3, travelled_nz: 3, last_nz_departure: 3, over_24_months: 3,
+    // Step 4 — Character & Health
+    character_convicted: 4, character_investigation: 4, character_deported: 4,
+    character_visa_refused: 4, lived_other_country_5y: 4, lived_other_country_details: 4,
+    health_tb: 4, health_renal: 4, health_hospital: 4, health_residential: 4, health_pregnant: 4,
+    // Step 5 — Employment
+    currently_working: 5, current_job_title: 5, current_job_duties: 5,
+    current_job_start: 5, current_job_finish: 5, current_job_country: 5, current_job_region: 5,
+    current_employer_name: 5, current_employer_address: 5,
+    current_employer_phone: 5, current_employer_email: 5,
+    // Step 6 — Study Plan
+    programmes: 6, study_period_from: 6, study_period_to: 6, school_name: 6, has_offer: 6,
+    // Step 7 — Funds
+    has_enough_funds: 7, tuition_fee_nzd: 7, living_expenses_nzd: 7,
+    has_sponsor: 7, sponsor_relationship: 7, sponsor_income_source: 7,
+    can_provide_statements: 7, has_other_assets: 7, other_assets_details: 7,
+    // Step 8 — Declaration
+    declaration_accepted: 8, signature_name: 8, signature_date: 8,
 };
 
 const FIELD_LABELS = {
@@ -88,13 +92,25 @@ export default function StudentInterestPage() {
         can_provide_statements: '', has_other_assets: '', other_assets_details: '',
 
         declaration_accepted: false, signature_name: '', signature_date: '',
+        // Privacy & Terms — gated by step 1.
+        terms_accepted: false,
         ...(draft || {}),
     });
 
     const [step, setStep] = useState(1);
     const [localErrors, setLocalErrors] = useState({});
     const [showConfirm, setShowConfirm] = useState(false);
+    const [showSuccess, setShowSuccess] = useState(false);
     const [visitedSteps, setVisitedSteps] = useState(() => new Set([1]));
+
+    // Persistent post-submit modal driven by `intake_submitted` flash.
+    const { flash } = usePage().props;
+    useEffect(() => {
+        if (flash?.intake_submitted) {
+            setShowSuccess(true);
+            try { window.localStorage.removeItem(DRAFT_KEY); } catch {}
+        }
+    }, [flash?.intake_submitted]);
     useEffect(() => {
         setVisitedSteps((prev) => {
             if (prev.has(step)) return prev;
@@ -114,6 +130,9 @@ export default function StudentInterestPage() {
         const errs = {};
         switch (n) {
             case 1:
+                if (!data.terms_accepted) errs.terms_accepted = 'Please accept the terms to continue';
+                break;
+            case 2:
                 if (!data.family_name?.trim()) errs.family_name = 'Family name is required';
                 if (!data.first_name?.trim()) errs.first_name = 'First name is required';
                 if (!data.dob) errs.dob = 'Date of birth is required';
@@ -123,11 +142,11 @@ export default function StudentInterestPage() {
                 if (!data.country_of_citizenship?.trim()) errs.country_of_citizenship = 'Country of citizenship is required';
                 if (!data.passport_number?.trim()) errs.passport_number = 'Passport number is required';
                 break;
-            case 2:
+            case 3:
                 if (!data.travelled_nz) errs.travelled_nz = 'Please answer';
                 if (!data.over_24_months) errs.over_24_months = 'Please answer';
                 break;
-            case 3:
+            case 4:
                 ['character_convicted','character_investigation','character_deported','character_visa_refused','lived_other_country_5y'].forEach((k) => {
                     if (!data[k]) errs[k] = 'Please answer';
                 });
@@ -135,20 +154,20 @@ export default function StudentInterestPage() {
                     if (!data[k]) errs[k] = 'Please answer';
                 });
                 break;
-            case 4:
+            case 5:
                 if (!data.currently_working) errs.currently_working = 'Please answer';
                 break;
-            case 5:
+            case 6:
                 if (!data.programmes?.trim()) errs.programmes = 'Programme(s) are required';
                 if (!data.school_name?.trim()) errs.school_name = 'School name is required';
                 if (!data.study_period_from) errs.study_period_from = 'Start date is required';
                 if (!data.has_offer) errs.has_offer = 'Please answer';
                 break;
-            case 6:
+            case 7:
                 if (!data.has_enough_funds) errs.has_enough_funds = 'Please answer';
                 if (data.tuition_fee_nzd === '' || data.tuition_fee_nzd === null) errs.tuition_fee_nzd = 'Tuition fee is required';
                 break;
-            case 7:
+            case 8:
                 if (!data.declaration_accepted) errs.declaration_accepted = 'You must accept the declaration to continue';
                 break;
         }
@@ -160,7 +179,7 @@ export default function StudentInterestPage() {
     const submit = () => {
         const aggregated = {};
         let firstInvalid = null;
-        for (let n = 1; n <= 7; n++) {
+        for (let n = 1; n <= 8; n++) {
             const errs = validateStep(n);
             if (Object.keys(errs).length && firstInvalid === null) firstInvalid = n;
             Object.assign(aggregated, errs);
@@ -216,7 +235,7 @@ export default function StudentInterestPage() {
     useEffect(() => {
         if (Object.keys(localErrors).length === 0) return;
         const fresh = {};
-        for (let n = 1; n <= 7; n++) Object.assign(fresh, validateStep(n));
+        for (let n = 1; n <= 8; n++) Object.assign(fresh, validateStep(n));
         const next = {};
         let changed = false;
         for (const k of Object.keys(localErrors)) {
@@ -228,6 +247,17 @@ export default function StudentInterestPage() {
     }, [data]);
 
     const steps = [
+        {
+            title: 'Terms',
+            render: () => (
+                <IntakeTermsStep
+                    visaLabel="Student Visa (SV)"
+                    accepted={data.terms_accepted}
+                    onAccept={set('terms_accepted')}
+                    error={errors.terms_accepted}
+                />
+            ),
+        },
         {
             title: 'Identity',
             render: () => (
@@ -414,7 +444,7 @@ export default function StudentInterestPage() {
                 steps={steps}
                 onSubmit={submit}
                 processing={processing}
-                submitLabel="Submit & continue to payment"
+                submitLabel="Submit"
                 data={data}
                 draftKey={DRAFT_KEY}
                 step={step}
@@ -436,6 +466,11 @@ export default function StudentInterestPage() {
                     ['Programme', data.programmes],
                     ['School', data.school_name],
                 ]}
+            />
+            <IntakeSuccessModal
+                open={showSuccess}
+                onClose={() => setShowSuccess(false)}
+                visaLabel={flash?.intake_submitted || 'Student Visa'}
             />
         </>
     );
