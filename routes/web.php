@@ -202,6 +202,7 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/admin/dashboard', function () {
             return inertia('admin/Dashboard');
         });
+        Route::get('/admin/team-cards', fn () => inertia('admin/TeamCards'))->name('admin.team-cards');
         Route::get('/admin/leads', [LeadController::class, 'index'])->name('admin.leads');
         Route::get('/admin/events', [EventController::class, 'index'])->name('admin.events');
         Route::post('/admin/events', [EventController::class, 'store']);

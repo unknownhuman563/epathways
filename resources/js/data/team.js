@@ -5,29 +5,34 @@ import DaiImg from "@assets/team/dai.png";
 import EmilyImg from "@assets/team/emily.png";
 import NovaImg from "@assets/team/nova.png";
 
+// To add a member's WeChat QR: drop the image in resources/assets/team/,
+// import it here (e.g. `import DevWeChat from "@assets/team/dev-wechat.png";`),
+// and set that member's `links.wechatQr` to it. The profile shows the QR
+// (tap to enlarge); until a QR is set, it falls back to the WeChat ID + Copy.
+
 // Single source of truth for team members shown on the "Team Behind" grid
 // and their public digital-card profiles at /team/{slug}.
 //
-// links: a button renders only when its value is non-empty. WhatsApp is an
-// E.164-style number in any format (non-digits are stripped for the wa.me link).
+// links: a button renders only when its value is set. WhatsApp is an E.164-style
+// number in any format (non-digits are stripped for the wa.me link).
 //
-// NOTE: the link values + bios below are PLACEHOLDER / demo content so every
-// button shows up. Replace each one with the person's real details.
+// NOTE: values marked with TODO are PLACEHOLDER demo content — replace them.
 export const team = [
   {
-    slug: "david-bhageerutty",
-    name: "David Bhageerutty",
+    slug: "dev-bhageerutty",
+    name: "Dev Bhageerutty",
     role: "Licence Immigration Adviser (Provisional) — 202401351",
     location: "New Zealand",
     image: DevImg,
-    bio: "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Guiding students and skilled migrants through every step of their New Zealand journey.",
+    bio: "Guiding students and skilled migrants through every step of their New Zealand journey.",
     links: {
-      booking: "https://calendly.com/epathways/david",
-      whatsapp: "+64 21 555 0101",
-      email: "david@epathways.co.nz",
-      facebook: "https://facebook.com/epathways",
-      linkedin: "https://linkedin.com/in/david-bhageerutty",
-      wechatId: "ep-david",
+      booking: "https://calendly.com/epathways/dev", // TODO: replace with Dev's paid-booking calendar URL
+      whatsapp: "+64 22 188 2800",
+      email: "dev@epathways.co.nz",
+      facebook: "https://www.facebook.com/dev.bhageerutty",
+      linkedin: "https://linkedin.com/in/dev-bhageerutty", // TODO: replace with Dev's real LinkedIn URL
+      wechatId: "ep-dev", // TODO: pending — replace with Dev's WeChat QR image (set wechatQr)
+      wechatQr: null,
     },
   },
   {
@@ -36,14 +41,15 @@ export const team = [
     role: "Co-Founding Member",
     location: "New Zealand",
     image: DinaImg,
-    bio: "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Building pathways that help people emerge, energise, and evolve.",
+    bio: "Building pathways that help people emerge, energise, and evolve.",
     links: {
-      booking: "https://calendly.com/epathways/dinah",
-      whatsapp: "+64 21 555 0102",
+      booking: "https://calendar.app.google/NNorTcatG68Rjwd46",
+      whatsapp: "+64 27 777 5586",
       email: "dinah@epathways.co.nz",
-      facebook: "https://facebook.com/epathways",
-      linkedin: "https://linkedin.com/in/dinah-suarin",
-      wechatId: "ep-dinah",
+      facebook: "https://www.facebook.com/dinah.jabonesuarin",
+      linkedin: "https://linkedin.com/in/dinah-suarin", // TODO: replace with Dinah's real LinkedIn URL
+      wechatId: "ep-dinah", // TODO: pending — replace with Dinah's WeChat QR image (set wechatQr)
+      wechatQr: null,
     },
   },
   {
@@ -52,14 +58,15 @@ export const team = [
     role: "People Journey Experience Champion",
     location: "New Zealand",
     image: EmmaImg,
-    bio: "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Making sure every client feels supported from the first hello to arrival day.",
+    bio: "Making sure every client feels supported from the first hello to arrival day.",
     links: {
-      booking: "https://calendly.com/epathways/emma",
-      whatsapp: "+64 21 555 0103",
-      email: "emma@epathways.co.nz",
-      facebook: "https://facebook.com/epathways",
-      linkedin: "https://linkedin.com/in/emma-ceballo",
-      wechatId: "ep-emma",
+      booking: "https://calendly.com/epathways/emma", // TODO
+      whatsapp: "+64 21 555 0103", // TODO
+      email: "emma@epathways.co.nz", // TODO
+      facebook: "https://facebook.com/epathways", // TODO
+      linkedin: "https://linkedin.com/in/emma-ceballo", // TODO
+      wechatId: "ep-emma", // TODO
+      wechatQr: null,
     },
   },
   {
@@ -68,14 +75,15 @@ export const team = [
     role: "Licence Immigration Adviser — IAA: 201500074",
     location: "New Zealand",
     image: DaiImg,
-    bio: "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Licensed immigration advice you can trust, with years of hands-on casework.",
+    bio: "Licensed immigration advice you can trust, with years of hands-on casework.",
     links: {
-      booking: "https://calendly.com/epathways/hendry",
-      whatsapp: "+64 21 555 0104",
-      email: "hendry@epathways.co.nz",
-      facebook: "https://facebook.com/epathways",
-      linkedin: "https://linkedin.com/in/hendry-dai",
-      wechatId: "ep-hendry",
+      booking: "https://calendly.com/epathways/hendry", // TODO
+      whatsapp: "+64 21 555 0104", // TODO
+      email: "hendry@epathways.co.nz", // TODO
+      facebook: "https://facebook.com/epathways", // TODO
+      linkedin: "https://linkedin.com/in/hendry-dai", // TODO
+      wechatId: "ep-hendry", // TODO
+      wechatQr: null,
     },
   },
   {
@@ -84,14 +92,15 @@ export const team = [
     role: "Finance Admin Champion",
     location: "New Zealand",
     image: EmilyImg,
-    bio: "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Keeping the numbers clear so your journey stays smooth and stress-free.",
+    bio: "Keeping the numbers clear so your journey stays smooth and stress-free.",
     links: {
-      booking: "https://calendly.com/epathways/emily",
-      whatsapp: "+64 21 555 0105",
-      email: "emily@epathways.co.nz",
-      facebook: "https://facebook.com/epathways",
-      linkedin: "https://linkedin.com/in/emily-dela-pena",
-      wechatId: "ep-emily",
+      booking: "https://calendly.com/epathways/emily", // TODO
+      whatsapp: "+64 21 555 0105", // TODO
+      email: "emily@epathways.co.nz", // TODO
+      facebook: "https://facebook.com/epathways", // TODO
+      linkedin: "https://linkedin.com/in/emily-dela-pena", // TODO
+      wechatId: "ep-emily", // TODO
+      wechatQr: null,
     },
   },
   {
@@ -100,14 +109,15 @@ export const team = [
     role: "Admin Champion",
     location: "New Zealand",
     image: NovaImg,
-    bio: "Lorem ipsum dolor sit amet, consectetur adipiscing elit. The behind-the-scenes engine keeping every application on track.",
+    bio: "The behind-the-scenes engine keeping every application on track.",
     links: {
-      booking: "https://calendly.com/epathways/nova",
-      whatsapp: "+64 21 555 0106",
-      email: "nova@epathways.co.nz",
-      facebook: "https://facebook.com/epathways",
-      linkedin: "https://linkedin.com/in/nova-palaca",
-      wechatId: "ep-nova",
+      booking: "https://calendly.com/epathways/nova", // TODO
+      whatsapp: "+64 21 555 0106", // TODO
+      email: "nova@epathways.co.nz", // TODO
+      facebook: "https://facebook.com/epathways", // TODO
+      linkedin: "https://linkedin.com/in/nova-palaca", // TODO
+      wechatId: "ep-nova", // TODO
+      wechatQr: null,
     },
   },
 ];
