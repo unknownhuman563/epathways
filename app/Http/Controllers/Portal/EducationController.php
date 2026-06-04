@@ -157,28 +157,87 @@ class EducationController extends Controller
             // Students are leads explicitly flipped via "Convert to Student"
             // on the lead detail page. The flag is the source of truth — no
             // more guessing from status or study plans.
+            //
+            // Returned payload mirrors the Education team's "Students
+            // Dashboard" spreadsheet (Date Engaged, Status, Location, Payment,
+            // Intake, Program, School, COOP, PTE/IELTS, OOP, Contact, Email,
+            // GDrive, Comments) so the expanded student row on the portal
+            // matches the columns staff are already tracking offline.
             $students = Lead::with(['studyPlans', 'documents'])
                 ->where('is_student', true)
                 ->orderByDesc('student_converted_at')
                 ->limit(200)
                 ->get()
-                ->map(fn ($l) => [
-                    'id'       => $l->id,
-                    'lead_id'  => $l->lead_id,
-                    'name'     => trim("{$l->first_name} {$l->last_name}") ?: 'Unknown',
-                    'email'    => $l->email,
-                    'status'   => $l->status,
-                    'program'  => optional($l->studyPlans->first())->preferred_course,
-                    'level'    => optional($l->studyPlans->first())->qualification_level,
-                    'docs_total'    => $l->documents->count(),
-                    'docs_approved' => $l->documents->where('status', 'Approved')->count(),
-                ]);
+                ->map(function ($l) {
+                    $plan = $l->studyPlans->first();
+                    return [
+                        'id'       => $l->id,
+                        'lead_id'  => $l->lead_id,
+                        'name'     => trim("{$l->first_name} {$l->last_name}") ?: 'Unknown',
+                        'email'    => $l->email,
+                        'phone'    => $l->phone,
+                        'status'   => $l->status,
+                        'location' => $l->residence_country,
+                        'date_engaged' => optional($l->date_of_engagement)->toDateString()
+                            ?? optional($l->student_converted_at)->toDateString(),
+                        'program'  => optional($plan)->preferred_course,
+                        'level'    => optional($plan)->qualification_level,
+                        'intake'   => optional($plan)->preferred_intake,
+                        'english_test'       => optional($plan)->english_test_type,
+                        'english_test_taken' => (bool) optional($plan)->english_test_taken,
+                        'english_test_score' => optional($plan)->score_overall,
+                        // Spreadsheet-mirror fields stored directly on leads.
+                        'payment'      => $l->student_payment,
+                        'school'       => $l->student_school,
+                        'coop'         => $l->student_coop,
+                        'oop'          => $l->student_oop,
+                        'gdrive_link'  => $l->student_gdrive_link,
+                        'comments'     => $l->student_comments,
+                        'docs_total'    => $l->documents->count(),
+                        'docs_approved' => $l->documents->where('status', 'Approved')->count(),
+                    ];
+                });
 
             return inertia('portal/education/Students', ['portal' => 'education', 'students' => $students]);
         } catch (\Throwable $e) {
             Log::error('Education students list failed', ['error' => $e->getMessage()]);
             return inertia('portal/education/Students', ['portal' => 'education', 'students' => collect()]);
         }
+    }
+
+    /**
+     * Inline-update one of the Students-Dashboard mirror columns from the
+     * Students screen's expanded row. The frontend posts a single field at
+     * a time; the validator whitelists exactly the dashboard fields so
+     * nothing else on the lead can be touched through this endpoint.
+     */
+    public function updateStudentField(\Illuminate\Http\Request $request, int $id)
+    {
+        $lead = Lead::where('is_student', true)->findOrFail($id);
+
+        $data = $request->validate([
+            'payment'      => 'nullable|string|max:191',
+            'school'       => 'nullable|string|max:191',
+            'coop'         => 'nullable|string|max:191',
+            'oop'          => 'nullable|string|max:191',
+            'gdrive_link'  => 'nullable|url|max:512',
+            'comments'     => 'nullable|string|max:5000',
+        ]);
+
+        $map = [
+            'payment'     => 'student_payment',
+            'school'      => 'student_school',
+            'coop'        => 'student_coop',
+            'oop'         => 'student_oop',
+            'gdrive_link' => 'student_gdrive_link',
+            'comments'    => 'student_comments',
+        ];
+        foreach ($data as $k => $v) {
+            $lead->{$map[$k]} = $v;
+        }
+        $lead->save();
+
+        return back();
     }
 
     /**

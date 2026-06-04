@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { Upload, X, FileText } from 'lucide-react';
+import { Upload, X, FileText, CheckCircle2 } from 'lucide-react';
 
 const DEFAULT_ACCEPT = '.pdf,.doc,.docx,.xls,.csv,.jpg,.jpeg,.png,.gif';
 const DEFAULT_HINT   = 'PDF, DOC/DOCX, XLS/CSV, JPG/JPEG, PNG, GIF';
@@ -53,6 +53,50 @@ export default function FileDropzone({
                     {label}
                 </label>
             )}
+            {/* Attached-files panel sits ABOVE the dropzone so the client
+                immediately sees what they've added without having to look
+                past the empty upload area. */}
+            {files.length > 0 && (
+                <div className="mb-3">
+                    <p
+                        className="text-[11px] font-bold uppercase tracking-[0.18em] mb-2 flex items-center gap-2"
+                        style={{ color: accent }}
+                    >
+                        <CheckCircle2 size={14} strokeWidth={2.5} />
+                        {files.length} file{files.length === 1 ? '' : 's'} attached
+                    </p>
+                    <ul className="space-y-2">
+                        {files.map((f, i) => (
+                            <li
+                                key={`${f.name}-${i}`}
+                                className="flex items-center gap-3 text-sm bg-white px-4 py-3 rounded-lg border-2 shadow-sm"
+                                style={{ borderColor: `${accent}33` }}
+                            >
+                                <div
+                                    className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"
+                                    style={{ backgroundColor: `${accent}1a`, color: accent }}
+                                >
+                                    <FileText size={18} strokeWidth={2} />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <p className="font-semibold text-[#282728] truncate">{f.name}</p>
+                                    <p className="text-[11px] text-gray-500 mt-0.5 tabular-nums">
+                                        {(f.size / 1024).toFixed(0)} KB · Ready to upload
+                                    </p>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={(e) => { e.stopPropagation(); removeAt(i); }}
+                                    className="w-7 h-7 rounded-full flex items-center justify-center text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors flex-shrink-0"
+                                    aria-label="Remove file"
+                                >
+                                    <X size={15} strokeWidth={2.5} />
+                                </button>
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+            )}
             <div
                 onDragOver={(e) => { e.preventDefault(); setDrag(true); }}
                 onDragLeave={() => setDrag(false)}
@@ -89,30 +133,6 @@ export default function FileDropzone({
             </div>
             {error && (
                 <p className="text-xs text-red-500 mt-1.5 font-medium">{error}</p>
-            )}
-            {files.length > 0 && (
-                <ul className="mt-3 space-y-1.5">
-                    {files.map((f, i) => (
-                        <li
-                            key={`${f.name}-${i}`}
-                            className="flex items-center gap-2 text-xs text-gray-700 bg-gray-50 px-3 py-2 rounded-lg border border-gray-100"
-                        >
-                            <FileText size={14} className="text-gray-500 flex-shrink-0" />
-                            <span className="flex-1 truncate">{f.name}</span>
-                            <span className="text-gray-400 tabular-nums">
-                                {(f.size / 1024).toFixed(0)} KB
-                            </span>
-                            <button
-                                type="button"
-                                onClick={(e) => { e.stopPropagation(); removeAt(i); }}
-                                className="text-gray-400 hover:text-red-500"
-                                aria-label="Remove file"
-                            >
-                                <X size={14} />
-                            </button>
-                        </li>
-                    ))}
-                </ul>
             )}
         </div>
     );
