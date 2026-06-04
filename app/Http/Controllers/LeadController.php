@@ -387,7 +387,20 @@ class LeadController extends Controller
             'military_info'  => 'nullable|array',
             'home_ties_info' => 'nullable|array',
 
-            // Step 12 - Declaration
+            // Step 12 - Documents (Education Enrolment only — Free Assessment
+            // doesn't send these so the nullable rule keeps it backwards-
+            // compatible). Each file: up to 10 MB, in the formats listed
+            // by the dropzone widget.
+            'cv_files'           => 'nullable|array|max:10',
+            'cv_files.*'         => 'file|mimes:pdf,doc,docx,xls,csv,jpg,jpeg,png,gif|max:10240',
+            'passport_files'     => 'nullable|array|max:10',
+            'passport_files.*'   => 'file|mimes:pdf,doc,docx,xls,csv,jpg,jpeg,png,gif|max:10240',
+            'diploma_files'      => 'nullable|array|max:10',
+            'diploma_files.*'    => 'file|mimes:pdf,doc,docx,xls,csv,jpg,jpeg,png,gif|max:10240',
+            'transcript_files'   => 'nullable|array|max:10',
+            'transcript_files.*' => 'file|mimes:pdf,doc,docx,xls,csv,jpg,jpeg,png,gif|max:10240',
+
+            // Step 13 - Declaration
             'declaration_accepted' => 'required|accepted',
         ]);
 
@@ -489,6 +502,34 @@ class LeadController extends Controller
             // over any earlier partial submissions.
             $existing->update($payload);
             $lead = $existing->fresh();
+
+            // 3b. Store Education Enrolment document uploads (CV / Passport /
+            // Diploma / Transcript). Each lead gets its own folder under the
+            // public disk; the stored paths are merged into education_notes
+            // so the existing JSON column carries them — no migration needed.
+            $docMap = [
+                'cv_files'         => 'cv',
+                'passport_files'   => 'passport',
+                'diploma_files'    => 'diploma',
+                'transcript_files' => 'transcript',
+            ];
+            $uploaded = [];
+            foreach ($docMap as $field => $folder) {
+                if (! $request->hasFile($field)) continue;
+                foreach ((array) $request->file($field) as $uploadedFile) {
+                    if (! $uploadedFile) continue;
+                    $uploaded[$folder][] = $uploadedFile->store(
+                        "enrolment-docs/{$lead->lead_id}/{$folder}",
+                        'public'
+                    );
+                }
+            }
+            if (! empty($uploaded)) {
+                $notes = $lead->education_notes ?? [];
+                $notes['uploaded_files'] = $uploaded;
+                $lead->update(['education_notes' => $notes]);
+                $lead = $lead->fresh();
+            }
 
             // 4. Relational Data Mapping: Study Plans
             if (!empty($data['study_plans'])) {

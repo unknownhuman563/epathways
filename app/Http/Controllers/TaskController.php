@@ -61,11 +61,17 @@ class TaskController extends Controller
         ];
 
         if ($taskType === 'linked') {
-            $rules['lead_id']  = 'required|exists:leads,id';
-            $rules['category'] = 'nullable|string|max:100';
+            // `lead_ids[]` is the multi-link path; `lead_id` is kept for
+            // backwards compatibility when the caller only links one lead.
+            // The rules below require at least one (validated after).
+            $rules['lead_id']    = 'nullable|exists:leads,id';
+            $rules['lead_ids']   = 'nullable|array|max:50';
+            $rules['lead_ids.*'] = 'integer|exists:leads,id';
+            $rules['category']   = 'nullable|string|max:100';
         } else {
-            $rules['lead_id']  = 'nullable';
-            $rules['category'] = 'required|string|max:100';
+            $rules['lead_id']    = 'nullable';
+            $rules['lead_ids']   = 'nullable|array|max:50';
+            $rules['category']   = 'required|string|max:100';
         }
 
         $validated = $request->validate($rules);
@@ -97,9 +103,26 @@ class TaskController extends Controller
             fn (User $u) => ! $u->isAdmin() && $u->role && $u->role !== $department
         );
 
+        // Resolve final lead list — prefer `lead_ids` array; fall back to
+        // the legacy single `lead_id`. First id becomes the primary
+        // (kept on lead_id for relation / activity-log compatibility);
+        // the rest land in additional_lead_ids.
+        $leadIds = [];
+        if ($taskType === 'linked') {
+            $leadIds = array_values(array_unique(array_filter(array_map('intval',
+                $validated['lead_ids'] ?? array_filter([$validated['lead_id'] ?? null])
+            ))));
+            if (empty($leadIds)) {
+                return back()->withErrors(['lead_ids' => 'Pick at least one lead.']);
+            }
+        }
+        $primaryLeadId    = $leadIds[0] ?? null;
+        $additionalLeadIds = count($leadIds) > 1 ? array_slice($leadIds, 1) : null;
+
         try {
             $task = LeadTask::create([
-                'lead_id'                 => $taskType === 'linked' ? $validated['lead_id'] : null,
+                'lead_id'                 => $primaryLeadId,
+                'additional_lead_ids'     => $additionalLeadIds,
                 'created_by'              => $user->id,
                 'assignee_id'             => $primaryAssigneeId,
                 'additional_assignee_ids' => $additionalIds ?: null,
@@ -161,6 +184,9 @@ class TaskController extends Controller
             'assignee_id'       => 'sometimes|nullable|exists:users,id',
             'assignee_ids'      => 'sometimes|nullable|array|max:20',
             'assignee_ids.*'    => 'integer|exists:users,id',
+            'lead_id'           => 'sometimes|nullable|exists:leads,id',
+            'lead_ids'          => 'sometimes|nullable|array|max:50',
+            'lead_ids.*'        => 'integer|exists:leads,id',
             'department'        => ['sometimes', Rule::in(LeadTask::DEPARTMENTS)],
             'cross_dept_reason' => 'sometimes|nullable|string|max:500',
             'tags'              => 'sometimes|nullable|array',
@@ -187,6 +213,15 @@ class TaskController extends Controller
                 $task->additional_assignee_ids = count($ids) > 1 ? array_slice($ids, 1) : null;
             } elseif (array_key_exists('assignee_id', $validated)) {
                 $task->assignee_id = $validated['assignee_id'];
+            }
+
+            // Multi-lead replace: same shape as the assignee path.
+            if (array_key_exists('lead_ids', $validated)) {
+                $ids = array_values(array_unique(array_filter(array_map('intval', $validated['lead_ids'] ?? []))));
+                $task->lead_id             = $ids[0] ?? null;
+                $task->additional_lead_ids = count($ids) > 1 ? array_slice($ids, 1) : null;
+            } elseif (array_key_exists('lead_id', $validated)) {
+                $task->lead_id = $validated['lead_id'];
             }
 
             foreach (['completion_notes', 'priority', 'progress', 'title', 'description', 'note', 'due_at', 'department', 'cross_dept_reason', 'tags', 'type', 'category'] as $field) {
@@ -335,10 +370,13 @@ class TaskController extends Controller
     {
         $q     = trim((string) $request->input('q', ''));
         $types = array_filter(explode(',', (string) $request->input('types', 'lead,student,case,client')));
+        $allTypes = ['lead', 'student', 'case', 'client'];
 
-        if (mb_strlen($q) < 2) {
-            return response()->json(['records' => []]);
-        }
+        // Optional explicit-id fetch — used by the edit modal to rehydrate
+        // already-linked leads without having to search for them.
+        $idFilter = array_values(array_filter(array_map('intval', array_filter(
+            explode(',', (string) $request->input('ids', ''))
+        ))));
 
         try {
             $query = Lead::query()->select(
@@ -346,32 +384,49 @@ class TaskController extends Controller
                 'is_student', 'is_immigration_case', 'is_accommodation_lead'
             );
 
-            // Type filter — at least one of the flags must match. "lead"
-            // matches the absence of every flag.
-            $query->where(function ($q2) use ($types) {
-                if (in_array('student', $types, true)) $q2->orWhere('is_student', true);
-                if (in_array('case',    $types, true)) $q2->orWhere('is_immigration_case', true);
-                if (in_array('client',  $types, true)) $q2->orWhere('is_accommodation_lead', true);
-                if (in_array('lead',    $types, true)) {
-                    $q2->orWhere(function ($q3) {
-                        $q3->where('is_student', false)
-                            ->where('is_immigration_case', false)
-                            ->where('is_accommodation_lead', false);
-                    });
-                }
-            });
+            if (! empty($idFilter)) {
+                $query->whereIn('id', $idFilter);
+            }
 
-            $query->where(function ($q2) use ($q) {
-                $q2->where('first_name', 'like', "%{$q}%")
-                    ->orWhere('last_name', 'like', "%{$q}%")
-                    ->orWhere('email', 'like', "%{$q}%")
-                    ->orWhere('lead_id', 'like', "%{$q}%");
-            });
+            // Only narrow by type when the caller has opted into a subset.
+            // The default (all 4 types) returns every lead so the dropdown
+            // has something useful to show the moment it opens — the type
+            // flag columns can be NULL on legacy rows so the prior
+            // `where(false)` predicate filtered them all out by accident.
+            $subsetRequested = count($types) > 0 && count(array_diff($allTypes, $types)) > 0;
+            if ($subsetRequested) {
+                $query->where(function ($q2) use ($types) {
+                    if (in_array('student', $types, true)) $q2->orWhere('is_student', true);
+                    if (in_array('case',    $types, true)) $q2->orWhere('is_immigration_case', true);
+                    if (in_array('client',  $types, true)) $q2->orWhere('is_accommodation_lead', true);
+                    if (in_array('lead',    $types, true)) {
+                        $q2->orWhere(function ($q3) {
+                            $q3->where(fn ($w) => $w->where('is_student', false)->orWhereNull('is_student'))
+                                ->where(fn ($w) => $w->where('is_immigration_case', false)->orWhereNull('is_immigration_case'))
+                                ->where(fn ($w) => $w->where('is_accommodation_lead', false)->orWhereNull('is_accommodation_lead'));
+                        });
+                    }
+                });
+            }
 
-            $records = $query->orderBy('first_name')->limit(15)->get()->map(fn ($l) => [
+            // When a query string is supplied, narrow by name / email / lead_id.
+            // Otherwise return the most recent records.
+            if (mb_strlen($q) >= 1) {
+                $query->where(function ($q2) use ($q) {
+                    $q2->where('first_name', 'like', "%{$q}%")
+                        ->orWhere('last_name', 'like', "%{$q}%")
+                        ->orWhere('email', 'like', "%{$q}%")
+                        ->orWhere('lead_id', 'like', "%{$q}%");
+                });
+                $query->orderBy('first_name');
+            } else {
+                $query->orderByDesc('id');
+            }
+
+            $records = $query->limit(100)->get()->map(fn ($l) => [
                 'id'         => $l->id,
                 'lead_id'    => $l->lead_id,
-                'name'       => trim("{$l->first_name} {$l->last_name}"),
+                'name'       => trim("{$l->first_name} {$l->last_name}") ?: ($l->email ?: "Lead #{$l->lead_id}"),
                 'email'      => $l->email,
                 'record_type' => $l->is_student ? 'student'
                     : ($l->is_immigration_case ? 'case'

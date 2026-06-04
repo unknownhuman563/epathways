@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { useForm } from '@inertiajs/react';
+import { useForm, usePage } from '@inertiajs/react';
 import { toast } from 'sonner';
 import IntakeFormShell from '@/components/visa/IntakeFormShell';
 import IntakeConfirmModal from '@/components/visa/IntakeConfirmModal';
+import IntakeSuccessModal from '@/components/visa/IntakeSuccessModal';
+import IntakeTermsStep from '@/components/visa/IntakeTermsStep';
 import {
     Field, TextField, TextareaField, DateField, SelectField, YesNoField, FieldGrid, SectionTitle,
 } from '@/components/visa/IntakeFields';
@@ -13,24 +15,27 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 // Server can reject any field, not just the required-by-client ones. This
 // map sends the applicant straight to whichever step holds the bad field.
+// Step 1 is the shared Privacy & Terms step; all real form fields start at
+// step 2 and onward.
 const FIELD_TO_STEP = {
-    family_name: 1, first_name: 1, other_names: 1, gender: 1, dob: 1,
-    country_of_birth: 1, place_of_birth: 1, current_address: 1, email: 1, phone: 1,
-    country_of_citizenship: 1, other_citizenships: 1, national_id: 1, partnership_status: 1,
-    current_country: 2, previous_nz_visa: 2, previous_nz_visa_details: 2, previous_nzeta: 2,
-    australian_pr: 2, travelled_nz: 2, last_nz_departure: 2, over_24_months: 2,
-    employer_name: 3, employer_is_family: 3, employer_family_relation: 3, self_employed: 3,
-    job_start_date: 3, hourly_rate: 3, supports_dependent_children: 3,
-    character_convicted: 4, character_investigation: 4, character_deported: 4,
-    character_visa_refused: 4, lived_other_country_5y: 4, lived_other_country_details: 4,
-    health_tb: 4, health_renal: 4, health_hospital: 4, health_residential: 4, health_pregnant: 4,
-    currently_working: 5, current_job_title: 5, current_job_duties: 5,
-    current_job_start: 5, current_job_country: 5, current_job_region: 5,
-    current_employer_name: 5, current_employer_address: 5,
-    current_employer_phone: 5, current_employer_email: 5,
-    military_compulsory: 6, military_undertaken: 6, military_details: 6,
-    travelled_internationally: 6,
-    declaration_accepted: 7, signature_name: 7, signature_date: 7,
+    terms_accepted: 1,
+    family_name: 2, first_name: 2, other_names: 2, gender: 2, dob: 2,
+    country_of_birth: 2, place_of_birth: 2, current_address: 2, email: 2, phone: 2,
+    country_of_citizenship: 2, other_citizenships: 2, national_id: 2, partnership_status: 2,
+    current_country: 3, previous_nz_visa: 3, previous_nz_visa_details: 3, previous_nzeta: 3,
+    australian_pr: 3, travelled_nz: 3, last_nz_departure: 3, over_24_months: 3,
+    employer_name: 4, employer_is_family: 4, employer_family_relation: 4, self_employed: 4,
+    job_start_date: 4, hourly_rate: 4, supports_dependent_children: 4,
+    character_convicted: 5, character_investigation: 5, character_deported: 5,
+    character_visa_refused: 5, lived_other_country_5y: 5, lived_other_country_details: 5,
+    health_tb: 5, health_renal: 5, health_hospital: 5, health_residential: 5, health_pregnant: 5,
+    currently_working: 6, current_job_title: 6, current_job_duties: 6,
+    current_job_start: 6, current_job_country: 6, current_job_region: 6,
+    current_employer_name: 6, current_employer_address: 6,
+    current_employer_phone: 6, current_employer_email: 6,
+    military_compulsory: 7, military_undertaken: 7, military_details: 7,
+    travelled_internationally: 7,
+    declaration_accepted: 8, signature_name: 8, signature_date: 8,
 };
 
 const FIELD_LABELS = {
@@ -83,6 +88,8 @@ export default function WorkInterestPage() {
         travelled_internationally: '', travel_trips: [],
 
         declaration_accepted: false, signature_name: '', signature_date: '',
+        // Privacy & Terms — gated by step 1.
+        terms_accepted: false,
         // Restored values from any previously-saved local draft. Spread last
         // so they override the empty defaults above.
         ...(draft || {}),
@@ -91,6 +98,17 @@ export default function WorkInterestPage() {
     const [step, setStep] = useState(1);
     const [localErrors, setLocalErrors] = useState({});
     const [showConfirm, setShowConfirm] = useState(false);
+    const [showSuccess, setShowSuccess] = useState(false);
+
+    // Persistent post-submit modal — driven by the controller's
+    // `intake_submitted` flash, not auto-dismissed.
+    const { flash } = usePage().props;
+    useEffect(() => {
+        if (flash?.intake_submitted) {
+            setShowSuccess(true);
+            try { window.localStorage.removeItem(DRAFT_KEY); } catch {}
+        }
+    }, [flash?.intake_submitted]);
     // Steps the user has actually opened. The stepper only paints a checkmark
     // for a step the user has visited AND whose required fields validate —
     // matches the resident-intake behaviour where skipping forward leaves the
@@ -121,6 +139,9 @@ export default function WorkInterestPage() {
         const errs = {};
         switch (n) {
             case 1:
+                if (!data.terms_accepted) errs.terms_accepted = 'Please accept the terms to continue';
+                break;
+            case 2:
                 if (!data.family_name?.trim()) errs.family_name = 'Family name is required';
                 if (!data.first_name?.trim()) errs.first_name = 'First name is required';
                 if (!data.dob) errs.dob = 'Date of birth is required';
@@ -129,17 +150,17 @@ export default function WorkInterestPage() {
                 if (!data.phone?.trim()) errs.phone = 'Contact number is required';
                 if (!data.country_of_citizenship?.trim()) errs.country_of_citizenship = 'Country of citizenship is required';
                 break;
-            case 2:
+            case 3:
                 if (!data.travelled_nz) errs.travelled_nz = 'Please answer';
                 if (!data.over_24_months) errs.over_24_months = 'Please answer';
                 break;
-            case 3:
+            case 4:
                 if (!data.employer_name?.trim()) errs.employer_name = 'Employer name is required';
                 if (!data.employer_is_family) errs.employer_is_family = 'Please answer';
                 if (!data.job_start_date) errs.job_start_date = 'Start date is required';
                 if (data.hourly_rate === '' || data.hourly_rate === null) errs.hourly_rate = 'Hourly rate is required';
                 break;
-            case 4:
+            case 5:
                 ['character_convicted','character_investigation','character_deported','character_visa_refused','lived_other_country_5y'].forEach((k) => {
                     if (!data[k]) errs[k] = 'Please answer';
                 });
@@ -147,15 +168,15 @@ export default function WorkInterestPage() {
                     if (!data[k]) errs[k] = 'Please answer';
                 });
                 break;
-            case 5:
+            case 6:
                 if (!data.currently_working) errs.currently_working = 'Please answer';
                 break;
-            case 6:
+            case 7:
                 if (!data.military_compulsory) errs.military_compulsory = 'Please answer';
                 if (!data.military_undertaken) errs.military_undertaken = 'Please answer';
                 if (!data.travelled_internationally) errs.travelled_internationally = 'Please answer';
                 break;
-            case 7:
+            case 8:
                 if (!data.declaration_accepted) errs.declaration_accepted = 'You must accept the declaration to continue';
                 break;
         }
@@ -170,7 +191,7 @@ export default function WorkInterestPage() {
     const submit = () => {
         const aggregated = {};
         let firstInvalid = null;
-        for (let n = 1; n <= 7; n++) {
+        for (let n = 1; n <= 8; n++) {
             const errs = validateStep(n);
             if (Object.keys(errs).length && firstInvalid === null) firstInvalid = n;
             Object.assign(aggregated, errs);
@@ -222,7 +243,7 @@ export default function WorkInterestPage() {
     useEffect(() => {
         if (Object.keys(localErrors).length === 0) return;
         const fresh = {};
-        for (let n = 1; n <= 7; n++) Object.assign(fresh, validateStep(n));
+        for (let n = 1; n <= 8; n++) Object.assign(fresh, validateStep(n));
         const next = {};
         let changed = false;
         for (const k of Object.keys(localErrors)) {
@@ -234,6 +255,17 @@ export default function WorkInterestPage() {
     }, [data]);
 
     const steps = [
+        {
+            title: 'Terms',
+            render: () => (
+                <IntakeTermsStep
+                    visaLabel="Work Visa (AEWV)"
+                    accepted={data.terms_accepted}
+                    onAccept={set('terms_accepted')}
+                    error={errors.terms_accepted}
+                />
+            ),
+        },
         {
             title: 'Identity',
             render: () => (
@@ -425,7 +457,7 @@ export default function WorkInterestPage() {
                 steps={steps}
                 onSubmit={submit}
                 processing={processing}
-                submitLabel="Submit & continue to payment"
+                submitLabel="Submit"
                 data={data}
                 draftKey={DRAFT_KEY}
                 step={step}
@@ -447,6 +479,11 @@ export default function WorkInterestPage() {
                     ['Employer', data.employer_name],
                     ['Job starts', data.job_start_date],
                 ]}
+            />
+            <IntakeSuccessModal
+                open={showSuccess}
+                onClose={() => setShowSuccess(false)}
+                visaLabel={flash?.intake_submitted || 'Work Visa (AEWV)'}
             />
         </>
     );

@@ -38,26 +38,31 @@ class StudentIntakeController extends Controller
                 'status'    => 'Submitted',
             ]));
 
-            $visaType = VisaType::query()->where('code', 'STUDENT')->first()
-                ?: VisaType::query()->where('category', 'Student')->first();
-
-            $assessment = Assessment::create([
-                'visa_type_id'         => $visaType?->id,
-                'intakeable_type'      => StudentIntake::class,
-                'intakeable_id'        => $intake->id,
-                'applicant_first_name' => $intake->first_name,
-                'applicant_last_name'  => $intake->family_name,
-                'applicant_email'      => $intake->email,
-                'applicant_phone'      => $intake->phone,
-                'status'               => 'submitted',
-            ]);
-            if ($visaType) {
-                $assessment->lockCurrentPrice();
-            }
+            // ── PAYMENT + BOOKING TEMPORARILY DISABLED ────────────────
+            // See WorkIntakeController for context. Re-enable by
+            // uncommenting and restoring the assessment.pay redirect.
+            //
+            // $visaType = VisaType::query()->where('code', 'STUDENT')->first()
+            //     ?: VisaType::query()->where('category', 'Student')->first();
+            //
+            // $assessment = Assessment::create([
+            //     'visa_type_id'         => $visaType?->id,
+            //     'intakeable_type'      => StudentIntake::class,
+            //     'intakeable_id'        => $intake->id,
+            //     'applicant_first_name' => $intake->first_name,
+            //     'applicant_last_name'  => $intake->family_name,
+            //     'applicant_email'      => $intake->email,
+            //     'applicant_phone'      => $intake->phone,
+            //     'status'               => 'submitted',
+            // ]);
+            // if ($visaType) {
+            //     $assessment->lockCurrentPrice();
+            // }
 
             DB::commit();
 
-            return redirect()->route('assessment.pay', $assessment->token);
+            // return redirect()->route('assessment.pay', $assessment->token);
+            return back()->with('intake_submitted', 'Student Visa');
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error('Student intake storage failed', ['error' => $e->getMessage()]);

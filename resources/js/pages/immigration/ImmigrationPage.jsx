@@ -410,10 +410,13 @@ export default function Immigration({ reviews = [], stats = { count: 0, average:
             
             {/* ══════════════════════════════════════════════════════════════
                 GUIDANCE SECTION  —  White / Editorial Style
+                Tightened to match the rest of the system: smaller heading
+                scale, lighter padding, image fixed to a 420px frame so it
+                doesn't dwarf the surrounding cards.
             ══════════════════════════════════════════════════════════════ */}
-            <section className="bg-white text-[#282728] py-32 font-urbanist overflow-hidden">
-                <div className="container mx-auto px-6 md:px-12 max-w-7xl">
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
+            <section className="bg-white text-[#282728] py-20 font-urbanist overflow-hidden">
+                <div className="container mx-auto px-6 md:px-12 max-w-6xl">
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
                         {/* Left Content */}
                         <motion.div
                             initial={{ opacity: 0, x: -30 }}
@@ -421,47 +424,47 @@ export default function Immigration({ reviews = [], stats = { count: 0, average:
                             viewport={{ once: true }}
                             transition={{ duration: 0.8 }}
                         >
-                            <span className="text-[11px] font-bold tracking-[0.3em] uppercase text-gray-500 mb-6 block">
+                            <span className="text-[11px] font-bold tracking-[0.3em] uppercase text-gray-500 mb-4 block">
                                 Guidance
                             </span>
-                            <h2 className="text-4xl md:text-5xl lg:text-6xl font-medium leading-tight mb-8">
+                            <h2 className="text-3xl md:text-4xl lg:text-5xl font-medium leading-tight mb-5">
                                 We handle immigration with <br />
                                 <span className="text-gray-300 italic">care and precision</span>
                             </h2>
-                            <p className="text-gray-600 text-base md:text-lg leading-relaxed mb-12 max-w-md">
-                                ePathways connects you with licensed advisers who know the terrain. 
+                            <p className="text-gray-600 text-sm md:text-base leading-relaxed mb-8 max-w-md">
+                                ePathways connects you with licensed advisers who know the terrain.
                                 We've guided thousands through visa applications, residency pathways, and new beginnings abroad.
                             </p>
 
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-10 mb-12">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-8">
                                 {/* Feature 1 */}
-                                <div className="space-y-4">
-                                    <div className="w-10 h-10 rounded-full bg-gray-50 flex items-center justify-center text-[#00A693]">
-                                        <CheckCircle size={20} />
+                                <div className="space-y-2.5">
+                                    <div className="w-9 h-9 rounded-full bg-gray-50 flex items-center justify-center text-[#00A693]">
+                                        <CheckCircle size={16} />
                                     </div>
-                                    <h3 className="text-lg font-bold">Expert team</h3>
-                                    <p className="text-gray-500 text-sm leading-relaxed">
+                                    <h3 className="text-base font-bold">Expert team</h3>
+                                    <p className="text-gray-500 text-xs leading-relaxed">
                                         Certified professionals with years of real-world immigration experience.
                                     </p>
                                 </div>
 
                                 {/* Feature 2 */}
-                                <div className="space-y-4">
-                                    <div className="w-10 h-10 rounded-full bg-gray-50 flex items-center justify-center text-[#00A693]">
-                                        <MapPin size={20} />
+                                <div className="space-y-2.5">
+                                    <div className="w-9 h-9 rounded-full bg-gray-50 flex items-center justify-center text-[#00A693]">
+                                        <MapPin size={16} />
                                     </div>
-                                    <h3 className="text-lg font-bold">Proven results</h3>
-                                    <p className="text-gray-500 text-sm leading-relaxed">
+                                    <h3 className="text-base font-bold">Proven results</h3>
+                                    <p className="text-gray-500 text-xs leading-relaxed">
                                         High approval rates backed by meticulous preparation and attention to detail.
                                     </p>
                                 </div>
                             </div>
 
-                            <a 
+                            <a
                                 href="/booking"
-                                className="inline-flex items-center gap-3 border border-gray-200 px-8 py-3 text-[11px] font-bold uppercase tracking-widest hover:bg-[#282728] hover:text-white transition-all duration-500"
+                                className="inline-flex items-center gap-2 border border-gray-200 px-6 py-2.5 text-[10px] font-bold uppercase tracking-widest hover:bg-[#282728] hover:text-white transition-all duration-500"
                             >
-                                Learn <ArrowRight size={14} />
+                                Learn <ArrowRight size={12} />
                             </a>
                         </motion.div>
 
@@ -471,11 +474,11 @@ export default function Immigration({ reviews = [], stats = { count: 0, average:
                             whileInView={{ opacity: 1, scale: 1 }}
                             viewport={{ once: true }}
                             transition={{ duration: 1 }}
-                            className="relative aspect-square lg:aspect-auto lg:h-[600px] overflow-hidden rounded-sm"
+                            className="relative h-[300px] md:h-[380px] lg:h-[420px] overflow-hidden rounded-2xl"
                         >
-                            <img 
-                                src={GuidanceImg} 
-                                alt="Immigration Guidance" 
+                            <img
+                                src={GuidanceImg}
+                                alt="Immigration Guidance"
                                 className="w-full h-full object-cover transition-all duration-700"
                             />
                             {/* Decorative overlay */}
@@ -487,90 +490,92 @@ export default function Immigration({ reviews = [], stats = { count: 0, average:
 
             {/* ══════════════════════════════════════════════════════════════
                 VISA PATHWAYS SECTION  —  Dark Green Grid
+                Trimmed: smaller padding, headings, card heights so the
+                whole section matches the rest of the page's density.
             ══════════════════════════════════════════════════════════════ */}
-            <section className="bg-[#0c1611] text-white py-24 font-urbanist overflow-hidden border-t border-white/5">
+            <section className="bg-[#0c1611] text-white py-16 font-urbanist overflow-hidden border-t border-white/5">
                 <div className="container mx-auto px-6 md:px-12 max-w-7xl">
                     {/* Header */}
-                    <div className="text-center mb-20">
+                    <div className="text-center mb-12">
                         <motion.span
                             initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true }}
-                            className="text-[11px] font-bold tracking-[0.4em] uppercase text-[#00A693] mb-4 block"
+                            className="text-[11px] font-bold tracking-[0.4em] uppercase text-[#00A693] mb-3 block"
                         >
                             Services
                         </motion.span>
                         <motion.h2
                             initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}
-                            className="text-4xl md:text-5xl font-medium mb-6 tracking-tight"
+                            className="text-3xl md:text-4xl font-medium mb-4 tracking-tight"
                         >
                             Visa pathways tailored to your goals
                         </motion.h2>
                         <motion.p
                             initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true }}
-                            className="text-white/50 text-sm md:text-base max-w-xl mx-auto leading-relaxed"
+                            className="text-white/50 text-sm max-w-xl mx-auto leading-relaxed"
                         >
                             Whether you're seeking education abroad, work opportunities, or permanent residence, we offer comprehensive support across all major visa categories.
                         </motion.p>
                     </div>
 
                     {/* Grid */}
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
                         {/* Left: Large Card (Student Visa) */}
                         <motion.div
                             initial={{ opacity: 0, y: 30 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}
-                            className="bg-white/5 border border-white/10 rounded-sm overflow-hidden flex flex-col group"
+                            className="bg-white/5 border border-white/10 rounded-2xl overflow-hidden flex flex-col group"
                         >
-                            <div className="p-10 md:p-14 flex-1">
-                                <span className="text-[10px] font-bold tracking-widest uppercase text-[#00A693] mb-4 block">Study</span>
-                                <h3 className="text-3xl md:text-4xl font-medium mb-6 leading-tight">Student visa</h3>
-                                <p className="text-white/50 text-sm md:text-base leading-relaxed mb-8 max-w-md">
-                                    Study at world-class institutions with full visa support, from application to arrival. 
+                            <div className="p-6 md:p-8 flex-1">
+                                <span className="text-[10px] font-bold tracking-widest uppercase text-[#00A693] mb-3 block">Study</span>
+                                <h3 className="text-2xl md:text-3xl font-medium mb-4 leading-tight">Student visa</h3>
+                                <p className="text-white/50 text-xs md:text-sm leading-relaxed mb-6 max-w-md">
+                                    Study at world-class institutions with full visa support, from application to arrival.
                                     We guide course selection, admissions, and pre-departure logistics.
                                 </p>
-                                <a href="/booking" className="inline-flex items-center gap-3 border border-white/20 px-8 py-3 text-[11px] font-bold uppercase tracking-widest hover:bg-white hover:text-[#0c1611] transition-all duration-500">
-                                    Explore <ArrowRight size={14} />
+                                <a href="/booking" className="inline-flex items-center gap-2 border border-white/20 px-5 py-2.5 text-[10px] font-bold uppercase tracking-widest hover:bg-white hover:text-[#0c1611] transition-all duration-500">
+                                    Explore <ArrowRight size={12} />
                                 </a>
                             </div>
-                            <div className="aspect-video relative overflow-hidden">
+                            <div className="h-44 md:h-52 relative overflow-hidden">
                                 <img src={StudentVisaImg} alt="Student Visa" className="w-full h-full object-cover group-hover:scale-105 transition-all duration-700" />
                             </div>
                         </motion.div>
 
                         {/* Right: 2x2 Grid of Smaller Cards */}
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                             {[
-                                { 
-                                    tag: "Travel", title: "Visitor visa", img: VisitorVisaImg, 
-                                    desc: "Travel with confidence. Our advisers prepare documentation and applications for tourism, family visits, and short-term stays." 
+                                {
+                                    tag: "Travel", title: "Visitor visa", img: VisitorVisaImg,
+                                    desc: "Travel with confidence. Our advisers prepare documentation and applications for tourism, family visits, and short-term stays."
                                 },
-                                { 
-                                    tag: "Career", title: "Work visa", img: WorkVisaImg, 
-                                    desc: "Secure employment abroad through skilled migration programs. We assess eligibility and manage the entire sponsorship process." 
+                                {
+                                    tag: "Career", title: "Work visa", img: WorkVisaImg,
+                                    desc: "Secure employment abroad through skilled migration programs. We assess eligibility and manage the entire sponsorship process."
                                 },
-                                { 
-                                    tag: "Settle", title: "Study abroad fully supported", img: SettleVisaImg, 
-                                    desc: "Enroll at universities worldwide with complete visa sponsorship and guidance throughout the entire process." 
+                                {
+                                    tag: "Settle", title: "Study abroad fully supported", img: SettleVisaImg,
+                                    desc: "Enroll at universities worldwide with complete visa sponsorship and guidance throughout the entire process."
                                 },
-                                { 
-                                    tag: "Visit", title: "Travel with proper documentation", img: VisitorVisaImg, 
-                                    desc: "Tourism and family visits handled with care and precision throughout. We ensure your documents are perfectly in order." 
+                                {
+                                    tag: "Visit", title: "Travel with proper documentation", img: VisitorVisaImg,
+                                    desc: "Tourism and family visits handled with care and precision throughout. We ensure your documents are perfectly in order."
                                 }
                             ].map((card, i) => (
                                 <motion.div
                                     key={i}
                                     initial={{ opacity: 0, y: 30 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: i * 0.1 }}
-                                    className="bg-white/5 border border-white/10 rounded-sm overflow-hidden flex flex-col group"
+                                    className="bg-white/5 border border-white/10 rounded-2xl overflow-hidden flex flex-col group"
                                 >
-                                    <div className="p-8 flex-1">
-                                        <span className="text-[9px] font-bold tracking-widest uppercase text-[#00A693] mb-3 block">{card.tag}</span>
-                                        <h3 className="text-xl font-medium mb-4 leading-tight">{card.title}</h3>
-                                        <p className="text-white/40 text-xs leading-relaxed mb-6">
+                                    <div className="p-5 flex-1">
+                                        <span className="text-[9px] font-bold tracking-widest uppercase text-[#00A693] mb-2 block">{card.tag}</span>
+                                        <h3 className="text-lg font-medium mb-3 leading-tight">{card.title}</h3>
+                                        <p className="text-white/40 text-[11px] leading-relaxed mb-4 line-clamp-3">
                                             {card.desc}
                                         </p>
-                                        <a href="/booking" className="text-[10px] font-bold uppercase tracking-widest flex items-center gap-2 text-white hover:text-[#00A693] transition-colors group/link">
-                                            Explore <ArrowRight size={12} className="group-hover/link:translate-x-1 transition-transform" />
+                                        <a href="/booking" className="text-[10px] font-bold uppercase tracking-widest inline-flex items-center gap-1.5 text-white hover:text-[#00A693] transition-colors group/link">
+                                            Explore <ArrowRight size={10} className="group-hover/link:translate-x-1 transition-transform" />
                                         </a>
                                     </div>
-                                    <div className="h-48 relative overflow-hidden border-t border-white/5">
+                                    <div className="h-32 relative overflow-hidden border-t border-white/5">
                                         <img src={card.img} alt={card.title} className="w-full h-full object-cover group-hover:scale-105 transition-all duration-700" />
                                     </div>
                                 </motion.div>
@@ -582,44 +587,47 @@ export default function Immigration({ reviews = [], stats = { count: 0, average:
 
             {/* ══════════════════════════════════════════════════════════════
                 MOST SOUGHT VISAS SECTION  —  Tabbed Layout
+                Sized to match the "Select your visa pathway" cards below
+                so the page reads as one consistent system instead of one
+                oversized hero followed by compact cards.
             ══════════════════════════════════════════════════════════════ */}
-            <section id="top-visas" className="py-32 bg-white">
+            <section id="top-visas" className="py-20 bg-white">
                 <div className="container mx-auto px-6 md:px-12 max-w-7xl">
                     {/* Header */}
-                    <div className="text-center mb-16">
+                    <div className="text-center mb-10">
                         <motion.span
                             initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true }}
-                            className="text-[11px] font-bold tracking-[0.4em] uppercase text-gray-500 mb-4 block"
+                            className="text-[11px] font-bold tracking-[0.4em] uppercase text-gray-500 mb-3 block"
                         >
                             Popular
                         </motion.span>
                         <motion.h2
                             initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}
-                            className="text-4xl md:text-6xl font-medium mb-6 tracking-tight text-[#282728]"
+                            className="text-3xl md:text-4xl lg:text-5xl font-medium mb-4 tracking-tight text-[#282728]"
                         >
                             Most sought visas
                         </motion.h2>
                         <motion.p
                             initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true }}
-                            className="text-gray-600 text-sm md:text-base max-w-xl mx-auto leading-relaxed mb-10"
+                            className="text-gray-600 text-sm max-w-xl mx-auto leading-relaxed mb-6"
                         >
                             These pathways open doors for thousands each year. Explore what might work for you.
                         </motion.p>
-                        <a 
-                            href="/booking" 
-                            className="inline-flex items-center gap-3 border border-gray-200 px-8 py-3 text-[11px] font-bold uppercase tracking-widest hover:border-[#282728] transition-all duration-300"
+                        <a
+                            href="/booking"
+                            className="inline-flex items-center gap-2 border border-gray-200 px-6 py-2.5 text-[10px] font-bold uppercase tracking-widest hover:border-[#282728] transition-all duration-300"
                         >
-                            Discover <ArrowRight size={14} />
+                            Discover <ArrowRight size={12} />
                         </a>
                     </div>
 
                     {/* Tabs */}
-                    <div className="flex justify-center gap-8 mb-16 border-b border-gray-100">
+                    <div className="flex justify-center gap-6 md:gap-8 mb-8 border-b border-gray-100">
                         {Object.keys(visaTabs).map((tab) => (
                             <button
                                 key={tab}
                                 onClick={() => setActiveTab(tab)}
-                                className={`pb-4 text-sm font-bold tracking-widest uppercase transition-all relative ${activeTab === tab ? 'text-[#282728]' : 'text-gray-300 hover:text-gray-600'}`}
+                                className={`pb-3 text-[11px] md:text-xs font-bold tracking-widest uppercase transition-all relative ${activeTab === tab ? 'text-[#282728]' : 'text-gray-300 hover:text-gray-600'}`}
                             >
                                 {tab}
                                 {activeTab === tab && (
@@ -629,7 +637,9 @@ export default function Immigration({ reviews = [], stats = { count: 0, average:
                         ))}
                     </div>
 
-                    {/* Tab Content */}
+                    {/* Tab Content — compact split card. Matches the card
+                        scale used in the visa-pathway grid (300px tall) so
+                        the page reads as a consistent system. */}
                     <AnimatePresence mode="wait">
                         <motion.div
                             key={activeTab}
@@ -637,30 +647,30 @@ export default function Immigration({ reviews = [], stats = { count: 0, average:
                             animate={{ opacity: 1, x: 0 }}
                             exit={{ opacity: 0, x: -20 }}
                             transition={{ duration: 0.4 }}
-                            className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center bg-gray-50 rounded-sm overflow-hidden"
+                            className="grid grid-cols-1 md:grid-cols-2 gap-0 items-stretch bg-gray-50 rounded-2xl overflow-hidden max-w-5xl mx-auto"
                         >
-                            <div className="aspect-[4/3] relative overflow-hidden">
-                                <img 
-                                    src={visaTabs[activeTab].img} 
-                                    alt={activeTab} 
-                                    className="w-full h-full object-cover"
+                            <div className="relative overflow-hidden h-[240px] md:h-auto md:min-h-[320px]">
+                                <img
+                                    src={visaTabs[activeTab].img}
+                                    alt={activeTab}
+                                    className="absolute inset-0 w-full h-full object-cover"
                                 />
                             </div>
-                            <div className="p-12 md:p-16">
-                                <span className="text-[10px] font-bold tracking-widest uppercase text-[#00A693] mb-4 block">
+                            <div className="p-6 md:p-8 lg:p-10 flex flex-col justify-center">
+                                <span className="text-[10px] font-bold tracking-widest uppercase text-[#00A693] mb-3 block">
                                     {visaTabs[activeTab].tag}
                                 </span>
-                                <h3 className="text-3xl md:text-5xl font-medium mb-8 leading-tight text-[#282728]">
+                                <h3 className="text-xl md:text-2xl lg:text-3xl font-medium mb-4 leading-tight text-[#282728]">
                                     {visaTabs[activeTab].title}
                                 </h3>
-                                <p className="text-gray-600 text-sm md:text-base leading-relaxed mb-10 max-w-md">
+                                <p className="text-gray-600 text-xs md:text-sm leading-relaxed mb-6 max-w-md">
                                     {visaTabs[activeTab].desc}
                                 </p>
-                                <a 
-                                    href="/booking" 
-                                    className="inline-flex items-center gap-3 border border-gray-200 px-8 py-3 text-[11px] font-bold uppercase tracking-widest hover:bg-[#282728] hover:text-white transition-all duration-300"
+                                <a
+                                    href="/booking"
+                                    className="inline-flex items-center gap-2 border border-gray-200 px-5 py-2.5 text-[10px] font-bold uppercase tracking-widest hover:bg-[#282728] hover:text-white transition-all duration-300 self-start"
                                 >
-                                    Learn more <ArrowRight size={14} />
+                                    Learn more <ArrowRight size={12} />
                                 </a>
                             </div>
                         </motion.div>
@@ -847,7 +857,7 @@ export default function Immigration({ reviews = [], stats = { count: 0, average:
                 Sits right after the Team section so visitors see who they'd
                 work with, then immediately read what past clients say.
             ══════════════════════════════════════════════════════════════ */}
-            <ReviewsSection reviews={reviews} stats={stats} />
+            <ReviewsSection reviews={reviews} stats={stats} compact />
 
             {/* ══════════════════════════════════════════════════════════════
                 FEATURED STORIES  —  driven by admin-curated reviews
@@ -855,12 +865,12 @@ export default function Immigration({ reviews = [], stats = { count: 0, average:
                 has been featured yet, so the page never shows fake stories.
             ══════════════════════════════════════════════════════════════ */}
             {featuredReviews.length > 0 && (
-                <section id="stories" className="py-32 bg-white">
+                <section id="stories" className="py-20 bg-white">
                     <div className="container mx-auto px-6 md:px-12 max-w-7xl">
                         {/* Header — editorial */}
-                        <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-8 mb-16">
+                        <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-6 mb-10">
                             <div className="max-w-2xl">
-                                <div className="flex items-center gap-4 mb-5">
+                                <div className="flex items-center gap-4 mb-4">
                                     <span className="text-[10px] font-bold text-[#436235] uppercase tracking-[0.35em]">
                                         Featured stories
                                     </span>
@@ -868,13 +878,13 @@ export default function Immigration({ reviews = [], stats = { count: 0, average:
                                 </div>
                                 <motion.h2
                                     initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}
-                                    className="text-4xl md:text-5xl font-medium tracking-tight leading-[1.1] text-[#282728]"
+                                    className="text-2xl sm:text-3xl lg:text-4xl font-medium tracking-tight leading-[1.1] text-[#282728]"
                                 >
                                     Real journeys.<br />
                                     <span className="text-[#436235] font-light italic">Real outcomes.</span>
                                 </motion.h2>
                             </div>
-                            <p className="text-sm text-gray-500 font-light leading-relaxed max-w-md">
+                            <p className="text-xs sm:text-sm text-gray-500 font-light leading-relaxed max-w-md">
                                 Hand-picked stories from the people our advisers worked with — each verified, each approved.
                             </p>
                         </div>
@@ -882,19 +892,19 @@ export default function Immigration({ reviews = [], stats = { count: 0, average:
                         {/* Featured grid — same card component used in the
                             reviews section below, so the visual language is
                             consistent. */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 lg:gap-6">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-5">
                             {featuredReviews.map((r) => (
-                                <ReviewCard key={r.id} review={r} />
+                                <ReviewCard key={r.id} review={r} compact />
                             ))}
                         </div>
 
-                        <div className="mt-12 text-center">
+                        <div className="mt-10 text-center">
                             <a
                                 href="#reviews"
-                                className="inline-flex items-center gap-2.5 text-[11px] font-bold uppercase tracking-[0.22em] text-[#282728] border-b border-[#282728]/30 hover:border-[#436235] hover:text-[#436235] pb-1 transition-colors"
+                                className="inline-flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.22em] text-[#282728] border-b border-[#282728]/30 hover:border-[#436235] hover:text-[#436235] pb-1 transition-colors"
                             >
                                 Read all client reviews
-                                <ArrowRight size={13} strokeWidth={2.5} />
+                                <ArrowRight size={12} strokeWidth={2.5} />
                             </a>
                         </div>
                     </div>
@@ -923,15 +933,15 @@ export default function Immigration({ reviews = [], stats = { count: 0, average:
                 const featuredDate = fmtBig(featured.published_at);
 
                 return (
-                    <section id="news" className="py-24 sm:py-28 lg:py-32 bg-white font-urbanist border-t border-gray-100">
+                    <section id="news" className="py-16 sm:py-20 lg:py-24 bg-white font-urbanist border-t border-gray-100">
                         <div className="max-w-7xl mx-auto px-6 md:px-10 lg:px-16">
 
                             {/* Header */}
-                            <div className="mb-14 lg:mb-16 flex flex-col lg:flex-row lg:items-end lg:justify-between gap-6">
+                            <div className="mb-10 lg:mb-12 flex flex-col lg:flex-row lg:items-end lg:justify-between gap-5">
                                 <div className="max-w-2xl">
                                     <motion.div
                                         initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true }}
-                                        className="flex items-center gap-4 mb-5"
+                                        className="flex items-center gap-4 mb-4"
                                     >
                                         <span className="text-[10px] font-bold text-[#436235] uppercase tracking-[0.35em]">
                                             Migration news
@@ -940,20 +950,20 @@ export default function Immigration({ reviews = [], stats = { count: 0, average:
                                     </motion.div>
                                     <motion.h2
                                         initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}
-                                        className="text-3xl sm:text-4xl lg:text-5xl font-medium tracking-tight leading-[1.1] text-[#282728]"
+                                        className="text-2xl sm:text-3xl lg:text-4xl font-medium tracking-tight leading-[1.1] text-[#282728]"
                                     >
                                         Latest from NZ <span className="text-[#436235] font-light italic">immigration coverage.</span>
                                     </motion.h2>
                                 </div>
                                 <motion.p
                                     initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true }}
-                                    className="text-sm text-gray-500 font-light leading-relaxed max-w-sm"
+                                    className="text-xs sm:text-sm text-gray-500 font-light leading-relaxed max-w-sm"
                                 >
                                     Auto-curated from NZ&apos;s leading news sources. Tap a story to read the full article.
                                 </motion.p>
                             </div>
 
-                            <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-14">
+                            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-10">
 
                                 {/* ── FEATURED — masthead-style left column */}
                                 <motion.a
@@ -967,22 +977,22 @@ export default function Immigration({ reviews = [], stats = { count: 0, average:
                                     className={`group block ${others.length > 0 ? "lg:col-span-7" : "lg:col-span-12 max-w-4xl mx-auto"}`}
                                 >
                                     {/* Date masthead */}
-                                    <div className="flex items-baseline gap-4 mb-7 pb-7 border-b border-[#282728]/25">
-                                        <span className="text-[64px] sm:text-[72px] lg:text-[88px] font-light text-[#282728] tracking-[-0.04em] leading-none tabular-nums">
+                                    <div className="flex items-baseline gap-4 mb-5 pb-5 border-b border-[#282728]/25">
+                                        <span className="text-[44px] sm:text-[52px] lg:text-[64px] font-light text-[#282728] tracking-[-0.04em] leading-none tabular-nums">
                                             {featuredDate.day}
                                         </span>
                                         <div className="flex flex-col">
                                             <span className="text-[10px] font-bold text-[#436235] uppercase tracking-[0.3em]">
                                                 Featured
                                             </span>
-                                            <span className="text-[11px] font-semibold uppercase tracking-[0.22em] text-gray-400 mt-1">
+                                            <span className="text-[10px] font-semibold uppercase tracking-[0.22em] text-gray-400 mt-1">
                                                 {featuredDate.monthYear}
                                             </span>
                                         </div>
                                     </div>
 
                                     {/* Source + tag */}
-                                    <div className="flex items-center gap-3 mb-5 text-[10px] font-bold uppercase tracking-[0.3em]">
+                                    <div className="flex items-center gap-3 mb-4 text-[10px] font-bold uppercase tracking-[0.3em]">
                                         {featured.source && (
                                             <span className="text-[#282728]">{featured.source}</span>
                                         )}
@@ -995,20 +1005,20 @@ export default function Immigration({ reviews = [], stats = { count: 0, average:
                                     </div>
 
                                     {/* Headline — the visual centerpiece */}
-                                    <h3 className="text-2xl sm:text-3xl lg:text-[40px] font-medium text-[#282728] tracking-tight leading-[1.15] mb-8 group-hover:text-[#436235] transition-colors">
+                                    <h3 className="text-xl sm:text-2xl lg:text-[28px] font-medium text-[#282728] tracking-tight leading-[1.2] mb-6 group-hover:text-[#436235] transition-colors">
                                         {featured.title}
                                     </h3>
 
-                                    <span className="inline-flex items-center gap-3 text-[11px] font-bold uppercase tracking-[0.25em] text-[#282728] border-b border-[#282728] pb-1.5 group-hover:text-[#436235] group-hover:border-[#436235] transition-colors">
+                                    <span className="inline-flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.25em] text-[#282728] border-b border-[#282728] pb-1.5 group-hover:text-[#436235] group-hover:border-[#436235] transition-colors">
                                         Read the full story
-                                        <ArrowRight size={14} strokeWidth={2.5} className="group-hover:translate-x-1 transition-transform" />
+                                        <ArrowRight size={12} strokeWidth={2.5} className="group-hover:translate-x-1 transition-transform" />
                                     </span>
                                 </motion.a>
 
                                 {/* ── SIDEBAR — vertical list of remaining stories */}
                                 {others.length > 0 && (
-                                    <div className="lg:col-span-5 lg:border-l lg:border-[#282728]/25 lg:pl-10">
-                                        <p className="text-[10px] font-bold text-[#436235] uppercase tracking-[0.3em] mb-7 pb-3 border-b border-[#282728]/25">
+                                    <div className="lg:col-span-5 lg:border-l lg:border-[#282728]/25 lg:pl-8">
+                                        <p className="text-[10px] font-bold text-[#436235] uppercase tracking-[0.3em] mb-5 pb-3 border-b border-[#282728]/25">
                                             Also in the news
                                         </p>
                                         <div className="flex flex-col">
@@ -1022,9 +1032,9 @@ export default function Immigration({ reviews = [], stats = { count: 0, average:
                                                     whileInView={{ opacity: 1, y: 0 }}
                                                     viewport={{ once: true, margin: "-40px" }}
                                                     transition={{ delay: i * 0.08, duration: 0.5 }}
-                                                    className={`group py-7 ${i < others.length - 1 ? "border-b border-[#282728]/25" : ""}`}
+                                                    className={`group py-5 ${i < others.length - 1 ? "border-b border-[#282728]/25" : ""}`}
                                                 >
-                                                    <div className="flex items-center gap-2.5 mb-3 text-[10px] font-bold uppercase tracking-[0.22em] text-gray-400">
+                                                    <div className="flex items-center gap-2.5 mb-2 text-[10px] font-bold uppercase tracking-[0.22em] text-gray-400">
                                                         <span className="tabular-nums">{fmt(n.published_at)}</span>
                                                         {n.source && (
                                                             <>
@@ -1033,7 +1043,7 @@ export default function Immigration({ reviews = [], stats = { count: 0, average:
                                                             </>
                                                         )}
                                                     </div>
-                                                    <h4 className="text-base sm:text-lg font-medium text-[#282728] leading-snug tracking-tight mb-3 group-hover:text-[#436235] transition-colors line-clamp-3">
+                                                    <h4 className="text-sm sm:text-base font-medium text-[#282728] leading-snug tracking-tight mb-2 group-hover:text-[#436235] transition-colors line-clamp-3">
                                                         {n.title}
                                                     </h4>
                                                     <span className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.22em] text-gray-500 group-hover:text-[#436235] transition-colors">
@@ -1047,7 +1057,7 @@ export default function Immigration({ reviews = [], stats = { count: 0, average:
                                 )}
                             </div>
 
-                            <p className="mt-14 lg:mt-16 text-[10px] text-gray-400 font-light text-center uppercase tracking-[0.25em]">
+                            <p className="mt-10 lg:mt-12 text-[10px] text-gray-400 font-light text-center uppercase tracking-[0.25em]">
                                 News aggregated from third-party publishers · Not editorial endorsement
                             </p>
                         </div>
@@ -1058,34 +1068,34 @@ export default function Immigration({ reviews = [], stats = { count: 0, average:
             {/* ══════════════════════════════════════════════════════════════
                 NEWSLETTER CTA SECTION
             ══════════════════════════════════════════════════════════════ */}
-            <section className="py-32 bg-[#0c1611] text-white overflow-hidden relative">
-                <div className="container mx-auto px-6 md:px-12 max-w-4xl text-center relative z-10">
+            <section className="py-20 bg-[#0c1611] text-white overflow-hidden relative">
+                <div className="container mx-auto px-6 md:px-12 max-w-3xl text-center relative z-10">
                     <motion.h2
                         initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}
-                        className="text-4xl md:text-5xl font-medium mb-6 tracking-tight"
+                        className="text-2xl md:text-3xl lg:text-4xl font-medium mb-4 tracking-tight"
                     >
                         Stay updated on policy changes
                     </motion.h2>
                     <motion.p
                         initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true }}
-                        className="text-white/50 text-sm md:text-base mb-12 max-w-xl mx-auto leading-relaxed"
+                        className="text-white/50 text-sm mb-8 max-w-xl mx-auto leading-relaxed"
                     >
                         Join our newsletter to receive the latest New Zealand immigration updates and exclusive expert insights delivered directly to your inbox.
                     </motion.p>
-                    
+
                     <motion.form
                         initial={{ opacity: 0, y: 10 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}
-                        className="flex flex-col sm:flex-row gap-4 max-w-lg mx-auto mb-6"
+                        className="flex flex-col sm:flex-row gap-3 max-w-lg mx-auto mb-4"
                         onSubmit={(e) => e.preventDefault()}
                     >
-                        <input 
-                            type="email" 
-                            placeholder="Enter your email" 
-                            className="flex-1 bg-white/5 border border-white/10 px-6 py-4 text-sm focus:outline-none focus:border-[#00A693] transition-colors"
+                        <input
+                            type="email"
+                            placeholder="Enter your email"
+                            className="flex-1 bg-white/5 border border-white/10 px-5 py-3 text-sm focus:outline-none focus:border-[#00A693] transition-colors"
                         />
-                        <button 
+                        <button
                             type="submit"
-                            className="bg-[#00A693] text-white font-bold uppercase tracking-[0.2em] text-[11px] px-10 py-4 hover:bg-[#008c7c] transition-all"
+                            className="bg-[#00A693] text-white font-bold uppercase tracking-[0.2em] text-[10px] px-8 py-3 hover:bg-[#008c7c] transition-all"
                         >
                             Sign up
                         </button>

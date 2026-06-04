@@ -42,26 +42,37 @@ class WorkIntakeController extends Controller
                 'status'    => 'Submitted',
             ]));
 
-            $visaType = VisaType::query()->where('code', 'WORK_AEWV')->first()
-                ?: VisaType::query()->where('category', 'Work')->first();
-
-            $assessment = Assessment::create([
-                'visa_type_id'         => $visaType?->id,
-                'intakeable_type'      => WorkIntake::class,
-                'intakeable_id'        => $intake->id,
-                'applicant_first_name' => $intake->first_name,
-                'applicant_last_name'  => $intake->family_name,
-                'applicant_email'      => $intake->email,
-                'applicant_phone'      => $intake->phone,
-                'status'               => 'submitted',
-            ]);
-            if ($visaType) {
-                $assessment->lockCurrentPrice();
-            }
+            // ── PAYMENT + BOOKING TEMPORARILY DISABLED ────────────────
+            // Client wants to collect intake submissions only for now;
+            // pricing / Stripe / consultation booking will be turned
+            // back on once the plan is finalised. To re-enable, uncomment
+            // the Assessment::create block below and switch the redirect
+            // back to `route('assessment.pay', $assessment->token)`.
+            //
+            // $visaType = VisaType::query()->where('code', 'WORK_AEWV')->first()
+            //     ?: VisaType::query()->where('category', 'Work')->first();
+            //
+            // $assessment = Assessment::create([
+            //     'visa_type_id'         => $visaType?->id,
+            //     'intakeable_type'      => WorkIntake::class,
+            //     'intakeable_id'        => $intake->id,
+            //     'applicant_first_name' => $intake->first_name,
+            //     'applicant_last_name'  => $intake->family_name,
+            //     'applicant_email'      => $intake->email,
+            //     'applicant_phone'      => $intake->phone,
+            //     'status'               => 'submitted',
+            // ]);
+            // if ($visaType) {
+            //     $assessment->lockCurrentPrice();
+            // }
 
             DB::commit();
 
-            return redirect()->route('assessment.pay', $assessment->token);
+            // return redirect()->route('assessment.pay', $assessment->token);
+            // Stay on the form page and flip it to the persistent
+            // thank-you modal — the visa label is carried so the modal
+            // can mention it by name.
+            return back()->with('intake_submitted', 'Work Visa (AEWV)');
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error('Work intake storage failed', ['error' => $e->getMessage()]);

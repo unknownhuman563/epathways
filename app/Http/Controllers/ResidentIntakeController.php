@@ -163,33 +163,36 @@ class ResidentIntakeController extends Controller
                 ]
             ));
 
-            // Wrap the form submission in an Assessment record — the
-            // visa-type-agnostic "applicant journey" shell that owns locked
-            // pricing + payment + booking. Resident intake = SMC visa type.
-            $visaType = VisaType::query()
-                ->where('code', 'SMC')
-                ->orWhere('category', 'Resident')
-                ->first();
-
-            $assessment = Assessment::create([
-                'visa_type_id'         => $visaType?->id,
-                'intakeable_type'      => ResidentIntake::class,
-                'intakeable_id'        => $intake->id,
-                'applicant_first_name' => $intake->first_name,
-                'applicant_last_name'  => $intake->last_name,
-                'applicant_email'      => $intake->email,
-                'applicant_phone'      => $intake->phone,
-                'status'               => 'submitted',
-            ]);
-            if ($visaType) {
-                $assessment->lockCurrentPrice();
-            }
+            // ── PAYMENT + BOOKING TEMPORARILY DISABLED ────────────────
+            // Client wants to collect intake submissions only for now;
+            // pricing / Stripe / consultation booking will be turned
+            // back on once the plan is finalised. To re-enable, uncomment
+            // the Assessment::create block below and switch the redirect
+            // back to `route('assessment.pay', $assessment->token)`.
+            //
+            // $visaType = VisaType::query()
+            //     ->where('code', 'SMC')
+            //     ->orWhere('category', 'Resident')
+            //     ->first();
+            //
+            // $assessment = Assessment::create([
+            //     'visa_type_id'         => $visaType?->id,
+            //     'intakeable_type'      => ResidentIntake::class,
+            //     'intakeable_id'        => $intake->id,
+            //     'applicant_first_name' => $intake->first_name,
+            //     'applicant_last_name'  => $intake->last_name,
+            //     'applicant_email'      => $intake->email,
+            //     'applicant_phone'      => $intake->phone,
+            //     'status'               => 'submitted',
+            // ]);
+            // if ($visaType) {
+            //     $assessment->lockCurrentPrice();
+            // }
 
             DB::commit();
 
-            // Pay → Book runs off the assessment token, not the intake_id —
-            // future visa types reuse the exact same flow.
-            return redirect()->route('assessment.pay', $assessment->token);
+            // return redirect()->route('assessment.pay', $assessment->token);
+            return back()->with('intake_submitted', 'Resident Visa (SMC)');
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error('Resident intake storage failed', ['error' => $e->getMessage()]);
