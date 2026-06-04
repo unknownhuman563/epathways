@@ -282,10 +282,83 @@ class ImmigrationController extends Controller
     public function assessments()
     {
         try {
-            $intakes = ResidentIntake::latest()->limit(100)->get([
-                'id', 'intake_id', 'first_name', 'last_name', 'email', 'phone',
-                'current_visa_type', 'job_title', 'status', 'created_at',
-            ]);
+            // Pre-fetch all Assessments + their Bookings for the intakes we're
+            // about to show. Indexed by intakeable id so the normalizer can
+            // look up the journey state without N+1 queries.
+            $loadAssessments = function (string $modelClass, $intakes) {
+                if ($intakes->isEmpty()) return collect();
+                return \App\Models\Assessment::with('booking:id,status,appointment_date,appointment_time')
+                    ->where('intakeable_type', $modelClass)
+                    ->whereIn('intakeable_id', $intakes->pluck('id'))
+                    ->get()
+                    ->keyBy('intakeable_id');
+            };
+
+            $normalize = function ($intake, string $visaType, $assessment): array {
+                $first   = (string) ($intake->first_name ?? '');
+                $last    = (string) ($intake->last_name ?? $intake->family_name ?? '');
+                $booking = $assessment?->booking;
+                $apptIso = $booking?->appointment_date;
+
+                // Consultation "done" — true once the appointment date has
+                // passed (we don't have a separate completion flag), or if
+                // the booking status is explicitly Completed.
+                $consultDone = false;
+                if ($booking) {
+                    $consultDone = $booking->status === 'Completed'
+                        || ($apptIso && \Illuminate\Support\Carbon::parse($apptIso)->isPast());
+                }
+
+                return [
+                    'id'          => $intake->id,
+                    'intake_id'   => $intake->intake_id,
+                    'visa_type'   => $visaType, // resident | work | student | visitor
+                    'name'        => trim("{$first} {$last}") ?: 'Unknown',
+                    'email'       => $intake->email,
+                    'phone'       => $intake->phone,
+                    'status'      => $intake->status,
+                    'created_at'  => $intake->created_at,
+                    'extra'       => $visaType === 'resident'
+                        ? trim(($intake->current_visa_type ?? '') . ($intake->job_title ? ' · ' . $intake->job_title : ''))
+                        : null,
+                    'can_convert' => $visaType === 'resident' && $intake->status !== 'Engaged',
+                    'detail_url'  => $visaType === 'resident'
+                        ? "/admin/immigration/resident-intakes/{$intake->id}"
+                        : null,
+                    // Linear journey — each stage either has a timestamp/value
+                    // (truthy = done) or is false/null (= not yet).
+                    'journey' => [
+                        'submitted'    => $intake->status === 'Submitted',
+                        'submitted_at' => $intake->status === 'Submitted' ? $intake->created_at : null,
+                        'paid'         => $assessment?->payment_status === 'paid',
+                        'paid_at'      => $assessment?->paid_at,
+                        'booked'       => (bool) $assessment?->booking_id,
+                        'appointment'  => $apptIso,
+                        'consultation_done' => $consultDone,
+                    ],
+                ];
+            };
+
+            // Pull each intake table, then their assessments in a single
+            // query each.
+            $resident = ResidentIntake::latest()->limit(200)->get();
+            $work     = \App\Models\WorkIntake::latest()->limit(200)->get();
+            $student  = \App\Models\StudentIntake::latest()->limit(200)->get();
+            $visitor  = \App\Models\VisitorIntake::latest()->limit(200)->get();
+
+            $aResident = $loadAssessments(ResidentIntake::class,           $resident);
+            $aWork     = $loadAssessments(\App\Models\WorkIntake::class,    $work);
+            $aStudent  = $loadAssessments(\App\Models\StudentIntake::class, $student);
+            $aVisitor  = $loadAssessments(\App\Models\VisitorIntake::class, $visitor);
+
+            $rows = collect()
+                ->concat($resident->map(fn ($r) => $normalize($r, 'resident', $aResident->get($r->id))))
+                ->concat($work    ->map(fn ($r) => $normalize($r, 'work',     $aWork    ->get($r->id))))
+                ->concat($student ->map(fn ($r) => $normalize($r, 'student',  $aStudent ->get($r->id))))
+                ->concat($visitor ->map(fn ($r) => $normalize($r, 'visitor',  $aVisitor ->get($r->id))));
+
+            $intakes = $rows->sortByDesc('created_at')->values();
+
             return inertia('portal/immigration/Assessments', ['intakes' => $intakes]);
         } catch (\Throwable $e) {
             Log::error('Immigration assessments page failed', ['error' => $e->getMessage()]);
@@ -422,4 +495,89 @@ class ImmigrationController extends Controller
         }
     }
     public function notifications()     { return inertia('portal/immigration/Notifications',     []); }
+
+    /**
+     * Task Board page — mirrors the Sales/Education shape. See
+     * App\Http\Controllers\Portal\SalesController::tasks() for the
+     * canonical implementation; everything here is the same query keyed
+     * off the current user. Department-scoping is UI-only for now until
+     * LeadTask grows a department column.
+     */
+    public function tasks(Request $request)
+    {
+        try {
+            $userId   = $request->user()->id;
+            $scope    = $request->input('scope', 'mine');
+            $now      = now();
+            $todayEnd = $now->copy()->endOfDay();
+            $weekEnd  = $now->copy()->endOfWeek();
+
+            $base = \App\Models\LeadTask::with(['lead:id,lead_id,first_name,last_name,email,status', 'assignee:id,name', 'creator:id,name', 'attachments'])
+                ->withCount('comments')
+                ->when($scope === 'mine', fn ($q) => $q->where('assignee_id', $userId));
+
+            $serialize = fn ($t) => [
+                'id'           => $t->id,
+                'title'        => $t->title,
+                'description'  => $t->description,
+                'note'         => $t->note,
+                'comments_count' => (int) ($t->comments_count ?? 0),
+                'priority'     => $t->priority,
+                'progress'     => (int) ($t->progress ?? 0),
+                'due_at'       => $t->due_at,
+                'completed'    => $t->completed,
+                'completed_at' => $t->completed_at,
+                'overdue'      => ! $t->completed && $t->due_at && $t->due_at->isPast(),
+                'type'         => $t->type,
+                'category'     => $t->category,
+                'department'   => $t->department,
+                'tags'         => $t->tags,
+                'status'       => $t->status,
+                'completion_notes' => $t->completion_notes,
+                'attachments'  => $t->attachments->map(fn ($a) => [
+                    'id'                => $a->id,
+                    'url'               => $a->url,
+                    'original_filename' => $a->original_filename,
+                    'is_image'          => $a->is_image,
+                    'mime_type'         => $a->mime_type,
+                    'size'              => $a->size,
+                ])->values(),
+                'assignee'     => $t->assignee ? ['id' => $t->assignee->id, 'name' => $t->assignee->name] : null,
+                'additional_assignee_ids' => $t->additional_assignee_ids ?? [],
+                'creator'      => $t->creator  ? ['id' => $t->creator->id,  'name' => $t->creator->name]  : null,
+                'lead'         => $t->lead ? [
+                    'id'      => $t->lead->id,
+                    'lead_id' => $t->lead->lead_id,
+                    'name'    => trim("{$t->lead->first_name} {$t->lead->last_name}"),
+                    'status'  => $t->lead->status,
+                ] : null,
+            ];
+
+            // Full task set for the kanban (all dates, all statuses).
+            $allTasks     = (clone $base)->orderByDesc('created_at')->limit(1000)->get()->map($serialize);
+            $today        = (clone $base)->where('completed', false)->whereBetween('due_at', [$now, $todayEnd])->orderBy('due_at')->get()->map($serialize);
+            $overdue      = (clone $base)->where('completed', false)->whereNotNull('due_at')->where('due_at', '<', $now)->orderBy('due_at')->get()->map($serialize);
+            $thisWeek     = (clone $base)->where('completed', false)->whereBetween('due_at', [$todayEnd, $weekEnd])->orderBy('due_at')->get()->map($serialize);
+            $undated      = (clone $base)->where('completed', false)->whereNull('due_at')->orderByDesc('created_at')->limit(50)->get()->map($serialize);
+            $recentlyDone = (clone $base)->where('completed', true)->where('completed_at', '>=', $now->copy()->subDays(7))->orderByDesc('completed_at')->limit(50)->get()->map($serialize);
+
+            return inertia('portal/immigration/Tasks', [
+                'portal'        => 'immigration',
+                'scope'         => $scope,
+                'all_tasks'     => $allTasks,
+                'today'         => $today,
+                'overdue'       => $overdue,
+                'this_week'     => $thisWeek,
+                'undated'       => $undated,
+                'recently_done' => $recentlyDone,
+                'staffOptions'  => \App\Models\User::whereNotIn('role', ['lead', 'revoked_lead'])->orderBy('name')->get(['id', 'name', 'role']),
+                'recent_activity' => \App\Models\ActivityLog::where('action', 'like', 'lead_task.%')
+                    ->latest()->limit(30)
+                    ->get(['id', 'action', 'description', 'actor_name', 'actor_role', 'properties', 'created_at']),
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('Immigration tasks page failed', ['error' => $e->getMessage()]);
+            return inertia('portal/immigration/Tasks', ['portal' => 'immigration', 'scope' => 'mine', 'today' => [], 'overdue' => [], 'this_week' => [], 'undated' => [], 'recently_done' => [], 'staffOptions' => []]);
+        }
+    }
 }

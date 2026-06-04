@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { Star, ArrowRight, PenTool } from "react-feather";
-import { Quote } from "lucide-react";
 import ReviewModal from "./ReviewModal";
 
 const PAGE_SIZE = 6;
@@ -77,20 +76,11 @@ function ReviewCard({ review, compact = false }) {
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true, margin: "-60px" }}
             transition={{ duration: 0.5, ease: "easeOut" }}
-            className="relative bg-white rounded-2xl shadow-[0_4px_24px_-12px_rgba(40,39,40,0.08)] hover:shadow-[0_24px_48px_-12px_rgba(40,39,40,0.15)] hover:-translate-y-1 p-8 flex flex-col group transition-all duration-300 overflow-hidden"
+            className={`relative bg-[#282728] rounded-2xl border border-white/5 shadow-[0_8px_32px_-12px_rgba(0,0,0,0.35)] hover:shadow-[0_24px_48px_-12px_rgba(0,0,0,0.55)] hover:-translate-y-1 hover:border-white/10 ${compact ? "p-6" : "p-8"} flex flex-col group transition-all duration-300 overflow-hidden`}
         >
             {/* Olive accent bar at the top — same motif used in the section
                 eyebrows for visual cohesion. */}
             <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-[#436235] via-[#436235]/70 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-
-            {/* Oversized quote glyph as a watermark in the background —
-                amber-tinted so it picks up the star colour and adds warmth. */}
-            <Quote
-                size={80}
-                strokeWidth={1}
-                className="absolute -top-2 -right-4 text-amber-50 fill-amber-50/60 -rotate-12"
-                aria-hidden="true"
-            />
 
             {/* Identity row — bigger avatar, clearer name + role hierarchy. */}
             <div className="relative flex items-center gap-3.5 mb-4">
@@ -98,17 +88,17 @@ function ReviewCard({ review, compact = false }) {
                     <img
                         src={review.photo_url}
                         alt={review.name}
-                        className="w-12 h-12 rounded-full object-cover flex-shrink-0 ring-2 ring-white shadow-md"
+                        className="w-12 h-12 rounded-full object-cover flex-shrink-0 ring-2 ring-white/10 shadow-md"
                     />
                 ) : (
-                    <div className="w-12 h-12 rounded-full bg-gradient-to-br from-[#282728] to-[#3d3c3d] text-white flex items-center justify-center text-sm font-bold flex-shrink-0 shadow-md ring-2 ring-white">
+                    <div className="w-12 h-12 rounded-full bg-gradient-to-br from-[#3d3c3d] to-[#525051] text-white flex items-center justify-center text-sm font-bold flex-shrink-0 shadow-md ring-2 ring-white/10">
                         {initials}
                     </div>
                 )}
                 <div className="min-w-0 flex-1">
-                    <p className="text-base font-bold text-[#282728] truncate leading-tight">{review.name}</p>
+                    <p className="text-base font-bold text-white truncate leading-tight">{review.name}</p>
                     {(review.visa_type || review.program_type) && (
-                        <p className="text-xs font-semibold text-rose-600 truncate leading-tight mt-1">
+                        <p className="text-xs font-semibold text-gray-400 truncate leading-tight mt-1">
                             {[review.visa_type, review.program_type].filter(Boolean).join(" · ")}
                         </p>
                     )}
@@ -119,7 +109,7 @@ function ReviewCard({ review, compact = false }) {
             {review.rating ? (
                 <div className="relative flex items-center gap-2.5 mb-5">
                     <StarRow value={review.rating} size={16} />
-                    <span className="text-sm font-bold text-[#282728] tabular-nums">
+                    <span className="text-sm font-bold text-white tabular-nums">
                         {Number(review.rating).toFixed(1)}
                     </span>
                 </div>
@@ -128,7 +118,7 @@ function ReviewCard({ review, compact = false }) {
             )}
 
             {/* Body — larger leading, slightly bigger type for older readers. */}
-            <p className={`relative text-[15px] text-gray-700 font-normal leading-relaxed flex-grow whitespace-pre-line ${
+            <p className={`relative text-[15px] text-gray-300 font-normal leading-relaxed flex-grow whitespace-pre-line ${
                 expanded ? "" : (compact ? "line-clamp-4" : "line-clamp-6")
             }`}>
                 {bodyText}
@@ -137,16 +127,16 @@ function ReviewCard({ review, compact = false }) {
                 <button
                     type="button"
                     onClick={() => setExpanded((v) => !v)}
-                    className="relative mt-3 inline-flex items-center gap-1 text-[11px] font-bold uppercase tracking-[0.18em] text-[#436235] hover:text-[#385029] transition-colors self-start"
+                    className="relative mt-3 inline-flex items-center gap-1 text-[11px] font-bold uppercase tracking-[0.18em] text-[#7a9d68] hover:text-[#9bbe88] transition-colors self-start"
                 >
                     {expanded ? "Show less" : "Read more"} <ArrowRight size={11} strokeWidth={2.5} />
                 </button>
             )}
 
-            {/* Footer — divider line + meta, with a tiny olive dot for accent. */}
-            <div className="relative mt-6 pt-4 border-t border-gray-100 flex items-center gap-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#436235]" />
-                <p className="text-[10px] text-gray-500 font-bold uppercase tracking-[0.2em]">
+            {/* Footer — just the meta with a tiny olive dot for accent. */}
+            <div className="relative mt-6 flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#7a9d68]" />
+                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-[0.2em]">
                     {timeAgo(review.created_at)}{review.is_featured ? " · Featured" : ""}
                 </p>
             </div>
@@ -173,6 +163,10 @@ export default function ReviewsSection({
     // grid. Off on /home (merged feed across departments — submission lives
     // on each department's own page instead).
     showWriteCta = true,
+    // Pass `compact` from pages that want a tighter, denser version of the
+    // section (smaller padding, smaller heading scale). Card layout itself
+    // stays the same so the visual language is consistent everywhere.
+    compact = false,
 }) {
     const [modalOpen, setModalOpen] = useState(false);
     const [visible, setVisible] = useState(PAGE_SIZE);
@@ -185,23 +179,26 @@ export default function ReviewsSection({
     const hasMore = reviews.length > visible;
 
     return (
-        <section id="reviews" className="py-24 sm:py-28 lg:py-32 bg-gradient-to-b from-white via-[#fafaf9] to-white font-urbanist">
+        <section
+            id="reviews"
+            className={`${compact ? "py-16 sm:py-20 lg:py-24" : "py-24 sm:py-28 lg:py-32"} bg-gradient-to-b from-white via-[#fafaf9] to-white font-urbanist`}
+        >
             <div className="max-w-7xl mx-auto px-6 md:px-10 lg:px-16">
 
                 {/* ── Header — same editorial pattern used by the visa
                     pathway / visa journey sections: tiny olive eyebrow,
                     oversized dark heading, soft gray intro. */}
-                <div className="max-w-3xl mb-14 lg:mb-16">
-                    <div className="flex items-center gap-4 mb-5">
+                <div className={`max-w-3xl ${compact ? "mb-10 lg:mb-12" : "mb-14 lg:mb-16"}`}>
+                    <div className="flex items-center gap-4 mb-4">
                         <span className="text-[10px] font-bold text-[#436235] uppercase tracking-[0.35em]">
                             {eyebrow}
                         </span>
                         <div className="h-px w-12 bg-[#436235]/50"></div>
                     </div>
-                    <h2 className="text-3xl sm:text-4xl lg:text-5xl font-medium text-[#282728] tracking-tight leading-[1.1] mb-5">
+                    <h2 className={`${compact ? "text-2xl sm:text-3xl lg:text-4xl" : "text-3xl sm:text-4xl lg:text-5xl"} font-medium text-[#282728] tracking-tight leading-[1.1] mb-4`}>
                         {headline}
                     </h2>
-                    <p className="text-base text-gray-700 font-normal leading-relaxed max-w-xl">
+                    <p className={`${compact ? "text-sm" : "text-base"} text-gray-700 font-normal leading-relaxed max-w-xl`}>
                         {intro}
                     </p>
                 </div>
@@ -209,9 +206,9 @@ export default function ReviewsSection({
                 {/* ── Grid / empty state */}
                 {shown.length > 0 ? (
                     <>
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 lg:gap-6">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-5">
                             {shown.map((r) => (
-                                <ReviewCard key={r.id} review={r} />
+                                <ReviewCard key={r.id} review={r} compact={compact} />
                             ))}
                         </div>
 

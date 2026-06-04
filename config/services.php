@@ -49,6 +49,16 @@ return [
         'api_key' => env('GEMINI_API_KEY'),
     ],
 
+    // Stripe Checkout — used by the resident-intake payment step. The
+    // publishable `key` is sent to the browser; `secret` and `webhook_secret`
+    // stay server-side. `webhook_secret` verifies signatures on the
+    // POST /stripe/webhook callback.
+    'stripe' => [
+        'key'            => env('STRIPE_KEY'),
+        'secret'         => env('STRIPE_SECRET'),
+        'webhook_secret' => env('STRIPE_WEBHOOK_SECRET'),
+    ],
+
     // PLAI Partner API — AI ad platform that launches creatives to
     // Facebook / Instagram / Google / LinkedIn / TikTok / YouTube / Bing.
     // Requires an Enterprise account; key is generated under
@@ -57,6 +67,16 @@ return [
         'api_key'      => env('PLAI_API_KEY'),
         'base_url'     => env('PLAI_BASE_URL', 'https://partner.plai.io'),
         'workspace_id' => env('PLAI_WORKSPACE_ID'),
+    ],
+
+    // n8n workflow that powers the Social MVP (stats, variant generation,
+    // approve / reject / schedule, accounts, quick posts). Proxied
+    // server-side by AiAdsWebhookController so OpenRouter / Zernio keys
+    // never reach the browser. Leave SOCIAL_WEBHOOK_BASE unset to run the
+    // UI against the controller's stub fixtures during early development.
+    'social' => [
+        'webhook_base'   => env('SOCIAL_WEBHOOK_BASE'),
+        'webhook_secret' => env('SOCIAL_WEBHOOK_SECRET'),
     ],
 
     // Public contact destinations surfaced in floating widgets, the mobile

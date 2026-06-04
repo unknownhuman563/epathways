@@ -20,6 +20,14 @@ use App\Http\Controllers\ProgramController;
 use App\Http\Controllers\ProgramPromoController;
 use App\Http\Controllers\QuickLeadController;
 use App\Http\Controllers\ResidentIntakeController;
+use App\Http\Controllers\WorkIntakeController;
+use App\Http\Controllers\StudentIntakeController;
+use App\Http\Controllers\VisitorIntakeController;
+use App\Http\Controllers\AssessmentController;
+use App\Http\Controllers\PaymentController;
+use App\Http\Controllers\SettingController;
+use App\Http\Controllers\AvailabilityController;
+use App\Http\Controllers\VisaTypeController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\UserReviewController;
 use App\Services\NewsFeedService;
@@ -92,12 +100,31 @@ Route::get('/visa-assessment-form', function () {
     return inertia('visa/VisaAssessmentForm');
 });
 
-Route::get('/resident-interest', [ResidentIntakeController::class, 'showForm'])->name('resident-interest');
-Route::post('/resident-interest', [ResidentIntakeController::class, 'store']);
+Route::get("/resident-interest", [ResidentIntakeController::class, 'showForm'])->name('resident-interest');
+Route::post("/resident-interest", [ResidentIntakeController::class, 'store']);
+
+// AEWV (Work) + Student (SV) + Visitor (GVV) intake forms. Each follows the
+// same Resident pattern — submit creates an Assessment row that drives the
+// Pay → Book funnel below.
+Route::get('/work-interest',     [WorkIntakeController::class,    'showForm'])->name('work-interest');
+Route::post('/work-interest',    [WorkIntakeController::class,    'store']);
+Route::get('/student-interest',  [StudentIntakeController::class, 'showForm'])->name('student-interest');
+Route::post('/student-interest', [StudentIntakeController::class, 'store']);
+Route::get('/visitor-interest',  [VisitorIntakeController::class, 'showForm'])->name('visitor-interest');
+Route::post('/visitor-interest', [VisitorIntakeController::class, 'store']);
 
 // Token-based edit links (no auth — the opaque token is the bearer credential).
 Route::get('/resident-interest/edit/{token}', [ResidentIntakeController::class, 'showEditForm'])->name('resident-interest.edit');
 Route::post('/resident-interest/edit/{token}', [ResidentIntakeController::class, 'updateFromEditLink']);
+
+// Pay → Book funnel — visa-type-agnostic. Token is created when the
+// intake form is submitted; only the original applicant holds it. The same
+// routes serve every visa type via the polymorphic intakeable_* columns.
+Route::get('/assessment/{token}/pay',    [AssessmentController::class, 'showPay'])->name('assessment.pay');
+Route::post('/assessment/{token}/pay',   [AssessmentController::class, 'simulatePay'])->name('assessment.pay.simulate');
+Route::get('/assessment/{token}/book',   [AssessmentController::class, 'showBook'])->name('assessment.book');
+Route::post('/assessment/{token}/book',  [AssessmentController::class, 'claimSlot'])->name('assessment.book.claim');
+Route::get('/assessment/{token}/booked', [AssessmentController::class, 'booked'])->name('assessment.booked');
 
 // Keep the old path working for any in-flight bookmarks / external links.
 Route::permanentRedirect('/resident-intake', '/resident-interest');
@@ -132,6 +159,16 @@ Route::get('/register/{event_code}', [EventController::class, 'showRegistrationF
 Route::post('/register/{event_code}', [EventController::class, 'registerLead']);
 Route::get('/free-assessment', [LeadController::class, 'showFreeAssessment'])->name('free-assessment');
 Route::post('/free-assessment', [LeadController::class, 'storeFreeAssessment']);
+
+// Education Enrolment — clean IntakeFormShell-based 7-step assessment.
+// Separate controller method because the payload is simpler than the full
+// free-assessment shape and gets tagged as `education-enrolment`.
+Route::get('/education-enrolment',        [LeadController::class, 'showEducationEnrolment'])->name('education-enrolment');
+Route::post('/education-enrolment',       [LeadController::class, 'storeEducationEnrolmentFull']);
+Route::post('/education-enrolment/draft', [LeadController::class, 'saveAssessmentDraft'])->name('education-enrolment.draft');
+
+// Free Assessment draft endpoint — same handler, tagged via URL.
+Route::post('/free-assessment/draft', [LeadController::class, 'saveAssessmentDraft'])->name('free-assessment.draft');
 Route::get('/assessment-result/{lead_id}', [LeadController::class, 'showAssessmentResult'])->name('assessment-result');
 
 // Lightweight inline lead capture (hero, exit-intent, fee-guide download,
@@ -179,8 +216,16 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/admin/programs/{id}', [ProgramController::class, 'update']);
         Route::delete('/admin/programs/{id}', [ProgramController::class, 'destroy']);
 
-        Route::get('/admin/booking', [BookingController::class, 'index'])->name('admin.bookings');
-        Route::post('/admin/bookings/{id}', [BookingController::class, 'update']);
+        Route::get("/admin/booking", [BookingController::class, 'index'])->name('admin.bookings');
+        Route::post("/admin/bookings/{id}", [BookingController::class, 'update']);
+
+        Route::get('/admin/settings',     [SettingController::class, 'index'])->name('admin.settings');
+        Route::post('/admin/settings',    [SettingController::class, 'update']);
+
+        Route::get('/admin/availability',       [AvailabilityController::class, 'index'])->name('admin.availability');
+        Route::post('/admin/availability',      [AvailabilityController::class, 'store']);
+        Route::post('/admin/availability/{id}', [AvailabilityController::class, 'update']);
+        Route::delete('/admin/availability/{id}', [AvailabilityController::class, 'destroy']);
 
         Route::get('/admin/users', [UserController::class, 'index'])->name('admin.users');
         Route::post('/admin/users', [UserController::class, 'store']);
@@ -189,8 +234,10 @@ Route::middleware(['auth'])->group(function () {
 
         Route::get('/admin/activity-logs', [ActivityLogController::class, 'index'])->name('admin.activity-logs');
 
-        Route::get('/admin/team-cards', fn () => inertia('admin/TeamCards'))
-            ->name('admin.team-cards');
+        // All Tasks — cross-department view. Same TaskBoardPage component the
+        // department portals render, with admin scope (no assignee filter
+        // by default + read-only on rows from other departments).
+        Route::get('/admin/tasks', App\Http\Controllers\AdminTaskController::class)->name('admin.tasks');
 
         // AI Ads — Cerebras local copy brainstorming + PLAI Partner API for
         // launching to FB/IG/Google/LinkedIn/TikTok/etc. PLAI launch is
@@ -199,6 +246,38 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/admin/ai-ads/plai/connection', [App\Http\Controllers\AiAdController::class, 'testConnection'])->name('admin.ai-ads.plai.connection');
         Route::post('/admin/ai-ads/generate', [App\Http\Controllers\AiAdController::class, 'generateCopy'])->name('admin.ai-ads.generate');
         Route::post('/admin/ai-ads/launch', [App\Http\Controllers\AiAdController::class, 'launch'])->name('admin.ai-ads.launch');
+
+        // Social — restructured admin pages (Phase 2). Each route renders an
+        // Inertia page under resources/js/pages/admin/social/. The bare /social
+        // entry redirects to /social/compose so the sidebar link always lands
+        // on a usable screen.
+        Route::get('/social', fn () => redirect('/social/compose'))->name('social');
+        Route::get('/social/compose',     fn () => inertia('admin/social/Compose'))->name('social.compose');
+        Route::get('/social/scheduled',   fn () => inertia('admin/social/Scheduled'))->name('social.scheduled');
+        Route::get('/social/inbox',       fn () => inertia('admin/social/Inbox'))->name('social.inbox');
+        Route::get('/social/ads',         fn () => inertia('admin/social/Ads'))->name('social.ads');
+        Route::get('/social/performance', fn () => inertia('admin/social/Performance'))->name('social.performance');
+        Route::get('/social/accounts',    fn () => inertia('admin/social/Accounts'))->name('social.accounts');
+
+        // Social MVP webhook proxy — Laravel routes the React UI hits.
+        // AiAdsWebhookController forwards to n8n when configured, otherwise
+        // returns stub data so the UI can be built in isolation. See
+        // app/Http/Controllers/AiAdsWebhookController.php for the contract.
+        Route::prefix('webhook/social')->name('webhook.social.')->group(function () {
+            Route::get('/stats',               [App\Http\Controllers\AiAdsWebhookController::class, 'stats'])->name('stats');
+            Route::post('/generate-variants',  [App\Http\Controllers\AiAdsWebhookController::class, 'generateVariants'])->name('generate-variants');
+            Route::get('/list-variants',       [App\Http\Controllers\AiAdsWebhookController::class, 'listVariants'])->name('list-variants');
+            Route::post('/update-variant',     [App\Http\Controllers\AiAdsWebhookController::class, 'updateVariant'])->name('update-variant');
+            Route::post('/reject-variant',     [App\Http\Controllers\AiAdsWebhookController::class, 'rejectVariant'])->name('reject-variant');
+            Route::post('/approve-variant',    [App\Http\Controllers\AiAdsWebhookController::class, 'approveVariant'])->name('approve-variant');
+            Route::get('/list-scheduled',      [App\Http\Controllers\AiAdsWebhookController::class, 'listScheduled'])->name('list-scheduled');
+            Route::post('/reschedule',         [App\Http\Controllers\AiAdsWebhookController::class, 'reschedule'])->name('reschedule');
+            Route::post('/cancel-post',        [App\Http\Controllers\AiAdsWebhookController::class, 'cancelPost'])->name('cancel-post');
+            Route::post('/quick-post',         [App\Http\Controllers\AiAdsWebhookController::class, 'quickPost'])->name('quick-post');
+            Route::get('/list-accounts',       [App\Http\Controllers\AiAdsWebhookController::class, 'listAccounts'])->name('list-accounts');
+            Route::post('/start-oauth',        [App\Http\Controllers\AiAdsWebhookController::class, 'startOauth'])->name('start-oauth');
+            Route::post('/disconnect',         [App\Http\Controllers\AiAdsWebhookController::class, 'disconnectAccount'])->name('disconnect');
+        });
 
         // Lead Portal invitations — admin approval / rejection / revocation.
         // Sales requests via /portal/sales/... (separate route below).
@@ -248,6 +327,8 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/admin/leads/{id}/documents/section-verification', [LeadController::class, 'updateSectionVerification'])->name('admin.leads.documents.section-verification');
 
         // Internal notes — any staff role can add, only author or admin can edit/delete.
+        Route::get('/admin/leads/{id}/notes', [\App\Http\Controllers\LeadNoteController::class, 'index'])
+            ->name('admin.leads.notes.index');
         Route::post('/admin/leads/{id}/notes', [\App\Http\Controllers\LeadNoteController::class, 'store'])
             ->name('admin.leads.notes.store');
         Route::post('/admin/leads/{leadId}/notes/{noteId}', [\App\Http\Controllers\LeadNoteController::class, 'update'])
@@ -305,6 +386,19 @@ Route::middleware(['auth'])->group(function () {
         // Staff download — same controller, role-gated inside.
         Route::get('/admin/documents/{docId}/download', [LeadDocumentController::class, 'download'])
             ->name('admin.documents.download');
+
+        // Task Board — cross-portal Task API for the New Task modal.
+        // Lives in routes/web.php (not routes/api.php) so it inherits the
+        // session-auth + CSRF middleware Inertia POSTs already use. The
+        // existing per-lead POST /admin/leads/{id}/tasks endpoint is
+        // unchanged; this is an additional path that also handles
+        // department/personal tasks (no lead_id).
+        Route::post ('/api/tasks',                  [App\Http\Controllers\TaskController::class, 'store'])->name('api.tasks.store');
+        Route::patch('/api/tasks/{id}',             [App\Http\Controllers\TaskController::class, 'update'])->name('api.tasks.update');
+        Route::post ('/api/tasks/{id}/attachments', [App\Http\Controllers\TaskController::class, 'attach'])->name('api.tasks.attach');
+        Route::get  ('/api/tasks/{id}/comments',    [App\Http\Controllers\TaskController::class, 'comments'])->name('api.tasks.comments');
+        Route::post ('/api/tasks/{id}/comments',    [App\Http\Controllers\TaskController::class, 'storeComment'])->name('api.tasks.comments.store');
+        Route::get  ('/api/tasks/related-records',  [App\Http\Controllers\TaskController::class, 'relatedRecords'])->name('api.tasks.related-records');
     });
 
     // Immigration management screens — shared between admins and immigration-role staff.
@@ -364,6 +458,9 @@ Route::middleware(['auth'])->group(function () {
             // Sales Weekly Report — 11 sections; ?week_start=YYYY-MM-DD steps weeks.
             Route::get('/reports', [SalesController::class, 'report'])->name('reports');
 
+            // Public assessment submissions (free-assessment + education-enrolment).
+            Route::get('/assessments', [SalesController::class, 'assessments'])->name('assessments');
+
             // OUTREACH — placeholders until the email backbone ships.
             Route::get('/bulk-email', [SalesController::class, 'bulkEmail'])->name('bulk-email');
             Route::get('/email-templates', [SalesController::class, 'emailTemplates'])->name('email-templates');
@@ -391,8 +488,11 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/leads/{id}', [LeadController::class, 'show'])->name('leads.show');
 
             // WORK
-            Route::get('/students', [EducationController::class, 'students'])->name('students');
-            Route::get('/documents', [EducationController::class, 'documents'])->name('documents');
+            Route::get('/students',    [EducationController::class, 'students'])->name('students');
+            Route::post('/students/{id}/dashboard-field', [EducationController::class, 'updateStudentField'])->name('students.dashboard-field');
+            Route::get('/documents',   [EducationController::class, 'documents'])->name('documents');
+            // Public assessment submissions (free-assessment + education-enrolment).
+            Route::get('/assessments', [EducationController::class, 'assessments'])->name('assessments');
             // Tasks & follow-ups (mirror of /portal/sales/tasks). Reuses
             // LeadTaskController::dueToday for the AJAX endpoint since
             // tasks are not department-scoped server-side.
@@ -433,11 +533,20 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/documents', [ImmigrationController::class, 'documents'])->name('documents');
             Route::get('/appointments', [ImmigrationController::class, 'appointments'])->name('appointments');
 
-            // SETUP
-            Route::get('/visa-types', [ImmigrationController::class, 'visaTypes'])->name('visa-types');
-            Route::get('/intakes', [ImmigrationController::class, 'intakes'])->name('intakes');
-            Route::get('/inz-forms', [ImmigrationController::class, 'inzForms'])->name('inz-forms');
+            // SETUP — visa types are managed through VisaTypeController so
+            // the same logic (policy, audit, notifications) applies to both
+            // admin staff and immigration managers/advisers.
+            Route::get('/visa-types',                          [VisaTypeController::class, 'index'])->name('visa-types');
+            Route::post('/visa-types/{visa_type}',             [VisaTypeController::class, 'update'])->name('visa-types.update');
+            Route::delete('/visa-types/{visa_type}',           [VisaTypeController::class, 'destroy'])->name('visa-types.destroy');
+            Route::get('/visa-types/{visa_type}/price-history',[VisaTypeController::class, 'priceHistory'])->name('visa-types.price-history');
+            Route::get('/intakes',             [ImmigrationController::class, 'intakes'])->name('intakes');
+            Route::get('/inz-forms',           [ImmigrationController::class, 'inzForms'])->name('inz-forms');
             Route::get('/checklist-templates', [ImmigrationController::class, 'checklistTemplates'])->name('checklist-templates');
+
+            // Task Board — shared TaskBoardPage component (see resources/js/
+            // components/task-board/TaskBoardPage.jsx).
+            Route::get('/tasks', [ImmigrationController::class, 'tasks'])->name('tasks');
 
             // REPORTS
             Route::get('/reports', [ImmigrationController::class, 'reports'])->name('reports');
@@ -450,6 +559,7 @@ Route::middleware(['auth'])->group(function () {
 
         Route::middleware('portal:accommodation')->prefix('accommodation')->name('portal.accommodation.')->group(function () {
             Route::get('/dashboard', [AccommodationController::class, 'dashboard'])->name('dashboard');
+            Route::get('/tasks',     [AccommodationController::class, 'tasks'])->name('tasks');
             Route::get('/leads/{id}', [LeadController::class, 'show'])->name('leads.show');
 
             // Property listings CRUD (multipart: update is POST + _method=PUT).

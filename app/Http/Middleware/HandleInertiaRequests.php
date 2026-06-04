@@ -55,6 +55,16 @@ class HandleInertiaRequests extends Middleware
                 'generated_credentials' => $request->session()->get('generated_credentials'),
                 // Lead CSV import summary — surfaces +N new / N updated / N skipped chip.
                 'import_summary' => $request->session()->get('import_summary'),
+                // Assessment draft save — distinct from `success` so the page
+                // doesn't flip to the "submission complete" screen on a save.
+                'draft_saved' => $request->session()->get('draft_saved'),
+                'draft_id'    => $request->session()->get('draft_id'),
+                // Visa intake post-submit — used by the four visa intake
+                // pages to swap the form for a persistent thank-you modal
+                // once the controller saves the row. Carries the visa name
+                // so the modal copy can read "Thanks for submitting your
+                // Work Visa (AEWV) details" etc.
+                'intake_submitted' => $request->session()->get('intake_submitted'),
             ],
             // Public contact channels for the sticky CTA bar, floating contact
             // widget, and footer. Components hide channels with empty values.

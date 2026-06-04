@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Assessment;
 use App\Models\ResidentIntake;
+use App\Models\VisaType;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -155,18 +157,42 @@ class ResidentIntakeController extends Controller
                 $validated,
                 [
                     'intake_id'      => $intakeId,
-                    'status'         => 'New',
+                    'status'         => 'Submitted',
                     'documents'      => $documents ?: null,
                     'document_files' => $storedFiles ?: null,
                 ]
             ));
 
+            // ── PAYMENT + BOOKING TEMPORARILY DISABLED ────────────────
+            // Client wants to collect intake submissions only for now;
+            // pricing / Stripe / consultation booking will be turned
+            // back on once the plan is finalised. To re-enable, uncomment
+            // the Assessment::create block below and switch the redirect
+            // back to `route('assessment.pay', $assessment->token)`.
+            //
+            // $visaType = VisaType::query()
+            //     ->where('code', 'SMC')
+            //     ->orWhere('category', 'Resident')
+            //     ->first();
+            //
+            // $assessment = Assessment::create([
+            //     'visa_type_id'         => $visaType?->id,
+            //     'intakeable_type'      => ResidentIntake::class,
+            //     'intakeable_id'        => $intake->id,
+            //     'applicant_first_name' => $intake->first_name,
+            //     'applicant_last_name'  => $intake->last_name,
+            //     'applicant_email'      => $intake->email,
+            //     'applicant_phone'      => $intake->phone,
+            //     'status'               => 'submitted',
+            // ]);
+            // if ($visaType) {
+            //     $assessment->lockCurrentPrice();
+            // }
+
             DB::commit();
 
-            return redirect()->back()->with([
-                'success'   => true,
-                'intake_id' => $intake->intake_id,
-            ]);
+            // return redirect()->route('assessment.pay', $assessment->token);
+            return back()->with('intake_submitted', 'Resident Visa (SMC)');
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error('Resident intake storage failed', ['error' => $e->getMessage()]);

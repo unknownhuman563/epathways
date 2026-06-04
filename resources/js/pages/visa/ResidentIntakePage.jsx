@@ -17,11 +17,15 @@ import {
     Send,
     Plus,
     Trash2,
-    Calendar
+    Calendar,
+    Eye,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { toast } from 'sonner';
 import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
+import ResidentIntakeStepper from "@/components/visa/ResidentIntakeStepper";
+import IntakeSuccessModal from "@/components/visa/IntakeSuccessModal";
 
 const TEAL = '#00A693';
 const TEAL_DARK = '#008c7c';
@@ -29,6 +33,10 @@ const DARK = '#0c1611';
 
 const TOTAL_STEPS = 9;
 const DRAFT_STORAGE_KEY = 'epathways_resident_intake_draft';
+// Tracks the user's in-flight assessment after a successful form submit, so
+// that revisiting /resident-interest forwards them to the right next step
+// (pay / book / booked) instead of starting a brand-new intake from scratch.
+const PENDING_ASSESSMENT_KEY = 'epathways_pending_assessment';
 
 // ─── Date helpers (form uses DD/MM/YYYY; backend wants YYYY-MM-DD) ──────────
 const isoToDmy = (s) => {
@@ -279,17 +287,60 @@ function editIntakeToFormData(intake) {
 export default function ResidentIntakePage({ editIntake = null, editToken = null }) {
     const { flash } = usePage().props;
     const isEditing = !!editToken;
+
+    // ── PAYMENT + BOOKING TEMPORARILY DISABLED ────────────────────
+    // Resume-to-pay bounce is off while the pricing / Stripe / booking
+    // flow is paused; re-enable when the controllers wire the
+    // Assessment + assessment.pay redirect back in.
+    const [resumeChecked, setResumeChecked] = useState(true);
+    // useEffect(() => {
+    //     if (isEditing) return;
+    //     try {
+    //         const raw = window.localStorage.getItem(PENDING_ASSESSMENT_KEY);
+    //         if (!raw) { setResumeChecked(true); return; }
+    //         const { token, status } = JSON.parse(raw);
+    //         if (!token) { setResumeChecked(true); return; }
+    //         // booked = journey complete; let the user start a new intake.
+    //         if (status === 'booked') {
+    //             window.localStorage.removeItem(PENDING_ASSESSMENT_KEY);
+    //             setResumeChecked(true);
+    //             return;
+    //         }
+    //         const target = status === 'paid'
+    //             ? `/assessment/${token}/book`
+    //             : `/assessment/${token}/pay`;
+    //         window.location.replace(target);
+    //     } catch {
+    //         setResumeChecked(true);
+    //     }
+    // }, [isEditing]);
+
     // Snapshot of files already on the server for this intake — shown to the
     // applicant in Step 8 as "already attached" so they know what's on file.
     const existingFiles = editIntake?.document_files && typeof editIntake.document_files === 'object'
         ? editIntake.document_files
         : {};
     const [step, setStep] = useState(isEditing ? 1 : loadDraftStep);
+    // Steps the user has actually opened — a step only shows the completed
+    // checkmark when it has been visited AND its required fields validate.
+    // Jumping forward through the stepper does NOT mark intermediate steps as
+    // visited; only the destination is added.
+    const [visitedSteps, setVisitedSteps] = useState(() => new Set([isEditing ? 1 : loadDraftStep()]));
     const [isSuccess, setIsSuccess] = useState(false);
     const [intakeId, setIntakeId] = useState(null);
-    const [modal, setModal] = useState({ show: false, message: '' });
     const [localErrors, setLocalErrors] = useState({});
     const [showConfirm, setShowConfirm] = useState(false);
+    const [showSuccess, setShowSuccess] = useState(false);
+
+    // Persistent post-submit modal — driven by the controller's
+    // `intake_submitted` flash. Stays until the user manually dismisses
+    // it, so they don't think the submission silently failed.
+    useEffect(() => {
+        if (flash?.intake_submitted) {
+            setShowSuccess(true);
+            try { window.localStorage.removeItem(DRAFT_STORAGE_KEY); } catch {}
+        }
+    }, [flash?.intake_submitted]);
 
     useEffect(() => {
         if (flash?.success) {
@@ -335,7 +386,7 @@ export default function ResidentIntakePage({ editIntake = null, editToken = null
         });
         setStep(1);
         setLocalErrors({});
-        setModal({ show: false, message: '' });
+        setVisitedSteps(new Set([1]));
     };
 
     const steps = [
@@ -441,14 +492,21 @@ export default function ResidentIntakePage({ editIntake = null, editToken = null
         if (changed) setLocalErrors(next);
     }, [data]);
 
+    // Record every step the user opens so the stepper can distinguish
+    // "visited and valid" (checkmark) from "skipped past" (still a number).
+    useEffect(() => {
+        setVisitedSteps((prev) => {
+            if (prev.has(step)) return prev;
+            const next = new Set(prev);
+            next.add(step);
+            return next;
+        });
+    }, [step]);
+
+    // Free navigation between steps — the user can move around freely; missing
+    // fields are flagged inline when they hit submit, and we auto-jump them to
+    // the first step that needs attention.
     const nextStep = () => {
-        const errs = validateStep(step);
-        if (Object.keys(errs).length > 0) {
-            setLocalErrors(errs);
-            setModal({ show: true, message: `Please complete the required fields in Step ${step} (${steps[step - 1].title}) before proceeding.` });
-            scrollFormToTop();
-            return;
-        }
         setLocalErrors({});
         setStep(s => Math.min(s + 1, TOTAL_STEPS));
     };
@@ -460,31 +518,20 @@ export default function ResidentIntakePage({ editIntake = null, editToken = null
 
     const handleSidebarClick = (id) => {
         if (id === step) return;
-        if (id < step) {
-            setLocalErrors({});
-            setStep(id);
-            return;
-        }
-        const { aggregated, firstInvalid } = validateRange(1, id - 1);
-        if (firstInvalid !== null) {
-            setLocalErrors(aggregated);
-            setStep(firstInvalid);
-            setModal({ show: true, message: `Please complete the required fields in Step ${firstInvalid} (${steps[firstInvalid - 1].title}) before moving forward.` });
-            scrollFormToTop();
-            return;
-        }
         setLocalErrors({});
         setStep(id);
     };
 
-    // Clicking "Submit Intake Form" doesn't post immediately — it validates and
-    // then opens a confirmation modal so the user can review and explicitly confirm.
+    // Clicking "Submit Intake Form" doesn't post immediately — it walks every
+    // step, and if any required fields are missing it jumps the user straight
+    // to the first offending step so they can fill it in inline. Confirmation
+    // modal only opens once all steps validate.
     const submitFinal = () => {
         const { aggregated, firstInvalid } = validateRange(1, TOTAL_STEPS);
         if (firstInvalid !== null) {
             setLocalErrors(aggregated);
             setStep(firstInvalid);
-            setModal({ show: true, message: `Please complete the required fields in Step ${firstInvalid} (${steps[firstInvalid - 1].title}) before submitting.` });
+            toast.error(`Some fields in Step ${firstInvalid} (${steps[firstInvalid - 1].title}) need your attention.`);
             scrollFormToTop();
             return;
         }
@@ -524,12 +571,11 @@ export default function ResidentIntakePage({ editIntake = null, editToken = null
             },
             onError: (errs) => {
                 setShowConfirm(false);
-                setModal({
-                    show: true,
-                    message: errs?.error
+                toast.error(
+                    errs?.error
                         || Object.values(errs || {})[0]
-                        || 'Submission failed. Please review your details and try again.',
-                });
+                        || 'Submission failed. Please review your details and try again.'
+                );
             },
         });
     };
@@ -542,126 +588,67 @@ export default function ResidentIntakePage({ editIntake = null, editToken = null
 
     if (isSuccess) return <SuccessMessage intakeId={intakeId} edited={isEditing} />;
 
+    // Don't paint the form until we've decided whether to resume an existing
+    // submission — otherwise the user sees the form flash before the redirect.
+    if (!resumeChecked) {
+        return (
+            <div className="min-h-screen bg-white flex items-center justify-center">
+                <p className="text-xs font-bold uppercase tracking-[0.3em] text-gray-400">Loading…</p>
+            </div>
+        );
+    }
+
     const stepLabel = step < 10 ? `0${step}` : `${step}`;
     const docTotal = Object.keys(data.documents).length;
     const docChecked = Object.values(data.documents).filter(Boolean).length;
 
     return (
-        <div className="min-h-screen bg-white font-urbanist text-[#212121] overflow-x-hidden">
+        <div className="min-h-screen bg-[#f8f9fb] font-urbanist text-[#212121] overflow-x-hidden">
             <Head title="NZ Resident Visa — Client Interest" />
             <Navbar />
 
-            {/* Hero Header */}
-            <div className="relative bg-white border-b border-gray-100 overflow-hidden">
-                <div className="absolute top-0 left-0 right-0 h-1 bg-[#00A693]" />
-                <div className="absolute inset-0 opacity-[0.025]" style={{ backgroundImage: 'repeating-linear-gradient(0deg, transparent, transparent 40px, #282728 40px, #282728 41px), repeating-linear-gradient(90deg, transparent, transparent 80px, #282728 80px, #282728 81px)' }} />
+            {/* Hero Header removed — the navbar + form sidebar give enough
+                context; the giant "New Zealand Resident Visa Client Interest"
+                hero was duplicating the CTA on /immigration above the
+                actual intake form. */}
 
-                <div className="container mx-auto px-6 py-24 lg:py-28 relative z-10">
-                    <div className="max-w-5xl mx-auto">
-                        <span className="text-xs font-bold text-[#00A693] uppercase tracking-[0.3em] mb-6 block">
-                            Skilled Migrant Category — Resident Visa
-                        </span>
-                        <h1 className="text-5xl lg:text-7xl font-black text-[#282728] uppercase tracking-tighter leading-[0.9] mb-8">
-                            New Zealand<br />
-                            <span className="text-[#00A693]">Resident Visa</span><br />
-                            Client Interest
-                        </h1>
-                        <div className="w-12 h-[2px] bg-[#282728]/20 my-8" />
-                        <div className="flex flex-col md:flex-row md:items-end gap-10">
-                            <p className="text-gray-600 text-sm leading-[1.9] font-light max-w-[480px] tracking-wide">
-                                Client information & document checklist for your SMC Resident Visa application — initial
-                                intake prior to engagement agreement. All fields marked * are required.
-                            </p>
-                            <div className="flex items-center gap-8 md:ml-auto flex-shrink-0">
-                                <div className="text-center">
-                                    <div className="text-4xl font-black text-[#282728]">~10</div>
-                                    <div className="text-xs text-gray-500 uppercase tracking-[0.3em] font-bold mt-1">Minutes</div>
-                                </div>
-                                {/* <div className="w-[1px] h-10 bg-gray-200" />
-                                <div className="text-center">
-                                    <div className="text-4xl font-black text-[#00A693]">$35</div>
-                                    <div className="text-xs text-gray-500 uppercase tracking-[0.3em] font-bold mt-1">Median / hr</div>
-                                </div> */}
-                            </div>
-                        </div>
+            <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-32 pt-12">
+                {/* 11-step funnel: steps 1-9 live here, 10 (Pay) and 11
+                    (Book) on dedicated pages after submit. The stepper
+                    component is shared so the funnel feels continuous. */}
+                <div className="mb-10">
+                    <ResidentIntakeStepper
+                        currentStep={step}
+                        completedSteps={steps
+                            .filter(s => s.id !== step
+                                && visitedSteps.has(s.id)
+                                && Object.keys(validateStep(s.id)).length === 0)
+                            .map(s => s.id)}
+                        onStepClick={(id) => { if (id <= TOTAL_STEPS) handleSidebarClick(id); }}
+                    />
+
+                    <div className="flex items-center justify-between mt-5 px-1 text-[11px]">
+                        <p className="text-gray-400">
+                            {isEditing
+                                ? 'Your intake is pre-filled — any changes update the original record.'
+                                : 'Answers save automatically — close or refresh and pick up where you left off.'}
+                        </p>
+                        {isEditing ? (
+                            <span className="font-medium text-[#00A693] flex-shrink-0 ml-4">Edit mode</span>
+                        ) : (
+                            <button
+                                type="button"
+                                onClick={handleStartOver}
+                                className="font-medium text-gray-400 hover:text-red-500 transition-colors flex-shrink-0 ml-4"
+                            >
+                                Start over
+                            </button>
+                        )}
                     </div>
                 </div>
-            </div>
 
-            <main className="container mx-auto px-6 pb-32 pt-12 max-w-7xl">
-                <div className="flex flex-col lg:flex-row gap-8 lg:gap-16 items-start">
-
-                    {/* Sidebar */}
-                    <div className="lg:w-[220px] sticky top-28 flex-shrink-0">
-                        <div className="rounded-3xl overflow-hidden border border-gray-100 shadow-xl shadow-gray-100/80">
-                            <div className="px-6 pt-6 pb-5 bg-[#282728]">
-                                <p className="text-xs font-bold text-white/40 uppercase tracking-[0.4em] mb-1">Form Progress</p>
-                                <div className="text-2xl font-black text-white">{Math.round((step / TOTAL_STEPS) * 100)}<span className="text-base text-white/30">%</span></div>
-                                <div className="mt-3 h-0.5 bg-white/10 rounded-full overflow-hidden">
-                                    <motion.div
-                                        className="h-full bg-[#00A693]"
-                                        initial={{ width: 0 }}
-                                        animate={{ width: `${(step / TOTAL_STEPS) * 100}%` }}
-                                        transition={{ duration: 0.8, ease: 'circOut' }}
-                                    />
-                                </div>
-                            </div>
-                            <div className="bg-white px-3 py-4 space-y-0.5">
-                                {steps.map((s) => {
-                                    const isActive = step === s.id;
-                                    const isCompleted = step > s.id;
-                                    const Icon = s.icon;
-                                    const stepNum = s.id < 10 ? `0${s.id}` : `${s.id}`;
-                                    return (
-                                        <div
-                                            key={s.id}
-                                            onClick={() => handleSidebarClick(s.id)}
-                                            className={`group flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer transition-all duration-200 ${isActive ? 'bg-[#282728]' : 'hover:bg-gray-50'}`}
-                                        >
-                                            <div className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 transition-all ${isActive ? 'bg-[#00A693]' : isCompleted ? 'bg-[#00A693]/10' : 'bg-gray-100'}`}>
-                                                {isCompleted && !isActive ? (
-                                                    <CheckCircle size={12} className="text-[#00A693]" />
-                                                ) : (
-                                                    <Icon size={11} className={isActive ? 'text-white' : 'text-gray-500'} />
-                                                )}
-                                            </div>
-                                            <div className="flex flex-col min-w-0">
-                                                <span className={`text-xs font-black uppercase tracking-[0.25em] leading-none mb-0.5 ${isActive ? 'text-white/40' : 'text-gray-300'}`}>{stepNum}</span>
-                                                <span className={`text-xs font-black uppercase tracking-[0.12em] leading-none truncate ${isActive ? 'text-white' : isCompleted ? 'text-[#00A693]' : 'text-gray-500 group-hover:text-[#282728]'}`}>{s.title}</span>
-                                            </div>
-                                            {isActive && (
-                                                <motion.div layoutId="sidebar-active" className="ml-auto w-1 h-4 rounded-full bg-[#00A693]" />
-                                            )}
-                                        </div>
-                                    );
-                                })}
-
-                                <div className="mt-3 pt-3 px-2 border-t border-gray-100">
-                                    {isEditing ? (
-                                        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#00A693]">
-                                            Edit mode
-                                        </p>
-                                    ) : (
-                                        <button
-                                            type="button"
-                                            onClick={handleStartOver}
-                                            className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 hover:text-red-500 transition-colors"
-                                        >
-                                            Start over
-                                        </button>
-                                    )}
-                                    <p className="text-[10px] text-gray-400 leading-relaxed mt-2">
-                                        {isEditing
-                                            ? 'Your intake is pre-filled. Any changes you save here update the original record on file.'
-                                            : 'Your answers are saved on this device automatically — you can close or refresh this page and pick up where you left off.'}
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Form Content */}
-                    <div className="flex-1 min-w-0 bg-white rounded-3xl border border-gray-100 shadow-xl shadow-gray-100/80 overflow-hidden">
+                {/* Form Content */}
+                <div className="bg-white rounded-3xl border border-gray-100 shadow-xl shadow-gray-100/80 overflow-hidden">
                         <div className="px-8 pt-8 pb-6 border-b border-gray-50">
                             <div className="flex items-center justify-between mb-4">
                                 <div>
@@ -741,7 +728,7 @@ export default function ResidentIntakePage({ editIntake = null, editToken = null
                                                 <Send size={13} />
                                                 {processing
                                                     ? (isEditing ? 'Saving...' : 'Submitting...')
-                                                    : (isEditing ? 'Save Changes' : 'Submit Intake Form')}
+                                                    : (isEditing ? 'Save Changes' : 'Submit')}
                                             </button>
                                         )}
                                     </div>
@@ -749,35 +736,15 @@ export default function ResidentIntakePage({ editIntake = null, editToken = null
                             </form>
                         </div>
                     </div>
-                </div>
             </main>
             <Footer />
 
-            <AnimatePresence>
-                {modal.show && (
-                    <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-[#282728]/40 backdrop-blur-sm">
-                        <motion.div
-                            initial={{ scale: 0.9, opacity: 0, y: 20 }}
-                            animate={{ scale: 1, opacity: 1, y: 0 }}
-                            exit={{ scale: 0.9, opacity: 0, y: 20 }}
-                            className="bg-white w-full max-w-[400px] rounded-[2.5rem] shadow-[0_64px_128px_-24px_rgba(40,39,40,0.15)] p-12 text-center"
-                        >
-                            <div className="w-16 h-16 bg-[#282728]/5 rounded-[1.5rem] flex items-center justify-center text-[#282728] mx-auto mb-8">
-                                <AlertCircle size={32} />
-                            </div>
-                            <h3 className="text-xl font-black text-[#282728] uppercase tracking-tighter mb-4">Action Required</h3>
-                            <p className="text-gray-500 text-sm leading-relaxed mb-10 font-medium px-4 whitespace-pre-wrap">{modal.message}</p>
-                            <button
-                                type="button"
-                                onClick={() => setModal({ show: false, message: '' })}
-                                className="w-full bg-[#282728] text-white py-5 rounded-2xl text-xs font-black uppercase tracking-[0.4em] shadow-xl hover:bg-black transition-all active:scale-95"
-                            >
-                                Acknowledge
-                            </button>
-                        </motion.div>
-                    </div>
-                )}
-            </AnimatePresence>
+            {/* ── Persistent post-submit thank-you modal ────────────────── */}
+            <IntakeSuccessModal
+                open={showSuccess}
+                onClose={() => setShowSuccess(false)}
+                visaLabel={flash?.intake_submitted || 'Resident Visa (SMC)'}
+            />
 
             {/* ── Pre-submit confirmation modal ─────────────────────────── */}
             <AnimatePresence>
@@ -792,23 +759,32 @@ export default function ResidentIntakePage({ editIntake = null, editToken = null
                             exit={{ scale: 0.92, opacity: 0, y: 24 }}
                             transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
                             onClick={(e) => e.stopPropagation()}
-                            className="w-full max-w-[520px] overflow-hidden max-h-[90vh] overflow-y-auto"
+                            className="w-full max-w-[520px] overflow-hidden rounded-2xl bg-white max-h-[90vh] overflow-y-auto"
                         >
-                            {/* ── Dark header ── */}
-                            <div className="bg-[#282728] px-8 pt-10 pb-8 text-center relative overflow-hidden">
-                                <div className="absolute inset-0 opacity-[0.04]" style={{ backgroundImage: 'repeating-linear-gradient(0deg, transparent, transparent 20px, #fff 20px, #fff 21px), repeating-linear-gradient(90deg, transparent, transparent 40px, #fff 40px, #fff 41px)' }} />
-                                <div className="relative z-10">
-                                    <div className="w-14 h-14 bg-[#00A693] rounded-xl flex items-center justify-center text-white mx-auto mb-5 shadow-lg shadow-[#00A693]/30">
-                                        <ShieldCheck size={28} />
+                            {/* ── Light "review" header — intentionally NOT a
+                                dark success-style hero, to avoid the previous
+                                UX issue of clients thinking they had already
+                                submitted at this point. ── */}
+                            <div className="bg-amber-50/70 border-b border-amber-100 px-8 pt-8 pb-6">
+                                <div className="flex items-center justify-end mb-4">
+                                    <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-amber-700/60">
+                                        Last step
+                                    </span>
+                                </div>
+                                <div className="flex items-start gap-4">
+                                    <div className="w-11 h-11 bg-white border border-amber-200 rounded-xl flex items-center justify-center text-amber-700 flex-shrink-0">
+                                        <Eye size={20} />
                                     </div>
-                                    <h3 className="text-lg font-black text-white uppercase tracking-[0.15em] mb-2">
-                                        {isEditing ? 'Confirm Changes' : 'Confirm Submission'}
-                                    </h3>
-                                    <p className="text-white/50 text-xs font-medium leading-relaxed max-w-xs mx-auto">
-                                        {isEditing
-                                            ? 'Please review the summary below before saving your changes.'
-                                            : 'Please review the summary below before finalising your intake.'}
-                                    </p>
+                                    <div>
+                                        <h3 className="text-lg font-black text-[#282728] tracking-tight mb-1">
+                                            {isEditing ? 'Review your changes' : 'Review your details before submitting'}
+                                        </h3>
+                                        <p className="text-xs text-gray-600 leading-relaxed">
+                                            {isEditing
+                                                ? 'Take a quick look below. Nothing is saved until you click "Save changes".'
+                                                : 'Take a quick look below. Nothing is submitted until you click "Submit intake".'}
+                                        </p>
+                                    </div>
                                 </div>
                             </div>
 
@@ -865,20 +841,20 @@ export default function ResidentIntakePage({ editIntake = null, editToken = null
                                         type="button"
                                         onClick={() => setShowConfirm(false)}
                                         disabled={processing}
-                                        className="flex-1 py-4 border border-gray-200 text-[#282728] text-[10px] font-black uppercase tracking-[0.25em] hover:border-[#282728] transition-all active:scale-[0.98] disabled:opacity-50"
+                                        className="flex-1 py-4 rounded-xl border border-gray-200 text-[#282728] text-[10px] font-black uppercase tracking-[0.25em] hover:border-[#282728] transition-all active:scale-[0.98] disabled:opacity-50"
                                     >
-                                        Go back &amp; edit
+                                        Keep editing
                                     </button>
                                     <button
                                         type="button"
                                         onClick={confirmSubmit}
                                         disabled={processing}
-                                        className="flex-1 py-4 bg-[#282728] text-white text-[10px] font-black uppercase tracking-[0.25em] hover:bg-[#00A693] transition-all active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2 shadow-xl shadow-[#282728]/15"
+                                        className="flex-1 py-4 rounded-xl bg-[#282728] text-white text-[10px] font-black uppercase tracking-[0.25em] hover:bg-[#00A693] transition-all active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2 shadow-xl shadow-[#282728]/15"
                                     >
                                         <Send size={12} />
                                         {processing
                                             ? (isEditing ? 'Saving...' : 'Submitting...')
-                                            : (isEditing ? 'Confirm & Save' : 'Confirm & Submit')}
+                                            : (isEditing ? 'Save changes' : 'Submit intake')}
                                     </button>
                                 </div>
                             </div>

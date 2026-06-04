@@ -1,10 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { Head, router, useForm } from '@inertiajs/react';
+import { Head, router, useForm, usePage } from '@inertiajs/react';
 import {
     Search, Plus, Edit2, Trash2, ChevronDown, Tag, Percent,
     Calendar as CalendarIcon, X, ChevronRight, ChevronLeft,
     AlertCircle, AlertTriangle, Eye, EyeOff,
 } from 'lucide-react';
+import EducationLayout from "@/components/layout/EducationLayout";
+import SalesLayout from "@/components/layout/SalesLayout";
+import AdminLayout from "@/components/layout/AdminLayout";
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
 
@@ -321,7 +324,37 @@ function PromoModal({ open, onClose, editing, programs }) {
     );
 }
 
-export default function Promos({ promos = [], programs = [] }) {
+function PromoTabButton({ tab, active, onClick }) {
+    const TONES = {
+        emerald: { border: 'border-emerald-500', badgeActive: 'bg-emerald-500' },
+        blue:    { border: 'border-blue-500',    badgeActive: 'bg-blue-500'    },
+        amber:   { border: 'border-amber-500',   badgeActive: 'bg-amber-500'   },
+        gray:    { border: 'border-gray-900',    badgeActive: 'bg-gray-900'    },
+    };
+    const t = TONES[tab.tone] || TONES.gray;
+    return (
+        <button
+            type="button"
+            onClick={onClick}
+            className={`px-4 py-3 text-xs font-bold uppercase tracking-wider transition-colors border-b-2 inline-flex items-center gap-2 whitespace-nowrap ${
+                active
+                    ? `text-gray-900 ${t.border}`
+                    : 'text-gray-400 border-transparent hover:text-gray-700'
+            }`}
+        >
+            {tab.label}
+            {tab.count > 0 && (
+                <span className={`inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[9px] font-bold tabular-nums ${
+                    active ? `${t.badgeActive} text-white` : 'bg-gray-100 text-gray-600'
+                }`}>
+                    {tab.count}
+                </span>
+            )}
+        </button>
+    );
+}
+
+function Promos({ promos = [], programs = [] }) {
     const [search, setSearch] = useState('');
     const [stateFilter, setStateFilter] = useState('All');
     const [activeDropdown, setActiveDropdown] = useState(null);
@@ -413,51 +446,53 @@ export default function Promos({ promos = [], programs = [] }) {
                 </button>
             </div>
 
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                {summaryCards.map((card, idx) => (
-                    <div
-                        key={idx}
-                        onClick={() => setStateFilter(card.filterTo)}
-                        className={`p-5 rounded-2xl cursor-pointer transition-all duration-300 hover:scale-[1.02] ${card.dark ? 'bg-gray-900 text-white shadow-lg' : 'bg-white text-gray-900 shadow-sm border border-gray-100'}`}
-                    >
-                        <div className="flex items-center justify-between mb-3">
-                            <span className={`text-sm font-medium ${card.dark ? 'text-gray-300' : 'text-gray-500'}`}>{card.label}</span>
-                            <span className={`p-1.5 rounded-lg ${card.dark ? 'bg-white/10 text-white' : 'bg-gray-100 text-gray-500'}`}>{card.icon}</span>
-                        </div>
-                        <p className="text-3xl font-bold tracking-tight">{card.value}</p>
-                    </div>
-                ))}
-            </div>
-
-            <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between lg:gap-4">
-                <div className="w-full lg:w-72 relative">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <Search className="h-5 w-5 text-gray-400" />
-                    </div>
-                    <input
-                        type="text"
-                        value={search}
-                        onChange={e => setSearch(e.target.value)}
-                        className="block w-full pl-10 pr-3 py-2.5 border border-gray-200 rounded-xl bg-gray-50 placeholder-gray-400 focus:outline-none focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition-all"
-                        placeholder="Search by title, programme, or code..."
-                    />
-                </div>
-
-                <div className="grid grid-cols-2 gap-1.5 sm:flex sm:flex-wrap sm:items-center">
-                    {['All', 'Live', 'Scheduled', 'Expired', 'Inactive'].map(tab => (
-                        <button key={tab} onClick={() => setStateFilter(tab)}
-                            className={`w-full sm:w-auto px-3.5 py-1.5 rounded-xl text-xs font-bold border transition-all duration-200 ${stateFilter === tab ? 'bg-gray-900 text-white border-gray-900 shadow-sm' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}>
-                            {tab}
-                        </button>
+            {/* Status tabs + search in a single surface — mirrors the
+                Documents page pattern. */}
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm">
+                <div className="flex items-center border-b border-gray-100 px-2 overflow-x-auto">
+                    {[
+                        { key: 'All',       label: 'All',       count: promos.length,                                tone: 'gray'    },
+                        { key: 'Live',      label: 'Live now',  count: counts.live      || 0,                        tone: 'emerald' },
+                        { key: 'Scheduled', label: 'Scheduled', count: counts.scheduled || 0,                        tone: 'blue'    },
+                        { key: 'Expired',   label: 'Expired',   count: counts.expired   || 0,                        tone: 'gray'    },
+                        { key: 'Inactive',  label: 'Inactive',  count: counts.inactive  || 0,                        tone: 'amber'   },
+                    ].map((tab) => (
+                        <PromoTabButton
+                            key={tab.key}
+                            tab={tab}
+                            active={stateFilter === tab.key}
+                            onClick={() => setStateFilter(tab.key)}
+                        />
                     ))}
                 </div>
 
-                <button
-                    onClick={openCreate}
-                    className="lg:hidden flex items-center justify-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-xl hover:bg-gray-800 text-sm font-semibold transition-colors shadow-sm"
-                >
-                    <Plus size={16} /> New Promotion
-                </button>
+                <div className="flex flex-col lg:flex-row lg:items-center gap-3 px-4 py-2.5 border-b border-gray-100">
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                        <Search size={14} className="text-gray-400 flex-shrink-0" />
+                        <input
+                            type="text"
+                            value={search}
+                            onChange={(e) => setSearch(e.target.value)}
+                            placeholder="Search by title, programme, or code…"
+                            className="flex-1 outline-none text-sm placeholder:text-gray-400 bg-transparent"
+                        />
+                        {search && (
+                            <button
+                                type="button"
+                                onClick={() => setSearch('')}
+                                className="text-gray-400 hover:text-gray-700 text-[11px] font-bold uppercase tracking-wider"
+                            >
+                                Clear
+                            </button>
+                        )}
+                    </div>
+                    <button
+                        onClick={openCreate}
+                        className="lg:hidden flex items-center justify-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-xl hover:bg-gray-800 text-sm font-semibold transition-colors shadow-sm"
+                    >
+                        <Plus size={16} /> New Promotion
+                    </button>
+                </div>
             </div>
 
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
@@ -647,3 +682,19 @@ export default function Promos({ promos = [], programs = [] }) {
         </div>
     );
 }
+
+// Role-aware layout — the Promos page is shared between admin / sales /
+// education staff. The page name (`admin/Promos`) makes app.jsx default
+// to AdminLayout, but a department staff member browsing here from their
+// portal sidebar should still see their own portal chrome. Pick the
+// layout based on the authenticated user's role.
+Promos.layout = (page) => {
+    const role = page.props?.auth?.user?.role;
+    const Layout =
+        role === 'education' ? EducationLayout
+        : role === 'sales'   ? SalesLayout
+        :                      AdminLayout;
+    return <Layout>{page}</Layout>;
+};
+
+export default Promos;
