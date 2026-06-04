@@ -73,7 +73,7 @@ function flattenToFormData(value, fd = new FormData(), prefix = '') {
     return fd;
 }
 
-export default function EducationEnrolment() {
+export default function EducationEnrolment({ programs = [] }) {
     const { flash } = usePage().props;
     const draft = loadDraft();
 
@@ -412,7 +412,7 @@ export default function EducationEnrolment() {
     const steps = [
         { title: 'Terms',        render: () => <StepTerms          data={data} setData={setData} errors={errors} /> },
         { title: 'Personal',     render: () => <StepPersonal       data={data} setData={setData} errors={errors} /> },
-        { title: 'Study Plans',  render: () => <StepStudyPlans     data={data} setData={setData} errors={errors} /> },
+        { title: 'Study Plans',  render: () => <StepStudyPlans     data={data} setData={setData} errors={errors} programs={programs} /> },
         { title: 'Education',    render: () => <StepEducation      data={data} setData={setData} errors={errors} /> },
         { title: 'Work',         render: () => <StepWork           data={data} setData={setData} errors={errors} /> },
         { title: 'Financial',    render: () => <StepFinancial      data={data} setData={setData} errors={errors} /> },

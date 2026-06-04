@@ -229,7 +229,7 @@ export function StepPersonal({ data, setData, errors }) {
     );
 }
 
-export function StepStudyPlans({ data, setData, errors }) {
+export function StepStudyPlans({ data, setData, errors, programs = [] }) {
     const levels = ['Diploma (Level 5-6)', 'Bachelor Degree (Level 7)', 'Postgraduate Diploma (Level 8)', 'Master\'s Degree (Level 9)', 'Doctorate (Level 10)'];
     const updateNested = (key, val) => setData('study_plans', { ...data.study_plans, [key]: val });
 
@@ -239,7 +239,26 @@ export function StepStudyPlans({ data, setData, errors }) {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <Field label="Preferred Course/Program *" error={errors['study_plans.preferred_course']}>
-                    <input type="text" className="w-full bg-transparent border-b border-gray-200 py-3 text-[#282728] focus:outline-none focus:border-[#436235] transition-colors" value={data.study_plans.preferred_course} onChange={e => updateNested('preferred_course', e.target.value)} />
+                    {programs.length > 0 ? (
+                        // Pages that pass the programs catalogue get a real
+                        // dropdown bound to the DB; everyone else (e.g. the
+                        // legacy /free-assessment route) falls back to a free
+                        // text input so the form keeps working with no data.
+                        <select
+                            className="w-full bg-transparent border-b border-gray-200 py-3 text-[#282728] focus:outline-none focus:border-[#436235] transition-colors"
+                            value={data.study_plans.preferred_course}
+                            onChange={e => updateNested('preferred_course', e.target.value)}
+                        >
+                            <option value="">Select a programme</option>
+                            {programs.map(p => (
+                                <option key={p.id} value={p.title}>
+                                    {p.title}{p.level ? ` — ${p.level}` : ''}{p.institution ? ` (${p.institution})` : ''}
+                                </option>
+                            ))}
+                        </select>
+                    ) : (
+                        <input type="text" className="w-full bg-transparent border-b border-gray-200 py-3 text-[#282728] focus:outline-none focus:border-[#436235] transition-colors" value={data.study_plans.preferred_course} onChange={e => updateNested('preferred_course', e.target.value)} />
+                    )}
                 </Field>
                 <Field label="Qualification Level *" error={errors['study_plans.qualification_level']}>
                     <select className="w-full bg-transparent border-b border-gray-200 py-3 text-[#282728] focus:outline-none focus:border-[#436235] transition-colors" value={data.study_plans.qualification_level} onChange={e => updateNested('qualification_level', e.target.value)}>

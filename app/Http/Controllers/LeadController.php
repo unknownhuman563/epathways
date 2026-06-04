@@ -79,7 +79,17 @@ class LeadController extends Controller
      */
     public function showFreeAssessment()
     {
-        return inertia('free-assessment/FreeAssessmentPage');
+        // Same programme catalogue Education Enrolment uses — keeps the
+        // "Preferred Course/Program" dropdown consistent across both
+        // public assessment funnels.
+        $programs = \App\Models\Program::where('status', 'published')
+            ->orderBy('level')
+            ->orderBy('title')
+            ->get(['id', 'title', 'level', 'institution']);
+
+        return inertia('free-assessment/FreeAssessmentPage', [
+            'programs' => $programs,
+        ]);
     }
 
     /**
@@ -88,7 +98,17 @@ class LeadController extends Controller
      */
     public function showEducationEnrolment()
     {
-        return inertia('free-assessment/EducationEnrolmentPage');
+        // Surface the published programme catalogue so the "Preferred
+        // Course/Program" field on Step 3 (Study Plans) renders as a real
+        // dropdown bound to the database, not a free-text input.
+        $programs = \App\Models\Program::where('status', 'published')
+            ->orderBy('level')
+            ->orderBy('title')
+            ->get(['id', 'title', 'level', 'institution']);
+
+        return inertia('free-assessment/EducationEnrolmentPage', [
+            'programs' => $programs,
+        ]);
     }
 
     /**

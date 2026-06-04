@@ -39,7 +39,7 @@ const C = {
     bg: '#f9fafb'
 };
 
-export default function FreeAssessment() {
+export default function FreeAssessment({ programs = [] }) {
     const { flash } = usePage().props;
     const [step, setStep] = useState(1);
     const [isSuccess, setIsSuccess] = useState(false);
@@ -707,7 +707,7 @@ export default function FreeAssessment() {
                                         >
                                             {step === 1 && <StepTerms data={data} setData={setData} errors={allErrors} />}
                                             {step === 2 && <StepPersonal data={data} setData={setData} errors={allErrors} />}
-                                            {step === 3 && <StepStudyPlans data={data} setData={setData} errors={allErrors} />}
+                                            {step === 3 && <StepStudyPlans data={data} setData={setData} errors={allErrors} programs={programs} />}
                                             {step === 4 && <StepEducation data={data} setData={setData} errors={allErrors} />}
                                             {step === 5 && <StepWork data={data} setData={setData} errors={allErrors} />}
                                             {step === 6 && <StepFinancial data={data} setData={setData} errors={allErrors} />}
@@ -1019,7 +1019,7 @@ function StepPersonal({ data, setData, errors }) {
     );
 }
 
-function StepStudyPlans({ data, setData, errors }) {
+function StepStudyPlans({ data, setData, errors, programs = [] }) {
     const levels = ['Diploma (Level 5-6)', 'Bachelor Degree (Level 7)', 'Postgraduate Diploma (Level 8)', 'Master\'s Degree (Level 9)', 'Doctorate (Level 10)'];
     const updateNested = (key, val) => setData('study_plans', { ...data.study_plans, [key]: val });
 
@@ -1029,7 +1029,22 @@ function StepStudyPlans({ data, setData, errors }) {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <Field label="Preferred Course/Program *" error={errors['study_plans.preferred_course']}>
-                    <input type="text" className="w-full bg-transparent border-b border-gray-200 py-3 text-[#282728] focus:outline-none focus:border-[#436235] transition-colors" value={data.study_plans.preferred_course} onChange={e => updateNested('preferred_course', e.target.value)} />
+                    {programs.length > 0 ? (
+                        <select
+                            className="w-full bg-transparent border-b border-gray-200 py-3 text-[#282728] focus:outline-none focus:border-[#436235] transition-colors"
+                            value={data.study_plans.preferred_course}
+                            onChange={e => updateNested('preferred_course', e.target.value)}
+                        >
+                            <option value="">Select a programme</option>
+                            {programs.map(p => (
+                                <option key={p.id} value={p.title}>
+                                    {p.title}{p.level ? ` — ${p.level}` : ''}{p.institution ? ` (${p.institution})` : ''}
+                                </option>
+                            ))}
+                        </select>
+                    ) : (
+                        <input type="text" className="w-full bg-transparent border-b border-gray-200 py-3 text-[#282728] focus:outline-none focus:border-[#436235] transition-colors" value={data.study_plans.preferred_course} onChange={e => updateNested('preferred_course', e.target.value)} />
+                    )}
                 </Field>
                 <Field label="Qualification Level *" error={errors['study_plans.qualification_level']}>
                     <select className="w-full bg-transparent border-b border-gray-200 py-3 text-[#282728] focus:outline-none focus:border-[#436235] transition-colors" value={data.study_plans.qualification_level} onChange={e => updateNested('qualification_level', e.target.value)}>

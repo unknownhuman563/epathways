@@ -489,6 +489,7 @@ Route::middleware(['auth'])->group(function () {
 
             // WORK
             Route::get('/students',    [EducationController::class, 'students'])->name('students');
+            Route::post('/students/{id}/dashboard-field', [EducationController::class, 'updateStudentField'])->name('students.dashboard-field');
             Route::get('/documents',   [EducationController::class, 'documents'])->name('documents');
             // Public assessment submissions (free-assessment + education-enrolment).
             Route::get('/assessments', [EducationController::class, 'assessments'])->name('assessments');
