@@ -16,7 +16,14 @@ class LeadController extends Controller
      */
     public function index()
     {
-        $leads = Lead::with(['studyPlans', 'event'])->latest()->get();
+        // A lead drops out of this view the moment it's adopted by any
+        // department (student / English / immigration / accommodation).
+        // Each department has its own queue surface; keeping them in the
+        // sales-pipeline table would mean each row appears in two places.
+        $leads = Lead::inLeadPipeline()
+            ->with(['studyPlans', 'event'])
+            ->latest()
+            ->get();
         return inertia('admin/Leads', [
             'leads' => $leads
         ]);
@@ -1530,6 +1537,46 @@ class LeadController extends Controller
         try {
             $lead = Lead::findOrFail($id);
             $lead->fill(['is_accommodation_client' => false, 'accommodation_converted_at' => null, 'accommodation_converted_by' => null])->save();
+            return back()->with('success', "Lead {$lead->lead_id} reverted.");
+        } catch (\Throwable $e) {
+            return back()->with('error', 'Could not revert.');
+        }
+    }
+
+    /**
+     * Convert a lead into an English-team student. Mirrors the
+     * is_student / is_immigration_case / is_accommodation_client trio
+     * so the English team gets a "Cases" queue and the lead drops out
+     * of the Sales pipeline view.
+     */
+    public function convertToEnglish($id)
+    {
+        try {
+            $lead = Lead::findOrFail($id);
+            if ($lead->is_english_student) {
+                return back()->with('error', 'Already an English student.');
+            }
+            $lead->fill([
+                'is_english_student'   => true,
+                'english_converted_at' => now(),
+                'english_converted_by' => auth()->id(),
+            ])->save();
+            return back()->with('success', "Lead {$lead->lead_id} is now an English student.");
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('Convert to English failed', ['id' => $id, 'error' => $e->getMessage()]);
+            return back()->with('error', 'Could not convert this lead.');
+        }
+    }
+
+    public function revertEnglish($id)
+    {
+        try {
+            $lead = Lead::findOrFail($id);
+            $lead->fill([
+                'is_english_student'   => false,
+                'english_converted_at' => null,
+                'english_converted_by' => null,
+            ])->save();
             return back()->with('success', "Lead {$lead->lead_id} reverted.");
         } catch (\Throwable $e) {
             return back()->with('error', 'Could not revert.');

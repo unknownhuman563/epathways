@@ -1258,6 +1258,7 @@ const MENU_TONE = {
     emerald: { dot: 'bg-emerald-500', icon: 'text-emerald-600', badge: 'bg-emerald-100 text-emerald-700 border-emerald-200' },
     amber:   { dot: 'bg-amber-500',   icon: 'text-amber-600',   badge: 'bg-amber-100 text-amber-700 border-amber-200' },
     cyan:    { dot: 'bg-cyan-500',    icon: 'text-cyan-600',    badge: 'bg-cyan-100 text-cyan-700 border-cyan-200' },
+    purple:  { dot: 'bg-purple-500',  icon: 'text-purple-600',  badge: 'bg-purple-100 text-purple-700 border-purple-200' },
 };
 
 function ConvertMenu({ lead, canRevert }) {
@@ -1313,6 +1314,17 @@ function ConvertMenu({ lead, canRevert }) {
             endpoint: `/admin/leads/${lead.id}/convert-to-accommodation`,
             revertEndpoint: `/admin/leads/${lead.id}/revert-accommodation`,
             confirmText: "Open as an accommodation client? They appear in the Accommodation team's queue.",
+        },
+        {
+            key: 'english',
+            label: 'English',
+            sublabel: 'language',
+            icon: <Globe size={14} />,
+            tone: 'purple',
+            active: !!lead.is_english_student,
+            endpoint: `/admin/leads/${lead.id}/convert-to-english`,
+            revertEndpoint: `/admin/leads/${lead.id}/revert-english`,
+            confirmText: "Convert to an English student? Lands them in the English team's queue (PTE / DIY / mocktest pipeline).",
         },
     ];
 

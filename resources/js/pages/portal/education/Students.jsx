@@ -6,7 +6,7 @@ import {
     GraduationCap, Search, Users, Mail, Phone, MapPin, Calendar, School,
     CreditCard, FileText, ExternalLink, Languages, ClipboardList,
     Save, Edit2, ArrowUpDown, ArrowUp, ArrowDown,
-    ChevronDown, Check,
+    ChevronDown, Check, TrendingUp, Globe,
 } from "lucide-react";
 
 const PAGE_SIZE = 25;
@@ -647,7 +647,28 @@ function StudentDashboardPanel({ student: s }) {
                 </div>
             </section>
 
-            {/* 2 — Study plan */}
+            {/* 2 — Journey — one unified stepper across the whole
+                Education → Immigration pipeline. Each node is tinted by
+                the team that owns it (green for education, indigo for
+                immigration). English shows as a parallel mini-track
+                below if the student is in that queue. */}
+            <section>
+                <PanelTitle>Journey</PanelTitle>
+                <UnifiedJourney student={s} />
+                {s.english_stage && (
+                    <div className="mt-3">
+                        <JourneyTrack
+                            icon={<Languages size={11} />}
+                            label="English (parallel)"
+                            stages={ENGLISH_STAGES}
+                            current={s.english_stage}
+                            toneClass="english"
+                        />
+                    </div>
+                )}
+            </section>
+
+            {/* 3 — Study plan */}
             <section>
                 <PanelTitle>Study plan</PanelTitle>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
@@ -754,6 +775,234 @@ function StudentDashboardPanel({ student: s }) {
 }
 
 // ─── Small UI helpers ──────────────────────────────────────────────────────
+// The canonical end-to-end student journey from initial school
+// endorsement through visa approval to course start. Each node carries
+// the team that owns that stage so the stepper can colour each segment
+// accordingly — green = Education team, indigo = Immigration team.
+const UNIFIED_JOURNEY = [
+    { stage: "Endorsed to School",       team: "education"   },
+    { stage: "Conditional Offer",        team: "education"   },
+    { stage: "Unconditional Offer",      team: "education"   },
+    { stage: "Endorsed to Immigration",  team: "immigration" },
+    { stage: "Visa Lodged",              team: "immigration" },
+    { stage: "Request for Information",  team: "immigration" },
+    { stage: "Approved in Principle",    team: "immigration" },
+    { stage: "Approved Visa",            team: "immigration" },
+    { stage: "Started Course",           team: "education"   },
+];
+
+// Immigration team uses "Endorsed" as a shorter alias for "Endorsed to
+// Immigration"; everything else maps 1:1 to the unified labels above.
+const IMMIGRATION_TO_UNIFIED = {
+    "Endorsed":                "Endorsed to Immigration",
+    "Visa Lodged":             "Visa Lodged",
+    "Request for Information": "Request for Information",
+    "Approved in Principle":   "Approved in Principle",
+    "Approved Visa":           "Approved Visa",
+};
+
+// Resolve which node on the unified sequence the student is parked
+// at. Immigration stage takes precedence (it's the more granular
+// downstream signal). Returns null when nothing is set yet.
+function resolveJourneyPosition(student) {
+    if (student.immigration_stage) {
+        if (student.immigration_stage === "Decline Visa") return { declined: true };
+        const mapped = IMMIGRATION_TO_UNIFIED[student.immigration_stage];
+        const idx = UNIFIED_JOURNEY.findIndex((n) => n.stage === mapped);
+        if (idx > -1) return { index: idx };
+    }
+    if (student.education_stage) {
+        const idx = UNIFIED_JOURNEY.findIndex((n) => n.stage === student.education_stage);
+        if (idx > -1) return { index: idx };
+    }
+    return null;
+}
+
+const TEAM_COLOURS = {
+    education:   { fill: "bg-emerald-500", text: "text-emerald-700", soft: "bg-emerald-100 border-emerald-200", line: "bg-emerald-200" },
+    immigration: { fill: "bg-indigo-500",  text: "text-indigo-700",  soft: "bg-indigo-100 border-indigo-200",   line: "bg-indigo-200"  },
+};
+
+// The unified stepper. Renders all 9 canonical stages in order, with
+// the team-owned segment of the line and dot colour-coded. The current
+// stage gets a larger filled dot + bold label; everything before is
+// shown as completed (filled), everything after as muted gray.
+function UnifiedJourney({ student }) {
+    const position = resolveJourneyPosition(student);
+    const currentIdx = position?.index ?? -1;
+    const declined = !! position?.declined;
+    const currentNode = currentIdx > -1 ? UNIFIED_JOURNEY[currentIdx] : null;
+    const currentTeam = declined ? null : (currentNode?.team || "education");
+    const currentLabel = declined
+        ? "Visa Declined"
+        : currentNode?.stage || "Not started yet";
+
+    return (
+        <div className="bg-white rounded-lg border border-gray-200 px-3 py-3">
+            {/* Header: end-to-end framing + current stage on the right */}
+            <div className="flex items-center justify-between gap-2 mb-3">
+                <span className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-gray-600">
+                    <span className="w-4 h-4 rounded-md bg-gray-100 flex items-center justify-center">
+                        <TrendingUp size={11} className="text-gray-500" />
+                    </span>
+                    Education → Immigration
+                </span>
+                <span
+                    className={`text-[10px] font-bold ${
+                        declined
+                            ? "text-red-700"
+                            : currentTeam
+                                ? TEAM_COLOURS[currentTeam].text
+                                : "text-gray-400"
+                    }`}
+                >
+                    {currentLabel}
+                </span>
+            </div>
+
+            {/* Stepper — flex row, each cell rendering a node. */}
+            <ol className="relative flex items-start justify-between gap-1">
+                {UNIFIED_JOURNEY.map((node, i) => {
+                    const isCurrent = i === currentIdx && ! declined;
+                    const passed    = currentIdx > -1 && i < currentIdx;
+                    const team      = TEAM_COLOURS[node.team];
+                    // The connector line to the left of this node uses
+                    // this node's team colour when passed/current, gray
+                    // otherwise. Drawn as an absolute-positioned segment
+                    // so the colour transitions land between dots.
+                    const showLine = i > 0;
+                    const prevPassed = currentIdx > -1 && i - 1 < currentIdx;
+                    const lineActive = passed || isCurrent || prevPassed;
+                    return (
+                        <li
+                            key={node.stage}
+                            title={`${node.stage} · ${node.team}`}
+                            className="relative flex-1 flex flex-col items-center gap-1.5 min-w-0"
+                        >
+                            {showLine && (
+                                <span
+                                    className={`absolute top-[6px] right-[50%] w-full h-px ${
+                                        lineActive ? team.line : "bg-gray-200"
+                                    }`}
+                                    aria-hidden
+                                />
+                            )}
+                            <span
+                                className={`relative z-10 inline-flex items-center justify-center rounded-full ring-2 ring-white transition-all ${
+                                    isCurrent
+                                        ? `w-3.5 h-3.5 ${team.fill} shadow-sm`
+                                        : passed
+                                            ? `w-3 h-3 ${team.fill}`
+                                            : "w-3 h-3 bg-gray-200"
+                                }`}
+                            />
+                            <span
+                                className={`text-[9px] text-center leading-tight truncate max-w-full ${
+                                    isCurrent
+                                        ? `${team.text} font-bold`
+                                        : passed
+                                            ? "text-gray-600"
+                                            : "text-gray-400"
+                                }`}
+                            >
+                                {node.stage}
+                            </span>
+                        </li>
+                    );
+                })}
+            </ol>
+
+            {declined && (
+                <p className="mt-3 text-[11px] text-red-700 bg-red-50 border border-red-100 rounded-md px-2.5 py-1.5 inline-flex items-center gap-1.5">
+                    <Globe size={11} /> Visa application declined — see immigration team for next steps.
+                </p>
+            )}
+
+            {/* Tiny legend so the colour story is unambiguous. */}
+            <div className="mt-3 flex items-center gap-4 text-[9.5px] text-gray-500">
+                <span className="inline-flex items-center gap-1">
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" /> Education
+                </span>
+                <span className="inline-flex items-center gap-1">
+                    <span className="w-2.5 h-2.5 rounded-full bg-indigo-500" /> Immigration
+                </span>
+            </div>
+        </div>
+    );
+}
+
+// One row in the student Journey panel — renders a single track
+// (Education, English, or Immigration) as a horizontal stepper across
+// the canonical stage sequence. Stages before the current one show as
+// "passed" (filled tone), the current stage as the active node (bigger
+// dot + tinted background), and stages after as muted gray.
+const JOURNEY_TONE = {
+    education:   { fill: "bg-emerald-500", soft: "bg-emerald-100 text-emerald-700 border-emerald-200", text: "text-emerald-700" },
+    english:     { fill: "bg-purple-500",  soft: "bg-purple-100 text-purple-700 border-purple-200",    text: "text-purple-700" },
+    immigration: { fill: "bg-indigo-500",  soft: "bg-indigo-100 text-indigo-700 border-indigo-200",    text: "text-indigo-700" },
+};
+
+function JourneyTrack({ icon, label, stages, current, toneClass }) {
+    const tone = JOURNEY_TONE[toneClass] || JOURNEY_TONE.education;
+    const currentIdx = current ? stages.indexOf(current) : -1;
+
+    return (
+        <div className="bg-white rounded-lg border border-gray-200 px-3 py-2.5">
+            <div className="flex items-center justify-between gap-2 mb-2">
+                <span className={`inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider ${tone.text}`}>
+                    <span className={`w-4 h-4 rounded-md ${tone.soft} flex items-center justify-center`}>
+                        {icon}
+                    </span>
+                    {label}
+                </span>
+                <span className={`text-[10px] font-bold ${current ? tone.text : "text-gray-400"}`}>
+                    {current || "Not started"}
+                </span>
+            </div>
+
+            {/* Stepper — connector line + numbered dots, one per stage in
+                the canonical sequence. Hover any dot to read its label. */}
+            <div className="relative">
+                <div className="absolute top-1.5 left-1 right-1 h-px bg-gray-200" aria-hidden />
+                <ol className="relative flex items-start justify-between gap-1">
+                    {stages.map((stage, i) => {
+                        const passed = currentIdx > -1 && i < currentIdx;
+                        const isCurrent = i === currentIdx;
+                        return (
+                            <li
+                                key={stage}
+                                title={stage}
+                                className="flex-1 flex flex-col items-center gap-1 min-w-0"
+                            >
+                                <span
+                                    className={`relative z-10 inline-flex items-center justify-center rounded-full ring-2 ring-white transition-all ${
+                                        isCurrent
+                                            ? `w-3.5 h-3.5 ${tone.fill} shadow-sm`
+                                            : passed
+                                                ? `w-3 h-3 ${tone.fill}`
+                                                : "w-3 h-3 bg-gray-200"
+                                    }`}
+                                />
+                                <span
+                                    className={`text-[9px] text-center leading-tight truncate max-w-full ${
+                                        isCurrent
+                                            ? `${tone.text} font-bold`
+                                            : passed
+                                                ? "text-gray-600"
+                                                : "text-gray-400"
+                                    }`}
+                                >
+                                    {stage}
+                                </span>
+                            </li>
+                        );
+                    })}
+                </ol>
+            </div>
+        </div>
+    );
+}
+
 function PanelTitle({ children }) {
     return <h4 className="text-[10px] font-bold uppercase tracking-[0.18em] text-gray-500 mb-2.5">{children}</h4>;
 }

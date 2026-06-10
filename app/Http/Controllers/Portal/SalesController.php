@@ -112,12 +112,16 @@ class SalesController extends Controller
             // index can render their summary chips and the expander panel
             // without triggering N+1. `tasks_open_count` is a custom alias
             // for incomplete tasks only.
-            $leads = Lead::with([
-                'studyPlans',
-                'event',
-                'portalUser:id,lead_id,last_login_at',
-                'notes' => fn ($q) => $q->latest(),
-            ])
+            // Sales only sees leads still in the pipeline — once any
+            // department adopts the lead (student / English / case /
+            // accommodation) it disappears from this table.
+            $leads = Lead::inLeadPipeline()
+                ->with([
+                    'studyPlans',
+                    'event',
+                    'portalUser:id,lead_id,last_login_at',
+                    'notes' => fn ($q) => $q->latest(),
+                ])
                 ->withCount(['notes', 'documents'])
                 ->withCount(['tasks as tasks_open_count' => fn ($q) => $q->where('completed', false)])
                 ->latest()->get();

@@ -88,6 +88,21 @@ class Lead extends Model
     }
 
     /**
+     * Query scope — leads that are still in the Sales pipeline. Any
+     * lead that's been moved to another department (student / English
+     * student / immigration case / accommodation client) drops out of
+     * the leads-table view. Used by the admin + sales leads listings.
+     */
+    public function scopeInLeadPipeline($query)
+    {
+        return $query
+            ->where('is_student',              false)
+            ->where('is_immigration_case',     false)
+            ->where('is_accommodation_client', false)
+            ->where('is_english_student',      false);
+    }
+
+    /**
      * Canonical lead-pipeline stages. Single source of truth — referenced
      * by SalesController validation and the LeadController stage-update
      * endpoint. Order is the canonical pipeline order surfaced in the UI.
@@ -147,6 +162,7 @@ class Lead extends Model
         // Multi-service flags
         'is_immigration_case', 'immigration_converted_at', 'immigration_converted_by',
         'is_accommodation_client', 'accommodation_converted_at', 'accommodation_converted_by',
+        'is_english_student', 'english_converted_at', 'english_converted_by',
         // INZ lodgement tracking
         'inz_visa_type', 'inz_lodged_at', 'inz_reference', 'inz_status', 'inz_decision_at',
         // IAA / Privacy Act gating

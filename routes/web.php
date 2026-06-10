@@ -342,6 +342,8 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/admin/leads/{id}/revert-case', [LeadController::class, 'revertCase'])->name('admin.leads.revert-case');
         Route::post('/admin/leads/{id}/convert-to-accommodation', [LeadController::class, 'convertToAccommodation'])->name('admin.leads.convert-accommodation');
         Route::post('/admin/leads/{id}/revert-accommodation', [LeadController::class, 'revertAccommodation'])->name('admin.leads.revert-accommodation');
+        Route::post('/admin/leads/{id}/convert-to-english', [LeadController::class, 'convertToEnglish'])->name('admin.leads.convert-english');
+        Route::post('/admin/leads/{id}/revert-english', [LeadController::class, 'revertEnglish'])->name('admin.leads.revert-english');
         Route::post('/admin/leads/{id}/inz', [LeadController::class, 'updateInz'])->name('admin.leads.inz');
 
         // Bulk CSV import — duplicates detected by email or name+phone.
