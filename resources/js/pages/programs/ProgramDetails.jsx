@@ -67,6 +67,15 @@ function renderSections(value, fallback) {
 export default function ProgramDetails({ program }) {
     const paragraphs = (program?.description || '').split(/\n\n+/).filter(Boolean);
     const fees = Array.isArray(program?.fee_guide) ? program.fee_guide : [];
+
+    // Multiple tuition rows: [{ label, amount, notes }]. Fall back to the
+    // legacy single tuition_fee / tuition_fee_notes when none are saved.
+    const tuitionRows = (Array.isArray(program?.tuition_fees) && program.tuition_fees.length > 0
+        ? program.tuition_fees
+        : (program?.tuition_fee
+            ? [{ label: '', amount: program.tuition_fee, notes: program.tuition_fee_notes }]
+            : [])
+    ).filter(r => (r.label && String(r.label).trim()) || r.amount || (r.notes && String(r.notes).trim()));
     const fmt = (val) => {
         if (val === null || val === undefined || val === '') return '—';
         const n = Number(val);
@@ -151,31 +160,31 @@ export default function ProgramDetails({ program }) {
 
                         {/* Stats Bar — 2-col on mobile so text isn't crammed,
                             5-col on desktop. */}
-                        <div className="bg-[#1a1a1a] text-white py-7 sm:py-10 px-4 sm:px-6">
-                            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-y-5 items-center">
+                        <div className="bg-[#1a1a1a] text-white py-10 sm:py-14 px-4 sm:px-6">
+                            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-y-8 items-center">
                                 <div className="flex flex-col items-center sm:border-r border-white/10 last:border-r-0 px-2">
-                                    <span className="text-2xl sm:text-3xl font-bold mb-1.5 tabular-nums">{program?.level ?? '—'}</span>
-                                    <span className="text-[10px] text-gray-500 font-medium uppercase tracking-[0.2em]">Level</span>
+                                    <span className="text-4xl sm:text-5xl lg:text-6xl font-bold mb-2 tabular-nums">{program?.level ?? '—'}</span>
+                                    <span className="text-sm sm:text-base text-gray-300 font-semibold uppercase tracking-[0.15em]">Level</span>
                                 </div>
                                 <div className="flex flex-col items-center sm:border-r border-white/10 last:border-r-0 px-2">
-                                    <span className="text-2xl sm:text-3xl font-bold mb-1.5 tabular-nums">{program?.duration_months ?? '—'}</span>
-                                    <div className="text-[10px] text-gray-500 font-medium uppercase tracking-[0.2em] text-center leading-relaxed">
+                                    <span className="text-4xl sm:text-5xl lg:text-6xl font-bold mb-2 tabular-nums">{program?.duration_months ?? '—'}</span>
+                                    <div className="text-sm sm:text-base text-gray-300 font-semibold uppercase tracking-[0.15em] text-center leading-relaxed">
                                         Months<br />(Duration)
                                     </div>
                                 </div>
                                 <div className="flex flex-col items-center sm:border-r border-white/10 last:border-r-0 px-2">
-                                    <span className="text-2xl sm:text-3xl font-bold mb-1.5 tabular-nums">{program?.credits ?? '—'}</span>
-                                    <span className="text-[10px] text-gray-500 font-medium uppercase tracking-[0.2em]">Credits</span>
+                                    <span className="text-4xl sm:text-5xl lg:text-6xl font-bold mb-2 tabular-nums">{program?.credits ?? '—'}</span>
+                                    <span className="text-sm sm:text-base text-gray-300 font-semibold uppercase tracking-[0.15em]">Credits</span>
                                 </div>
                                 <div className="flex flex-col items-center sm:border-r border-white/10 last:border-r-0 px-2">
-                                    <span className="text-2xl sm:text-3xl font-bold mb-1.5 tabular-nums">{program?.residency_points ?? '—'}</span>
-                                    <div className="text-[10px] text-gray-500 font-medium uppercase tracking-[0.2em] text-center leading-relaxed">
+                                    <span className="text-4xl sm:text-5xl lg:text-6xl font-bold mb-2 tabular-nums">{program?.residency_points ?? '—'}</span>
+                                    <div className="text-sm sm:text-base text-gray-300 font-semibold uppercase tracking-[0.15em] text-center leading-relaxed">
                                         Points of Residency
                                     </div>
                                 </div>
                                 <div className="flex flex-col items-center sm:border-r border-white/10 last:border-r-0 px-2 col-span-2 sm:col-span-1">
-                                    <span className="text-2xl sm:text-3xl font-bold mb-1.5 tabular-nums">{program?.hours_per_week ?? '—'}</span>
-                                    <div className="text-[10px] text-gray-500 font-medium uppercase tracking-[0.2em] text-center leading-relaxed">
+                                    <span className="text-4xl sm:text-5xl lg:text-6xl font-bold mb-2 tabular-nums">{program?.hours_per_week ?? '—'}</span>
+                                    <div className="text-sm sm:text-base text-gray-300 font-semibold uppercase tracking-[0.15em] text-center leading-relaxed">
                                         Hours per Week<br />(Works Right)
                                     </div>
                                 </div>
@@ -197,7 +206,7 @@ export default function ProgramDetails({ program }) {
                     {/* English Requirements Card */}
                     <div className="bg-white p-8 rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.05)] border border-gray-100 h-full">
                         <h3 className="text-lg font-bold text-[#282728] mb-4">English Requirements</h3>
-                        <p className="text-sm text-gray-600 leading-relaxed">
+                        <p className="text-sm text-gray-600 leading-relaxed whitespace-pre-line">
                             {program?.english_requirements || 'No English requirements specified.'}
                         </p>
                     </div>
@@ -241,15 +250,15 @@ export default function ProgramDetails({ program }) {
                     )}
                 </div>
 
-                {/* Detailed Entry Requirements Alert */}
+                {/* Detailed Other Benefits Alert */}
                 <div className="mb-16">
-                    <h3 className="text-lg font-bold text-[#282728] mb-6">Entry Requirements</h3>
+                    <h3 className="text-lg font-bold text-[#282728] mb-6">Other Benefits</h3>
                     <div className="bg-white border border-gray-200 rounded-xl p-6 flex items-start gap-4 shadow-sm w-full md:w-1/2">
                         <div className="min-w-[24px] h-6 bg-[#436235] rounded flex items-center justify-center mt-0.5">
                             <Check className="w-4 h-4 text-white" strokeWidth={3} />
                         </div>
                         <div className="text-sm text-gray-600 leading-relaxed flex-1">
-                            {renderSections(program?.entry_requirements, 'No entry requirements specified.')}
+                            {renderSections(program?.other_benefits, 'No other benefits specified.')}
                         </div>
                     </div>
                 </div>
@@ -266,20 +275,23 @@ export default function ProgramDetails({ program }) {
                             </div>
 
                             <div className="space-y-3">
-                                <div className="flex justify-between items-baseline gap-4">
-                                    <span className="text-gray-600 text-sm flex-shrink-0">Tuition</span>
-                                    <span className="font-bold text-[#282728] text-right">
-                                        <span className="text-2xl tabular-nums">
-                                            {program?.tuition_fee ? fmt(program.tuition_fee) : '—'}
-                                        </span>
-                                        {program?.tuition_fee && program?.tuition_fee_notes && (
-                                            <span className="text-sm font-normal text-gray-600 ml-2">
-                                                ({program.tuition_fee_notes})
+                                {tuitionRows.length > 0 ? (
+                                    tuitionRows.map((row, i) => (
+                                        <div key={i} className="flex justify-between items-baseline gap-4">
+                                            <span className="text-gray-600 text-sm flex-shrink-0">{row.label || 'Tuition'}</span>
+                                            <span className="font-bold text-[#282728] text-right">
+                                                <span className="text-2xl tabular-nums">
+                                                    {row.amount !== '' && row.amount !== null && row.amount !== undefined ? fmt(row.amount) : '—'}
+                                                </span>
+                                                {row.notes && (
+                                                    <span className="text-sm font-normal text-gray-600 ml-2">
+                                                        ({row.notes})
+                                                    </span>
+                                                )}
                                             </span>
-                                        )}
-                                    </span>
-                                </div>
-                                {!program?.tuition_fee && (
+                                        </div>
+                                    ))
+                                ) : (
                                     <p className="text-sm text-gray-500">No tuition fee specified.</p>
                                 )}
                             </div>

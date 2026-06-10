@@ -18,12 +18,14 @@ export default function ProgramsLevels({ programs = [], activePromos = [] }) {
     const [activeFilter, setActiveFilter] = useState('all');
     const [visibleCount, setVisibleCount] = useState(8); // Start with 8 visible cards
 
-    const filteredPrograms = programs.filter(program => {
-        const matchesSearch = (program.title || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-            (program.institution || '').toLowerCase().includes(searchQuery.toLowerCase());
-        const matchesFilter = activeFilter === 'all' || program.category === activeFilter;
-        return matchesSearch && matchesFilter;
-    });
+    const filteredPrograms = programs
+        .filter(program => {
+            const matchesSearch = (program.title || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+                (program.institution || '').toLowerCase().includes(searchQuery.toLowerCase());
+            const matchesFilter = activeFilter === 'all' || program.category === activeFilter;
+            return matchesSearch && matchesFilter;
+        })
+        .sort((a, b) => (Number(b.level) || 0) - (Number(a.level) || 0)); // highest level (9) first
 
     const visiblePrograms = filteredPrograms.slice(0, visibleCount);
 

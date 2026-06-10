@@ -81,6 +81,7 @@ const blankProgram = () => ({
     fee_guide: DEFAULT_FEE_REGIONS.map(region => ({ region, fee: '' })),
     tuition_fee: '',
     tuition_fee_notes: '',
+    tuition_fees: [{ label: '', amount: '', notes: '' }],
     insurance_fee: '',
     visa_processing_fee: '',
     living_expense: '',
@@ -270,6 +271,15 @@ function ProgramModal({ open, onClose, editing }) {
                 : DEFAULT_FEE_REGIONS.map(region => ({ region, fee: '' })),
             entry_requirements: normalizeSectionsField(editing.entry_requirements),
             employment_outcomes: normalizeSectionsField(editing.employment_outcomes),
+            tuition_fees: Array.isArray(editing.tuition_fees) && editing.tuition_fees.length > 0
+                ? editing.tuition_fees.map(r => ({
+                    label: r?.label ?? '',
+                    amount: r?.amount ?? '',
+                    notes: r?.notes ?? '',
+                }))
+                : editing.tuition_fee
+                    ? [{ label: '', amount: editing.tuition_fee, notes: editing.tuition_fee_notes ?? '' }]
+                    : [{ label: '', amount: '', notes: '' }],
         };
     };
 
@@ -288,6 +298,13 @@ function ProgramModal({ open, onClose, editing }) {
         const out = { ...d };
         if (out.image === null && isEdit) delete out.image;
         out.fee_guide = (out.fee_guide || []).filter(r => r.region || r.fee);
+        out.tuition_fees = (out.tuition_fees || [])
+            .map(r => ({
+                label: (r.label ?? '').trim(),
+                amount: r.amount,
+                notes: (r.notes ?? '').trim(),
+            }))
+            .filter(r => r.label || (r.amount !== '' && r.amount !== null && r.amount !== undefined) || r.notes);
         out.entry_requirements = cleanSectionsField(out.entry_requirements);
         out.employment_outcomes = cleanSectionsField(out.employment_outcomes);
         out.other_benefits = Array.isArray(out.other_benefits)
@@ -315,6 +332,14 @@ function ProgramModal({ open, onClose, editing }) {
     };
     const addFeeRow = () => setData('fee_guide', [...data.fee_guide, { region: '', fee: '' }]);
     const removeFeeRow = (idx) => setData('fee_guide', data.fee_guide.filter((_, i) => i !== idx));
+
+    const setTuitionRow = (idx, key, val) => {
+        const next = [...(data.tuition_fees || [])];
+        next[idx] = { ...next[idx], [key]: val };
+        setData('tuition_fees', next);
+    };
+    const addTuitionRow = () => setData('tuition_fees', [...(data.tuition_fees || []), { label: '', amount: '', notes: '' }]);
+    const removeTuitionRow = (idx) => setData('tuition_fees', (data.tuition_fees || []).filter((_, i) => i !== idx));
 
     const submit = () => {
         const url = isEdit ? '/admin/programs/' + editing.id : '/admin/programs';
@@ -539,27 +564,59 @@ function ProgramModal({ open, onClose, editing }) {
 
                             <div className="border border-gray-200 rounded-xl p-4 bg-gray-50/50">
                                 <Label>Tuition Fee</Label>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2">
-                                    <div>
-                                        <Input
-                                            type="number"
-                                            step="0.01"
-                                            min="0"
-                                            value={data.tuition_fee}
-                                            onChange={e => setField('tuition_fee', e.target.value)}
-                                            placeholder="1000.00"
-                                        />
-                                        <p className="text-[10px] text-gray-500 mt-1">Amount in NZD</p>
-                                    </div>
-                                    <div>
-                                        <Input
-                                            value={data.tuition_fee_notes}
-                                            onChange={e => setField('tuition_fee_notes', e.target.value)}
-                                            placeholder="e.g. Partial scholarship available"
-                                        />
-                                        <p className="text-[10px] text-gray-500 mt-1">Notes (e.g. partial, sponsored, per semester)</p>
-                                    </div>
+                                <div className="space-y-3 mt-2">
+                                    {(data.tuition_fees || []).map((row, idx) => (
+                                        <div
+                                            key={idx}
+                                            className="flex flex-wrap items-end gap-2 border border-gray-200 rounded-lg p-3 bg-white"
+                                        >
+                                            {/* basis-* + grow + min-w-0 = each field flexes and wraps to its own line when the row gets narrow */}
+                                            <div className="grow basis-24 min-w-0">
+                                                <span className="block text-[10px] font-bold text-gray-600 uppercase tracking-wider mb-1">Label</span>
+                                                <Input
+                                                    value={row.label}
+                                                    onChange={e => setTuitionRow(idx, 'label', e.target.value)}
+                                                    placeholder="Year 1"
+                                                />
+                                            </div>
+                                            <div className="grow basis-28 min-w-0">
+                                                <span className="block text-[10px] font-bold text-gray-600 uppercase tracking-wider mb-1">Amount (NZD)</span>
+                                                <Input
+                                                    type="number"
+                                                    step="0.01"
+                                                    min="0"
+                                                    value={row.amount}
+                                                    onChange={e => setTuitionRow(idx, 'amount', e.target.value)}
+                                                    placeholder="33075.00"
+                                                />
+                                            </div>
+                                            <div className="grow basis-40 min-w-0">
+                                                <span className="block text-[10px] font-bold text-gray-600 uppercase tracking-wider mb-1">Notes</span>
+                                                <Input
+                                                    value={row.notes}
+                                                    onChange={e => setTuitionRow(idx, 'notes', e.target.value)}
+                                                    placeholder="optional note"
+                                                />
+                                            </div>
+                                            <button
+                                                type="button"
+                                                onClick={() => removeTuitionRow(idx)}
+                                                className="shrink-0 p-2.5 mb-0.5 text-gray-500 hover:text-red-500 hover:bg-red-50 rounded-lg"
+                                                title="Remove row"
+                                            >
+                                                <X size={14} />
+                                            </button>
+                                        </div>
+                                    ))}
                                 </div>
+                                <button
+                                    type="button"
+                                    onClick={addTuitionRow}
+                                    className="mt-3 w-full py-2 border-2 border-dashed border-gray-200 rounded-xl text-xs font-semibold text-gray-600 hover:border-gray-400 hover:text-gray-700 hover:bg-white flex items-center justify-center gap-2"
+                                >
+                                    <Plus size={14} /> Add Tuition Row
+                                </button>
+                                <p className="text-[10px] text-gray-500 mt-2">Add one row per year/installment. Label (e.g. "Year 1"), amount in NZD, and an optional note shown in parentheses.</p>
                             </div>
 
                             {/*
