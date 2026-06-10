@@ -12,6 +12,8 @@ import {
   Check,
   ArrowLeft,
   MapPin,
+  QrCode,
+  X,
 } from "lucide-react";
 import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
@@ -24,6 +26,7 @@ const waNumber = (raw) => (raw || "").replace(/\D/g, "");
 export default function TeamProfilePage({ slug }) {
   const member = getMemberBySlug(slug);
   const [copied, setCopied] = useState(false);
+  const [qrOpen, setQrOpen] = useState(false);
 
   if (!member) {
     return (
@@ -144,7 +147,26 @@ export default function TeamProfilePage({ slug }) {
                   ) : null}
                 </div>
 
-                {links.wechatId ? (
+                {links.wechatQr ? (
+                  <button
+                    type="button"
+                    onClick={() => setQrOpen(true)}
+                    className="group flex w-full items-center gap-4 rounded-2xl border border-gray-200/80 bg-white px-5 py-4 text-left transition-all duration-300 hover:-translate-y-0.5 hover:border-[#436235]/40 hover:shadow-md"
+                  >
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#436235]/10 text-[#436235] transition-colors duration-300 group-hover:bg-[#436235] group-hover:text-white">
+                      <QrCode className="h-5 w-5" />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-sm font-bold tracking-tight text-[#282728]">WeChat</span>
+                      <span className="block truncate text-xs text-gray-400">Tap to show QR code</span>
+                    </span>
+                    <img
+                      src={links.wechatQr}
+                      alt=""
+                      className="h-10 w-10 rounded-lg object-contain ring-1 ring-gray-200"
+                    />
+                  </button>
+                ) : links.wechatId ? (
                   <div className="rounded-2xl border border-gray-200/80 bg-white px-5 py-4">
                     <div className="flex items-center gap-4">
                       <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#436235]/10 text-base font-extrabold text-[#436235]">
@@ -178,6 +200,35 @@ export default function TeamProfilePage({ slug }) {
           </div>
         </motion.div>
       </section>
+
+      {/* WeChat QR lightbox */}
+      {qrOpen && links.wechatQr ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6 backdrop-blur-sm"
+          onClick={() => setQrOpen(false)}
+        >
+          <div
+            className="relative w-full max-w-xs rounded-3xl bg-white p-6 text-center shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={() => setQrOpen(false)}
+              aria-label="Close"
+              className="absolute right-4 top-4 text-gray-400 transition-colors hover:text-[#282728]"
+            >
+              <X className="h-5 w-5" />
+            </button>
+            <img
+              src={links.wechatQr}
+              alt={`${name} WeChat QR code`}
+              className="mx-auto h-64 w-64 object-contain"
+            />
+            <p className="mt-4 text-sm font-bold text-[#282728]">Scan to add {name} on WeChat</p>
+            {links.wechatId ? <p className="text-xs text-gray-400">{links.wechatId}</p> : null}
+          </div>
+        </div>
+      ) : null}
 
       <Footer />
     </div>

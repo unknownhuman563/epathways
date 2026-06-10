@@ -35,6 +35,7 @@ class Program extends Model
         'fee_guide',
         'tuition_fee',
         'tuition_fee_notes',
+        'tuition_fees',
         'insurance_fee',
         'visa_processing_fee',
         'living_expense',
@@ -43,6 +44,7 @@ class Program extends Model
 
     protected $casts = [
         'fee_guide' => 'array',
+        'tuition_fees' => 'array',
         'entry_requirements' => 'array',
         'employment_outcomes' => 'array',
         'other_benefits' => 'array',

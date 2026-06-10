@@ -25,11 +25,7 @@ export default function ProgramsLevels({ programs = [], activePromos = [] }) {
             const matchesFilter = activeFilter === 'all' || program.category === activeFilter;
             return matchesSearch && matchesFilter;
         })
-        // Sort by NZQA level descending so the highest qualifications surface
-        // first: Doctorate (10) → Master's (9) → PG Dip (8) → Bachelor (7) →
-        // Diploma (5–6). Numeric coerce because `level` arrives as a string
-        // on some legacy records; missing levels sink to the bottom.
-        .sort((a, b) => (Number(b.level) || 0) - (Number(a.level) || 0));
+        .sort((a, b) => (Number(b.level) || 0) - (Number(a.level) || 0)); // highest level (9) first
 
     const visiblePrograms = filteredPrograms.slice(0, visibleCount);
 
