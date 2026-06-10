@@ -150,6 +150,12 @@ class User extends Authenticatable
      */
     public function canAccessPortal(string $portal): bool
     {
+        // Super-admin-only surfaces must NOT let plain admins through —
+        // resolve this gate by exact-role check before the broader
+        // admin-pass below.
+        if ($portal === self::ROLE_SUPER_ADMIN) {
+            return $this->isSuperAdmin();
+        }
         if ($this->isAdmin()) return true;
         if ($portal === 'immigration' && in_array($this->role, self::IMMIGRATION_ROLES, true)) {
             return true;
@@ -164,6 +170,9 @@ class User extends Authenticatable
     {
         if ($this->isLead()) {
             return '/portal/lead/dashboard';
+        }
+        if ($this->isSuperAdmin()) {
+            return '/admin/super-dashboard';
         }
         if (in_array($this->role, self::IMMIGRATION_ROLES, true)) {
             return '/portal/immigration/dashboard';

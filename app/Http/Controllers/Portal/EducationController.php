@@ -163,8 +163,20 @@ class EducationController extends Controller
             // Intake, Program, School, COOP, PTE/IELTS, OOP, Contact, Email,
             // GDrive, Comments) so the expanded student row on the portal
             // matches the columns staff are already tracking offline.
+            // Widened to include not just Education students but also leads
+            // who have moved on to English (stage = "English Pro") or have
+            // been converted to an Immigration case. The frontend segments
+            // these into three department tabs (Education / English /
+            // Immigration) — once a lead moves on, they drop out of the
+            // Education tab automatically.
             $students = Lead::with(['studyPlans', 'documents'])
-                ->where('is_student', true)
+                ->where(function ($q) {
+                    $q->where('is_student', true)
+                      ->orWhere('is_immigration_case', true)
+                      ->orWhere('stage', 'English Pro')
+                      ->orWhereNotNull('english_stage')
+                      ->orWhereNotNull('immigration_stage');
+                })
                 ->orderByDesc('student_converted_at')
                 ->limit(200)
                 ->get()
@@ -176,8 +188,20 @@ class EducationController extends Controller
                         'name'     => trim("{$l->first_name} {$l->last_name}") ?: 'Unknown',
                         'email'    => $l->email,
                         'phone'    => $l->phone,
-                        'status'   => $l->status,
-                        'location' => $l->residence_country,
+                        // `education_stage` is the Education-team lifecycle
+                        // shown as a dropdown in the Status column; falls
+                        // back to the lead's generic status only as a hint.
+                        'status'            => $l->education_stage ?: $l->status,
+                        'education_stage'   => $l->education_stage,
+                        'english_stage'     => $l->english_stage,
+                        'immigration_stage' => $l->immigration_stage,
+                        // Department-routing flags read by the tab strip.
+                        // Drives precedence on the frontend: Immigration >
+                        // English > Education.
+                        'is_student'          => (bool) $l->is_student,
+                        'is_immigration_case' => (bool) $l->is_immigration_case,
+                        'stage'               => $l->stage,
+                        'location'        => $l->residence_country,
                         'date_engaged' => optional($l->date_of_engagement)->toDateString()
                             ?? optional($l->student_converted_at)->toDateString(),
                         'program'  => optional($plan)->preferred_course,
@@ -216,21 +240,30 @@ class EducationController extends Controller
         $lead = Lead::where('is_student', true)->findOrFail($id);
 
         $data = $request->validate([
-            'payment'      => 'nullable|string|max:191',
-            'school'       => 'nullable|string|max:191',
-            'coop'         => 'nullable|string|max:191',
-            'oop'          => 'nullable|string|max:191',
-            'gdrive_link'  => 'nullable|url|max:512',
-            'comments'     => 'nullable|string|max:5000',
+            'payment'         => 'nullable|string|max:191',
+            'school'          => 'nullable|string|max:191',
+            'coop'            => 'nullable|string|max:191',
+            'oop'             => 'nullable|string|max:191',
+            'gdrive_link'     => 'nullable|url|max:512',
+            'comments'        => 'nullable|string|max:5000',
+            // Department lifecycle stages — each whitelisted to its own
+            // canonical list on the Lead model so the columns can't drift
+            // to free-form strings.
+            'education_stage'   => ['nullable', \Illuminate\Validation\Rule::in(Lead::EDUCATION_STAGES)],
+            'english_stage'     => ['nullable', \Illuminate\Validation\Rule::in(Lead::ENGLISH_STAGES)],
+            'immigration_stage' => ['nullable', \Illuminate\Validation\Rule::in(Lead::IMMIGRATION_STAGES)],
         ]);
 
         $map = [
-            'payment'     => 'student_payment',
-            'school'      => 'student_school',
-            'coop'        => 'student_coop',
-            'oop'         => 'student_oop',
-            'gdrive_link' => 'student_gdrive_link',
-            'comments'    => 'student_comments',
+            'payment'           => 'student_payment',
+            'school'            => 'student_school',
+            'coop'              => 'student_coop',
+            'oop'               => 'student_oop',
+            'gdrive_link'       => 'student_gdrive_link',
+            'comments'          => 'student_comments',
+            'education_stage'   => 'education_stage',
+            'english_stage'     => 'english_stage',
+            'immigration_stage' => 'immigration_stage',
         ];
         foreach ($data as $k => $v) {
             $lead->{$map[$k]} = $v;

@@ -32,17 +32,21 @@ class ImmigrationController extends Controller
             $monthStart = $now->copy()->startOfMonth();
 
             // ── Top tiles ──────────────────────────────────────────────────
-            $activeCases   = Lead::where('is_immigration_case', true)->count();
+            // A lead is an immigration case if the team explicitly opened
+            // one (is_immigration_case) OR the Education team's hand-off
+            // stage was set to one of the immigration stages — see
+            // Lead::scopeImmigrationCase().
+            $activeCases   = Lead::immigrationCase()->count();
             $newAssessmentsThisWeek = ResidentIntake::where('created_at', '>=', $weekStart)->count();
             $bookingsPaidUnseen = Booking::where('status', 'Confirmed')->whereNull('appointment_date')->count();
             $docsPendingReview  = LeadDocument::whereIn('status', ['Submitted', 'UnderReview'])->count();
-            $casesLodged        = Lead::where('is_immigration_case', true)->whereIn('inz_status', ['Lodged', 'Decision Pending', 'Info Requested'])->count();
-            $infoRequests       = Lead::where('is_immigration_case', true)->where('inz_status', 'Info Requested')->count();
+            $casesLodged        = Lead::immigrationCase()->whereIn('inz_status', ['Lodged', 'Decision Pending', 'Info Requested'])->count();
+            $infoRequests       = Lead::immigrationCase()->where('inz_status', 'Info Requested')->count();
 
             // ── INZ pipeline aging (green / amber / red) ─────────────────
             $visaTypes = \App\Models\VisaType::pluck('expected_processing_days', 'name')->all();
             $defaultWindow = 40; // fallback when visa-type not in catalog
-            $inzCases = Lead::where('is_immigration_case', true)
+            $inzCases = Lead::immigrationCase()
                 ->whereIn('inz_status', ['Lodged', 'Decision Pending', 'Info Requested'])
                 ->whereNotNull('inz_lodged_at')
                 ->get(['id', 'lead_id', 'first_name', 'last_name', 'inz_visa_type', 'inz_lodged_at', 'inz_status']);
@@ -207,7 +211,7 @@ class ImmigrationController extends Controller
     {
         try {
             $cases = Lead::with(['documents', 'portalUser:id,lead_id,last_login_at'])
-                ->where('is_immigration_case', true)
+                ->immigrationCase()
                 ->orderByDesc('updated_at')
                 ->limit(200)
                 ->get()

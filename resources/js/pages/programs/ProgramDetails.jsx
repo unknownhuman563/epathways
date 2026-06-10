@@ -241,19 +241,6 @@ export default function ProgramDetails({ program }) {
                     )}
                 </div>
 
-                {/* Detailed Entry Requirements Alert */}
-                <div className="mb-16">
-                    <h3 className="text-lg font-bold text-[#282728] mb-6">Entry Requirements</h3>
-                    <div className="bg-white border border-gray-200 rounded-xl p-6 flex items-start gap-4 shadow-sm w-full md:w-1/2">
-                        <div className="min-w-[24px] h-6 bg-[#436235] rounded flex items-center justify-center mt-0.5">
-                            <Check className="w-4 h-4 text-white" strokeWidth={3} />
-                        </div>
-                        <div className="text-sm text-gray-600 leading-relaxed flex-1">
-                            {renderSections(program?.entry_requirements, 'No entry requirements specified.')}
-                        </div>
-                    </div>
-                </div>
-
                 {/* Fee Guide */}
                 <div>
                     <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-6">Fee Guide</h3>
