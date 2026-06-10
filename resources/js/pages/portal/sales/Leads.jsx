@@ -8,7 +8,7 @@ import {
 } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 import {
-    Search, KeyRound, Clock, Check, Mail, ShieldOff, FileText, Phone,
+    Search, KeyRound, Clock, Check, Mail, ShieldOff, FileText, Phone, Copy,
     Filter, ArrowUpDown, ArrowUp, ArrowDown, ChevronLeft, ChevronRight,
     MoreHorizontal, ChevronDown, ChevronRight as ChevronRightIcon, ExternalLink, UserCheck,
     Upload, Loader, Plus, X, CalendarClock, Link2, FileText as FileTextIcon,
@@ -930,6 +930,34 @@ function RowMenu({ lead, open, onToggle, onClose, onRequestPortal, isSaving, por
                         <FileText size={12} className="text-gray-400" />
                         Documents
                     </a>
+                    {/* Copy the public /track URL to the clipboard so staff
+                        can paste it straight into WhatsApp / email — the
+                        client opens it to see info, documents, timeline,
+                        and to edit their own information. */}
+                    {lead.tracking_code && (
+                        <button
+                            type="button"
+                            role="menuitem"
+                            onClick={() => {
+                                const url = `${window.location.origin}/track/${lead.tracking_code}`;
+                                // Multi-line payload so the message reads
+                                // cleanly when staff pastes it directly
+                                // into WhatsApp / email / SMS.
+                                const payload =
+                                    `Link: ${url}\n` +
+                                    `Application Tracking Code: ${lead.tracking_code}`;
+                                navigator.clipboard?.writeText(payload).then(
+                                    () => toast.success('Tracking link + code copied', { description: payload }),
+                                    () => toast.error('Could not copy — your browser blocked clipboard access')
+                                );
+                                onClose?.();
+                            }}
+                            className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 text-left"
+                        >
+                            <Copy size={12} className="text-gray-400" />
+                            Copy tracking link
+                        </button>
+                    )}
 
                     {/* Section: Portal invitation — only sales staff can initiate
                         a Lead-Portal invitation (admin approves). Other portals

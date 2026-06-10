@@ -163,10 +163,11 @@ export default function KanbanBoard({
         applyStatus(task, newStatus, null);
     };
 
-    const handleClickCard = (task) => {
-        // Detail view is a future prompt — for now, log the intent.
-        // eslint-disable-next-line no-console
-        console.log(`Open task detail for ${task.id}`);
+    const handleClickCard = (_task) => {
+        // No-op: TaskCard opens its own TaskDetailModal directly on click
+        // so the board doesn't need to thread modal state through here.
+        // Kept as a hook in case a future flow wants to react to card
+        // clicks (analytics, breadcrumb, etc.).
     };
 
     // Whole-board empty state. Note: per-column empty states render inside

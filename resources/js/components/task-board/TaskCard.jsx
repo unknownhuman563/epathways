@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { router, usePage } from "@inertiajs/react";
 import { toast } from "sonner";
 import {
-    Building2, Calendar, Hash, Lock, MessageCircle, MoreVertical, Paperclip,
-    User, ArrowRightLeft, Check, Pencil, FileText, Film, Music, FileImage,
+    Building2, Lock, MessageCircle, MoreVertical, User,
+    ArrowRightLeft, Check, Pencil,
+    Flag, Clock, Folder,
 } from "lucide-react";
 import CommentsPopover from "./CommentsPopover";
 import TaskDetailModal from "./TaskDetailModal";
@@ -12,25 +13,6 @@ import AttachmentsModal from "./AttachmentsModal";
 // Pure presentational task card. Shared between the kanban (where it's
 // wrapped by useDraggable) and the list view (where it sits in a grid).
 // Lives outside KanbanBoard so it doesn't require a DndContext to mount.
-
-// Pastel palette for tag chips — same string always hashes to the same
-// color so the eye can scan by tag across the board.
-const TAG_PALETTE = [
-    "bg-blue-100 text-blue-700",
-    "bg-pink-100 text-pink-700",
-    "bg-orange-100 text-orange-700",
-    "bg-teal-100 text-teal-700",
-    "bg-purple-100 text-purple-700",
-    "bg-amber-100 text-amber-700",
-    "bg-emerald-100 text-emerald-700",
-    "bg-rose-100 text-rose-700",
-];
-
-export const tagColor = (tag) => {
-    let hash = 0;
-    for (let i = 0; i < tag.length; i++) hash = ((hash << 5) - hash) + tag.charCodeAt(i);
-    return TAG_PALETTE[Math.abs(hash) % TAG_PALETTE.length];
-};
 
 const PRIORITY_CHIP = {
     urgent: "bg-red-100 text-red-700",
@@ -68,6 +50,29 @@ const fmtAbsolute = (iso) =>
     iso
         ? new Date(iso).toLocaleString("en-NZ", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })
         : null;
+
+// Short date shown next to the flag icon: "02 Nov 2026".
+const fmtShortDate = (iso) =>
+    iso
+        ? new Date(iso).toLocaleDateString("en-NZ", { day: "2-digit", month: "short", year: "numeric" })
+        : null;
+
+// Compact "remaining" string for the bottom stats row:
+//   "4d left" / "2h left" / "Overdue" / "Done".
+const fmtRemaining = (iso, completed) => {
+    if (completed) return "Done";
+    if (! iso)     return null;
+    const target = new Date(iso);
+    const now    = new Date();
+    const ms     = target - now;
+    if (ms < 0) return "Overdue";
+    const mins  = Math.floor(ms / 60000);
+    const hours = Math.floor(mins / 60);
+    const days  = Math.floor(hours / 24);
+    if (days  >= 1) return `${days}d left`;
+    if (hours >= 1) return `${hours}h left`;
+    return `${mins}m left`;
+};
 
 // Friendly relative due date — "Today, 5:00 pm", "Tomorrow", "2 days left",
 // "Yesterday", "3 days ago", "in 2 weeks", "2 weeks ago"; falls back to the
@@ -124,23 +129,17 @@ const TaskCard = function TaskCard({
     const due       = fmtRelative(task.due_at);
     const dueExact  = fmtAbsolute(task.due_at);
     const isOverdue = task.overdue;
-
-    const chips = useMemo(() => {
-        const out = [];
-        if (task.category)      out.push({ label: task.category, palette: tagColor(task.category) });
-        else if (task.type)     out.push({ label: task.type.replace("_", " "), palette: tagColor(task.type) });
-        for (const tag of (task.tags || [])) out.push({ label: tag, palette: tagColor(tag) });
-        return out.slice(0, 4);
-    }, [task.category, task.type, task.tags]);
+    const remaining = fmtRemaining(task.due_at, task.completed);
+    // Surface 2 extra assignee bubbles next to the primary; anything
+    // beyond that collapses into the "+N" badge.
+    const extraAssigneeCount = Math.max(
+        0,
+        (Array.isArray(task.additional_assignee_ids) ? task.additional_assignee_ids.length : 0) - 2,
+    );
 
     const priorityChip = PRIORITY_CHIP[task.priority];
 
-    // Prefer showing an image thumbnail if there is one, but fall back to
-    // the first attachment of any type so PDFs / videos / docs also get a
-    // visible tile on the card.
     const attachmentsList = task.attachments || [];
-    const images = attachmentsList.filter((a) => a.is_image);
-    const firstAttachment = images[0] || attachmentsList[0] || null;
     const attachmentCount = attachmentsList.length;
 
     // Comments badge / popover. `commentsCount` shadows the server-provided
@@ -216,37 +215,34 @@ const TaskCard = function TaskCard({
             ref={setNodeRef}
             {...(dragHandleProps || {})}
             style={style}
-            onClick={onClick}
+            onClick={(e) => {
+                // Open the detail modal on whole-card click — every
+                // interactive child (kebab, attachments tile, comment
+                // count, etc.) calls e.stopPropagation() so they keep
+                // their dedicated behaviour.
+                onClick?.(e);
+                setDetailOpen(true);
+            }}
             onKeyDown={(e) => {
                 if (e.key === "Enter") {
                     e.preventDefault();
                     onClick?.();
+                    setDetailOpen(true);
                 }
             }}
             tabIndex={0}
             role="button"
-            aria-label={`${task.title}, ${task.priority || "normal"} priority, ${task.status || "not started"}`}
+            aria-label={`${task.title}, ${task.priority || "normal"} priority, ${task.status || "not started"}. Click to view details.`}
             className={`relative ${tone || "bg-white"} rounded-2xl shadow-sm border border-gray-100/80 overflow-hidden text-left focus:outline-none focus:ring-2 focus:ring-gray-900 ${
                 dragHandleProps ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"
             } ${isOverlay ? "shadow-2xl rotate-1" : "hover:shadow-md transition-shadow"}`}
         >
-            {/* Chip row + kebab */}
-            <div className="flex items-start justify-between gap-2 p-4 pb-2.5">
-                <div className="flex items-center gap-1 flex-wrap min-w-0">
-                    {chips.map((c, i) => (
-                        <span
-                            key={`${c.label}-${i}`}
-                            className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${c.palette}`}
-                        >
-                            {c.label}
-                        </span>
-                    ))}
-                    {priorityChip && (
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${priorityChip}`}>
-                            {task.priority}
-                        </span>
-                    )}
-                </div>
+            {/* Header — title + kebab. Top-right kebab keeps the move-to-dept
+                menu accessible without a separate chip row. */}
+            <div className="flex items-start justify-between gap-2 p-4 pb-2">
+                <h4 className={`text-[14px] font-bold leading-snug flex-1 min-w-0 ${task.completed ? "line-through text-gray-400" : "text-gray-900"}`}>
+                    {task.title}
+                </h4>
                 <div ref={menuRef} className="flex items-center gap-1 flex-shrink-0 relative">
                     {locked && (
                         <span className="text-gray-400" title="Locked — you can't move tasks from other departments">
@@ -313,145 +309,108 @@ const TaskCard = function TaskCard({
                 </div>
             </div>
 
-            {/* Title */}
-            <h4 className={`px-4 text-[15px] font-bold leading-snug ${task.completed ? "line-through text-gray-400" : "text-gray-900"}`}>
-                {task.title}
-            </h4>
-
-            {/* Description preview — 3 lines max */}
-            {task.description && (
-                <p className="px-4 mt-1.5 text-[12.5px] text-gray-500 leading-snug line-clamp-3">
-                    {task.description}
-                </p>
-            )}
-
-            {/* Linked-record or category subtitle (only when no description) */}
-            {! task.description && isLinked && (
-                <p className="px-4 mt-1.5 text-[11px] text-gray-500 truncate flex items-center gap-0.5">
-                    <User size={10} className="text-gray-400" /> Lead
-                    <Hash size={9} className="text-gray-300 ml-0.5" />
-                    <span className="font-mono">{task.lead.lead_id}</span>
-                    <span className="ml-1 truncate">— {task.lead.name}</span>
-                </p>
-            )}
-            {! task.description && ! isLinked && task.category && (
-                <p className="px-4 mt-1.5 text-[11px] text-gray-500 truncate inline-flex items-center gap-1">
-                    <Building2 size={10} /> {task.category}
-                </p>
-            )}
-
-            {/* Sticky note — prominent, separate from description. */}
-            {task.note && (
-                <p className="mx-4 mt-2.5 text-[12px] text-gray-600 italic leading-snug">
-                    <span className="font-bold not-italic text-gray-700">Note:</span> {task.note}
-                </p>
-            )}
-
-            {/* Progress — only renders when > 0, so cards without progress
-                set stay clean. The bar fill matches the card tone so it
-                doesn't fight the column color. */}
-            {Number(task.progress) > 0 && (
-                <div className="px-4 mt-2.5">
-                    <div className="flex items-center justify-between mb-1.5">
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500">Progress</span>
-                        <span className="text-[11px] font-bold tabular-nums text-gray-700">{task.progress}%</span>
-                    </div>
-                    <div className="h-2 w-full rounded-full bg-gray-200/70 overflow-hidden">
-                        <div
-                            className="h-full rounded-full bg-gray-700"
-                            style={{ width: `${Math.min(100, Math.max(0, Number(task.progress)))}%` }}
-                        />
-                    </div>
+            {/* Lead link — shown when the task is bound to a lead so the
+                viewer can see who/what it relates to at a glance. */}
+            {isLinked && (
+                <div className="px-4 pb-2 flex items-center gap-1 text-[11px] text-gray-500 min-w-0">
+                    <User size={11} className="text-gray-400 flex-shrink-0" />
+                    <span className="font-mono text-gray-500 flex-shrink-0">#{task.lead.lead_id}</span>
+                    <span className="text-gray-300">·</span>
+                    <span className="text-gray-700 font-medium truncate">{task.lead.name}</span>
                 </div>
             )}
 
-            {/* Attachment thumbnail — image when one exists, otherwise a
-                typed file tile (PDF, video, doc…). Click opens the
-                attachments modal so users can browse + download every file
-                on the task. */}
-            {firstAttachment && (
-                <button
-                    type="button"
-                    onPointerDown={(e) => e.stopPropagation()}
-                    onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        setAttachmentsOpen(true);
-                    }}
-                    className="mx-4 mt-2.5 rounded-xl overflow-hidden bg-gray-100 aspect-[16/10] block w-[calc(100%-2rem)] group relative cursor-pointer"
-                    title={firstAttachment.is_image ? "View attachments" : firstAttachment.original_filename}
+            {/* Assignees row — "Asignees :" + overlapping avatar stack +
+                "+N" badge when there are more than 3. Mirrors the
+                reference card's people line. */}
+            <div className="px-4 pb-2 flex items-center gap-2 text-[11px] text-gray-500">
+                <span className="font-medium">Asignees :</span>
+                {task.assignee || (Array.isArray(task.additional_assignee_ids) && task.additional_assignee_ids.length > 0) ? (
+                    <div className="flex -space-x-1.5">
+                        {task.assignee && (
+                            <span
+                                title={task.assignee.name}
+                                className={`inline-flex items-center justify-center w-5 h-5 rounded-full text-white text-[8.5px] font-bold ring-2 ring-white ${avatarColor(task.assignee.id || task.assignee.name)}`}
+                            >
+                                {initials(task.assignee.name)}
+                            </span>
+                        )}
+                        {(task.additional_assignee_ids || []).slice(0, 2).map((id) => (
+                            <span
+                                key={`extra-${id}`}
+                                title="Additional assignee"
+                                className={`inline-block w-5 h-5 rounded-full ring-2 ring-white ${avatarColor(`extra-${id}`)}`}
+                            />
+                        ))}
+                        {extraAssigneeCount > 0 && (
+                            <span className="inline-flex items-center justify-center min-w-[24px] h-5 px-1 rounded-full bg-gray-100 text-gray-600 text-[9px] font-bold ring-2 ring-white">
+                                {extraAssigneeCount}+
+                            </span>
+                        )}
+                    </div>
+                ) : (
+                    <span className="italic text-gray-400">Unassigned</span>
+                )}
+            </div>
+
+            {/* Flag + due date + priority chip row. Flag pulses red for
+                overdue, otherwise stays muted. */}
+            <div className="px-4 pb-2 flex items-center gap-2">
+                <span
+                    title={dueExact}
+                    className={`inline-flex items-center gap-1.5 text-[11.5px] tabular-nums ${isOverdue ? "text-red-600 font-semibold" : "text-gray-600"}`}
                 >
-                    {firstAttachment.is_image ? (
-                        <img
-                            src={firstAttachment.url}
-                            alt={firstAttachment.original_filename}
-                            className="w-full h-full object-cover group-hover:opacity-90 transition-opacity"
-                            draggable={false}
-                        />
-                    ) : (
-                        <FileTile attachment={firstAttachment} />
-                    )}
-                    {attachmentCount > 1 && (
-                        <span className="absolute top-1.5 right-1.5 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-black/65 text-white text-[10px] font-bold backdrop-blur-sm">
-                            <Paperclip size={9} /> {attachmentCount}
-                        </span>
-                    )}
-                </button>
-            )}
+                    <Flag size={12} className={isOverdue ? "text-red-500" : "text-gray-400"} />
+                    {task.due_at ? fmtShortDate(task.due_at) : "No due date"}
+                </span>
+                {priorityChip && (
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold capitalize ${priorityChip}`}>
+                        {task.priority}
+                    </span>
+                )}
+                {crossDept && (
+                    <span className="ml-auto inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-indigo-50 text-indigo-700">
+                        From {DEPARTMENT_LABEL[task.department] || task.department}
+                    </span>
+                )}
+            </div>
 
-            {/* Bottom row */}
-            <div className="px-4 py-3 mt-2.5 flex items-center justify-between gap-2 border-t border-gray-50">
-                <div className="flex items-center gap-2 min-w-0">
-                    {due && (
-                        <span
-                            title={dueExact}
-                            className={`inline-flex items-center gap-1 text-[10.5px] font-medium tabular-nums ${isOverdue ? "text-red-600" : "text-gray-500"}`}
-                        >
-                            <Calendar size={10} />
-                            {isOverdue ? "⚠ " : ""}{due}
-                        </span>
-                    )}
-                    {crossDept && (
-                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-indigo-50 text-indigo-700">
-                            From {DEPARTMENT_LABEL[task.department] || task.department}
-                        </span>
-                    )}
-                </div>
-
-                <div className="flex items-center gap-2 flex-shrink-0">
+            {/* Bottom stats row — folder/comments/remaining-time stats
+                in a clean evenly-spaced layout. */}
+            <div className="px-4 pt-2.5 pb-3.5 mt-0.5 flex items-center justify-between gap-2 border-t border-gray-50 text-[11.5px] text-gray-500">
+                <div className="flex items-center gap-3">
                     <button
                         type="button"
                         onClick={(e) => {
                             e.stopPropagation();
-                            setCommentsOpen(true);
+                            if (attachmentCount > 0) setAttachmentsOpen(true);
                         }}
-                        className="inline-flex items-center gap-0.5 text-[10px] font-medium text-gray-500 hover:text-gray-900"
+                        className="inline-flex items-center gap-1 hover:text-gray-900 disabled:cursor-default"
+                        title={attachmentCount > 0 ? "View attachments" : "No attachments"}
+                        disabled={attachmentCount === 0}
+                    >
+                        <Folder size={12} className="text-gray-400" />
+                        <span className="tabular-nums font-semibold">{attachmentCount}</span>
+                    </button>
+                    <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); setCommentsOpen(true); }}
+                        className="inline-flex items-center gap-1 hover:text-gray-900"
                         title="View comments"
                     >
-                        <MessageCircle size={10} /> {commentsCount}
+                        <MessageCircle size={12} className="text-gray-400" />
+                        <span className="tabular-nums font-semibold">{commentsCount}</span>
                     </button>
-                    {attachmentCount > 0 && (
-                        <button
-                            type="button"
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                setAttachmentsOpen(true);
-                            }}
-                            className="inline-flex items-center gap-0.5 text-[10px] font-medium text-gray-500 hover:text-gray-900"
-                            title="View attachments"
-                        >
-                            <Paperclip size={10} /> {attachmentCount}
-                        </button>
-                    )}
-                    {task.assignee && (
-                        <span
-                            className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-white text-[9px] font-bold ring-2 ring-white shadow-sm ${avatarColor(task.assignee.id || task.assignee.name)}`}
-                            title={task.assignee.name}
-                        >
-                            {initials(task.assignee.name)}
-                        </span>
-                    )}
                 </div>
+                {remaining && (
+                    <span
+                        title={dueExact}
+                        className={`inline-flex items-center gap-1 ${remaining === "Overdue" ? "text-red-600 font-semibold" : "text-gray-500"}`}
+                    >
+                        <Clock size={12} className={remaining === "Overdue" ? "text-red-500" : "text-gray-400"} />
+                        {remaining === "Overdue" ? "Overdue" : `Remaining ${remaining.replace(" left", "")}`}
+                    </span>
+                )}
             </div>
         </div>
 
@@ -480,34 +439,3 @@ const TaskCard = function TaskCard({
 };
 
 export default TaskCard;
-
-// Tile used as the card thumbnail when the first attachment isn't an image.
-// Visually matches the image tile (same aspect ratio + rounded container)
-// so cards stay consistent across attachment types.
-function FileTile({ attachment }) {
-    const mime = attachment.mime_type || "";
-    const name = attachment.original_filename || "attachment";
-    const isPdf   = mime === "application/pdf" || name.toLowerCase().endsWith(".pdf");
-    const isVideo = mime.startsWith("video/");
-    const isAudio = mime.startsWith("audio/");
-
-    const { tone, label, Icon } = isPdf
-        ? { tone: "from-rose-500 to-red-600",       label: "PDF",   Icon: FileText }
-        : isVideo
-            ? { tone: "from-indigo-500 to-purple-600", label: "VIDEO", Icon: Film }
-            : isAudio
-                ? { tone: "from-amber-500 to-orange-600", label: "AUDIO", Icon: Music }
-                : { tone: "from-slate-500 to-slate-700",  label: "FILE",  Icon: FileImage };
-
-    return (
-        <div className={`w-full h-full bg-gradient-to-br ${tone} text-white flex flex-col items-center justify-center px-3 group-hover:opacity-95 transition-opacity relative`}>
-            <Icon size={32} className="opacity-90 drop-shadow" />
-            <span className="mt-2 text-[10px] font-bold uppercase tracking-[0.18em] bg-white/20 backdrop-blur-sm px-2 py-0.5 rounded">
-                {label}
-            </span>
-            <p className="mt-2 text-[11px] font-semibold text-center leading-tight line-clamp-2 break-all max-w-full">
-                {name}
-            </p>
-        </div>
-    );
-}

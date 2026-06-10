@@ -1,11 +1,22 @@
+import { usePage } from "@inertiajs/react";
 import DashboardLayout from "./DashboardLayout";
 import {
     Home, Users, UserCog, History, Calendar as CalendarIcon, BookOpen,
     GraduationCap, Video, Globe, FileText, Star, LayoutDashboard,
     Briefcase, Languages, Building2, KeyRound, Sparkles, Tag,
     Radio, PenLine, CalendarDays, Inbox, Megaphone, BarChart3,
-    CheckSquare, Clock,
+    CheckSquare, Clock, Crown,
 } from "lucide-react";
+
+// Super-admin-only entry — only injected when the current user holds
+// the `super_admin` role. The route itself is also gated server-side
+// (portal:super_admin in routes/web.php), so this filter is purely
+// cosmetic — admins won't even see the link.
+const SUPER_ADMIN_NAV = {
+    name: "Super Dashboard",
+    href: "/admin/super-dashboard",
+    icon: <Crown size={20} />,
+};
 
 const ADMIN_NAV = [
     { name: "Dashboard", href: "/admin/dashboard", icon: <Home size={20} /> },
@@ -58,12 +69,18 @@ const ADMIN_NAV = [
 ];
 
 export default function AdminLayout({ children }) {
+    const { props } = usePage();
+    const isSuperAdmin = props?.auth?.user?.role === "super_admin";
+    // Slip the Super Dashboard link in at the top for super-admins; the
+    // rest of the nav stays untouched for plain admins.
+    const nav = isSuperAdmin ? [SUPER_ADMIN_NAV, ...ADMIN_NAV] : ADMIN_NAV;
+
     return (
         <DashboardLayout
             brand="ePathways."
-            subtitle="Admin Panel"
+            subtitle={isSuperAdmin ? "Super Admin" : "Admin Panel"}
             accent="bg-gray-900"
-            nav={ADMIN_NAV}
+            nav={nav}
             settingsHref="/admin/settings"
         >
             {children}
