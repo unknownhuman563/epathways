@@ -11,6 +11,98 @@ class Lead extends Model
     use LogsActivity;
 
     /**
+     * Education-team-specific lifecycle stages. Distinct from the global
+     * pipeline below — these track the downstream Endorsement → Offer →
+     * Visa → Enrolment flow that the Education portal owns once a lead is
+     * converted to a student. Surfaced as the dropdown in the Students
+     * dashboard's Status column.
+     */
+    public const EDUCATION_STAGES = [
+        'Endorsed to School',
+        'Conditional Offer',
+        'Unconditional Offer',
+        'Endorsed to Immigration',
+        'Visa Lodged',
+        'Approved in Principle',
+        'Request for Information',
+        'Approved Visa',
+        'Started Course',
+    ];
+
+    /**
+     * Subset of EDUCATION_STAGES that hand the lead off to the Immigration
+     * team. Anyone at one of these stages is treated as an immigration
+     * case for routing purposes — they appear on the Immigration
+     * dashboard, the Cases list, and the Immigration tab of the Education
+     * Students page, even if `is_immigration_case` hasn't been flipped
+     * manually. Single source of truth — referenced by the model scope
+     * below and by the Students.jsx tab routing.
+     */
+    public const EDUCATION_STAGES_IMMIGRATION = [
+        'Endorsed to Immigration',
+        'Visa Lodged',
+        'Approved in Principle',
+        'Request for Information',
+        'Approved Visa',
+    ];
+
+    /**
+     * English-team lifecycle. Tracks the PTE / DIY review and test-prep
+     * flow. Setting `english_stage` to any of these routes the lead to
+     * the English tab on the Education Students page.
+     */
+    public const ENGLISH_STAGES = [
+        'PTE Review',
+        'DIY Review',
+        'For PTE Mocktest',
+        'For PTE Exam',
+    ];
+
+    /**
+     * Immigration-team lifecycle. Tracks the case from initial endorsement
+     * through INZ outcome. Setting `immigration_stage` to any of these
+     * routes the lead to the Immigration tab.
+     */
+    public const IMMIGRATION_STAGES = [
+        'Endorsed',
+        'Visa Lodged',
+        'Request for Information',
+        'Approved in Principle',
+        'Approved Visa',
+        'Decline Visa',
+    ];
+
+    /**
+     * Query scope — leads currently in the Immigration team's queue.
+     * Either explicitly converted via "Convert to Immigration Case" (the
+     * `is_immigration_case` flag), at one of the immigration handoff
+     * education_stage values, OR with an immigration_stage set.
+     */
+    public function scopeImmigrationCase($query)
+    {
+        return $query->where(function ($q) {
+            $q->where('is_immigration_case', true)
+              ->orWhereIn('education_stage', self::EDUCATION_STAGES_IMMIGRATION)
+              ->orWhereNotNull('immigration_stage');
+        });
+    }
+
+    /**
+     * Query scope — leads that are still in the Sales pipeline. Any
+     * lead that's been moved to another department (student / English
+     * student / immigration case / accommodation client) drops out of
+     * the leads-table view. Used by the admin + sales leads listings.
+     */
+    public function scopeInLeadPipeline($query)
+    {
+        return $query
+            ->where('is_student',              false)
+            ->where('is_immigration_case',     false)
+            ->where('is_accommodation_client', false)
+            ->where('is_english_student',      false);
+    }
+
+    /**
      * Canonical lead-pipeline stages. Single source of truth — referenced
      * by SalesController validation and the LeadController stage-update
      * endpoint. Order is the canonical pipeline order surfaced in the UI.
@@ -38,7 +130,7 @@ class Lead extends Model
     ];
 
     protected $fillable = [
-        'lead_id', 'first_name', 'last_name', 'dob', 'other_names', 'email', 'phone',
+        'lead_id', 'tracking_code', 'first_name', 'middle_name', 'last_name', 'dob', 'other_names', 'email', 'phone',
         'gender', 'marital_status', 'branch', 'stage', 'status',
         'country_of_birth', 'place_of_birth', 'citizenship',
         'residence_city', 'residence_state', 'residence_country',
@@ -70,6 +162,7 @@ class Lead extends Model
         // Multi-service flags
         'is_immigration_case', 'immigration_converted_at', 'immigration_converted_by',
         'is_accommodation_client', 'accommodation_converted_at', 'accommodation_converted_by',
+        'is_english_student', 'english_converted_at', 'english_converted_by',
         // INZ lodgement tracking
         'inz_visa_type', 'inz_lodged_at', 'inz_reference', 'inz_status', 'inz_decision_at',
         // IAA / Privacy Act gating
@@ -80,6 +173,11 @@ class Lead extends Model
         // that don't already live elsewhere on the lead row).
         'student_payment', 'student_school', 'student_coop', 'student_oop',
         'student_gdrive_link', 'student_comments',
+        // Education-team-specific lifecycle stage (see EDUCATION_STAGES).
+        'education_stage',
+        // English / Immigration sub-stage tracks (see ENGLISH_STAGES,
+        // IMMIGRATION_STAGES).
+        'english_stage', 'immigration_stage',
     ];
 
     protected $casts = [
@@ -121,6 +219,44 @@ class Lead extends Model
     public function portalUser()
     {
         return $this->hasOne(User::class, 'lead_id');
+    }
+
+    /**
+     * Generate a short, customer-friendly tracking code that is guaranteed
+     * unique against the leads table. Ambiguous characters (0/O, 1/I/L) are
+     * stripped so codes can be read aloud or texted without confusion.
+     *
+     * Format: "EP-XXXXXXXX" (8 alphanumerics, ~30 bits of entropy — large
+     * enough that a malicious enumerator can't realistically harvest live
+     * codes against the rate-limited public lookup endpoint).
+     */
+    public static function generateTrackingCode(): string
+    {
+        $alphabet = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+
+        do {
+            $body = '';
+            for ($i = 0; $i < 8; $i++) {
+                $body .= $alphabet[random_int(0, strlen($alphabet) - 1)];
+            }
+            $code = 'EP-'.$body;
+        } while (static::where('tracking_code', $code)->exists());
+
+        return $code;
+    }
+
+    /**
+     * Boot hook: every new lead gets a tracking_code automatically. We
+     * only generate one if the caller hasn't provided one (so seeders and
+     * the backfill migration can pass their own).
+     */
+    protected static function booted(): void
+    {
+        static::creating(function (Lead $lead) {
+            if (empty($lead->tracking_code)) {
+                $lead->tracking_code = static::generateTrackingCode();
+            }
+        });
     }
 
     public function documentRequests()

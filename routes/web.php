@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AccommodationController as PublicAccommodationController;
 use App\Http\Controllers\ActivityLogController;
+use App\Http\Controllers\Admin\SuperAdminDashboardController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\BookingController;
 use App\Http\Controllers\EventController;
@@ -9,6 +10,7 @@ use App\Http\Controllers\HomeController;
 use App\Http\Controllers\LeadController;
 use App\Http\Controllers\LeadDocumentController;
 use App\Http\Controllers\LeadPortalInvitationController;
+use App\Http\Controllers\LeadTrackingController;
 use App\Http\Controllers\Portal\AccommodationController;
 use App\Http\Controllers\Portal\EducationController;
 use App\Http\Controllers\Portal\EnglishController;
@@ -154,6 +156,19 @@ Route::get('/visa-approved', function () {
     return inertia('visa/VisaApproved');
 });
 
+// Public application tracking — Ninja-Van-style lookup the department
+// pastes to clients. /track shows the empty input; /track/{code} resolves
+// a lead by tracking_code and renders info + documents + timeline. No
+// auth: the tracking_code itself is the bearer credential. The same code
+// authorises the lead to edit a tightly-scoped allow-list of fields and
+// upload supporting documents (POST endpoints below).
+Route::get ('/track',                          [LeadTrackingController::class, 'show'])->name('track');
+Route::get ('/track/{code}',                   [LeadTrackingController::class, 'show'])->name('track.lookup');
+Route::post('/track/{code}/info',              [LeadTrackingController::class, 'update'])->name('track.update');
+Route::post('/track/{code}/document',          [LeadTrackingController::class, 'uploadDoc'])->name('track.upload');
+Route::post  ('/track/{code}/document/{doc}',  [LeadTrackingController::class, 'updateDoc'])->name('track.doc.update');
+Route::delete('/track/{code}/document/{doc}',  [LeadTrackingController::class, 'deleteDoc'])->name('track.doc.delete');
+
 // Public Registration & Assessment Routes
 Route::get('/register/{event_code}', [EventController::class, 'showRegistrationForm']);
 Route::post('/register/{event_code}', [EventController::class, 'registerLead']);
@@ -195,6 +210,14 @@ Route::post('/api/sync-calendar', [App\Http\Controllers\SyncController::class, '
 // Authenticated areas — every staff user must be logged in ('auth'); role
 // middleware nested below narrows each section ('portal:admin', 'portal:sales', …).
 Route::middleware(['auth'])->group(function () {
+
+    // Super-admin-only — the top-of-house cross-department overview.
+    // `portal:super_admin` is exact-role (see User::canAccessPortal), so
+    // plain admins do NOT see this surface.
+    Route::middleware('portal:super_admin')->group(function () {
+        Route::get('/admin/super-dashboard', [SuperAdminDashboardController::class, 'dashboard'])
+            ->name('admin.super-dashboard');
+    });
 
     // Admin area — admin role only; department-portal staff are kept out by 'portal:admin'.
     Route::middleware('portal:admin')->group(function () {
@@ -320,6 +343,8 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/admin/leads/{id}/revert-case', [LeadController::class, 'revertCase'])->name('admin.leads.revert-case');
         Route::post('/admin/leads/{id}/convert-to-accommodation', [LeadController::class, 'convertToAccommodation'])->name('admin.leads.convert-accommodation');
         Route::post('/admin/leads/{id}/revert-accommodation', [LeadController::class, 'revertAccommodation'])->name('admin.leads.revert-accommodation');
+        Route::post('/admin/leads/{id}/convert-to-english', [LeadController::class, 'convertToEnglish'])->name('admin.leads.convert-english');
+        Route::post('/admin/leads/{id}/revert-english', [LeadController::class, 'revertEnglish'])->name('admin.leads.revert-english');
         Route::post('/admin/leads/{id}/inz', [LeadController::class, 'updateInz'])->name('admin.leads.inz');
 
         // Bulk CSV import — duplicates detected by email or name+phone.

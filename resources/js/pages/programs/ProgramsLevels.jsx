@@ -197,44 +197,73 @@ export default function ProgramsLevels({ programs = [], activePromos = [] }) {
                                 viewport={{ once: true }}
                                 transition={{ delay: index * 0.05 }}
                             >
+                                {/* Card — editorial / premium treatment.
+                                    Single hairline frame, edge-to-edge
+                                    photo with a vignette, level marker
+                                    set as tracked white type on the image
+                                    (not a pill), generous interior space,
+                                    and a chevron link above a hairline
+                                    divider instead of a heavy button.
+                                    Restraint over ornament. */}
                                 <Link
                                     href={`/program-details/${program.slug}`}
-                                    className="bg-white p-3 rounded-2xl shadow-[0_2px_15px_-3px_rgba(0,0,0,0.07),0_10px_20px_-2px_rgba(0,0,0,0.04)] hover:shadow-[0_8px_30px_rgb(0,0,0,0.12)] hover:-translate-y-1 transition-all duration-300 border border-gray-100 flex flex-col h-full group cursor-pointer"
+                                    className="bg-white border border-gray-200 hover:border-gray-400 hover:shadow-[0_30px_60px_-15px_rgba(0,0,0,0.15)] transition-all duration-500 flex flex-col h-full group cursor-pointer"
                                 >
-                                    {/* Program Image */}
-                                    <div className="relative h-48 w-full rounded-xl overflow-hidden">
+                                    {/* Hero image — taller, edge-to-edge */}
+                                    <div className="relative h-56 w-full overflow-hidden">
                                         <img
                                             src={program.image_url || placeholderImg}
                                             alt={program.title}
-                                            className="w-full h-full object-cover transform group-hover:scale-105 transition-transform duration-500"
+                                            className="w-full h-full object-cover transform group-hover:scale-105 transition-transform duration-[1500ms] ease-out"
                                         />
-                                        {/* Overlay - Matching Hero Section */}
-                                        <div className="absolute inset-0 bg-black/30 transition-all duration-300 group-hover:bg-black/10"></div>
-
-                                        {/* Level Badge - Green Pill */}
-                                        <div className="absolute top-3 right-3 bg-[#436235] text-white text-[10px] font-medium px-2.5 py-1 rounded shadow-sm">
+                                        {/* Level marker — pinned to the top
+                                            of the image as a small frosted
+                                            pill so it stays legible against
+                                            any photo background (the prior
+                                            bottom-left white-on-photo
+                                            treatment kept disappearing into
+                                            light backgrounds). */}
+                                        <span className="absolute top-3 left-3 bg-white/95 backdrop-blur-sm text-[#282728] text-[9px] font-bold tracking-[0.18em] uppercase px-2 py-0.5 shadow-sm">
                                             Level {program.level}
-                                        </div>
+                                        </span>
                                     </div>
 
-                                    {/* Program Details */}
-                                    <div className="mt-4 px-1 flex flex-col flex-grow">
-                                        <h4 className="text-lg font-bold text-gray-900 mb-0 leading-tight tracking-tight group-hover:text-[#436235] transition-colors">
+                                    {/* Content — generous padding, clear
+                                        hierarchy: eyebrow → title →
+                                        description → quiet CTA. */}
+                                    <div className="p-7 flex flex-col flex-grow">
+                                        {/* Eyebrow — intake · duration */}
+                                        <p className="text-[10px] font-medium text-gray-500 tracking-[0.25em] uppercase mb-3">
+                                            {program.intake_months || 'Intake TBA'}
+                                            {program.duration_months && (
+                                                <span className="mx-2 text-gray-300">·</span>
+                                            )}
+                                            {program.duration_months && `${program.duration_months} months`}
+                                        </p>
+
+                                        {/* Title */}
+                                        <h4 className="text-xl font-medium text-[#282728] leading-snug tracking-tight mb-3">
                                             {program.title}
                                         </h4>
 
-                                        <p className="text-sm text-gray-600 mt-1">{program.institution}</p>
+                                        {/* Description — real copy from the
+                                            program record only. When a
+                                            programme has no description on
+                                            file the paragraph collapses
+                                            entirely rather than printing a
+                                            generic placeholder. */}
+                                        {program.description && (
+                                            <p className="text-sm text-gray-500 leading-relaxed line-clamp-2 mb-6">
+                                                {program.description}
+                                            </p>
+                                        )}
 
-                                        <div className="text-[10px] font-bold text-[#436235] mt-2 mb-4 leading-snug">
-                                            <p>Start from {program.intake_months || 'TBA'}</p>
-                                            {program.duration_months && (
-                                                <p className="font-normal text-gray-600 mt-0.5">{program.duration_months} months duration</p>
-                                            )}
-                                        </div>
-
-                                        <div className="flex mt-auto">
-                                            <span className="w-full px-6 py-3 bg-[#436235] text-white text-sm font-bold uppercase tracking-widest rounded group-hover:bg-[#436235]/90 transition-colors shadow-sm flex items-center justify-center gap-2">
-                                                Details <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
+                                        {/* CTA — hairline divider + chevron
+                                            link. Editorial, not a button. */}
+                                        <div className="mt-auto pt-5 border-t border-gray-200">
+                                            <span className="text-[11px] font-bold text-[#282728] uppercase tracking-[0.22em] flex items-center gap-2 group-hover:gap-3 transition-all duration-300">
+                                                Explore Programme
+                                                <ArrowRight size={14} strokeWidth={2} className="group-hover:translate-x-1 transition-transform duration-300" />
                                             </span>
                                         </div>
                                     </div>

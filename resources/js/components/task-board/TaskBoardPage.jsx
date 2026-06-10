@@ -4,6 +4,7 @@ import { ChevronDown, Clock, Filter, Plus, Search, X } from "lucide-react";
 import NewTaskModal from "./NewTaskModal";
 import KanbanBoard from "./KanbanBoard";
 import CalendarView from "./CalendarView";
+import ListView from "./ListView";
 
 // Single Task Board UI shared across every staff portal. The `department`
 // prop scopes labels, default filters, and category lists. Data still comes
@@ -194,7 +195,7 @@ export default function TaskBoardPage({
 
     const [newTaskOpen,  setNewTaskOpen]  = useState(false);
     const [filtersOpen,  setFiltersOpen]  = useState(false);
-    const [view,         setView]         = useState("kanban"); // kanban | calendar
+    const [view,         setView]         = useState("kanban"); // kanban | calendar | list
     const [activityOpen, setActivityOpen] = useState(false);
 
     const setScope = (next) => {
@@ -407,8 +408,8 @@ export default function TaskBoardPage({
                 )}
             </div>
 
-            {/* Kanban / Calendar view switcher — own row above the board,
-                left-aligned over the first column. */}
+            {/* Kanban / Calendar / List view switcher — own row above the
+                board, left-aligned over the first column. */}
             <div className="px-2 sm:px-4">
                 <div className="inline-flex items-center gap-1 bg-white rounded-xl border border-gray-200 p-1">
                     <button
@@ -429,11 +430,20 @@ export default function TaskBoardPage({
                     >
                         Calendar
                     </button>
+                    <button
+                        type="button"
+                        onClick={() => setView("list")}
+                        className={`px-3.5 py-1.5 rounded-lg text-[12px] font-bold uppercase tracking-wider transition-colors ${
+                            view === "list" ? "bg-gray-900 text-white" : "text-gray-600 hover:bg-gray-50"
+                        }`}
+                    >
+                        List
+                    </button>
                 </div>
             </div>
 
-            {/* The board — kanban or calendar depending on the toggle. */}
-            {view === "kanban" ? (
+            {/* The board — kanban, calendar, or list depending on the toggle. */}
+            {view === "kanban" && (
                 <KanbanBoard
                     tasks={kanbanTasks}
                     department={department}
@@ -441,15 +451,21 @@ export default function TaskBoardPage({
                     onNewTask={openNewTaskModal}
                     onClearFilters={resetFilters}
                 />
-            ) : (
+            )}
+            {view === "calendar" && (
                 <CalendarView
                     tasks={kanbanTasks}
                     onTaskClick={(t) => {
-                        // Detail view ships later — for now log so we know
-                        // the click hit the right task.
                         // eslint-disable-next-line no-console
                         console.log(`Open task detail for ${t.id}`);
                     }}
+                />
+            )}
+            {view === "list" && (
+                <ListView
+                    tasks={kanbanTasks}
+                    department={department}
+                    onNewTask={openNewTaskModal}
                 />
             )}
 

@@ -33,6 +33,10 @@ trait BuildsLeadRow
         return [
             'id'                       => $l->id,
             'lead_id'                  => $l->lead_id,
+            // Customer-shareable code — drives the "Copy tracking link"
+            // action in the Leads row menu so staff can paste a
+            // /track/{code} URL straight to the client.
+            'tracking_code'            => $l->tracking_code,
             'name'                     => trim("{$l->first_name} {$l->last_name}") ?: 'Unknown',
             'email'                    => $l->email,
             'phone'                    => $l->phone,

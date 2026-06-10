@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Head, Link, router, usePage } from '@inertiajs/react';
+import { toast } from 'sonner';
 import {
     ArrowLeft, User, BookOpen, DollarSign, GraduationCap,
     FileText, Download, Edit, Phone, Mail, MapPin,
@@ -189,6 +190,7 @@ export default function LeadDetails({ lead: backendLead, activity = [], stageTim
     // Map Backend Data to the Frontend Display Object (Maintaining original UI structure)
     const lead = {
         id: backendLead.lead_id || `LP-${backendLead.id}`,
+        trackingCode: backendLead.tracking_code || null,
         status: backendLead.status || 'New',
         stage: backendLead.stage || 'N/A',
         branch: backendLead.branch || 'Main',
@@ -417,6 +419,35 @@ export default function LeadDetails({ lead: backendLead, activity = [], stageTim
                         canRevert={currentUser?.is_admin}
                     />
 
+
+                    {/* Copy the public tracking link to the clipboard so
+                        the department can paste it straight into an email
+                        / WhatsApp / SMS. The lead opens that link and
+                        sees their information + documents + timeline,
+                        and can edit their information there. */}
+                    {lead.trackingCode && (
+                        <button
+                            type="button"
+                            title="Copy public tracking link + code for this lead"
+                            onClick={() => {
+                                const url = `${window.location.origin}/track/${lead.trackingCode}`;
+                                // Multi-line payload so staff can paste
+                                // straight into WhatsApp / email and the
+                                // client sees both the URL and the code
+                                // they should type into the search box.
+                                const payload =
+                                    `Link: ${url}\n` +
+                                    `Application Tracking Code: ${lead.trackingCode}`;
+                                navigator.clipboard?.writeText(payload).then(
+                                    () => toast.success('Tracking link + code copied', { description: payload }),
+                                    () => toast.error('Could not copy — your browser blocked clipboard access')
+                                );
+                            }}
+                            className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 text-sm font-semibold transition-colors shadow-sm"
+                        >
+                            <Copy size={16} /> Copy Track Link
+                        </button>
+                    )}
 
                     <button className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 text-sm font-semibold transition-colors shadow-sm">
                         <Download size={16} /> Export PDF
@@ -1227,6 +1258,7 @@ const MENU_TONE = {
     emerald: { dot: 'bg-emerald-500', icon: 'text-emerald-600', badge: 'bg-emerald-100 text-emerald-700 border-emerald-200' },
     amber:   { dot: 'bg-amber-500',   icon: 'text-amber-600',   badge: 'bg-amber-100 text-amber-700 border-amber-200' },
     cyan:    { dot: 'bg-cyan-500',    icon: 'text-cyan-600',    badge: 'bg-cyan-100 text-cyan-700 border-cyan-200' },
+    purple:  { dot: 'bg-purple-500',  icon: 'text-purple-600',  badge: 'bg-purple-100 text-purple-700 border-purple-200' },
 };
 
 function ConvertMenu({ lead, canRevert }) {
@@ -1282,6 +1314,17 @@ function ConvertMenu({ lead, canRevert }) {
             endpoint: `/admin/leads/${lead.id}/convert-to-accommodation`,
             revertEndpoint: `/admin/leads/${lead.id}/revert-accommodation`,
             confirmText: "Open as an accommodation client? They appear in the Accommodation team's queue.",
+        },
+        {
+            key: 'english',
+            label: 'English',
+            sublabel: 'language',
+            icon: <Globe size={14} />,
+            tone: 'purple',
+            active: !!lead.is_english_student,
+            endpoint: `/admin/leads/${lead.id}/convert-to-english`,
+            revertEndpoint: `/admin/leads/${lead.id}/revert-english`,
+            confirmText: "Convert to an English student? Lands them in the English team's queue (PTE / DIY / mocktest pipeline).",
         },
     ];
 
