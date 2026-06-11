@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Models\VisaType;
 use App\Models\VisaTypePriceHistory;
 use App\Notifications\VisaTypePriceChanged;
+use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
@@ -18,6 +19,12 @@ use Inertia\Inertia;
 
 class VisaTypeController extends Controller
 {
+    // Laravel 12 ships an empty base controller, so the `$this->authorize()`
+    // shortcut used by VisaTypePolicy isn't bundled in. Pull the trait in
+    // locally — every other controller in this project guards via
+    // middleware instead, so widening the base controller would be churn.
+    use AuthorizesRequests;
+
     /**
      * Portal listing — every Immigration tier + admins can view; only Manager+
      * (per VisaTypePolicy@update) sees the Edit affordance in the UI.
@@ -35,15 +42,63 @@ class VisaTypeController extends Controller
             ->get()
             ->map(fn (VisaType $v) => $this->serialize($v));
 
+        // Route permissions through the policy so the UI affordances and
+        // the server-side guards can never drift apart. Anyone who can do
+        // X via the policy sees X in the toolbar; anyone who can't, sees a
+        // clean rendering with the action hidden.
         return Inertia::render('portal/immigration/VisaTypes', [
             'visaTypes'   => $rows,
             'permissions' => [
                 'canCreate'      => $user?->can('create', VisaType::class) ?? false,
-                'canUpdate'      => $user?->hasAnyRole([User::ROLE_SUPER_ADMIN, User::ROLE_ADMIN, User::ROLE_IMMIGRATION_MANAGER]) ?? false,
-                'canDelete'      => $user?->isSuperAdmin() ?? false,
-                'canViewHistory' => $user?->hasAnyRole([User::ROLE_SUPER_ADMIN, User::ROLE_ADMIN, User::ROLE_IMMIGRATION_MANAGER]) ?? false,
+                'canUpdate'      => $user?->can('update', VisaType::class) ?? false,
+                'canDelete'      => $user?->can('delete', VisaType::class) ?? false,
+                'canViewHistory' => $user?->can('viewPriceHistory', VisaType::class) ?? false,
             ],
         ]);
+    }
+
+    /**
+     * Create — inline-validated to keep CreateVisaTypeRequest from doubling
+     * UpdateVisaTypeRequest's rules. Code must be unique + uppercase
+     * alphanumeric so it stays usable as a system identifier.
+     */
+    public function store(Request $request)
+    {
+        $this->authorize('create', VisaType::class);
+
+        $payload = $request->validate([
+            'code'                          => 'required|string|max:32|regex:/^[A-Z0-9_-]+$/|unique:visa_types,code',
+            'name'                          => 'required|string|max:100',
+            'short_description'             => 'nullable|string|max:200',
+            'category'                      => 'nullable|string|max:50',
+            'consultation_price_nzd'        => 'required|numeric|min:0|max:5000',
+            'consultation_duration_minutes' => 'required|integer|min:15|max:180',
+            'estimated_minutes'             => 'required|integer|min:5|max:60',
+            'inz_form_refs'                 => 'nullable|string|max:120',
+            'icon'                          => 'required|string|max:60',
+            'active'                        => 'required|boolean',
+            // Per-visa checklist — same shape as the update endpoint so
+            // the React form can post identical payloads.
+            'checklist_items'               => 'nullable|array|max:50',
+            'checklist_items.*.key'         => 'required|string|max:80|regex:/^[a-z0-9_]+$/',
+            'checklist_items.*.label'       => 'required|string|max:120',
+            'checklist_items.*.hint'        => 'nullable|string|max:200',
+            'checklist_items.*.required'    => 'sometimes|boolean',
+        ], [
+            'code.regex'  => 'Code must be uppercase letters, numbers, dashes, or underscores only.',
+            'code.unique' => 'A visa type with that code already exists.',
+            'checklist_items.*.key.regex' => 'Checklist keys must be lowercase letters, numbers, and underscores.',
+        ]);
+
+        $visa_type = VisaType::create($payload);
+
+        ActivityLog::record('visa_type.created', [
+            'entity_type' => VisaType::class,
+            'entity_id'   => $visa_type->id,
+            'description' => "Created visa type {$visa_type->name}",
+        ]);
+
+        return back()->with('success', 'Visa type created');
     }
 
     /**
@@ -80,6 +135,16 @@ class VisaTypeController extends Controller
             }
         }
 
+        // Checklist changes are an array, so compare the JSON-encoded form.
+        $oldChecklist = $visa_type->checklist_items ?? [];
+        $newChecklist = $payload['checklist_items'] ?? [];
+        if (json_encode($oldChecklist) !== json_encode($newChecklist)) {
+            $diff['checklist_items'] = [
+                'old' => count($oldChecklist).' item(s)',
+                'new' => count($newChecklist).' item(s)',
+            ];
+        }
+
         if (empty($diff)) {
             return back()->with('success', 'No changes to save.');
         }
@@ -106,6 +171,7 @@ class VisaTypeController extends Controller
                 'estimated_minutes'             => $payload['estimated_minutes'],
                 'icon'                          => $payload['icon'],
                 'inz_form_refs'                 => $payload['inz_form_refs'] ?? null,
+                'checklist_items'               => $payload['checklist_items'] ?? null,
                 'active'                        => $payload['active'],
             ]);
 
@@ -202,6 +268,7 @@ class VisaTypeController extends Controller
             'estimated_minutes'             => (int) $v->estimated_minutes,
             'icon'                          => $v->icon ?? 'Globe',
             'inz_form_refs'                 => $v->inz_form_refs,
+            'checklist_items'               => is_array($v->checklist_items) ? $v->checklist_items : [],
             'active'                        => (bool) $v->active,
             'updated_at'                    => $v->updated_at?->toIso8601String(),
             'price_history'                 => $v->priceHistory->take(10)->map(fn (VisaTypePriceHistory $h) => [

@@ -33,6 +33,14 @@ class UpdateVisaTypeRequest extends FormRequest
             'inz_form_refs'                 => 'nullable|string|max:120',
             'icon'                          => 'required|string|max:60',
             'active'                        => 'required|boolean',
+            // Per-visa document checklist. Each item must carry a stable
+            // `key` (snake_case identifier used to match LeadDocument
+            // uploads) and a human label.
+            'checklist_items'               => 'nullable|array|max:50',
+            'checklist_items.*.key'         => 'required|string|max:80|regex:/^[a-z0-9_]+$/',
+            'checklist_items.*.label'       => 'required|string|max:120',
+            'checklist_items.*.hint'        => 'nullable|string|max:200',
+            'checklist_items.*.required'    => 'sometimes|boolean',
             'reason'                        => $priceChanged
                 ? 'required|string|min:10|max:500'
                 : 'nullable|string|max:500',

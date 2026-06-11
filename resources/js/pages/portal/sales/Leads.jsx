@@ -48,6 +48,27 @@ const STAGE_STYLES = {
 };
 const stageClass = (s) => STAGE_STYLES[s] || "bg-gray-100 text-gray-700 border-gray-200";
 
+// Hex tones for the StagePicker dropdown's colour dot — inline `style`
+// instead of a `bg-xxx-500` class so Tailwind's JIT purge can't drop a
+// dynamically-built class name. Indexed by tailwind colour family name.
+const STAGE_DOT_HEX = {
+    sky:     "#0ea5e9", amber:  "#f59e0b", emerald: "#10b981",
+    indigo:  "#6366f1", violet: "#8b5cf6", orange:  "#f97316",
+    cyan:    "#06b6d4", red:    "#ef4444", purple:  "#a855f7",
+    fuchsia: "#d946ef", pink:   "#ec4899", teal:    "#14b8a6",
+    rose:    "#f43f5e", slate:  "#64748b", blue:    "#3b82f6",
+    yellow:  "#eab308", lime:   "#84cc16", stone:   "#78716c",
+    gray:    "#9ca3af",
+};
+
+// Pull the colour family from any token in the styler's class string
+// (e.g. "bg-cyan-100 text-cyan-800 border-cyan-200" → "cyan").
+const stageDotHex = (styler, stage) => {
+    const cls = (typeof styler === "function" ? styler(stage) : "") || "";
+    const m = cls.match(/(?:text|bg|border)-([a-z]+)-\d+/);
+    return STAGE_DOT_HEX[m?.[1]] || "#9ca3af";
+};
+
 // Goal-setting status colours — kept in sync with LeadDetails.jsx so the
 // pill reads the same wherever it appears.
 const GOAL_STATUS_STYLE = {
@@ -1512,9 +1533,13 @@ function StagePicker({ lead, stages, open, onToggle, onClose, onSelect, isSaving
                                 role="option"
                                 aria-selected={active}
                                 onClick={() => onSelect(s)}
-                                className={`w-full flex items-center justify-between gap-2 px-2.5 py-1.5 text-left hover:bg-gray-50 transition-colors ${active ? "bg-gray-50/60" : ""}`}
+                                className={`w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-gray-50 transition-colors ${active ? "bg-indigo-50/60" : ""}`}
                             >
-                                <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold border uppercase ${stageClass(s)}`}>
+                                <span
+                                    className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                                    style={{ backgroundColor: stageDotHex(stageClass, s) }}
+                                />
+                                <span className={`flex-1 text-[12.5px] truncate ${active ? "font-bold text-gray-900" : "font-medium text-gray-700"}`}>
                                     {s}
                                 </span>
                                 {active && <Check size={12} className="text-gray-900 flex-shrink-0" strokeWidth={3} />}

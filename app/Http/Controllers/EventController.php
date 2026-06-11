@@ -5,7 +5,6 @@ namespace App\Http\Controllers;
 use App\Models\Event;
 use App\Models\FacebookLiveSession;
 use Illuminate\Http\Request;
-use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
@@ -20,13 +19,16 @@ class EventController extends Controller
     {
         $events = Event::with('sessions')->withCount(['sessions', 'leads'])->latest()->get();
 
-        // Append the registration URL to each event
+        // Append the registration URL (and banner URL, if any) to each event
         $events->each(function ($event) {
-            $event->registration_url = url('/register/' . $event->event_code);
+            $event->registration_url = url('/register/'.$event->event_code);
+            if ($event->banner_image) {
+                $event->banner_image_url = Storage::disk('public')->url($event->banner_image);
+            }
         });
 
         return inertia('admin/Events', [
-            'events' => $events
+            'events' => $events,
         ]);
     }
 
@@ -36,7 +38,7 @@ class EventController extends Controller
     public function show($id)
     {
         $event = Event::with('sessions')->findOrFail($id);
-        
+
         // Optionally append the public URL for the banner image to be displayed in the overview
         if ($event->banner_image) {
             $event->banner_image_url = Storage::disk('public')->url($event->banner_image);
@@ -47,7 +49,7 @@ class EventController extends Controller
 
         return inertia('admin/EventDetails', [
             'event' => $event,
-            'leads' => $leads
+            'leads' => $leads,
         ]);
     }
 
@@ -57,26 +59,26 @@ class EventController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'name'              => 'required|string|max:255',
-            'type'              => 'required|string|max:100',
-            'description'       => 'nullable|string',
-            'date_from'         => 'nullable|date',
-            'date_to'           => 'nullable|date|after_or_equal:date_from',
-            'status'            => 'required|in:draft,upcoming,ongoing,completed,cancelled',
-            'mode'              => 'required|in:in-person,online,hybrid',
-            'organizer_id'      => 'nullable|string|max:255',
-            'notes'             => 'nullable|string',
-            'banner_image'      => 'nullable|image|mimes:jpeg,png,jpg,webp,gif|max:4096',
+            'name' => 'required|string|max:255',
+            'type' => 'required|string|max:100',
+            'description' => 'nullable|string',
+            'date_from' => 'nullable|date',
+            'date_to' => 'nullable|date|after_or_equal:date_from',
+            'status' => 'required|in:draft,upcoming,ongoing,completed,cancelled',
+            'mode' => 'required|in:in-person,online,hybrid',
+            'organizer_id' => 'nullable|string|max:255',
+            'notes' => 'nullable|string',
+            'banner_image' => 'nullable|image|mimes:jpeg,png,jpg,webp,gif|max:4096',
             // sessions are fully optional
-            'sessions'                  => 'nullable|array',
-            'sessions.*.venue_name'     => 'nullable|string|max:255',
-            'sessions.*.address'        => 'nullable|string|max:500',
-            'sessions.*.city'           => 'nullable|string|max:100',
-            'sessions.*.date'           => 'nullable|date',
-            'sessions.*.time_start'     => 'nullable|date_format:H:i',
-            'sessions.*.time_end'       => 'nullable|date_format:H:i',
-            'sessions.*.capacity'       => 'nullable|integer|min:1',
-            'sessions.*.status'         => 'nullable|in:draft,upcoming,ongoing,completed,cancelled',
+            'sessions' => 'nullable|array',
+            'sessions.*.venue_name' => 'nullable|string|max:255',
+            'sessions.*.address' => 'nullable|string|max:500',
+            'sessions.*.city' => 'nullable|string|max:100',
+            'sessions.*.date' => 'nullable|date',
+            'sessions.*.time_start' => 'nullable|date_format:H:i',
+            'sessions.*.time_end' => 'nullable|date_format:H:i',
+            'sessions.*.capacity' => 'nullable|integer|min:1',
+            'sessions.*.status' => 'nullable|in:draft,upcoming,ongoing,completed,cancelled',
         ]);
 
         // Handle banner image upload
@@ -88,14 +90,14 @@ class EventController extends Controller
             DB::beginTransaction();
 
             // Auto-generate a unique event_code from the name + random suffix
-            $eventCode = Str::slug($validated['name']) . '-' . strtolower(Str::random(5));
+            $eventCode = Str::slug($validated['name']).'-'.strtolower(Str::random(5));
 
             $event = Event::create(array_merge($validated, [
                 'event_code' => $eventCode,
             ]));
 
             // Sessions are optional — only create if provided
-            if (!empty($validated['sessions'])) {
+            if (! empty($validated['sessions'])) {
                 foreach ($validated['sessions'] as $sessionData) {
                     $event->sessions()->create($sessionData);
                 }
@@ -108,9 +110,9 @@ class EventController extends Controller
             }
 
             return response()->json([
-                'status'  => 'success',
+                'status' => 'success',
                 'message' => 'Event created successfully.',
-                'data'    => $event->load('sessions'),
+                'data' => $event->load('sessions'),
             ], 201);
         } catch (\Exception $e) {
             DB::rollBack();
@@ -121,9 +123,131 @@ class EventController extends Controller
             }
 
             return response()->json([
-                'status'  => 'error',
+                'status' => 'error',
                 'message' => 'Failed to create event. Please try again.',
             ], 500);
+        }
+    }
+
+    /**
+     * Update an existing event (and sync its sessions) in storage.
+     */
+    public function update(Request $request, $id)
+    {
+        $event = Event::findOrFail($id);
+
+        $validated = $request->validate([
+            'name' => 'required|string|max:255',
+            'type' => 'required|string|max:100',
+            'description' => 'nullable|string',
+            'date_from' => 'nullable|date',
+            'date_to' => 'nullable|date|after_or_equal:date_from',
+            'status' => 'required|in:draft,upcoming,ongoing,completed,cancelled',
+            'mode' => 'required|in:in-person,online,hybrid',
+            'organizer_id' => 'nullable|string|max:255',
+            'notes' => 'nullable|string',
+            'banner_image' => 'nullable|image|mimes:jpeg,png,jpg,webp,gif|max:4096',
+            'sessions' => 'nullable|array',
+            'sessions.*.id' => 'nullable|integer',
+            'sessions.*.venue_name' => 'nullable|string|max:255',
+            'sessions.*.address' => 'nullable|string|max:500',
+            'sessions.*.city' => 'nullable|string|max:100',
+            'sessions.*.date' => 'nullable|date',
+            'sessions.*.time_start' => 'nullable|date_format:H:i',
+            'sessions.*.time_end' => 'nullable|date_format:H:i',
+            'sessions.*.capacity' => 'nullable|integer|min:1',
+            'sessions.*.status' => 'nullable|in:draft,upcoming,ongoing,completed,cancelled',
+        ]);
+
+        // Handle banner image upload — only replace when a new file is provided
+        if ($request->hasFile('banner_image')) {
+            if ($event->banner_image) {
+                Storage::disk('public')->delete($event->banner_image);
+            }
+            $validated['banner_image'] = $request->file('banner_image')->store('events/banners', 'public');
+        } else {
+            unset($validated['banner_image']);
+        }
+
+        try {
+            DB::beginTransaction();
+
+            $sessions = $validated['sessions'] ?? null;
+            unset($validated['sessions']);
+
+            $event->update($validated);
+
+            // Sync sessions only when the key is present in the request.
+            // Existing sessions (matched by id) are updated, new ones created,
+            // and removed ones deleted — except those that already have
+            // registered leads, to avoid orphaning lead->session links.
+            if ($request->has('sessions')) {
+                $keepIds = [];
+
+                foreach ($sessions ?? [] as $sessionData) {
+                    $sessionId = $sessionData['id'] ?? null;
+                    unset($sessionData['id']);
+
+                    if ($sessionId) {
+                        $session = $event->sessions()->find($sessionId);
+                        if ($session) {
+                            $session->update($sessionData);
+                            $keepIds[] = $session->id;
+                        }
+                    } else {
+                        $keepIds[] = $event->sessions()->create($sessionData)->id;
+                    }
+                }
+
+                $event->sessions()
+                    ->whereNotIn('id', $keepIds)
+                    ->whereDoesntHave('leads')
+                    ->delete();
+            }
+
+            DB::commit();
+
+            return redirect()->back()->with('success', 'Event updated successfully.');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Event update failed', ['error' => $e->getMessage()]);
+
+            return redirect()->back()->withErrors(['message' => 'Failed to update event. Please try again.']);
+        }
+    }
+
+    /**
+     * Remove an event (its banner, sessions, and lead links) from storage.
+     */
+    public function destroy($id)
+    {
+        $event = Event::findOrFail($id);
+
+        try {
+            DB::beginTransaction();
+
+            // Detach any leads that registered for this event so we don't
+            // delete the lead records themselves, just the event association.
+            $event->leads()->update([
+                'event_id' => null,
+                'event_session_id' => null,
+            ]);
+
+            if ($event->banner_image) {
+                Storage::disk('public')->delete($event->banner_image);
+            }
+
+            $event->sessions()->delete();
+            $event->delete();
+
+            DB::commit();
+
+            return redirect()->back()->with('success', 'Event deleted successfully.');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Event deletion failed', ['error' => $e->getMessage()]);
+
+            return redirect()->back()->withErrors(['message' => 'Failed to delete event. Please try again.']);
         }
     }
 
@@ -142,7 +266,7 @@ class EventController extends Controller
         }
 
         return inertia('registration/RegistrationPage', [
-            'event' => $event
+            'event' => $event,
         ]);
     }
 
@@ -180,26 +304,26 @@ class EventController extends Controller
             $intake = app(\App\Services\LeadIntakeService::class);
             $lead = $intake->ingest("event:{$event->event_code}", [
                 'first_name' => $validated['first_name'],
-                'last_name'  => $validated['last_name'],
-                'email'      => $validated['email'],
-                'phone'      => $validated['phone'],
-                'country'    => $validated['country'],
-                'stage'      => $validated['interest'],
+                'last_name' => $validated['last_name'],
+                'email' => $validated['email'],
+                'phone' => $validated['phone'],
+                'country' => $validated['country'],
+                'stage' => $validated['interest'],
             ], $request);
 
             // Attach the event-specific context — branch, work_info,
             // financial_info, event link — but only if this is a fresh
             // intake or the existing lead doesn't already have them.
             $eventAttrs = array_filter([
-                'branch'           => $lead->branch ?: 'Online Registration',
-                'event_id'         => $event->id,
+                'branch' => $lead->branch ?: 'Online Registration',
+                'event_id' => $event->id,
                 'event_session_id' => $validated['event_session_id'] ?? null,
-                'work_info'        => $lead->work_info ?: [
+                'work_info' => $lead->work_info ?: [
                     'employment_status' => $validated['employment_status'],
-                    'city'              => $validated['city'],
-                    'remarks'           => $validated['remarks'] ?? null,
+                    'city' => $validated['city'],
+                    'remarks' => $validated['remarks'] ?? null,
                 ],
-                'financial_info'   => $lead->financial_info ?: [
+                'financial_info' => $lead->financial_info ?: [
                     'funding_source' => $validated['funding_source'],
                 ],
             ], fn ($v) => ! is_null($v));
@@ -222,26 +346,26 @@ class EventController extends Controller
 
             DB::commit();
 
-            if ($request->header('X-Inertia') || !$request->wantsJson()) {
+            if ($request->header('X-Inertia') || ! $request->wantsJson()) {
                 return redirect()->back()->with('success', 'Registration successful! We will contact you soon.');
             }
 
             return response()->json([
                 'status' => 'success',
-                'message' => 'Registration successful! We will contact you soon.'
+                'message' => 'Registration successful! We will contact you soon.',
             ], 201);
 
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error('Public registration failed', ['error' => $e->getMessage()]);
 
-            if ($request->header('X-Inertia') || !$request->wantsJson()) {
+            if ($request->header('X-Inertia') || ! $request->wantsJson()) {
                 return redirect()->back()->withErrors(['error' => 'Registration failed. Please try again later.']);
             }
 
             return response()->json([
                 'status' => 'error',
-                'message' => 'Registration failed. Please try again later.'
+                'message' => 'Registration failed. Please try again later.',
             ], 500);
         }
     }
@@ -257,7 +381,7 @@ class EventController extends Controller
             ->get();
 
         $events->each(function ($event) {
-            $event->registration_url = url('/register/' . $event->event_code);
+            $event->registration_url = url('/register/'.$event->event_code);
         });
 
         $today = today()->toDateString();
@@ -270,13 +394,13 @@ class EventController extends Controller
             ->orderBy('session_date', 'desc')
             ->get();
 
-        if (!$featuredSession && $pastSessions->isNotEmpty()) {
+        if (! $featuredSession && $pastSessions->isNotEmpty()) {
             $featuredSession = $pastSessions->shift();
         }
 
         return inertia('activities/ActivitiesPage', [
-            'events'          => $events,
-            'pastSessions'    => $pastSessions->values(),
+            'events' => $events,
+            'pastSessions' => $pastSessions->values(),
             'featuredSession' => $featuredSession,
         ]);
     }

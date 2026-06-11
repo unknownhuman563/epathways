@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Head, useForm, Link } from '@inertiajs/react';
+import React, { useState, useEffect } from 'react';
+import { Head, useForm, Link, router } from '@inertiajs/react';
 import {
     Search, Plus, Eye, Edit2, Trash2, ChevronDown, Clock,
     Calendar, MapPin, Users, Globe, XCircle, Tag,
@@ -126,10 +126,14 @@ const emptySession = () => ({
     _key: Math.random(),
 });
 
-// ─── Create Event Slide-Over ──────────────────────────────────────────────────
-function CreateEventModal({ open, onClose, onCreated }) {
+// ─── Create / Edit Event Slide-Over ───────────────────────────────────────────
+function EventFormModal({ open, onClose, editingEvent }) {
+    const isEditing = !!editingEvent;
     const [step, setStep] = useState(1);
     const [hasSessions, setHasSessions] = useState(false);
+    // URL of the banner already stored on the server (edit mode), shown until
+    // the user picks a replacement file.
+    const [existingBanner, setExistingBanner] = useState(null);
 
     const { data, setData, post, processing, errors, setError, clearErrors, reset, transform } = useForm({
         name: '', type: '', description: '', date_from: '', date_to: '',
@@ -137,6 +141,44 @@ function CreateEventModal({ open, onClose, onCreated }) {
         banner_image: null,
         sessions: [emptySession()],
     });
+
+    // Hydrate the form whenever the slide-over opens for a specific event.
+    useEffect(() => {
+        if (!open) return;
+
+        if (editingEvent) {
+            const toDateInput = (d) => (d ? String(d).slice(0, 10) : '');
+            const sessions = (editingEvent.sessions || []).map((s) => ({
+                id: s.id,
+                venue_name: s.venue_name || '', address: s.address || '', city: s.city || '',
+                date: toDateInput(s.date),
+                time_start: s.time_start ? String(s.time_start).slice(0, 5) : '',
+                time_end: s.time_end ? String(s.time_end).slice(0, 5) : '',
+                capacity: s.capacity ?? '', status: s.status || 'upcoming',
+                _key: s.id,
+            }));
+            setData({
+                name: editingEvent.name || '', type: editingEvent.type || '',
+                description: editingEvent.description || '',
+                date_from: toDateInput(editingEvent.date_from),
+                date_to: toDateInput(editingEvent.date_to),
+                status: editingEvent.status || 'upcoming',
+                mode: editingEvent.mode || 'in-person',
+                organizer_id: editingEvent.organizer_id || '',
+                notes: editingEvent.notes || '',
+                banner_image: null,
+                sessions: sessions.length ? sessions : [emptySession()],
+            });
+            setHasSessions(sessions.length > 0);
+            setExistingBanner(editingEvent.banner_image_url || null);
+        } else {
+            reset();
+            setHasSessions(false);
+            setExistingBanner(null);
+        }
+        setStep(1);
+        clearErrors();
+    }, [open, editingEvent]);
 
     // Transform data before submission
     transform((data) => ({
@@ -155,10 +197,11 @@ function CreateEventModal({ open, onClose, onCreated }) {
     const removeSession = (idx) => setData('sessions', data.sessions.filter((_, i) => i !== idx));
 
     const resetAndClose = () => {
-        setStep(1); 
+        setStep(1);
         reset();
         clearErrors();
         setHasSessions(false);
+        setExistingBanner(null);
         onClose();
     };
 
@@ -177,7 +220,8 @@ function CreateEventModal({ open, onClose, onCreated }) {
     };
 
     const handleSubmit = () => {
-        post('/admin/events', {
+        const url = isEditing ? `/admin/events/${editingEvent.id}` : '/admin/events';
+        post(url, {
             forceFormData: true,
             onSuccess: () => {
                 resetAndClose();
@@ -201,7 +245,7 @@ function CreateEventModal({ open, onClose, onCreated }) {
                 {/* Header */}
                 <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between flex-shrink-0">
                     <div>
-                        <h2 className="text-lg font-bold text-gray-900">Create Event</h2>
+                        <h2 className="text-lg font-bold text-gray-900">{isEditing ? 'Edit Event' : 'Create Event'}</h2>
                         <p className="text-xs text-gray-500 mt-0.5">Step {step} of 2 — {step === 1 ? 'Event Details' : 'Sessions (Optional)'}</p>
                     </div>
                     <button onClick={resetAndClose} className="p-2 rounded-xl text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors">
@@ -302,16 +346,16 @@ function CreateEventModal({ open, onClose, onCreated }) {
                                     className="relative border-2 border-dashed border-gray-200 rounded-xl p-4 text-center cursor-pointer hover:border-gray-400 hover:bg-gray-50 transition-all"
                                     onClick={() => document.getElementById('banner-image-input').click()}
                                 >
-                                    {data.banner_image ? (
+                                    {(data.banner_image || existingBanner) ? (
                                         <div className="relative">
                                             <img
-                                                src={URL.createObjectURL(data.banner_image)}
+                                                src={data.banner_image ? URL.createObjectURL(data.banner_image) : existingBanner}
                                                 alt="Banner preview"
                                                 className="w-full h-32 object-cover rounded-lg"
                                             />
                                             <button
                                                 type="button"
-                                                onClick={e => { e.stopPropagation(); setData('banner_image', null); }}
+                                                onClick={e => { e.stopPropagation(); setData('banner_image', null); setExistingBanner(null); }}
                                                 className="absolute top-1 right-1 p-1 bg-black/60 text-white rounded-full hover:bg-black/80 transition"
                                             >
                                                 <X size={12} />
@@ -453,8 +497,8 @@ function CreateEventModal({ open, onClose, onCreated }) {
                                 className="flex items-center gap-2 px-5 py-2.5 bg-gray-900 text-white text-sm font-semibold rounded-xl hover:bg-gray-800 transition-colors shadow-sm disabled:opacity-60 disabled:cursor-not-allowed"
                             >
                                 {processing ? (
-                                    <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />Creating…</>
-                                ) : 'Create Event'}
+                                    <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />{isEditing ? 'Saving…' : 'Creating…'}</>
+                                ) : (isEditing ? 'Save Changes' : 'Create Event')}
                             </button>
                         </>
                     )}
@@ -470,7 +514,16 @@ export default function Events({ events: backendEvents }) {
     const [selectedEvents, setSelectedEvents] = useState([]);
     const [activeDropdown, setActiveDropdown] = useState(null);
     const [activeStatusFilter, setActiveStatusFilter] = useState('All');
-    const [showCreateModal, setShowCreateModal] = useState(false);
+    const [modalOpen, setModalOpen] = useState(false);
+    const [editingEvent, setEditingEvent] = useState(null);
+
+    const openCreate = () => { setEditingEvent(null); setModalOpen(true); };
+    const openEdit = (event) => { setEditingEvent(event); setModalOpen(true); setActiveDropdown(null); };
+    const handleDelete = (event) => {
+        if (!confirm(`Delete "${event.name || event.title}"? This cannot be undone.`)) return;
+        setActiveDropdown(null);
+        router.delete(`/admin/events/${event.id}`, { preserveScroll: true });
+    };
 
     const summaryCards = [
         { label: 'Total Events', value: events.length, trend: '+3', trendLabel: 'this month', isPositive: true, icon: <Calendar className="w-5 h-5" />, dark: true },
@@ -484,11 +537,6 @@ export default function Events({ events: backendEvents }) {
 
     const toggleSelectAll = (e) => setSelectedEvents(e.target.checked ? filtered.map(ev => ev.id) : []);
     const toggleSelect = (id) => setSelectedEvents(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
-
-    const handleCreated = (newEvent) => {
-        // Inertia will automatically refresh the 'events' prop 
-        // because the controller redirects back().
-    };
 
     return (
         <div className="space-y-6 max-w-[1600px] mx-auto pb-12">
@@ -506,7 +554,7 @@ export default function Events({ events: backendEvents }) {
                         Export Report
                     </button>
                     <button
-                        onClick={() => setShowCreateModal(true)}
+                        onClick={openCreate}
                         className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-xl hover:bg-gray-800 text-sm font-semibold transition-colors shadow-sm"
                     >
                         <Plus size={16} />
@@ -596,7 +644,7 @@ export default function Events({ events: backendEvents }) {
                                         <Calendar className="w-10 h-10 mx-auto mb-3 text-gray-200" />
                                         <p className="font-semibold">No events found</p>
                                         <p className="text-sm mt-1">Try adjusting your filters or
-                                            <button onClick={() => setShowCreateModal(true)} className="text-blue-600 hover:underline ml-1">create a new event</button>.
+                                            <button onClick={openCreate} className="text-blue-600 hover:underline ml-1">create a new event</button>.
                                         </p>
                                     </td>
                                 </tr>
@@ -689,7 +737,7 @@ export default function Events({ events: backendEvents }) {
                                                             <Copy size={16} /> Copy Registration Link
                                                         </button>
                                                         <Link href={`/admin/events/${event.id}`} className="flex w-full items-center gap-3 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"><Eye size={16} className="text-gray-500" /> View Details</Link>
-                                                        <button className="flex w-full items-center gap-3 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"><Edit2 size={16} className="text-gray-500" /> Edit Event</button>
+                                                        <button onClick={() => openEdit(event)} className="flex w-full items-center gap-3 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"><Edit2 size={16} className="text-gray-500" /> Edit Event</button>
                                                     </div>
                                                     <div className="px-1 py-1">
                                                         <button className="flex w-full items-center gap-3 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"><Copy size={16} className="text-blue-500" /> Duplicate</button>
@@ -697,7 +745,7 @@ export default function Events({ events: backendEvents }) {
                                                         <button className="flex w-full items-center gap-3 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"><Users size={16} className="text-emerald-500" /> View Registrants</button>
                                                     </div>
                                                     <div className="px-1 py-1">
-                                                        <button className="flex w-full items-center gap-3 px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors"><Trash2 size={16} /> Delete Event</button>
+                                                        <button onClick={() => handleDelete(event)} className="flex w-full items-center gap-3 px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors"><Trash2 size={16} /> Delete Event</button>
                                                     </div>
                                                 </div>
                                             </>
@@ -722,11 +770,11 @@ export default function Events({ events: backendEvents }) {
                 </div>
             </div>
 
-            {/* Create Event Slide-Over */}
-            <CreateEventModal
-                open={showCreateModal}
-                onClose={() => setShowCreateModal(false)}
-                onCreated={handleCreated}
+            {/* Create / Edit Event Slide-Over */}
+            <EventFormModal
+                open={modalOpen}
+                onClose={() => setModalOpen(false)}
+                editingEvent={editingEvent}
             />
 
             <style dangerouslySetInnerHTML={{ __html: `

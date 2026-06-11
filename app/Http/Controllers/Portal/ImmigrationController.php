@@ -210,33 +210,189 @@ class ImmigrationController extends Controller
     public function cases()
     {
         try {
-            $cases = Lead::with(['documents', 'portalUser:id,lead_id,last_login_at'])
+            $cases = Lead::with([
+                    'documents',
+                    'portalUser:id,lead_id,last_login_at',
+                    'immigrationConverter:id,name',
+                    'studentConverter:id,name',
+                    'stageUpdater:id,name',
+                ])
                 ->immigrationCase()
                 ->orderByDesc('updated_at')
                 ->limit(200)
                 ->get()
                 ->map(fn ($l) => [
-                    'id'             => $l->id,
-                    'lead_id'        => $l->lead_id,
-                    'name'           => trim("{$l->first_name} {$l->last_name}") ?: 'Unknown',
-                    'email'          => $l->email,
-                    'phone'          => $l->phone,
-                    'country'        => $l->residence_country,
-                    'status'         => $l->status,
-                    'inz_status'     => $l->inz_status,
-                    'inz_visa_type'  => $l->inz_visa_type,
-                    'inz_lodged_at'  => $l->inz_lodged_at,
-                    'docs_total'     => $l->documents->count(),
-                    'docs_approved'  => $l->documents->where('status', 'Approved')->count(),
-                    'docs_pending'   => $l->documents->whereIn('status', ['Submitted', 'UnderReview'])->count(),
-                    'docs_rejected'  => $l->documents->where('status', 'Rejected')->count(),
-                    'updated_at'     => $l->updated_at,
+                    'id'                => $l->id,
+                    'lead_id'           => $l->lead_id,
+                    // Customer-shareable tracking code — drives the
+                    // "Copy tracking link" row action so staff can paste a
+                    // /track/{code} URL straight to the client.
+                    'tracking_code'     => $l->tracking_code,
+                    // Most recent stage-mover (falls back to the original
+                    // converter if the row predates stage-update
+                    // tracking). Drives "Updated [date] · Endorsed by
+                    // [Name]" under the stage chip.
+                    'endorsed_by'       => optional($l->stageUpdater)->name
+                                            ?? optional($l->immigrationConverter)->name
+                                            ?? optional($l->studentConverter)->name,
+                    'stage_updated_at'  => optional($l->stage_updated_at)?->toIso8601String(),
+                    'name'              => trim("{$l->first_name} {$l->last_name}") ?: 'Unknown',
+                    'email'             => $l->email,
+                    'phone'             => $l->phone,
+                    'country'           => $l->residence_country,
+                    'status'            => $l->status,
+                    'inz_status'        => $l->inz_status,
+                    'inz_visa_type'     => $l->inz_visa_type,
+                    'inz_reference'     => $l->inz_reference,
+                    'inz_lodged_at'     => $l->inz_lodged_at,
+                    // Immigration-team sub-stage. Drives both the inline
+                    // status picker on each row and the distribution graph
+                    // up top. Pre-existing leads still on `inz_status`
+                    // fall back to "Unassigned".
+                    'immigration_stage' => $l->immigration_stage,
+                    'docs_total'        => $l->documents->count(),
+                    'docs_approved'     => $l->documents->where('status', 'Approved')->count(),
+                    'docs_pending'      => $l->documents->whereIn('status', ['Submitted', 'UnderReview'])->count(),
+                    'docs_rejected'     => $l->documents->where('status', 'Rejected')->count(),
+                    'updated_at'        => $l->updated_at,
                 ]);
-            return inertia('portal/immigration/Cases', ['cases' => $cases]);
+
+            // Distribution payload for the stacked-bar graph that replaces
+            // the old summary cards. Counts how many cases sit in each
+            // canonical immigration_stage value plus an "Unassigned"
+            // bucket for cases that haven't been put on the ladder yet.
+            $distribution = collect(Lead::IMMIGRATION_STAGES)
+                ->map(fn ($stage) => [
+                    'stage' => $stage,
+                    'count' => $cases->where('immigration_stage', $stage)->count(),
+                ])
+                ->push([
+                    'stage' => 'Unassigned',
+                    'count' => $cases->whereNull('immigration_stage')->count(),
+                ])
+                ->values();
+
+            // Visa-type catalogue for the "Add new case" form. Active
+            // entries only so inactive types don't pollute the dropdown,
+            // ordered by category → name to match VisaType admin tooling.
+            $visaTypes = \App\Models\VisaType::query()
+                ->where('active', true)
+                ->orderBy('category')
+                ->orderBy('name')
+                ->get(['id', 'code', 'name', 'category']);
+
+            return inertia('portal/immigration/Cases', [
+                'cases'        => $cases,
+                'distribution' => $distribution,
+                'stages'       => Lead::IMMIGRATION_STAGES,
+                'visaTypes'    => $visaTypes,
+            ]);
         } catch (\Throwable $e) {
             Log::error('Immigration cases list failed', ['error' => $e->getMessage()]);
-            return inertia('portal/immigration/Cases', ['cases' => []]);
+            return inertia('portal/immigration/Cases', [
+                'cases' => [],
+                'distribution' => [],
+                'stages' => Lead::IMMIGRATION_STAGES,
+                'visaTypes' => [],
+            ]);
         }
+    }
+
+    /**
+     * Create a brand-new immigration case from the Cases page. Saves a
+     * Lead row flagged as an immigration case, optionally attaches a
+     * LeadNote for the internal-note field, and stamps `inz_visa_type`
+     * from the chosen visa-type name so existing tooling sees a familiar
+     * label.
+     */
+    public function storeCase(\Illuminate\Http\Request $request)
+    {
+        $data = $request->validate([
+            'first_name'        => 'required|string|max:80',
+            'middle_name'       => 'nullable|string|max:80',
+            'last_name'         => 'required|string|max:80',
+            'suffix'            => 'nullable|string|max:20',
+            'gender'            => 'nullable|string|max:30',
+            'email'             => 'required|email|max:120',
+            'phone'             => 'required|string|max:40',
+            // Stage is now optional — if the staff member doesn't pick
+            // one we default to the first canonical value ("Endorsed")
+            // below so the new case lands cleanly on the journey rail.
+            'immigration_stage' => ['nullable', \Illuminate\Validation\Rule::in(Lead::IMMIGRATION_STAGES)],
+            'internal_note'     => 'nullable|string|max:5000',
+            'payment'           => 'nullable|string|max:120',
+            'visa_type_id'      => 'required|integer|exists:visa_types,id',
+        ]);
+
+        $visa = \App\Models\VisaType::find($data['visa_type_id']);
+
+        $lead = Lead::create([
+            'lead_id'                  => 'IC-'.strtoupper(uniqid()),
+            'first_name'               => $data['first_name'],
+            'middle_name'              => $data['middle_name'] ?? null,
+            'last_name'                => $data['last_name'],
+            'suffix'                   => $data['suffix'] ?? null,
+            'gender'                   => $data['gender'] ?? null,
+            'email'                    => $data['email'],
+            'phone'                    => $data['phone'],
+            'immigration_stage'        => $data['immigration_stage'] ?? Lead::IMMIGRATION_STAGES[0],
+            'inz_visa_type'            => $visa?->name,
+            'student_payment'          => $data['payment'] ?? null,
+            // Mark immediately as an immigration case so scopeImmigrationCase
+            // picks it up without waiting for a stage hand-off.
+            'is_immigration_case'      => true,
+            'immigration_converted_at' => now(),
+            'immigration_converted_by' => auth()->id(),
+            // Initial stage stamp — drives "Updated [date] · Endorsed by
+            // [Name]" subtitle in the Cases table.
+            'stage_updated_at'         => now(),
+            'stage_updated_by'         => auth()->id(),
+            'source'                   => 'manual.immigration',
+            'status'                   => 'New',
+            'stage'                    => 'Visa Process',
+        ]);
+
+        // Internal note → LeadNote so it surfaces in the same notes feed
+        // the rest of the system writes to, rather than getting buried in
+        // a free-form column.
+        if (!empty($data['internal_note'])) {
+            \App\Models\LeadNote::create([
+                'lead_id'     => $lead->id,
+                'kind'        => 'general',
+                'body'        => $data['internal_note'],
+                'author_name' => auth()->user()?->name ?? 'System',
+                'author_role' => auth()->user()?->role ?? 'immigration',
+            ]);
+        }
+
+        return back()->with('success', "Case {$lead->lead_id} created.");
+    }
+
+    /**
+     * Inline stage update from the Cases table. Mirrors EducationController's
+     * `updateStudentField` pattern — single endpoint, immigration_stage is
+     * the only field accepted.
+     */
+    public function updateCaseStage(\Illuminate\Http\Request $request, $id)
+    {
+        $lead = Lead::immigrationCase()->findOrFail($id);
+
+        $data = $request->validate([
+            'immigration_stage' => ['nullable', \Illuminate\Validation\Rule::in(Lead::IMMIGRATION_STAGES)],
+        ]);
+
+        $newStage = $data['immigration_stage'] ?? null;
+        if (($lead->immigration_stage ?? null) !== $newStage) {
+            $lead->immigration_stage = $newStage;
+            // Only stamp the stage-tracking columns when the stage
+            // actually moved — re-saving the same value shouldn't refresh
+            // the "Updated [date]" subtitle the table shows.
+            $lead->stage_updated_at  = now();
+            $lead->stage_updated_by  = auth()->id();
+            $lead->save();
+        }
+
+        return back();
     }
 
     /**

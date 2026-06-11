@@ -15,7 +15,7 @@ class VisaType extends Model
         'consultation_price_nzd', 'consultation_duration_minutes',
         'estimated_minutes', 'icon',
         'expected_processing_days',
-        'inz_form_refs', 'notes', 'active',
+        'inz_form_refs', 'checklist_items', 'notes', 'active',
     ];
 
     protected $casts = [
@@ -24,6 +24,10 @@ class VisaType extends Model
         'consultation_duration_minutes' => 'integer',
         'estimated_minutes'             => 'integer',
         'active'                        => 'boolean',
+        // Per-visa document checklist: [{ key, label, hint?, required }].
+        // Drives the lead's /track "Visa requirements" panel and the
+        // Documents tab's checklist UI on the staff side.
+        'checklist_items'               => 'array',
     ];
 
     public function priceHistory(): HasMany
