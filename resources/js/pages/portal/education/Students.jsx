@@ -1,13 +1,16 @@
 import { Head, Link, router } from "@inertiajs/react";
 import { createPortal } from "react-dom";
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
 import {
     BookOpen, ChevronRight, ChevronLeft, Clock, FileCheck, FolderOpen,
     GraduationCap, Search, Users, Mail, Phone, MapPin, Calendar, School,
     CreditCard, FileText, ExternalLink, Languages, ClipboardList,
     Save, Edit2, ArrowUpDown, ArrowUp, ArrowDown,
     ChevronDown, Check, TrendingUp, Globe,
+    UserPlus, Pencil, Trash2, Copy, MoreHorizontal,
 } from "lucide-react";
+import AddEditStudentModal from "./AddEditStudentModal";
 
 const PAGE_SIZE = 25;
 
@@ -26,6 +29,142 @@ const avatarColor = (key) => {
 };
 const initials = (name = "") =>
     name.trim().split(/\s+/).slice(0, 2).map((w) => w[0] || "").join("").toUpperCase();
+
+// Write the public /track link + raw code to the clipboard in a single
+// payload so staff can paste it straight into WhatsApp / email / SMS.
+// Mirrors the same helper used in Sales/Leads + Immigration/Cases.
+function copyTrackingLink(code) {
+    if (!code) return;
+    const url = `${window.location.origin}/track/${code}`;
+    const payload = `Link: ${url}\nApplication Tracking Code: ${code}`;
+    navigator.clipboard?.writeText(payload).then(
+        () => toast.success("Tracking link + code copied", { description: payload }),
+        () => toast.error("Could not copy — your browser blocked clipboard access")
+    );
+}
+
+/**
+ * Three-dot row action menu. Items are `{ key, label, icon, onClick?,
+ * href?, external?, danger? }`. Portal-anchored so it escapes table
+ * overflow. Mirrors the menu used in Immigration/Cases.
+ */
+function RowMenu({ items = [] }) {
+    const [open, setOpen] = useState(false);
+    const [coords, setCoords] = useState({ top: 0, left: 0 });
+    const triggerRef = useRef(null);
+    const menuRef = useRef(null);
+
+    useEffect(() => {
+        if (!open || !triggerRef.current) return;
+        const place = () => {
+            const r = triggerRef.current.getBoundingClientRect();
+            setCoords({ top: r.bottom + 6, left: r.right - 220 });
+        };
+        place();
+        const onScroll = () => place();
+        window.addEventListener("scroll", onScroll, true);
+        window.addEventListener("resize", onScroll);
+        return () => {
+            window.removeEventListener("scroll", onScroll, true);
+            window.removeEventListener("resize", onScroll);
+        };
+    }, [open]);
+
+    useEffect(() => {
+        if (!open) return;
+        const onDocClick = (e) => {
+            if (menuRef.current?.contains(e.target) || triggerRef.current?.contains(e.target)) return;
+            setOpen(false);
+        };
+        const onKey = (e) => { if (e.key === "Escape") setOpen(false); };
+        document.addEventListener("mousedown", onDocClick);
+        document.addEventListener("keydown", onKey);
+        return () => {
+            document.removeEventListener("mousedown", onDocClick);
+            document.removeEventListener("keydown", onKey);
+        };
+    }, [open]);
+
+    const handleClick = (item) => {
+        setOpen(false);
+        item.onClick?.();
+    };
+
+    return (
+        <>
+            <button
+                ref={triggerRef}
+                type="button"
+                onClick={() => setOpen(!open)}
+                title="More actions"
+                className={`inline-flex items-center justify-center w-7 h-7 rounded-md transition-colors ${open ? "bg-gray-100 text-gray-900" : "text-gray-500 hover:text-gray-900 hover:bg-gray-100"}`}
+            >
+                <MoreHorizontal size={14} />
+            </button>
+
+            {open && typeof document !== "undefined" && createPortal(
+                <div
+                    ref={menuRef}
+                    role="menu"
+                    style={{
+                        position: "fixed",
+                        top: coords.top,
+                        left: Math.max(8, coords.left),
+                        width: 220,
+                    }}
+                    className="z-[60] bg-white rounded-xl shadow-2xl border border-gray-100 py-1.5"
+                >
+                    {items.map((it) => {
+                        const Icon = it.icon;
+                        const tone = it.danger
+                            ? "text-red-600 hover:bg-red-50"
+                            : "text-gray-700 hover:bg-gray-50";
+                        const iconTone = it.danger ? "text-red-400" : "text-gray-400";
+                        const inner = (
+                            <span className={`flex items-center gap-2.5 px-3 py-2 text-xs ${tone} cursor-pointer`}>
+                                {Icon && <Icon size={13} className={iconTone} />}
+                                {it.label}
+                            </span>
+                        );
+                        if (it.href) {
+                            // External links bypass Inertia so target+rel work.
+                            if (it.external) {
+                                return (
+                                    <a
+                                        key={it.key}
+                                        href={it.href}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        onClick={() => setOpen(false)}
+                                        className="block"
+                                    >
+                                        {inner}
+                                    </a>
+                                );
+                            }
+                            return (
+                                <Link key={it.key} href={it.href} onClick={() => setOpen(false)} className="block">
+                                    {inner}
+                                </Link>
+                            );
+                        }
+                        return (
+                            <button
+                                key={it.key}
+                                type="button"
+                                onClick={() => handleClick(it)}
+                                className="w-full text-left block"
+                            >
+                                {inner}
+                            </button>
+                        );
+                    })}
+                </div>,
+                document.body
+            )}
+        </>
+    );
+}
 
 // Stage chip colours mirror the Leads palette so a student's stage reads
 // the same here as it does on the lead detail screen.
@@ -162,7 +301,20 @@ const fmtDate = (iso) => {
     } catch { return ""; }
 };
 
-export default function EducationStudents({ students = [] }) {
+export default function EducationStudents({ students = [], schoolOptions = [], programOptions = [] }) {
+    // Add / edit student modal — null = closed, {} = new, object = edit.
+    const [editingStudent, setEditingStudent] = useState(null);
+    const [studentModalOpen, setStudentModalOpen] = useState(false);
+
+    const openNewStudent = () => { setEditingStudent(null); setStudentModalOpen(true); };
+    const openEditStudent = (s) => { setEditingStudent(s); setStudentModalOpen(true); };
+    const closeStudentModal = () => { setStudentModalOpen(false); setEditingStudent(null); };
+
+    const deleteStudent = (s) => {
+        if (! window.confirm(`Remove "${s.name}" from the Students list? Their lead record stays; just the student flag clears.`)) return;
+        router.post(`/portal/education/students/${s.id}/destroy`, {}, { preserveScroll: true, preserveState: true });
+    };
+
     const [search, setSearch] = useState("");
     const [expandedId, setExpandedId] = useState(null);
     const [selectedIds, setSelectedIds] = useState(new Set());
@@ -257,7 +409,30 @@ export default function EducationStudents({ students = [] }) {
         const total       = students.length;
         const withPlan    = students.filter((s) => !! s.program).length;
         const pendingDocs = students.filter((s) => (s.docs_total || 0) > 0 && (s.docs_approved || 0) < s.docs_total).length;
-        return { total, withPlan, pendingDocs };
+
+        // Stage breakdown — count students by which stage they're parked
+        // at right now. Builds one row per canonical stage even if zero
+        // so the bar layout stays the same shape across renders. Also
+        // computes a "Not started" bucket for students with no stage yet.
+        const tally = (stages, field) => {
+            const counts = Object.fromEntries(stages.map((s) => [s, 0]));
+            let notStarted = 0;
+            for (const s of students) {
+                const v = s[field];
+                if (v && counts[v] !== undefined) counts[v]++;
+                else if (! v) notStarted++;
+            }
+            return { counts, notStarted };
+        };
+
+        return {
+            total,
+            withPlan,
+            pendingDocs,
+            education:   tally(EDUCATION_STAGES,   "education_stage"),
+            english:     tally(ENGLISH_STAGES,     "english_stage"),
+            immigration: tally(IMMIGRATION_STAGES, "immigration_stage"),
+        };
     }, [students]);
 
     return (
@@ -272,14 +447,17 @@ export default function EducationStudents({ students = [] }) {
                         Pipeline · {filtered.length} {filtered.length === 1 ? "student" : "students"}
                     </p>
                 </div>
+                <button
+                    type="button"
+                    onClick={openNewStudent}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gray-900 text-white text-sm font-semibold hover:bg-gray-800 transition-colors shadow-sm"
+                >
+                    <UserPlus size={15} /> New student
+                </button>
             </div>
 
-            {/* Stat tiles */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <StatTile label="Total students"     value={stats.total}       icon={<GraduationCap size={16} />} tone="indigo"  />
-                <StatTile label="With study plan"    value={stats.withPlan}    icon={<BookOpen size={16} />}      tone="emerald" />
-                <StatTile label="Pending documents"  value={stats.pendingDocs} icon={<Clock size={16} />}         tone="amber"   />
-            </div>
+            {/* Stage distribution — small line graph for Education only. */}
+            <StageDistribution stats={stats} students={students} />
 
             {/* Toolbar — tabs + filter pills + sort + search, mirroring the
                 sales-portal Leads toolbar so the two surfaces feel paired. */}
@@ -474,7 +652,10 @@ export default function EducationStudents({ students = [] }) {
                                             {/* Status — department-aware stage picker. The
                                                 column read (education_stage / english_stage /
                                                 immigration_stage) and the available stage list
-                                                come from the active tab's config. */}
+                                                come from the active tab's config. The
+                                                "Endorsed by [Name]" subtitle below the
+                                                chip surfaces the staff member who created
+                                                or endorsed this record. */}
                                             <td className="px-3 py-2.5 relative">
                                                 <StagePicker
                                                     leadId={s.id}
@@ -553,28 +734,44 @@ export default function EducationStudents({ students = [] }) {
                                                 )}
                                             </td>
 
-                                            {/* Actions */}
+                                            {/* Actions — collapsed into a three-dot menu */}
                                             <td className="px-3 py-2.5 pr-4 text-right">
-                                                <div className="inline-flex items-center gap-1">
-                                                    <a
-                                                        href={`/portal/education/leads/${s.id}/documents`}
-                                                        title="Open documents"
-                                                        className="inline-flex items-center justify-center w-7 h-7 rounded-md text-gray-500 hover:text-gray-900 hover:bg-gray-100 transition-colors"
-                                                    >
-                                                        <FileText size={12} />
-                                                    </a>
-                                                    {s.gdrive_link && (
-                                                        <a
-                                                            href={s.gdrive_link}
-                                                            target="_blank"
-                                                            rel="noopener noreferrer"
-                                                            title="Open GDrive"
-                                                            className="inline-flex items-center justify-center w-7 h-7 rounded-md text-gray-500 hover:text-gray-900 hover:bg-gray-100 transition-colors"
-                                                        >
-                                                            <ExternalLink size={12} />
-                                                        </a>
-                                                    )}
-                                                </div>
+                                                <RowMenu
+                                                    items={[
+                                                        s.tracking_code && {
+                                                            key: 'copy',
+                                                            label: 'Copy tracking link',
+                                                            icon: Copy,
+                                                            onClick: () => copyTrackingLink(s.tracking_code),
+                                                        },
+                                                        {
+                                                            key: 'docs',
+                                                            label: 'Open documents',
+                                                            icon: FileText,
+                                                            href: `/portal/education/leads/${s.id}/documents`,
+                                                        },
+                                                        s.gdrive_link && {
+                                                            key: 'gdrive',
+                                                            label: 'Open GDrive',
+                                                            icon: ExternalLink,
+                                                            href: s.gdrive_link,
+                                                            external: true,
+                                                        },
+                                                        {
+                                                            key: 'edit',
+                                                            label: 'Edit student',
+                                                            icon: Pencil,
+                                                            onClick: () => openEditStudent(s),
+                                                        },
+                                                        {
+                                                            key: 'delete',
+                                                            label: 'Remove from students',
+                                                            icon: Trash2,
+                                                            onClick: () => deleteStudent(s),
+                                                            danger: true,
+                                                        },
+                                                    ].filter(Boolean)}
+                                                />
                                             </td>
                                         </tr>
 
@@ -623,6 +820,14 @@ export default function EducationStudents({ students = [] }) {
                     </div>
                 )}
             </div>
+
+            <AddEditStudentModal
+                open={studentModalOpen}
+                student={editingStudent}
+                onClose={closeStudentModal}
+                schoolOptions={schoolOptions}
+                programOptions={programOptions}
+            />
         </div>
     );
 }
@@ -634,9 +839,17 @@ function StudentDashboardPanel({ student: s }) {
     const docsDone  = hasDocs && s.docs_approved >= s.docs_total;
     const barColor  = docsDone ? "bg-emerald-500" : pct >= 50 ? "bg-amber-500" : "bg-gray-400";
 
+    // Prefer the school FK lookup; fall back to the legacy free-text
+    // column on older rows that haven't been re-linked yet.
+    const schoolDisplay = s.school_name || s.school;
+    const englishTest   = s.english_test
+        ? `${s.english_test}${s.english_test_score ? ` · ${s.english_test_score}` : ""}${s.english_test_taken ? "" : " · pending"}`
+        : null;
+
     return (
-        <div className="space-y-5">
-            {/* 1 — Identity / contact / engagement */}
+        <div className="space-y-4">
+
+            {/* ── Profile · contact, engagement ───────────────────── */}
             <section>
                 <PanelTitle>Profile</PanelTitle>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
@@ -644,14 +857,14 @@ function StudentDashboardPanel({ student: s }) {
                     <ReadOnlyField icon={MapPin}    label="Location"       value={s.location} />
                     <ReadOnlyField icon={Phone}     label="Contact number" value={s.phone}    href={s.phone ? `tel:${s.phone}` : null} />
                     <ReadOnlyField icon={Mail}      label="Email"          value={s.email}    href={s.email ? `mailto:${s.email}` : null} truncate />
+                    {/* Endorsed by — staff member who last moved the
+                        stage. Lives in the expander so the row column
+                        stays compact. */}
+                    <ReadOnlyField icon={UserPlus}  label="Endorsed by"    value={s.endorsed_by} />
                 </div>
             </section>
 
-            {/* 2 — Journey — one unified stepper across the whole
-                Education → Immigration pipeline. Each node is tinted by
-                the team that owns it (green for education, indigo for
-                immigration). English shows as a parallel mini-track
-                below if the student is in that queue. */}
+            {/* ── Journey · unified Education → Immigration stepper ─ */}
             <section>
                 <PanelTitle>Journey</PanelTitle>
                 <UnifiedJourney student={s} />
@@ -668,35 +881,48 @@ function StudentDashboardPanel({ student: s }) {
                 )}
             </section>
 
-            {/* 3 — Study plan */}
+            {/* ── Student details · academic + operations stacked in
+                a single 4-column grid so it reads as one block. The old
+                "Status & offers" wrapper and the duplicate "School
+                (Override)" tile are gone — the School FK supersedes the
+                legacy free-text column. */}
             <section>
-                <PanelTitle>Study plan</PanelTitle>
+                <PanelTitle>Student details</PanelTitle>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                    <ReadOnlyField icon={BookOpen}  label="Program"      value={s.program ? `${s.program}${s.level ? ` · ${s.level}` : ""}` : null} />
-                    <ReadOnlyField icon={School}    label="School"       value={s.school} />
-                    <ReadOnlyField icon={Calendar}  label="Intake"       value={s.intake} />
-                    <ReadOnlyField
-                        icon={Languages}
-                        label="PTE / IELTS"
-                        value={s.english_test ? `${s.english_test}${s.english_test_score ? ` · ${s.english_test_score}` : ""}${s.english_test_taken ? "" : " · pending"}` : null}
-                    />
+                    {/* Row 1 — academic */}
+                    <ReadOnlyField icon={BookOpen}  label="Program"     value={s.program ? `${s.program}${s.level ? ` · ${s.level}` : ""}` : null} />
+                    <ReadOnlyField icon={School}    label="School"      value={schoolDisplay} />
+                    <ReadOnlyField icon={Calendar}  label="Intake"      value={s.intake} />
+                    <ReadOnlyField icon={Languages} label="PTE / IELTS" value={englishTest} />
+
+                    {/* Row 2 — operations */}
+                    <EditableField leadId={s.id} fieldKey="payment" icon={CreditCard} label="Payment" value={s.payment} placeholder="e.g. PhP 150,000" />
+                    <EditableField leadId={s.id} fieldKey="coop"    icon={FileCheck}  label="COOP"    value={s.coop}    placeholder="Yes / No / Date" />
+                    <EditableField leadId={s.id} fieldKey="oop"     icon={FileCheck}  label="OOP"     value={s.oop}     placeholder="Yes / No / Date" />
+
+                    {/* Documents progress slotted into the 4th column
+                        of row 2 — keeps the grid tight and surfaces the
+                        same metric without a dedicated section header. */}
+                    <div className="bg-white rounded-lg border border-gray-200 px-3 py-2.5 flex flex-col justify-between">
+                        <div className="flex items-center justify-between">
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-gray-500">
+                                <FileCheck size={10} /> Documents
+                            </span>
+                            <span className="text-[11px] tabular-nums font-semibold text-gray-700">
+                                {s.docs_approved || 0} / {s.docs_total || 0}
+                                {hasDocs && <span className="ml-1 text-gray-400">· {pct}%</span>}
+                            </span>
+                        </div>
+                        <div className="h-1.5 w-full rounded-full bg-gray-100 overflow-hidden mt-2">
+                            <div className={`h-full rounded-full ${barColor}`} style={{ width: `${pct}%` }} />
+                        </div>
+                    </div>
                 </div>
             </section>
 
-            {/* 3 — Payment / COOP / OOP / School override */}
+            {/* ── Notes & links · comments (wide) + GDrive ─────────── */}
             <section>
-                <PanelTitle>Status & offers</PanelTitle>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                    <EditableField leadId={s.id} fieldKey="payment" icon={CreditCard} label="Payment"          value={s.payment} placeholder="e.g. PhP 150,000" />
-                    <EditableField leadId={s.id} fieldKey="coop"    icon={FileCheck}  label="COOP"             value={s.coop}    placeholder="Yes / No / Date" />
-                    <EditableField leadId={s.id} fieldKey="oop"     icon={FileCheck}  label="OOP"              value={s.oop}     placeholder="Yes / No / Date" />
-                    <EditableField leadId={s.id} fieldKey="school"  icon={School}     label="School (override)" value={s.school} placeholder="Institution name" />
-                </div>
-            </section>
-
-            {/* 4 — Comments + GDrive */}
-            <section>
-                <PanelTitle>Notes & references</PanelTitle>
+                <PanelTitle>Notes &amp; links</PanelTitle>
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
                     <div className="lg:col-span-2">
                         <EditableField
@@ -718,25 +944,6 @@ function StudentDashboardPanel({ student: s }) {
                         placeholder="https://drive.google.com/…"
                         isLink
                     />
-                </div>
-            </section>
-
-            {/* 5 — Documents */}
-            <section>
-                <PanelTitle>Documents</PanelTitle>
-                <div className="bg-white rounded-lg border border-gray-200 px-3 py-2.5">
-                    <div className="flex items-center justify-between text-[10px] mb-1.5">
-                        <span className="inline-flex items-center gap-1 font-bold uppercase tracking-wider text-gray-500">
-                            <FileCheck size={10} /> Documents
-                        </span>
-                        <span className="tabular-nums font-semibold text-gray-700">
-                            {s.docs_approved || 0} / {s.docs_total || 0}
-                            {hasDocs && <span className="ml-1 text-gray-400">· {pct}%</span>}
-                        </span>
-                    </div>
-                    <div className="h-1.5 w-full rounded-full bg-gray-100 overflow-hidden">
-                        <div className={`h-full rounded-full ${barColor}`} style={{ width: `${pct}%` }} />
-                    </div>
                 </div>
             </section>
 
@@ -1003,6 +1210,168 @@ function JourneyTrack({ icon, label, stages, current, toneClass }) {
     );
 }
 
+// Summary chart — horizontal bar rows per stage, one block per
+// department track. The bar width is proportional to the busiest
+// stage in that track so a small department doesn't get crushed
+// against a large one. Click a row to filter the table.
+// Per-stage hex tone for the line graph's dots + count labels. Each
+// stage in the Education flow gets its own colour so a glance at the
+// chart tells you which "milestone" the cluster sits at, not just the
+// numeric count.
+const EDUCATION_STAGE_HEX = {
+    "Endorsed to School":      "#0ea5e9", // sky
+    "Conditional Offer":       "#f59e0b", // amber
+    "Unconditional Offer":     "#10b981", // emerald
+    "Endorsed to Immigration": "#6366f1", // indigo
+    "Visa Lodged":             "#8b5cf6", // violet
+    "Approved in Principle":   "#06b6d4", // cyan
+    "Request for Information": "#f97316", // orange
+    "Approved Visa":           "#22c55e", // green
+    "Started Course":          "#14b8a6", // teal
+};
+const educationStageHex = (s) => EDUCATION_STAGE_HEX[s] || "#9ca3af";
+
+// Small line graph showing how many students sit at each Education
+// stage. Single track only — English / Immigration counts surface via
+// the per-row chips and the Journey panel instead.
+function StageDistribution({ stats, students }) {
+    if (students.length === 0) return null;
+
+    const stages    = EDUCATION_STAGES;
+    const counts    = stats.education.counts;
+    const data      = stages.map((s) => counts[s] || 0);
+    const peak      = Math.max(1, ...data);
+    const placed    = data.reduce((sum, n) => sum + n, 0);
+    const unstaged  = stats.education.notStarted;
+
+    // SVG dimensions — viewBox units. Compact sparkline-style chart;
+    // the rotated stage labels eat the bottom band. Extra horizontal
+    // padding keeps the leftmost / rightmost rotated label from
+    // bleeding outside the card.
+    const W         = 920;
+    const H         = 170;
+    const padX      = 60;
+    const padTop    = 22;
+    const padBottom = 60;
+    const chartW    = W - padX * 2;
+    const chartH    = H - padTop - padBottom;
+    const baselineY = padTop + chartH;
+
+    const xFor = (i) => padX + (i / Math.max(1, stages.length - 1)) * chartW;
+    const yFor = (n) => padTop + (1 - n / peak) * chartH;
+
+    const linePoints = data.map((n, i) => `${xFor(i)},${yFor(n)}`).join(" ");
+    // Closed path for the soft area fill under the line.
+    const areaPath = `M${xFor(0)},${baselineY} L` +
+        data.map((n, i) => `${xFor(i)},${yFor(n)}`).join(" L") +
+        ` L${xFor(data.length - 1)},${baselineY} Z`;
+
+    return (
+        <section className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+            <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between gap-3 flex-wrap">
+                <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center">
+                        <TrendingUp size={13} />
+                    </div>
+                    <div>
+                        <h2 className="text-[12px] font-bold uppercase tracking-wider text-gray-800">
+                            Education stage distribution
+                        </h2>
+                        <p className="text-[10.5px] text-gray-500 mt-0.5">
+                            {placed} placed · {unstaged} unstaged · {students.length} total
+                        </p>
+                    </div>
+                </div>
+                <span className="text-[10.5px] text-gray-400 inline-flex items-center gap-1.5">
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+                    Students at stage
+                </span>
+            </div>
+
+            <div className="px-3 py-3">
+                <svg
+                    viewBox={`0 0 ${W} ${H}`}
+                    className="w-full"
+                    style={{ maxHeight: 160 }}
+                    role="img"
+                    aria-label="Line graph of student count per Education stage"
+                >
+                    {/* Soft horizontal gridlines (4 evenly-spaced bands). */}
+                    {[0, 0.25, 0.5, 0.75, 1].map((t, i) => (
+                        <line
+                            key={i}
+                            x1={padX}
+                            x2={W - padX}
+                            y1={padTop + (1 - t) * chartH}
+                            y2={padTop + (1 - t) * chartH}
+                            stroke="#f3f4f6"
+                            strokeWidth="1"
+                        />
+                    ))}
+
+                    {/* Area fill under the line. */}
+                    <defs>
+                        <linearGradient id="stage-area" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%"   stopColor="#10b981" stopOpacity="0.28" />
+                            <stop offset="100%" stopColor="#10b981" stopOpacity="0" />
+                        </linearGradient>
+                    </defs>
+                    <path d={areaPath} fill="url(#stage-area)" />
+
+                    {/* The line itself. */}
+                    <polyline
+                        points={linePoints}
+                        stroke="#10b981"
+                        strokeWidth="2"
+                        fill="none"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                    />
+
+                    {/* Dots + count above + rotated stage label below.
+                        Each stage gets its own hex tone so the visual
+                        story matches the chip palette used elsewhere. */}
+                    {data.map((n, i) => {
+                        const tone = educationStageHex(stages[i]);
+                        return (
+                            <g key={stages[i]}>
+                                <circle
+                                    cx={xFor(i)}
+                                    cy={yFor(n)}
+                                    r="4"
+                                    fill="white"
+                                    stroke={tone}
+                                    strokeWidth="2.5"
+                                />
+                                <text
+                                    x={xFor(i)}
+                                    y={yFor(n) - 9}
+                                    textAnchor="middle"
+                                    fontSize="10.5"
+                                    fontWeight="700"
+                                    fill={tone}
+                                >
+                                    {n}
+                                </text>
+                                <text
+                                    x={xFor(i)}
+                                    y={baselineY + 14}
+                                    textAnchor="end"
+                                    fontSize="10"
+                                    fill="#6b7280"
+                                    transform={`rotate(-30 ${xFor(i)} ${baselineY + 14})`}
+                                >
+                                    {stages[i]}
+                                </text>
+                            </g>
+                        );
+                    })}
+                </svg>
+            </div>
+        </section>
+    );
+}
+
 function PanelTitle({ children }) {
     return <h4 className="text-[10px] font-bold uppercase tracking-[0.18em] text-gray-500 mb-2.5">{children}</h4>;
 }
@@ -1050,6 +1419,28 @@ function ReadOnlyField({ icon: Icon, label, value, href = null, truncate = false
 // portal's StagePicker in resources/js/pages/portal/sales/Leads.jsx so
 // the two surfaces feel consistent. Saves inline to leads.education_stage
 // via the dashboard-field endpoint other inline edits use.
+// Maps tailwind colour family names → hex, used by the StagePicker's
+// dropdown rows. Inline `style` instead of `bg-XXX-500` so JIT purge
+// can't drop dynamically-built classes.
+const STAGE_DOT_HEX = {
+    sky:     "#0ea5e9", amber:  "#f59e0b", emerald: "#10b981",
+    indigo:  "#6366f1", violet: "#8b5cf6", orange:  "#f97316",
+    cyan:    "#06b6d4", red:    "#ef4444", purple:  "#a855f7",
+    fuchsia: "#d946ef", pink:   "#ec4899", teal:    "#14b8a6",
+    rose:    "#f43f5e", slate:  "#64748b", blue:    "#3b82f6",
+    yellow:  "#eab308", lime:   "#84cc16", stone:   "#78716c",
+    gray:    "#9ca3af",
+};
+
+// Parse the styler's class string (e.g. "bg-cyan-100 text-cyan-800
+// border-cyan-200") and pull the colour family from any token. Falls
+// back to a neutral grey when nothing matches.
+function stageDotHex(styler, stage) {
+    const cls = (typeof styler === "function" ? styler(stage) : "") || "";
+    const match = cls.match(/(?:text|bg|border)-([a-z]+)-\d+/);
+    return STAGE_DOT_HEX[match?.[1]] || "#9ca3af";
+}
+
 function StagePicker({ leadId, field, stages, styler, heading, value, fallbackLabel, open, onToggle, onClose }) {
     const [saving, setSaving] = useState(false);
     // Where to position the popover. Computed from the trigger button's
@@ -1163,9 +1554,13 @@ function StagePicker({ leadId, field, stages, styler, heading, value, fallbackLa
                                 role="option"
                                 aria-selected={active}
                                 onClick={() => select(s)}
-                                className={`w-full flex items-center justify-between gap-2 px-2.5 py-1.5 text-left hover:bg-gray-50 transition-colors ${active ? "bg-gray-50/60" : ""}`}
+                                className={`w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-gray-50 transition-colors ${active ? "bg-indigo-50/60" : ""}`}
                             >
-                                <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold border uppercase ${styler(s)}`}>
+                                <span
+                                    className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                                    style={{ backgroundColor: stageDotHex(styler, s) }}
+                                />
+                                <span className={`flex-1 text-[12.5px] truncate ${active ? "font-bold text-gray-900" : "font-medium text-gray-700"}`}>
                                     {s}
                                 </span>
                                 {active && <Check size={12} className="text-gray-900 flex-shrink-0" strokeWidth={3} />}

@@ -23,6 +23,7 @@ export default function TrackingPage({
     info = null,
     documents = [],
     timeline = [],
+    visa = null,
     error = null,
 }) {
     const [input, setInput] = useState(code || '');
@@ -114,6 +115,14 @@ export default function TrackingPage({
 
                             {/* Journey — the priority section, full width */}
                             <TimelinePanel timeline={timeline} currentStage={lead.stage} />
+
+                            {/* Visa Requirements — full-width panel that
+                                only renders when the lead is on an
+                                immigration case with a known visa type.
+                                Sits between the journey and the
+                                edit/upload row so leads see what's needed
+                                before they start uploading. */}
+                            {visa && <VisaRequirementsPanel visa={visa} />}
 
                             {/* Information + Documents — equal 2-col split
                                 under the timeline, restored from the
@@ -884,6 +893,150 @@ function DocStatusBadge({ status }) {
  * indicators (no per-step icons). Backend ships the canonical list of
  * steps; this component just paints them.
  */
+/**
+ * Visa-type + per-document checklist. Renders the visa name + short
+ * description, a progress strip showing how many required docs are in,
+ * and a list of every checklist item the visa type defines, each tagged
+ * with its current status (Submitted / Approved / Rejected / Missing).
+ */
+function VisaRequirementsPanel({ visa }) {
+    const { name, code, short_description, checklist = [], totals } = visa;
+    const req = totals?.required || 0;
+    const subm = totals?.submitted || 0;
+    const apprPct = req > 0 ? Math.round(((totals?.approved || 0) / req) * 100) : 0;
+    const submPct = req > 0 ? Math.round((subm / req) * 100) : 0;
+
+    return (
+        <PanelShell
+            title={name || 'Visa type'}
+            subtitle={
+                <span>
+                    {short_description || 'Documents needed for your visa application.'}
+                    {code && (
+                        <span className="ml-2 font-mono text-[10px] text-gray-400">
+                            {code}
+                        </span>
+                    )}
+                </span>
+            }
+            action={
+                req > 0 ? (
+                    <span className="text-[11px] font-semibold text-gray-500">
+                        {totals.approved}/{req} approved · {subm}/{req} submitted
+                    </span>
+                ) : null
+            }
+        >
+            {/* Progress strip: stacked approved + submitted (lighter) */}
+            {req > 0 && (
+                <div className="mb-5 h-2 rounded-full bg-gray-100 overflow-hidden relative">
+                    <div
+                        className="absolute inset-y-0 left-0 bg-[#282728]/40 transition-all duration-500"
+                        style={{ width: `${submPct}%` }}
+                    />
+                    <div
+                        className="absolute inset-y-0 left-0 bg-[#282728] transition-all duration-500"
+                        style={{ width: `${apprPct}%` }}
+                    />
+                </div>
+            )}
+
+            {checklist.length === 0 ? (
+                <p className="text-sm text-gray-400 text-center py-6">
+                    No specific checklist has been published for this visa yet — upload anything we've asked you for, and we'll let you know what's missing.
+                </p>
+            ) : (
+                <ul className="space-y-2">
+                    {checklist.map((item) => (
+                        <li
+                            key={item.key}
+                            className="flex items-start gap-3 px-3 py-2.5 border border-gray-200 bg-white"
+                        >
+                            <RequirementDot status={item.status} />
+                            <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                    <p className="text-[13px] font-semibold text-[#282728]">
+                                        {item.label}
+                                    </p>
+                                    {item.required ? (
+                                        <span className="px-1.5 py-0.5 bg-rose-50 text-rose-700 text-[9px] font-bold uppercase tracking-[0.18em] border border-rose-200">
+                                            Required
+                                        </span>
+                                    ) : (
+                                        <span className="px-1.5 py-0.5 bg-gray-50 text-gray-500 text-[9px] font-bold uppercase tracking-[0.18em] border border-gray-200">
+                                            Optional
+                                        </span>
+                                    )}
+                                </div>
+                                {item.hint && (
+                                    <p className="text-[11px] text-gray-500 mt-0.5">{item.hint}</p>
+                                )}
+                                {item.count > 0 && (
+                                    <p className="text-[10px] text-gray-400 mt-1">
+                                        {item.count} file{item.count === 1 ? '' : 's'} on file
+                                    </p>
+                                )}
+                            </div>
+                            <RequirementBadge status={item.status} />
+                        </li>
+                    ))}
+                </ul>
+            )}
+        </PanelShell>
+    );
+}
+
+function RequirementDot({ status }) {
+    if (status === 'approved') {
+        return (
+            <span className="inline-flex w-6 h-6 rounded-full bg-emerald-500 items-center justify-center flex-shrink-0 mt-0.5">
+                <CheckCircle2 size={13} className="text-white" strokeWidth={3} />
+            </span>
+        );
+    }
+    if (status === 'submitted') {
+        return (
+            <span className="inline-flex w-6 h-6 rounded-full bg-[#282728] items-center justify-center flex-shrink-0 mt-0.5">
+                <CheckCircle2 size={13} className="text-white" strokeWidth={2.5} />
+            </span>
+        );
+    }
+    if (status === 'rejected') {
+        return (
+            <span className="inline-flex w-6 h-6 rounded-full bg-rose-100 border-2 border-rose-300 items-center justify-center flex-shrink-0 mt-0.5">
+                <AlertCircle size={13} className="text-rose-600" strokeWidth={2.5} />
+            </span>
+        );
+    }
+    return (
+        <span className="inline-flex w-6 h-6 rounded-full border-2 border-gray-200 bg-white items-center justify-center flex-shrink-0 mt-0.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-gray-300" />
+        </span>
+    );
+}
+
+function RequirementBadge({ status }) {
+    const palette = {
+        approved:  'bg-emerald-50 text-emerald-700 border-emerald-200',
+        submitted: 'bg-gray-100 text-gray-700 border-gray-300',
+        rejected:  'bg-rose-50 text-rose-700 border-rose-200',
+        missing:   'bg-gray-50 text-gray-400 border-gray-200',
+    }[status] || 'bg-gray-50 text-gray-400 border-gray-200';
+
+    const label = {
+        approved:  'Approved',
+        submitted: 'Submitted',
+        rejected:  'Rejected',
+        missing:   'Missing',
+    }[status] || 'Missing';
+
+    return (
+        <span className={`px-2 py-1 text-[9px] font-bold uppercase tracking-[0.18em] border whitespace-nowrap ${palette}`}>
+            {label}
+        </span>
+    );
+}
+
 function TimelinePanel({ timeline = [], currentStage }) {
     // Backend now returns the canonical roadmap left→right with
     // status per step — no client-side reversing or guessing.
@@ -891,9 +1044,20 @@ function TimelinePanel({ timeline = [], currentStage }) {
     const total = steps.length;
     const currentIndex = Math.max(0, steps.findIndex((s) => s.status === 'current'));
     const completedCount = steps.filter((s) => s.status === 'completed').length;
-    // Fill stops *at* the current node, so the progress line runs across
-    // every completed step's gap but not into the pending ones.
-    const fillPct = total <= 1 ? 0 : (currentIndex / (total - 1)) * 100;
+    // Index of the first alternative-outcome step (declined, etc.) —
+    // -1 if there isn't one. The progress line splits at this point:
+    // the segment leading into the alternative is rendered dashed.
+    const altIndex = steps.findIndex((s) => s.alternative);
+    const hasAlternative = altIndex >= 0;
+    // Fill stops *at* the current node (or the alternative, when there
+    // is no in-progress step because the case has terminated).
+    const stopIndex = currentIndex > 0
+        ? currentIndex
+        : (hasAlternative ? altIndex : completedCount - 1);
+    const fillPct = total <= 1 ? 0 : (Math.max(0, stopIndex) / (total - 1)) * 100;
+    // Percent position of the alternative step, used as the boundary
+    // where the dashed segment starts.
+    const altPct = hasAlternative && total > 1 ? (altIndex / (total - 1)) * 100 : 100;
 
     return (
         <PanelShell
@@ -919,43 +1083,76 @@ function TimelinePanel({ timeline = [], currentStage }) {
                     </p>
                 </div>
             ) : (
-                <div className="overflow-x-auto -mx-2 px-2 pt-2 pb-1">
-                    <div className="relative min-w-max md:min-w-0">
-                        {/* Background track — the empty rail */}
-                        <div className="absolute left-0 right-0 top-[14px] h-[2px] bg-gray-200 mx-[7%]" />
-                        {/* Filled portion — runs from the first node up to
-                            the current node. */}
-                        <div
-                            className="absolute top-[14px] h-[2px] bg-[#282728] mx-[7%] transition-all duration-700"
-                            style={{ left: 0, right: `${100 - fillPct}%`, marginRight: 0 }}
-                        />
+                <>
+                    <div className="overflow-x-auto -mx-2 px-2 pt-2 pb-1">
+                        <div className="relative min-w-max md:min-w-0">
+                            {/* Background track — solid section runs up
+                                to (but not into) the alternative step;
+                                dashed segment runs from there to the end
+                                when an alternative outcome exists. */}
+                            <div
+                                className="absolute top-[14px] h-[2px] bg-gray-200 mx-[7%]"
+                                style={hasAlternative
+                                    ? { left: 0, right: `${100 - altPct}%`, marginRight: 0 }
+                                    : { left: 0, right: 0 }}
+                            />
+                            {hasAlternative && (
+                                <div
+                                    className="absolute top-[12px] mx-[7%] border-t-[2px] border-dashed border-gray-300"
+                                    style={{ left: `${altPct}%`, right: 0, marginLeft: 0 }}
+                                />
+                            )}
+                            {/* Filled progress — charcoal up to the
+                                current / stop index. Also flips to dashed
+                                if the stop sits past the alternative
+                                boundary. */}
+                            <div
+                                className="absolute top-[14px] h-[2px] bg-[#282728] mx-[7%] transition-all duration-700"
+                                style={{ left: 0, right: `${100 - fillPct}%`, marginRight: 0 }}
+                            />
 
-                        <ol className="relative flex items-start gap-3">
-                            {steps.map((step, i) => (
-                                <JourneyStep key={step.key} step={step} index={i} />
-                            ))}
-                        </ol>
+                            <ol className="relative flex items-start gap-3">
+                                {steps.map((step, i) => (
+                                    <JourneyStep key={step.key} step={step} index={i} />
+                                ))}
+                            </ol>
+                        </div>
                     </div>
-                </div>
+                    {hasAlternative && (
+                        <p className="text-[10px] text-gray-400 text-center mt-3">
+                            Solid line = standard progression · Dashed line = alternative outcome
+                        </p>
+                    )}
+                </>
             )}
         </PanelShell>
     );
 }
 
 function JourneyStep({ step, index }) {
+    const isAlt = !!step.alternative;
     return (
         <li className="relative flex flex-col items-center text-center flex-1 min-w-[140px] md:min-w-0 px-1.5">
-            <StatusDot status={step.status} />
+            <StatusDot status={step.status} alternative={isAlt} />
 
             <p className="text-[11px] font-medium text-gray-500 mt-3 mb-0.5">
-                Step {index + 1}
+                {isAlt ? 'Outcome' : `Step ${index + 1}`}
             </p>
             <h4 className={`text-[14px] font-bold leading-tight mb-1 ${
-                step.status === 'pending' ? 'text-gray-400' : 'text-[#282728]'
+                isAlt
+                    ? 'text-rose-700'
+                    : step.status === 'pending'
+                        ? 'text-gray-400'
+                        : 'text-[#282728]'
             }`}>
                 {step.label}
             </h4>
-            <StatusLabel status={step.status} />
+            <StatusLabel status={step.status} alternative={isAlt} />
+            {step.description && (
+                <p className="text-[11px] text-gray-500 leading-snug mt-1.5 max-w-[180px] mx-auto">
+                    {step.description}
+                </p>
+            )}
             {step.at && (
                 <time className="block text-[10px] text-gray-400 tracking-wider mt-1">
                     {formatStamp(step.at)}
@@ -965,7 +1162,16 @@ function JourneyStep({ step, index }) {
     );
 }
 
-function StatusDot({ status }) {
+function StatusDot({ status, alternative = false }) {
+    // Alternative-outcome step (e.g. "Application declined") — rose-tinted
+    // ring + white X-circle so it reads as a branch, not a continuation.
+    if (alternative) {
+        return (
+            <span className="relative inline-flex w-7 h-7 rounded-full bg-rose-600 items-center justify-center ring-[6px] ring-white shadow-sm">
+                <AlertCircle size={14} className="text-white" strokeWidth={2.5} />
+            </span>
+        );
+    }
     if (status === 'completed') {
         // Solid charcoal with white check — "this is done"
         return (
@@ -995,7 +1201,14 @@ function StatusDot({ status }) {
     );
 }
 
-function StatusLabel({ status }) {
+function StatusLabel({ status, alternative = false }) {
+    if (alternative) {
+        return (
+            <span className="text-[11px] font-semibold text-rose-700">
+                Declined
+            </span>
+        );
+    }
     if (status === 'completed') {
         return (
             <span className="text-[11px] font-semibold text-emerald-600">

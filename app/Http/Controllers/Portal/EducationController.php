@@ -169,7 +169,14 @@ class EducationController extends Controller
             // these into three department tabs (Education / English /
             // Immigration) — once a lead moves on, they drop out of the
             // Education tab automatically.
-            $students = Lead::with(['studyPlans', 'documents'])
+            $students = Lead::with([
+                    'studyPlans',
+                    'documents',
+                    'school',
+                    'studentConverter:id,name',
+                    'immigrationConverter:id,name',
+                    'stageUpdater:id,name',
+                ])
                 ->where(function ($q) {
                     $q->where('is_student', true)
                       ->orWhere('is_immigration_case', true)
@@ -185,6 +192,19 @@ class EducationController extends Controller
                     return [
                         'id'       => $l->id,
                         'lead_id'  => $l->lead_id,
+                        // Customer-shareable tracking code — drives the
+                        // "Copy tracking link" row action so staff can
+                        // paste a /track/{code} URL straight to the student.
+                        'tracking_code' => $l->tracking_code,
+                        // Most recent stage-mover (falls back to whoever
+                        // converted them in if the row predates the
+                        // stage-update tracking). Drives the
+                        // "Updated [date] · Endorsed by [Name]" subtitle
+                        // under the stage chip.
+                        'endorsed_by'   => optional($l->stageUpdater)->name
+                                            ?? optional($l->studentConverter)->name
+                                            ?? optional($l->immigrationConverter)->name,
+                        'stage_updated_at' => optional($l->stage_updated_at)?->toIso8601String(),
                         'name'     => trim("{$l->first_name} {$l->last_name}") ?: 'Unknown',
                         'email'    => $l->email,
                         'phone'    => $l->phone,
@@ -211,8 +231,13 @@ class EducationController extends Controller
                         'english_test_taken' => (bool) optional($plan)->english_test_taken,
                         'english_test_score' => optional($plan)->score_overall,
                         // Spreadsheet-mirror fields stored directly on leads.
+                        'middle_name'  => $l->middle_name,
+                        'suffix'       => $l->suffix,
+                        'gender'       => $l->gender,
                         'payment'      => $l->student_payment,
                         'school'       => $l->student_school,
+                        'school_id'    => $l->school_id,
+                        'school_name'  => optional($l->school)->name,
                         'coop'         => $l->student_coop,
                         'oop'          => $l->student_oop,
                         'gdrive_link'  => $l->student_gdrive_link,
@@ -222,7 +247,18 @@ class EducationController extends Controller
                     ];
                 });
 
-            return inertia('portal/education/Students', ['portal' => 'education', 'students' => $students]);
+            $schoolOptions  = \App\Models\School::where('status', 'active')
+                ->orderBy('name')
+                ->get(['id', 'name', 'country', 'city']);
+            $programOptions = \App\Models\Program::orderBy('title')
+                ->get(['id', 'title', 'level']);
+
+            return inertia('portal/education/Students', [
+                'portal'         => 'education',
+                'students'       => $students,
+                'schoolOptions'  => $schoolOptions,
+                'programOptions' => $programOptions,
+            ]);
         } catch (\Throwable $e) {
             Log::error('Education students list failed', ['error' => $e->getMessage()]);
             return inertia('portal/education/Students', ['portal' => 'education', 'students' => collect()]);
@@ -265,12 +301,228 @@ class EducationController extends Controller
             'english_stage'     => 'english_stage',
             'immigration_stage' => 'immigration_stage',
         ];
+        // Detect whether the staff member actually moved a stage. Only
+        // stage-field changes refresh `stage_updated_at` — touching the
+        // spreadsheet columns (payment / coop / oop / etc.) doesn't.
+        $stageFields = ['education_stage', 'english_stage', 'immigration_stage'];
+        $stageChanged = false;
+        foreach ($stageFields as $f) {
+            if (array_key_exists($f, $data) && ($lead->{$f} ?? null) !== ($data[$f] ?? null)) {
+                $stageChanged = true;
+                break;
+            }
+        }
+
         foreach ($data as $k => $v) {
             $lead->{$map[$k]} = $v;
         }
+
+        if ($stageChanged) {
+            $lead->stage_updated_at = now();
+            $lead->stage_updated_by = auth()->id();
+        }
+
+        // Auto-promote the lead to an Immigration Case the first time the
+        // Education team moves them onto one of the handoff stages
+        // (Endorsed to Immigration → Approved Visa). Without this, the
+        // student appears in /portal/immigration/cases via the education
+        // scope but the lead detail still reads as "Study only" — the
+        // Move To widget then doesn't show Immigration as ACTIVE, which is
+        // what surprised staff. Conversion is one-way: we don't roll it
+        // back when the stage moves to a non-immigration value, since
+        // immigration may still be working the case in parallel.
+        $movedToImmigrationStage = array_key_exists('education_stage', $data)
+            && in_array($data['education_stage'], Lead::EDUCATION_STAGES_IMMIGRATION, true);
+
+        if ($movedToImmigrationStage && ! $lead->is_immigration_case) {
+            $lead->is_immigration_case      = true;
+            $lead->immigration_converted_at = now();
+            $lead->immigration_converted_by = auth()->id();
+        }
+
+        // Handoff also retires the student from the Education team's
+        // active queue. Without this, the lead-detail "Move To" widget
+        // shows both Study and Case as ACTIVE — confusing now that
+        // Immigration owns the case. Their record still appears in the
+        // Students list (it's joined on is_immigration_case OR is_student),
+        // just under the Immigration tab instead of Education's.
+        if ($movedToImmigrationStage && $lead->is_student) {
+            $lead->is_student = false;
+        }
+
         $lead->save();
 
         return back();
+    }
+
+    /**
+     * Create a brand-new student from the Education Students page's
+     * "Add new student" modal. Spawns a Lead row pre-flagged with
+     * is_student=true so it lands in the Students list immediately,
+     * plus a LeadStudyPlan capturing program / intake / English test
+     * info if any of those fields were provided.
+     */
+    public function storeStudent(\Illuminate\Http\Request $request)
+    {
+        $data = $this->validateStudentPayload($request);
+
+        try {
+            $lead = Lead::create([
+                'lead_id'              => 'LP-' . str_pad((string) ((int) Lead::max('id') + 1001), 5, '0', STR_PAD_LEFT),
+                'first_name'           => $data['first_name'],
+                'middle_name'          => $data['middle_name']  ?? null,
+                'last_name'            => $data['last_name'],
+                'suffix'               => $data['suffix']       ?? null,
+                'gender'               => $data['gender']       ?? null,
+                'email'                => $data['email']        ?? null,
+                'phone'                => $data['phone']        ?? null,
+                // First canonical stage if the staff member didn't pick
+                // one — the row shows up under "Endorsed to School" with
+                // an "Endorsed by [Name]" subtitle in the table, instead
+                // of looking unstaged from day one.
+                'education_stage'      => $data['education_stage']   ?? Lead::EDUCATION_STAGES[0],
+                'english_stage'        => $data['english_stage']     ?? null,
+                'immigration_stage'    => $data['immigration_stage'] ?? null,
+                'student_payment'      => $data['payment']      ?? null,
+                'student_coop'         => $data['coop']         ?? null,
+                'student_oop'          => $data['oop']          ?? null,
+                'student_comments'     => $data['internal_note'] ?? null,
+                'school_id'            => $data['school_id']    ?? null,
+                'is_student'           => true,
+                'student_converted_at' => now(),
+                'student_converted_by' => auth()->id(),
+                // Initial stage stamp — the table's "Updated [date] ·
+                // Endorsed by [Name]" subtitle uses these columns rather
+                // than the generic updated_at.
+                'stage_updated_at'     => now(),
+                'stage_updated_by'     => auth()->id(),
+                'date_of_engagement'   => now()->toDateString(),
+            ]);
+
+            if (! empty($data['program_text']) || ! empty($data['intake']) || ! empty($data['english_test'])) {
+                // The Program field is a typeable combobox — the user can
+                // pick from the catalog OR enter a free-form title. We
+                // resolve the typed string to a Program by exact-title
+                // match so the qualification_level can be auto-filled.
+                $program      = ! empty($data['program_text'])
+                    ? \App\Models\Program::where('title', $data['program_text'])->first()
+                    : null;
+                $programTitle = $data['program_text'] ?? null;
+                $programLevel = $program?->level ?? '';
+
+                \App\Models\LeadStudyPlan::create([
+                    'lead_id'             => $lead->id,
+                    'preferred_course'    => $programTitle,
+                    'qualification_level' => $programLevel,
+                    'preferred_intake'    => $data['intake']       ?? null,
+                    'english_test_type'   => $data['english_test'] ?? null,
+                    'english_test_taken'  => false,
+                ]);
+            }
+
+            return back()->with('success', "Student {$lead->lead_id} added.");
+        } catch (\Throwable $e) {
+            Log::error('Education store student failed', ['error' => $e->getMessage()]);
+            return back()->with('error', 'Could not add the student.');
+        }
+    }
+
+    /**
+     * Update an existing student row from the same modal. Touches the
+     * lead's profile fields, school FK, and (if present) the study plan.
+     */
+    public function updateStudent(\Illuminate\Http\Request $request, int $id)
+    {
+        $lead = Lead::where('is_student', true)->findOrFail($id);
+        $data = $this->validateStudentPayload($request, $lead->id);
+
+        try {
+            $lead->fill([
+                'first_name'       => $data['first_name'],
+                'middle_name'      => $data['middle_name']  ?? null,
+                'last_name'        => $data['last_name'],
+                'suffix'           => $data['suffix']       ?? null,
+                'gender'           => $data['gender']       ?? null,
+                'email'            => $data['email']        ?? null,
+                'phone'            => $data['phone']        ?? null,
+                'education_stage'   => $data['education_stage']   ?? null,
+                'english_stage'     => $data['english_stage']     ?? null,
+                'immigration_stage' => $data['immigration_stage'] ?? null,
+                'student_payment'   => $data['payment']      ?? null,
+                'student_coop'     => $data['coop']         ?? null,
+                'student_oop'      => $data['oop']          ?? null,
+                'student_comments' => $data['internal_note'] ?? null,
+                'school_id'        => $data['school_id']    ?? null,
+            ])->save();
+
+            // Update or create the primary study plan row.
+            $plan = $lead->studyPlans()->first() ?: new \App\Models\LeadStudyPlan(['lead_id' => $lead->id]);
+            if (array_key_exists('program_text', $data)) {
+                $plan->preferred_course = $data['program_text'] ?: null;
+                if (! empty($data['program_text'])) {
+                    $match = \App\Models\Program::where('title', $data['program_text'])->first();
+                    if ($match && empty($plan->qualification_level)) {
+                        $plan->qualification_level = $match->level ?? '';
+                    }
+                }
+                // The legacy column is NOT NULL — give it an empty string
+                // on new plans where we couldn't resolve a level.
+                if (! $plan->exists && empty($plan->qualification_level)) {
+                    $plan->qualification_level = '';
+                }
+            }
+            if (array_key_exists('intake', $data))       $plan->preferred_intake  = $data['intake'] ?: null;
+            if (array_key_exists('english_test', $data)) $plan->english_test_type = $data['english_test'] ?: null;
+            if ($plan->isDirty() || ! $plan->exists) $plan->save();
+
+            return back()->with('success', "Student {$lead->lead_id} updated.");
+        } catch (\Throwable $e) {
+            Log::error('Education update student failed', ['id' => $id, 'error' => $e->getMessage()]);
+            return back()->with('error', 'Could not update the student.');
+        }
+    }
+
+    /**
+     * Soft-delete a student row by flipping is_student=false. The
+     * underlying Lead record stays in place so history, documents, and
+     * tasks survive — the row simply drops off the Students table.
+     */
+    public function destroyStudent(int $id)
+    {
+        $lead = Lead::where('is_student', true)->findOrFail($id);
+        try {
+            $lead->fill([
+                'is_student'           => false,
+                'student_converted_at' => null,
+                'student_converted_by' => null,
+            ])->save();
+            return back()->with('success', "Student {$lead->lead_id} removed from the list.");
+        } catch (\Throwable $e) {
+            Log::error('Education destroy student failed', ['id' => $id, 'error' => $e->getMessage()]);
+            return back()->with('error', 'Could not remove the student.');
+        }
+    }
+
+    private function validateStudentPayload(\Illuminate\Http\Request $request, ?int $leadId = null): array
+    {
+        return $request->validate([
+            'first_name'       => 'required|string|max:120',
+            'middle_name'      => 'nullable|string|max:120',
+            'last_name'        => 'required|string|max:120',
+            'suffix'           => 'nullable|string|max:20',
+            'gender'           => 'nullable|string|max:32',
+            'email'            => 'required|email|max:191',
+            'phone'            => 'required|string|max:60',
+            'education_stage'  => ['nullable', \Illuminate\Validation\Rule::in(Lead::EDUCATION_STAGES)],
+            'program_text'     => 'nullable|string|max:191',
+            'school_id'        => 'nullable|integer|exists:schools,id',
+            'internal_note'    => 'nullable|string|max:5000',
+            'payment'          => 'nullable|string|max:191',
+            'intake'           => 'nullable|string|max:120',
+            'coop'             => 'nullable|string|max:120',
+            'oop'              => 'nullable|string|max:120',
+            'english_test'     => 'nullable|string|max:32',
+        ]);
     }
 
     /**
