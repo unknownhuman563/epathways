@@ -74,16 +74,25 @@ class Lead extends Model
 
     /**
      * Query scope — leads currently in the Immigration team's queue.
-     * Either explicitly converted via "Convert to Immigration Case" (the
-     * `is_immigration_case` flag), at one of the immigration handoff
-     * education_stage values, OR with an immigration_stage set.
+     * The two qualifying signals are:
+     *   1. `is_immigration_case = true` — explicit "Convert to Immigration
+     *      Case" action on the lead detail page.
+     *   2. `education_stage` is one of the EDUCATION_STAGES_IMMIGRATION
+     *      values — the Education team has handed the file across.
+     *
+     * `immigration_stage` is intentionally NOT a qualifying signal on its
+     * own. Staff can set it from the Students dashboard purely as a
+     * handoff-tracking note on a still-active student — treating that as
+     * "now in Cases" pulled pure students (e.g. anyone Study=ACTIVE who
+     * had their immigration_stage stamped for reference) into the
+     * Immigration Cases list by mistake. The flag/handoff-stage above are
+     * what determine queue membership.
      */
     public function scopeImmigrationCase($query)
     {
         return $query->where(function ($q) {
             $q->where('is_immigration_case', true)
-              ->orWhereIn('education_stage', self::EDUCATION_STAGES_IMMIGRATION)
-              ->orWhereNotNull('immigration_stage');
+              ->orWhereIn('education_stage', self::EDUCATION_STAGES_IMMIGRATION);
         });
     }
 
@@ -130,7 +139,7 @@ class Lead extends Model
     ];
 
     protected $fillable = [
-        'lead_id', 'tracking_code', 'first_name', 'middle_name', 'last_name', 'dob', 'other_names', 'email', 'phone',
+        'lead_id', 'tracking_code', 'first_name', 'middle_name', 'last_name', 'suffix', 'dob', 'other_names', 'email', 'phone', 'school_id',
         'gender', 'marital_status', 'branch', 'stage', 'status',
         'country_of_birth', 'place_of_birth', 'citizenship',
         'residence_city', 'residence_state', 'residence_country',
@@ -175,6 +184,11 @@ class Lead extends Model
         'student_gdrive_link', 'student_comments',
         // Education-team-specific lifecycle stage (see EDUCATION_STAGES).
         'education_stage',
+        // Last stage movement — used by the Students / Cases tables'
+        // "Updated [date] · Endorsed by [Name]" subtitle. Only touched by
+        // stage-update + creation flows so the timestamp is a reliable
+        // signal of actual pipeline movement.
+        'stage_updated_at', 'stage_updated_by',
         // English / Immigration sub-stage tracks (see ENGLISH_STAGES,
         // IMMIGRATION_STAGES).
         'english_stage', 'immigration_stage',
@@ -204,6 +218,7 @@ class Lead extends Model
         'document_checklist'             => 'array',
         'section_verifications'          => 'array',
         'agreements_acknowledged_at'     => 'datetime',
+        'stage_updated_at'               => 'datetime',
         'is_student'                     => 'boolean',
         'student_converted_at'           => 'datetime',
         'is_immigration_case'            => 'boolean',
@@ -219,6 +234,24 @@ class Lead extends Model
     public function portalUser()
     {
         return $this->hasOne(User::class, 'lead_id');
+    }
+
+    /** Staff member who flipped is_student=true (or null on legacy rows). */
+    public function studentConverter()
+    {
+        return $this->belongsTo(User::class, 'student_converted_by');
+    }
+
+    /** Staff member who flipped is_immigration_case=true. */
+    public function immigrationConverter()
+    {
+        return $this->belongsTo(User::class, 'immigration_converted_by');
+    }
+
+    /** Staff member who last moved the lead's stage in any department. */
+    public function stageUpdater()
+    {
+        return $this->belongsTo(User::class, 'stage_updated_by');
     }
 
     /**
@@ -305,6 +338,11 @@ class Lead extends Model
     public function event()
     {
         return $this->belongsTo(Event::class);
+    }
+
+    public function school()
+    {
+        return $this->belongsTo(School::class);
     }
     
     public function eventSession()

@@ -26,6 +26,7 @@ const ADMIN_NAV = [
     { name: "Bookings", href: "/admin/booking", icon: <BookOpen size={20} /> },
     { name: "Availability", href: "/admin/availability", icon: <Clock size={20} /> },
     { name: "Programs", href: "/admin/programs", icon: <GraduationCap size={20} /> },
+    { name: "Schools",  href: "/admin/schools",  icon: <Building2 size={20} /> },
     { name: "Promotions", href: "/admin/promos", icon: <Tag size={20} /> },
     { name: "Facebook Live", href: "/admin/facebook-live", icon: <Video size={20} /> },
     {

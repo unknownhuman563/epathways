@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Lead;
 use App\Models\LeadDocument;
+use App\Models\VisaType;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Storage;
@@ -48,6 +49,7 @@ class LeadTrackingController extends Controller
             'info'      => null,
             'documents' => [],
             'timeline'  => [],
+            'visa'      => null,
             'error'     => null,
         ];
 
@@ -66,7 +68,13 @@ class LeadTrackingController extends Controller
         $payload['lead']      = $this->publicLeadShape($lead);
         $payload['info']      = $this->editableInfo($lead);
         $payload['documents'] = $this->publicDocuments($lead);
-        $payload['timeline']  = $this->buildTimeline($lead);
+        // Immigration cases get the 12-step "My Visa Application Journey"
+        // roadmap; everyone else (general leads / education students)
+        // keeps the high-level 7-step pipeline view.
+        $payload['timeline']  = $lead->is_immigration_case
+            ? $this->buildImmigrationJourney($lead)
+            : $this->buildTimeline($lead);
+        $payload['visa']      = $this->resolveVisa($lead);
 
         return inertia('track/TrackingPage', $payload);
     }
@@ -337,6 +345,93 @@ class LeadTrackingController extends Controller
      * timestamp = completed; the first step without = current ("In
      * Progress"); everything after = pending.
      */
+    /**
+     * Resolve the visa-type catalogue entry the lead is on and decorate
+     * each of its checklist items with a per-item status (submitted /
+     * approved / rejected / missing). Status is computed from the lead's
+     * own LeadDocument rows, matched by `checklist_key`.
+     *
+     * Returns null when the lead has no `inz_visa_type` set OR the visa
+     * type can't be located in the catalogue.
+     */
+    private function resolveVisa(Lead $lead): ?array
+    {
+        if (! $lead->inz_visa_type) {
+            return null;
+        }
+
+        $visa = VisaType::query()
+            ->where('name', $lead->inz_visa_type)
+            ->orWhere('code', $lead->inz_visa_type)
+            ->first();
+
+        if (! $visa) {
+            // Surface the bare visa name so the panel can still render
+            // something useful even when the catalogue doesn't match.
+            return [
+                'name'             => $lead->inz_visa_type,
+                'short_description'=> null,
+                'checklist'        => [],
+                'totals'           => ['required' => 0, 'submitted' => 0, 'approved' => 0],
+            ];
+        }
+
+        // Group docs by checklist_key so we can decorate items in O(1).
+        $docsByKey = $lead->documents()
+            ->whereNotNull('checklist_key')
+            ->get()
+            ->groupBy('checklist_key');
+
+        $items = is_array($visa->checklist_items) ? $visa->checklist_items : [];
+
+        $decorated = collect($items)->map(function ($item) use ($docsByKey) {
+            $key  = $item['key']   ?? null;
+            $docs = $key ? ($docsByKey->get($key) ?? collect()) : collect();
+
+            // Status is whichever the "best" doc landed on:
+            //   Approved > Submitted/UnderReview > Rejected > none.
+            $status = 'missing';
+            if ($docs->contains(fn ($d) => $d->status === LeadDocument::STATUS_APPROVED)) {
+                $status = 'approved';
+            } elseif ($docs->contains(fn ($d) => in_array($d->status, [LeadDocument::STATUS_SUBMITTED, LeadDocument::STATUS_UNDER_REVIEW]))) {
+                $status = 'submitted';
+            } elseif ($docs->contains(fn ($d) => $d->status === LeadDocument::STATUS_REJECTED)) {
+                $status = 'rejected';
+            }
+
+            return [
+                'key'      => $key,
+                'label'    => $item['label']    ?? '',
+                'hint'     => $item['hint']     ?? null,
+                'required' => ($item['required'] ?? true) ? true : false,
+                'status'   => $status,
+                'count'    => $docs->count(),
+            ];
+        })->all();
+
+        $requiredCount  = collect($decorated)->where('required', true)->count();
+        $submittedCount = collect($decorated)
+            ->where('required', true)
+            ->whereIn('status', ['submitted', 'approved'])
+            ->count();
+        $approvedCount  = collect($decorated)
+            ->where('required', true)
+            ->where('status', 'approved')
+            ->count();
+
+        return [
+            'name'              => $visa->name,
+            'code'              => $visa->code,
+            'short_description' => $visa->short_description,
+            'checklist'         => $decorated,
+            'totals'            => [
+                'required'  => $requiredCount,
+                'submitted' => $submittedCount,
+                'approved'  => $approvedCount,
+            ],
+        ];
+    }
+
     private function buildTimeline(Lead $lead): array
     {
         $earliestConversion = collect([
@@ -374,6 +469,186 @@ class LeadTrackingController extends Controller
                 'label'  => $m['label'],
                 'status' => $status,
                 'at'     => $m['at'] ? Carbon::parse($m['at'])->toIso8601String() : null,
+            ];
+        }
+
+        return $journey;
+    }
+
+    /**
+     * 12-step "My Visa Application Journey" used for immigration cases.
+     * Each entry mirrors the standard journey shape (key/label/status/at)
+     * with two extras:
+     *   - description: per-step copy displayed under the label
+     *   - alternative: true when the step is an outcome branch (Decline)
+     *     so the frontend can draw the connecting line dashed.
+     *
+     * The status of each step is computed from explicit lead columns +
+     * the lead's current `immigration_stage`. The 11 standard steps are
+     * always returned in order; the 12th "Application declined" step is
+     * appended only when the case has been declined.
+     */
+    private function buildImmigrationJourney(Lead $lead): array
+    {
+        $docs           = $lead->documents;
+        $stage          = $lead->immigration_stage; // one of Lead::IMMIGRATION_STAGES
+        $hasDocs        = $docs->isNotEmpty();
+        $hasUnderReview = $docs->whereIn('status', [LeadDocument::STATUS_SUBMITTED, LeadDocument::STATUS_UNDER_REVIEW])->isNotEmpty();
+        $hasApprovedDoc = $docs->where('status', LeadDocument::STATUS_APPROVED)->isNotEmpty();
+
+        // Stage hierarchy — anything at or past `Endorsed` counts as "doc
+        // review done", anything at or past `Visa Lodged` counts as
+        // "application lodged", etc. Decline / Approved Visa are
+        // terminal markers.
+        $stageRank = [
+            'Endorsed'                => 1,
+            'Visa Lodged'             => 2,
+            'Request for Information' => 3,
+            'Approved in Principle'   => 4,
+            'Approved Visa'           => 5,
+            'Decline Visa'            => -1, // outcome branch
+        ];
+        $rank = $stageRank[$stage] ?? 0;
+        $declined = $stage === 'Decline Visa';
+
+        // Step definitions — `done` is whatever proves the step happened,
+        // `at` is the best timestamp we can attach for display.
+        $steps = [
+            [
+                'key'         => 'initial_consultation',
+                'label'       => 'Initial consultation',
+                'description' => 'I meet my adviser to check if I\'m eligible and explore my options.',
+                'done'        => (bool) $lead->date_of_first_contact,
+                'at'          => optional($lead->date_of_first_contact)?->toDateTimeString(),
+            ],
+            [
+                'key'         => 'referred_to_adviser',
+                'label'       => 'Referred to my adviser',
+                'description' => 'My case is passed to a Licensed Immigration Adviser to look after it.',
+                'done'        => (bool) $lead->date_of_engagement || (bool) $lead->immigration_converted_at,
+                'at'          => optional($lead->date_of_engagement)?->toDateTimeString()
+                                ?? optional($lead->immigration_converted_at)?->toDateTimeString(),
+            ],
+            [
+                'key'         => 'engaged_adviser',
+                'label'       => 'Engaged my adviser',
+                'description' => 'I sign the service agreement and my adviser formally takes on my case.',
+                'done'        => (bool) $lead->services_agreement_signed_at,
+                'at'          => optional($lead->services_agreement_signed_at)?->toDateTimeString(),
+            ],
+            [
+                'key'         => 'gathering_documents',
+                'label'       => 'Gathering my documents',
+                'description' => 'I collect and send through the documents on my checklist.',
+                'done'        => $hasDocs,
+                'at'          => optional($docs->sortBy('created_at')->first()?->created_at)?->toDateTimeString(),
+            ],
+            [
+                'key'         => 'documentation_review',
+                'label'       => 'Documentation under review',
+                'description' => 'My adviser checks everything is correct, complete and valid.',
+                'done'        => $hasUnderReview || $hasApprovedDoc || $rank >= 1,
+                'at'          => optional(
+                    $docs->whereIn('status', [LeadDocument::STATUS_APPROVED, LeadDocument::STATUS_UNDER_REVIEW])
+                        ->sortBy('created_at')->first()?->created_at
+                )?->toDateTimeString(),
+            ],
+            [
+                'key'         => 'application_prepared',
+                'label'       => 'Application prepared',
+                'description' => 'My adviser drafts my application, and we do a final check before lodging.',
+                'done'        => $rank >= 1,
+                'at'          => null,
+            ],
+            [
+                'key'         => 'application_lodged',
+                'label'       => 'Application lodged',
+                'description' => 'My application is formally submitted to Immigration New Zealand.',
+                'done'        => (bool) $lead->inz_lodged_at || $rank >= 2,
+                'at'          => optional($lead->inz_lodged_at)?->toDateTimeString(),
+            ],
+            [
+                'key'         => 'further_info_requested',
+                'label'       => 'Further information requested',
+                'description' => 'Immigration NZ asks for more details, and my adviser helps me respond.',
+                // Treat this as "happened" only when the case currently is
+                // or was previously at RFI (rank 3) or has moved past it.
+                'done'        => $rank >= 3,
+                'at'          => null,
+                // Mark optional so we don't force every applicant through
+                // a step they may never trigger.
+                'optional'    => true,
+            ],
+            [
+                'key'         => 'approved_in_principle',
+                'label'       => 'Approved in principle',
+                'description' => 'My visa is approved, pending final steps like payment or medicals.',
+                'done'        => $rank >= 4,
+                'at'          => null,
+            ],
+            [
+                'key'         => 'visa_approved',
+                'label'       => 'Visa approved',
+                'description' => 'Immigration New Zealand grants my visa.',
+                'done'        => $rank >= 5,
+                'at'          => optional($lead->inz_decision_at)?->toDateTimeString(),
+            ],
+            [
+                'key'         => 'visa_issued',
+                'label'       => 'Visa issued & settling in',
+                'description' => 'I receive my visa and prepare to travel, arrive and settle in.',
+                // We don't track "issued" separately yet; treat as
+                // visa_approved + complete (so the lead sees it as
+                // pending until staff stamp a decision).
+                'done'        => $rank >= 5 && (bool) $lead->inz_decision_at,
+                'at'          => optional($lead->inz_decision_at)?->toDateTimeString(),
+            ],
+        ];
+
+        // Walk the list and tag completed / current / pending. Optional
+        // steps don't promote themselves to "current" — they stay
+        // pending until evidence appears.
+        $foundCurrent = false;
+        $journey = [];
+        foreach ($steps as $s) {
+            if (! empty($s['done'])) {
+                $status = 'completed';
+            } elseif (! $foundCurrent && empty($s['optional'])) {
+                $status = 'current';
+                $foundCurrent = true;
+            } else {
+                $status = 'pending';
+            }
+
+            $journey[] = [
+                'key'         => $s['key'],
+                'label'       => $s['label'],
+                'description' => $s['description'],
+                'status'      => $status,
+                'at'          => $s['at'] ? Carbon::parse($s['at'])->toIso8601String() : null,
+            ];
+        }
+
+        // Declined outcome — append a 12th alternative-branch step. The
+        // frontend renders this with a dashed connecting line so it reads
+        // as a branch rather than a continuation.
+        if ($declined) {
+            // Demote any step we'd already tagged "current" because the
+            // outcome decided the case.
+            $journey = array_map(function ($s) {
+                if ($s['status'] === 'current') {
+                    $s['status'] = 'pending';
+                }
+                return $s;
+            }, $journey);
+
+            $journey[] = [
+                'key'         => 'application_declined',
+                'label'       => 'Application declined',
+                'description' => 'My application wasn\'t successful; my adviser tells me through next steps.',
+                'status'      => 'completed',
+                'at'          => optional($lead->inz_decision_at)?->toIso8601String(),
+                'alternative' => true,
             ];
         }
 

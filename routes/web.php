@@ -230,6 +230,8 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/admin/events', [EventController::class, 'index'])->name('admin.events');
         Route::post('/admin/events', [EventController::class, 'store']);
         Route::get('/admin/events/{id}', [EventController::class, 'show'])->name('admin.events.show');
+        Route::post('/admin/events/{id}', [EventController::class, 'update']);
+        Route::delete('/admin/events/{id}', [EventController::class, 'destroy']);
 
         Route::get('/admin/programs', [ProgramController::class, 'index'])->name('admin.programs');
         Route::get('/admin/facebook-live', [App\Http\Controllers\FacebookLiveController::class, 'index'])->name('admin.facebook-live');
@@ -446,6 +448,13 @@ Route::middleware(['auth'])->group(function () {
     Route::middleware('portal:admin,education')->group(function () {
         Route::get('/admin/education/user-reviews', fn () => app(UserReviewController::class)->adminIndex('education'))->name('admin.education.user-reviews');
         Route::get('/admin/education/user-reviews/{id}', fn ($id) => app(UserReviewController::class)->adminShow($id, 'education'))->name('admin.education.user-reviews.show');
+
+        // Schools catalog — education team uses this from their Setup
+        // sidebar to add institutions students get placed into.
+        Route::get('/admin/schools',         [\App\Http\Controllers\SchoolController::class, 'index'])->name('admin.schools');
+        Route::post('/admin/schools',        [\App\Http\Controllers\SchoolController::class, 'store']);
+        Route::post('/admin/schools/{id}',   [\App\Http\Controllers\SchoolController::class, 'update']);
+        Route::delete('/admin/schools/{id}', [\App\Http\Controllers\SchoolController::class, 'destroy']);
     });
 
     // Unified User Reviews — single page with Immigration / Education
@@ -516,6 +525,14 @@ Route::middleware(['auth'])->group(function () {
             // WORK
             Route::get('/students',    [EducationController::class, 'students'])->name('students');
             Route::post('/students/{id}/dashboard-field', [EducationController::class, 'updateStudentField'])->name('students.dashboard-field');
+            // Add / edit / soft-delete student rows from the Students page.
+            Route::post('/students',                [EducationController::class, 'storeStudent'])->name('students.store');
+            Route::post('/students/{id}/update',    [EducationController::class, 'updateStudent'])->name('students.update');
+            Route::post('/students/{id}/destroy',   [EducationController::class, 'destroyStudent'])->name('students.destroy');
+            // Schools catalog — same SchoolController as /admin/schools,
+            // but routed under the education prefix so the page wraps in
+            // EducationLayout instead of AdminLayout.
+            Route::get('/schools', [\App\Http\Controllers\SchoolController::class, 'index'])->name('schools');
             Route::get('/documents',   [EducationController::class, 'documents'])->name('documents');
             // Public assessment submissions (free-assessment + education-enrolment).
             Route::get('/assessments', [EducationController::class, 'assessments'])->name('assessments');
@@ -556,6 +573,11 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/assessments', [ImmigrationController::class, 'assessments'])->name('assessments');
             Route::post('/assessments/{intakeId}/convert-to-case', [ImmigrationController::class, 'convertAssessmentToCase'])->name('assessments.convert');
             Route::get('/cases', [ImmigrationController::class, 'cases'])->name('cases');
+            // Create new case from the Cases page "Add new case" modal.
+            Route::post('/cases', [ImmigrationController::class, 'storeCase'])->name('cases.store');
+            // Inline stage update from the Cases table — mirrors the
+            // EducationController dashboard-field pattern.
+            Route::post('/cases/{id}/stage', [ImmigrationController::class, 'updateCaseStage'])->name('cases.stage');
             Route::get('/documents', [ImmigrationController::class, 'documents'])->name('documents');
             Route::get('/appointments', [ImmigrationController::class, 'appointments'])->name('appointments');
 
@@ -563,6 +585,7 @@ Route::middleware(['auth'])->group(function () {
             // the same logic (policy, audit, notifications) applies to both
             // admin staff and immigration managers/advisers.
             Route::get('/visa-types',                          [VisaTypeController::class, 'index'])->name('visa-types');
+            Route::post('/visa-types',                         [VisaTypeController::class, 'store'])->name('visa-types.store');
             Route::post('/visa-types/{visa_type}',             [VisaTypeController::class, 'update'])->name('visa-types.update');
             Route::delete('/visa-types/{visa_type}',           [VisaTypeController::class, 'destroy'])->name('visa-types.destroy');
             Route::get('/visa-types/{visa_type}/price-history',[VisaTypeController::class, 'priceHistory'])->name('visa-types.price-history');
