@@ -2,12 +2,15 @@
 
 namespace App\Models;
 
+use App\Support\OnboardingPipeline;
 use App\Traits\LogsActivity;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class EoiSubmission extends Model
 {
-    use LogsActivity;
+    use LogsActivity, SoftDeletes;
 
     protected $table = 'accommodation_eoi_submissions';
 
@@ -31,6 +34,14 @@ class EoiSubmission extends Model
         'confirm_accurate', 'consent_collection',
         // Workflow
         'status', 'form_type',
+        // Onboarding pipeline (additive)
+        'property_id', 'lead_temperature',
+        'viewing_scheduled_at', 'viewing_completed_at', 'viewing_outcome',
+        'pre_tenancy_form_sent_at', 'pre_tenancy_form_completed_at', 'pre_tenancy_form_data',
+        'tenancy_agreement_sent_at', 'tenancy_agreement_signed_at',
+        'invoice_amount_nzd', 'invoice_sent_at', 'payment_confirmed_at',
+        'move_in_date', 'not_proceeding_reason', 'declined_reason',
+        'converted_to_tenant_id', 'assigned_to_user_id', 'internal_notes',
     ];
 
     protected $casts = [
@@ -43,11 +54,99 @@ class EoiSubmission extends Model
         'viewing_available_7days' => 'boolean',
         'confirm_accurate' => 'boolean',
         'consent_collection' => 'boolean',
+        // Onboarding
+        'viewing_scheduled_at' => 'datetime',
+        'viewing_completed_at' => 'datetime',
+        'pre_tenancy_form_sent_at' => 'datetime',
+        'pre_tenancy_form_completed_at' => 'datetime',
+        'tenancy_agreement_sent_at' => 'datetime',
+        'tenancy_agreement_signed_at' => 'datetime',
+        'invoice_sent_at' => 'datetime',
+        'payment_confirmed_at' => 'datetime',
+        'move_in_date' => 'date',
+        'pre_tenancy_form_data' => 'array',
+        'invoice_amount_nzd' => 'decimal:2',
     ];
+
+    protected $appends = ['days_at_current_stage'];
+
+    protected static function booted(): void
+    {
+        // Denormalise lead_temperature from form_type on create, so new public
+        // submissions get it without touching the public eoiStore endpoints.
+        static::creating(function (EoiSubmission $submission) {
+            if (empty($submission->lead_temperature) && ! empty($submission->form_type)) {
+                $submission->lead_temperature = $submission->form_type;
+            }
+        });
+    }
 
     /** Label used in the activity log feed. */
     public function activityLabel(): string
     {
         return $this->full_legal_name ?? 'EOI submission';
+    }
+
+    // ---- Relationships ----------------------------------------------------
+
+    public function property(): BelongsTo
+    {
+        return $this->belongsTo(Property::class, 'property_id');
+    }
+
+    public function convertedTenant(): BelongsTo
+    {
+        return $this->belongsTo(Tenant::class, 'converted_to_tenant_id');
+    }
+
+    public function assignedTo(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'assigned_to_user_id');
+    }
+
+    // ---- Accessors --------------------------------------------------------
+
+    /** Days since the record last changed — used to flag stalling applicants. */
+    public function getDaysAtCurrentStageAttribute(): int
+    {
+        return $this->updated_at ? (int) $this->updated_at->diffInDays(now()) : 0;
+    }
+
+    // ---- Scopes -----------------------------------------------------------
+
+    public function scopeNew($query)
+    {
+        return $query->where('status', 'new');
+    }
+
+    public function scopeReviewed($query)
+    {
+        return $query->where('status', 'reviewed');
+    }
+
+    public function scopeShortlisted($query)
+    {
+        return $query->where('status', 'shortlisted');
+    }
+
+    public function scopeAtStage($query, string $stage)
+    {
+        return $query->where('status', $stage);
+    }
+
+    public function scopeHot($query)
+    {
+        return $query->where('lead_temperature', 'hot');
+    }
+
+    public function scopeCold($query)
+    {
+        return $query->where('lead_temperature', 'cold');
+    }
+
+    /** Applicants still moving through the pipeline (excludes terminal states). */
+    public function scopeInActivePipeline($query)
+    {
+        return $query->whereNotIn('status', OnboardingPipeline::OFF_PIPELINE);
     }
 }

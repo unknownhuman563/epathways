@@ -299,23 +299,10 @@ export default function TaskBoardPage({
                             )}
                         </button>
 
-                        {/* Activity log drawer toggle */}
-                        <button
-                            type="button"
-                            onClick={() => setActivityOpen(true)}
-                            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border text-[11px] font-bold uppercase tracking-wider bg-white text-gray-700 border-gray-200 hover:bg-gray-50 transition-colors"
-                            aria-haspopup="dialog"
-                        >
-                            <Clock size={12} />
-                            Activity
-                            {recent_activity.length > 0 && (
-                                <span className="inline-flex items-center justify-center min-w-[14px] h-[14px] px-1 rounded-full bg-gray-100 text-gray-600 text-[9px] font-bold tabular-nums">
-                                    {recent_activity.length}
-                                </span>
-                            )}
-                        </button>
-
-                        {/* Assigned-to-me / All staff scope */}
+                        {/* Mine / Department / All scope. The Department option
+                            (this portal's own tasks) is hidden on the admin
+                            board, which spans every department already and has
+                            its own department dropdown in Filters. */}
                         <div className="flex items-center gap-0.5 bg-white rounded-lg border border-gray-200 p-0.5">
                             <button
                                 type="button"
@@ -326,6 +313,17 @@ export default function TaskBoardPage({
                             >
                                 Mine
                             </button>
+                            {!isAdmin && (
+                                <button
+                                    type="button"
+                                    onClick={() => setScope("department")}
+                                    className={`px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider transition-colors ${
+                                        scope === "department" ? "bg-gray-900 text-white" : "text-gray-600 hover:bg-gray-50"
+                                    }`}
+                                >
+                                    Department
+                                </button>
+                            )}
                             <button
                                 type="button"
                                 onClick={() => setScope("all")}
@@ -409,8 +407,9 @@ export default function TaskBoardPage({
             </div>
 
             {/* Kanban / Calendar / List view switcher — own row above the
-                board, left-aligned over the first column. */}
-            <div className="px-2 sm:px-4">
+                board: switcher left-aligned over the first column, Activity
+                log pinned to the right end. */}
+            <div className="px-2 sm:px-4 flex items-center justify-between gap-2">
                 <div className="inline-flex items-center gap-1 bg-white rounded-xl border border-gray-200 p-1">
                     <button
                         type="button"
@@ -440,6 +439,22 @@ export default function TaskBoardPage({
                         List
                     </button>
                 </div>
+
+                {/* Activity log drawer toggle — right end of the view row */}
+                <button
+                    type="button"
+                    onClick={() => setActivityOpen(true)}
+                    className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border text-[11px] font-bold uppercase tracking-wider bg-white text-gray-700 border-gray-200 hover:bg-gray-50 transition-colors"
+                    aria-haspopup="dialog"
+                >
+                    <Clock size={12} />
+                    Activity
+                    {recent_activity.length > 0 && (
+                        <span className="inline-flex items-center justify-center min-w-[14px] h-[14px] px-1 rounded-full bg-gray-100 text-gray-600 text-[9px] font-bold tabular-nums">
+                            {recent_activity.length}
+                        </span>
+                    )}
+                </button>
             </div>
 
             {/* The board — kanban, calendar, or list depending on the toggle. */}
