@@ -7,12 +7,28 @@ use App\Models\LeadEducationExp;
 use App\Models\LeadStudyPlan;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Bus;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class FreeAssessmentTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        // Prevent the AnalyzeLeadAssessment job from making real HTTP calls
+        // to the Cerebras API during tests. Without these fakes, the queued
+        // job (run synchronously with QUEUE_CONNECTION=sync) hits a real
+        // endpoint and the resulting exception corrupts the SQLite :memory:
+        // transaction state, poisoning every subsequent test class in the
+        // full suite run.
+        Bus::fake();
+        Http::preventStrayRequests();
+    }
 
     /**
      * Full form payload matching the 12-step frontend form.
