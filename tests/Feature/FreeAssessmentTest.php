@@ -212,7 +212,7 @@ class FreeAssessmentTest extends TestCase
         $response = $this->get('/free-assessment');
 
         $response->assertStatus(200);
-        $response->assertInertia(fn ($page) => $page->component('FreeAssessment', false));
+        $response->assertInertia(fn ($page) => $page->component('free-assessment/FreeAssessmentPage', false));
     }
 
     public function test_full_submission_creates_lead_with_all_fields(): void

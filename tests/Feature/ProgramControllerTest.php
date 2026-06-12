@@ -15,7 +15,7 @@ class ProgramControllerTest extends TestCase
 
     private function admin(): User
     {
-        return User::factory()->create();
+        return User::factory()->create(['role' => 'admin']);
     }
 
     private function payload(array $overrides = []): array
@@ -67,7 +67,7 @@ class ProgramControllerTest extends TestCase
 
         $response->assertOk();
         $response->assertInertia(fn ($page) => $page
-            ->component('Admin/Programs')
+            ->component('admin/Programs')
             ->has('programs', 1)
         );
     }
@@ -142,7 +142,7 @@ class ProgramControllerTest extends TestCase
 
         $response->assertOk();
         $response->assertInertia(fn ($page) => $page
-            ->component('ProgramsLevels')
+            ->component('programs/ProgramsLevels')
             ->has('programs', 1)
             ->where('programs.0.title', 'Published')
         );
@@ -152,18 +152,18 @@ class ProgramControllerTest extends TestCase
     {
         $program = Program::create($this->payload(['status' => 'draft']));
 
-        $this->get('/program-details/'.$program->id)->assertNotFound();
+        $this->get('/program-details/'.$program->slug)->assertNotFound();
     }
 
     public function test_public_show_renders_published_program(): void
     {
         $program = Program::create($this->payload(['status' => 'published']));
 
-        $response = $this->get('/program-details/'.$program->id);
+        $response = $this->get('/program-details/'.$program->slug);
 
         $response->assertOk();
         $response->assertInertia(fn ($page) => $page
-            ->component('ProgramDetails')
+            ->component('programs/ProgramDetails')
             ->where('program.id', $program->id)
         );
     }
