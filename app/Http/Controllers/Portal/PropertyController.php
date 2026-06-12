@@ -5,14 +5,21 @@ namespace App\Http\Controllers\Portal;
 use App\Http\Controllers\Controller;
 use App\Models\Property;
 use App\Models\PropertyImage;
+use App\Models\Tenant;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Response;
 use Illuminate\Validation\Rule;
 
 class PropertyController extends Controller
 {
-    private function rules(): array
+    /** Internal fields + computed occupancy, surfaced only inside the portal. */
+    private const VISIBLE_IN_PORTAL = [...Property::MANAGEMENT_FIELDS, 'rooms_occupied', 'occupancy_status'];
+
+    private function rules(?Property $property = null): array
     {
         return [
+            // Public listing fields (unchanged)
             'name' => 'required|string|max:255',
             'location' => 'nullable|string|max:255',
             'suburb' => ['nullable', Rule::in(['Hobsonville', 'Glenfield', 'Kelston', 'Hillsborough', 'Sunnynook'])],
@@ -29,42 +36,105 @@ class PropertyController extends Controller
             'status' => ['required', Rule::in(['available', 'unavailable'])],
             'images' => 'nullable|array',
             'images.*' => 'image|mimes:jpeg,png,jpg,webp,gif|max:4096',
+
+            // Internal management fields
+            'code' => ['nullable', 'string', 'max:50', Rule::unique('accommodation_properties', 'code')->ignore($property?->id)],
+            'address' => 'nullable|string|max:200',
+            'city' => 'nullable|string|max:100',
+            'region' => 'nullable|string|max:100',
+            'property_type' => ['nullable', Rule::in(Property::PROPERTY_TYPES)],
+            'total_rooms' => 'nullable|integer|min:1|max:50',
+            'mercury_account_number' => 'nullable|string|max:100',
+            'mercury_account_holder' => 'nullable|string|max:255',
+            'property_icp' => 'nullable|string|max:100',
+            'house_code' => 'nullable|string|max:100',
+            'internet_passcode' => 'nullable|string|max:100',
+            'bond_total_nzd' => 'nullable|numeric|min:0',
+            'advance_total_nzd' => 'nullable|numeric|min:0',
+            'property_manager_name' => 'nullable|string|max:255',
+            'property_manager_phone' => 'nullable|string|max:50',
+            'property_manager_email' => 'nullable|email|max:255',
+            'pm_payment_schedule' => ['nullable', Rule::in(Property::PAYMENT_SCHEDULES)],
+            'power_due_date' => 'nullable|date',
+            'water_due_date' => 'nullable|date',
+            'internet_due_date' => 'nullable|date',
+            'last_gas_purchase' => 'nullable|date',
+            'uses_bottled_gas' => 'boolean',
+            'is_active' => 'boolean',
+            'notes' => 'nullable|string',
         ];
     }
 
     public function index(Request $request)
     {
         $search = $request->query('search');
-        $status = $request->query('status');
-        $roomType = $request->query('room_type');
-        $bedType = $request->query('bed_type');
+        $active = $request->query('active', 'active');   // active | archived | all
+        $type = $request->query('property_type');
+        $city = $request->query('city');
+        $sort = $request->query('sort', 'code');         // code | address | latest
 
         $properties = Property::with('images')
+            ->withCount('activeTenants') // drives rooms_occupied / occupancy_status
             ->when($search, fn ($q) => $q->where(fn ($w) => $w
                 ->where('name', 'like', "%{$search}%")
+                ->orWhere('code', 'like', "%{$search}%")
+                ->orWhere('address', 'like', "%{$search}%")
+                ->orWhere('city', 'like', "%{$search}%")
+                ->orWhere('suburb', 'like', "%{$search}%")
                 ->orWhere('location', 'like', "%{$search}%")
-                ->orWhere('suburb', 'like', "%{$search}%")))
-            ->when(in_array($status, ['available', 'unavailable'], true), fn ($q) => $q->where('status', $status))
-            ->when(in_array($roomType, ['single', 'ensuite'], true), fn ($q) => $q->where('room_type', $roomType))
-            ->when(in_array($bedType, ['single', 'double'], true), fn ($q) => $q->where('bed_type', $bedType))
-            ->latest()
-            ->paginate(10)
-            ->withQueryString();
+                ->orWhere('property_manager_name', 'like', "%{$search}%")))
+            ->when($active === 'active', fn ($q) => $q->where('is_active', true))
+            ->when($active === 'archived', fn ($q) => $q->where('is_active', false))
+            ->when(in_array($type, Property::PROPERTY_TYPES, true), fn ($q) => $q->where('property_type', $type))
+            ->when($city, fn ($q) => $q->where('city', $city))
+            ->when($request->boolean('has_tenants'), fn ($q) => $q->whereHas('activeTenants'))
+            ->when($sort === 'address', fn ($q) => $q->orderBy('address'))
+            ->when($sort === 'latest', fn ($q) => $q->latest())
+            // Default: numeric-aware sort by code, nulls last.
+            ->when(! in_array($sort, ['address', 'latest'], true), fn ($q) => $q
+                ->orderByRaw('code IS NULL, CAST(code AS UNSIGNED), code'))
+            ->paginate(15)
+            ->withQueryString()
+            ->through(fn (Property $p) => $p->makeVisible(self::VISIBLE_IN_PORTAL));
 
         return inertia('portal/accommodation/Properties', [
             'properties' => $properties,
             'filters' => [
                 'search' => $search,
-                'status' => $status,
-                'room_type' => $roomType,
-                'bed_type' => $bedType,
+                'active' => $active,
+                'property_type' => $type,
+                'city' => $city,
+                'sort' => $sort,
+                'has_tenants' => $request->boolean('has_tenants'),
             ],
+            'options' => [
+                'property_types' => Property::PROPERTY_TYPES,
+                'cities' => Property::query()->whereNotNull('city')->distinct()->orderBy('city')->pluck('city'),
+            ],
+        ]);
+    }
+
+    public function show(Property $property)
+    {
+        $property->load('images')->loadCount('activeTenants')->makeVisible(self::VISIBLE_IN_PORTAL);
+
+        $tenants = $property->tenants()->orderByRaw('contract_end IS NULL, contract_end ASC')->get();
+
+        return inertia('portal/accommodation/PropertyDetail', [
+            'property' => $property,
+            'tenants' => $tenants->whereIn('current_status', Tenant::ACTIVE_STATUSES)->values(),
+            'historicalTenants' => $tenants->where('current_status', 'vacated')->values(),
+            'activity' => [],
         ]);
     }
 
     public function create()
     {
-        return inertia('portal/accommodation/PropertyForm', ['property' => null]);
+        return inertia('portal/accommodation/PropertyForm', [
+            'property' => null,
+            'options' => $this->formOptions(),
+            'next_code' => $this->nextCode(),
+        ]);
     }
 
     public function store(Request $request)
@@ -78,22 +148,46 @@ class PropertyController extends Controller
 
     public function edit(Property $property)
     {
-        $property->load('images');
+        $property->load('images')->makeVisible(self::VISIBLE_IN_PORTAL);
 
-        return inertia('portal/accommodation/PropertyForm', ['property' => $property]);
+        return inertia('portal/accommodation/PropertyForm', [
+            'property' => $property,
+            'options' => $this->formOptions(),
+            'next_code' => null,
+        ]);
     }
 
     public function update(Request $request, Property $property)
     {
-        $property->update($this->cleanData($request));
+        $property->update($this->cleanData($request, $property));
         $this->storeImages($property, $request->file('images', []));
 
-        return redirect()->route('portal.accommodation.properties.index')
+        return redirect()->route('portal.accommodation.properties.show', $property)
             ->with('success', 'Property updated successfully.');
+    }
+
+    /** Archive (soft remove from portfolio) rather than delete. */
+    public function archive(Property $property)
+    {
+        if ($property->activeTenants()->exists()) {
+            return redirect()->back()
+                ->with('error', 'Cannot archive a property with active tenants. Vacate or move them first.');
+        }
+
+        $property->update(['is_active' => false]);
+
+        return redirect()->back()->with('success', 'Property archived.');
     }
 
     public function destroy(Property $property)
     {
+        // A property with active tenants cannot be removed — they must be
+        // vacated/moved first. (The model enforces this too, for safety.)
+        if ($property->activeTenants()->exists()) {
+            return redirect()->back()
+                ->with('error', 'Cannot delete a property with active tenants. Vacate or move them first.');
+        }
+
         $property->delete();
 
         return redirect()->route('portal.accommodation.properties.index')
@@ -108,13 +202,52 @@ class PropertyController extends Controller
         return redirect()->back()->with('success', 'Image removed.');
     }
 
-    /** Validated scalar fields with booleans normalized. */
-    private function cleanData(Request $request): array
+    /** Stream all properties (management columns) as a CSV. */
+    public function export()
     {
-        $data = $request->validate($this->rules());
+        $columns = [
+            'code', 'name', 'address', 'city', 'region', 'property_type', 'total_rooms',
+            'property_manager_name', 'property_manager_phone', 'property_manager_email',
+            'pm_payment_schedule', 'bond_total_nzd', 'advance_total_nzd',
+            'mercury_account_number', 'mercury_account_holder', 'property_icp',
+            'house_code', 'internet_passcode', 'uses_bottled_gas', 'last_gas_purchase',
+            'power_due_date', 'water_due_date', 'internet_due_date', 'is_active',
+        ];
+
+        return Response::streamDownload(function () use ($columns) {
+            $out = fopen('php://output', 'w');
+            fputcsv($out, $columns);
+
+            Property::query()->orderByRaw('CAST(code AS UNSIGNED)')->chunk(200, function ($chunk) use ($out, $columns) {
+                foreach ($chunk as $p) {
+                    fputcsv($out, array_map(fn ($c) => $this->csvValue($p->{$c}), $columns));
+                }
+            });
+
+            fclose($out);
+        }, 'properties.csv', ['Content-Type' => 'text/csv']);
+    }
+
+    private function csvValue($value): string
+    {
+        if (is_bool($value)) {
+            return $value ? 'Yes' : 'No';
+        }
+
+        return (string) ($value ?? '');
+    }
+
+    /** Validated scalar fields with booleans normalized. */
+    private function cleanData(Request $request, ?Property $property = null): array
+    {
+        $data = $request->validate($this->rules($property));
         unset($data['images']);
+
         $data['has_wardrobe'] = $request->boolean('has_wardrobe');
         $data['bills_excluded'] = $request->boolean('bills_excluded');
+        $data['uses_bottled_gas'] = $request->boolean('uses_bottled_gas');
+        // Default new records to active; respect the toggle when present.
+        $data['is_active'] = $request->has('is_active') ? $request->boolean('is_active') : true;
 
         return $data;
     }
@@ -130,5 +263,21 @@ class PropertyController extends Controller
                 'sort_order' => ++$next,
             ]);
         }
+    }
+
+    private function formOptions(): array
+    {
+        return [
+            'property_types' => Property::PROPERTY_TYPES,
+            'payment_schedules' => Property::PAYMENT_SCHEDULES,
+        ];
+    }
+
+    /** Suggest the next numeric code (max numeric code + 1). */
+    private function nextCode(): string
+    {
+        $max = (int) Property::query()->whereNotNull('code')->max(DB::raw('CAST(code AS UNSIGNED)'));
+
+        return (string) ($max + 1);
     }
 }

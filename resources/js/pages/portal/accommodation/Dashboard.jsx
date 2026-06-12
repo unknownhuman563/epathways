@@ -42,7 +42,7 @@ export default function AccommodationDashboard({
                 </div>
                 <Link
                     href="/portal/accommodation/properties/create"
-                    className="inline-flex items-center gap-2 rounded-full bg-rose-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-rose-700 transition-colors"
+                    className="inline-flex items-center gap-2 rounded-full bg-[#1F5A8B] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[#184A73] transition-colors"
                 >
                     <Plus size={18} /> New property
                 </Link>
@@ -66,7 +66,7 @@ export default function AccommodationDashboard({
             <div className="bg-white rounded-3xl border border-gray-50 shadow-sm overflow-hidden">
                 <div className="flex items-center justify-between px-6 py-5">
                     <h2 className="text-lg font-bold text-gray-900">Recent leads</h2>
-                    <Link href="/portal/accommodation/applications" className="text-sm font-semibold text-rose-600 hover:text-rose-700">View all</Link>
+                    <Link href="/portal/accommodation/applications" className="text-sm font-semibold text-[#1F5A8B] hover:text-[#184A73]">View all</Link>
                 </div>
                 {recentApplications.length === 0 ? (
                     <div className="border-t border-gray-50 px-6 py-12 text-center">
@@ -106,7 +106,7 @@ export default function AccommodationDashboard({
             <div className="bg-white rounded-3xl border border-gray-50 shadow-sm overflow-hidden">
                 <div className="flex items-center justify-between px-6 py-5">
                     <h2 className="text-lg font-bold text-gray-900">Recent properties</h2>
-                    <Link href="/portal/accommodation/properties" className="text-sm font-semibold text-rose-600 hover:text-rose-700">View all</Link>
+                    <Link href="/portal/accommodation/properties" className="text-sm font-semibold text-[#1F5A8B] hover:text-[#184A73]">View all</Link>
                 </div>
                 {recentProperties.length === 0 ? (
                     <div className="border-t border-gray-50 px-6 py-12 text-center">

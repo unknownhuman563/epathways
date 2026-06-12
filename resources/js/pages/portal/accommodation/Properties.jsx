@@ -1,28 +1,42 @@
 import { useState, useEffect } from "react";
 import { Head, Link, router } from "@inertiajs/react";
-import { Plus, Pencil, Trash2, Home, Search } from "lucide-react";
+import { Plus, Pencil, Archive, Eye, Home, Search, Download } from "lucide-react";
 import Pagination from "@/components/ui/Pagination";
 
-export default function Properties({ properties = {}, filters = {} }) {
+const OCCUPANCY_STYLES = {
+    full: "bg-emerald-50 text-emerald-700",
+    partial: "bg-amber-50 text-amber-700",
+    vacant: "bg-rose-50 text-rose-600",
+};
+const cap = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
+
+export default function Properties({ properties = {}, filters = {}, options = {} }) {
     const rows = properties.data ?? [];
     const [search, setSearch] = useState(filters.search ?? "");
-    const status = filters.status ?? "all";
-    const roomType = filters.room_type ?? "all";
-    const bedType = filters.bed_type ?? "all";
-    const hasFilters = Boolean(search) || status !== "all" || roomType !== "all" || bedType !== "all";
+    const active = filters.active ?? "active";
+    const propertyType = filters.property_type ?? "all";
+    const city = filters.city ?? "all";
+    const sort = filters.sort ?? "code";
+    const hasTenants = Boolean(filters.has_tenants);
+    const hasFilters =
+        Boolean(search) || active !== "active" || propertyType !== "all" || city !== "all" || hasTenants;
 
     const applyFilters = (next = {}) => {
         const merged = {
             search: next.search !== undefined ? next.search : search,
-            status: next.status !== undefined ? next.status : status,
-            room_type: next.room_type !== undefined ? next.room_type : roomType,
-            bed_type: next.bed_type !== undefined ? next.bed_type : bedType,
+            active: next.active !== undefined ? next.active : active,
+            property_type: next.property_type !== undefined ? next.property_type : propertyType,
+            city: next.city !== undefined ? next.city : city,
+            sort: next.sort !== undefined ? next.sort : sort,
+            has_tenants: next.has_tenants !== undefined ? next.has_tenants : hasTenants,
         };
         const query = {};
         if (merged.search) query.search = merged.search;
-        if (merged.status !== "all") query.status = merged.status;
-        if (merged.room_type !== "all") query.room_type = merged.room_type;
-        if (merged.bed_type !== "all") query.bed_type = merged.bed_type;
+        if (merged.active !== "active") query.active = merged.active;
+        if (merged.property_type !== "all") query.property_type = merged.property_type;
+        if (merged.city !== "all") query.city = merged.city;
+        if (merged.sort !== "code") query.sort = merged.sort;
+        if (merged.has_tenants) query.has_tenants = 1;
         router.get("/portal/accommodation/properties", query, {
             preserveState: true,
             preserveScroll: true,
@@ -36,100 +50,115 @@ export default function Properties({ properties = {}, filters = {} }) {
             if ((filters.search ?? "") !== search) applyFilters({ search });
         }, 400);
         return () => clearTimeout(t);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [search]);
 
-    const destroy = (property) => {
-        if (confirm(`Delete "${property.name}"? This removes its images too.`)) {
-            router.delete(`/portal/accommodation/properties/${property.id}`, {
+    const archive = (property) => {
+        if (confirm(`Archive "${property.address || property.name}"? It will be hidden from the active list.`)) {
+            router.patch(`/portal/accommodation/properties/${property.id}/archive`, {}, {
                 preserveScroll: true,
             });
         }
     };
 
-    const money = (v) => (v == null ? "—" : `$${Number(v).toFixed(0)}`);
+    const select = "rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm text-gray-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-[#1F5A8B]";
 
     return (
         <div className="space-y-6 max-w-7xl mx-auto">
             <Head title="Properties" />
 
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                     <h1 className="text-2xl font-bold text-gray-900">Properties</h1>
-                    <p className="text-sm text-gray-500">Listings shown on the public accommodation page.</p>
+                    <p className="text-sm text-gray-500">Your managed property portfolio. Public listing details and internal records in one place.</p>
                 </div>
-                <Link
-                    href="/portal/accommodation/properties/create"
-                    className="inline-flex items-center gap-2 rounded-full bg-rose-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-rose-700 transition-colors"
-                >
-                    <Plus size={18} /> New property
-                </Link>
+                <div className="flex items-center gap-2">
+                    <a
+                        href="/portal/accommodation/properties/export"
+                        className="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-gray-600 hover:bg-gray-50"
+                    >
+                        <Download size={16} /> Export CSV
+                    </a>
+                    <Link
+                        href="/portal/accommodation/properties/create"
+                        className="inline-flex items-center gap-2 rounded-full bg-[#1F5A8B] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[#184A73] transition-colors"
+                    >
+                        <Plus size={18} /> Add property
+                    </Link>
+                </div>
             </div>
 
             {/* Filters */}
-            <div className="flex flex-col sm:flex-row gap-3">
+            <div className="flex flex-col lg:flex-row gap-3">
                 <div className="relative flex-1">
                     <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                     <input
                         type="text"
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
-                        placeholder="Search by name, suburb or location…"
-                        className="w-full rounded-xl border border-gray-200 bg-white pl-9 pr-4 py-2 text-sm text-gray-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-rose-500"
+                        placeholder="Search code, address, city or property manager…"
+                        className="w-full rounded-xl border border-gray-200 bg-white pl-9 pr-4 py-2 text-sm text-gray-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-[#1F5A8B]"
                     />
                 </div>
-                <select
-                    value={status}
-                    onChange={(e) => applyFilters({ status: e.target.value })}
-                    className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm text-gray-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-rose-500"
-                >
-                    <option value="all">All statuses</option>
-                    <option value="available">Available</option>
-                    <option value="unavailable">Unavailable</option>
+                <select value={active} onChange={(e) => applyFilters({ active: e.target.value })} className={select}>
+                    <option value="active">Active</option>
+                    <option value="archived">Archived</option>
+                    <option value="all">All</option>
                 </select>
-                <select
-                    value={roomType}
-                    onChange={(e) => applyFilters({ room_type: e.target.value })}
-                    className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm text-gray-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-rose-500"
-                >
-                    <option value="all">All room types</option>
-                    <option value="single">Single</option>
-                    <option value="ensuite">Ensuite</option>
+                <select value={propertyType} onChange={(e) => applyFilters({ property_type: e.target.value })} className={select}>
+                    <option value="all">All types</option>
+                    {(options.property_types ?? []).map((t) => (
+                        <option key={t} value={t}>{t}</option>
+                    ))}
                 </select>
-                <select
-                    value={bedType}
-                    onChange={(e) => applyFilters({ bed_type: e.target.value })}
-                    className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm text-gray-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-rose-500"
-                >
-                    <option value="all">All beds</option>
-                    <option value="single">Single bed</option>
-                    <option value="double">Double bed</option>
+                {(options.cities ?? []).length > 0 && (
+                    <select value={city} onChange={(e) => applyFilters({ city: e.target.value })} className={select}>
+                        <option value="all">All cities</option>
+                        {options.cities.map((c) => (
+                            <option key={c} value={c}>{c}</option>
+                        ))}
+                    </select>
+                )}
+                <select value={sort} onChange={(e) => applyFilters({ sort: e.target.value })} className={select}>
+                    <option value="code">Sort: Code</option>
+                    <option value="address">Sort: Address</option>
+                    <option value="latest">Sort: Newest</option>
                 </select>
+                <button
+                    onClick={() => applyFilters({ has_tenants: !hasTenants })}
+                    className={`rounded-xl border px-4 py-2 text-sm font-medium shadow-sm ${hasTenants ? "border-[#1F5A8B] bg-[#1F5A8B]/10 text-[#1F5A8B]" : "border-gray-200 bg-white text-gray-600"}`}
+                >
+                    Has active tenants
+                </button>
             </div>
 
             {rows.length === 0 ? (
                 <div className="rounded-3xl border border-dashed border-gray-200 bg-white p-16 text-center">
                     <Home className="mx-auto mb-3 text-gray-300" size={40} />
                     <p className="font-semibold text-gray-900">{hasFilters ? "No matching properties" : "No properties yet"}</p>
-                    <p className="text-sm text-gray-500">{hasFilters ? "Try adjusting your search or filter." : "Add your first listing to populate the accommodation page."}</p>
+                    <p className="text-sm text-gray-500">{hasFilters ? "Try adjusting your search or filters." : "Add your first property to start building the portfolio."}</p>
                 </div>
             ) : (
-                <div className="overflow-hidden rounded-3xl border border-gray-50 bg-white shadow-sm">
+                <div className="overflow-x-auto rounded-3xl border border-gray-50 bg-white shadow-sm">
                     <table className="w-full text-sm">
                         <thead className="bg-gray-50 text-left text-xs uppercase tracking-wider text-gray-500">
                             <tr>
-                                <th className="px-6 py-4 font-semibold">Property</th>
-                                <th className="px-6 py-4 font-semibold">Room type</th>
-                                <th className="px-6 py-4 font-semibold">Rent (single / couple)</th>
-                                <th className="px-6 py-4 font-semibold">Status</th>
-                                <th className="px-6 py-4 font-semibold text-right">Actions</th>
+                                <th className="px-5 py-4 font-semibold">#</th>
+                                <th className="px-5 py-4 font-semibold">Property</th>
+                                <th className="px-5 py-4 font-semibold">Rooms</th>
+                                <th className="px-5 py-4 font-semibold">Occupancy</th>
+                                <th className="px-5 py-4 font-semibold">Property manager</th>
+                                <th className="px-5 py-4 font-semibold">Status</th>
+                                <th className="px-5 py-4 font-semibold text-right">Actions</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-50">
                             {rows.map((p) => (
                                 <tr key={p.id} className="hover:bg-gray-50/50">
-                                    <td className="px-6 py-4">
-                                        <div className="flex items-center gap-3">
-                                            <div className="h-12 w-12 shrink-0 overflow-hidden rounded-xl bg-gray-100">
+                                    <td className="px-5 py-4 font-semibold text-gray-900">{p.code || "—"}</td>
+                                    <td className="px-5 py-4">
+                                        <Link href={`/portal/accommodation/properties/${p.id}`} className="flex items-center gap-3 group">
+                                            <div className="h-11 w-11 shrink-0 overflow-hidden rounded-xl bg-gray-100">
                                                 {p.cover_image ? (
                                                     <img src={p.cover_image} alt="" className="h-full w-full object-cover" />
                                                 ) : (
@@ -139,38 +168,55 @@ export default function Properties({ properties = {}, filters = {} }) {
                                                 )}
                                             </div>
                                             <div>
-                                                <p className="font-semibold text-gray-900">{p.name}</p>
-                                                <p className="text-xs text-gray-500">{[p.suburb, p.location].filter(Boolean).join(" · ") || "—"}</p>
+                                                <p className="font-semibold text-gray-900 group-hover:text-[#1F5A8B]">{p.address || p.name}</p>
+                                                <p className="text-xs text-gray-500">
+                                                    {[p.city || p.suburb, p.property_type].filter(Boolean).join(" · ") || "—"}
+                                                </p>
                                             </div>
-                                        </div>
+                                        </Link>
                                     </td>
-                                    <td className="px-6 py-4 capitalize text-gray-700">{p.room_type}</td>
-                                    <td className="px-6 py-4 text-gray-700">
-                                        {money(p.rent_single)}/wk · {money(p.rent_couple)}/wk
+                                    <td className="px-5 py-4 text-gray-700">
+                                        {p.total_rooms ? `${p.rooms_occupied ?? 0}/${p.total_rooms}` : "—"}
                                     </td>
-                                    <td className="px-6 py-4">
-                                        <span className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                                            p.status === "available"
-                                                ? "bg-emerald-50 text-emerald-700"
-                                                : "bg-gray-100 text-gray-500"
-                                        }`}>
-                                            {p.status}
-                                        </span>
+                                    <td className="px-5 py-4">
+                                        {p.occupancy_status ? (
+                                            <span className={`rounded-full px-3 py-1 text-xs font-semibold ${OCCUPANCY_STYLES[p.occupancy_status] ?? "bg-gray-100 text-gray-500"}`}>
+                                                {cap(p.occupancy_status)}
+                                            </span>
+                                        ) : (
+                                            <span className="text-xs text-gray-400">—</span>
+                                        )}
                                     </td>
-                                    <td className="px-6 py-4">
-                                        <div className="flex items-center justify-end gap-2">
-                                            <Link
-                                                href={`/portal/accommodation/properties/${p.id}/edit`}
-                                                className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-900"
-                                            >
+                                    <td className="px-5 py-4 text-gray-700">
+                                        {p.property_manager_name ? (
+                                            <div>
+                                                <p className="text-gray-900">{p.property_manager_name}</p>
+                                                {p.pm_payment_schedule && <p className="text-xs text-gray-500">{p.pm_payment_schedule}</p>}
+                                            </div>
+                                        ) : (
+                                            <span className="text-xs text-gray-400">—</span>
+                                        )}
+                                    </td>
+                                    <td className="px-5 py-4">
+                                        {p.is_active ? (
+                                            <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">Active</span>
+                                        ) : (
+                                            <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-500">Archived</span>
+                                        )}
+                                    </td>
+                                    <td className="px-5 py-4">
+                                        <div className="flex items-center justify-end gap-1">
+                                            <Link href={`/portal/accommodation/properties/${p.id}`} className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-900" title="View">
+                                                <Eye size={16} />
+                                            </Link>
+                                            <Link href={`/portal/accommodation/properties/${p.id}/edit`} className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-900" title="Edit">
                                                 <Pencil size={16} />
                                             </Link>
-                                            <button
-                                                onClick={() => destroy(p)}
-                                                className="rounded-lg p-2 text-gray-500 hover:bg-rose-50 hover:text-rose-600"
-                                            >
-                                                <Trash2 size={16} />
-                                            </button>
+                                            {p.is_active && (
+                                                <button onClick={() => archive(p)} className="rounded-lg p-2 text-gray-500 hover:bg-amber-50 hover:text-amber-600" title="Archive">
+                                                    <Archive size={16} />
+                                                </button>
+                                            )}
                                         </div>
                                     </td>
                                 </tr>
