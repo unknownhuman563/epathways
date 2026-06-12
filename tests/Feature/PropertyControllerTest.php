@@ -84,7 +84,7 @@ class PropertyControllerTest extends TestCase
                 'name' => 'Renamed House',
                 'images' => [UploadedFile::fake()->create('c.jpg', 100, 'image/jpeg')],
             ]))
-            ->assertRedirect('/portal/accommodation/properties');
+            ->assertRedirect("/portal/accommodation/properties/{$property->id}");
 
         $this->assertDatabaseHas('accommodation_properties', [
             'id' => $property->id, 'name' => 'Renamed House',

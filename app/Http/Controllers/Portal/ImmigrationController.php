@@ -674,7 +674,8 @@ class ImmigrationController extends Controller
 
             $base = \App\Models\LeadTask::with(['lead:id,lead_id,first_name,last_name,email,status', 'assignee:id,name', 'creator:id,name', 'attachments'])
                 ->withCount('comments')
-                ->when($scope === 'mine', fn ($q) => $q->where('assignee_id', $userId));
+                ->when($scope === 'mine', fn ($q) => $q->where('assignee_id', $userId))
+                ->when($scope === 'department', fn ($q) => $q->where('department', 'immigration'));
 
             $serialize = fn ($t) => [
                 'id'           => $t->id,

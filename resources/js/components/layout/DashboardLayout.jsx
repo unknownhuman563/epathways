@@ -141,7 +141,7 @@ export default function DashboardLayout({
                     if (item.section) {
                         return (
                             <p
-                                key={item.name}
+                                key={`section-${item.name}`}
                                 className="px-4 pt-4 pb-1 text-[9px] font-bold uppercase tracking-[0.22em] text-gray-400"
                             >
                                 {item.name}
