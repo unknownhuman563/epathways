@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Support\NotificationFormatter;
 use Illuminate\Http\Request;
 
 /**
@@ -107,16 +108,26 @@ class NotificationController extends Controller
     }
 
     /**
-     * Shape one notification row for the frontend. Commit 2 enriches this
-     * with NotificationFormatter (icon/color/title/url). For now it returns
-     * the raw stored data plus read state.
+     * Shape one notification row for the frontend — raw stored data + read
+     * state, enriched with the NotificationFormatter UI mapping (icon /
+     * color / title / body / url).
      */
     private function serialize($n): array
     {
+        $formatted = NotificationFormatter::format([
+            'type' => $n->type,
+            'data' => $n->data,
+        ]);
+
         return [
             'id'         => $n->id,
-            'type'       => class_basename($n->type),
+            'type'       => $formatted['type'],
             'data'       => $n->data,
+            'icon'       => $formatted['icon'],
+            'color'      => $formatted['color'],
+            'title'      => $formatted['title'],
+            'body'       => $formatted['body'],
+            'url'        => $formatted['url'],
             'is_read'    => $n->read_at !== null,
             'read_at'    => optional($n->read_at)?->toIso8601String(),
             'created_at' => optional($n->created_at)?->toIso8601String(),

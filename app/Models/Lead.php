@@ -2,10 +2,13 @@
 
 namespace App\Models;
 
+use App\Observers\LeadObserver;
 use App\Traits\LogsActivity;
+use Illuminate\Database\Eloquent\Attributes\ObservedBy;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
+#[ObservedBy([LeadObserver::class])]
 class Lead extends Model
 {
     use LogsActivity;
@@ -172,6 +175,8 @@ class Lead extends Model
         'is_immigration_case', 'immigration_converted_at', 'immigration_converted_by',
         'is_accommodation_client', 'accommodation_converted_at', 'accommodation_converted_by',
         'is_english_student', 'english_converted_at', 'english_converted_by',
+        // Staff member responsible for this lead (drives assignment notifications)
+        'assigned_to',
         // INZ lodgement tracking
         'inz_visa_type', 'inz_lodged_at', 'inz_reference', 'inz_status', 'inz_decision_at',
         // IAA / Privacy Act gating
@@ -348,6 +353,12 @@ class Lead extends Model
     public function stageUpdater()
     {
         return $this->belongsTo(User::class, 'stage_updated_by');
+    }
+
+    /** Staff member this lead is currently assigned to (or null). */
+    public function assignee()
+    {
+        return $this->belongsTo(User::class, 'assigned_to');
     }
 
     // ─── Computed accessors used by the Personal Info tab ─────────────

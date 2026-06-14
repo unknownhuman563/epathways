@@ -151,7 +151,7 @@ class LeadTrackingController extends Controller
 
         $checklistKey = $request->input('checklist_key');
 
-        LeadDocument::create([
+        $document = LeadDocument::create([
             'lead_id'       => $lead->id,
             'checklist_key' => $checklistKey,
             'original_name' => $file->getClientOriginalName(),
@@ -161,6 +161,12 @@ class LeadTrackingController extends Controller
             'status'        => LeadDocument::STATUS_SUBMITTED,
             'source'        => LeadDocument::SOURCE_UPLOAD,
         ]);
+
+        // Notify the staff member who owns this lead (if assigned). Public
+        // upload, so there's no acting user — we never notify the lead.
+        if ($lead->assigned_to && ($staff = $lead->assignee)) {
+            $staff->notify(new \App\Notifications\DocumentSubmittedForReview($lead, $document));
+        }
 
         // Passport upload: surface the entered passport metadata onto the
         // lead row itself so admin search / visa lodgement / immigration
