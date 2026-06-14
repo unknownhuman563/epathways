@@ -45,6 +45,11 @@ class NotificationFormatter
                 'color' => 'emerald',
                 'title' => $data['title'] ?? 'Document submitted for review',
             ],
+            'LeadInfoUpdated' => [
+                'icon'  => 'UserPen',
+                'color' => 'blue',
+                'title' => $data['title'] ?? 'Lead updated their details',
+            ],
             default => [
                 'icon'  => 'Bell',
                 'color' => 'gray',

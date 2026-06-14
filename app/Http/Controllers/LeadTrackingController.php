@@ -8,6 +8,7 @@ use App\Models\LeadDocument;
 use App\Models\User;
 use App\Models\VisaType;
 use App\Notifications\DocumentSubmittedForReview;
+use App\Notifications\LeadInfoUpdated;
 use App\Support\UploadValidation;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -124,8 +125,50 @@ class LeadTrackingController extends Controller
 
         // The allow-list filter is redundant after the validator, but
         // belt-and-braces in case future validation rules drift.
-        $lead->fill(array_intersect_key($validated, array_flip(self::EDITABLE)));
-        $lead->save();
+        $filtered = array_intersect_key($validated, array_flip(self::EDITABLE));
+
+        // Compute the change set on DECRYPTED values (encrypted casts would
+        // otherwise always read as "dirty"). Sensitive fields are redacted —
+        // we record THAT they changed, never the values.
+        $sensitive = ['passport_number'];
+        $changes = [];
+        foreach ($filtered as $field => $new) {
+            $old = $lead->{$field};
+            if ((string) $old !== (string) $new) {
+                $changes[$field] = in_array($field, $sensitive, true)
+                    ? ['old' => '[redacted]', 'new' => '[updated]']
+                    : ['old' => $old, 'new' => $new];
+            }
+        }
+
+        // saveQuietly so the LogsActivity trait's null-actor auto-log doesn't
+        // fire — we record a tailored entry with the tracking_code as actor.
+        $lead->fill($filtered)->saveQuietly();
+
+        if (! empty($changes)) {
+            ActivityLog::record('lead.updated', [
+                'actor_name'  => $lead->tracking_code,
+                'actor_role'  => 'tracker',
+                'portal'      => 'public',
+                'entity_type' => Lead::class,
+                'entity_id'   => $lead->id,
+                'description' => "Lead updated their information via the tracker",
+                'properties'  => [
+                    'subject_type' => 'Lead',
+                    'subject_id'   => $lead->id,
+                    'changes'      => $changes,
+                ],
+            ]);
+        }
+
+        // Notify staff when a key identity/contact field changes.
+        $keyFields = array_values(array_intersect(array_keys($changes), ['passport_number', 'phone', 'email']));
+        if (! empty($keyFields)) {
+            $recipients = $this->staffRecipients($lead);
+            if ($recipients->isNotEmpty()) {
+                Notification::send($recipients, new LeadInfoUpdated($lead, $keyFields));
+            }
+        }
 
         return redirect()
             ->route('track.lookup', ['code' => $lead->tracking_code])
@@ -311,15 +354,25 @@ class LeadTrackingController extends Controller
      */
     private function notifyDocumentSubmitted(Lead $lead, LeadDocument $document, string $context): void
     {
-        $recipients = $lead->assignee
-            ? collect([$lead->assignee])
-            : User::whereIn('role', [User::ROLE_ADMIN, User::ROLE_SUPER_ADMIN])->get();
-
+        $recipients = $this->staffRecipients($lead);
         if ($recipients->isEmpty()) {
             return;
         }
 
         Notification::send($recipients, new DocumentSubmittedForReview($lead, $document, $context));
+    }
+
+    /**
+     * Who hears about a lead's tracker activity: their assigned staff
+     * member, or admin-tier users as a fallback when unassigned.
+     *
+     * @return \Illuminate\Support\Collection<int, User>
+     */
+    private function staffRecipients(Lead $lead): \Illuminate\Support\Collection
+    {
+        return $lead->assignee
+            ? collect([$lead->assignee])
+            : User::whereIn('role', [User::ROLE_ADMIN, User::ROLE_SUPER_ADMIN])->get();
     }
 
     private function resolveLead(string $code): ?Lead
