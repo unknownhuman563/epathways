@@ -1,7 +1,8 @@
 import { Link, usePage, router } from "@inertiajs/react";
 import { useState, useEffect } from "react";
-import { Menu, X, Search, Settings, LogOut, ChevronDown, Eye, ArrowLeft } from "lucide-react";
+import { Menu, X, Settings, LogOut, ChevronDown, Eye, ArrowLeft } from "lucide-react";
 import NotificationBell from "@/components/NotificationBell";
+import GlobalSearchBar from "@/components/GlobalSearchBar";
 
 /**
  * The official ePathways dashboard shell — sidebar + topbar + content area.
@@ -241,14 +242,7 @@ export default function DashboardLayout({
                     </div>
 
                     <div className="flex items-center gap-4 lg:gap-5 mt-2">
-                        <div className="hidden md:flex items-center bg-white border border-gray-100 rounded-full px-4 py-1.5 shadow-sm focus-within:ring-2 focus-within:ring-gray-200 focus-within:border-gray-200 transition-shadow">
-                            <Search size={16} className="text-gray-500" />
-                            <input
-                                type="text"
-                                placeholder="Search..."
-                                className="bg-transparent border-none outline-none text-sm text-gray-700 ml-2 w-48 placeholder-gray-400"
-                            />
-                        </div>
+                        <GlobalSearchBar />
 
                         <NotificationBell />
 
