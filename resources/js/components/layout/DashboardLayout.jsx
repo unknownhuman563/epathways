@@ -1,6 +1,7 @@
 import { Link, usePage, router } from "@inertiajs/react";
 import { useState, useEffect } from "react";
-import { Menu, X, Search, Bell, Settings, LogOut, ChevronDown, Eye, ArrowLeft } from "lucide-react";
+import { Menu, X, Search, Settings, LogOut, ChevronDown, Eye, ArrowLeft } from "lucide-react";
+import NotificationBell from "@/components/NotificationBell";
 
 /**
  * The official ePathways dashboard shell — sidebar + topbar + content area.
@@ -249,10 +250,7 @@ export default function DashboardLayout({
                             />
                         </div>
 
-                        <button className="relative p-1.5 text-gray-600 hover:bg-white hover:shadow-sm rounded-full transition-all">
-                            <Bell size={18} />
-                            <span className="absolute top-1 right-1.5 w-2 h-2 bg-red-500 rounded-full border-2 border-[#F5F5F7]"></span>
-                        </button>
+                        <NotificationBell />
 
                         <div className="flex items-center gap-2.5">
                             <div className="text-right hidden sm:block leading-tight">
