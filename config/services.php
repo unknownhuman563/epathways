@@ -59,6 +59,13 @@ return [
         'webhook_secret' => env('STRIPE_WEBHOOK_SECRET'),
     ],
 
+    // Calendar sync — token used by SyncController to authenticate inbound
+    // appointment pushes from the external Google Apps Script
+    // (X-Sync-Token header must match this value).
+    'calendar' => [
+        'sync_token' => env('CALENDAR_SYNC_TOKEN'),
+    ],
+
     // PLAI Partner API — AI ad platform that launches creatives to
     // Facebook / Instagram / Google / LinkedIn / TikTok / YouTube / Bing.
     // Requires an Enterprise account; key is generated under
