@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Portal;
 
 use App\Http\Controllers\Controller;
+use App\Models\EnglishAssessment;
 use App\Models\EnglishClass;
 use App\Models\EnglishClassEnrollment;
 use App\Models\Lead;
@@ -270,5 +271,148 @@ class EnglishController extends Controller
                 'name'    => trim("{$l->first_name} {$l->last_name}") ?: 'Unknown',
                 'email'   => $l->email,
             ]);
+    }
+
+    // ─── Assessments ──────────────────────────────────────────────────────
+
+    /**
+     * Assessment list with type / date-range / learner-search filters and
+     * top-line stats (this month, average overall score, pass rate).
+     */
+    public function assessments(Request $request)
+    {
+        $type     = $request->query('type');
+        $dateFrom = $request->query('date_from');
+        $dateTo   = $request->query('date_to');
+        $search   = trim((string) $request->query('search', ''));
+
+        $base = EnglishAssessment::query()
+            ->with(['lead:id,first_name,last_name,email,lead_id', 'englishClass:id,name', 'administrator:id,name'])
+            ->when($type, fn ($q) => $q->where('assessment_type', $type))
+            ->when($dateFrom, fn ($q) => $q->whereDate('assessment_date', '>=', $dateFrom))
+            ->when($dateTo, fn ($q) => $q->whereDate('assessment_date', '<=', $dateTo))
+            ->when($search !== '', fn ($q) => $q->whereHas('lead', function ($qq) use ($search) {
+                $qq->where('first_name', 'like', "%{$search}%")
+                    ->orWhere('last_name', 'like', "%{$search}%")
+                    ->orWhere('email', 'like', "%{$search}%");
+            }));
+
+        $assessments = (clone $base)
+            ->orderByDesc('assessment_date')
+            ->orderByDesc('id')
+            ->get()
+            ->map(fn (EnglishAssessment $a) => $this->serializeAssessment($a));
+
+        // Stats are computed across the *unfiltered* dataset so the header
+        // reflects the whole programme, not the current filter view.
+        $all = EnglishAssessment::query();
+        $stats = [
+            'this_month'   => (clone $all)->whereDate('assessment_date', '>=', now()->startOfMonth())->count(),
+            'average_score' => round((float) (clone $all)->whereNotNull('overall_score')->avg('overall_score'), 1),
+            'pass_rate'    => $this->passRate(),
+            'total'        => (clone $all)->count(),
+        ];
+
+        return inertia('portal/english/Assessments', [
+            'portal'         => 'english',
+            'assessments'    => $assessments,
+            'stats'          => $stats,
+            'types'          => EnglishAssessment::TYPES,
+            'learnerOptions' => $this->learnerOptions(),
+            'classOptions'   => EnglishClass::orderByDesc('created_at')->get(['id', 'name']),
+            'filters'        => ['type' => $type, 'date_from' => $dateFrom, 'date_to' => $dateTo, 'search' => $search],
+        ]);
+    }
+
+    public function showAssessment($id)
+    {
+        $a = EnglishAssessment::with(['lead:id,first_name,last_name,email,lead_id', 'englishClass:id,name', 'administrator:id,name'])
+            ->findOrFail($id);
+
+        return response()->json(['assessment' => $this->serializeAssessment($a)]);
+    }
+
+    public function storeAssessment(Request $request)
+    {
+        $data = $this->validateAssessment($request);
+        $data['administered_by'] = $data['administered_by'] ?? auth()->id();
+        EnglishAssessment::create($data);
+
+        return back()->with('success', 'Assessment recorded.');
+    }
+
+    public function updateAssessment(Request $request, $id)
+    {
+        $assessment = EnglishAssessment::findOrFail($id);
+        $assessment->update($this->validateAssessment($request));
+
+        return back()->with('success', 'Assessment updated.');
+    }
+
+    public function destroyAssessment($id)
+    {
+        EnglishAssessment::findOrFail($id)->delete(); // soft delete
+
+        return back()->with('success', 'Assessment removed.');
+    }
+
+    private function validateAssessment(Request $request): array
+    {
+        // PTE-style scores run 0–90; "other" (e.g. IELTS) runs 0–9.
+        $max = $request->input('assessment_type') === 'other' ? 9 : 90;
+        $score = "nullable|numeric|min:0|max:{$max}";
+
+        return $request->validate([
+            'lead_id' => [
+                'required',
+                Rule::exists('leads', 'id')->where(fn ($q) => $q->where('is_english_student', true)),
+            ],
+            'english_class_id' => 'nullable|exists:english_classes,id',
+            'assessment_type'  => ['required', Rule::in(EnglishAssessment::TYPES)],
+            'assessment_date'  => 'required|date',
+            'overall_score'    => $score,
+            'reading_score'    => $score,
+            'writing_score'    => $score,
+            'listening_score'  => $score,
+            'speaking_score'   => $score,
+            'passed'           => 'nullable|boolean',
+            'notes'            => 'nullable|string|max:5000',
+            'administered_by'  => 'nullable|exists:users,id',
+        ], [
+            'lead_id.exists' => 'That learner is not an English student.',
+        ]);
+    }
+
+    private function passRate(): ?float
+    {
+        $graded = EnglishAssessment::whereNotNull('passed')->count();
+        if ($graded === 0) {
+            return null;
+        }
+        $passed = EnglishAssessment::where('passed', true)->count();
+
+        return round($passed / $graded * 100, 1);
+    }
+
+    private function serializeAssessment(EnglishAssessment $a): array
+    {
+        return [
+            'id'               => $a->id,
+            'lead_id'          => $a->lead_id,
+            'learner'          => $a->lead ? trim("{$a->lead->first_name} {$a->lead->last_name}") : 'Unknown',
+            'email'            => optional($a->lead)->email,
+            'english_class_id' => $a->english_class_id,
+            'class_name'       => optional($a->englishClass)->name,
+            'assessment_type'  => $a->assessment_type,
+            'assessment_date'  => optional($a->assessment_date)?->toDateString(),
+            'overall_score'    => $a->overall_score,
+            'reading_score'    => $a->reading_score,
+            'writing_score'    => $a->writing_score,
+            'listening_score'  => $a->listening_score,
+            'speaking_score'   => $a->speaking_score,
+            'passed'           => $a->passed,
+            'notes'            => $a->notes,
+            'administered_by'  => optional($a->administrator)->name,
+        ];
     }
 }

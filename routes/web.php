@@ -572,6 +572,13 @@ Route::middleware(['auth'])->group(function () {
             Route::delete('/classes/{id}', [EnglishController::class, 'destroyClass'])->name('classes.destroy');
             Route::post('/classes/{id}/enroll', [EnglishController::class, 'enrollLearner'])->name('classes.enroll');
             Route::delete('/classes/{id}/enroll/{enrollmentId}', [EnglishController::class, 'withdrawLearner'])->name('classes.withdraw');
+
+            // English assessments — mock / official test score records.
+            Route::get('/assessments', [EnglishController::class, 'assessments'])->name('assessments');
+            Route::post('/assessments', [EnglishController::class, 'storeAssessment'])->name('assessments.store');
+            Route::get('/assessments/{id}', [EnglishController::class, 'showAssessment'])->name('assessments.show');
+            Route::put('/assessments/{id}', [EnglishController::class, 'updateAssessment'])->name('assessments.update');
+            Route::delete('/assessments/{id}', [EnglishController::class, 'destroyAssessment'])->name('assessments.destroy');
         });
 
         Route::middleware('portal:immigration')->prefix('immigration')->name('portal.immigration.')->group(function () {
