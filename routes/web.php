@@ -165,12 +165,14 @@ Route::get('/visa-approved', function () {
 // auth: the tracking_code itself is the bearer credential. The same code
 // authorises the lead to edit a tightly-scoped allow-list of fields and
 // upload supporting documents (POST endpoints below).
-Route::get('/track', [LeadTrackingController::class, 'show'])->name('track');
-Route::get('/track/{code}', [LeadTrackingController::class, 'show'])->name('track.lookup');
-Route::post('/track/{code}/info', [LeadTrackingController::class, 'update'])->name('track.update');
-Route::post('/track/{code}/document', [LeadTrackingController::class, 'uploadDoc'])->name('track.upload');
-Route::post('/track/{code}/document/{doc}', [LeadTrackingController::class, 'updateDoc'])->name('track.doc.update');
-Route::delete('/track/{code}/document/{doc}', [LeadTrackingController::class, 'deleteDoc'])->name('track.doc.delete');
+Route::middleware('throttle:tracker')->group(function () {
+    Route::get('/track', [LeadTrackingController::class, 'show'])->name('track');
+    Route::get('/track/{code}', [LeadTrackingController::class, 'show'])->name('track.lookup');
+    Route::post('/track/{code}/info', [LeadTrackingController::class, 'update'])->name('track.update');
+    Route::post('/track/{code}/document', [LeadTrackingController::class, 'uploadDoc'])->name('track.upload');
+    Route::post('/track/{code}/document/{doc}', [LeadTrackingController::class, 'updateDoc'])->name('track.doc.update');
+    Route::delete('/track/{code}/document/{doc}', [LeadTrackingController::class, 'deleteDoc'])->name('track.doc.delete');
+});
 
 // Public Registration & Assessment Routes
 Route::get('/register/{event_code}', [EventController::class, 'showRegistrationForm']);

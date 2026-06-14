@@ -4,7 +4,10 @@ namespace App\Providers;
 
 use Illuminate\Auth\Middleware\RedirectIfAuthenticated;
 use Illuminate\Auth\Notifications\ResetPassword;
+use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Http\Request;
 use Illuminate\Notifications\Messages\MailMessage;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
 
@@ -33,6 +36,11 @@ class AppServiceProvider extends ServiceProvider
         // mixed case, numbers. Used via Password::defaults() everywhere a
         // password is set — reset, admin user CRUD, lead-portal setup.
         Password::defaults(fn () => Password::min(8)->letters()->mixedCase()->numbers());
+
+        // Public /track/{code} throttle — 30 requests/min per code+IP to
+        // blunt tracking-code enumeration without bothering real leads.
+        RateLimiter::for('tracker', fn (Request $request) => Limit::perMinute(30)
+            ->by(($request->route('code') ?? 'none') . '|' . $request->ip()));
 
         // Build the reset URL on the app's own domain (config, not env) so it
         // points at our Inertia reset page rather than a framework default.

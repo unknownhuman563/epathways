@@ -2,12 +2,14 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\ActivityLog;
 use App\Models\Lead;
 use App\Models\LeadDocument;
 use App\Models\VisaType;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
 /**
@@ -60,10 +62,14 @@ class LeadTrackingController extends Controller
         $lead = $this->resolveLead($code);
 
         if (! $lead) {
+            // Friendly "not found" — the same tracker shell with a message,
+            // but a real 404 status so it isn't mistaken for a valid page.
             $payload['error'] = 'We could not find an application with that tracking code. Please double-check it and try again.';
 
-            return inertia('track/TrackingPage', $payload);
+            return inertia('track/TrackingPage', $payload)->toResponse($request)->setStatusCode(404);
         }
+
+        $this->recordVisit($request, $lead);
 
         $payload['lead']      = $this->publicLeadShape($lead);
         $payload['info']      = $this->editableInfo($lead);
@@ -289,6 +295,38 @@ class LeadTrackingController extends Controller
     private function resolveLead(string $code): ?Lead
     {
         return Lead::where('tracking_code', strtoupper(trim($code)))->first();
+    }
+
+    /**
+     * Stamp last_seen_at on every visit and write a debounced activity-log
+     * entry (at most once per 15 min) so the audit trail doesn't flood on a
+     * page that polls/refreshes. The tracking_code is the "actor" since
+     * there's no logged-in user; no sensitive lead data is logged.
+     */
+    private function recordVisit(Request $request, Lead $lead): void
+    {
+        $shouldLog = is_null($lead->last_seen_at)
+            || $lead->last_seen_at->lt(now()->subMinutes(15));
+
+        // saveQuietly so the last_seen_at write doesn't itself spam the
+        // LogsActivity 'lead.updated' trail.
+        $lead->forceFill(['last_seen_at' => now()])->saveQuietly();
+
+        if (! $shouldLog) {
+            return;
+        }
+
+        ActivityLog::record('lead.tracker_view', [
+            'actor_name'  => $lead->tracking_code,
+            'actor_role'  => 'tracker',
+            'portal'      => 'public',
+            'entity_type' => Lead::class,
+            'entity_id'   => $lead->id,
+            'description' => "Tracker viewed for {$lead->tracking_code}",
+            'metadata'    => [
+                'user_agent' => Str::limit((string) $request->userAgent(), 255, ''),
+            ],
+        ]);
     }
 
     private function publicLeadShape(Lead $lead): array

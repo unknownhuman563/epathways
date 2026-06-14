@@ -177,6 +177,8 @@ class Lead extends Model
         'is_english_student', 'english_converted_at', 'english_converted_by',
         // Staff member responsible for this lead (drives assignment notifications)
         'assigned_to',
+        // Last time the lead opened their /track/{code} page
+        'last_seen_at',
         // INZ lodgement tracking
         'inz_visa_type', 'inz_lodged_at', 'inz_reference', 'inz_status', 'inz_decision_at',
         // IAA / Privacy Act gating
@@ -273,6 +275,7 @@ class Lead extends Model
         'section_verifications'          => 'array',
         'agreements_acknowledged_at'     => 'datetime',
         'stage_updated_at'               => 'datetime',
+        'last_seen_at'                   => 'datetime',
         'is_student'                     => 'boolean',
         'student_converted_at'           => 'datetime',
         'is_immigration_case'            => 'boolean',
