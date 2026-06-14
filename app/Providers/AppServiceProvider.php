@@ -6,6 +6,7 @@ use Illuminate\Auth\Middleware\RedirectIfAuthenticated;
 use Illuminate\Auth\Notifications\ResetPassword;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Support\ServiceProvider;
+use Illuminate\Validation\Rules\Password;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -27,6 +28,11 @@ class AppServiceProvider extends ServiceProvider
         RedirectIfAuthenticated::redirectUsing(
             fn ($request) => $request->user()?->homeRoute() ?? '/'
         );
+
+        // Single source of truth for password strength (D4): min 8, letters,
+        // mixed case, numbers. Used via Password::defaults() everywhere a
+        // password is set — reset, admin user CRUD, lead-portal setup.
+        Password::defaults(fn () => Password::min(8)->letters()->mixedCase()->numbers());
 
         // Build the reset URL on the app's own domain (config, not env) so it
         // points at our Inertia reset page rather than a framework default.

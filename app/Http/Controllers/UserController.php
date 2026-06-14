@@ -31,7 +31,7 @@ class UserController extends Controller
             'name' => 'required|string|max:255',
             'email' => 'required|email|max:255|unique:users,email',
             'role' => ['required', Rule::in($this->roleValues())],
-            'password' => 'required|string|min:8',
+            'password' => ['required', \Illuminate\Validation\Rules\Password::defaults()],
         ]);
 
         // The 'password' => 'hashed' cast on the model hashes this on save.
@@ -53,7 +53,7 @@ class UserController extends Controller
             'name' => 'required|string|max:255',
             'email' => ['required', 'email', 'max:255', Rule::unique('users', 'email')->ignore($user->id)],
             'role' => ['required', Rule::in($this->roleValues())],
-            'password' => 'nullable|string|min:8',
+            'password' => ['nullable', \Illuminate\Validation\Rules\Password::defaults()],
         ]);
 
         // Don't let the current admin demote themselves — avoids locking yourself out.

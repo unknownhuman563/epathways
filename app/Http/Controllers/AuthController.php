@@ -87,7 +87,7 @@ class AuthController extends Controller
      */
     public static function passwordRules(): array
     {
-        return ['required', 'confirmed', PasswordRule::min(8)->letters()->mixedCase()->numbers()];
+        return ['required', 'confirmed', PasswordRule::defaults()];
     }
 
     // ─── Password reset ───────────────────────────────────────────────────

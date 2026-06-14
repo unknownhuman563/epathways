@@ -196,7 +196,7 @@ class LeadPortalInvitationController extends Controller
     public function store(Request $request, string $token)
     {
         $request->validate([
-            'password' => 'required|string|min:8|confirmed',
+            'password' => ['required', 'confirmed', \Illuminate\Validation\Rules\Password::defaults()],
         ]);
 
         $lead = Lead::where('portal_invitation_token', hash('sha256', $token))->first();
