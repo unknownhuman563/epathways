@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Assessment;
 use App\Models\VisaType;
 use App\Models\WorkIntake;
+use App\Support\IntakeVisaTypeMap;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -42,29 +43,21 @@ class WorkIntakeController extends Controller
                 'status'    => 'Submitted',
             ]));
 
-            // ── PAYMENT + BOOKING TEMPORARILY DISABLED ────────────────
-            // Client wants to collect intake submissions only for now;
-            // pricing / Stripe / consultation booking will be turned
-            // back on once the plan is finalised. To re-enable, uncomment
-            // the Assessment::create block below and switch the redirect
-            // back to `route('assessment.pay', $assessment->token)`.
-            //
-            // $visaType = VisaType::query()->where('code', 'WORK_AEWV')->first()
-            //     ?: VisaType::query()->where('category', 'Work')->first();
-            //
-            // $assessment = Assessment::create([
-            //     'visa_type_id'         => $visaType?->id,
-            //     'intakeable_type'      => WorkIntake::class,
-            //     'intakeable_id'        => $intake->id,
-            //     'applicant_first_name' => $intake->first_name,
-            //     'applicant_last_name'  => $intake->family_name,
-            //     'applicant_email'      => $intake->email,
-            //     'applicant_phone'      => $intake->phone,
-            //     'status'               => 'submitted',
-            // ]);
-            // if ($visaType) {
-            //     $assessment->lockCurrentPrice();
-            // }
+            // Tracking-only Assessment row — payment + booking stay
+            // disabled (see AssessmentController::simulatePay). The
+            // portal Assessments page + Convert-to-Case flow need a
+            // paired Assessment to hang journey state on. Pay/Book
+            // redirect stays commented; payment intake is dormant until
+            // Stripe is wired up in a future build.
+            $visaType = IntakeVisaTypeMap::resolve(WorkIntake::class);
+            if (! $visaType) {
+                Log::warning('VisaType not found for Work intake; skipping Assessment creation.', [
+                    'intake_id' => $intake->id,
+                    'intake_class' => WorkIntake::class,
+                ]);
+            } else {
+                Assessment::createForIntake($intake, $visaType);
+            }
 
             DB::commit();
 

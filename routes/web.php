@@ -572,7 +572,12 @@ Route::middleware(['auth'])->group(function () {
 
             // WORK
             Route::get('/assessments', [ImmigrationController::class, 'assessments'])->name('assessments');
-            Route::post('/assessments/{intakeId}/convert-to-case', [ImmigrationController::class, 'convertAssessmentToCase'])->name('assessments.convert');
+            // Convert a visa-interest submission to an immigration case.
+            // The {id} route param is Assessment.id (post-Phase-B
+            // canonical). The controller also accepts a legacy
+            // ResidentIntake.id for backward compat — any pre-Phase-B
+            // bookmark that POSTed an intake id still resolves cleanly.
+            Route::post('/assessments/{id}/convert-to-case', [ImmigrationController::class, 'convertAssessmentToCase'])->name('assessments.convert');
             Route::get('/cases', [ImmigrationController::class, 'cases'])->name('cases');
             // Create new case from the Cases page "Add new case" modal.
             Route::post('/cases', [ImmigrationController::class, 'storeCase'])->name('cases.store');

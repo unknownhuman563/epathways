@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Portal;
 
 use App\Http\Controllers\Controller;
+use App\Models\Assessment;
 use App\Models\Booking;
 use App\Models\Lead;
 use App\Models\LeadDocument;
@@ -10,6 +11,7 @@ use App\Models\ResidentIntake;
 use App\Models\UserReview;
 use App\Traits\BuildsLeadRow;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
 
@@ -396,18 +398,129 @@ class ImmigrationController extends Controller
     }
 
     /**
-     * Convert a public ResidentIntake submission into an active immigration
-     * case — finds-or-creates a Lead from the intake's contact info, flags
-     * it as is_immigration_case, and marks the intake as "Engaged".
+     * Convert a public visa-interest submission into an active immigration
+     * case — works for all four intake types (Resident / Work / Student /
+     * Visitor) via the Assessment's polymorphic intakeable relationship.
+     *
+     * Route param accepts either an Assessment ID (preferred, current
+     * frontend) or a legacy ResidentIntake ID (kept working so any
+     * pre-Phase-B bookmarks still convert correctly). The shim resolves
+     * the right Assessment regardless of which ID was posted.
+     *
+     * Idempotent: if the matched Lead is already flagged as an immigration
+     * case, the existing immigration_converted_at timestamp is preserved.
+     * The Assessment + intake are still progressed so the row leaves the
+     * triage queue.
      */
-    public function convertAssessmentToCase($intakeId)
+    public function convertAssessmentToCase($id)
     {
         try {
-            $intake = ResidentIntake::findOrFail($intakeId);
+            // Prefer Assessment ID (post-Phase-B route + frontend). If
+            // that fails, treat the id as a legacy ResidentIntake ID and
+            // resolve its paired Assessment for backward compat with the
+            // old `/assessments/{intakeId}/convert-to-case` URL.
+            $assessment = Assessment::with(['visaType', 'intakeable'])->find($id);
+            if (! $assessment) {
+                $residentIntake = ResidentIntake::find($id);
+                if ($residentIntake) {
+                    $assessment = Assessment::with(['visaType', 'intakeable'])
+                        ->where('intakeable_type', ResidentIntake::class)
+                        ->where('intakeable_id', $residentIntake->id)
+                        ->first();
+                }
+                // Legacy path — the resident intake exists but no
+                // Assessment was ever created (pre-Phase-A submission +
+                // backfill not yet run). Fall back to the original
+                // intake-only flow so the convert button isn't a dead end.
+                if (! $assessment && $residentIntake) {
+                    return $this->convertResidentIntakeWithoutAssessment($residentIntake);
+                }
+            }
 
-            // Find an existing lead by email; otherwise mint one with the
-            // intake data. Intake stays linked via its lead_id (if column
-            // exists) or just by email match.
+            if (! $assessment) {
+                Log::warning('Convert-to-case: no Assessment or ResidentIntake matched.', ['id' => $id]);
+                return back()->with('error', 'Could not find this submission.');
+            }
+
+            $intake = $assessment->intakeable;
+            if (! $intake) {
+                Log::error('Convert-to-case: Assessment has no intakeable.', ['assessment_id' => $assessment->id]);
+                return back()->with('error', 'Submission data is incomplete; please contact support.');
+            }
+
+            // Visa name from the linked VisaType — falls back to the
+            // intake's own visa label so we never blank-stamp inz_visa_type.
+            $visaName = $assessment->visaType?->name
+                ?? \App\Support\IntakeVisaTypeMap::label($intake::class);
+
+            // Last-name snapshot tolerates both naming conventions
+            // (Resident uses last_name; Work/Student/Visitor use family_name).
+            $lastName = $intake->last_name ?? $intake->family_name ?? null;
+
+            return DB::transaction(function () use ($assessment, $intake, $visaName, $lastName) {
+                // Find-or-create the Lead by email. firstOrNew lets us
+                // populate snapshot fields only on a fresh row.
+                $email = $intake->email ?: $assessment->applicant_email;
+                $lead  = $email ? Lead::where('email', $email)->first() : null;
+
+                if (! $lead) {
+                    $lead = Lead::create([
+                        'lead_id'           => 'LP-' . str_pad((string) (Lead::max('id') + 1000), 5, '0', STR_PAD_LEFT),
+                        'first_name'        => $intake->first_name ?? $assessment->applicant_first_name,
+                        'last_name'         => $lastName ?? $assessment->applicant_last_name,
+                        'email'             => $email,
+                        'phone'             => $intake->phone ?? $assessment->applicant_phone,
+                        'dob'               => $intake->dob ?? null,
+                        'citizenship'       => $intake->country_of_citizenship ?? $intake->nationality ?? null,
+                        'country_of_birth'  => $intake->country_of_birth ?? null,
+                        'place_of_birth'    => $intake->place_of_birth ?? null,
+                        'passport_number'   => $intake->passport_number ?? null,
+                        'passport_expiry'   => $intake->passport_expiry ?? null,
+                        'source'            => self::sourceForIntake($intake),
+                        'status'            => 'New Leads',
+                    ]);
+                }
+
+                // Idempotent flip — preserve the original conversion
+                // timestamp on a re-run. We still stamp inz_visa_type so
+                // a Work-then-Resident conversion can update the visa
+                // label without changing the conversion date.
+                $patch = ['inz_visa_type' => $visaName];
+                if (! $lead->is_immigration_case) {
+                    $patch['is_immigration_case']      = true;
+                    $patch['immigration_converted_at'] = now();
+                    $patch['immigration_converted_by'] = auth()->id();
+                    $patch['stage_updated_at']         = now();
+                    $patch['stage_updated_by']         = auth()->id();
+                }
+                $lead->fill($patch)->save();
+
+                // Mark the intake "Engaged" so it drops out of the
+                // triage queue. Assessment moves to "completed" so the
+                // assessment lifecycle reflects the handoff.
+                $intake->update(['status' => 'Engaged']);
+                $assessment->update(['status' => 'completed']);
+
+                return redirect("/portal/immigration/leads/{$lead->id}?tab=documents")
+                    ->with('success', "Converted {$lead->first_name} to an immigration case.");
+            });
+        } catch (\Throwable $e) {
+            Log::error('Assessment to case conversion failed', [
+                'id'    => $id,
+                'error' => $e->getMessage(),
+            ]);
+            return back()->with('error', 'Could not convert this assessment.');
+        }
+    }
+
+    /**
+     * Legacy fallback — a ResidentIntake exists but never had an
+     * Assessment paired (submission predates Phase A and backfill hasn't
+     * run yet). Preserves the original behaviour from before this build.
+     */
+    private function convertResidentIntakeWithoutAssessment(ResidentIntake $intake)
+    {
+        return DB::transaction(function () use ($intake) {
             $lead = Lead::where('email', $intake->email)->first();
             if (! $lead) {
                 $lead = Lead::create([
@@ -421,21 +534,32 @@ class ImmigrationController extends Controller
                 ]);
             }
 
-            $lead->fill([
-                'is_immigration_case'      => true,
-                'immigration_converted_at' => now(),
-                'immigration_converted_by' => auth()->id(),
-            ])->save();
-
-            // Mark the intake as engaged so it falls out of the triage queue.
+            if (! $lead->is_immigration_case) {
+                $lead->fill([
+                    'is_immigration_case'      => true,
+                    'immigration_converted_at' => now(),
+                    'immigration_converted_by' => auth()->id(),
+                    'stage_updated_at'         => now(),
+                    'stage_updated_by'         => auth()->id(),
+                ])->save();
+            }
             $intake->update(['status' => 'Engaged']);
 
             return redirect("/portal/immigration/leads/{$lead->id}?tab=documents")
                 ->with('success', "Converted {$intake->first_name} to an immigration case.");
-        } catch (\Throwable $e) {
-            Log::error('Assessment to case conversion failed', ['intake_id' => $intakeId, 'error' => $e->getMessage()]);
-            return back()->with('error', 'Could not convert this assessment.');
-        }
+        });
+    }
+
+    /** "resident-intake" / "work-intake" / "student-intake" / "visitor-intake". */
+    private static function sourceForIntake($intake): string
+    {
+        return match ($intake::class) {
+            \App\Models\ResidentIntake::class => 'resident-intake',
+            \App\Models\WorkIntake::class     => 'work-intake',
+            \App\Models\StudentIntake::class  => 'student-intake',
+            \App\Models\VisitorIntake::class  => 'visitor-intake',
+            default => 'visa-intake',
+        };
     }
 
     /** Assessments — public ResidentIntake submissions feed for adviser triage. */
@@ -454,47 +578,74 @@ class ImmigrationController extends Controller
                     ->keyBy('intakeable_id');
             };
 
-            $normalize = function ($intake, string $visaType, $assessment): array {
+            // Pre-compute the set of applicant emails that already map to
+            // a Lead flagged as an immigration case. The Convert button
+            // is hidden when an email matches so we don't surface a
+            // duplicate-conversion path; the row still renders with the
+            // "Converted to Case" step lit up.
+            $caseEmails = Lead::query()
+                ->where('is_immigration_case', true)
+                ->whereNotNull('email')
+                ->pluck('email')
+                ->map(fn ($e) => strtolower(trim($e)))
+                ->flip(); // O(1) lookup via array key
+
+            $normalize = function ($intake, string $visaType, $assessment) use ($caseEmails): array {
                 $first   = (string) ($intake->first_name ?? '');
                 $last    = (string) ($intake->last_name ?? $intake->family_name ?? '');
-                $booking = $assessment?->booking;
-                $apptIso = $booking?->appointment_date;
+                $email   = strtolower(trim((string) ($intake->email ?? '')));
+                $hasAssessment = (bool) $assessment;
 
-                // Consultation "done" — true once the appointment date has
-                // passed (we don't have a separate completion flag), or if
-                // the booking status is explicitly Completed.
-                $consultDone = false;
-                if ($booking) {
-                    $consultDone = $booking->status === 'Completed'
-                        || ($apptIso && \Illuminate\Support\Carbon::parse($apptIso)->isPast());
-                }
+                // Triaged — staff have changed the intake status away from
+                // the default "Submitted"/"submitted"/"New" set. Anything
+                // else counts.
+                $defaultStatuses = ['Submitted', 'submitted', 'New', 'new'];
+                $isTriaged = $intake->status !== null
+                    && ! in_array($intake->status, $defaultStatuses, true);
+
+                // Converted — either matched a Lead already flagged as
+                // an immigration case, or the row's intake status has
+                // been set to "Engaged" (the post-convert state).
+                $isConverted = ($email !== '' && isset($caseEmails[$email]))
+                    || $intake->status === 'Engaged';
 
                 return [
-                    'id'          => $intake->id,
-                    'intake_id'   => $intake->intake_id,
-                    'visa_type'   => $visaType, // resident | work | student | visitor
-                    'name'        => trim("{$first} {$last}") ?: 'Unknown',
-                    'email'       => $intake->email,
-                    'phone'       => $intake->phone,
-                    'status'      => $intake->status,
-                    'created_at'  => $intake->created_at,
-                    'extra'       => $visaType === 'resident'
+                    'id'           => $intake->id,
+                    'assessment_id' => $assessment?->id,
+                    'intake_id'    => $intake->intake_id,
+                    'visa_type'    => $visaType, // resident | work | student | visitor
+                    'name'         => trim("{$first} {$last}") ?: 'Unknown',
+                    'email'        => $intake->email,
+                    'phone'        => $intake->phone,
+                    'status'       => $intake->status,
+                    'created_at'   => $intake->created_at,
+                    'extra'        => $visaType === 'resident'
                         ? trim(($intake->current_visa_type ?? '') . ($intake->job_title ? ' · ' . $intake->job_title : ''))
                         : null,
-                    'can_convert' => $visaType === 'resident' && $intake->status !== 'Engaged',
-                    'detail_url'  => $visaType === 'resident'
+                    // Convert is available to all four visa types now,
+                    // gated on (1) a paired Assessment exists, (2) the
+                    // intake isn't already Engaged, (3) no existing
+                    // Lead with matching email is already an
+                    // immigration case.
+                    'can_convert'  => $hasAssessment
+                        && $intake->status !== 'Engaged'
+                        && ! $isConverted,
+                    'detail_url'   => $visaType === 'resident'
                         ? "/admin/immigration/resident-intakes/{$intake->id}"
-                        : null,
-                    // Linear journey — each stage either has a timestamp/value
-                    // (truthy = done) or is false/null (= not yet).
+                        : ($email !== ''
+                            ? "/portal/immigration/leads?search=" . urlencode($intake->email ?? '')
+                            : null),
+                    // Three-step lifecycle: Submitted → Triaged →
+                    // Converted to Case. Pay/Book are deliberately
+                    // omitted while payment intake stays disabled —
+                    // re-add when AssessmentController::simulatePay
+                    // gets a real Stripe body.
                     'journey' => [
-                        'submitted'    => $intake->status === 'Submitted',
-                        'submitted_at' => $intake->status === 'Submitted' ? $intake->created_at : null,
-                        'paid'         => $assessment?->payment_status === 'paid',
-                        'paid_at'      => $assessment?->paid_at,
-                        'booked'       => (bool) $assessment?->booking_id,
-                        'appointment'  => $apptIso,
-                        'consultation_done' => $consultDone,
+                        'submitted'        => true, // any visible row exists
+                        'submitted_at'     => $intake->created_at,
+                        'triaged'          => $isTriaged,
+                        'converted'        => $isConverted,
+                        'assessment_status'=> $assessment?->status,
                     ],
                 ];
             };

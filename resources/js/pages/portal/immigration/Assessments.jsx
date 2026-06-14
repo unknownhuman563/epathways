@@ -3,7 +3,7 @@ import { Head, Link, router } from "@inertiajs/react";
 import {
     ChevronRight, ChevronDown, ClipboardCheck, FileEdit, Globe, Send, Search,
     Users, Briefcase, GraduationCap, Plane,
-    Check, CreditCard, Calendar, MessagesSquare, FileText,
+    Check, FileText, UserCheck, ArrowRightCircle,
 } from "lucide-react";
 import PortalPageHeader from "@/components/portal/PortalPageHeader";
 
@@ -342,7 +342,12 @@ function IntakeRow({ intake: i, expanded = false, onToggle }) {
                             type="button"
                             onClick={() => {
                                 if (! confirm("Convert this assessment to an immigration case? A lead will be created (or matched on email) and flagged as a case.")) return;
-                                router.post(`/portal/immigration/assessments/${i.id}/convert-to-case`, {}, { preserveScroll: true });
+                                // Post the Assessment ID (canonical from
+                                // Phase B). The controller still accepts
+                                // a ResidentIntake.id for backward compat
+                                // if assessment_id is missing.
+                                const id = i.assessment_id ?? i.id;
+                                router.post(`/portal/immigration/assessments/${id}/convert-to-case`, {}, { preserveScroll: true });
                             }}
                             className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider bg-amber-600 text-white hover:bg-amber-700 transition-colors"
                         >
@@ -350,8 +355,15 @@ function IntakeRow({ intake: i, expanded = false, onToggle }) {
                         </button>
                     )}
                     {i.detail_url ? (
+                        // Resident gets the dedicated detail page;
+                        // Work/Student/Visitor fall back to the leads
+                        // index search-by-email until per-type detail
+                        // pages land.
                         <Link
                             href={i.detail_url}
+                            title={i.visa_type === "resident"
+                                ? undefined
+                                : "Detail view coming soon — open as lead"}
                             className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider text-gray-600 hover:text-gray-900 hover:bg-gray-100 transition-colors"
                         >
                             Open <ChevronRight size={10} />
@@ -359,7 +371,7 @@ function IntakeRow({ intake: i, expanded = false, onToggle }) {
                     ) : (
                         <span
                             className="inline-flex items-center px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider text-gray-400 bg-gray-50 cursor-not-allowed"
-                            title="Detail page coming soon for this visa type"
+                            title="No contact email on this submission"
                         >
                             —
                         </span>
@@ -381,10 +393,13 @@ function IntakeRow({ intake: i, expanded = false, onToggle }) {
 
 // ── Journey timeline ───────────────────────────────────────────────────────
 
+// Three-step applicant journey shown in the expanded row. Payment +
+// booking are intentionally omitted while payment intake stays disabled;
+// when AssessmentController::simulatePay gets a real Stripe body, Pay
+// and Booked can return as a separate strip without touching this one.
 function JourneyRow({ intake: i }) {
     const j = i.journey || {};
     const fmt = (iso) => iso ? new Date(iso).toLocaleString("en-NZ", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) : null;
-    const fmtShort = (iso) => iso ? new Date(iso).toLocaleDateString("en-NZ", { day: "numeric", month: "short", year: "numeric" }) : null;
 
     const steps = [
         {
@@ -393,27 +408,23 @@ function JourneyRow({ intake: i }) {
             icon: <FileText size={14} />,
             done: !! j.submitted,
             sub:  j.submitted_at ? fmt(j.submitted_at) : "Not yet submitted",
+            tip:  "Applicant submitted the visa-interest form. Always true for any visible row.",
         },
         {
-            key: "paid",
-            label: "Paid",
-            icon: <CreditCard size={14} />,
-            done: !! j.paid,
-            sub:  j.paid_at ? fmt(j.paid_at) : "Payment pending",
+            key: "triaged",
+            label: "Triaged",
+            icon: <UserCheck size={14} />,
+            done: !! j.triaged,
+            sub:  j.triaged ? `Status: ${i.status}` : "Awaiting adviser triage",
+            tip:  "Staff have changed the intake status away from the default Submitted/New state.",
         },
         {
-            key: "booked",
-            label: "Booked",
-            icon: <Calendar size={14} />,
-            done: !! j.booked,
-            sub:  j.appointment ? fmtShort(j.appointment) : "Consultation not booked",
-        },
-        {
-            key: "consultation_done",
-            label: "Consultation done",
-            icon: <MessagesSquare size={14} />,
-            done: !! j.consultation_done,
-            sub:  j.consultation_done ? "Completed" : "Awaiting consultation",
+            key: "converted",
+            label: "Converted to Case",
+            icon: <ArrowRightCircle size={14} />,
+            done: !! j.converted,
+            sub:  j.converted ? "Linked Lead is an immigration case" : "Not yet converted",
+            tip:  "A Lead with this applicant's email is flagged as an immigration case (is_immigration_case = true).",
         },
     ];
 
@@ -431,11 +442,14 @@ function JourneyRow({ intake: i }) {
                         <div key={s.key} className="flex-1 min-w-0">
                             <div className="flex items-center">
                                 {/* Step circle */}
-                                <span className={`flex-shrink-0 w-9 h-9 rounded-full inline-flex items-center justify-center border-2 transition-colors ${
-                                    s.done
-                                        ? "bg-emerald-500 border-emerald-500 text-white"
-                                        : "bg-white border-gray-300 text-gray-400"
-                                }`}>
+                                <span
+                                    title={s.tip}
+                                    className={`flex-shrink-0 w-9 h-9 rounded-full inline-flex items-center justify-center border-2 transition-colors cursor-help ${
+                                        s.done
+                                            ? "bg-emerald-500 border-emerald-500 text-white"
+                                            : "bg-white border-gray-300 text-gray-400"
+                                    }`}
+                                >
                                     {s.done ? <Check size={15} strokeWidth={3} /> : s.icon}
                                 </span>
 
@@ -453,7 +467,10 @@ function JourneyRow({ intake: i }) {
 
                             {/* Label + subtext */}
                             <div className="mt-2 pr-3">
-                                <p className={`text-[11.5px] font-bold ${s.done ? "text-gray-900" : "text-gray-500"}`}>
+                                <p
+                                    title={s.tip}
+                                    className={`text-[11.5px] font-bold cursor-help ${s.done ? "text-gray-900" : "text-gray-500"}`}
+                                >
                                     {s.label}
                                 </p>
                                 <p className={`text-[10.5px] mt-0.5 ${s.done ? "text-gray-600" : "text-gray-400 italic"}`}>

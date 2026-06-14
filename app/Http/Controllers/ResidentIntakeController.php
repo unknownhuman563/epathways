@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Assessment;
 use App\Models\ResidentIntake;
 use App\Models\VisaType;
+use App\Support\IntakeVisaTypeMap;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -163,31 +164,22 @@ class ResidentIntakeController extends Controller
                 ]
             ));
 
-            // ── PAYMENT + BOOKING TEMPORARILY DISABLED ────────────────
-            // Client wants to collect intake submissions only for now;
-            // pricing / Stripe / consultation booking will be turned
-            // back on once the plan is finalised. To re-enable, uncomment
-            // the Assessment::create block below and switch the redirect
-            // back to `route('assessment.pay', $assessment->token)`.
-            //
-            // $visaType = VisaType::query()
-            //     ->where('code', 'SMC')
-            //     ->orWhere('category', 'Resident')
-            //     ->first();
-            //
-            // $assessment = Assessment::create([
-            //     'visa_type_id'         => $visaType?->id,
-            //     'intakeable_type'      => ResidentIntake::class,
-            //     'intakeable_id'        => $intake->id,
-            //     'applicant_first_name' => $intake->first_name,
-            //     'applicant_last_name'  => $intake->last_name,
-            //     'applicant_email'      => $intake->email,
-            //     'applicant_phone'      => $intake->phone,
-            //     'status'               => 'submitted',
-            // ]);
-            // if ($visaType) {
-            //     $assessment->lockCurrentPrice();
-            // }
+            // Tracking-only Assessment row — payment + booking stay
+            // disabled (see AssessmentController::simulatePay), but the
+            // portal Assessments page + Convert-to-Case flow need a
+            // paired Assessment to hang journey state and the assessment
+            // ID off. The Pay/Book redirects below are intentionally
+            // commented out: payment intake is dormant until Stripe is
+            // wired up in a future build.
+            $visaType = IntakeVisaTypeMap::resolve(ResidentIntake::class);
+            if (! $visaType) {
+                Log::warning('VisaType not found for Resident intake; skipping Assessment creation.', [
+                    'intake_id' => $intake->id,
+                    'intake_class' => ResidentIntake::class,
+                ]);
+            } else {
+                Assessment::createForIntake($intake, $visaType);
+            }
 
             DB::commit();
 

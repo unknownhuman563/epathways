@@ -1078,35 +1078,202 @@ class LeadController extends Controller
     }
 
     /**
-     * Edit the lead's Personal Information card — core bio + contact fields.
-     * Any logged-in staff can edit; changes are audited via LogsActivity.
+     * Edit the lead's Personal Info tab — drives all 9 section cards
+     * on the lead detail page (Identity, Passport, Current NZ Visa,
+     * Study Plans, Financial, Employment, Education, Family, Health &
+     * Character). The validator allow-list is exhaustive; any column
+     * absent from the list is silently dropped, so frontend bugs can
+     * never write to forbidden columns.
+     *
+     * Section saves are partial-payload friendly — the frontend only
+     * posts the section being edited, so `first_name` is required
+     * (it's also the row's display label) but every other field is
+     * optional and only updated when included.
+     *
+     * Conditional rules run after the main validator so the "if X is
+     * true, Y is required" pattern lands on the right field key. JSON
+     * responses are returned for Inertia + clean back() flashes for
+     * the legacy form post.
      */
     public function updatePersonal(\Illuminate\Http\Request $request, $id)
     {
-        $validated = $request->validate([
-            'first_name'        => 'required|string|max:120',
-            'last_name'         => 'nullable|string|max:120',
-            'other_names'       => 'nullable|string|max:200',
-            'email'             => 'nullable|email|max:200',
-            'phone'             => 'nullable|string|max:40',
-            'gender'            => 'nullable|string|max:30',
-            'marital_status'    => 'nullable|string|max:40',
-            'dob'               => 'nullable|date',
-            'country_of_birth'  => 'nullable|string|max:120',
-            'place_of_birth'    => 'nullable|string|max:120',
-            'citizenship'       => 'nullable|string|max:120',
-            'residence_city'    => 'nullable|string|max:160',
-            'residence_country' => 'nullable|string|max:120',
-        ]);
+        $rules = [
+            // ── Section 1 · Personal identity ────────────────────────
+            'first_name'                       => 'required|string|max:120',
+            'last_name'                        => 'nullable|string|max:120',
+            'middle_name'                      => 'nullable|string|max:120',
+            'suffix'                           => 'nullable|string|max:20',
+            'other_names'                      => 'nullable|string|max:200',
+            'preferred_name'                   => 'nullable|string|max:100',
+            'email'                            => 'nullable|email|max:200',
+            'phone'                            => 'nullable|string|max:40',
+            'whatsapp'                         => 'nullable|string|max:40',
+            'gender'                           => 'nullable|string|max:30',
+            'marital_status'                   => ['nullable', \Illuminate\Validation\Rule::in([
+                'Single', 'Married', 'De Facto', 'Civil Union', 'Divorced', 'Widowed', 'Separated',
+            ])],
+            'dob'                              => 'nullable|date|before:today',
+            'country_of_birth'                 => 'nullable|string|max:120',
+            'place_of_birth'                   => 'nullable|string|max:120',
+            'citizenship'                      => 'nullable|string|max:120',
+            'residence_city'                   => 'nullable|string|max:160',
+            'residence_country'                => 'nullable|string|max:120',
+            'residence_address_line_1'         => 'nullable|string|max:200',
+            'residence_address_line_2'         => 'nullable|string|max:200',
+            'residence_address_postcode'       => 'nullable|string|max:20',
+            'has_been_in_nz_continuously'      => 'nullable|boolean',
+            'nz_continuous_residence_months'   => 'nullable|integer|min:0|max:600',
+
+            // ── Section 2 · Passport ─────────────────────────────────
+            'has_passport'                     => 'nullable|boolean',
+            'passport_number'                  => 'nullable|string|max:50',
+            'passport_issuing_country'         => 'nullable|string|max:120',
+            'passport_issue_date'              => 'nullable|date',
+            'passport_expiry'                  => 'nullable|date',
+
+            // ── Section 3 · Current NZ visa ──────────────────────────
+            'current_nz_visa_type'             => 'nullable|string|max:120',
+            'current_nz_visa_number'           => 'nullable|string|max:50',
+            'current_nz_visa_issued_date'      => 'nullable|date',
+            'current_nz_visa_expiry_date'      => 'nullable|date',
+            'previous_nz_visa_type'            => 'nullable|string|max:120',
+
+            // ── Section 4 · Study plans ──────────────────────────────
+            'preferred_course'                 => 'nullable|string|max:200',
+            'preferred_qualification_level'    => 'nullable|string|max:120',
+            'preferred_city_of_study'          => 'nullable|string|max:120',
+            'preferred_intake'                 => 'nullable|string|max:120',
+            'english_test_type'                => 'nullable|string|max:30',
+            'english_test_overall_score'       => 'nullable|numeric|min:0|max:100',
+            'english_test_listening'           => 'nullable|numeric|min:0|max:100',
+            'english_test_reading'             => 'nullable|numeric|min:0|max:100',
+            'english_test_writing'             => 'nullable|numeric|min:0|max:100',
+            'english_test_speaking'            => 'nullable|numeric|min:0|max:100',
+            'english_test_date'                => 'nullable|date',
+            'target_institution'               => 'nullable|string|max:200',
+
+            // ── Section 5 · Financial ────────────────────────────────
+            'funding_source'                   => ['nullable', \Illuminate\Validation\Rule::in(['Self', 'Sponsor', 'Scholarship', 'Loan', 'Mixed'])],
+            'estimated_total_cost_nzd'         => 'nullable|numeric|min:0|max:10000000',
+            'available_funds_nzd'              => 'nullable|numeric|min:0|max:10000000',
+            'supports_partner_or_dependents'   => 'nullable|boolean',
+            'has_property_in_home_country'     => 'nullable|boolean',
+            'annual_income_nzd'                => 'nullable|numeric|min:0|max:10000000',
+            'annual_income_currency'           => 'nullable|string|size:3',
+            'bank_funds_evidence_provided'     => 'nullable|boolean',
+
+            // ── Section 6 · Employment ───────────────────────────────
+            'employment_type'                  => ['nullable', \Illuminate\Validation\Rule::in(['Employed', 'Self-employed', 'Unemployed', 'Student', 'Retired'])],
+            'current_employer_name'            => 'nullable|string|max:200',
+            'current_position_title'           => 'nullable|string|max:200',
+            'current_employer_country'         => 'nullable|string|max:120',
+            'current_employer_phone'           => 'nullable|string|max:50',
+            'current_employer_email'           => 'nullable|email|max:200',
+            'current_employment_start_date'    => 'nullable|date',
+            'current_salary_nzd'               => 'nullable|numeric|min:0|max:10000000',
+            'years_of_relevant_experience'     => 'nullable|integer|min:0|max:80',
+            'has_anzsco_listed_role'           => 'nullable|boolean',
+            'anzsco_code'                      => 'nullable|string|max:10',
+            'has_nz_professional_registration' => 'nullable|boolean',
+            'nz_professional_registration_body' => 'nullable|string|max:200',
+
+            // ── Section 7 · Education background ─────────────────────
+            'highest_qualification'                 => ['nullable', \Illuminate\Validation\Rule::in([
+                'Doctorate', 'Master', 'Postgraduate Diploma', 'Bachelor', 'Diploma', 'Certificate', 'High School', 'None',
+            ])],
+            'highest_qualification_field'           => 'nullable|string|max:200',
+            'highest_qualification_country'         => 'nullable|string|max:120',
+            'highest_qualification_year_completed'  => 'nullable|integer|min:1900|max:2050',
+            'has_nzqa_assessment'                   => 'nullable|boolean',
+            'nzqa_assessment_level'                 => 'nullable|string|max:120',
+
+            // ── Section 8 · Family ───────────────────────────────────
+            'has_children'              => 'nullable|boolean',
+            'number_of_children'        => 'nullable|integer|min:0|max:20',
+            'dependent_children_notes'  => 'nullable|string|max:5000',
+            'has_dependent_partner'     => 'nullable|boolean',
+            'partner_in_nz'             => 'nullable|boolean',
+            'intends_to_bring_family'   => 'nullable|boolean',
+
+            // ── Section 9 · Health & character ───────────────────────
+            'has_health_disclosure'        => 'nullable|boolean',
+            'health_disclosure_notes'      => 'nullable|string|max:2000',
+            'has_character_disclosure'     => 'nullable|boolean',
+            'character_disclosure_notes'   => 'nullable|string|max:2000',
+            'has_been_declined_visa'       => 'nullable|boolean',
+            'declined_visa_details'        => 'nullable|string|max:2000',
+            'has_criminal_record'          => 'nullable|boolean',
+            'criminal_record_details'      => 'nullable|string|max:2000',
+            'meets_184_day_rule_two_years' => 'nullable|boolean',
+        ];
+
+        $validator = \Illuminate\Support\Facades\Validator::make($request->all(), $rules);
+
+        // Conditional rules — each "if X then Y must …" check writes the
+        // error onto the dependent field key so the frontend can render
+        // it inline next to the right input.
+        $validator->after(function ($v) use ($request) {
+            $bool = function ($key) use ($request): bool {
+                $val = $request->input($key);
+                return $val === true || $val === 'true' || $val === 1 || $val === '1';
+            };
+
+            if ($bool('has_passport') && trim((string) $request->input('passport_number')) === '') {
+                $v->errors()->add('passport_number', 'Passport number is required when "Has passport" is yes.');
+            }
+
+            $emp = $request->input('employment_type');
+            if (in_array($emp, ['Employed', 'Self-employed'], true)
+                && trim((string) $request->input('current_employer_name')) === ''
+            ) {
+                $v->errors()->add('current_employer_name', 'Current employer is required when employment type is Employed or Self-employed.');
+            }
+
+            $disclosurePairs = [
+                'has_health_disclosure'    => ['health_disclosure_notes',    'Health disclosure notes are required when "Has health disclosure" is yes.'],
+                'has_character_disclosure' => ['character_disclosure_notes', 'Character disclosure notes are required when "Has character disclosure" is yes.'],
+                'has_been_declined_visa'   => ['declined_visa_details',      'Declined-visa details are required when "Has been declined a visa" is yes.'],
+                'has_criminal_record'      => ['criminal_record_details',    'Criminal-record details are required when "Has criminal record" is yes.'],
+            ];
+            foreach ($disclosurePairs as $flag => [$noteKey, $msg]) {
+                if ($bool($flag) && strlen(trim((string) $request->input($noteKey, ''))) < 10) {
+                    $v->errors()->add($noteKey, $msg . ' (min 10 characters)');
+                }
+            }
+
+            if ($bool('has_children')) {
+                $count = (int) $request->input('number_of_children', 0);
+                if ($count <= 0) {
+                    $v->errors()->add('number_of_children', 'Number of children must be at least 1 when "Has children" is yes.');
+                }
+            }
+        });
+
+        $validated = $validator->validate();
 
         try {
-            $lead = Lead::findOrFail($id);
-            // Empty strings → null so we don't store blanks over real data.
-            $lead->fill(array_map(fn ($v) => $v === '' ? null : $v, $validated));
-            $lead->first_name = $validated['first_name'];
-            $lead->save();
+            return \Illuminate\Support\Facades\DB::transaction(function () use ($validated, $request, $id) {
+                $lead = Lead::findOrFail($id);
 
-            return back()->with('success', 'Personal information updated.');
+                // Partial-payload model: only update keys that were
+                // actually sent. Empty-string normalisation to null
+                // applies just to the keys present in the request so
+                // a section save can't accidentally wipe other section
+                // fields by omitting them.
+                $patch = collect($validated)
+                    ->filter(fn ($v, $k) => $request->has($k))
+                    ->map(fn ($v) => $v === '' ? null : $v)
+                    ->all();
+
+                $lead->fill($patch);
+                $lead->save();
+
+                // Inertia treats JSON as a non-Inertia response and
+                // bounces to a JSON page; sticking with back() keeps
+                // the page state intact and lets the frontend rely on
+                // flash messages + page-prop refresh.
+                return back()->with('success', 'Personal information updated.');
+            });
         } catch (\Throwable $e) {
             \Illuminate\Support\Facades\Log::error('Lead personal update failed', ['id' => $id, 'error' => $e->getMessage()]);
             return back()->with('error', 'Could not update personal information.');
