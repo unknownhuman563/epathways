@@ -1344,7 +1344,10 @@ class LeadController extends Controller
     public function importLeads(\Illuminate\Http\Request $request)
     {
         $request->validate([
-            'file' => 'required|file|max:20480', // 20 MB; many BOM-style CSVs trip the mime check
+            // Extension allow-list (csv/txt/xls/xlsx). Real CSVs — including
+            // BOM-prefixed ones — are detected as text/plain and pass; binaries
+            // like .exe/.php are rejected.
+            'file' => 'required|' . \App\Support\UploadValidation::spreadsheet(),
         ]);
 
         // Big imports can run long — give them room.

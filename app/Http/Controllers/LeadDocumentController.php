@@ -6,6 +6,7 @@ use App\Models\Lead;
 use App\Models\LeadDocument;
 use App\Models\LeadDocumentRequest;
 use App\Services\AgreementGenerator;
+use App\Support\UploadValidation;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
@@ -144,7 +145,7 @@ class LeadDocumentController extends Controller
     {
         $lead = Lead::findOrFail($leadId);
         $request->validate([
-            'file' => 'required|file|max:20480', // 20MB
+            'file' => 'required|' . UploadValidation::document(),
             'note' => 'nullable|string|max:500',
         ]);
 
@@ -176,7 +177,7 @@ class LeadDocumentController extends Controller
 
         $request->validate([
             'files'   => 'required|array|min:1|max:10',
-            'files.*' => 'file|max:20480', // 20MB each
+            'files.*' => UploadValidation::document(),
         ]);
 
         try {
@@ -359,7 +360,7 @@ class LeadDocumentController extends Controller
 
         $request->validate([
             'files'   => 'required|array|min:1|max:10',
-            'files.*' => 'file|max:20480',
+            'files.*' => UploadValidation::document(),
         ]);
 
         try {
@@ -419,7 +420,7 @@ class LeadDocumentController extends Controller
         abort_unless($lead, 403);
 
         $request->validate([
-            'file'       => 'required|file|max:20480', // 20MB
+            'file'       => 'required|' . UploadValidation::document(),
             'request_id' => 'nullable|integer|exists:lead_document_requests,id',
         ]);
 

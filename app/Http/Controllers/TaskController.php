@@ -57,7 +57,7 @@ class TaskController extends Controller
             // audio). The kanban card renders the first image as a
             // thumbnail and surfaces the total count on the paperclip.
             'attachments'   => 'nullable|array|max:8',
-            'attachments.*' => 'file|max:20480',
+            'attachments.*' => \App\Support\UploadValidation::taskAttachment(),
         ];
 
         if ($taskType === 'linked') {
