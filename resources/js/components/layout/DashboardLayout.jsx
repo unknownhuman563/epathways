@@ -252,9 +252,13 @@ export default function DashboardLayout({
                                 {user?.role && <p className="text-[11px] text-gray-500 capitalize">{user.role}</p>}
                             </div>
                             <div
-                                className={`flex items-center justify-center w-9 h-9 rounded-full ${accent} text-white font-bold text-sm shadow-md ring-2 ring-white`}
+                                className={`flex items-center justify-center w-9 h-9 rounded-full overflow-hidden ${accent} text-white font-bold text-sm shadow-md ring-2 ring-white`}
                             >
-                                {user?.name?.charAt(0)?.toUpperCase() || "U"}
+                                {user?.avatar_url ? (
+                                    <img src={user.avatar_url} alt={user.name} className="w-full h-full object-cover" />
+                                ) : (
+                                    user?.name?.charAt(0)?.toUpperCase() || "U"
+                                )}
                             </div>
                         </div>
                     </div>

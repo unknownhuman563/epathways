@@ -222,6 +222,10 @@ Route::post('/api/sync-calendar', [App\Http\Controllers\SyncController::class, '
 // middleware nested below narrows each section ('portal:admin', 'portal:sales', …).
 Route::middleware(['auth'])->group(function () {
 
+    // Profile avatar — role-agnostic; any authenticated user manages their own.
+    Route::post('/profile/avatar', [UserController::class, 'uploadAvatar'])->name('profile.avatar.upload');
+    Route::delete('/profile/avatar', [UserController::class, 'deleteAvatar'])->name('profile.avatar.delete');
+
     // Global search — Cmd+K across leads, tenants, properties, programs,
     // schools, English classes/assessments, applications, bookings.
     // Role-gated inside the service.

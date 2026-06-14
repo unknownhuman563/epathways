@@ -1,6 +1,7 @@
 import { Head } from "@inertiajs/react";
 import { User, Mail, Phone, MapPin, Hash, ShieldCheck, Lock } from "lucide-react";
 import PortalPageHeader from "@/components/portal/PortalPageHeader";
+import AvatarUploader from "@/components/AvatarUploader";
 
 const fmtDate = (iso) => iso ? new Date(iso).toLocaleDateString("en-NZ", { day: "numeric", month: "long", year: "numeric" }) : "—";
 
@@ -17,9 +18,7 @@ export default function LeadProfile({ lead }) {
             {/* Profile card */}
             <section className="bg-white rounded-2xl border border-[#282728]/15 overflow-hidden">
                 <div className="p-6 sm:p-8 flex items-center gap-5">
-                    <div className="w-16 h-16 rounded-2xl bg-[#436235] text-white flex items-center justify-center text-2xl font-bold">
-                        {(lead?.first_name || "?").slice(0, 1).toUpperCase()}
-                    </div>
+                    <AvatarUploader accent="bg-[#436235]" />
                     <div className="min-w-0">
                         <h2 className="text-xl font-medium text-[#282728] tracking-tight">{lead.first_name} {lead.last_name}</h2>
                         <p className="text-sm text-gray-500 mt-0.5">{lead.email}</p>

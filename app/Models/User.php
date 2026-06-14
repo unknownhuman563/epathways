@@ -57,7 +57,11 @@ class User extends Authenticatable
         'lead_id',
         'iaa_licence_number',
         'iaa_licence_expiry',
+        'avatar_path',
     ];
+
+    /** Computed attributes always included in array/JSON output. */
+    protected $appends = ['avatar_url'];
 
     /**
      * The attributes that should be hidden for serialization.
@@ -82,6 +86,17 @@ class User extends Authenticatable
             'iaa_licence_expiry' => 'date',
             'password' => 'hashed',
         ];
+    }
+
+    /**
+     * Public URL of the user's profile photo, or null when none is set
+     * (the UI falls back to an initials avatar from the name).
+     */
+    public function getAvatarUrlAttribute(): ?string
+    {
+        return $this->avatar_path
+            ? \Illuminate\Support\Facades\Storage::disk('public')->url($this->avatar_path)
+            : null;
     }
 
     /**
