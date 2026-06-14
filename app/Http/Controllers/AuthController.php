@@ -3,8 +3,13 @@
 namespace App\Http\Controllers;
 
 use App\Models\ActivityLog;
+use Illuminate\Auth\Events\PasswordReset;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Password;
+use Illuminate\Support\Str;
+use Illuminate\Validation\Rules\Password as PasswordRule;
 use Inertia\Inertia;
 
 class AuthController extends Controller
@@ -59,6 +64,73 @@ class AuthController extends Controller
         return back()->withErrors([
             'email' => 'The provided credentials do not match our records.',
         ])->onlyInput('email');
+    }
+
+    /**
+     * Shared password strength rule (min 8, mixed case, letters, numbers).
+     */
+    public static function passwordRules(): array
+    {
+        return ['required', 'confirmed', PasswordRule::min(8)->letters()->mixedCase()->numbers()];
+    }
+
+    // ─── Password reset ───────────────────────────────────────────────────
+
+    public function showForgotPassword()
+    {
+        return Inertia::render('auth/ForgotPassword');
+    }
+
+    /**
+     * Send the reset link. Always returns the same success message whether
+     * or not the email exists — no account enumeration.
+     */
+    public function sendResetLink(Request $request)
+    {
+        $request->validate(['email' => ['required', 'email']]);
+
+        Password::sendResetLink($request->only('email'));
+
+        return back()->with('success', 'If an account exists for that email, a password reset link is on its way.');
+    }
+
+    public function showResetPassword(Request $request, string $token)
+    {
+        return Inertia::render('auth/ResetPassword', [
+            'token' => $token,
+            'email' => $request->query('email'),
+        ]);
+    }
+
+    /**
+     * Complete the reset. Token validity + expiry (60 min, see
+     * config/auth.php) are enforced by the password broker.
+     */
+    public function resetPassword(Request $request)
+    {
+        $request->validate([
+            'token'    => ['required'],
+            'email'    => ['required', 'email'],
+            'password' => self::passwordRules(),
+        ]);
+
+        $status = Password::reset(
+            $request->only('email', 'password', 'password_confirmation', 'token'),
+            function ($user, $password) {
+                $user->forceFill([
+                    'password'       => Hash::make($password),
+                    'remember_token' => Str::random(60),
+                ])->save();
+
+                event(new PasswordReset($user));
+            }
+        );
+
+        if ($status === Password::PASSWORD_RESET) {
+            return redirect('/login')->with('success', 'Your password has been reset — please sign in.');
+        }
+
+        return back()->withErrors(['email' => __($status)]);
     }
 
     /**
