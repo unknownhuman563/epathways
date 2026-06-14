@@ -560,6 +560,9 @@ Route::middleware(['auth'])->group(function () {
         Route::middleware('portal:english')->prefix('english')->name('portal.english.')->group(function () {
             Route::get('/dashboard', [EnglishController::class, 'dashboard'])->name('dashboard');
             Route::get('/leads/{id}', [LeadController::class, 'show'])->name('leads.show');
+
+            // English learners — leads flagged is_english_student.
+            Route::get('/learners', [EnglishController::class, 'learners'])->name('learners');
         });
 
         Route::middleware('portal:immigration')->prefix('immigration')->name('portal.immigration.')->group(function () {

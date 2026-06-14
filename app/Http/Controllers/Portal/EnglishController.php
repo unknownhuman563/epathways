@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Portal;
 use App\Http\Controllers\Controller;
 use App\Models\Lead;
 use App\Models\LeadStudyPlan;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
 class EnglishController extends Controller
@@ -59,5 +60,50 @@ class EnglishController extends Controller
                 'recentLearners' => collect(),
             ]);
         }
+    }
+
+    /**
+     * Learners list — every lead flagged is_english_student. Supports a
+     * stage filter (Lead::ENGLISH_STAGES) and a free-text search across
+     * name / email / phone / lead_id. Paginated server-side.
+     */
+    public function learners(Request $request)
+    {
+        $stage  = $request->query('stage');
+        $search = trim((string) $request->query('search', ''));
+
+        $learners = Lead::query()
+            ->where('is_english_student', true)
+            ->when($stage, fn ($q) => $q->where('english_stage', $stage))
+            ->when($search !== '', function ($q) use ($search) {
+                $q->where(function ($qq) use ($search) {
+                    $qq->where('first_name', 'like', "%{$search}%")
+                        ->orWhere('last_name', 'like', "%{$search}%")
+                        ->orWhere('email', 'like', "%{$search}%")
+                        ->orWhere('phone', 'like', "%{$search}%")
+                        ->orWhere('lead_id', 'like', "%{$search}%");
+                });
+            })
+            ->orderByDesc('english_converted_at')
+            ->orderByDesc('updated_at')
+            ->paginate(15)
+            ->withQueryString()
+            ->through(fn (Lead $l) => [
+                'id'            => $l->id,
+                'lead_id'       => $l->lead_id,
+                'name'          => trim("{$l->first_name} {$l->last_name}") ?: 'Unknown',
+                'email'         => $l->email,
+                'phone'         => $l->phone,
+                'english_stage' => $l->english_stage,
+                'converted_at'  => optional($l->english_converted_at)?->toIso8601String(),
+                'last_activity' => optional($l->updated_at)?->toIso8601String(),
+            ]);
+
+        return inertia('portal/english/Learners', [
+            'portal'   => 'english',
+            'learners' => $learners,
+            'stages'   => Lead::ENGLISH_STAGES,
+            'filters'  => ['stage' => $stage, 'search' => $search],
+        ]);
     }
 }
