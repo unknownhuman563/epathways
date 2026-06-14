@@ -28,11 +28,27 @@ class AuthController extends Controller
     public function login(Request $request)
     {
         $credentials = $request->validate([
-            'email' => ['required', 'string'],
+            // Tightened from a bare 'string': a new login must be a valid
+            // email. We still accept a value that matches an existing
+            // account's email verbatim, so the one legacy username-style
+            // account ('adminepathways') keeps working — new garbage emails
+            // (which match no user) are rejected. See build notes.
+            'email' => [
+                'required',
+                function (string $attribute, mixed $value, \Closure $fail) {
+                    if (! filter_var($value, FILTER_VALIDATE_EMAIL)
+                        && ! \App\Models\User::where('email', $value)->exists()) {
+                        $fail('Please enter a valid email address.');
+                    }
+                },
+            ],
             'password' => ['required'],
+            'remember' => ['sometimes', 'boolean'],
         ]);
 
-        if (Auth::attempt($credentials)) {
+        $remember = $request->boolean('remember');
+
+        if (Auth::attempt(['email' => $credentials['email'], 'password' => $credentials['password']], $remember)) {
             $request->session()->regenerate();
 
             $user = Auth::user();
