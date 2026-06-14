@@ -2,11 +2,13 @@
 
 namespace App\Services;
 
+use App\Mail\TrackerWelcome;
 use App\Models\ActivityLog;
 use App\Models\Lead;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 
 /**
  * Unified entry point for every public form that creates/updates a Lead.
@@ -98,7 +100,7 @@ class LeadIntakeService
     /** Create a fresh Lead with first-touch attribution. */
     private function createNew(string $formType, array $payload, ?Request $request): Lead
     {
-        return Lead::create(array_merge(
+        $lead = Lead::create(array_merge(
             [
                 'lead_id'           => $payload['lead_id'] ?? 'LP-' . rand(10000, 99999),
                 'first_name'        => $payload['first_name']        ?? '',
@@ -112,6 +114,18 @@ class LeadIntakeService
             ],
             $this->captureUtm($request)
         ));
+
+        // First-touch: give the lead their /track/{code} home. Queued, and
+        // only when we actually have an address to send to.
+        if (! empty($lead->email)) {
+            try {
+                Mail::to($lead->email)->send(new TrackerWelcome($lead));
+            } catch (\Throwable $e) {
+                Log::error('TrackerWelcome dispatch failed', ['lead_id' => $lead->id, 'error' => $e->getMessage()]);
+            }
+        }
+
+        return $lead;
     }
 
     /**

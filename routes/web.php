@@ -379,6 +379,7 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/admin/leads/{id}/convert-to-english', [LeadController::class, 'convertToEnglish'])->name('admin.leads.convert-english');
         Route::post('/admin/leads/{id}/revert-english', [LeadController::class, 'revertEnglish'])->name('admin.leads.revert-english');
         Route::post('/admin/leads/{id}/inz', [LeadController::class, 'updateInz'])->name('admin.leads.inz');
+        Route::post('/admin/leads/{id}/send-tracker-link', [LeadController::class, 'sendTrackerLink'])->name('admin.leads.send-tracker-link');
 
         // Bulk CSV import — duplicates detected by email or name+phone.
         Route::post('/admin/leads/import', [LeadController::class, 'importLeads'])->name('admin.leads.import');

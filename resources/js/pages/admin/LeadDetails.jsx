@@ -422,6 +422,18 @@ export default function LeadDetails({ lead: backendLead, activity = [], stageTim
                         </button>
                     )}
 
+                    {lead.trackingCode && (
+                        <button
+                            type="button"
+                            disabled={!backendLead.email}
+                            title={backendLead.email ? 'Email this lead their tracker link' : 'Lead has no email on file'}
+                            onClick={() => router.post(`/admin/leads/${backendLead.id}/send-tracker-link`, {}, { preserveScroll: true, preserveState: true })}
+                            className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 text-sm font-semibold transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            <Mail size={16} /> Send Tracker Link
+                        </button>
+                    )}
+
                     <button className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 text-sm font-semibold transition-colors shadow-sm">
                         <Download size={16} /> Export PDF
                     </button>

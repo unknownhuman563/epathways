@@ -10,6 +10,7 @@ use App\Support\UploadValidation;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 
@@ -92,7 +93,7 @@ class LeadDocumentController extends Controller
 
         try {
             foreach ($data['items'] as $item) {
-                LeadDocumentRequest::create([
+                $docRequest = LeadDocumentRequest::create([
                     'lead_id'      => $lead->id,
                     'label'        => $item['label'],
                     'description'  => $item['description'] ?? null,
@@ -100,6 +101,15 @@ class LeadDocumentController extends Controller
                     'requested_by' => Auth::id(),
                     'requested_at' => now(),
                 ]);
+
+                // Email the lead a link to their tracker to upload it.
+                if (! empty($lead->email)) {
+                    try {
+                        Mail::to($lead->email)->send(new \App\Mail\DocumentRequestedFromLead($lead, $docRequest));
+                    } catch (\Throwable $e) {
+                        Log::error('DocumentRequestedFromLead dispatch failed', ['lead_id' => $lead->id, 'error' => $e->getMessage()]);
+                    }
+                }
             }
             return back()->with('success', count($data['items']) . ' document request(s) added.');
         } catch (\Throwable $e) {
@@ -137,6 +147,17 @@ class LeadDocumentController extends Controller
             'reviewed_by' => Auth::id(),
             'reviewed_at' => now(),
         ]);
+
+        // Tell the lead their document was approved / rejected.
+        $lead = $doc->lead;
+        if (in_array($validated['status'], [LeadDocument::STATUS_APPROVED, LeadDocument::STATUS_REJECTED], true)
+            && $lead && ! empty($lead->email)) {
+            try {
+                Mail::to($lead->email)->send(new \App\Mail\DocumentStatusChanged($lead, $doc->fresh(), $validated['note'] ?? null));
+            } catch (\Throwable $e) {
+                Log::error('DocumentStatusChanged dispatch failed', ['doc_id' => $doc->id, 'error' => $e->getMessage()]);
+            }
+        }
 
         return back()->with('success', "Document marked {$validated['status']}.");
     }

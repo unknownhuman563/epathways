@@ -1754,6 +1754,35 @@ class LeadController extends Controller
     }
 
     /**
+     * Manually (re)send the lead their /track/{code} tracker link. Used
+     * from the lead detail page; disabled in the UI when the lead has no
+     * email. Audit-logged.
+     */
+    public function sendTrackerLink($id)
+    {
+        $lead = Lead::findOrFail($id);
+
+        if (empty($lead->email)) {
+            return back()->with('error', 'This lead has no email address on file.');
+        }
+
+        try {
+            \Illuminate\Support\Facades\Mail::to($lead->email)->send(new \App\Mail\TrackerWelcome($lead));
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('Manual TrackerWelcome failed', ['lead_id' => $lead->id, 'error' => $e->getMessage()]);
+            return back()->with('error', 'Could not send the tracker link. Please try again.');
+        }
+
+        \App\Models\ActivityLog::record('lead.tracker_link_sent', [
+            'entity_type' => Lead::class,
+            'entity_id'   => $lead->id,
+            'description' => "Tracker link emailed to {$lead->email}",
+        ]);
+
+        return back()->with('success', "Tracker link sent to {$lead->email}.");
+    }
+
+    /**
      * Update the INZ tracking fields on a lead — visa type, lodgement date,
      * INZ reference number, current status, decision date.
      */
