@@ -813,7 +813,6 @@ class EducationController extends Controller
         return $points;
     }
     public function profile()           { return inertia('portal/education/Profile',  ['portal' => 'education', 'user' => auth()->user()->only(['id','name','email','role'])]); }
-    public function notifications()     { return inertia('portal/education/Notifications', ['portal' => 'education']); }
 
     /**
      * Tasks & follow-ups across every lead, bucketed Today / This Week /

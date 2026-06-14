@@ -805,7 +805,6 @@ class ImmigrationController extends Controller
             return back()->with('error', 'Could not update profile.');
         }
     }
-    public function notifications()     { return inertia('portal/immigration/Notifications',     []); }
 
     /**
      * Task Board page — mirrors the Sales/Education shape. See
