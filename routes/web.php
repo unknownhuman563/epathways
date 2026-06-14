@@ -5,6 +5,7 @@ use App\Http\Controllers\ActivityLogController;
 use App\Http\Controllers\Admin\SuperAdminDashboardController;
 use App\Http\Controllers\AssessmentController;
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\AvailabilityController;
 use App\Http\Controllers\BookingController;
 use App\Http\Controllers\EventController;
@@ -211,6 +212,15 @@ Route::post('/api/sync-calendar', [App\Http\Controllers\SyncController::class, '
 // Authenticated areas — every staff user must be logged in ('auth'); role
 // middleware nested below narrows each section ('portal:admin', 'portal:sales', …).
 Route::middleware(['auth'])->group(function () {
+
+    // Notifications read path — role-agnostic; every authenticated user
+    // reads their own in-app notifications (bell dropdown + full page).
+    Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications.index');
+    Route::get('/api/notifications/recent', [NotificationController::class, 'recent'])->name('notifications.recent');
+    Route::get('/api/notifications/unread-count', [NotificationController::class, 'unreadCount'])->name('notifications.unread-count');
+    Route::post('/notifications/{id}/read', [NotificationController::class, 'markAsRead'])->name('notifications.read');
+    Route::post('/notifications/mark-all-read', [NotificationController::class, 'markAllAsRead'])->name('notifications.mark-all-read');
+    Route::delete('/notifications/{id}', [NotificationController::class, 'destroy'])->name('notifications.destroy');
 
     // Super-admin-only — the top-of-house cross-department overview.
     // `portal:super_admin` is exact-role (see User::canAccessPortal), so
