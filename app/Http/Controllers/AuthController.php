@@ -8,6 +8,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Password;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rules\Password as PasswordRule;
 use Inertia\Inertia;
@@ -25,8 +26,25 @@ class AuthController extends Controller
     /**
      * Handle an authentication attempt.
      */
+    /** Max failed login attempts before a one-minute lockout. */
+    private const MAX_LOGIN_ATTEMPTS = 5;
+
     public function login(Request $request)
     {
+        // Two throttles: email+IP (brute-force on one account) and IP-only
+        // (one IP spraying many accounts). Either tripping locks out for a
+        // minute; a successful login clears both.
+        [$emailKey, $ipKey] = $this->loginThrottleKeys($request);
+
+        foreach ([$emailKey, $ipKey] as $key) {
+            if (RateLimiter::tooManyAttempts($key, self::MAX_LOGIN_ATTEMPTS)) {
+                $seconds = RateLimiter::availableIn($key);
+                abort(429, "Too many login attempts. Please try again in {$seconds} seconds.", [
+                    'Retry-After' => (string) $seconds,
+                ]);
+            }
+        }
+
         $credentials = $request->validate([
             // Tightened from a bare 'string': a new login must be a valid
             // email. We still accept a value that matches an existing
@@ -49,6 +67,10 @@ class AuthController extends Controller
         $remember = $request->boolean('remember');
 
         if (Auth::attempt(['email' => $credentials['email'], 'password' => $credentials['password']], $remember)) {
+            // Clean slate on success — failed-attempt counters reset.
+            RateLimiter::clear($emailKey);
+            RateLimiter::clear($ipKey);
+
             $request->session()->regenerate();
 
             $user = Auth::user();
@@ -71,6 +93,10 @@ class AuthController extends Controller
                 ->with('success', 'Welcome back, '.$user->name.'!');
         }
 
+        // Count this failed attempt against both throttles (decay 60s).
+        RateLimiter::hit($emailKey, 60);
+        RateLimiter::hit($ipKey, 60);
+
         ActivityLog::record('login.failed', [
             'actor_name' => $credentials['email'],
             'portal' => 'public',
@@ -80,6 +106,19 @@ class AuthController extends Controller
         return back()->withErrors([
             'email' => 'The provided credentials do not match our records.',
         ])->onlyInput('email');
+    }
+
+    /**
+     * Rate-limiter keys for a login attempt: [email+IP, IP].
+     *
+     * @return array{0: string, 1: string}
+     */
+    private function loginThrottleKeys(Request $request): array
+    {
+        $email = Str::lower((string) $request->input('email'));
+        $ip = $request->ip();
+
+        return ["login:{$email}|{$ip}", "login-ip:{$ip}"];
     }
 
     /**
