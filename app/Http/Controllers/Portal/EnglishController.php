@@ -3,10 +3,14 @@
 namespace App\Http\Controllers\Portal;
 
 use App\Http\Controllers\Controller;
+use App\Models\EnglishClass;
+use App\Models\EnglishClassEnrollment;
 use App\Models\Lead;
 use App\Models\LeadStudyPlan;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\Rule;
 
 class EnglishController extends Controller
 {
@@ -105,5 +109,166 @@ class EnglishController extends Controller
             'stages'   => Lead::ENGLISH_STAGES,
             'filters'  => ['stage' => $stage, 'search' => $search],
         ]);
+    }
+
+    // ─── Classes ──────────────────────────────────────────────────────────
+
+    /**
+     * Class list. Enrollments are embedded per class so the detail modal
+     * has everything client-side (class counts are small). Supports a
+     * status filter.
+     */
+    public function classes(Request $request, $focusId = null)
+    {
+        $status = $request->query('status');
+
+        $classes = EnglishClass::query()
+            ->with([
+                'instructor:id,name',
+                'enrollments.lead:id,first_name,last_name,email,lead_id',
+            ])
+            ->when($status, fn ($q) => $q->where('status', $status))
+            ->orderByDesc('starts_at')
+            ->orderByDesc('created_at')
+            ->get()
+            ->map(fn (EnglishClass $c) => $this->serializeClass($c));
+
+        return inertia('portal/english/Classes', [
+            'portal'            => 'english',
+            'classes'           => $classes,
+            'statuses'          => EnglishClass::STATUSES,
+            'instructorOptions' => $this->instructorOptions(),
+            'learnerOptions'    => $this->learnerOptions(),
+            'filters'           => ['status' => $status],
+            'focusClassId'      => $focusId ? (int) $focusId : null,
+        ]);
+    }
+
+    public function showClass(Request $request, $id)
+    {
+        // Deep-link to a single class — renders the list with that class's
+        // detail modal opened.
+        return $this->classes($request, $id);
+    }
+
+    public function storeClass(Request $request)
+    {
+        $data = $this->validateClass($request);
+        $class = EnglishClass::create($data);
+
+        return back()->with('success', "Class \"{$class->name}\" created.");
+    }
+
+    public function updateClass(Request $request, $id)
+    {
+        $class = EnglishClass::findOrFail($id);
+        $class->update($this->validateClass($request));
+
+        return back()->with('success', "Class \"{$class->name}\" updated.");
+    }
+
+    public function destroyClass($id)
+    {
+        $class = EnglishClass::findOrFail($id);
+        $class->delete(); // soft delete
+
+        return back()->with('success', 'Class removed.');
+    }
+
+    public function enrollLearner(Request $request, $id)
+    {
+        $class = EnglishClass::findOrFail($id);
+
+        $data = $request->validate([
+            // The lead must exist AND be flagged is_english_student.
+            'lead_id' => [
+                'required',
+                Rule::exists('leads', 'id')->where(fn ($q) => $q->where('is_english_student', true)),
+            ],
+            'notes' => 'nullable|string|max:1000',
+        ], [
+            'lead_id.exists' => 'That learner is not an English student.',
+        ]);
+
+        EnglishClassEnrollment::firstOrCreate(
+            ['english_class_id' => $class->id, 'lead_id' => $data['lead_id']],
+            ['status' => 'active', 'enrolled_at' => now(), 'notes' => $data['notes'] ?? null],
+        );
+
+        return back()->with('success', 'Learner enrolled.');
+    }
+
+    public function withdrawLearner($id, $enrollmentId)
+    {
+        $enrollment = EnglishClassEnrollment::where('english_class_id', $id)
+            ->findOrFail($enrollmentId);
+        $enrollment->delete();
+
+        return back()->with('success', 'Learner withdrawn from class.');
+    }
+
+    private function validateClass(Request $request): array
+    {
+        return $request->validate([
+            'name'          => 'required|string|max:191',
+            'description'   => 'nullable|string|max:5000',
+            'instructor_id' => 'nullable|exists:users,id',
+            'schedule_text' => 'nullable|string|max:191',
+            'location'      => 'nullable|string|max:1000',
+            'capacity'      => 'nullable|integer|min:0|max:1000',
+            'status'        => ['required', Rule::in(EnglishClass::STATUSES)],
+            'starts_at'     => 'nullable|date',
+            'ends_at'       => 'nullable|date|after_or_equal:starts_at',
+        ]);
+    }
+
+    private function serializeClass(EnglishClass $c): array
+    {
+        return [
+            'id'             => $c->id,
+            'name'           => $c->name,
+            'description'    => $c->description,
+            'instructor_id'  => $c->instructor_id,
+            'instructor'     => optional($c->instructor)->name,
+            'schedule_text'  => $c->schedule_text,
+            'location'       => $c->location,
+            'capacity'       => $c->capacity,
+            'status'         => $c->status,
+            'starts_at'      => optional($c->starts_at)?->toDateString(),
+            'ends_at'        => optional($c->ends_at)?->toDateString(),
+            'enrolled_count' => $c->enrollments->count(),
+            'enrollments'    => $c->enrollments->map(fn (EnglishClassEnrollment $e) => [
+                'id'          => $e->id,
+                'lead_id'     => $e->lead_id,
+                'name'        => $e->lead ? trim("{$e->lead->first_name} {$e->lead->last_name}") : 'Unknown',
+                'email'       => optional($e->lead)->email,
+                'status'      => $e->status,
+                'enrolled_at' => optional($e->enrolled_at)?->toIso8601String(),
+            ])->values(),
+        ];
+    }
+
+    /** Users who can be assigned as instructors (English staff + admins). */
+    private function instructorOptions()
+    {
+        return User::query()
+            ->whereIn('role', ['english', 'admin', 'super_admin'])
+            ->orderBy('name')
+            ->get(['id', 'name', 'role']);
+    }
+
+    /** English learners available to enroll / record assessments against. */
+    private function learnerOptions()
+    {
+        return Lead::query()
+            ->where('is_english_student', true)
+            ->orderBy('first_name')
+            ->get(['id', 'first_name', 'last_name', 'email', 'lead_id'])
+            ->map(fn (Lead $l) => [
+                'id'      => $l->id,
+                'lead_id' => $l->lead_id,
+                'name'    => trim("{$l->first_name} {$l->last_name}") ?: 'Unknown',
+                'email'   => $l->email,
+            ]);
     }
 }

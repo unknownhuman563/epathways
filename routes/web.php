@@ -563,6 +563,15 @@ Route::middleware(['auth'])->group(function () {
 
             // English learners — leads flagged is_english_student.
             Route::get('/learners', [EnglishController::class, 'learners'])->name('learners');
+
+            // English classes — group sessions with learner enrollment.
+            Route::get('/classes', [EnglishController::class, 'classes'])->name('classes');
+            Route::post('/classes', [EnglishController::class, 'storeClass'])->name('classes.store');
+            Route::get('/classes/{id}', [EnglishController::class, 'showClass'])->name('classes.show');
+            Route::put('/classes/{id}', [EnglishController::class, 'updateClass'])->name('classes.update');
+            Route::delete('/classes/{id}', [EnglishController::class, 'destroyClass'])->name('classes.destroy');
+            Route::post('/classes/{id}/enroll', [EnglishController::class, 'enrollLearner'])->name('classes.enroll');
+            Route::delete('/classes/{id}/enroll/{enrollmentId}', [EnglishController::class, 'withdrawLearner'])->name('classes.withdraw');
         });
 
         Route::middleware('portal:immigration')->prefix('immigration')->name('portal.immigration.')->group(function () {
