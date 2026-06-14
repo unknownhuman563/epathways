@@ -27,6 +27,7 @@ use App\Http\Controllers\ProgramController;
 use App\Http\Controllers\ProgramPromoController;
 use App\Http\Controllers\QuickLeadController;
 use App\Http\Controllers\ResidentIntakeController;
+use App\Http\Controllers\SearchController;
 use App\Http\Controllers\SettingController;
 use App\Http\Controllers\StudentIntakeController;
 use App\Http\Controllers\UserController;
@@ -212,6 +213,11 @@ Route::post('/api/sync-calendar', [App\Http\Controllers\SyncController::class, '
 // Authenticated areas — every staff user must be logged in ('auth'); role
 // middleware nested below narrows each section ('portal:admin', 'portal:sales', …).
 Route::middleware(['auth'])->group(function () {
+
+    // Global search — Cmd+K across leads, tenants, properties, programs,
+    // schools, English classes/assessments, applications, bookings.
+    // Role-gated inside the service.
+    Route::get('/api/search', [SearchController::class, 'search'])->name('search');
 
     // Notifications read path — role-agnostic; every authenticated user
     // reads their own in-app notifications (bell dropdown + full page).
