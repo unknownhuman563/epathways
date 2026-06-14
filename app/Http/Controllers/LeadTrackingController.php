@@ -5,9 +5,13 @@ namespace App\Http\Controllers;
 use App\Models\ActivityLog;
 use App\Models\Lead;
 use App\Models\LeadDocument;
+use App\Models\User;
 use App\Models\VisaType;
+use App\Notifications\DocumentSubmittedForReview;
+use App\Support\UploadValidation;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
@@ -142,7 +146,7 @@ class LeadTrackingController extends Controller
         }
 
         $request->validate([
-            'file' => 'required|file|mimes:pdf,doc,docx,xls,csv,jpg,jpeg,png,gif|max:10240',
+            'file' => 'required|' . UploadValidation::document(),
             'checklist_key' => 'nullable|string|max:80',
             // Optional metadata captured at upload-time for passport docs so
             // the lead doesn't have to re-enter passport number / expiry in
@@ -168,11 +172,7 @@ class LeadTrackingController extends Controller
             'source'        => LeadDocument::SOURCE_UPLOAD,
         ]);
 
-        // Notify the staff member who owns this lead (if assigned). Public
-        // upload, so there's no acting user — we never notify the lead.
-        if ($lead->assigned_to && ($staff = $lead->assignee)) {
-            $staff->notify(new \App\Notifications\DocumentSubmittedForReview($lead, $document));
-        }
+        $this->notifyDocumentSubmitted($lead, $document, 'submitted');
 
         // Passport upload: surface the entered passport metadata onto the
         // lead row itself so admin search / visa lodgement / immigration
@@ -217,16 +217,18 @@ class LeadTrackingController extends Controller
             return back()->with('error', 'Document not found.');
         }
 
-        // Staff has already touched this doc — lock it for the lead.
-        if ($doc->status !== LeadDocument::STATUS_SUBMITTED) {
-            return back()->with('error', 'This document has already been reviewed and can no longer be edited.');
+        // Once staff has approved a doc it's locked; the lead may still fix a
+        // pending / under-review / rejected one.
+        if ($doc->status === LeadDocument::STATUS_APPROVED) {
+            return back()->with('error', 'This document has been approved and can no longer be edited.');
         }
 
         $request->validate([
-            'file' => 'nullable|file|mimes:pdf,doc,docx,xls,csv,jpg,jpeg,png,gif|max:10240',
+            'file' => 'nullable|' . UploadValidation::document(),
             'checklist_key' => 'nullable|string|max:80',
         ]);
 
+        $replacedFile = false;
         if ($request->hasFile('file')) {
             // Best-effort: drop the old file so we don't accumulate
             // orphans. We swallow failures because the audit value of
@@ -243,7 +245,10 @@ class LeadTrackingController extends Controller
                 'file_path'     => $path,
                 'mime'          => $file->getMimeType(),
                 'size'          => $file->getSize(),
+                // A replaced file goes back into the review queue.
+                'status'        => LeadDocument::STATUS_SUBMITTED,
             ]);
+            $replacedFile = true;
         }
 
         if ($request->filled('checklist_key')) {
@@ -251,6 +256,10 @@ class LeadTrackingController extends Controller
         }
 
         $doc->save();
+
+        if ($replacedFile) {
+            $this->notifyDocumentSubmitted($lead, $doc, 'replaced');
+        }
 
         return redirect()
             ->route('track.lookup', ['code' => $lead->tracking_code])
@@ -276,8 +285,10 @@ class LeadTrackingController extends Controller
             return back()->with('error', 'Document not found.');
         }
 
-        if ($doc->status !== LeadDocument::STATUS_SUBMITTED) {
-            return back()->with('error', 'This document has already been reviewed and can no longer be deleted.');
+        // Approved docs are locked; the lead can still remove a pending /
+        // under-review / rejected one.
+        if ($doc->status === LeadDocument::STATUS_APPROVED) {
+            return back()->with('error', 'This document has been approved and can no longer be deleted.');
         }
 
         if ($doc->file_path) {
@@ -291,6 +302,25 @@ class LeadTrackingController extends Controller
     }
 
     // ─── helpers ────────────────────────────────────────────────────────
+
+    /**
+     * Notify staff that a lead submitted (or replaced) a document. Goes to
+     * the lead's assigned staff member; if none is assigned, falls back to
+     * admin-tier users so a submission is never dropped on the floor. The
+     * lead is never notified here.
+     */
+    private function notifyDocumentSubmitted(Lead $lead, LeadDocument $document, string $context): void
+    {
+        $recipients = $lead->assignee
+            ? collect([$lead->assignee])
+            : User::whereIn('role', [User::ROLE_ADMIN, User::ROLE_SUPER_ADMIN])->get();
+
+        if ($recipients->isEmpty()) {
+            return;
+        }
+
+        Notification::send($recipients, new DocumentSubmittedForReview($lead, $document, $context));
+    }
 
     private function resolveLead(string $code): ?Lead
     {

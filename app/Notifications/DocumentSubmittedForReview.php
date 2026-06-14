@@ -18,6 +18,7 @@ class DocumentSubmittedForReview extends Notification
     public function __construct(
         public readonly Lead $lead,
         public readonly LeadDocument $document,
+        public readonly string $context = 'submitted', // 'submitted' | 'replaced'
     ) {}
 
     public function via(object $notifiable): array
@@ -29,15 +30,19 @@ class DocumentSubmittedForReview extends Notification
     {
         $name = trim("{$this->lead->first_name} {$this->lead->last_name}") ?: 'a lead';
         $docName = $this->document->original_name ?: 'a document';
+        $verb = $this->context === 'replaced' ? 'replaced' : 'uploaded';
 
         return [
-            'title'         => 'Document submitted for review',
-            'body'          => "{$name} uploaded \"{$docName}\".",
+            'title'         => $this->context === 'replaced'
+                ? 'Document replaced'
+                : 'Document submitted for review',
+            'body'          => "{$name} {$verb} \"{$docName}\".",
             'lead_id'       => $this->lead->id,
             'lead_name'     => $name,
             'document_id'   => $this->document->id,
             'document_name' => $docName,
             'document_type' => $this->document->checklist_key,
+            'context'       => $this->context,
             'link'          => "/admin/leads/{$this->lead->id}",
         ];
     }
