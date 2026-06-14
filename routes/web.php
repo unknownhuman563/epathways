@@ -74,9 +74,9 @@ Route::get('/immigration', function () {
 // Admin moderation toggle for published / featured / status on a review.
 // Both departments hit the same controller method — the moderation
 // fields (is_published / is_featured / status / visa_type) are shared.
-Route::middleware('auth')->post('/admin/immigration/user-reviews/{id}', [UserReviewController::class, 'adminUpdate'])
+Route::middleware(['auth', 'portal:admin,immigration'])->post('/admin/immigration/user-reviews/{id}', [UserReviewController::class, 'adminUpdate'])
     ->name('admin.immigration.user-reviews.update');
-Route::middleware('auth')->post('/admin/education/user-reviews/{id}', [UserReviewController::class, 'adminUpdate'])
+Route::middleware(['auth', 'portal:admin,education'])->post('/admin/education/user-reviews/{id}', [UserReviewController::class, 'adminUpdate'])
     ->name('admin.education.user-reviews.update');
 
 Route::get('/accommodation', [PublicAccommodationController::class, 'index']);
