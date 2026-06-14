@@ -164,6 +164,7 @@ export default function LeadDetails({ lead: backendLead, activity = [], stageTim
     const lead = {
         id: backendLead.lead_id || `LP-${backendLead.id}`,
         trackingCode: backendLead.tracking_code || null,
+        lastSeenAt: backendLead.last_seen_at || null,
         status: backendLead.status || 'New',
         stage: backendLead.stage || 'N/A',
         branch: backendLead.branch || 'Main',
@@ -398,6 +399,15 @@ export default function LeadDetails({ lead: backendLead, activity = [], stageTim
                         / WhatsApp / SMS. The lead opens that link and
                         sees their information + documents + timeline,
                         and can edit their information there. */}
+                    {lead.lastSeenAt && (
+                        <span
+                            title={`Lead last opened their tracker on ${new Date(lead.lastSeenAt).toLocaleString()}`}
+                            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-50 text-emerald-700 text-xs font-semibold"
+                        >
+                            <Eye size={14} /> Tracker seen {new Date(lead.lastSeenAt).toLocaleDateString()}
+                        </span>
+                    )}
+
                     {lead.trackingCode && (
                         <button
                             type="button"

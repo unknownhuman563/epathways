@@ -381,6 +381,10 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/admin/leads/{id}/inz', [LeadController::class, 'updateInz'])->name('admin.leads.inz');
         Route::post('/admin/leads/{id}/send-tracker-link', [LeadController::class, 'sendTrackerLink'])->name('admin.leads.send-tracker-link');
 
+        // Cross-lead document queue — review lead-submitted docs in bulk.
+        Route::get('/admin/document-queue', [\App\Http\Controllers\DocumentQueueController::class, 'index'])->name('admin.document-queue');
+        Route::post('/admin/document-queue/bulk', [\App\Http\Controllers\DocumentQueueController::class, 'bulk'])->name('admin.document-queue.bulk');
+
         // Bulk CSV import — duplicates detected by email or name+phone.
         Route::post('/admin/leads/import', [LeadController::class, 'importLeads'])->name('admin.leads.import');
         Route::post('/admin/leads/{id}/documents/checklist', [LeadController::class, 'updateDocumentChecklist'])->name('admin.leads.documents.checklist');
