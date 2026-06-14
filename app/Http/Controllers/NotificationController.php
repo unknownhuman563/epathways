@@ -38,7 +38,7 @@ class NotificationController extends Controller
             ->withQueryString()
             ->through(fn ($n) => $this->serialize($n));
 
-        return inertia('notifications/Index', [
+        return inertia($this->pageComponent($user), [
             'notifications' => $notifications,
             'filter'        => $filter,
             'counts'        => [
@@ -47,6 +47,25 @@ class NotificationController extends Controller
                 'read'   => $user->readNotifications()->count(),
             ],
         ]);
+    }
+
+    /**
+     * Resolve the page component by role so the shared notifications page
+     * is wrapped in the user's own portal layout (app.jsx auto-wraps by
+     * the component-name prefix). Each portal/<role>/Notifications page is
+     * a thin wrapper re-exporting notifications/Index.
+     */
+    private function pageComponent($user): string
+    {
+        return match ($user->role) {
+            'sales'         => 'portal/sales/Notifications',
+            'education'     => 'portal/education/Notifications',
+            'english'       => 'portal/english/Notifications',
+            'accommodation' => 'portal/accommodation/Notifications',
+            'lead'          => 'portal/lead/Notifications',
+            'immigration', 'immigration_manager', 'immigration_adviser' => 'portal/immigration/Notifications',
+            default         => 'admin/Notifications', // admin + super_admin
+        };
     }
 
     /** Recent 10 (read + unread) for the bell dropdown. */

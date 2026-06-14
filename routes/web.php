@@ -514,7 +514,7 @@ Route::middleware(['auth'])->group(function () {
 
             // ACCOUNT
             Route::get('/profile', [SalesController::class, 'profile'])->name('profile');
-            Route::get('/notifications', [SalesController::class, 'notifications'])->name('notifications');
+            Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications');
 
             // Portal-scoped lead detail URL (sales user lands at /portal/sales/leads/{id})
             Route::get('/leads/{id}', [LeadController::class, 'show'])->name('leads.show');
@@ -564,7 +564,7 @@ Route::middleware(['auth'])->group(function () {
 
             // ACCOUNT
             Route::get('/profile', [EducationController::class, 'profile'])->name('profile');
-            Route::get('/notifications', [EducationController::class, 'notifications'])->name('notifications');
+            Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications');
         });
 
         Route::middleware('portal:english')->prefix('english')->name('portal.english.')->group(function () {
@@ -638,7 +638,7 @@ Route::middleware(['auth'])->group(function () {
             // ACCOUNT
             Route::get('/profile', [ImmigrationController::class, 'profile'])->name('profile');
             Route::post('/profile', [ImmigrationController::class, 'updateProfile'])->name('profile.update');
-            Route::get('/notifications', [ImmigrationController::class, 'notifications'])->name('notifications');
+            Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications');
         });
 
         Route::middleware('portal:accommodation')->prefix('accommodation')->name('portal.accommodation.')->group(function () {
@@ -706,7 +706,7 @@ Route::middleware(['auth'])->group(function () {
             // Reports & Account
             Route::get('/reports', $stub('Reports', 'Weekly, monthly, quarterly and custom reports.'))->name('reports');
             Route::get('/profile', $stub('My Profile', 'Your account details and preferences.'))->name('profile');
-            Route::get('/notifications', $stub('Notifications', 'Your portal notifications.'))->name('notifications');
+            Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications');
         });
 
         // Lead Portal — external client-facing dashboard. Each lead-role user
