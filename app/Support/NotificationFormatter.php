@@ -50,6 +50,11 @@ class NotificationFormatter
                 'color' => 'blue',
                 'title' => $data['title'] ?? 'Lead updated their details',
             ],
+            'LeadConvertedToDepartment' => [
+                'icon'  => 'ArrowRightLeft',
+                'color' => 'blue',
+                'title' => $data['title'] ?? 'New department lead',
+            ],
             default => [
                 'icon'  => 'Bell',
                 'color' => 'gray',

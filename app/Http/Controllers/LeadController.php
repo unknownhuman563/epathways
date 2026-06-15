@@ -1316,6 +1316,30 @@ class LeadController extends Controller
      * and when. Same record stays; everything (documents, notes, history)
      * remains attached. Reversible via revertStudent() below.
      */
+    /**
+     * Notify a whole department's staff that a lead was moved into their
+     * pipeline. Falls back to admins only when the department has no users,
+     * so a conversion is never silently dropped.
+     */
+    private function notifyDepartmentOfConversion(Lead $lead, array $roles, string $label): void
+    {
+        try {
+            $recipients = \App\Models\User::whereIn('role', $roles)->get();
+            if ($recipients->isEmpty()) {
+                $recipients = \App\Models\User::whereIn('role', [\App\Models\User::ROLE_ADMIN, \App\Models\User::ROLE_SUPER_ADMIN])->get();
+            }
+            if ($recipients->isNotEmpty()) {
+                \Illuminate\Support\Facades\Notification::send(
+                    $recipients,
+                    new \App\Notifications\LeadConvertedToDepartment($lead, $label, auth()->user()?->name)
+                );
+            }
+        } catch (\Throwable $e) {
+            // Notifying must never break the conversion itself.
+            \Illuminate\Support\Facades\Log::error('Department conversion notify failed', ['lead_id' => $lead->id, 'error' => $e->getMessage()]);
+        }
+    }
+
     public function convertToStudent($id)
     {
         try {
@@ -1328,6 +1352,7 @@ class LeadController extends Controller
                 'student_converted_at' => now(),
                 'student_converted_by' => auth()->id(),
             ])->save();
+            $this->notifyDepartmentOfConversion($lead, ['education'], 'Education');
             return back()->with('success', "Lead {$lead->lead_id} is now a student.");
         } catch (\Throwable $e) {
             \Illuminate\Support\Facades\Log::error('Convert to student failed', ['id' => $id, 'error' => $e->getMessage()]);
@@ -1667,6 +1692,7 @@ class LeadController extends Controller
                 'immigration_converted_at' => now(),
                 'immigration_converted_by' => auth()->id(),
             ])->save();
+            $this->notifyDepartmentOfConversion($lead, ['immigration', 'immigration_manager', 'immigration_adviser'], 'Immigration');
             return back()->with('success', "Lead {$lead->lead_id} is now an immigration case.");
         } catch (\Throwable $e) {
             \Illuminate\Support\Facades\Log::error('Convert to case failed', ['id' => $id, 'error' => $e->getMessage()]);
@@ -1695,6 +1721,7 @@ class LeadController extends Controller
                 'accommodation_converted_at' => now(),
                 'accommodation_converted_by' => auth()->id(),
             ])->save();
+            $this->notifyDepartmentOfConversion($lead, ['accommodation'], 'Accommodation');
             return back()->with('success', "Lead {$lead->lead_id} is now an accommodation client.");
         } catch (\Throwable $e) {
             \Illuminate\Support\Facades\Log::error('Convert to accommodation failed', ['id' => $id, 'error' => $e->getMessage()]);
@@ -1731,6 +1758,7 @@ class LeadController extends Controller
                 'english_converted_at' => now(),
                 'english_converted_by' => auth()->id(),
             ])->save();
+            $this->notifyDepartmentOfConversion($lead, ['english'], 'English');
             return back()->with('success', "Lead {$lead->lead_id} is now an English student.");
         } catch (\Throwable $e) {
             \Illuminate\Support\Facades\Log::error('Convert to English failed', ['id' => $id, 'error' => $e->getMessage()]);
