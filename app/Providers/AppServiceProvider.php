@@ -18,7 +18,9 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        // Default SMS transport is the no-op provider; Twilio replaces this
+        // binding when configured (see boot()).
+        $this->app->bind(\App\Contracts\SmsProvider::class, \App\Services\Sms\NullSmsProvider::class);
     }
 
     /**
