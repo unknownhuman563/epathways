@@ -291,6 +291,15 @@ Route::middleware(['auth'])->group(function () {
 
         Route::get('/admin/activity-logs', [ActivityLogController::class, 'index'])->name('admin.activity-logs');
 
+        // Message templates — staff-editable email/SMS templates.
+        Route::get('/admin/message-templates', [\App\Http\Controllers\MessageTemplateController::class, 'index'])->name('admin.message-templates');
+        Route::get('/admin/message-templates/create', [\App\Http\Controllers\MessageTemplateController::class, 'create'])->name('admin.message-templates.create');
+        Route::post('/admin/message-templates', [\App\Http\Controllers\MessageTemplateController::class, 'store'])->name('admin.message-templates.store');
+        Route::get('/admin/message-templates/{id}', [\App\Http\Controllers\MessageTemplateController::class, 'show'])->name('admin.message-templates.show');
+        Route::put('/admin/message-templates/{id}', [\App\Http\Controllers\MessageTemplateController::class, 'update'])->name('admin.message-templates.update');
+        Route::delete('/admin/message-templates/{id}', [\App\Http\Controllers\MessageTemplateController::class, 'destroy'])->name('admin.message-templates.destroy');
+        Route::post('/admin/message-templates/{id}/test', [\App\Http\Controllers\MessageTemplateController::class, 'sendTest'])->name('admin.message-templates.test');
+
         // All Tasks — cross-department view. Same TaskBoardPage component the
         // department portals render, with admin scope (no assignee filter
         // by default + read-only on rows from other departments).
