@@ -53,6 +53,30 @@ Safe to wire into a post-deploy smoke check.
 
 ---
 
+## SMS (Twilio)
+
+SMS is sent through `App\Services\Sms\TwilioSmsProvider` (via the
+`CommunicationService`). Leave `TWILIO_SID` unset to disable SMS — the
+system falls back to a no-op provider that records a `failed` `message_logs`
+row with a clear reason, so nothing breaks without Twilio.
+
+```dotenv
+TWILIO_SID=ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+TWILIO_TOKEN=your-auth-token
+TWILIO_FROM_NUMBER=+64xxxxxxxxx   # a Twilio number you own, E.164
+```
+
+Phone numbers are normalized to E.164 (default region NZ) before sending;
+un-normalizable numbers skip SMS and log a failure.
+
+**Verify:** `php artisan ep:test-sms "+64211234567" "Hello"` — prints the
+provider result and writes a `message_logs` row.
+
+**Cost note:** outbound SMS to NZ mobiles is roughly **US$0.04–0.08 per
+segment** via Twilio (a "segment" is ~160 GSM-7 chars; long messages split
+into multiple segments). Verify current pricing at twilio.com/sms/pricing
+before enabling at volume.
+
 ## Calendar sync token
 
 `SyncController` (`POST /api/sync-calendar`) authenticates inbound

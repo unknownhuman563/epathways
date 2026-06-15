@@ -68,6 +68,35 @@ class CommunicationService
             : $this->sendEmail($lead, $subject ?? '(no subject)', $body, null);
     }
 
+    /**
+     * Send an SMS to a bare phone number (no Lead) — used by the test
+     * command and any future system-level alert. Logs a 'raw' MessageLog.
+     */
+    public function sendRawSms(string $phone, string $body): MessageLog
+    {
+        $to = $this->normalizePhone($phone);
+
+        if (! $to) {
+            return $this->log([
+                'channel' => MessageLog::CHANNEL_SMS, 'recipient_type' => 'raw',
+                'recipient_address' => $phone, 'body' => $body,
+                'status' => MessageLog::STATUS_FAILED,
+                'error_message' => 'Invalid phone number — could not normalize to E.164.', 'failed_at' => now(),
+            ]);
+        }
+
+        $res = $this->sms->send($to, $body);
+
+        return $this->log([
+            'channel' => MessageLog::CHANNEL_SMS, 'recipient_type' => 'raw',
+            'recipient_address' => $to, 'body' => $body,
+            'status' => $res['ok'] ? MessageLog::STATUS_QUEUED : MessageLog::STATUS_FAILED,
+            'provider_message_id' => $res['message_id'] ?? null,
+            'error_message' => $res['ok'] ? null : ($res['error'] ?? 'SMS send failed.'),
+            'failed_at' => $res['ok'] ? null : now(),
+        ]);
+    }
+
     // ─── Channels ─────────────────────────────────────────────────────────
 
     private function sendEmail(Lead $lead, string $subject, string $body, ?string $key): MessageLog
