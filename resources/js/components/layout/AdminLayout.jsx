@@ -5,7 +5,7 @@ import {
     GraduationCap, Video, Globe, FileText, Star, LayoutDashboard,
     Briefcase, Languages, Building2, KeyRound, Sparkles, Tag,
     Radio, PenLine, CalendarDays, Inbox, Megaphone, BarChart3,
-    CheckSquare, Clock, Crown,
+    CheckSquare, Clock, Crown, LifeBuoy,
 } from "lucide-react";
 
 // Super-admin-only entry — only injected when the current user holds
@@ -46,6 +46,7 @@ const ADMIN_NAV = [
     // inside the page so staff doesn't have to bounce between sidebar links.
     { name: "User Reviews", href: "/admin/user-reviews", icon: <Star size={20} /> },
     { name: "Message Templates", href: "/admin/message-templates", icon: <PenLine size={20} /> },
+    { name: "System Requests", href: "/admin/system-tickets", icon: <LifeBuoy size={20} /> },
     {
         name: "Immigration",
         icon: <Globe size={20} />,

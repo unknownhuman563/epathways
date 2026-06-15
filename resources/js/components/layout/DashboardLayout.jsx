@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { Menu, X, Settings, LogOut, ChevronDown, Eye, ArrowLeft } from "lucide-react";
 import NotificationBell from "@/components/NotificationBell";
 import GlobalSearchBar from "@/components/GlobalSearchBar";
+import RequestTicketButton from "@/components/RequestTicketButton";
 
 /**
  * The official ePathways dashboard shell — sidebar + topbar + content area.
@@ -243,6 +244,8 @@ export default function DashboardLayout({
 
                     <div className="flex items-center gap-4 lg:gap-5 mt-2">
                         <GlobalSearchBar />
+
+                        {user?.role !== "lead" && <RequestTicketButton />}
 
                         <NotificationBell />
 

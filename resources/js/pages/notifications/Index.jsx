@@ -1,8 +1,8 @@
 import { Head, router, usePage } from "@inertiajs/react";
-import { Bell, DollarSign, UserPlus, UserPen, FileText, ArrowRightLeft, CheckSquare, Check, Trash2, CheckCheck } from "lucide-react";
+import { Bell, DollarSign, UserPlus, UserPen, FileText, ArrowRightLeft, CheckSquare, Ticket, Check, Trash2, CheckCheck } from "lucide-react";
 import Pagination from "@/components/ui/Pagination";
 
-const ICONS = { Bell, DollarSign, UserPlus, UserPen, FileText, ArrowRightLeft, CheckSquare };
+const ICONS = { Bell, DollarSign, UserPlus, UserPen, FileText, ArrowRightLeft, CheckSquare, Ticket };
 const COLORS = {
     amber: "bg-amber-50 text-amber-600",
     blue: "bg-blue-50 text-blue-600",

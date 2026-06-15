@@ -60,6 +60,16 @@ class NotificationFormatter
                 'color' => 'amber',
                 'title' => $data['title'] ?? 'New task assigned to you',
             ],
+            'TicketSubmitted' => [
+                'icon'  => 'Ticket',
+                'color' => 'amber',
+                'title' => $data['title'] ?? 'New system request',
+            ],
+            'TicketUpdated' => [
+                'icon'  => 'Ticket',
+                'color' => 'blue',
+                'title' => $data['title'] ?? 'Your request was updated',
+            ],
             default => [
                 'icon'  => 'Bell',
                 'color' => 'gray',
