@@ -2986,6 +2986,65 @@ function TagsPanel({ leadId, tags, allTags }) {
 
 // ── Documents tab — checklist of required NZ application docs ────────────
 
+// Flat checklist table — every required document as a row: name | status.
+// Reads the lead's per-item status (or "Submitted" when files exist / else
+// "Pending") and links each row into its section folder for upload/review.
+function ChecklistTable({ state = {}, checklistFiles = {}, onOpenSection }) {
+    return (
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+            <table className="w-full text-left">
+                <thead>
+                    <tr className="bg-gray-50/60 border-b border-gray-100 text-[10px] font-bold uppercase tracking-widest text-gray-500">
+                        <th className="px-6 py-3">Document Name</th>
+                        <th className="px-6 py-3 w-44">Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {CHECKLIST.map((section) => (
+                        <React.Fragment key={section.key}>
+                            <tr className="bg-gray-50/40 border-b border-gray-100">
+                                <td colSpan={2} className="px-6 py-2 text-[11px] font-bold uppercase tracking-wider text-gray-600">
+                                    {section.section}
+                                </td>
+                            </tr>
+                            {section.items.map((it) => {
+                                const status = state[it.id]?.status;
+                                const files = checklistFiles[it.id]?.length || 0;
+                                const label = status ? STATUS_LABEL[status] : (files > 0 ? 'Submitted' : 'Pending');
+                                const chip = status
+                                    ? STATUS_CHIP[status]
+                                    : (files > 0 ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-gray-100 text-gray-500 border-gray-200');
+                                return (
+                                    <tr
+                                        key={it.id}
+                                        onClick={() => onOpenSection(section.section)}
+                                        className="border-b border-gray-50 hover:bg-emerald-50/30 cursor-pointer transition-colors"
+                                    >
+                                        <td className="px-6 py-3">
+                                            <div className="flex items-center gap-2.5">
+                                                <FileText size={14} className="text-gray-400 shrink-0" />
+                                                <span className="text-sm text-gray-800">{it.name}</span>
+                                                {files > 0 && (
+                                                    <span className="text-[10px] text-gray-400 tabular-nums">· {files} file{files === 1 ? '' : 's'}</span>
+                                                )}
+                                            </div>
+                                        </td>
+                                        <td className="px-6 py-3">
+                                            <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] font-medium ${chip}`}>
+                                                {label}
+                                            </span>
+                                        </td>
+                                    </tr>
+                                );
+                            })}
+                        </React.Fragment>
+                    ))}
+                </tbody>
+            </table>
+        </div>
+    );
+}
+
 function DocumentsPanel({ lead, checklistFiles = {}, currentUser = null }) {
     // The lead's saved checklist state lives on the backend in a JSON column
     // keyed by item id. We keep a local copy here so edits feel instant and
@@ -3088,18 +3147,11 @@ function DocumentsPanel({ lead, checklistFiles = {}, currentUser = null }) {
             {/* Either the folder grid (overview) or one folder's contents
                 (drill-in view) — toggled by openFolder state. */}
             {openFolder === null ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                    {CHECKLIST.map((section, idx) => (
-                        <FolderCard
-                            key={section.section}
-                            section={section}
-                            stats={sectionStats(section, state, checklistFiles)}
-                            verification={verifications[section.key]}
-                            onClick={() => setOpenFolder(section.section)}
-                            paletteIndex={idx}
-                        />
-                    ))}
-                </div>
+                <ChecklistTable
+                    state={state}
+                    checklistFiles={checklistFiles}
+                    onOpenSection={setOpenFolder}
+                />
             ) : (
                 <FolderDetail
                     section={CHECKLIST.find((s) => s.section === openFolder)}
