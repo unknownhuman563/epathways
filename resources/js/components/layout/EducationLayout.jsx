@@ -3,7 +3,7 @@ import { usePage } from "@inertiajs/react";
 import {
     LayoutDashboard, UserSquare2, Users, FolderOpen, GraduationCap,
     ListChecks, LineChart, User, Bell, Tag, Star, CheckSquare, ClipboardCheck,
-    Building2,
+    Building2, Ticket,
 } from "lucide-react";
 
 export default function EducationLayout({ children }) {
@@ -32,6 +32,7 @@ export default function EducationLayout({ children }) {
         { name: "Account", section: true },
         { name: "My Profile",    href: "/portal/education/profile",       icon: <User size={20} /> },
         { name: "Notifications", href: "/portal/education/notifications", icon: <Bell size={20} />, badge: badges.notifications_unread, badgeTone: "warning" },
+        { name: "My Tickets",    href: "/portal/tickets",                icon: <Ticket size={20} /> },
     ];
 
     return (

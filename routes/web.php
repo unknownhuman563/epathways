@@ -524,6 +524,11 @@ Route::middleware(['auth'])->group(function () {
     Route::prefix('portal')->group(function () {
         Route::get('/', fn () => redirect(auth()->user()->homeRoute()))->name('portal');
 
+        // "My Tickets" — every department staffer's own system-ticket list.
+        // One route for all portals: the controller picks the per-role page
+        // so it wraps in that staffer's layout (admins redirect to the board).
+        Route::get('/tickets', [\App\Http\Controllers\SystemTicketController::class, 'myTickets'])->name('portal.tickets');
+
         // Sales portal — leads pipeline + consultation bookings.
         Route::middleware('portal:sales')->prefix('sales')->name('portal.sales.')->group(function () {
             Route::get('/dashboard', [SalesController::class, 'dashboard'])->name('dashboard');

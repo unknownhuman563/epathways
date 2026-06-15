@@ -39,10 +39,10 @@ export default function SystemTickets({ tickets = { data: [], links: [] }, filte
             <header className="flex items-end justify-between gap-4 flex-wrap">
                 <div>
                     <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-                        <Ticket className="w-6 h-6 text-gray-700" /> System Requests
+                        <Ticket className="w-6 h-6 text-gray-700" /> System Tickets
                         {(counts.open ?? 0) > 0 && <span className="text-xs font-bold bg-blue-600 text-white rounded-full px-2 py-0.5">{counts.open} open</span>}
                     </h1>
-                    <p className="text-sm text-gray-500 mt-1">Change &amp; feature requests raised by the departments.</p>
+                    <p className="text-sm text-gray-500 mt-1">Change &amp; feature tickets raised by the departments.</p>
                 </div>
             </header>
 
@@ -57,7 +57,7 @@ export default function SystemTickets({ tickets = { data: [], links: [] }, filte
                 </div>
                 <form onSubmit={(e) => { e.preventDefault(); setFilter({ search }); }} className="relative flex-1 min-w-[200px] max-w-xs ml-auto">
                     <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                    <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search requests…" className="w-full pl-9 pr-3 py-2 rounded-xl border border-gray-200 text-sm outline-none focus:ring-2 focus:ring-gray-300" />
+                    <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search tickets…" className="w-full pl-9 pr-3 py-2 rounded-xl border border-gray-200 text-sm outline-none focus:ring-2 focus:ring-gray-300" />
                 </form>
             </div>
 
@@ -75,7 +75,7 @@ export default function SystemTickets({ tickets = { data: [], links: [] }, filte
                         </thead>
                         <tbody className="divide-y divide-gray-50">
                             {rows.length === 0 ? (
-                                <tr><td colSpan={5} className="px-6 py-16 text-center text-sm text-gray-400">No requests yet.</td></tr>
+                                <tr><td colSpan={5} className="px-6 py-16 text-center text-sm text-gray-400">No tickets yet.</td></tr>
                             ) : rows.map((t) => (
                                 <tr key={t.id} onClick={() => setActive(t)} className="hover:bg-gray-50/40 cursor-pointer">
                                     <td className="px-6 py-3">

@@ -12,10 +12,10 @@ use Illuminate\Validation\Rule;
 
 class UserController extends Controller
 {
-    /** admin + every department-portal role. */
+    /** super-admin + admin + every department-portal role. */
     private function roleValues(): array
     {
-        return array_merge([User::ROLE_ADMIN], User::PORTAL_ROLES);
+        return array_merge([User::ROLE_SUPER_ADMIN, User::ROLE_ADMIN], User::PORTAL_ROLES);
     }
 
     public function index()
@@ -59,8 +59,9 @@ class UserController extends Controller
             'password' => ['nullable', \Illuminate\Validation\Rules\Password::defaults()],
         ]);
 
-        // Don't let the current admin demote themselves — avoids locking yourself out.
-        if ($user->is($request->user()) && $validated['role'] !== User::ROLE_ADMIN) {
+        // Don't let anyone change their own role — avoids locking yourself out
+        // (e.g. a super-admin demoting themselves and losing the super surface).
+        if ($user->is($request->user()) && $validated['role'] !== $user->role) {
             return back()->withErrors(['role' => 'You cannot change your own role.']);
         }
 

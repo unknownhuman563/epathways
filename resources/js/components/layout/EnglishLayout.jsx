@@ -1,11 +1,14 @@
 import DashboardLayout from "./DashboardLayout";
-import { LayoutDashboard, Languages, Users, ClipboardCheck } from "lucide-react";
+import { LayoutDashboard, Languages, Users, ClipboardCheck, Ticket } from "lucide-react";
 
 const ENGLISH_NAV = [
     { name: "Dashboard", href: "/portal/english/dashboard", icon: <LayoutDashboard size={20} /> },
     { name: "Classes", href: "/portal/english/classes", icon: <Languages size={20} /> },
     { name: "Learners", href: "/portal/english/learners", icon: <Users size={20} /> },
     { name: "Assessments", href: "/portal/english/assessments", icon: <ClipboardCheck size={20} /> },
+
+    { name: "Account", section: true },
+    { name: "My Tickets", href: "/portal/tickets", icon: <Ticket size={20} /> },
 ];
 
 export default function EnglishLayout({ children }) {

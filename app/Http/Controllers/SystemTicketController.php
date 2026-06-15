@@ -19,7 +19,7 @@ class SystemTicketController extends Controller
     public function store(Request $request)
     {
         $user = $request->user();
-        abort_if($user->isLead(), 403, 'Only staff can submit system requests.');
+        abort_if($user->isLead(), 403, 'Only staff can submit tickets.');
 
         $data = $request->validate([
             'title'       => ['required', 'string', 'max:160'],
@@ -41,7 +41,57 @@ class SystemTicketController extends Controller
             Notification::send($recipients, new TicketSubmitted($ticket, $user->name));
         }
 
-        return back()->with('success', "Request {$ticket->ticket_ref} submitted — thank you!");
+        return back()->with('success', "Ticket {$ticket->ticket_ref} submitted — thank you!");
+    }
+
+    /**
+     * Staff-facing list of the tickets the current user has raised, with
+     * status + the admin's reply. Renders inside the user's own portal
+     * layout (app.jsx auto-wraps by the component-name prefix). Admins /
+     * super-admins don't have a personal list — they get the full board.
+     */
+    public function myTickets(Request $request)
+    {
+        $user = $request->user();
+        abort_if($user->isLead(), 403, 'Only staff can view tickets.');
+
+        if (in_array($user->role, [User::ROLE_ADMIN, User::ROLE_SUPER_ADMIN], true)) {
+            return redirect('/admin/system-tickets');
+        }
+
+        $mine = SystemTicket::where('submitted_by', $user->id);
+
+        $tickets = (clone $mine)
+            ->with('resolver:id,name')
+            ->orderByRaw("CASE WHEN status IN ('done','declined') THEN 1 ELSE 0 END")
+            ->orderByDesc('created_at')
+            ->paginate(15)
+            ->through(fn (SystemTicket $t) => $this->serialize($t));
+
+        return inertia($this->myTicketsPage($user), [
+            'tickets' => $tickets,
+            'counts'  => [
+                'open'  => (clone $mine)->open()->count(),
+                'total' => (clone $mine)->count(),
+            ],
+            'meta'    => [
+                'categories' => SystemTicket::CATEGORIES,
+                'priorities' => SystemTicket::PRIORITIES,
+            ],
+        ]);
+    }
+
+    /** Pick the per-portal page so the shared list wraps in the right layout. */
+    private function myTicketsPage($user): string
+    {
+        return match ($user->role) {
+            'sales'         => 'portal/sales/Tickets',
+            'education'     => 'portal/education/Tickets',
+            'english'       => 'portal/english/Tickets',
+            'accommodation' => 'portal/accommodation/Tickets',
+            'immigration', 'immigration_manager', 'immigration_adviser' => 'portal/immigration/Tickets',
+            default         => 'portal/sales/Tickets',
+        };
     }
 
     /** Admin / super-admin triage board of every ticket. */

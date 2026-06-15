@@ -87,6 +87,32 @@ class SystemTicketTest extends TestCase
             ->get('/admin/system-tickets')->assertForbidden();
     }
 
+    public function test_staff_see_only_their_own_tickets(): void
+    {
+        $sales = User::factory()->create(['role' => 'sales']);
+        $other = User::factory()->create(['role' => 'education']);
+        SystemTicket::create($this->payload(['submitted_by' => $sales->id, 'department' => 'sales']));
+        SystemTicket::create($this->payload(['submitted_by' => $other->id, 'department' => 'education']));
+
+        $this->actingAs($sales)
+            ->get('/portal/tickets')
+            ->assertOk()
+            ->assertInertia(fn (Assert $p) => $p->component('portal/sales/Tickets')->has('tickets.data', 1));
+    }
+
+    public function test_my_tickets_redirects_admins_to_the_board(): void
+    {
+        $this->actingAs(User::factory()->create(['role' => 'admin']))
+            ->get('/portal/tickets')
+            ->assertRedirect('/admin/system-tickets');
+    }
+
+    public function test_lead_cannot_view_my_tickets(): void
+    {
+        $this->actingAs(User::factory()->create(['role' => 'lead']))
+            ->get('/portal/tickets')->assertForbidden();
+    }
+
     public function test_admin_update_changes_status_and_notifies_submitter(): void
     {
         Notification::fake();

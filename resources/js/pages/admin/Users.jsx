@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 
 const ROLE_STYLES = {
+    super_admin:   'bg-gray-900 text-white border-gray-900',
     admin:         'bg-purple-100 text-purple-700 border-purple-200',
     sales:         'bg-blue-100 text-blue-700 border-blue-200',
     education:     'bg-emerald-100 text-emerald-700 border-emerald-200',
@@ -15,7 +16,8 @@ const ROLE_STYLES = {
 };
 
 const roleStyle = (role) => ROLE_STYLES[role] || 'bg-gray-100 text-gray-600 border-gray-200';
-const roleLabel = (role) => (role ? role.charAt(0).toUpperCase() + role.slice(1) : '—');
+const ROLE_LABELS = { super_admin: 'Super Admin' };
+const roleLabel = (role) => (role ? ROLE_LABELS[role] || role.charAt(0).toUpperCase() + role.slice(1) : '—');
 
 const formatDate = (iso) => {
     if (!iso) return '';
@@ -120,11 +122,11 @@ function UserModal({ open, onClose, editing, roles }) {
                                 className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-gray-900 transition-all"
                             >
                                 {roles.map(r => (
-                                    <option key={r} value={r}>{roleLabel(r)}{r === 'admin' ? ' — full admin access' : ' portal'}</option>
+                                    <option key={r} value={r}>{roleLabel(r)}{r === 'super_admin' ? ' — full access + super dashboard' : r === 'admin' ? ' — full admin access' : ' portal'}</option>
                                 ))}
                             </select>
                             <p className="text-[11px] text-gray-400 mt-1.5">
-                                Admins can open the whole admin area; a portal role only gets that department's portal.
+                                Super Admin adds the cross-department super dashboard on top of full admin access; Admin opens the whole admin area; a portal role only gets that department's portal.
                             </p>
                         </div>
 

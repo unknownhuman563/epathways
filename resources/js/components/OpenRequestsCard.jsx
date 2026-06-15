@@ -21,7 +21,7 @@ export default function OpenRequestsCard({ summary = { open_count: 0, recent: []
                 <div className="flex items-center gap-2.5">
                     <span className="w-9 h-9 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center"><LifeBuoy size={16} /></span>
                     <div>
-                        <h3 className="text-sm font-bold text-gray-900">System Requests</h3>
+                        <h3 className="text-sm font-bold text-gray-900">System Tickets</h3>
                         <p className="text-[11px] text-gray-400">{open_count} open</p>
                     </div>
                 </div>
@@ -32,7 +32,7 @@ export default function OpenRequestsCard({ summary = { open_count: 0, recent: []
 
             <div className="divide-y divide-gray-50">
                 {recent.length === 0 ? (
-                    <p className="px-5 py-8 text-center text-sm text-gray-400">No open requests 🎉</p>
+                    <p className="px-5 py-8 text-center text-sm text-gray-400">No open tickets 🎉</p>
                 ) : (
                     recent.map((t) => (
                         <Link key={t.id} href="/admin/system-tickets" className="flex items-center gap-3 px-5 py-3 hover:bg-gray-50/60">
