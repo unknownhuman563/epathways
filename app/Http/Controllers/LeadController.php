@@ -1767,7 +1767,10 @@ class LeadController extends Controller
         }
 
         try {
-            \Illuminate\Support\Facades\Mail::to($lead->email)->send(new \App\Mail\TrackerWelcome($lead));
+            $res = app(\App\Services\CommunicationService::class)->sendTemplated('tracker_welcome', $lead);
+            if (! $res['email']) {
+                \Illuminate\Support\Facades\Mail::to($lead->email)->send(new \App\Mail\TrackerWelcome($lead));
+            }
         } catch (\Throwable $e) {
             \Illuminate\Support\Facades\Log::error('Manual TrackerWelcome failed', ['lead_id' => $lead->id, 'error' => $e->getMessage()]);
             return back()->with('error', 'Could not send the tracker link. Please try again.');

@@ -19,5 +19,6 @@ class DatabaseSeeder extends Seeder
         $this->call(PortalUsersSeeder::class);
         $this->call(ProgramSeeder::class);
         $this->call(PropertySeeder::class);
+        $this->call(DefaultMessageTemplatesSeeder::class);
     }
 }

@@ -102,10 +102,15 @@ class LeadDocumentController extends Controller
                     'requested_at' => now(),
                 ]);
 
-                // Email the lead a link to their tracker to upload it.
+                // Email/SMS the lead a link to upload it. Prefer the
+                // 'doc_request' template; fall back to the legacy Mailable.
                 if (! empty($lead->email)) {
                     try {
-                        Mail::to($lead->email)->send(new \App\Mail\DocumentRequestedFromLead($lead, $docRequest));
+                        $res = app(\App\Services\CommunicationService::class)
+                            ->sendTemplated('doc_request', $lead, ['document_name' => $docRequest->label]);
+                        if (! $res['email']) {
+                            Mail::to($lead->email)->send(new \App\Mail\DocumentRequestedFromLead($lead, $docRequest));
+                        }
                     } catch (\Throwable $e) {
                         Log::error('DocumentRequestedFromLead dispatch failed', ['lead_id' => $lead->id, 'error' => $e->getMessage()]);
                     }
@@ -148,12 +153,20 @@ class LeadDocumentController extends Controller
             'reviewed_at' => now(),
         ]);
 
-        // Tell the lead their document was approved / rejected.
+        // Tell the lead their document was approved / rejected. Prefer the
+        // doc_approved / doc_rejected templates; fall back to the Mailable.
         $lead = $doc->lead;
         if (in_array($validated['status'], [LeadDocument::STATUS_APPROVED, LeadDocument::STATUS_REJECTED], true)
             && $lead && ! empty($lead->email)) {
             try {
-                Mail::to($lead->email)->send(new \App\Mail\DocumentStatusChanged($lead, $doc->fresh(), $validated['note'] ?? null));
+                $key = $validated['status'] === LeadDocument::STATUS_APPROVED ? 'doc_approved' : 'doc_rejected';
+                $res = app(\App\Services\CommunicationService::class)->sendTemplated($key, $lead, [
+                    'document_name' => $doc->original_name,
+                    'reason'        => $validated['note'] ?? '',
+                ]);
+                if (! $res['email']) {
+                    Mail::to($lead->email)->send(new \App\Mail\DocumentStatusChanged($lead, $doc->fresh(), $validated['note'] ?? null));
+                }
             } catch (\Throwable $e) {
                 Log::error('DocumentStatusChanged dispatch failed', ['doc_id' => $doc->id, 'error' => $e->getMessage()]);
             }

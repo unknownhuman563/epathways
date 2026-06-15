@@ -94,11 +94,19 @@ class DocumentQueueController extends Controller
             }
         });
 
-        // Notify leads after the status writes have committed.
+        // Notify leads after the status writes have committed. Prefer the
+        // doc_approved / doc_rejected templates; fall back to the Mailable.
+        $key = $status === LeadDocument::STATUS_APPROVED ? 'doc_approved' : 'doc_rejected';
         foreach ($docs as $doc) {
             if ($doc->lead && ! empty($doc->lead->email)) {
                 try {
-                    Mail::to($doc->lead->email)->send(new DocumentStatusChanged($doc->lead, $doc->fresh(), $data['reason'] ?? null));
+                    $res = app(\App\Services\CommunicationService::class)->sendTemplated($key, $doc->lead, [
+                        'document_name' => $doc->original_name,
+                        'reason'        => $data['reason'] ?? '',
+                    ]);
+                    if (! $res['email']) {
+                        Mail::to($doc->lead->email)->send(new DocumentStatusChanged($doc->lead, $doc->fresh(), $data['reason'] ?? null));
+                    }
                 } catch (\Throwable $e) {
                     \Illuminate\Support\Facades\Log::error('Bulk DocumentStatusChanged failed', ['doc_id' => $doc->id, 'error' => $e->getMessage()]);
                 }

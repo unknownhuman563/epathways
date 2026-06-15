@@ -115,11 +115,15 @@ class LeadIntakeService
             $this->captureUtm($request)
         ));
 
-        // First-touch: give the lead their /track/{code} home. Queued, and
-        // only when we actually have an address to send to.
+        // First-touch: give the lead their /track/{code} home. Prefer the
+        // 'tracker_welcome' template; fall back to the legacy Mailable if it
+        // isn't configured, so the email always sends.
         if (! empty($lead->email)) {
             try {
-                Mail::to($lead->email)->send(new TrackerWelcome($lead));
+                $res = app(CommunicationService::class)->sendTemplated('tracker_welcome', $lead);
+                if (! $res['email']) {
+                    Mail::to($lead->email)->send(new TrackerWelcome($lead));
+                }
             } catch (\Throwable $e) {
                 Log::error('TrackerWelcome dispatch failed', ['lead_id' => $lead->id, 'error' => $e->getMessage()]);
             }
