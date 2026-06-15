@@ -177,7 +177,9 @@ class ImmigrationController extends Controller
             return inertia('portal/immigration/Leads', [
                 'portal'   => 'immigration',
                 'statuses' => self::LEAD_STATUSES,
-                'leads'    => Lead::with(['studyPlans', 'event', 'portalUser:id,lead_id,last_login_at'])
+                // Pipeline only — converted leads (cases) move to the Cases page.
+                'leads'    => Lead::inLeadPipeline()
+                    ->with(['studyPlans', 'event', 'portalUser:id,lead_id,last_login_at'])
                     ->latest()->get()->map(fn ($l) => $this->leadRow($l)),
             ]);
         } catch (\Throwable $e) {
