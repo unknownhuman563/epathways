@@ -7,9 +7,11 @@ use App\Models\LeadTask;
 use App\Models\LeadTaskAttachment;
 use App\Models\LeadTaskComment;
 use App\Models\User;
+use App\Notifications\TaskAssigned;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 
@@ -142,6 +144,9 @@ class TaskController extends Controller
 
             $this->storeAttachments($request, $task, $user);
 
+            // Notify everyone the task was assigned to (except the creator).
+            $this->notifyAssignees($task, $assigneeIds, $user->id);
+
             return back()->with('success', "Task “{$task->title}” created.");
         } catch (\Throwable $e) {
             Log::error('Task create failed', ['error' => $e->getMessage(), 'user_id' => $user->id]);
@@ -171,6 +176,9 @@ class TaskController extends Controller
             || ($task->department && $task->department === $user->role);
 
         abort_unless($canEdit, 403, 'You do not have permission to update this task.');
+
+        // Snapshot current assignees so we can notify anyone newly added.
+        $assigneesBefore = $task->allAssigneeIds();
 
         $validated = $request->validate([
             'status'            => ['sometimes', Rule::in(LeadTask::STATUSES)],
@@ -232,11 +240,37 @@ class TaskController extends Controller
 
             $task->save();
 
+            // Notify anyone added as an assignee by this update (not re-notify
+            // existing ones, and never the editor themselves).
+            $added = array_diff($task->allAssigneeIds(), $assigneesBefore);
+            $this->notifyAssignees($task, $added, $user->id);
+
             return back()->with('success', 'Task updated.');
         } catch (\Throwable $e) {
             Log::error('Task update failed', ['task_id' => $id, 'error' => $e->getMessage()]);
 
             return back()->withErrors(['error' => 'Could not update task.']);
+        }
+    }
+
+    /**
+     * Send a TaskAssigned notification to the given assignee ids, excluding
+     * the actor (no point pinging yourself about your own assignment).
+     */
+    private function notifyAssignees(LeadTask $task, array $assigneeIds, int $actorId): void
+    {
+        $ids = array_values(array_diff(array_map('intval', $assigneeIds), [$actorId]));
+        if (empty($ids)) {
+            return;
+        }
+
+        try {
+            $recipients = User::whereIn('id', $ids)->get();
+            if ($recipients->isNotEmpty()) {
+                Notification::send($recipients, new TaskAssigned($task, Auth::user()?->name));
+            }
+        } catch (\Throwable $e) {
+            Log::error('Task assignment notify failed', ['task_id' => $task->id, 'error' => $e->getMessage()]);
         }
     }
 

@@ -398,10 +398,11 @@ class LeadDocumentController extends Controller
         ]);
 
         try {
+            $lastDoc = null;
             foreach ($request->file('files') as $file) {
                 $path = $file->store("lead-documents/{$lead->id}", self::DISK);
 
-                LeadDocument::create([
+                $lastDoc = LeadDocument::create([
                     'lead_id'       => $lead->id,
                     'request_id'    => null,
                     'checklist_key' => $key,
@@ -412,6 +413,11 @@ class LeadDocumentController extends Controller
                     'status'        => LeadDocument::STATUS_SUBMITTED,
                     'uploaded_by'   => $user->id,
                 ]);
+            }
+
+            // One notification per upload batch (not per file).
+            if ($lastDoc) {
+                $this->notifyDocumentSubmitted($lead, $lastDoc);
             }
 
             return back()->with('success', 'Document uploaded. Our team will review it shortly.');
@@ -447,6 +453,28 @@ class LeadDocumentController extends Controller
         }
     }
 
+    /**
+     * Notify the lead's assigned staff (or admins as a fallback) that the
+     * lead submitted a document — same alert the public /track upload fires.
+     */
+    private function notifyDocumentSubmitted(Lead $lead, LeadDocument $document): void
+    {
+        try {
+            $recipients = $lead->assignee
+                ? collect([$lead->assignee])
+                : \App\Models\User::whereIn('role', [\App\Models\User::ROLE_ADMIN, \App\Models\User::ROLE_SUPER_ADMIN])->get();
+
+            if ($recipients->isNotEmpty()) {
+                \Illuminate\Support\Facades\Notification::send(
+                    $recipients,
+                    new \App\Notifications\DocumentSubmittedForReview($lead, $document)
+                );
+            }
+        } catch (\Throwable $e) {
+            Log::error('Lead-portal document notify failed', ['lead_id' => $lead->id, 'error' => $e->getMessage()]);
+        }
+    }
+
     public function leadUpload(Request $request)
     {
         $user = Auth::user();
@@ -468,7 +496,7 @@ class LeadDocumentController extends Controller
 
         $path = $request->file('file')->store("lead-documents/{$lead->id}", self::DISK);
 
-        LeadDocument::create([
+        $document = LeadDocument::create([
             'lead_id'       => $lead->id,
             'request_id'    => $request->input('request_id'),
             'original_name' => $request->file('file')->getClientOriginalName(),
@@ -478,6 +506,8 @@ class LeadDocumentController extends Controller
             'status'        => LeadDocument::STATUS_SUBMITTED,
             'uploaded_by'   => $user->id,
         ]);
+
+        $this->notifyDocumentSubmitted($lead, $document);
 
         return back()->with('success', 'Document uploaded. Our team will review it shortly.');
     }
