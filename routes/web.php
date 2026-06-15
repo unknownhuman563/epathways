@@ -258,7 +258,9 @@ Route::middleware(['auth'])->group(function () {
     Route::middleware('portal:admin')->group(function () {
         Route::redirect('/admin', '/admin/dashboard');
         Route::get('/admin/dashboard', function () {
-            return inertia('admin/Dashboard');
+            return inertia('admin/Dashboard', [
+                'ticketSummary' => \App\Models\SystemTicket::dashboardSummary(),
+            ]);
         });
         Route::get('/admin/team-cards', fn () => inertia('admin/TeamCards'))->name('admin.team-cards');
         Route::get('/admin/leads', [LeadController::class, 'index'])->name('admin.leads');

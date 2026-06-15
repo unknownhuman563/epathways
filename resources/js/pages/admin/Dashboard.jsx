@@ -1,8 +1,9 @@
 import React from 'react';
 import { Head } from '@inertiajs/react';
 import { TrendingUp, TrendingDown, MoreHorizontal, ArrowUpRight, ArrowDownRight, ChevronLeft, ChevronRight, Search } from 'lucide-react';
+import OpenRequestsCard from '@/components/OpenRequestsCard';
 
-export default function Dashboard() {
+export default function Dashboard({ ticketSummary = { open_count: 0, recent: [] } }) {
     // Mock data based on the design
     const summaryCards = [
         { title: "Total Revenue", value: "$23,902", trend: "+4.2%", trendLabel: "from last month", isPositive: true, dark: true },
@@ -46,6 +47,9 @@ export default function Dashboard() {
                     </div>
                 </div>
             </div>
+
+            {/* Open system requests — quick triage peek */}
+            <OpenRequestsCard summary={ticketSummary} />
 
             {/* Summary Cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">

@@ -51,4 +51,29 @@ class SystemTicket extends Model
     {
         return $query->whereNotIn('status', ['done', 'declined']);
     }
+
+    /**
+     * Compact summary for the admin / super-admin dashboard widget:
+     * the open count plus the latest few open requests.
+     */
+    public static function dashboardSummary(): array
+    {
+        return [
+            'open_count' => static::open()->count(),
+            'recent'     => static::open()
+                ->latest()
+                ->limit(3)
+                ->get()
+                ->map(fn (self $t) => [
+                    'id'         => $t->id,
+                    'ticket_ref' => $t->ticket_ref,
+                    'title'      => $t->title,
+                    'department' => $t->department,
+                    'priority'   => $t->priority,
+                    'status'     => $t->status,
+                    'created_at' => optional($t->created_at)?->toIso8601String(),
+                ])
+                ->all(),
+        ];
+    }
 }
