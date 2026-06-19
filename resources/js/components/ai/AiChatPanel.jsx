@@ -7,10 +7,11 @@ const fmtTime = (iso) =>
     iso ? new Date(iso).toLocaleDateString("en-US", { day: "2-digit", month: "short" }) : "";
 
 /**
- * Slide-out AI assistant panel. Lists the staffer's conversations, lets them
- * switch / start / archive threads, and chats turn-by-turn. Plain-text
- * rendering (whitespace-pre-wrap) — no markdown dependency. Full-screen on
- * mobile, 420px drawer on desktop. Persists the active thread in localStorage.
+ * Right-side slide-out AI assistant panel (gray/white theme). Lists the
+ * staffer's conversations, lets them switch / start / archive threads, and
+ * chats turn-by-turn. Plain-text rendering (whitespace-pre-wrap) — no markdown
+ * dependency. Full-width on mobile, 420px drawer on desktop. Persists the
+ * active thread in localStorage.
  */
 export default function AiChatPanel({ onClose }) {
     const [conversations, setConversations] = useState([]);
@@ -20,10 +21,23 @@ export default function AiChatPanel({ onClose }) {
     const [sending, setSending] = useState(false);
     const [showHistory, setShowHistory] = useState(false);
     const [aiDisabled, setAiDisabled] = useState(false);
+    const [visible, setVisible] = useState(false); // drives the slide in/out
     const endRef = useRef(null);
 
     const scrollToEnd = () => endRef.current?.scrollIntoView({ behavior: "smooth" });
     useEffect(() => { scrollToEnd(); }, [messages, sending]);
+
+    // Slide in on mount (next frame so the transition has a from-state).
+    useEffect(() => {
+        const id = requestAnimationFrame(() => setVisible(true));
+        return () => cancelAnimationFrame(id);
+    }, []);
+
+    // Slide out, then unmount once the 200ms transition has finished.
+    const handleClose = () => {
+        setVisible(false);
+        setTimeout(onClose, 200);
+    };
 
     const loadConversation = useCallback(async (id) => {
         const { ok, data } = await aiClient.getConversation(id);
@@ -99,14 +113,20 @@ export default function AiChatPanel({ onClose }) {
     };
 
     return (
-        <div className="fixed inset-0 z-[70] flex justify-end">
-            {/* Backdrop */}
-            <div className="absolute inset-0 bg-black/30" onClick={onClose} />
+        <div className="fixed inset-0 z-[70]">
+            {/* Subtle dim backdrop — click to close */}
+            <div
+                className={`absolute inset-0 bg-black/30 transition-opacity duration-200 ease-out ${visible ? "opacity-100" : "opacity-0"}`}
+                onClick={handleClose}
+            />
 
-            <div className="relative flex flex-col w-full sm:w-[420px] h-full bg-white shadow-2xl">
+            {/* Slim right-side panel: 420px desktop, full-width on mobile */}
+            <div
+                className={`absolute right-0 top-0 bottom-0 flex flex-col w-full sm:w-[420px] bg-white shadow-[-8px_0_24px_rgba(0,0,0,0.12)] transition-transform duration-200 ease-out ${visible ? "translate-x-0" : "translate-x-full"}`}
+            >
                 {/* Header */}
                 <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-100">
-                    <span className="flex items-center justify-center w-8 h-8 rounded-lg bg-purple-50 text-purple-600">
+                    <span className="flex items-center justify-center w-8 h-8 rounded-lg bg-gray-100 text-gray-700">
                         <Sparkles size={16} />
                     </span>
                     <div className="flex-1 min-w-0">
@@ -119,7 +139,7 @@ export default function AiChatPanel({ onClose }) {
                     <button onClick={newChat} title="New chat" className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100">
                         <Plus size={17} />
                     </button>
-                    <button onClick={onClose} title="Close" className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100">
+                    <button onClick={handleClose} title="Close" className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100">
                         <X size={17} />
                     </button>
                 </div>
@@ -157,14 +177,14 @@ export default function AiChatPanel({ onClose }) {
                         <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
                             {messages.length === 0 && !sending ? (
                                 <div className="h-full flex flex-col items-center justify-center text-center px-6">
-                                    <Sparkles className="w-8 h-8 text-purple-200 mb-3" />
-                                    <p className="text-sm font-medium text-gray-600">How can I help?</p>
-                                    <p className="text-xs text-gray-400 mt-1">Ask me to draft a message, summarise a lead, or answer a question about your work.</p>
+                                    <Sparkles className="w-8 h-8 text-gray-400 mb-3" />
+                                    <p className="text-sm font-medium text-gray-900">How can I help?</p>
+                                    <p className="text-xs text-gray-500 mt-1">Ask me to draft a message, summarise a lead, or answer a question about your work.</p>
                                 </div>
                             ) : (
                                 messages.map((m) => (
                                     <div key={m.id} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
-                                        <div className={`max-w-[85%] px-3.5 py-2.5 rounded-2xl text-sm whitespace-pre-wrap break-words ${m.role === "user" ? "bg-purple-600 text-white rounded-br-sm" : "bg-gray-100 text-gray-800 rounded-bl-sm"}`}>
+                                        <div className={`max-w-[85%] px-3.5 py-2.5 rounded-2xl text-sm whitespace-pre-wrap break-words ${m.role === "user" ? "bg-gray-800 text-white rounded-br-sm" : "bg-gray-100 text-gray-800 rounded-bl-sm"}`}>
                                             {m.content}
                                         </div>
                                     </div>
@@ -182,7 +202,7 @@ export default function AiChatPanel({ onClose }) {
 
                         {/* Composer */}
                         <div className="border-t border-gray-100 p-3">
-                            <div className="flex items-end gap-2 rounded-2xl border border-gray-200 bg-white px-3 py-2 focus-within:ring-2 focus-within:ring-purple-200">
+                            <div className="flex items-end gap-2 rounded-2xl border border-gray-200 bg-white px-3 py-2 focus-within:border-gray-400">
                                 <textarea
                                     value={input}
                                     onChange={(e) => setInput(e.target.value)}
@@ -194,7 +214,7 @@ export default function AiChatPanel({ onClose }) {
                                 <button
                                     onClick={send}
                                     disabled={!input.trim() || sending}
-                                    className="shrink-0 p-1.5 rounded-lg bg-purple-600 text-white disabled:opacity-40 hover:bg-purple-700"
+                                    className="shrink-0 p-1.5 rounded-lg bg-gray-800 text-white disabled:opacity-40 hover:bg-gray-900"
                                     title="Send"
                                 >
                                     <Send size={16} />

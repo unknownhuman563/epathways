@@ -19,7 +19,7 @@ export default function AiChatButton({ aiEnabled = true }) {
                 onClick={() => setIsOpen(true)}
                 title="ePathways AI Assistant"
                 aria-label="Open AI assistant"
-                className="relative p-2 rounded-full text-purple-600 hover:bg-purple-50 transition-colors"
+                className="relative p-2 rounded-full text-gray-600 hover:bg-gray-100 transition-colors"
             >
                 <Sparkles className="w-5 h-5" />
             </button>
