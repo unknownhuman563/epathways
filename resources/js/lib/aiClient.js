@@ -45,4 +45,7 @@ export const aiClient = {
     leadAnalysis: (leadId) => request(`/api/ai/leads/${leadId}/analysis`),
     refreshLeadAnalysis: (leadId) =>
         request(`/api/ai/leads/${leadId}/analysis/refresh`, { method: "POST" }),
+    caseAnalysis: (caseId) => request(`/api/ai/cases/${caseId}/analysis`),
+    refreshCaseAnalysis: (caseId) =>
+        request(`/api/ai/cases/${caseId}/analysis/refresh`, { method: "POST" }),
 };
