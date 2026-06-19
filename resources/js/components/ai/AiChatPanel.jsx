@@ -120,9 +120,11 @@ export default function AiChatPanel({ onClose }) {
                 onClick={handleClose}
             />
 
-            {/* Slim right-side panel: 420px desktop, full-width on mobile */}
+            {/* Slim right-side panel: capped at 420px (Gemini-style), full-width
+                only on phones narrower than that. w-full + max-w avoids the
+                responsive-variant cascade pitfall that left it full-screen. */}
             <div
-                className={`absolute right-0 top-0 bottom-0 flex flex-col w-full sm:w-[420px] bg-white shadow-[-8px_0_24px_rgba(0,0,0,0.12)] transition-transform duration-200 ease-out ${visible ? "translate-x-0" : "translate-x-full"}`}
+                className={`absolute right-0 top-0 bottom-0 flex flex-col w-full max-w-[420px] bg-white shadow-[-8px_0_24px_rgba(0,0,0,0.12)] transition-transform duration-200 ease-out ${visible ? "translate-x-0" : "translate-x-full"}`}
             >
                 {/* Header */}
                 <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-100">
