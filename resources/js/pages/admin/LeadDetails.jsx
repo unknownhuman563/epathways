@@ -13,6 +13,7 @@ import {
     Briefcase,
 } from 'lucide-react';
 import { CHECKLIST, STATUSES, STATUS_CHIP, STATUS_LABEL, SECTION_STATUSES, IMPORTANT_NOTES, renderFilename, currentSectionIndex } from '@/data/leadDocumentChecklist';
+import LeadHealthBadge from '@/components/ai/LeadHealthBadge';
 
 // Stage colour map — kept consistent with the leads list.
 const STAGE_STYLES = {
@@ -358,6 +359,9 @@ export default function LeadDetails({ lead: backendLead, activity = [], stageTim
 
                         <span className="text-xs text-blue-700 font-bold bg-blue-50 border border-blue-100 px-2 py-1 rounded-md uppercase tracking-wider">{lead.branch}</span>
                         <span className="text-xs text-gray-600 font-medium bg-gray-100 px-2 py-1 rounded-md">ID: {lead.id}</span>
+
+                        {/* AI lead-health badge — analyses on first open, cached 24h */}
+                        <LeadHealthBadge leadId={lead.id} />
 
                         {/* Source + AI score (moved out of the leads list table) */}
                         {backendLead.source && (

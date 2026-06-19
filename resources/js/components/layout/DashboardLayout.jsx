@@ -4,6 +4,7 @@ import { Menu, X, Settings, LogOut, ChevronDown, Eye, ArrowLeft } from "lucide-r
 import NotificationBell from "@/components/NotificationBell";
 import GlobalSearchBar from "@/components/GlobalSearchBar";
 import RequestTicketButton from "@/components/RequestTicketButton";
+import AiChatButton from "@/components/ai/AiChatButton";
 
 /**
  * The official ePathways dashboard shell — sidebar + topbar + content area.
@@ -246,6 +247,8 @@ export default function DashboardLayout({
                         <GlobalSearchBar />
 
                         {user?.role !== "lead" && <RequestTicketButton />}
+
+                        {user?.role !== "lead" && <AiChatButton aiEnabled={props.auth?.ai_enabled !== false} />}
 
                         <NotificationBell />
 

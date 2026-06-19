@@ -16,3 +16,6 @@ Schedule::call(fn () => (new NewsFeedService())->refresh())
     ->hourly()
     ->name('news-feed-refresh')
     ->withoutOverlapping();
+
+// Prune long-expired AI lead analyses so the cache table stays small.
+Schedule::command('ai:cleanup-expired')->daily();

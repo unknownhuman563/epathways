@@ -39,6 +39,9 @@ class HandleInertiaRequests extends Middleware
             ...parent::share($request),
             'auth' => [
                 'user' => $request->user(),
+                // Drives the topbar AI button + lead health badge. True only
+                // when the config kill switch AND the tenant toggle are on.
+                'ai_enabled' => (bool) config('ai.enabled') && (bool) \App\Models\Setting::get('ai_enabled', true),
             ],
             'flash' => [
                 'success' => $request->session()->get('success'),
