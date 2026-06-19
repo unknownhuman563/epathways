@@ -204,14 +204,14 @@ export default function AiChatPanel({ onClose }) {
 
                         {/* Composer */}
                         <div className="border-t border-gray-100 p-3">
-                            <div className="flex items-end gap-2 rounded-2xl border border-gray-200 bg-white px-3 py-2 focus-within:border-gray-400">
+                            <div className="flex items-end gap-2 rounded-2xl bg-gray-100 px-3 py-2">
                                 <textarea
                                     value={input}
                                     onChange={(e) => setInput(e.target.value)}
                                     onKeyDown={onKeyDown}
                                     rows={1}
                                     placeholder="Message the assistant…"
-                                    className="flex-1 resize-none max-h-32 text-sm outline-none bg-transparent"
+                                    className="flex-1 resize-none max-h-32 text-sm bg-transparent outline-none focus:outline-none focus:ring-0"
                                 />
                                 <button
                                     onClick={send}
