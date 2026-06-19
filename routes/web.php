@@ -239,6 +239,11 @@ Route::middleware(['auth'])->group(function () {
 
         Route::get('/leads/{lead}/analysis', [\App\Http\Controllers\Api\AiLeadAnalysisController::class, 'show'])->name('leads.analysis.show');
         Route::post('/leads/{lead}/analysis/refresh', [\App\Http\Controllers\Api\AiLeadAnalysisController::class, 'refresh'])->name('leads.analysis.refresh');
+
+        // Immigration cases are Lead records; {case} binds to Lead. Strict
+        // role gate (admin + immigration staff only) lives in the controller.
+        Route::get('/cases/{case}/analysis', [\App\Http\Controllers\Api\AiCaseAnalysisController::class, 'show'])->name('cases.analysis.show');
+        Route::post('/cases/{case}/analysis/refresh', [\App\Http\Controllers\Api\AiCaseAnalysisController::class, 'refresh'])->name('cases.analysis.refresh');
     });
 
     // Profile avatar — role-agnostic; any authenticated user manages their own.

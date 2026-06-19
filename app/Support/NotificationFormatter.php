@@ -75,6 +75,11 @@ class NotificationFormatter
                 'color' => 'red',
                 'title' => $data['title'] ?? 'AI flagged a lead as critical',
             ],
+            'AiCriticalCaseAlert' => [
+                'icon'  => 'AlertTriangle',
+                'color' => 'red',
+                'title' => $data['title'] ?? 'AI flagged a case as critical',
+            ],
             default => [
                 'icon'  => 'Bell',
                 'color' => 'gray',
