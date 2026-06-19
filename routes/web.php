@@ -228,6 +228,19 @@ Route::middleware(['auth'])->group(function () {
     // blocked inside the controller).
     Route::post('/tickets', [\App\Http\Controllers\SystemTicketController::class, 'store'])->name('tickets.store');
 
+    // AI Foundation (Build 9) — JSON endpoints for the topbar chat panel and
+    // the lead health badge. Session-auth (CSRF via X-XSRF-TOKEN from JS);
+    // each handler re-checks the AI kill switch + per-user/role scoping.
+    Route::prefix('api/ai')->name('api.ai.')->group(function () {
+        Route::get('/conversations', [\App\Http\Controllers\Api\AiChatController::class, 'index'])->name('conversations.index');
+        Route::get('/conversations/{conversation}', [\App\Http\Controllers\Api\AiChatController::class, 'show'])->name('conversations.show');
+        Route::post('/messages', [\App\Http\Controllers\Api\AiChatController::class, 'sendMessage'])->name('messages.store');
+        Route::delete('/conversations/{conversation}', [\App\Http\Controllers\Api\AiChatController::class, 'destroy'])->name('conversations.destroy');
+
+        Route::get('/leads/{lead}/analysis', [\App\Http\Controllers\Api\AiLeadAnalysisController::class, 'show'])->name('leads.analysis.show');
+        Route::post('/leads/{lead}/analysis/refresh', [\App\Http\Controllers\Api\AiLeadAnalysisController::class, 'refresh'])->name('leads.analysis.refresh');
+    });
+
     // Profile avatar — role-agnostic; any authenticated user manages their own.
     Route::post('/profile/avatar', [UserController::class, 'uploadAvatar'])->name('profile.avatar.upload');
     Route::delete('/profile/avatar', [UserController::class, 'deleteAvatar'])->name('profile.avatar.delete');

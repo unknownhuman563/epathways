@@ -1,14 +1,15 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { usePage, router } from "@inertiajs/react";
-import { Bell, DollarSign, UserPlus, UserPen, FileText, ArrowRightLeft, CheckSquare, Ticket } from "lucide-react";
+import { Bell, DollarSign, UserPlus, UserPen, FileText, ArrowRightLeft, CheckSquare, Ticket, AlertTriangle } from "lucide-react";
 
 // Lucide component lookup for the icon names the NotificationFormatter emits.
-const ICONS = { Bell, DollarSign, UserPlus, UserPen, FileText, ArrowRightLeft, CheckSquare, Ticket };
+const ICONS = { Bell, DollarSign, UserPlus, UserPen, FileText, ArrowRightLeft, CheckSquare, Ticket, AlertTriangle };
 // Semantic color token → Tailwind classes for the icon chip.
 const COLORS = {
     amber: "bg-amber-50 text-amber-600",
     blue: "bg-blue-50 text-blue-600",
     emerald: "bg-emerald-50 text-emerald-600",
+    red: "bg-red-50 text-red-600",
     gray: "bg-gray-100 text-gray-500",
 };
 
