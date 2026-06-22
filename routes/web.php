@@ -228,6 +228,15 @@ Route::middleware(['auth'])->group(function () {
     // blocked inside the controller).
     Route::post('/tickets', [\App\Http\Controllers\SystemTicketController::class, 'store'])->name('tickets.store');
 
+    // Active message templates (JSON) — feeds the bulk-email + compose pickers.
+    // Any authenticated staff member; no lead-specific data is exposed.
+    Route::get('/api/message-templates', function () {
+        return response()->json(
+            \App\Models\MessageTemplate::active()->orderBy('name')
+                ->get(['id', 'name', 'channels', 'email_subject', 'email_body', 'sms_body'])
+        );
+    })->name('api.message-templates');
+
     // AI Foundation (Build 9) — JSON endpoints for the topbar chat panel and
     // the lead health badge. Session-auth (CSRF via X-XSRF-TOKEN from JS);
     // each handler re-checks the AI kill switch + per-user/role scoping.

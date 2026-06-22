@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Head, Link, router, usePage } from "@inertiajs/react";
 import { toast } from "sonner";
+import BulkEmailModal from "@/components/sales/BulkEmailModal";
 import {
     DndContext, DragOverlay, KeyboardSensor, PointerSensor,
     useDraggable, useDroppable, useSensor, useSensors,
@@ -150,6 +151,7 @@ export default function SalesLeads({ leads = [], statuses = [], programs = [], s
     const [view, setView]                 = useState("table"); // table | kanban
     const [savingId, setSavingId] = useState(null);
     const [selectedIds, setSelectedIds] = useState(new Set());
+    const [bulkOpen, setBulkOpen] = useState(false);
     const [sortKey, setSortKey] = useState("created_at");
     const [sortDir, setSortDir] = useState("desc");
     const [page, setPage] = useState(1);
@@ -528,10 +530,19 @@ export default function SalesLeads({ leads = [], statuses = [], programs = [], s
 
                 {filtered.length > 0 && (
                     <div className="border-t border-gray-100 px-4 sm:px-5 py-3 flex items-center justify-between text-xs text-gray-500">
-                        <div>
-                            Page {safePage} of {totalPages}
+                        <div className="flex items-center gap-3">
+                            <span>Page {safePage} of {totalPages}</span>
                             {selectedIds.size > 0 && (
-                                <span className="ml-3 text-gray-900 font-semibold">· {selectedIds.size} selected</span>
+                                <>
+                                    <span className="text-gray-900 font-semibold">· {selectedIds.size} selected</span>
+                                    <button
+                                        type="button"
+                                        onClick={() => setBulkOpen(true)}
+                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-900 text-white font-semibold hover:bg-black"
+                                    >
+                                        <Mail size={13} /> Email selected
+                                    </button>
+                                </>
                             )}
                         </div>
                         <div className="flex items-center gap-1.5">
@@ -561,6 +572,8 @@ export default function SalesLeads({ leads = [], statuses = [], programs = [], s
             {view === "kanban" && (
                 <LeadsKanban filtered={filtered} statuses={statuses} portalBase={portalBase} />
             )}
+
+            <BulkEmailModal open={bulkOpen} onClose={() => setBulkOpen(false)} leadIds={[...selectedIds]} />
         </div>
     );
 }

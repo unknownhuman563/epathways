@@ -7,7 +7,7 @@ import {
     FileText, Download, Edit, Phone, Mail, MapPin,
     CheckCircle2, XCircle, FileQuestion, Calendar,
     TrendingUp, AlertTriangle, Clock, History, ChevronDown, Check,
-    User as UserIcon, ArrowRight, Sparkles, FolderOpen, Copy, Info, Undo2,
+    User as UserIcon, ArrowRight, Sparkles, FolderOpen, Copy, Info, Undo2, Send,
     Globe, Home, Wand2, Users as UsersIcon, Eye,
     Paperclip, FileImage, Film, Music,
     Briefcase,
@@ -16,6 +16,7 @@ import { CHECKLIST, STATUSES, STATUS_CHIP, STATUS_LABEL, SECTION_STATUSES, IMPOR
 import LeadHealthBadge from '@/components/ai/LeadHealthBadge';
 import CaseHealthBadge from '@/components/ai/CaseHealthBadge';
 import CommunicationsPanel from '@/components/sales/CommunicationsPanel';
+import ComposeMessagePanel from '@/components/sales/ComposeMessagePanel';
 
 // Stage colour map — kept consistent with the leads list.
 const STAGE_STYLES = {
@@ -55,10 +56,11 @@ export default function LeadDetails({ lead: backendLead, activity = [], stageTim
         const q = currentUrl.includes('?') ? currentUrl.split('?')[1] : '';
         const params = new URLSearchParams(q);
         const t = params.get('tab');
-        return ['stats', 'personal', 'activity', 'documents'].includes(t) ? t : 'stats';
+        return ['stats', 'personal', 'activity', 'documents', 'communications'].includes(t) ? t : 'stats';
     })();
 
     const [activeTab, setActiveTab] = useState(initialTab);
+    const [composeOpen, setComposeOpen] = useState(false);
     const [stageOpen, setStageOpen] = useState(false);
     const [savingStage, setSavingStage] = useState(false);
     const stageRef = useRef(null);
@@ -455,6 +457,15 @@ export default function LeadDetails({ lead: backendLead, activity = [], stageTim
                         </button>
                     )}
 
+                    <button
+                        type="button"
+                        onClick={() => setComposeOpen(true)}
+                        title="Send this lead an email or SMS"
+                        className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-xl hover:bg-black text-sm font-semibold transition-colors shadow-sm"
+                    >
+                        <Send size={16} /> Compose Message
+                    </button>
+
                     <button className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 text-sm font-semibold transition-colors shadow-sm">
                         <Download size={16} /> Export PDF
                     </button>
@@ -535,6 +546,18 @@ export default function LeadDetails({ lead: backendLead, activity = [], stageTim
             {activeTab === 'communications' && (
                 <CommunicationsPanel leadId={backendLead.id} />
             )}
+
+            {/* Compose message slide-over (email / SMS / both) */}
+            <ComposeMessagePanel
+                open={composeOpen}
+                onClose={() => setComposeOpen(false)}
+                lead={{
+                    id: backendLead.id,
+                    name: `${lead.personal.firstName} ${lead.personal.surname}`.trim(),
+                    email: backendLead.email,
+                    phone: backendLead.phone,
+                }}
+            />
 
             {/* ── Lead Stats tab — dashboard-style quick stats + AI hero ── */}
             <div className={activeTab === 'stats' ? 'space-y-6' : 'hidden'}>
