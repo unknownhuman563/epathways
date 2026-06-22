@@ -69,6 +69,51 @@ class CommunicationService
     }
 
     /**
+     * Render free text against a lead's variable context — for personalised
+     * previews and custom (template-free) sends. Mirrors the substitution the
+     * templated path uses ({{first_name}}, {{client_portal_url}}, …).
+     */
+    public function render(Lead $lead, string $text, array $extra = [], bool $escape = false): string
+    {
+        return $this->substitute($text, $this->buildContext($lead, $extra), $escape);
+    }
+
+    /**
+     * Send the same keyed template to many leads. One lead's failure never
+     * aborts the batch — every lead yields a result row.
+     *
+     * @param  iterable<Lead>  $leads
+     * @return array<int, array{lead_id:int, status:string, log_id:?int, error:?string}>
+     */
+    public function bulkSendTemplated(iterable $leads, MessageTemplate $template, array $extra = []): array
+    {
+        $results = [];
+
+        foreach ($leads as $lead) {
+            try {
+                $sent = $this->sendTemplated($template->key, $lead, $extra);
+                $log  = $sent['email'] ?? $sent['sms'];
+                $failed = $log && $log->status === MessageLog::STATUS_FAILED;
+
+                $results[] = [
+                    'lead_id' => $lead->id,
+                    'status'  => ($log && ! $failed) ? 'sent' : 'failed',
+                    'log_id'  => $log?->id,
+                    'error'   => $log?->error_message
+                        ?? ($log ? null : 'No deliverable channel (missing email/phone or template has none).'),
+                ];
+            } catch (\Throwable $e) {
+                Log::error('CommunicationService bulk send failed for lead', [
+                    'lead_id' => $lead->id, 'error' => $e->getMessage(),
+                ]);
+                $results[] = ['lead_id' => $lead->id, 'status' => 'failed', 'log_id' => null, 'error' => $e->getMessage()];
+            }
+        }
+
+        return $results;
+    }
+
+    /**
      * Send an SMS to a bare phone number (no Lead) — used by the test
      * command and any future system-level alert. Logs a 'raw' MessageLog.
      */
@@ -160,8 +205,28 @@ class CommunicationService
             'email'               => $lead->email ?? '',
             'phone'               => $lead->phone ?? '',
             'tracker_url'         => rtrim((string) config('app.url'), '/') . '/track/' . $lead->tracking_code,
+            'client_portal_url'   => $this->clientPortalUrl($lead),
             'assigned_staff_name' => $staff?->name ?? 'the ePathways team',
         ], $extra);
+    }
+
+    /**
+     * The best self-service link for this lead: their secured portal if they
+     * have a portal account, else the public tracker link, else blank.
+     */
+    private function clientPortalUrl(Lead $lead): string
+    {
+        $base = rtrim((string) config('app.url'), '/');
+
+        if ($lead->portalUser()->exists()) {
+            return $base . '/portal/lead/dashboard';
+        }
+
+        if (! empty($lead->tracking_code)) {
+            return $base . '/track/' . $lead->tracking_code;
+        }
+
+        return '';
     }
 
     /**
