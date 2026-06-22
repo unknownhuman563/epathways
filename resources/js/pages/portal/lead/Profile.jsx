@@ -1,5 +1,5 @@
-import { Head } from "@inertiajs/react";
-import { User, Mail, Phone, MapPin, Hash, ShieldCheck, Lock } from "lucide-react";
+import { Head, Link } from "@inertiajs/react";
+import { User, Mail, Phone, MapPin, Hash, ShieldCheck, Lock, MessageSquare } from "lucide-react";
 import PortalPageHeader from "@/components/portal/PortalPageHeader";
 import AvatarUploader from "@/components/AvatarUploader";
 
@@ -12,8 +12,23 @@ export default function LeadProfile({ lead }) {
             <PortalPageHeader
                 eyebrow="Account"
                 title="Profile"
-                description="Your personal details on file with ePathways. Need to update something? Message your adviser."
+                description="Your personal details on file with ePathways."
             />
+
+            {/* How to get details changed — Messages is read-only for now, so
+                point leads at it to read updates and at email to request edits. */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-[#436235]/[0.06] border border-[#436235]/15 rounded-2xl px-5 py-4">
+                <p className="text-sm text-[#282728]/75 font-light">
+                    View messages from your adviser on the Messages page. To reply or correct a detail,
+                    email your adviser directly using the address in your welcome email.
+                </p>
+                <Link
+                    href="/portal/lead/messages"
+                    className="shrink-0 inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#436235] text-white text-sm font-medium hover:bg-[#37502b] transition-colors"
+                >
+                    <MessageSquare size={15} /> Messages
+                </Link>
+            </div>
 
             {/* Profile card */}
             <section className="bg-white rounded-2xl border border-[#282728]/15 overflow-hidden">
