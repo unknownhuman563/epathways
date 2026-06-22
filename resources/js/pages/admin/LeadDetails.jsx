@@ -15,6 +15,7 @@ import {
 import { CHECKLIST, STATUSES, STATUS_CHIP, STATUS_LABEL, SECTION_STATUSES, IMPORTANT_NOTES, renderFilename, currentSectionIndex } from '@/data/leadDocumentChecklist';
 import LeadHealthBadge from '@/components/ai/LeadHealthBadge';
 import CaseHealthBadge from '@/components/ai/CaseHealthBadge';
+import CommunicationsPanel from '@/components/sales/CommunicationsPanel';
 
 // Stage colour map — kept consistent with the leads list.
 const STAGE_STYLES = {
@@ -487,6 +488,13 @@ export default function LeadDetails({ lead: backendLead, activity = [], stageTim
                     >
                         Documents
                     </TabButton>
+                    <TabButton
+                        active={activeTab === 'communications'}
+                        onClick={() => setActiveTab('communications')}
+                        icon={<Mail size={13} />}
+                    >
+                        Communications
+                    </TabButton>
                 </div>
             </div>
 
@@ -521,6 +529,11 @@ export default function LeadDetails({ lead: backendLead, activity = [], stageTim
             {/* ── Documents tab ── */}
             {activeTab === 'documents' && (
                 <DocumentsPanel lead={backendLead} checklistFiles={checklistFiles} currentUser={currentUser} />
+            )}
+
+            {/* ── Communications tab — message history sent to this lead ── */}
+            {activeTab === 'communications' && (
+                <CommunicationsPanel leadId={backendLead.id} />
             )}
 
             {/* ── Lead Stats tab — dashboard-style quick stats + AI hero ── */}
