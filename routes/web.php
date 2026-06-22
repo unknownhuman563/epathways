@@ -418,6 +418,13 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/admin/leads/{id}/inz', [LeadController::class, 'updateInz'])->name('admin.leads.inz');
         Route::post('/admin/leads/{id}/send-tracker-link', [LeadController::class, 'sendTrackerLink'])->name('admin.leads.send-tracker-link');
 
+        // Per-lead communications (Build 11.A) — compose a one-off message and
+        // read the message history. Access is re-checked per lead inside the
+        // controller (LeadAccess), so the broad route group can't leak a lead
+        // across departments.
+        Route::post('/admin/leads/{lead}/compose', [\App\Http\Controllers\Sales\ComposeMessageController::class, 'send'])->name('admin.leads.compose');
+        Route::get('/admin/leads/{lead}/communications', [\App\Http\Controllers\Sales\LeadCommunicationsController::class, 'index'])->name('admin.leads.communications');
+
         // Cross-lead document queue — review lead-submitted docs in bulk.
         Route::get('/admin/document-queue', [\App\Http\Controllers\DocumentQueueController::class, 'index'])->name('admin.document-queue');
         Route::post('/admin/document-queue/bulk', [\App\Http\Controllers\DocumentQueueController::class, 'bulk'])->name('admin.document-queue.bulk');
@@ -551,6 +558,12 @@ Route::middleware(['auth'])->group(function () {
         Route::middleware('portal:sales')->prefix('sales')->name('portal.sales.')->group(function () {
             Route::get('/dashboard', [SalesController::class, 'dashboard'])->name('dashboard');
             Route::get('/leads', [SalesController::class, 'leads'])->name('leads');
+
+            // Bulk email (Build 11.A) — preview + send to the selected leads.
+            // Declared before /leads/{id} so the two static segments win.
+            Route::post('/leads/bulk-email/preview', [\App\Http\Controllers\Sales\BulkEmailController::class, 'preview'])->name('leads.bulk-email.preview');
+            Route::post('/leads/bulk-email/send', [\App\Http\Controllers\Sales\BulkEmailController::class, 'send'])->name('leads.bulk-email.send');
+
             Route::post('/leads', [SalesController::class, 'storeLead'])->name('leads.store');
             Route::post('/leads/{id}/notes', [\App\Http\Controllers\LeadNoteController::class, 'store'])->name('leads.notes.store');
             Route::post('/leads/{id}', [SalesController::class, 'updateLead'])->name('leads.update');
