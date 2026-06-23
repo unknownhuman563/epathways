@@ -6,7 +6,9 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Calendar\StoreCalendarEventRequest;
 use App\Http\Requests\Calendar\UpdateCalendarEventRequest;
 use App\Models\CalendarEvent;
+use App\Models\EoiSubmission;
 use App\Models\Property;
+use App\Models\Tenant;
 use App\Services\CalendarEventAggregator;
 use App\Support\OnboardingPipeline;
 use Illuminate\Http\Request;
@@ -29,6 +31,12 @@ class CalendarController extends Controller
             ],
             'properties' => $this->propertyOptions(),
             'viewingStatuses' => OnboardingPipeline::allStatuses(),
+            'kpis' => [
+                // Clients currently scheduled to view (booked, not yet completed).
+                'upcoming_viewings' => EoiSubmission::where('status', 'viewing_booked')->count(),
+                // Active tenants whose contract ends within the "ending soon" window.
+                'ending_soon' => Tenant::active()->endingSoon()->count(),
+            ],
         ]);
     }
 

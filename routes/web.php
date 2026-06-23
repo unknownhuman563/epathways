@@ -14,6 +14,10 @@ use App\Http\Controllers\LeadDocumentController;
 use App\Http\Controllers\LeadPortalInvitationController;
 use App\Http\Controllers\LeadTrackingController;
 use App\Http\Controllers\Portal\Accommodation\CalendarController;
+use App\Http\Controllers\Portal\Accommodation\GasDeliveryController;
+use App\Http\Controllers\Portal\Accommodation\MessageTemplateController;
+use App\Http\Controllers\Portal\Accommodation\PaymentScheduleController;
+use App\Http\Controllers\Portal\Accommodation\RentUtilitiesController;
 use App\Http\Controllers\Portal\Accommodation\TenantController;
 use App\Http\Controllers\Portal\AccommodationController;
 use App\Http\Controllers\Portal\EducationController;
@@ -86,6 +90,10 @@ Route::get('/accommodation/expression-of-interest-cold', [PublicAccommodationCon
 Route::post('/accommodation/expression-of-interest-cold', [PublicAccommodationController::class, 'eoiStore'])->name('accommodation.eoi.store');
 Route::get('/accommodation/expression-of-interest-hot', [PublicAccommodationController::class, 'eoiHotForm'])->name('accommodation.eoi-hot');
 Route::post('/accommodation/expression-of-interest-hot', [PublicAccommodationController::class, 'eoiHotStore'])->name('accommodation.eoi-hot.store');
+// Public tenant complaint form — declared before /accommodation/{slug}.
+Route::get('/accommodation/complaint', [App\Http\Controllers\ComplaintController::class, 'form'])->name('accommodation.complaint');
+Route::post('/accommodation/complaint', [App\Http\Controllers\ComplaintController::class, 'store'])->name('accommodation.complaint.store');
+
 Route::get('/accommodation/{slug}', [PublicAccommodationController::class, 'show']);
 
 Route::get('/accommodation/{id}/checkout', function ($id) {
@@ -664,10 +672,16 @@ Route::middleware(['auth'])->group(function () {
             Route::post('/calendar/events', [CalendarController::class, 'storeCustomEvent'])->name('calendar.events.store');
             Route::patch('/calendar/events/{event}', [CalendarController::class, 'updateCustomEvent'])->name('calendar.events.update');
             Route::delete('/calendar/events/{event}', [CalendarController::class, 'destroyCustomEvent'])->name('calendar.events.destroy');
-            Route::get('/rent-utilities', $stub('Rent & Utilities', 'Payment schedules and utility charges.'))->name('rent-utilities');
-            Route::get('/payment-schedule', $stub('PM Payment Schedule', 'Payouts to property owners.'))->name('payment-schedule');
-            Route::get('/gas-delivery', $stub('Gas Delivery Tracker', 'Track gas bottle deliveries and swaps across properties.'))->name('gas-delivery');
-            Route::get('/message-templates', $stub('Message Templates', 'Reusable email and SMS templates for tenants and clients.'))->name('message-templates');
+            Route::get('/rent-utilities', [RentUtilitiesController::class, 'index'])->name('rent-utilities');
+            Route::patch('/rent-utilities/tenants/{tenant}/payment', [RentUtilitiesController::class, 'savePayment'])->name('rent-utilities.payment');
+            Route::patch('/rent-utilities/tenants/{tenant}/rent', [RentUtilitiesController::class, 'saveRentUtilities'])->name('rent-utilities.rent');
+            Route::get('/payment-schedule', [PaymentScheduleController::class, 'index'])->name('payment-schedule');
+            Route::get('/gas-delivery', [GasDeliveryController::class, 'index'])->name('gas-delivery');
+            Route::get('/complaints', [App\Http\Controllers\ComplaintController::class, 'index'])->name('complaints');
+            Route::get('/message-templates', [MessageTemplateController::class, 'index'])->name('message-templates');
+            Route::post('/message-templates', [MessageTemplateController::class, 'store'])->name('message-templates.store');
+            Route::patch('/message-templates/{template}', [MessageTemplateController::class, 'update'])->name('message-templates.update');
+            Route::delete('/message-templates/{template}', [MessageTemplateController::class, 'destroy'])->name('message-templates.destroy');
 
             // Reports & Account
             Route::get('/reports', $stub('Reports', 'Weekly, monthly, quarterly and custom reports.'))->name('reports');

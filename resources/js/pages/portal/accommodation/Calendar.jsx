@@ -3,7 +3,7 @@ import { Head, usePage, router } from "@inertiajs/react";
 import { toast } from "sonner";
 import {
     ChevronLeft, ChevronRight, Plus, SlidersHorizontal, X, Home, FileText,
-    CalendarDays, Loader2, Pencil, Trash2, ExternalLink,
+    CalendarDays, Loader2, Pencil, Trash2, ExternalLink, Eye, CalendarClock,
 } from "lucide-react";
 
 const ICONS = { Home, FileText, CalendarDays };
@@ -39,12 +39,25 @@ function periodLabel(view, anchor) {
     return "Next 30 days";
 }
 
-export default function Calendar({ eventTypes = [], properties = [], viewingStatuses = [] }) {
+function KpiCard({ icon, label, value, hint }) {
+    return (
+        <div className="flex items-center gap-3 rounded-3xl border border-gray-50 bg-white p-4 shadow-sm">
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#1F5A8B]/10 text-[#1F5A8B]">{icon}</span>
+            <div className="min-w-0">
+                <p className="text-2xl font-bold leading-tight text-gray-900">{value}</p>
+                <p className="truncate text-sm font-medium text-gray-600">{label}</p>
+                {hint && <p className="truncate text-xs text-gray-400">{hint}</p>}
+            </div>
+        </div>
+    );
+}
+
+export default function Calendar({ eventTypes = [], properties = [], viewingStatuses = [], kpis = {} }) {
     const { props } = usePage();
     const currentUser = props.auth?.user;
 
     const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
-    const [view, setView] = useState(isMobile ? "agenda" : "week");
+    const [view, setView] = useState(isMobile ? "agenda" : "month");
     const [anchor, setAnchor] = useState(() => startOfDay(new Date()));
     const [events, setEvents] = useState([]);
     const [loading, setLoading] = useState(false);
@@ -96,6 +109,22 @@ export default function Calendar({ eventTypes = [], properties = [], viewingStat
                     <button onClick={() => setShowFilters((s) => !s)} className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-50"><SlidersHorizontal size={15} /> Filters</button>
                     <button onClick={() => { setEditEvent(null); setAddOpen(true); }} className="inline-flex items-center gap-1.5 rounded-full bg-[#1F5A8B] px-4 py-2 text-sm font-semibold text-white hover:bg-[#184A73]"><Plus size={16} /> Add event</button>
                 </div>
+            </div>
+
+            {/* KPI cards */}
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <KpiCard
+                    icon={<Eye size={20} />}
+                    label="Upcoming viewings"
+                    value={kpis.upcoming_viewings ?? 0}
+                    hint="clients booked to view"
+                />
+                <KpiCard
+                    icon={<CalendarClock size={20} />}
+                    label="Contracts ending soon"
+                    value={kpis.ending_soon ?? 0}
+                    hint="active tenants ending within 25 days"
+                />
             </div>
 
             {/* Date nav */}
@@ -340,7 +369,7 @@ function EventDrawer({ event, currentUser, onClose, onChanged, onEdit }) {
 
                     {event.source_type === "contract_end" && (
                         <div className="space-y-1 text-sm text-gray-700">
-                            <Detail label="Days remaining" value={m.days_to_end} />
+                            <Detail label="Days to end" value={m.days_to_end} />
                             <Detail label="Status" value={m.current_status?.replace(/_/g, " ")} />
                             <Detail label="Weekly rent" value={m.weekly_rent_nzd ? `$${m.weekly_rent_nzd}` : null} />
                             <div className="flex flex-wrap gap-2 pt-3">
