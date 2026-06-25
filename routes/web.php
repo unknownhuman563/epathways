@@ -716,6 +716,13 @@ Route::middleware(['auth'])->group(function () {
             // Inline stage update from the Cases table — mirrors the
             // EducationController dashboard-field pattern.
             Route::post('/cases/{id}/stage', [ImmigrationController::class, 'updateCaseStage'])->name('cases.stage');
+
+            // Build 11.D — purpose-built Case Profile page. The {lead} binding
+            // is the Lead model; controller hard-404s when is_immigration_case
+            // is false so this endpoint stays case-only. Sales leads continue
+            // to use LeadController::show via /admin/leads/{id}.
+            Route::get('/cases/{lead}/profile', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'show'])
+                ->name('cases.profile');
             Route::get('/documents', [ImmigrationController::class, 'documents'])->name('documents');
             Route::get('/appointments', [ImmigrationController::class, 'appointments'])->name('appointments');
 

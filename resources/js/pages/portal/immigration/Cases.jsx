@@ -608,7 +608,7 @@ function CaseRow({ c, stages, isExpanded, onExpand, stageMenuOpen, onStageMenuTo
                 {/* Case (avatar + name) */}
                 <td className="px-3 py-2.5">
                     <Link
-                        href={`/portal/immigration/leads/${c.id}`}
+                        href={`/portal/immigration/cases/${c.id}/profile`}
                         className="flex items-center gap-2.5 min-w-[200px] group/case"
                     >
                         <div className={`w-7 h-7 rounded-full flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0 ${avatarColor(c.id)}`}>
@@ -695,13 +695,13 @@ function CaseRow({ c, stages, isExpanded, onExpand, stageMenuOpen, onStageMenuTo
                                 key: 'docs',
                                 label: 'Open documents',
                                 icon: FileText,
-                                href: `/portal/immigration/leads/${c.id}?tab=documents`,
+                                href: `/portal/immigration/cases/${c.id}/profile?tab=documents`,
                             },
                             {
                                 key: 'open',
                                 label: 'Open case',
                                 icon: ExternalLink,
-                                href: `/portal/immigration/leads/${c.id}`,
+                                href: `/portal/immigration/cases/${c.id}/profile`,
                             },
                         ].filter(Boolean)}
                     />
