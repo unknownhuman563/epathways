@@ -28,15 +28,27 @@ class LeadTaskController extends Controller
         try {
             $lead = Lead::findOrFail($leadId);
 
+            $assigneeId = $validated['assignee_id'] ?? Auth::id();
             $task = LeadTask::create([
                 'lead_id'     => $lead->id,
                 'created_by'  => Auth::id(),
-                'assignee_id' => $validated['assignee_id'] ?? Auth::id(),
+                'assignee_id' => $assigneeId,
                 'title'       => $validated['title'],
                 'description' => $validated['description'] ?? null,
                 'due_at'      => $validated['due_at'] ?? null,
                 'priority'    => $validated['priority'] ?? 'normal',
             ]);
+
+            // Notify the assignee when it's someone other than the creator.
+            if ($assigneeId && (int) $assigneeId !== (int) Auth::id()) {
+                try {
+                    if ($assignee = \App\Models\User::find($assigneeId)) {
+                        $assignee->notify(new \App\Notifications\TaskAssigned($task, Auth::user()?->name));
+                    }
+                } catch (\Throwable $e) {
+                    Log::error('Lead task notify failed', ['task_id' => $task->id, 'error' => $e->getMessage()]);
+                }
+            }
 
             return back()->with('success', "Task “{$task->title}” added.");
         } catch (\Throwable $e) {

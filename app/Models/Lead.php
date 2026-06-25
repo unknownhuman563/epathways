@@ -2,10 +2,13 @@
 
 namespace App\Models;
 
+use App\Observers\LeadObserver;
 use App\Traits\LogsActivity;
+use Illuminate\Database\Eloquent\Attributes\ObservedBy;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
+#[ObservedBy([LeadObserver::class])]
 class Lead extends Model
 {
     use LogsActivity;
@@ -172,6 +175,10 @@ class Lead extends Model
         'is_immigration_case', 'immigration_converted_at', 'immigration_converted_by',
         'is_accommodation_client', 'accommodation_converted_at', 'accommodation_converted_by',
         'is_english_student', 'english_converted_at', 'english_converted_by',
+        // Staff member responsible for this lead (drives assignment notifications)
+        'assigned_to',
+        // Last time the lead opened their /track/{code} page
+        'last_seen_at',
         // INZ lodgement tracking
         'inz_visa_type', 'inz_lodged_at', 'inz_reference', 'inz_status', 'inz_decision_at',
         // IAA / Privacy Act gating
@@ -192,6 +199,55 @@ class Lead extends Model
         // English / Immigration sub-stage tracks (see ENGLISH_STAGES,
         // IMMIGRATION_STAGES).
         'english_stage', 'immigration_stage',
+
+        // ── Wide profile-info build — columns surfaced by the
+        //    LeadController::updatePersonal allow-list and rendered
+        //    across the 9 editable Personal Info section cards. Grouped
+        //    by card for readability. ─────────────────────────────────
+        // 1. Personal identity (most existed; new = preferred_name,
+        //    whatsapp, address lines + postcode, NZ continuous residence)
+        'preferred_name', 'whatsapp',
+        'residence_address_line_1', 'residence_address_line_2', 'residence_address_postcode',
+        'has_been_in_nz_continuously', 'nz_continuous_residence_months',
+        // 2. Passport (existing has_passport / passport_number /
+        //    passport_expiry / passport_path stay)
+        'passport_issuing_country', 'passport_issue_date',
+        // 3. Current NZ visa (all new)
+        'current_nz_visa_type', 'current_nz_visa_number',
+        'current_nz_visa_issued_date', 'current_nz_visa_expiry_date',
+        'previous_nz_visa_type',
+        // 4. Study plans (flat columns alongside the related lead_study_plans
+        //    table — legacy rows continue to flow through that relation)
+        'preferred_course', 'preferred_qualification_level',
+        'preferred_city_of_study', 'preferred_intake',
+        'english_test_type', 'english_test_overall_score',
+        'english_test_listening', 'english_test_reading',
+        'english_test_writing', 'english_test_speaking',
+        'english_test_date', 'target_institution',
+        // 5. Financial
+        'funding_source', 'estimated_total_cost_nzd', 'available_funds_nzd',
+        'supports_partner_or_dependents', 'has_property_in_home_country',
+        'annual_income_nzd', 'annual_income_currency', 'bank_funds_evidence_provided',
+        // 6. Employment
+        'employment_type', 'current_employer_name', 'current_position_title',
+        'current_employer_country', 'current_employer_phone', 'current_employer_email',
+        'current_employment_start_date',
+        'current_salary_nzd', 'years_of_relevant_experience',
+        'has_anzsco_listed_role', 'anzsco_code',
+        'has_nz_professional_registration', 'nz_professional_registration_body',
+        // 7. Education background
+        'highest_qualification', 'highest_qualification_field',
+        'highest_qualification_country', 'highest_qualification_year_completed',
+        'has_nzqa_assessment', 'nzqa_assessment_level',
+        // 8. Family
+        'has_children', 'number_of_children', 'dependent_children_notes',
+        'has_dependent_partner', 'partner_in_nz', 'intends_to_bring_family',
+        // 9. Health & character
+        'has_health_disclosure', 'health_disclosure_notes',
+        'has_character_disclosure', 'character_disclosure_notes',
+        'has_been_declined_visa', 'declined_visa_details',
+        'has_criminal_record', 'criminal_record_details',
+        'meets_184_day_rule_two_years',
     ];
 
     protected $casts = [
@@ -219,6 +275,7 @@ class Lead extends Model
         'section_verifications'          => 'array',
         'agreements_acknowledged_at'     => 'datetime',
         'stage_updated_at'               => 'datetime',
+        'last_seen_at'                   => 'datetime',
         'is_student'                     => 'boolean',
         'student_converted_at'           => 'datetime',
         'is_immigration_case'            => 'boolean',
@@ -228,6 +285,53 @@ class Lead extends Model
         'inz_lodged_at'                  => 'datetime',
         'inz_decision_at'                => 'datetime',
         'services_agreement_signed_at'   => 'datetime',
+
+        // ── Wide profile-info build (column shapes match the
+        //    widen_lead_personal_info_columns migration). ──────────────
+        'dob'                            => 'date',
+        'passport_expiry'                => 'date',
+        'passport_issue_date'            => 'date',
+        'current_nz_visa_issued_date'    => 'date',
+        'current_nz_visa_expiry_date'    => 'date',
+        'current_employment_start_date'  => 'date',
+        'english_test_date'              => 'date',
+        // Encrypted at rest — Crypt::decryptString runs on read,
+        // Crypt::encryptString on write. Existing plain-text passport
+        // numbers were re-encrypted by the migration.
+        'passport_number'                => 'encrypted',
+        'current_nz_visa_number'         => 'encrypted',
+        // Booleans (mirrors migration column types).
+        'has_been_in_nz_continuously'    => 'boolean',
+        'meets_184_day_rule_two_years'   => 'boolean',
+        'has_passport'                   => 'boolean',
+        'supports_partner_or_dependents' => 'boolean',
+        'has_property_in_home_country'   => 'boolean',
+        'bank_funds_evidence_provided'   => 'boolean',
+        'has_anzsco_listed_role'         => 'boolean',
+        'has_nz_professional_registration' => 'boolean',
+        'has_nzqa_assessment'            => 'boolean',
+        'has_children'                   => 'boolean',
+        'has_dependent_partner'          => 'boolean',
+        'partner_in_nz'                  => 'boolean',
+        'intends_to_bring_family'        => 'boolean',
+        'has_health_disclosure'          => 'boolean',
+        'has_character_disclosure'       => 'boolean',
+        'has_been_declined_visa'         => 'boolean',
+        'has_criminal_record'            => 'boolean',
+        // Numeric.
+        'nz_continuous_residence_months'      => 'integer',
+        'years_of_relevant_experience'        => 'integer',
+        'highest_qualification_year_completed'=> 'integer',
+        'number_of_children'                  => 'integer',
+        'estimated_total_cost_nzd'            => 'decimal:2',
+        'available_funds_nzd'                 => 'decimal:2',
+        'annual_income_nzd'                   => 'decimal:2',
+        'current_salary_nzd'                  => 'decimal:2',
+        'english_test_overall_score'          => 'decimal:2',
+        'english_test_listening'              => 'decimal:2',
+        'english_test_reading'                => 'decimal:2',
+        'english_test_writing'                => 'decimal:2',
+        'english_test_speaking'               => 'decimal:2',
     ];
 
     /** Portal account (User row with role='lead'), if one exists. */
@@ -252,6 +356,75 @@ class Lead extends Model
     public function stageUpdater()
     {
         return $this->belongsTo(User::class, 'stage_updated_by');
+    }
+
+    /** Staff member this lead is currently assigned to (or null). */
+    public function assignee()
+    {
+        return $this->belongsTo(User::class, 'assigned_to');
+    }
+
+    // ─── Computed accessors used by the Personal Info tab ─────────────
+
+    /**
+     * Age in whole years, derived from `dob`. Overrides the legacy `age`
+     * column so the value can't drift out of sync with the date-of-birth
+     * column the rest of the editing UI writes to. Returns null when DOB
+     * is unset; falls back to whatever value sits in the legacy `age`
+     * column so historical rows without DOB still show their imported age.
+     */
+    public function getAgeAttribute(): ?int
+    {
+        if (! empty($this->attributes['dob'])) {
+            try {
+                return \Illuminate\Support\Carbon::parse($this->attributes['dob'])->age;
+            } catch (\Throwable $e) {
+                // Bad date — fall through to legacy column.
+            }
+        }
+        $legacy = $this->attributes['age'] ?? null;
+        return $legacy !== null ? (int) $legacy : null;
+    }
+
+    /**
+     * True for employment types that imply current paid work. Drives the
+     * "current employer" sub-form revealed in the Employment section
+     * card and the case-level filters on the Cases page.
+     */
+    public function getIsEmployedAttribute(): bool
+    {
+        return in_array($this->employment_type, ['Employed', 'Self-employed'], true);
+    }
+
+    /**
+     * True when a current_nz_visa_type is populated — surfaces in the
+     * /track page so the client sees their current visa status, and on
+     * the Cases page summary chips.
+     */
+    public function getHasCurrentNzVisaAttribute(): bool
+    {
+        return ! empty($this->current_nz_visa_type);
+    }
+
+    /**
+     * Whether the lead's passport_expiry sits within the supplied number
+     * of days from today. Defaults to 180 days (Immigration NZ's six-
+     * month rule). Property access `$lead->passport_expires_within_days`
+     * uses the default; pass an explicit number to `getPassportExpiresWithinDaysAttribute`
+     * for a different window.
+     */
+    public function getPassportExpiresWithinDaysAttribute(int $days = 180): bool
+    {
+        if (empty($this->attributes['passport_expiry'])) {
+            return false;
+        }
+        try {
+            $expiry = \Illuminate\Support\Carbon::parse($this->attributes['passport_expiry']);
+            return $expiry->isFuture()
+                && $expiry->diffInDays(\Illuminate\Support\Carbon::now()) <= $days;
+        } catch (\Throwable $e) {
+            return false;
+        }
     }
 
     /**

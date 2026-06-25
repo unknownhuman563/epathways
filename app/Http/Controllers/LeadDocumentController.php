@@ -6,9 +6,11 @@ use App\Models\Lead;
 use App\Models\LeadDocument;
 use App\Models\LeadDocumentRequest;
 use App\Services\AgreementGenerator;
+use App\Support\UploadValidation;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 
@@ -91,7 +93,7 @@ class LeadDocumentController extends Controller
 
         try {
             foreach ($data['items'] as $item) {
-                LeadDocumentRequest::create([
+                $docRequest = LeadDocumentRequest::create([
                     'lead_id'      => $lead->id,
                     'label'        => $item['label'],
                     'description'  => $item['description'] ?? null,
@@ -99,6 +101,20 @@ class LeadDocumentController extends Controller
                     'requested_by' => Auth::id(),
                     'requested_at' => now(),
                 ]);
+
+                // Email/SMS the lead a link to upload it. Prefer the
+                // 'doc_request' template; fall back to the legacy Mailable.
+                if (! empty($lead->email)) {
+                    try {
+                        $res = app(\App\Services\CommunicationService::class)
+                            ->sendTemplated('doc_request', $lead, ['document_name' => $docRequest->label]);
+                        if (! $res['email']) {
+                            Mail::to($lead->email)->send(new \App\Mail\DocumentRequestedFromLead($lead, $docRequest));
+                        }
+                    } catch (\Throwable $e) {
+                        Log::error('DocumentRequestedFromLead dispatch failed', ['lead_id' => $lead->id, 'error' => $e->getMessage()]);
+                    }
+                }
             }
             return back()->with('success', count($data['items']) . ' document request(s) added.');
         } catch (\Throwable $e) {
@@ -137,6 +153,25 @@ class LeadDocumentController extends Controller
             'reviewed_at' => now(),
         ]);
 
+        // Tell the lead their document was approved / rejected. Prefer the
+        // doc_approved / doc_rejected templates; fall back to the Mailable.
+        $lead = $doc->lead;
+        if (in_array($validated['status'], [LeadDocument::STATUS_APPROVED, LeadDocument::STATUS_REJECTED], true)
+            && $lead && ! empty($lead->email)) {
+            try {
+                $key = $validated['status'] === LeadDocument::STATUS_APPROVED ? 'doc_approved' : 'doc_rejected';
+                $res = app(\App\Services\CommunicationService::class)->sendTemplated($key, $lead, [
+                    'document_name' => $doc->original_name,
+                    'reason'        => $validated['note'] ?? '',
+                ]);
+                if (! $res['email']) {
+                    Mail::to($lead->email)->send(new \App\Mail\DocumentStatusChanged($lead, $doc->fresh(), $validated['note'] ?? null));
+                }
+            } catch (\Throwable $e) {
+                Log::error('DocumentStatusChanged dispatch failed', ['doc_id' => $doc->id, 'error' => $e->getMessage()]);
+            }
+        }
+
         return back()->with('success', "Document marked {$validated['status']}.");
     }
 
@@ -144,7 +179,7 @@ class LeadDocumentController extends Controller
     {
         $lead = Lead::findOrFail($leadId);
         $request->validate([
-            'file' => 'required|file|max:20480', // 20MB
+            'file' => 'required|' . UploadValidation::document(),
             'note' => 'nullable|string|max:500',
         ]);
 
@@ -176,7 +211,7 @@ class LeadDocumentController extends Controller
 
         $request->validate([
             'files'   => 'required|array|min:1|max:10',
-            'files.*' => 'file|max:20480', // 20MB each
+            'files.*' => UploadValidation::document(),
         ]);
 
         try {
@@ -359,14 +394,15 @@ class LeadDocumentController extends Controller
 
         $request->validate([
             'files'   => 'required|array|min:1|max:10',
-            'files.*' => 'file|max:20480',
+            'files.*' => UploadValidation::document(),
         ]);
 
         try {
+            $lastDoc = null;
             foreach ($request->file('files') as $file) {
                 $path = $file->store("lead-documents/{$lead->id}", self::DISK);
 
-                LeadDocument::create([
+                $lastDoc = LeadDocument::create([
                     'lead_id'       => $lead->id,
                     'request_id'    => null,
                     'checklist_key' => $key,
@@ -377,6 +413,11 @@ class LeadDocumentController extends Controller
                     'status'        => LeadDocument::STATUS_SUBMITTED,
                     'uploaded_by'   => $user->id,
                 ]);
+            }
+
+            // One notification per upload batch (not per file).
+            if ($lastDoc) {
+                $this->notifyDocumentSubmitted($lead, $lastDoc);
             }
 
             return back()->with('success', 'Document uploaded. Our team will review it shortly.');
@@ -412,6 +453,28 @@ class LeadDocumentController extends Controller
         }
     }
 
+    /**
+     * Notify the lead's assigned staff (or admins as a fallback) that the
+     * lead submitted a document — same alert the public /track upload fires.
+     */
+    private function notifyDocumentSubmitted(Lead $lead, LeadDocument $document): void
+    {
+        try {
+            $recipients = $lead->assignee
+                ? collect([$lead->assignee])
+                : \App\Models\User::whereIn('role', [\App\Models\User::ROLE_ADMIN, \App\Models\User::ROLE_SUPER_ADMIN])->get();
+
+            if ($recipients->isNotEmpty()) {
+                \Illuminate\Support\Facades\Notification::send(
+                    $recipients,
+                    new \App\Notifications\DocumentSubmittedForReview($lead, $document)
+                );
+            }
+        } catch (\Throwable $e) {
+            Log::error('Lead-portal document notify failed', ['lead_id' => $lead->id, 'error' => $e->getMessage()]);
+        }
+    }
+
     public function leadUpload(Request $request)
     {
         $user = Auth::user();
@@ -419,7 +482,7 @@ class LeadDocumentController extends Controller
         abort_unless($lead, 403);
 
         $request->validate([
-            'file'       => 'required|file|max:20480', // 20MB
+            'file'       => 'required|' . UploadValidation::document(),
             'request_id' => 'nullable|integer|exists:lead_document_requests,id',
         ]);
 
@@ -433,7 +496,7 @@ class LeadDocumentController extends Controller
 
         $path = $request->file('file')->store("lead-documents/{$lead->id}", self::DISK);
 
-        LeadDocument::create([
+        $document = LeadDocument::create([
             'lead_id'       => $lead->id,
             'request_id'    => $request->input('request_id'),
             'original_name' => $request->file('file')->getClientOriginalName(),
@@ -443,6 +506,8 @@ class LeadDocumentController extends Controller
             'status'        => LeadDocument::STATUS_SUBMITTED,
             'uploaded_by'   => $user->id,
         ]);
+
+        $this->notifyDocumentSubmitted($lead, $document);
 
         return back()->with('success', 'Document uploaded. Our team will review it shortly.');
     }

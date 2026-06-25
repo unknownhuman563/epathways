@@ -16,8 +16,11 @@ class DatabaseSeeder extends Seeder
         // User::factory(10)->create();
 
         $this->call(AdminSeeder::class);
+        $this->call(SuperAdminSeeder::class);
         $this->call(PortalUsersSeeder::class);
         $this->call(ProgramSeeder::class);
         $this->call(PropertySeeder::class);
+        $this->call(DefaultMessageTemplatesSeeder::class);
+        $this->call(AiSettingsSeeder::class);
     }
 }

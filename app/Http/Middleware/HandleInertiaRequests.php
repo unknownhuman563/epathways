@@ -39,6 +39,9 @@ class HandleInertiaRequests extends Middleware
             ...parent::share($request),
             'auth' => [
                 'user' => $request->user(),
+                // Drives the topbar AI button + lead health badge. True only
+                // when the config kill switch AND the tenant toggle are on.
+                'ai_enabled' => (bool) config('ai.enabled') && (bool) \App\Models\Setting::get('ai_enabled', true),
             ],
             'flash' => [
                 'success' => $request->session()->get('success'),
@@ -79,6 +82,12 @@ class HandleInertiaRequests extends Middleware
             // today" on the nav itself. Lazy so the queries only run for the
             // portal that's actually loading.
             'sidebarBadges' => fn () => $this->sidebarBadges($request),
+            // Global unread-notification count — drives the topbar bell badge
+            // across every portal. Re-shared on every Inertia navigation so
+            // the badge stays fresh without polling.
+            'notifications' => [
+                'unread_count' => $request->user()?->unreadNotifications()->count() ?? 0,
+            ],
         ];
     }
 
@@ -103,7 +112,7 @@ class HandleInertiaRequests extends Middleware
                 'new_leads_today'      => \App\Models\Lead::where('created_at', '>=', $todayStart)->count(),
                 'active_cases'         => \App\Models\Lead::where('status', 'Visa Process')->count(),
                 'docs_pending_review'  => \App\Models\LeadDocument::whereIn('status', ['Submitted', 'UnderReview'])->count(),
-                'notifications_unread' => 0,
+                'notifications_unread' => $user->unreadNotifications()->count(),
             ];
         }
 
@@ -112,7 +121,7 @@ class HandleInertiaRequests extends Middleware
             $out['education'] = [
                 'new_leads_today'      => \App\Models\Lead::where('created_at', '>=', $todayStart)->count(),
                 'docs_pending_review'  => \App\Models\LeadDocument::whereIn('status', ['Submitted', 'UnderReview'])->count(),
-                'notifications_unread' => 0,
+                'notifications_unread' => $user->unreadNotifications()->count(),
             ];
         }
 
@@ -125,7 +134,7 @@ class HandleInertiaRequests extends Middleware
                 'tasks_open'         => \App\Models\LeadTask::where('assignee_id', $user->id)->where('completed', false)->count(),
                 'tasks_overdue'      => \App\Models\LeadTask::where('assignee_id', $user->id)->where('completed', false)->whereNotNull('due_at')->where('due_at', '<', now())->count(),
                 'bookings_this_week' => \App\Models\Booking::whereBetween('appointment_date', [now()->startOfWeek(), $weekEnd])->count(),
-                'notifications_unread' => 0, // placeholder until notifications inbox ships
+                'notifications_unread' => $user->unreadNotifications()->count(),
             ];
         }
 

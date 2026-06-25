@@ -194,12 +194,12 @@ export default function Login() {
                                     </span>
                                     <span className="text-[13px] text-[#282728]/70 font-light">Remember me</span>
                                 </label>
-                                <a
-                                    href="mailto:info@epathways.co.nz?subject=Portal%20password%20help"
+                                <Link
+                                    href="/forgot-password"
                                     className="text-[12px] text-[#282728]/55 font-medium hover:text-[#282728] transition-colors"
                                 >
                                     Forgot Password?
-                                </a>
+                                </Link>
                             </div>
 
                             {/* Submit */}

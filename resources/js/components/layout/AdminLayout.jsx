@@ -5,7 +5,7 @@ import {
     GraduationCap, Video, Globe, FileText, Star, LayoutDashboard,
     Briefcase, Languages, Building2, KeyRound, Sparkles, Tag,
     Radio, PenLine, CalendarDays, Inbox, Megaphone, BarChart3,
-    CheckSquare, Clock, Crown,
+    CheckSquare, Clock, Crown, LifeBuoy,
 } from "lucide-react";
 
 // Super-admin-only entry — only injected when the current user holds
@@ -21,6 +21,7 @@ const SUPER_ADMIN_NAV = {
 const ADMIN_NAV = [
     { name: "Dashboard", href: "/admin/dashboard", icon: <Home size={20} /> },
     { name: "Leads", href: "/admin/leads", icon: <Users size={20} /> },
+    { name: "Document Queue", href: "/admin/document-queue", icon: <Inbox size={20} /> },
     { name: "Portal Invitations", href: "/admin/portal-invitations", icon: <KeyRound size={20} /> },
     { name: "Events", href: "/admin/events", icon: <CalendarIcon size={20} /> },
     { name: "Bookings", href: "/admin/booking", icon: <BookOpen size={20} /> },
@@ -44,6 +45,8 @@ const ADMIN_NAV = [
     // Single User Reviews page — tabs between Immigration and Education
     // inside the page so staff doesn't have to bounce between sidebar links.
     { name: "User Reviews", href: "/admin/user-reviews", icon: <Star size={20} /> },
+    { name: "Message Templates", href: "/admin/message-templates", icon: <PenLine size={20} /> },
+    { name: "System Tickets", href: "/admin/system-tickets", icon: <LifeBuoy size={20} /> },
     {
         name: "Immigration",
         icon: <Globe size={20} />,

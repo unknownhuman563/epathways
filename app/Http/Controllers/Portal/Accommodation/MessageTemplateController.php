@@ -3,14 +3,14 @@
 namespace App\Http\Controllers\Portal\Accommodation;
 
 use App\Http\Controllers\Controller;
-use App\Models\MessageTemplate;
+use App\Models\AccommodationMessageTemplate;
 use Illuminate\Http\Request;
 
 class MessageTemplateController extends Controller
 {
     public function index()
     {
-        $templates = MessageTemplate::orderBy('created_at')
+        $templates = AccommodationMessageTemplate::orderBy('created_at')
             ->get(['id', 'title', 'content', 'notes']);
 
         return inertia('portal/accommodation/MessageTemplates', [
@@ -20,19 +20,19 @@ class MessageTemplateController extends Controller
 
     public function store(Request $request)
     {
-        MessageTemplate::create($this->validated($request));
+        AccommodationMessageTemplate::create($this->validated($request));
 
         return redirect()->back()->with('success', 'Template added.');
     }
 
-    public function update(Request $request, MessageTemplate $template)
+    public function update(Request $request, AccommodationMessageTemplate $template)
     {
         $template->update($this->validated($request));
 
         return redirect()->back()->with('success', 'Template updated.');
     }
 
-    public function destroy(MessageTemplate $template)
+    public function destroy(AccommodationMessageTemplate $template)
     {
         $template->delete();
 

@@ -2,7 +2,7 @@
 
 namespace Tests\Feature;
 
-use App\Models\MessageTemplate;
+use App\Models\AccommodationMessageTemplate;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Inertia\Testing\AssertableInertia as AssertInertia;
@@ -19,7 +19,7 @@ class MessageTemplateTest extends TestCase
 
     public function test_index_lists_templates(): void
     {
-        MessageTemplate::create(['title' => 'Client Viewing', 'content' => 'Hey everyone…', 'notes' => null]);
+        AccommodationMessageTemplate::create(['title' => 'Client Viewing', 'content' => 'Hey everyone…', 'notes' => null]);
 
         $this->actingAs($this->staff())->get('/portal/accommodation/message-templates')
             ->assertInertia(fn (AssertInertia $page) => $page
@@ -49,7 +49,7 @@ class MessageTemplateTest extends TestCase
 
     public function test_update_template(): void
     {
-        $t = MessageTemplate::create(['title' => 'Old', 'content' => 'x']);
+        $t = AccommodationMessageTemplate::create(['title' => 'Old', 'content' => 'x']);
 
         $this->actingAs($this->staff())
             ->from('/portal/accommodation/message-templates')
@@ -62,7 +62,7 @@ class MessageTemplateTest extends TestCase
 
     public function test_destroy_template(): void
     {
-        $t = MessageTemplate::create(['title' => 'Bye', 'content' => 'x']);
+        $t = AccommodationMessageTemplate::create(['title' => 'Bye', 'content' => 'x']);
 
         $this->actingAs($this->staff())
             ->delete("/portal/accommodation/message-templates/{$t->id}")

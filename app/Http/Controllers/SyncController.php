@@ -14,7 +14,7 @@ class SyncController extends Controller
     public function syncCalendar(Request $request)
     {
         $token = $request->header('X-Sync-Token');
-        if ($token !== env('CALENDAR_SYNC_TOKEN')) {
+        if ($token !== config('services.calendar.sync_token')) {
             return response()->json(['message' => 'Unauthorized'], 401);
         }
 

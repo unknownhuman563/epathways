@@ -54,7 +54,7 @@ class ResidentIntakeUploadTest extends TestCase
             'document_files' => ['passport' => [$pdf]],
         ]));
 
-        $response->assertSessionHas('success', true);
+        $response->assertSessionHas('intake_submitted');
         $response->assertSessionHasNoErrors();
 
         $intake = ResidentIntake::firstOrFail();
@@ -84,7 +84,7 @@ class ResidentIntakeUploadTest extends TestCase
             ],
         ]));
 
-        $response->assertSessionHas('success', true);
+        $response->assertSessionHas('intake_submitted');
         $response->assertSessionHasNoErrors();
 
         $intake = ResidentIntake::firstOrFail();
@@ -106,7 +106,7 @@ class ResidentIntakeUploadTest extends TestCase
         $original = UploadedFile::fake()->create('passport-orig.pdf', 100, 'application/pdf');
         $this->post('/resident-interest', $this->payload([
             'document_files' => ['passport' => [$original]],
-        ]))->assertSessionHas('success', true);
+        ]))->assertSessionHas('intake_submitted');
 
         /** @var ResidentIntake $intake */
         $intake = ResidentIntake::firstOrFail();
@@ -141,7 +141,7 @@ class ResidentIntakeUploadTest extends TestCase
 
         $this->post('/resident-interest', $this->payload([
             'document_files' => [],
-        ]))->assertSessionHas('success', true);
+        ]))->assertSessionHas('intake_submitted');
 
         $intake = ResidentIntake::firstOrFail();
         $this->assertNull($intake->edit_token);
@@ -168,7 +168,7 @@ class ResidentIntakeUploadTest extends TestCase
             'document_files' => [],
         ]));
 
-        $response->assertSessionHas('success', true);
+        $response->assertSessionHas('intake_submitted');
         $response->assertSessionHasNoErrors();
 
         $intake = ResidentIntake::firstOrFail();

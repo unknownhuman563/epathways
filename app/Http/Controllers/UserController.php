@@ -4,15 +4,18 @@ namespace App\Http\Controllers;
 
 use App\Models\ActivityLog;
 use App\Models\User;
+use App\Support\UploadValidation;
 use Illuminate\Http\Request;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 
 class UserController extends Controller
 {
-    /** admin + every department-portal role. */
+    /** super-admin + admin + every department-portal role. */
     private function roleValues(): array
     {
-        return array_merge([User::ROLE_ADMIN], User::PORTAL_ROLES);
+        return array_merge([User::ROLE_SUPER_ADMIN, User::ROLE_ADMIN], User::PORTAL_ROLES);
     }
 
     public function index()
@@ -31,7 +34,7 @@ class UserController extends Controller
             'name' => 'required|string|max:255',
             'email' => 'required|email|max:255|unique:users,email',
             'role' => ['required', Rule::in($this->roleValues())],
-            'password' => 'required|string|min:8',
+            'password' => ['required', \Illuminate\Validation\Rules\Password::defaults()],
         ]);
 
         // The 'password' => 'hashed' cast on the model hashes this on save.
@@ -53,11 +56,12 @@ class UserController extends Controller
             'name' => 'required|string|max:255',
             'email' => ['required', 'email', 'max:255', Rule::unique('users', 'email')->ignore($user->id)],
             'role' => ['required', Rule::in($this->roleValues())],
-            'password' => 'nullable|string|min:8',
+            'password' => ['nullable', \Illuminate\Validation\Rules\Password::defaults()],
         ]);
 
-        // Don't let the current admin demote themselves — avoids locking yourself out.
-        if ($user->is($request->user()) && $validated['role'] !== User::ROLE_ADMIN) {
+        // Don't let anyone change their own role — avoids locking yourself out
+        // (e.g. a super-admin demoting themselves and losing the super surface).
+        if ($user->is($request->user()) && $validated['role'] !== $user->role) {
             return back()->withErrors(['role' => 'You cannot change your own role.']);
         }
 
@@ -97,5 +101,98 @@ class UserController extends Controller
         ]);
 
         return back()->with('success', 'User deleted successfully.');
+    }
+
+    // ─── Profile avatar ───────────────────────────────────────────────────
+
+    /**
+     * Upload (or replace) the current user's avatar. Image is downscaled to
+     * fit 256×256 and stored on the public disk at avatars/{id}.{ext}.
+     */
+    public function uploadAvatar(Request $request)
+    {
+        $request->validate(['avatar' => 'required|' . UploadValidation::image()]);
+
+        $user = $request->user();
+        $file = $request->file('avatar');
+        $ext = match (strtolower((string) ($file->extension() ?: 'jpg'))) {
+            'png'  => 'png',
+            'webp' => 'webp',
+            default => 'jpg',
+        };
+        $path = "avatars/{$user->id}.{$ext}";
+
+        Storage::disk('public')->put($path, $this->downscaleAvatar($file, $ext));
+
+        // Remove a previous avatar with a different extension.
+        if ($user->avatar_path && $user->avatar_path !== $path) {
+            Storage::disk('public')->delete($user->avatar_path);
+        }
+
+        $user->forceFill(['avatar_path' => $path])->save();
+
+        return back()->with('success', 'Profile photo updated.');
+    }
+
+    public function deleteAvatar(Request $request)
+    {
+        $user = $request->user();
+
+        if ($user->avatar_path) {
+            Storage::disk('public')->delete($user->avatar_path);
+            $user->forceFill(['avatar_path' => null])->save();
+        }
+
+        return back()->with('success', 'Profile photo removed.');
+    }
+
+    /**
+     * Downscale an uploaded image to fit within 256×256 (only shrinks) using
+     * GD, returning the encoded bytes. Falls back to the original bytes if
+     * the image can't be decoded.
+     */
+    private function downscaleAvatar(UploadedFile $file, string $ext): string
+    {
+        $src = $file->getRealPath();
+        $info = @getimagesize($src);
+        if (! $info) {
+            return (string) file_get_contents($src);
+        }
+
+        [$w, $h] = $info;
+        $max = 256;
+        $scale = min(1, $max / max($w, $h));
+        $nw = max(1, (int) round($w * $scale));
+        $nh = max(1, (int) round($h * $scale));
+
+        $mime = $info['mime'] ?? '';
+        $image = match (true) {
+            str_contains($mime, 'png')  => @imagecreatefrompng($src),
+            str_contains($mime, 'webp') => @imagecreatefromwebp($src),
+            default                     => @imagecreatefromjpeg($src),
+        };
+        if (! $image) {
+            return (string) file_get_contents($src);
+        }
+
+        $canvas = imagecreatetruecolor($nw, $nh);
+        if (in_array($ext, ['png', 'webp'], true)) {
+            imagealphablending($canvas, false);
+            imagesavealpha($canvas, true);
+        }
+        imagecopyresampled($canvas, $image, 0, 0, 0, 0, $nw, $nh, $w, $h);
+
+        ob_start();
+        match ($ext) {
+            'png'  => imagepng($canvas),
+            'webp' => imagewebp($canvas),
+            default => imagejpeg($canvas, null, 85),
+        };
+        $bytes = (string) ob_get_clean();
+
+        imagedestroy($image);
+        imagedestroy($canvas);
+
+        return $bytes;
     }
 }

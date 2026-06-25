@@ -2,12 +2,19 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\ActivityLog;
 use App\Models\Lead;
 use App\Models\LeadDocument;
+use App\Models\User;
 use App\Models\VisaType;
+use App\Notifications\DocumentSubmittedForReview;
+use App\Notifications\LeadInfoUpdated;
+use App\Support\UploadValidation;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
 /**
@@ -60,10 +67,14 @@ class LeadTrackingController extends Controller
         $lead = $this->resolveLead($code);
 
         if (! $lead) {
+            // Friendly "not found" — the same tracker shell with a message,
+            // but a real 404 status so it isn't mistaken for a valid page.
             $payload['error'] = 'We could not find an application with that tracking code. Please double-check it and try again.';
 
-            return inertia('track/TrackingPage', $payload);
+            return inertia('track/TrackingPage', $payload)->toResponse($request)->setStatusCode(404);
         }
+
+        $this->recordVisit($request, $lead);
 
         $payload['lead']      = $this->publicLeadShape($lead);
         $payload['info']      = $this->editableInfo($lead);
@@ -114,8 +125,50 @@ class LeadTrackingController extends Controller
 
         // The allow-list filter is redundant after the validator, but
         // belt-and-braces in case future validation rules drift.
-        $lead->fill(array_intersect_key($validated, array_flip(self::EDITABLE)));
-        $lead->save();
+        $filtered = array_intersect_key($validated, array_flip(self::EDITABLE));
+
+        // Compute the change set on DECRYPTED values (encrypted casts would
+        // otherwise always read as "dirty"). Sensitive fields are redacted —
+        // we record THAT they changed, never the values.
+        $sensitive = ['passport_number'];
+        $changes = [];
+        foreach ($filtered as $field => $new) {
+            $old = $lead->{$field};
+            if ((string) $old !== (string) $new) {
+                $changes[$field] = in_array($field, $sensitive, true)
+                    ? ['old' => '[redacted]', 'new' => '[updated]']
+                    : ['old' => $old, 'new' => $new];
+            }
+        }
+
+        // saveQuietly so the LogsActivity trait's null-actor auto-log doesn't
+        // fire — we record a tailored entry with the tracking_code as actor.
+        $lead->fill($filtered)->saveQuietly();
+
+        if (! empty($changes)) {
+            ActivityLog::record('lead.updated', [
+                'actor_name'  => $lead->tracking_code,
+                'actor_role'  => 'tracker',
+                'portal'      => 'public',
+                'entity_type' => Lead::class,
+                'entity_id'   => $lead->id,
+                'description' => "Lead updated their information via the tracker",
+                'properties'  => [
+                    'subject_type' => 'Lead',
+                    'subject_id'   => $lead->id,
+                    'changes'      => $changes,
+                ],
+            ]);
+        }
+
+        // Notify staff when a key identity/contact field changes.
+        $keyFields = array_values(array_intersect(array_keys($changes), ['passport_number', 'phone', 'email']));
+        if (! empty($keyFields)) {
+            $recipients = $this->staffRecipients($lead);
+            if ($recipients->isNotEmpty()) {
+                Notification::send($recipients, new LeadInfoUpdated($lead, $keyFields));
+            }
+        }
 
         return redirect()
             ->route('track.lookup', ['code' => $lead->tracking_code])
@@ -136,7 +189,7 @@ class LeadTrackingController extends Controller
         }
 
         $request->validate([
-            'file' => 'required|file|mimes:pdf,doc,docx,xls,csv,jpg,jpeg,png,gif|max:10240',
+            'file' => 'required|' . UploadValidation::document(),
             'checklist_key' => 'nullable|string|max:80',
             // Optional metadata captured at upload-time for passport docs so
             // the lead doesn't have to re-enter passport number / expiry in
@@ -151,7 +204,7 @@ class LeadTrackingController extends Controller
 
         $checklistKey = $request->input('checklist_key');
 
-        LeadDocument::create([
+        $document = LeadDocument::create([
             'lead_id'       => $lead->id,
             'checklist_key' => $checklistKey,
             'original_name' => $file->getClientOriginalName(),
@@ -161,6 +214,8 @@ class LeadTrackingController extends Controller
             'status'        => LeadDocument::STATUS_SUBMITTED,
             'source'        => LeadDocument::SOURCE_UPLOAD,
         ]);
+
+        $this->notifyDocumentSubmitted($lead, $document, 'submitted');
 
         // Passport upload: surface the entered passport metadata onto the
         // lead row itself so admin search / visa lodgement / immigration
@@ -205,16 +260,18 @@ class LeadTrackingController extends Controller
             return back()->with('error', 'Document not found.');
         }
 
-        // Staff has already touched this doc — lock it for the lead.
-        if ($doc->status !== LeadDocument::STATUS_SUBMITTED) {
-            return back()->with('error', 'This document has already been reviewed and can no longer be edited.');
+        // Once staff has approved a doc it's locked; the lead may still fix a
+        // pending / under-review / rejected one.
+        if ($doc->status === LeadDocument::STATUS_APPROVED) {
+            return back()->with('error', 'This document has been approved and can no longer be edited.');
         }
 
         $request->validate([
-            'file' => 'nullable|file|mimes:pdf,doc,docx,xls,csv,jpg,jpeg,png,gif|max:10240',
+            'file' => 'nullable|' . UploadValidation::document(),
             'checklist_key' => 'nullable|string|max:80',
         ]);
 
+        $replacedFile = false;
         if ($request->hasFile('file')) {
             // Best-effort: drop the old file so we don't accumulate
             // orphans. We swallow failures because the audit value of
@@ -231,7 +288,10 @@ class LeadTrackingController extends Controller
                 'file_path'     => $path,
                 'mime'          => $file->getMimeType(),
                 'size'          => $file->getSize(),
+                // A replaced file goes back into the review queue.
+                'status'        => LeadDocument::STATUS_SUBMITTED,
             ]);
+            $replacedFile = true;
         }
 
         if ($request->filled('checklist_key')) {
@@ -239,6 +299,10 @@ class LeadTrackingController extends Controller
         }
 
         $doc->save();
+
+        if ($replacedFile) {
+            $this->notifyDocumentSubmitted($lead, $doc, 'replaced');
+        }
 
         return redirect()
             ->route('track.lookup', ['code' => $lead->tracking_code])
@@ -264,8 +328,10 @@ class LeadTrackingController extends Controller
             return back()->with('error', 'Document not found.');
         }
 
-        if ($doc->status !== LeadDocument::STATUS_SUBMITTED) {
-            return back()->with('error', 'This document has already been reviewed and can no longer be deleted.');
+        // Approved docs are locked; the lead can still remove a pending /
+        // under-review / rejected one.
+        if ($doc->status === LeadDocument::STATUS_APPROVED) {
+            return back()->with('error', 'This document has been approved and can no longer be deleted.');
         }
 
         if ($doc->file_path) {
@@ -280,9 +346,70 @@ class LeadTrackingController extends Controller
 
     // ─── helpers ────────────────────────────────────────────────────────
 
+    /**
+     * Notify staff that a lead submitted (or replaced) a document. Goes to
+     * the lead's assigned staff member; if none is assigned, falls back to
+     * admin-tier users so a submission is never dropped on the floor. The
+     * lead is never notified here.
+     */
+    private function notifyDocumentSubmitted(Lead $lead, LeadDocument $document, string $context): void
+    {
+        $recipients = $this->staffRecipients($lead);
+        if ($recipients->isEmpty()) {
+            return;
+        }
+
+        Notification::send($recipients, new DocumentSubmittedForReview($lead, $document, $context));
+    }
+
+    /**
+     * Who hears about a lead's tracker activity: their assigned staff
+     * member, or admin-tier users as a fallback when unassigned.
+     *
+     * @return \Illuminate\Support\Collection<int, User>
+     */
+    private function staffRecipients(Lead $lead): \Illuminate\Support\Collection
+    {
+        return $lead->assignee
+            ? collect([$lead->assignee])
+            : User::whereIn('role', [User::ROLE_ADMIN, User::ROLE_SUPER_ADMIN])->get();
+    }
+
     private function resolveLead(string $code): ?Lead
     {
         return Lead::where('tracking_code', strtoupper(trim($code)))->first();
+    }
+
+    /**
+     * Stamp last_seen_at on every visit and write a debounced activity-log
+     * entry (at most once per 15 min) so the audit trail doesn't flood on a
+     * page that polls/refreshes. The tracking_code is the "actor" since
+     * there's no logged-in user; no sensitive lead data is logged.
+     */
+    private function recordVisit(Request $request, Lead $lead): void
+    {
+        $shouldLog = is_null($lead->last_seen_at)
+            || $lead->last_seen_at->lt(now()->subMinutes(15));
+
+        // saveQuietly so the last_seen_at write doesn't itself spam the
+        // LogsActivity 'lead.updated' trail.
+        $lead->forceFill(['last_seen_at' => now()])->saveQuietly();
+
+        if (! $shouldLog) {
+            return;
+        }
+
+        ActivityLog::record('lead.tracker_view', [
+            'actor_name'  => $lead->tracking_code,
+            'actor_role'  => 'tracker',
+            'portal'      => 'public',
+            'entity_type' => Lead::class,
+            'entity_id'   => $lead->id,
+            'description' => "Tracker viewed for {$lead->tracking_code}",
+            'metadata'    => [
+                'user_agent' => Str::limit((string) $request->userAgent(), 255, ''),
+            ],
+        ]);
     }
 
     private function publicLeadShape(Lead $lead): array

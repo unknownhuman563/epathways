@@ -1,6 +1,10 @@
 import { Link, usePage, router } from "@inertiajs/react";
 import { useState, useEffect } from "react";
-import { Menu, X, Search, Bell, Settings, LogOut, ChevronDown, Eye, ArrowLeft } from "lucide-react";
+import { Menu, X, Settings, LogOut, ChevronDown, Eye, ArrowLeft } from "lucide-react";
+import NotificationBell from "@/components/NotificationBell";
+import GlobalSearchBar from "@/components/GlobalSearchBar";
+import RequestTicketButton from "@/components/RequestTicketButton";
+import AiChatButton from "@/components/ai/AiChatButton";
 
 /**
  * The official ePathways dashboard shell — sidebar + topbar + content area.
@@ -240,19 +244,13 @@ export default function DashboardLayout({
                     </div>
 
                     <div className="flex items-center gap-4 lg:gap-5 mt-2">
-                        <div className="hidden md:flex items-center bg-white border border-gray-100 rounded-full px-4 py-1.5 shadow-sm focus-within:ring-2 focus-within:ring-gray-200 focus-within:border-gray-200 transition-shadow">
-                            <Search size={16} className="text-gray-500" />
-                            <input
-                                type="text"
-                                placeholder="Search..."
-                                className="bg-transparent border-none outline-none text-sm text-gray-700 ml-2 w-48 placeholder-gray-400"
-                            />
-                        </div>
+                        <GlobalSearchBar />
 
-                        <button className="relative p-1.5 text-gray-600 hover:bg-white hover:shadow-sm rounded-full transition-all">
-                            <Bell size={18} />
-                            <span className="absolute top-1 right-1.5 w-2 h-2 bg-red-500 rounded-full border-2 border-[#F5F5F7]"></span>
-                        </button>
+                        {user?.role !== "lead" && <RequestTicketButton />}
+
+                        {user?.role !== "lead" && <AiChatButton aiEnabled={props.auth?.ai_enabled !== false} />}
+
+                        <NotificationBell />
 
                         <div className="flex items-center gap-2.5">
                             <div className="text-right hidden sm:block leading-tight">
@@ -260,9 +258,13 @@ export default function DashboardLayout({
                                 {user?.role && <p className="text-[11px] text-gray-500 capitalize">{user.role}</p>}
                             </div>
                             <div
-                                className={`flex items-center justify-center w-9 h-9 rounded-full ${accent} text-white font-bold text-sm shadow-md ring-2 ring-white`}
+                                className={`flex items-center justify-center w-9 h-9 rounded-full overflow-hidden ${accent} text-white font-bold text-sm shadow-md ring-2 ring-white`}
                             >
-                                {user?.name?.charAt(0)?.toUpperCase() || "U"}
+                                {user?.avatar_url ? (
+                                    <img src={user.avatar_url} alt={user.name} className="w-full h-full object-cover" />
+                                ) : (
+                                    user?.name?.charAt(0)?.toUpperCase() || "U"
+                                )}
                             </div>
                         </div>
                     </div>

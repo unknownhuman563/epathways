@@ -457,7 +457,6 @@ class SalesController extends Controller
     public function emailTemplates(){ return inertia('portal/sales/EmailTemplates',['portal' => 'sales']); }
     public function campaigns()     { return inertia('portal/sales/Campaigns',     ['portal' => 'sales']); }
     public function profile()       { return inertia('portal/sales/Profile',       ['portal' => 'sales', 'user' => auth()->user()->only(['id', 'name', 'email', 'role'])]); }
-    public function notifications() { return inertia('portal/sales/Notifications', ['portal' => 'sales']); }
 
     /**
      * Sales assessments queue — same Free Assessment + Education Enrolment

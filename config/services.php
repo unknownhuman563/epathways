@@ -59,6 +59,22 @@ return [
         'webhook_secret' => env('STRIPE_WEBHOOK_SECRET'),
     ],
 
+    // Twilio SMS — used by App\Services\Sms\TwilioSmsProvider. Leave
+    // TWILIO_SID empty to disable SMS (the system falls back to a no-op
+    // provider that logs a 'failed' MessageLog with a clear reason).
+    'twilio' => [
+        'sid'   => env('TWILIO_SID'),
+        'token' => env('TWILIO_TOKEN'),
+        'from'  => env('TWILIO_FROM_NUMBER'),
+    ],
+
+    // Calendar sync — token used by SyncController to authenticate inbound
+    // appointment pushes from the external Google Apps Script
+    // (X-Sync-Token header must match this value).
+    'calendar' => [
+        'sync_token' => env('CALENDAR_SYNC_TOKEN'),
+    ],
+
     // PLAI Partner API — AI ad platform that launches creatives to
     // Facebook / Instagram / Google / LinkedIn / TikTok / YouTube / Bing.
     // Requires an Enterprise account; key is generated under

@@ -24,15 +24,6 @@ class SchoolController extends Controller
         return inertia($page, ['schools' => $schools]);
     }
 
-    /** API feed for the add-student modal's dropdown. */
-    public function listForPicker()
-    {
-        $schools = School::where('status', 'active')
-            ->orderBy('name')
-            ->get(['id', 'name', 'country', 'city']);
-        return response()->json(['schools' => $schools]);
-    }
-
     public function store(Request $request)
     {
         $data = $this->validatePayload($request);
