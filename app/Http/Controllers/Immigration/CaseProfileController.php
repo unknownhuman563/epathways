@@ -287,10 +287,36 @@ class CaseProfileController extends Controller
         return mb_strlen($plain) > 160 ? mb_substr($plain, 0, 160) . '…' : $plain;
     }
 
-    /** Phase 3 wires the real agreements table. Phase 1 ships an empty list. */
+    /**
+     * Build 11.D Phase 2 — Managed agreements for the case. Distinct from
+     * any AgreementGenerator-created LeadDocument rows (those still surface
+     * under the Documents tab via the existing checklist flow).
+     */
     private function loadAgreements(Lead $lead): array
     {
-        return [];
+        return $lead->agreements()
+            ->with(['template:id,name,visa_type', 'generatedBy:id,name'])
+            ->latest()
+            ->get()
+            ->map(fn (\App\Models\Agreement $a) => [
+                'id'                    => $a->id,
+                'title'                 => $a->title,
+                'status'                => $a->status,
+                'template'              => $a->template
+                    ? ['id' => $a->template->id, 'name' => $a->template->name, 'visa_type' => $a->template->visa_type]
+                    : null,
+                'generated_by'          => $a->generatedBy?->name,
+                'sent_at'               => $a->sent_at,
+                'viewed_at'             => $a->viewed_at,
+                'signed_at'             => $a->signed_at,
+                'signer_name'           => $a->signer_name,
+                'signer_ip'             => $a->signer_ip,
+                'has_pdf'               => (bool) $a->pdf_path,
+                'has_signed_pdf'        => (bool) $a->signed_pdf_path,
+                'tracker_signing_token' => $a->tracker_signing_token,
+                'created_at'            => $a->created_at,
+            ])
+            ->all();
     }
 
     private function loadNotes(Lead $lead): array

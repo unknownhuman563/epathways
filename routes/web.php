@@ -723,6 +723,20 @@ Route::middleware(['auth'])->group(function () {
             // to use LeadController::show via /admin/leads/{id}.
             Route::get('/cases/{lead}/profile', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'show'])
                 ->name('cases.profile');
+
+            // Build 11.D Phase 2 — Managed agreement endpoints. Each call
+            // re-checks is_immigration_case + agreement<->lead ownership so
+            // a cross-case URL guess still 404s. The route order matters:
+            // /agreements/templates must come before /agreements/{agreement}
+            // or the literal 'templates' would be captured as an Agreement id.
+            Route::prefix('cases/{lead}/agreements')->name('cases.agreements.')->group(function () {
+                Route::get('/',                       [\App\Http\Controllers\Immigration\AgreementController::class, 'index'])->name('index');
+                Route::get('/templates',              [\App\Http\Controllers\Immigration\AgreementController::class, 'templates'])->name('templates');
+                Route::post('/',                      [\App\Http\Controllers\Immigration\AgreementController::class, 'generate'])->name('generate');
+                Route::post('/{agreement}/send',      [\App\Http\Controllers\Immigration\AgreementController::class, 'send'])->name('send');
+                Route::get('/{agreement}/pdf',        [\App\Http\Controllers\Immigration\AgreementController::class, 'downloadPdf'])->name('pdf');
+                Route::post('/{agreement}/void',      [\App\Http\Controllers\Immigration\AgreementController::class, 'void'])->name('void');
+            });
             Route::get('/documents', [ImmigrationController::class, 'documents'])->name('documents');
             Route::get('/appointments', [ImmigrationController::class, 'appointments'])->name('appointments');
 
