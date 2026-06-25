@@ -35,8 +35,8 @@ class EoiSubmission extends Model
         // Workflow
         'status', 'form_type',
         // Onboarding pipeline (additive)
-        'property_id', 'lead_temperature',
-        'viewing_scheduled_at', 'viewing_completed_at', 'viewing_outcome',
+        'property_id', 'lead_temperature', 'viewing_email_sent_at',
+        'viewing_scheduled_at', 'viewing_completed_at', 'viewing_outcome', 'post_viewing_followup_at',
         'pre_tenancy_form_sent_at', 'pre_tenancy_form_completed_at', 'pre_tenancy_form_data',
         'tenancy_agreement_sent_at', 'tenancy_agreement_signed_at',
         'invoice_amount_nzd', 'invoice_sent_at', 'payment_confirmed_at',
@@ -55,8 +55,10 @@ class EoiSubmission extends Model
         'confirm_accurate' => 'boolean',
         'consent_collection' => 'boolean',
         // Onboarding
+        'viewing_email_sent_at' => 'datetime',
         'viewing_scheduled_at' => 'datetime',
         'viewing_completed_at' => 'datetime',
+        'post_viewing_followup_at' => 'datetime',
         'pre_tenancy_form_sent_at' => 'datetime',
         'pre_tenancy_form_completed_at' => 'datetime',
         'tenancy_agreement_sent_at' => 'datetime',

@@ -39,6 +39,22 @@ const SECTION_REQUIRED = [
     ['confirm_accurate', 'consent_collection'],
 ];
 
+// Maps every server-validatable field to its wizard section. The wizard only
+// renders the current section, so a server validation error targeting a field
+// on an earlier section would otherwise be invisible. On submit failure we use
+// this to jump back to the earliest section that has an error.
+const FIELD_SECTION = {
+    full_legal_name: 0, id_number: 0, visa_status: 0, visa_status_other: 0,
+    nationality: 0, nationality_other: 0, preferred_name: 0, email: 0, mobile: 0, age: 0,
+    property_interested: 1, room_type_interest: 1, tenancy_start_date: 1, stay_duration: 1,
+    occupants: 2, occupant_ages: 2, has_children: 2, children_ages: 2, has_pets: 2, pet_details: 2,
+    rent_funding: 3, rent_funding_other: 3, employment_status: 3, employment_status_other: 3,
+    current_address: 4, has_rented_before: 4, current_address_duration: 4, living_situation: 4, reason_for_moving: 4,
+    smokes_or_vapes: 5, drinks_alcohol: 5, work_hours: 5, flatmate_description: 5,
+    viewing_available_7days: 6, preferred_viewing_time: 6,
+    confirm_accurate: 7, consent_collection: 7,
+};
+
 const ROOM_OPTIONS = [
     'One Single Room (shared toilet and bathroom)',
     'One Ensuite Room (private toilet and bathroom)',
@@ -830,7 +846,21 @@ export default function ExpressionOfInterest({ variant = "cold", propertyPrefill
             return;
         }
         setLocalErrors({});
-        post(isHot ? '/accommodation/expression-of-interest-hot' : '/accommodation/expression-of-interest-cold');
+        post(isHot ? '/accommodation/expression-of-interest-hot' : '/accommodation/expression-of-interest-cold', {
+            onError: (errBag) => {
+                // Server validation can reject a field on an earlier section,
+                // which isn't rendered. Jump to the earliest section with an
+                // error so the message is visible instead of Submit silently
+                // doing nothing.
+                const sections = Object.keys(errBag)
+                    .map((f) => FIELD_SECTION[f])
+                    .filter((s) => s !== undefined);
+                if (sections.length > 0) {
+                    setCurrentStep(Math.min(...sections));
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                }
+            },
+        });
     }
 
     const sectionProps = { data, setData, localErrors, serverErrors };

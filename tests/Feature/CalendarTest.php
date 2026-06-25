@@ -81,6 +81,24 @@ class CalendarTest extends TestCase
             ->assertInertia(fn (AssertInertia $p) => $p->component('portal/accommodation/Calendar')->has('eventTypes'));
     }
 
+    public function test_calendar_index_returns_kpis(): void
+    {
+        // Viewings: two booked (counted), one at another stage (ignored).
+        $this->viewing();
+        $this->viewing(['email' => 'b@example.com']);
+        $this->viewing(['email' => 'c@example.com', 'status' => 'shortlisted']);
+
+        // Ending soon: within 25 days (counted), too far (ignored), vacated (ignored).
+        $this->tenant(['contract_end' => now()->addDays(10)]);
+        $this->tenant(['contract_end' => now()->addDays(100)]);
+        $this->tenant(['contract_end' => now()->addDays(10), 'current_status' => 'vacated']);
+
+        $this->actingAs($this->user())->get('/portal/accommodation/calendar')
+            ->assertInertia(fn (AssertInertia $p) => $p
+                ->where('kpis.upcoming_viewings', 2)
+                ->where('kpis.ending_soon', 1));
+    }
+
     // 2
     public function test_events_endpoint_returns_events(): void
     {
@@ -105,6 +123,20 @@ class CalendarTest extends TestCase
         $this->viewing(['viewing_scheduled_at' => now()->addDays(2)]);
         $events = $this->actingAs($this->user())->getJson($this->eventsUrl($this->defaultRange()))->json();
         $this->assertContains('viewing', array_column($events, 'source_type'));
+    }
+
+    public function test_viewing_hidden_once_past_booked_stage(): void
+    {
+        $booked = $this->viewing(['viewing_scheduled_at' => now()->addDays(2)]); // status viewing_booked
+        $movedIn = $this->viewing([
+            'email' => 'gone@example.com', 'viewing_scheduled_at' => now()->addDays(3), 'status' => 'moved_in',
+        ]);
+
+        $events = collect($this->actingAs($this->user())->getJson($this->eventsUrl($this->defaultRange()))->json());
+        $viewingIds = $events->where('source_type', 'viewing')->pluck('source_id');
+
+        $this->assertTrue($viewingIds->contains($booked->id));      // pending viewing shows
+        $this->assertFalse($viewingIds->contains($movedIn->id));    // tenant's old viewing is gone
     }
 
     // 5
@@ -241,7 +273,7 @@ class CalendarTest extends TestCase
         for ($i = 0; $i < 50; $i++) {
             $this->customEvent($owner, ['title' => "Event {$i}", 'starts_at' => now()->addDays($i % 80)]);
         }
-        $agg = new CalendarEventAggregator();
+        $agg = new CalendarEventAggregator;
         $start = microtime(true);
         $events = $agg->getEvents(Carbon::now()->subDays(10), Carbon::now()->addDays(80));
         $elapsed = microtime(true) - $start;

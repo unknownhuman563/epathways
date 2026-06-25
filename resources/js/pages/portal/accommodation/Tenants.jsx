@@ -147,7 +147,7 @@ export default function Tenants({ tenants = {}, filters = {}, options = {} }) {
                             {rows.map((t) => (
                                 <tr key={t.id} className={`hover:bg-gray-50/50 ${rowTint(t)}`}>
                                     <td className="px-4 py-3">
-                                        <div className="text-gray-900">{t.property?.address ?? "—"}</div>
+                                        <div className="text-gray-900">{t.property?.address || t.property?.name || "—"}</div>
                                         <div className="text-xs text-gray-500">{t.property?.code ? `#${t.property.code}` : ""}{t.unit ? ` · Unit ${t.unit}` : ""}</div>
                                     </td>
                                     <td className="px-4 py-3">

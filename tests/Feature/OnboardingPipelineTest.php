@@ -102,14 +102,34 @@ class OnboardingPipelineTest extends TestCase
         $this->assertEquals('new', $s->fresh()->status);
     }
 
-    public function test_viewing_booked_requires_scheduled_at(): void // 7
+    public function test_shortlisted_moves_to_viewing_email_sent_and_stamps(): void // 6b
     {
         $s = $this->submission(['status' => 'shortlisted']);
+        $this->patchStatus($s, ['status' => 'viewing_email_sent'])->assertRedirect();
+
+        $fresh = $s->fresh();
+        $this->assertEquals('viewing_email_sent', $fresh->status);
+        $this->assertNotNull($fresh->viewing_email_sent_at); // auto-stamped on entry
+    }
+
+    public function test_viewing_booked_requires_scheduled_at(): void // 7
+    {
+        $s = $this->submission(['status' => 'viewing_email_sent']);
         $this->patchStatus($s, ['status' => 'viewing_booked'])->assertSessionHasErrors(['viewing_scheduled_at']);
 
         $this->patchStatus($s, ['status' => 'viewing_booked', 'viewing_scheduled_at' => '2026-07-01 10:00:00'])->assertRedirect();
         $this->assertEquals('viewing_booked', $s->fresh()->status);
         $this->assertNotNull($s->fresh()->viewing_scheduled_at);
+    }
+
+    public function test_viewing_completed_moves_to_post_viewing_followup_and_stamps(): void // 7b
+    {
+        $s = $this->submission(['status' => 'viewing_completed']);
+        $this->patchStatus($s, ['status' => 'post_viewing_followup'])->assertRedirect();
+
+        $fresh = $s->fresh();
+        $this->assertEquals('post_viewing_followup', $fresh->status);
+        $this->assertNotNull($fresh->post_viewing_followup_at); // auto-stamped on entry
     }
 
     public function test_invoice_sent_requires_amount(): void // 8
