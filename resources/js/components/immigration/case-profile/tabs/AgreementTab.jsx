@@ -155,6 +155,12 @@ function AgreementCard({ agreement: a, lead, busy, onSend, onVoid }) {
                         <div className="mt-2 px-3 py-2 rounded-md bg-gray-50 border border-gray-100 text-[11px] text-gray-700 space-y-0.5">
                             <p><span className="text-gray-500">Signer name:</span> <span className="font-semibold">{a.signer_name || "—"}</span></p>
                             {a.signer_ip && <p><span className="text-gray-500">IP:</span> <span className="font-mono">{a.signer_ip}</span></p>}
+                            {a.signer_user_agent && (
+                                <p className="truncate"><span className="text-gray-500">Browser:</span> <span className="font-mono text-[10.5px]">{a.signer_user_agent}</span></p>
+                            )}
+                            {a.has_signed_pdf && (
+                                <p className="text-[10.5px] text-emerald-700 mt-1">✓ Signed PDF with embedded signature available — use the "Signed PDF" button.</p>
+                            )}
                         </div>
                     )}
                 </div>

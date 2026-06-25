@@ -311,6 +311,7 @@ class CaseProfileController extends Controller
                 'signed_at'             => $a->signed_at,
                 'signer_name'           => $a->signer_name,
                 'signer_ip'             => $a->signer_ip,
+                'signer_user_agent'     => $a->signer_user_agent,
                 'has_pdf'               => (bool) $a->pdf_path,
                 'has_signed_pdf'        => (bool) $a->signed_pdf_path,
                 'tracker_signing_token' => $a->tracker_signing_token,

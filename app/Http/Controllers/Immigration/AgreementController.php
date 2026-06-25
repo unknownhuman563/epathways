@@ -185,6 +185,7 @@ class AgreementController extends Controller
             'signed_at'             => $agreement->signed_at,
             'signer_name'           => $agreement->signer_name,
             'signer_ip'             => $agreement->signer_ip,
+            'signer_user_agent'     => $agreement->signer_user_agent,
             'has_pdf'               => (bool) $agreement->pdf_path,
             'has_signed_pdf'        => (bool) $agreement->signed_pdf_path,
             'tracker_signing_token' => $agreement->tracker_signing_token,
