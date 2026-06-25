@@ -492,6 +492,18 @@ class Lead extends Model
         return $this->hasMany(LeadDocument::class);
     }
 
+    /**
+     * Managed agreements for this lead (Build 11.D Phase 2). Distinct from
+     * documents — agreements have their own lifecycle (draft → sent → signed)
+     * and the signing audit trail. The pre-existing AgreementGenerator
+     * service writes generated PDFs as LeadDocument rows; that channel
+     * still works and is unrelated.
+     */
+    public function agreements()
+    {
+        return $this->hasMany(\App\Models\Agreement::class);
+    }
+
     /** AI analysis is written by a background job — don't log it as a user edit. */
     public function activityIgnoredAttributes(): array
     {
