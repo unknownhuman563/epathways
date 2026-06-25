@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Assessment;
 use App\Models\VisaType;
 use App\Models\VisitorIntake;
+use App\Support\IntakeVisaTypeMap;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -38,26 +39,21 @@ class VisitorIntakeController extends Controller
                 'status'    => 'Submitted',
             ]));
 
-            // ── PAYMENT + BOOKING TEMPORARILY DISABLED ────────────────
-            // See WorkIntakeController for context. Re-enable by
-            // uncommenting and restoring the assessment.pay redirect.
-            //
-            // $visaType = VisaType::query()->where('code', 'VISITOR')->first()
-            //     ?: VisaType::query()->where('category', 'Visitor')->first();
-            //
-            // $assessment = Assessment::create([
-            //     'visa_type_id'         => $visaType?->id,
-            //     'intakeable_type'      => VisitorIntake::class,
-            //     'intakeable_id'        => $intake->id,
-            //     'applicant_first_name' => $intake->first_name,
-            //     'applicant_last_name'  => $intake->family_name,
-            //     'applicant_email'      => $intake->email,
-            //     'applicant_phone'      => $intake->phone,
-            //     'status'               => 'submitted',
-            // ]);
-            // if ($visaType) {
-            //     $assessment->lockCurrentPrice();
-            // }
+            // Tracking-only Assessment row — payment + booking stay
+            // disabled (see AssessmentController::simulatePay). The
+            // portal Assessments page + Convert-to-Case flow need a
+            // paired Assessment to hang journey state on. Pay/Book
+            // redirect stays commented; payment intake is dormant until
+            // Stripe is wired up in a future build.
+            $visaType = IntakeVisaTypeMap::resolve(VisitorIntake::class);
+            if (! $visaType) {
+                Log::warning('VisaType not found for Visitor intake; skipping Assessment creation.', [
+                    'intake_id' => $intake->id,
+                    'intake_class' => VisitorIntake::class,
+                ]);
+            } else {
+                Assessment::createForIntake($intake, $visaType);
+            }
 
             DB::commit();
 

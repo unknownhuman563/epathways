@@ -15,8 +15,10 @@ class OnboardingPipeline
         'new',
         'reviewed',
         'shortlisted',
+        'viewing_email_sent',
         'viewing_booked',
         'viewing_completed',
+        'post_viewing_followup',
         'pre_tenancy_form_sent',
         'pre_tenancy_form_completed',
         'agreement_sent',
@@ -36,9 +38,11 @@ class OnboardingPipeline
     public const TRANSITIONS = [
         'new' => ['reviewed', 'declined'],
         'reviewed' => ['shortlisted', 'declined'],
-        'shortlisted' => ['viewing_booked', 'declined'],
+        'shortlisted' => ['viewing_email_sent', 'declined'],
+        'viewing_email_sent' => ['viewing_booked', 'declined'],
         'viewing_booked' => ['viewing_completed', 'not_proceeding'],
-        'viewing_completed' => ['pre_tenancy_form_sent', 'not_proceeding', 'declined'],
+        'viewing_completed' => ['post_viewing_followup', 'not_proceeding', 'declined'],
+        'post_viewing_followup' => ['pre_tenancy_form_sent', 'not_proceeding', 'declined'],
         'pre_tenancy_form_sent' => ['pre_tenancy_form_completed', 'not_proceeding'],
         'pre_tenancy_form_completed' => ['agreement_sent', 'declined'],
         'agreement_sent' => ['agreement_signed', 'not_proceeding'],
@@ -57,7 +61,9 @@ class OnboardingPipeline
      * moved_in → move_in_date) are intentionally absent.
      */
     public const AUTO_TIMESTAMP = [
+        'viewing_email_sent' => 'viewing_email_sent_at',
         'viewing_completed' => 'viewing_completed_at',
+        'post_viewing_followup' => 'post_viewing_followup_at',
         'pre_tenancy_form_sent' => 'pre_tenancy_form_sent_at',
         'pre_tenancy_form_completed' => 'pre_tenancy_form_completed_at',
         'agreement_sent' => 'tenancy_agreement_sent_at',

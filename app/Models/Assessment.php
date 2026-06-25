@@ -99,4 +99,62 @@ class Assessment extends Model
         $this->locked_price_expires_at = Carbon::now()->addDays(self::LOCK_DAYS);
         $this->save();
     }
+
+    /**
+     * Idempotent helper used by both the intake controllers and the
+     * backfill command. Creates an Assessment row paired to the given
+     * intake (any of the four *Intake models) plus the resolved VisaType,
+     * snapshots the applicant identity fields, and locks the current
+     * consultation price. Returns null when the matching VisaType can't
+     * be resolved — caller is responsible for logging that case.
+     *
+     * Re-running this for an intake that already has a paired Assessment
+     * returns the existing row without modifying it; payment_status,
+     * locked price, etc., are left intact.
+     *
+     * Payment + booking remain intentionally untouched here: this method
+     * only creates the tracking record so the portal Assessments page +
+     * Convert flow have something to hang off. Pay/Book wiring stays in
+     * AssessmentController behind the dormant Pay → Book redirects.
+     */
+    public static function createForIntake(\Illuminate\Database\Eloquent\Model $intake, ?\App\Models\VisaType $visaType): ?self
+    {
+        if (! $visaType) {
+            return null;
+        }
+
+        $intakeClass = $intake::class;
+
+        // Idempotency — never duplicate per (intakeable_type, intakeable_id).
+        $existing = static::query()
+            ->where('intakeable_type', $intakeClass)
+            ->where('intakeable_id', $intake->getKey())
+            ->first();
+        if ($existing) {
+            return $existing;
+        }
+
+        // ResidentIntake stores the family name on `last_name`; Work /
+        // Student / Visitor intakes use `family_name`. Snapshot whichever
+        // is set so the assessment carries a usable applicant identity
+        // without loading the intake row later.
+        $lastName = $intake->last_name ?? $intake->family_name ?? null;
+
+        $assessment = static::create([
+            'visa_type_id'         => $visaType->id,
+            'intakeable_type'      => $intakeClass,
+            'intakeable_id'        => $intake->getKey(),
+            'applicant_first_name' => $intake->first_name ?? null,
+            'applicant_last_name'  => $lastName,
+            'applicant_email'      => $intake->email ?? '',
+            'applicant_phone'      => $intake->phone ?? null,
+            'applicant_country'    => $intake->country_of_citizenship ?? $intake->nationality ?? null,
+            'status'               => 'submitted',
+            'payment_status'       => 'pending',
+        ]);
+
+        $assessment->lockCurrentPrice();
+
+        return $assessment;
+    }
 }

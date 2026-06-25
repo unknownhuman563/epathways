@@ -61,7 +61,9 @@ class EoiSubmissionController extends Controller
     public function show(EoiSubmission $submission)
     {
         $submission->load(['property', 'assignedTo', 'convertedTenant']);
-        $submission->property?->makeVisible(['code', 'address']);
+        // address/code for display; internet_passcode + house_code feed the
+        // move-in welcome email preview (staff-only portal page).
+        $submission->property?->makeVisible(['code', 'address', 'internet_passcode', 'house_code']);
 
         return inertia('portal/accommodation/ApplicationDetails', [
             'submission' => $submission,

@@ -1,5 +1,6 @@
 import { Head, Link, usePage } from "@inertiajs/react";
 import { useMemo } from "react";
+import OpenRequestsCard from "@/components/OpenRequestsCard";
 import {
     TrendingUp, Users, CheckSquare, AlertTriangle, Calendar as CalendarIcon,
     Sparkles, Activity, Crown, ArrowUpRight, ChevronRight, Globe, Briefcase,
@@ -59,6 +60,7 @@ export default function SuperDashboard() {
         recentAssessments = [],
         activity = [],
         generatedAt,
+        ticketSummary = { open_count: 0, recent: [] },
     } = props;
 
     // The funnel's max stage count is used to size each bar relative to
@@ -107,6 +109,9 @@ export default function SuperDashboard() {
                 <KpiCard label="Open Tasks"       value={kpis.open_tasks}         sub={`${kpis.overdue_tasks || 0} overdue`} icon={<CheckSquare size={16} />} accent="bg-amber-100 text-amber-700" tone={kpis.overdue_tasks > 0 ? "warn" : "default"} />
                 <KpiCard label="Bookings"         value={kpis.bookings_this_week} sub={`${kpis.bookings_today || 0} today`} icon={<CalendarIcon size={16} />} accent="bg-purple-100 text-purple-700" />
             </div>
+
+            {/* ── Open system requests — quick triage peek ────────── */}
+            <OpenRequestsCard summary={ticketSummary} />
 
             {/* ── Panel 1: Pipeline & Funnel ──────────────────────── */}
             <Panel title="Lead Pipeline & Funnel" icon={<TrendingUp size={14} />}>

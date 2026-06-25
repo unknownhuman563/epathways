@@ -50,7 +50,15 @@ class CalendarEventAggregator
             ->whereNotNull('viewing_scheduled_at')
             ->whereBetween('viewing_scheduled_at', [$start, $end])
             ->when($propertyIds, fn ($q) => $q->where(fn ($w) => $w->whereIn('property_id', $propertyIds)->orWhereNull('property_id')))
-            ->when($statuses, fn ($q) => $q->whereIn('status', $statuses))
+            // Only show viewings that are still pending. Once the applicant moves
+            // past "viewing_booked" (completed, onboarded, became a tenant, or
+            // declined) the scheduled-viewing timestamp lingers but the upcoming
+            // viewing should disappear from the calendar.
+            ->when(
+                $statuses,
+                fn ($q) => $q->whereIn('status', $statuses),
+                fn ($q) => $q->where('status', 'viewing_booked'),
+            )
             ->get()
             ->map(fn (EoiSubmission $s) => [
                 'id' => 'viewing-'.$s->id,

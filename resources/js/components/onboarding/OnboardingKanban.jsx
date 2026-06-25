@@ -11,6 +11,8 @@ import {
 } from "@/lib/onboardingMeta";
 import ConvertTenantModal from "./ConvertTenantModal";
 import TransitionModal from "./TransitionModal";
+import StageEmailModal from "./StageEmailModal";
+import { hasStageEmail } from "@/lib/stageEmails";
 
 export default function OnboardingKanban({ board = [], options = {} }) {
     const stages = options.stages ?? [];
@@ -23,6 +25,7 @@ export default function OnboardingKanban({ board = [], options = {} }) {
 
     const [activeId, setActiveId] = useState(null);
     const [convertFor, setConvertFor] = useState(null);     // submission
+    const [emailFor, setEmailFor] = useState(null); // { submission, target }
     const [transitionFor, setTransitionFor] = useState(null); // { submission, target }
     const [collapsed, setCollapsed] = useState(() =>
         Object.fromEntries(terminals.map((t) => [t, true])));
@@ -65,6 +68,7 @@ export default function OnboardingKanban({ board = [], options = {} }) {
             return;
         }
         if (target === "moved_in") { setConvertFor(sub); return; }
+        if (hasStageEmail(target)) { setEmailFor({ submission: sub, target }); return; }
         if (STAGE_INPUTS[target]) { setTransitionFor({ submission: sub, target }); return; }
         move(sub, target);
     };
@@ -109,6 +113,13 @@ export default function OnboardingKanban({ board = [], options = {} }) {
                     submission={transitionFor.submission}
                     target={transitionFor.target}
                     onClose={() => setTransitionFor(null)}
+                />
+            )}
+            {emailFor && (
+                <StageEmailModal
+                    submission={emailFor.submission}
+                    target={emailFor.target}
+                    onClose={() => setEmailFor(null)}
                 />
             )}
         </>

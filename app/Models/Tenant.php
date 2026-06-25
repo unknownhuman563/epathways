@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Traits\LogsActivity;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Carbon;
 
@@ -60,6 +61,11 @@ class Tenant extends Model
     public function movedToProperty(): BelongsTo
     {
         return $this->belongsTo(Property::class, 'moved_to_property_id');
+    }
+
+    public function rentPayments(): HasMany
+    {
+        return $this->hasMany(RentPayment::class);
     }
 
     // Viewer model does not exist yet — converted_from_viewer_id is a nullable

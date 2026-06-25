@@ -224,6 +224,7 @@ class SuperAdminDashboardController extends Controller
         ];
 
         return Inertia::render('admin/SuperDashboard', [
+            'ticketSummary'     => \App\Models\SystemTicket::dashboardSummary(),
             'kpis'              => $kpis,
             'pipeline'          => $pipeline,
             'sources'           => $sources,

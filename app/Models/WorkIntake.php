@@ -7,7 +7,26 @@ use Illuminate\Database\Eloquent\Relations\MorphOne;
 
 class WorkIntake extends Model
 {
-    protected $guarded = ['id', 'created_at', 'updated_at'];
+    protected $fillable = [
+        'intake_id', 'status', 'edit_token',
+        'family_name', 'first_name', 'other_names', 'gender', 'dob',
+        'country_of_birth', 'place_of_birth', 'current_address', 'email', 'phone',
+        'country_of_citizenship', 'other_citizenships', 'national_id', 'partnership_status',
+        'current_country', 'previous_nz_visa', 'previous_nz_visa_details', 'previous_nzeta',
+        'australian_pr', 'travelled_nz', 'last_nz_departure', 'over_24_months',
+        'employer_name', 'employer_is_family', 'employer_family_relation', 'self_employed',
+        'job_start_date', 'hourly_rate', 'supports_dependent_children',
+        'character_convicted', 'character_investigation', 'character_deported',
+        'character_visa_refused', 'lived_other_country_5y', 'lived_other_country_details',
+        'health_tb', 'health_renal', 'health_hospital', 'health_residential', 'health_pregnant',
+        'currently_working', 'current_job_title', 'current_job_duties', 'current_job_start',
+        'current_job_country', 'current_job_region', 'current_employer_name',
+        'current_employer_address', 'current_employer_phone', 'current_employer_email',
+        'previous_roles', 'family_members', 'has_nz_contacts', 'nz_contacts',
+        'military_compulsory', 'military_undertaken', 'military_details',
+        'travelled_internationally', 'travel_trips', 'declaration_accepted',
+        'signature_name', 'signature_date',
+    ];
 
     protected $casts = [
         'dob'                => 'date',

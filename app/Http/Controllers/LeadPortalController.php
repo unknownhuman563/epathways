@@ -163,11 +163,35 @@ class LeadPortalController extends Controller
         return inertia('portal/lead/Payments', ['lead' => $this->leadPayload($lead)]);
     }
 
+    /**
+     * Read-only history of emails the team has sent this lead. Scoped to the
+     * caller's own record ($user->lead) — there is no id parameter, so a lead
+     * can never reach another lead's messages. (Two-way replies land in
+     * Build 14; SMS history is withheld here for now.)
+     */
     public function messages()
     {
         $lead = $this->resolveLeadOrLogout();
         if (! $lead instanceof Lead) return $lead;
-        return inertia('portal/lead/Messages', ['lead' => $this->leadPayload($lead)]);
+
+        $messages = \App\Models\MessageLog::where('recipient_type', 'lead')
+            ->where('recipient_id', $lead->id)
+            ->where('channel', \App\Models\MessageLog::CHANNEL_EMAIL)
+            ->with('triggeredBy:id,name')
+            ->latest()
+            ->paginate(20)
+            ->through(fn (\App\Models\MessageLog $m) => [
+                'id'         => $m->id,
+                'subject'    => $m->subject,
+                'body'       => $m->body,
+                'from'       => $m->triggeredBy?->name ?? 'ePathways',
+                'created_at' => $m->created_at?->toIso8601String(),
+            ]);
+
+        return inertia('portal/lead/Messages', [
+            'lead'     => $this->leadPayload($lead),
+            'messages' => $messages,
+        ]);
     }
 
     public function profile()

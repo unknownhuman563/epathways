@@ -15,7 +15,7 @@ class FacebookLiveControllerTest extends TestCase
 
     private function admin(): User
     {
-        return User::factory()->create();
+        return User::factory()->create(['role' => 'admin']);
     }
 
     private function payload(array $overrides = []): array
@@ -41,7 +41,7 @@ class FacebookLiveControllerTest extends TestCase
 
         $response->assertOk();
         $response->assertInertia(fn ($page) => $page
-            ->component('Admin/FacebookLive')
+            ->component('admin/FacebookLive')
             ->has('sessions', 1)
         );
     }
@@ -151,7 +151,7 @@ class FacebookLiveControllerTest extends TestCase
 
         $response->assertOk();
         $response->assertInertia(fn ($page) => $page
-            ->component('Activities')
+            ->component('activities/ActivitiesPage')
             ->where('featuredSession.title', 'Earlier upcoming')
             ->has('pastSessions', 1)
             ->where('pastSessions.0.title', 'Past session')

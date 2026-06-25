@@ -5,6 +5,7 @@ use App\Http\Controllers\ActivityLogController;
 use App\Http\Controllers\Admin\SuperAdminDashboardController;
 use App\Http\Controllers\AssessmentController;
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\AvailabilityController;
 use App\Http\Controllers\BookingController;
 use App\Http\Controllers\EventController;
@@ -14,6 +15,10 @@ use App\Http\Controllers\LeadDocumentController;
 use App\Http\Controllers\LeadPortalInvitationController;
 use App\Http\Controllers\LeadTrackingController;
 use App\Http\Controllers\Portal\Accommodation\CalendarController;
+use App\Http\Controllers\Portal\Accommodation\GasDeliveryController;
+use App\Http\Controllers\Portal\Accommodation\MessageTemplateController;
+use App\Http\Controllers\Portal\Accommodation\PaymentScheduleController;
+use App\Http\Controllers\Portal\Accommodation\RentUtilitiesController;
 use App\Http\Controllers\Portal\Accommodation\TenantController;
 use App\Http\Controllers\Portal\AccommodationController;
 use App\Http\Controllers\Portal\EducationController;
@@ -26,6 +31,7 @@ use App\Http\Controllers\ProgramController;
 use App\Http\Controllers\ProgramPromoController;
 use App\Http\Controllers\QuickLeadController;
 use App\Http\Controllers\ResidentIntakeController;
+use App\Http\Controllers\SearchController;
 use App\Http\Controllers\SettingController;
 use App\Http\Controllers\StudentIntakeController;
 use App\Http\Controllers\UserController;
@@ -74,9 +80,9 @@ Route::get('/immigration', function () {
 // Admin moderation toggle for published / featured / status on a review.
 // Both departments hit the same controller method — the moderation
 // fields (is_published / is_featured / status / visa_type) are shared.
-Route::middleware('auth')->post('/admin/immigration/user-reviews/{id}', [UserReviewController::class, 'adminUpdate'])
+Route::middleware(['auth', 'portal:admin,immigration'])->post('/admin/immigration/user-reviews/{id}', [UserReviewController::class, 'adminUpdate'])
     ->name('admin.immigration.user-reviews.update');
-Route::middleware('auth')->post('/admin/education/user-reviews/{id}', [UserReviewController::class, 'adminUpdate'])
+Route::middleware(['auth', 'portal:admin,education'])->post('/admin/education/user-reviews/{id}', [UserReviewController::class, 'adminUpdate'])
     ->name('admin.education.user-reviews.update');
 
 Route::get('/accommodation', [PublicAccommodationController::class, 'index']);
@@ -86,6 +92,10 @@ Route::get('/accommodation/expression-of-interest-cold', [PublicAccommodationCon
 Route::post('/accommodation/expression-of-interest-cold', [PublicAccommodationController::class, 'eoiStore'])->name('accommodation.eoi.store');
 Route::get('/accommodation/expression-of-interest-hot', [PublicAccommodationController::class, 'eoiHotForm'])->name('accommodation.eoi-hot');
 Route::post('/accommodation/expression-of-interest-hot', [PublicAccommodationController::class, 'eoiHotStore'])->name('accommodation.eoi-hot.store');
+// Public tenant complaint form — declared before /accommodation/{slug}.
+Route::get('/accommodation/complaint', [App\Http\Controllers\ComplaintController::class, 'form'])->name('accommodation.complaint');
+Route::post('/accommodation/complaint', [App\Http\Controllers\ComplaintController::class, 'store'])->name('accommodation.complaint.store');
+
 Route::get('/accommodation/{slug}', [PublicAccommodationController::class, 'show']);
 
 Route::get('/accommodation/{id}/checkout', function ($id) {
@@ -163,12 +173,14 @@ Route::get('/visa-approved', function () {
 // auth: the tracking_code itself is the bearer credential. The same code
 // authorises the lead to edit a tightly-scoped allow-list of fields and
 // upload supporting documents (POST endpoints below).
-Route::get('/track', [LeadTrackingController::class, 'show'])->name('track');
-Route::get('/track/{code}', [LeadTrackingController::class, 'show'])->name('track.lookup');
-Route::post('/track/{code}/info', [LeadTrackingController::class, 'update'])->name('track.update');
-Route::post('/track/{code}/document', [LeadTrackingController::class, 'uploadDoc'])->name('track.upload');
-Route::post('/track/{code}/document/{doc}', [LeadTrackingController::class, 'updateDoc'])->name('track.doc.update');
-Route::delete('/track/{code}/document/{doc}', [LeadTrackingController::class, 'deleteDoc'])->name('track.doc.delete');
+Route::middleware('throttle:tracker')->group(function () {
+    Route::get('/track', [LeadTrackingController::class, 'show'])->name('track');
+    Route::get('/track/{code}', [LeadTrackingController::class, 'show'])->name('track.lookup');
+    Route::post('/track/{code}/info', [LeadTrackingController::class, 'update'])->name('track.update');
+    Route::post('/track/{code}/document', [LeadTrackingController::class, 'uploadDoc'])->name('track.upload');
+    Route::post('/track/{code}/document/{doc}', [LeadTrackingController::class, 'updateDoc'])->name('track.doc.update');
+    Route::delete('/track/{code}/document/{doc}', [LeadTrackingController::class, 'deleteDoc'])->name('track.doc.delete');
+});
 
 // Public Registration & Assessment Routes
 Route::get('/register/{event_code}', [EventController::class, 'showRegistrationForm']);
@@ -197,6 +209,14 @@ Route::get('/login', [AuthController::class, 'showLoginForm'])->name('login')->m
 Route::post('/login', [AuthController::class, 'login'])->middleware('guest');
 Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 
+// Self-service password reset (Laravel password broker, 60-min tokens).
+Route::middleware('guest')->group(function () {
+    Route::get('/forgot-password', [AuthController::class, 'showForgotPassword'])->name('password.request');
+    Route::post('/forgot-password', [AuthController::class, 'sendResetLink'])->name('password.email');
+    Route::get('/reset-password/{token}', [AuthController::class, 'showResetPassword'])->name('password.reset');
+    Route::post('/reset-password', [AuthController::class, 'resetPassword'])->name('password.update');
+});
+
 // Lead Portal account setup — the invitation token itself acts as auth,
 // so these routes sit outside the auth middleware.
 Route::get('/lead-portal/setup/{token}', [LeadPortalInvitationController::class, 'setup'])
@@ -212,6 +232,55 @@ Route::post('/api/sync-calendar', [App\Http\Controllers\SyncController::class, '
 // middleware nested below narrows each section ('portal:admin', 'portal:sales', …).
 Route::middleware(['auth'])->group(function () {
 
+    // System request tickets — any staff member can raise one (leads are
+    // blocked inside the controller).
+    Route::post('/tickets', [\App\Http\Controllers\SystemTicketController::class, 'store'])->name('tickets.store');
+
+    // Active message templates (JSON) — feeds the bulk-email + compose pickers.
+    // Any authenticated staff member; no lead-specific data is exposed.
+    Route::get('/api/message-templates', function () {
+        return response()->json(
+            \App\Models\MessageTemplate::active()->orderBy('name')
+                ->get(['id', 'name', 'channels', 'email_subject', 'email_body', 'sms_body'])
+        );
+    })->name('api.message-templates');
+
+    // AI Foundation (Build 9) — JSON endpoints for the topbar chat panel and
+    // the lead health badge. Session-auth (CSRF via X-XSRF-TOKEN from JS);
+    // each handler re-checks the AI kill switch + per-user/role scoping.
+    Route::prefix('api/ai')->name('api.ai.')->group(function () {
+        Route::get('/conversations', [\App\Http\Controllers\Api\AiChatController::class, 'index'])->name('conversations.index');
+        Route::get('/conversations/{conversation}', [\App\Http\Controllers\Api\AiChatController::class, 'show'])->name('conversations.show');
+        Route::post('/messages', [\App\Http\Controllers\Api\AiChatController::class, 'sendMessage'])->name('messages.store');
+        Route::delete('/conversations/{conversation}', [\App\Http\Controllers\Api\AiChatController::class, 'destroy'])->name('conversations.destroy');
+
+        Route::get('/leads/{lead}/analysis', [\App\Http\Controllers\Api\AiLeadAnalysisController::class, 'show'])->name('leads.analysis.show');
+        Route::post('/leads/{lead}/analysis/refresh', [\App\Http\Controllers\Api\AiLeadAnalysisController::class, 'refresh'])->name('leads.analysis.refresh');
+
+        // Immigration cases are Lead records; {case} binds to Lead. Strict
+        // role gate (admin + immigration staff only) lives in the controller.
+        Route::get('/cases/{case}/analysis', [\App\Http\Controllers\Api\AiCaseAnalysisController::class, 'show'])->name('cases.analysis.show');
+        Route::post('/cases/{case}/analysis/refresh', [\App\Http\Controllers\Api\AiCaseAnalysisController::class, 'refresh'])->name('cases.analysis.refresh');
+    });
+
+    // Profile avatar — role-agnostic; any authenticated user manages their own.
+    Route::post('/profile/avatar', [UserController::class, 'uploadAvatar'])->name('profile.avatar.upload');
+    Route::delete('/profile/avatar', [UserController::class, 'deleteAvatar'])->name('profile.avatar.delete');
+
+    // Global search — Cmd+K across leads, tenants, properties, programs,
+    // schools, English classes/assessments, applications, bookings.
+    // Role-gated inside the service.
+    Route::get('/api/search', [SearchController::class, 'search'])->name('search');
+
+    // Notifications read path — role-agnostic; every authenticated user
+    // reads their own in-app notifications (bell dropdown + full page).
+    Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications.index');
+    Route::get('/api/notifications/recent', [NotificationController::class, 'recent'])->name('notifications.recent');
+    Route::get('/api/notifications/unread-count', [NotificationController::class, 'unreadCount'])->name('notifications.unread-count');
+    Route::post('/notifications/{id}/read', [NotificationController::class, 'markAsRead'])->name('notifications.read');
+    Route::post('/notifications/mark-all-read', [NotificationController::class, 'markAllAsRead'])->name('notifications.mark-all-read');
+    Route::delete('/notifications/{id}', [NotificationController::class, 'destroy'])->name('notifications.destroy');
+
     // Super-admin-only — the top-of-house cross-department overview.
     // `portal:super_admin` is exact-role (see User::canAccessPortal), so
     // plain admins do NOT see this surface.
@@ -224,7 +293,9 @@ Route::middleware(['auth'])->group(function () {
     Route::middleware('portal:admin')->group(function () {
         Route::redirect('/admin', '/admin/dashboard');
         Route::get('/admin/dashboard', function () {
-            return inertia('admin/Dashboard');
+            return inertia('admin/Dashboard', [
+                'ticketSummary' => \App\Models\SystemTicket::dashboardSummary(),
+            ]);
         });
         Route::get('/admin/team-cards', fn () => inertia('admin/TeamCards'))->name('admin.team-cards');
         Route::get('/admin/leads', [LeadController::class, 'index'])->name('admin.leads');
@@ -260,6 +331,19 @@ Route::middleware(['auth'])->group(function () {
         Route::delete('/admin/users/{id}', [UserController::class, 'destroy']);
 
         Route::get('/admin/activity-logs', [ActivityLogController::class, 'index'])->name('admin.activity-logs');
+
+        // Message templates — staff-editable email/SMS templates.
+        Route::get('/admin/message-templates', [\App\Http\Controllers\MessageTemplateController::class, 'index'])->name('admin.message-templates');
+        Route::get('/admin/message-templates/create', [\App\Http\Controllers\MessageTemplateController::class, 'create'])->name('admin.message-templates.create');
+        Route::post('/admin/message-templates', [\App\Http\Controllers\MessageTemplateController::class, 'store'])->name('admin.message-templates.store');
+        Route::get('/admin/message-templates/{id}', [\App\Http\Controllers\MessageTemplateController::class, 'show'])->name('admin.message-templates.show');
+        Route::put('/admin/message-templates/{id}', [\App\Http\Controllers\MessageTemplateController::class, 'update'])->name('admin.message-templates.update');
+        Route::delete('/admin/message-templates/{id}', [\App\Http\Controllers\MessageTemplateController::class, 'destroy'])->name('admin.message-templates.destroy');
+        Route::post('/admin/message-templates/{id}/test', [\App\Http\Controllers\MessageTemplateController::class, 'sendTest'])->name('admin.message-templates.test');
+
+        // System request tickets — admin + super-admin triage board.
+        Route::get('/admin/system-tickets', [\App\Http\Controllers\SystemTicketController::class, 'adminIndex'])->name('admin.system-tickets');
+        Route::post('/admin/system-tickets/{id}', [\App\Http\Controllers\SystemTicketController::class, 'adminUpdate'])->name('admin.system-tickets.update');
 
         // All Tasks — cross-department view. Same TaskBoardPage component the
         // department portals render, with admin scope (no assignee filter
@@ -349,6 +433,18 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/admin/leads/{id}/convert-to-english', [LeadController::class, 'convertToEnglish'])->name('admin.leads.convert-english');
         Route::post('/admin/leads/{id}/revert-english', [LeadController::class, 'revertEnglish'])->name('admin.leads.revert-english');
         Route::post('/admin/leads/{id}/inz', [LeadController::class, 'updateInz'])->name('admin.leads.inz');
+        Route::post('/admin/leads/{id}/send-tracker-link', [LeadController::class, 'sendTrackerLink'])->name('admin.leads.send-tracker-link');
+
+        // Per-lead communications (Build 11.A) — compose a one-off message and
+        // read the message history. Access is re-checked per lead inside the
+        // controller (LeadAccess), so the broad route group can't leak a lead
+        // across departments.
+        Route::post('/admin/leads/{lead}/compose', [\App\Http\Controllers\Sales\ComposeMessageController::class, 'send'])->name('admin.leads.compose');
+        Route::get('/admin/leads/{lead}/communications', [\App\Http\Controllers\Sales\LeadCommunicationsController::class, 'index'])->name('admin.leads.communications');
+
+        // Cross-lead document queue — review lead-submitted docs in bulk.
+        Route::get('/admin/document-queue', [\App\Http\Controllers\DocumentQueueController::class, 'index'])->name('admin.document-queue');
+        Route::post('/admin/document-queue/bulk', [\App\Http\Controllers\DocumentQueueController::class, 'bulk'])->name('admin.document-queue.bulk');
 
         // Bulk CSV import — duplicates detected by email or name+phone.
         Route::post('/admin/leads/import', [LeadController::class, 'importLeads'])->name('admin.leads.import');
@@ -470,10 +566,21 @@ Route::middleware(['auth'])->group(function () {
     Route::prefix('portal')->group(function () {
         Route::get('/', fn () => redirect(auth()->user()->homeRoute()))->name('portal');
 
+        // "My Tickets" — every department staffer's own system-ticket list.
+        // One route for all portals: the controller picks the per-role page
+        // so it wraps in that staffer's layout (admins redirect to the board).
+        Route::get('/tickets', [\App\Http\Controllers\SystemTicketController::class, 'myTickets'])->name('portal.tickets');
+
         // Sales portal — leads pipeline + consultation bookings.
         Route::middleware('portal:sales')->prefix('sales')->name('portal.sales.')->group(function () {
             Route::get('/dashboard', [SalesController::class, 'dashboard'])->name('dashboard');
             Route::get('/leads', [SalesController::class, 'leads'])->name('leads');
+
+            // Bulk email (Build 11.A) — preview + send to the selected leads.
+            // Declared before /leads/{id} so the two static segments win.
+            Route::post('/leads/bulk-email/preview', [\App\Http\Controllers\Sales\BulkEmailController::class, 'preview'])->name('leads.bulk-email.preview');
+            Route::post('/leads/bulk-email/send', [\App\Http\Controllers\Sales\BulkEmailController::class, 'send'])->name('leads.bulk-email.send');
+
             Route::post('/leads', [SalesController::class, 'storeLead'])->name('leads.store');
             Route::post('/leads/{id}/notes', [\App\Http\Controllers\LeadNoteController::class, 'store'])->name('leads.notes.store');
             Route::post('/leads/{id}', [SalesController::class, 'updateLead'])->name('leads.update');
@@ -504,7 +611,7 @@ Route::middleware(['auth'])->group(function () {
 
             // ACCOUNT
             Route::get('/profile', [SalesController::class, 'profile'])->name('profile');
-            Route::get('/notifications', [SalesController::class, 'notifications'])->name('notifications');
+            Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications');
 
             // Portal-scoped lead detail URL (sales user lands at /portal/sales/leads/{id})
             Route::get('/leads/{id}', [LeadController::class, 'show'])->name('leads.show');
@@ -554,12 +661,31 @@ Route::middleware(['auth'])->group(function () {
 
             // ACCOUNT
             Route::get('/profile', [EducationController::class, 'profile'])->name('profile');
-            Route::get('/notifications', [EducationController::class, 'notifications'])->name('notifications');
+            Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications');
         });
 
         Route::middleware('portal:english')->prefix('english')->name('portal.english.')->group(function () {
             Route::get('/dashboard', [EnglishController::class, 'dashboard'])->name('dashboard');
             Route::get('/leads/{id}', [LeadController::class, 'show'])->name('leads.show');
+
+            // English learners — leads flagged is_english_student.
+            Route::get('/learners', [EnglishController::class, 'learners'])->name('learners');
+
+            // English classes — group sessions with learner enrollment.
+            Route::get('/classes', [EnglishController::class, 'classes'])->name('classes');
+            Route::post('/classes', [EnglishController::class, 'storeClass'])->name('classes.store');
+            Route::get('/classes/{id}', [EnglishController::class, 'showClass'])->name('classes.show');
+            Route::put('/classes/{id}', [EnglishController::class, 'updateClass'])->name('classes.update');
+            Route::delete('/classes/{id}', [EnglishController::class, 'destroyClass'])->name('classes.destroy');
+            Route::post('/classes/{id}/enroll', [EnglishController::class, 'enrollLearner'])->name('classes.enroll');
+            Route::delete('/classes/{id}/enroll/{enrollmentId}', [EnglishController::class, 'withdrawLearner'])->name('classes.withdraw');
+
+            // English assessments — mock / official test score records.
+            Route::get('/assessments', [EnglishController::class, 'assessments'])->name('assessments');
+            Route::post('/assessments', [EnglishController::class, 'storeAssessment'])->name('assessments.store');
+            Route::get('/assessments/{id}', [EnglishController::class, 'showAssessment'])->name('assessments.show');
+            Route::put('/assessments/{id}', [EnglishController::class, 'updateAssessment'])->name('assessments.update');
+            Route::delete('/assessments/{id}', [EnglishController::class, 'destroyAssessment'])->name('assessments.destroy');
         });
 
         Route::middleware('portal:immigration')->prefix('immigration')->name('portal.immigration.')->group(function () {
@@ -572,7 +698,18 @@ Route::middleware(['auth'])->group(function () {
 
             // WORK
             Route::get('/assessments', [ImmigrationController::class, 'assessments'])->name('assessments');
-            Route::post('/assessments/{intakeId}/convert-to-case', [ImmigrationController::class, 'convertAssessmentToCase'])->name('assessments.convert');
+            // Per-intake detail page — covers Work / Student / Visitor.
+            // Resident intakes use the dedicated /admin/immigration/
+            // resident-intakes/{id} route (richer document handling).
+            Route::get('/intakes/{type}/{id}', [ImmigrationController::class, 'showIntake'])
+                ->where(['type' => 'work|student|visitor', 'id' => '[0-9]+'])
+                ->name('intakes.show');
+            // Convert a visa-interest submission to an immigration case.
+            // The {id} route param is Assessment.id (post-Phase-B
+            // canonical). The controller also accepts a legacy
+            // ResidentIntake.id for backward compat — any pre-Phase-B
+            // bookmark that POSTed an intake id still resolves cleanly.
+            Route::post('/assessments/{id}/convert-to-case', [ImmigrationController::class, 'convertAssessmentToCase'])->name('assessments.convert');
             Route::get('/cases', [ImmigrationController::class, 'cases'])->name('cases');
             // Create new case from the Cases page "Add new case" modal.
             Route::post('/cases', [ImmigrationController::class, 'storeCase'])->name('cases.store');
@@ -604,7 +741,7 @@ Route::middleware(['auth'])->group(function () {
             // ACCOUNT
             Route::get('/profile', [ImmigrationController::class, 'profile'])->name('profile');
             Route::post('/profile', [ImmigrationController::class, 'updateProfile'])->name('profile.update');
-            Route::get('/notifications', [ImmigrationController::class, 'notifications'])->name('notifications');
+            Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications');
         });
 
         Route::middleware('portal:accommodation')->prefix('accommodation')->name('portal.accommodation.')->group(function () {
@@ -664,15 +801,21 @@ Route::middleware(['auth'])->group(function () {
             Route::post('/calendar/events', [CalendarController::class, 'storeCustomEvent'])->name('calendar.events.store');
             Route::patch('/calendar/events/{event}', [CalendarController::class, 'updateCustomEvent'])->name('calendar.events.update');
             Route::delete('/calendar/events/{event}', [CalendarController::class, 'destroyCustomEvent'])->name('calendar.events.destroy');
-            Route::get('/rent-utilities', $stub('Rent & Utilities', 'Payment schedules and utility charges.'))->name('rent-utilities');
-            Route::get('/payment-schedule', $stub('PM Payment Schedule', 'Payouts to property owners.'))->name('payment-schedule');
-            Route::get('/gas-delivery', $stub('Gas Delivery Tracker', 'Track gas bottle deliveries and swaps across properties.'))->name('gas-delivery');
-            Route::get('/message-templates', $stub('Message Templates', 'Reusable email and SMS templates for tenants and clients.'))->name('message-templates');
+            Route::get('/rent-utilities', [RentUtilitiesController::class, 'index'])->name('rent-utilities');
+            Route::patch('/rent-utilities/tenants/{tenant}/payment', [RentUtilitiesController::class, 'savePayment'])->name('rent-utilities.payment');
+            Route::patch('/rent-utilities/tenants/{tenant}/rent', [RentUtilitiesController::class, 'saveRentUtilities'])->name('rent-utilities.rent');
+            Route::get('/payment-schedule', [PaymentScheduleController::class, 'index'])->name('payment-schedule');
+            Route::get('/gas-delivery', [GasDeliveryController::class, 'index'])->name('gas-delivery');
+            Route::get('/complaints', [App\Http\Controllers\ComplaintController::class, 'index'])->name('complaints');
+            Route::get('/message-templates', [MessageTemplateController::class, 'index'])->name('message-templates');
+            Route::post('/message-templates', [MessageTemplateController::class, 'store'])->name('message-templates.store');
+            Route::patch('/message-templates/{template}', [MessageTemplateController::class, 'update'])->name('message-templates.update');
+            Route::delete('/message-templates/{template}', [MessageTemplateController::class, 'destroy'])->name('message-templates.destroy');
 
             // Reports & Account
             Route::get('/reports', $stub('Reports', 'Weekly, monthly, quarterly and custom reports.'))->name('reports');
             Route::get('/profile', $stub('My Profile', 'Your account details and preferences.'))->name('profile');
-            Route::get('/notifications', $stub('Notifications', 'Your portal notifications.'))->name('notifications');
+            Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications');
         });
 
         // Lead Portal — external client-facing dashboard. Each lead-role user

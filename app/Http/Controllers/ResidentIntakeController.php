@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Assessment;
 use App\Models\ResidentIntake;
 use App\Models\VisaType;
+use App\Support\IntakeVisaTypeMap;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -163,31 +164,22 @@ class ResidentIntakeController extends Controller
                 ]
             ));
 
-            // ── PAYMENT + BOOKING TEMPORARILY DISABLED ────────────────
-            // Client wants to collect intake submissions only for now;
-            // pricing / Stripe / consultation booking will be turned
-            // back on once the plan is finalised. To re-enable, uncomment
-            // the Assessment::create block below and switch the redirect
-            // back to `route('assessment.pay', $assessment->token)`.
-            //
-            // $visaType = VisaType::query()
-            //     ->where('code', 'SMC')
-            //     ->orWhere('category', 'Resident')
-            //     ->first();
-            //
-            // $assessment = Assessment::create([
-            //     'visa_type_id'         => $visaType?->id,
-            //     'intakeable_type'      => ResidentIntake::class,
-            //     'intakeable_id'        => $intake->id,
-            //     'applicant_first_name' => $intake->first_name,
-            //     'applicant_last_name'  => $intake->last_name,
-            //     'applicant_email'      => $intake->email,
-            //     'applicant_phone'      => $intake->phone,
-            //     'status'               => 'submitted',
-            // ]);
-            // if ($visaType) {
-            //     $assessment->lockCurrentPrice();
-            // }
+            // Tracking-only Assessment row — payment + booking stay
+            // disabled (see AssessmentController::simulatePay), but the
+            // portal Assessments page + Convert-to-Case flow need a
+            // paired Assessment to hang journey state and the assessment
+            // ID off. The Pay/Book redirects below are intentionally
+            // commented out: payment intake is dormant until Stripe is
+            // wired up in a future build.
+            $visaType = IntakeVisaTypeMap::resolve(ResidentIntake::class);
+            if (! $visaType) {
+                Log::warning('VisaType not found for Resident intake; skipping Assessment creation.', [
+                    'intake_id' => $intake->id,
+                    'intake_class' => ResidentIntake::class,
+                ]);
+            } else {
+                Assessment::createForIntake($intake, $visaType);
+            }
 
             DB::commit();
 
@@ -308,8 +300,55 @@ class ResidentIntakeController extends Controller
     public function adminShow($id)
     {
         $intake = ResidentIntake::findOrFail($id);
+
+        // Detect if the applicant's email already matches a Lead that
+        // has been converted to an immigration case — the unified
+        // detail page surfaces a "Converted to case" shortcut in the
+        // sidebar when so.
+        $email = strtolower(trim((string) ($intake->email ?? '')));
+        $lead  = null;
+        if ($email !== '') {
+            $lead = \App\Models\Lead::where('is_immigration_case', true)
+                ->whereRaw('LOWER(email) = ?', [$email])
+                ->first(['id', 'lead_id', 'first_name', 'last_name', 'status']);
+        }
+
+        // Paired Assessment (Pay → Book funnel state) + its Booking.
+        $assessment = \App\Models\Assessment::with('booking')
+            ->where('intakeable_type', ResidentIntake::class)
+            ->where('intakeable_id', $intake->id)
+            ->first();
+
         return inertia($this->immigrationPagePath('ResidentIntakeDetails'), [
-            'intake' => $intake,
+            'type'   => 'resident',
+            'intake' => $intake->toArray(),
+            // Documents payload — the unified DocumentsCard reads
+            // `labels` (chrome), `ticked` (checkbox state), `files`
+            // (uploaded files keyed by doc kind), and `other_label`.
+            'documents' => [
+                'labels'      => self::DOCUMENT_LABELS,
+                'ticked'      => $intake->documents ?? (object) [],
+                'files'       => $intake->document_files ?? (object) [],
+                'other_label' => 'Other supporting documents',
+            ],
+            'assessment' => $assessment ? [
+                'id'      => $assessment->id,
+                'status'  => $assessment->status,
+                'token'   => $assessment->token,
+                'paid_at' => $assessment->paid_at,
+                'booking' => $assessment->booking ? [
+                    'id'               => $assessment->booking->id,
+                    'status'           => $assessment->booking->status,
+                    'appointment_date' => $assessment->booking->appointment_date,
+                    'appointment_time' => $assessment->booking->appointment_time,
+                ] : null,
+            ] : null,
+            'linkedLead' => $lead ? [
+                'id'      => $lead->id,
+                'lead_id' => $lead->lead_id,
+                'name'    => trim("{$lead->first_name} {$lead->last_name}") ?: 'Unknown',
+                'status'  => $lead->status,
+            ] : null,
         ]);
     }
 

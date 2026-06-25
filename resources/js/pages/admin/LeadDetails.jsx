@@ -7,11 +7,16 @@ import {
     FileText, Download, Edit, Phone, Mail, MapPin,
     CheckCircle2, XCircle, FileQuestion, Calendar,
     TrendingUp, AlertTriangle, Clock, History, ChevronDown, Check,
-    User as UserIcon, ArrowRight, Sparkles, FolderOpen, Copy, Info, Undo2,
+    User as UserIcon, ArrowRight, Sparkles, FolderOpen, Copy, Info, Undo2, Send,
     Globe, Home, Wand2, Users as UsersIcon, Eye,
     Paperclip, FileImage, Film, Music,
+    Briefcase,
 } from 'lucide-react';
 import { CHECKLIST, STATUSES, STATUS_CHIP, STATUS_LABEL, SECTION_STATUSES, IMPORTANT_NOTES, renderFilename, currentSectionIndex } from '@/data/leadDocumentChecklist';
+import LeadHealthBadge from '@/components/ai/LeadHealthBadge';
+import CaseHealthBadge from '@/components/ai/CaseHealthBadge';
+import CommunicationsPanel from '@/components/sales/CommunicationsPanel';
+import ComposeMessagePanel from '@/components/sales/ComposeMessagePanel';
 
 // Stage colour map — kept consistent with the leads list.
 const STAGE_STYLES = {
@@ -51,10 +56,11 @@ export default function LeadDetails({ lead: backendLead, activity = [], stageTim
         const q = currentUrl.includes('?') ? currentUrl.split('?')[1] : '';
         const params = new URLSearchParams(q);
         const t = params.get('tab');
-        return ['stats', 'personal', 'activity', 'documents'].includes(t) ? t : 'stats';
+        return ['stats', 'personal', 'activity', 'documents', 'communications'].includes(t) ? t : 'stats';
     })();
 
     const [activeTab, setActiveTab] = useState(initialTab);
+    const [composeOpen, setComposeOpen] = useState(false);
     const [stageOpen, setStageOpen] = useState(false);
     const [savingStage, setSavingStage] = useState(false);
     const stageRef = useRef(null);
@@ -83,39 +89,11 @@ export default function LeadDetails({ lead: backendLead, activity = [], stageTim
         });
     };
 
-    // ── Inline Personal Information editing ────────────────────────────────
-    const [editingPersonal, setEditingPersonal] = useState(false);
-    const [savingPersonal, setSavingPersonal] = useState(false);
-    const [personalForm, setPersonalForm] = useState({});
-    const setPF = (k) => (e) => setPersonalForm((f) => ({ ...f, [k]: e.target.value }));
-
-    const startEditPersonal = () => {
-        const d = (v) => (v ? String(v).slice(0, 10) : '');
-        setPersonalForm({
-            first_name:        backendLead?.first_name || '',
-            last_name:         backendLead?.last_name || '',
-            other_names:       backendLead?.other_names || '',
-            gender:            backendLead?.gender || '',
-            marital_status:    backendLead?.marital_status || '',
-            dob:               d(backendLead?.dob),
-            country_of_birth:  backendLead?.country_of_birth || '',
-            place_of_birth:    backendLead?.place_of_birth || '',
-            citizenship:       backendLead?.citizenship || '',
-            residence_country: backendLead?.residence_country || backendLead?.country || '',
-            residence_city:    backendLead?.residence_city || '',
-        });
-        setEditingPersonal(true);
-    };
-
-    const savePersonal = () => {
-        if (!personalForm.first_name?.trim()) return;
-        setSavingPersonal(true);
-        router.post(`/admin/leads/${backendLead.id}/personal`, personalForm, {
-            preserveScroll: true,
-            onSuccess: () => setEditingPersonal(false),
-            onFinish: () => setSavingPersonal(false),
-        });
-    };
+    // ── Personal Info tab — single-edit-at-a-time gate ────────────────────
+    // The 9 section cards each manage their own form state via <Section/>;
+    // this top-level key gates the Edit buttons so only one section can be
+    // in edit mode at a time across the whole tab.
+    const [currentEditKey, setCurrentEditKey] = useState(null);
 
     // If no lead data is passed, show a loading or error state
     if (!backendLead) {
@@ -191,6 +169,7 @@ export default function LeadDetails({ lead: backendLead, activity = [], stageTim
     const lead = {
         id: backendLead.lead_id || `LP-${backendLead.id}`,
         trackingCode: backendLead.tracking_code || null,
+        lastSeenAt: backendLead.last_seen_at || null,
         status: backendLead.status || 'New',
         stage: backendLead.stage || 'N/A',
         branch: backendLead.branch || 'Main',
@@ -385,6 +364,14 @@ export default function LeadDetails({ lead: backendLead, activity = [], stageTim
                         <span className="text-xs text-blue-700 font-bold bg-blue-50 border border-blue-100 px-2 py-1 rounded-md uppercase tracking-wider">{lead.branch}</span>
                         <span className="text-xs text-gray-600 font-medium bg-gray-100 px-2 py-1 rounded-md">ID: {lead.id}</span>
 
+                        {/* AI health badge (analyses on first open, cached 24h).
+                            Immigration cases get the procedural/compliance read;
+                            every other lead gets the engagement read. Mutually
+                            exclusive so a case never shows two badges. */}
+                        {backendLead.is_immigration_case
+                            ? <CaseHealthBadge caseId={lead.id} />
+                            : <LeadHealthBadge leadId={lead.id} />}
+
                         {/* Source + AI score (moved out of the leads list table) */}
                         {backendLead.source && (
                             <span className="text-xs text-gray-700 font-medium bg-gray-50 border border-gray-200 px-2 py-1 rounded-md inline-flex items-center gap-1.5">
@@ -425,6 +412,15 @@ export default function LeadDetails({ lead: backendLead, activity = [], stageTim
                         / WhatsApp / SMS. The lead opens that link and
                         sees their information + documents + timeline,
                         and can edit their information there. */}
+                    {lead.lastSeenAt && (
+                        <span
+                            title={`Lead last opened their tracker on ${new Date(lead.lastSeenAt).toLocaleString()}`}
+                            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-50 text-emerald-700 text-xs font-semibold"
+                        >
+                            <Eye size={14} /> Tracker seen {new Date(lead.lastSeenAt).toLocaleDateString()}
+                        </span>
+                    )}
+
                     {lead.trackingCode && (
                         <button
                             type="button"
@@ -448,6 +444,27 @@ export default function LeadDetails({ lead: backendLead, activity = [], stageTim
                             <Copy size={16} /> Copy Track Link
                         </button>
                     )}
+
+                    {lead.trackingCode && (
+                        <button
+                            type="button"
+                            disabled={!backendLead.email}
+                            title={backendLead.email ? 'Email this lead their tracker link' : 'Lead has no email on file'}
+                            onClick={() => router.post(`/admin/leads/${backendLead.id}/send-tracker-link`, {}, { preserveScroll: true, preserveState: true })}
+                            className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 text-sm font-semibold transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            <Mail size={16} /> Send Tracker Link
+                        </button>
+                    )}
+
+                    <button
+                        type="button"
+                        onClick={() => setComposeOpen(true)}
+                        title="Send this lead an email or SMS"
+                        className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-xl hover:bg-black text-sm font-semibold transition-colors shadow-sm"
+                    >
+                        <Send size={16} /> Compose Message
+                    </button>
 
                     <button className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 text-sm font-semibold transition-colors shadow-sm">
                         <Download size={16} /> Export PDF
@@ -481,6 +498,13 @@ export default function LeadDetails({ lead: backendLead, activity = [], stageTim
                         icon={<FolderOpen size={13} />}
                     >
                         Documents
+                    </TabButton>
+                    <TabButton
+                        active={activeTab === 'communications'}
+                        onClick={() => setActiveTab('communications')}
+                        icon={<Mail size={13} />}
+                    >
+                        Communications
                     </TabButton>
                 </div>
             </div>
@@ -517,6 +541,23 @@ export default function LeadDetails({ lead: backendLead, activity = [], stageTim
             {activeTab === 'documents' && (
                 <DocumentsPanel lead={backendLead} checklistFiles={checklistFiles} currentUser={currentUser} />
             )}
+
+            {/* ── Communications tab — message history sent to this lead ── */}
+            {activeTab === 'communications' && (
+                <CommunicationsPanel leadId={backendLead.id} />
+            )}
+
+            {/* Compose message slide-over (email / SMS / both) */}
+            <ComposeMessagePanel
+                open={composeOpen}
+                onClose={() => setComposeOpen(false)}
+                lead={{
+                    id: backendLead.id,
+                    name: `${lead.personal.firstName} ${lead.personal.surname}`.trim(),
+                    email: backendLead.email,
+                    phone: backendLead.phone,
+                }}
+            />
 
             {/* ── Lead Stats tab — dashboard-style quick stats + AI hero ── */}
             <div className={activeTab === 'stats' ? 'space-y-6' : 'hidden'}>
@@ -687,332 +728,288 @@ export default function LeadDetails({ lead: backendLead, activity = [], stageTim
                 </div>
             )}
 
+
+            {/* ── 9-section editable Personal Info layout ─────────────
+                Each card uses the shared <Section/> primitive that
+                manages its own edit/save/cancel state and posts a
+                partial payload to /admin/leads/{id}/personal. Only ONE
+                section can be in edit mode at a time — `currentEditKey`
+                gates the Edit buttons on the others.
+
+                The order matches the new build spec:
+                1 Identity · 2 Passport · 3 Current NZ Visa · 4 Study
+                Plans · 5 Financial · 6 Employment · 7 Education · 8
+                Family · 9 Health & Character. */}
             <div className="grid grid-cols-1 gap-6">
 
-                {/* 1. Personal Information */}
-                <SectionCard
+                {/* 1. Personal Identity */}
+                <Section
+                    leadId={backendLead.id}
+                    sectionKey={1}
+                    currentEditKey={currentEditKey}
+                    setCurrentEditKey={setCurrentEditKey}
                     title="1. Personal Information"
                     icon={User}
-                    action={editingPersonal ? (
-                        <div className="flex items-center gap-2">
-                            <button
-                                type="button"
-                                onClick={() => setEditingPersonal(false)}
-                                className="px-3 py-1.5 rounded-lg text-xs font-semibold text-gray-600 hover:bg-gray-100 transition-colors"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                type="button"
-                                onClick={savePersonal}
-                                disabled={savingPersonal || !personalForm.first_name?.trim()}
-                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white bg-gray-900 hover:bg-gray-800 transition-colors disabled:opacity-40"
-                            >
-                                <Check size={13} /> {savingPersonal ? 'Saving…' : 'Save'}
-                            </button>
-                        </div>
-                    ) : (
-                        <button
-                            type="button"
-                            onClick={startEditPersonal}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 transition-colors"
-                        >
-                            <Edit size={13} /> Edit
-                        </button>
-                    )}
+                    initial={snapshotForSection(backendLead, 1)}
                 >
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-5">
-                        <PersonalField editing={editingPersonal} form={personalForm} setPF={setPF} label="Surname" field="last_name" value={lead.personal.surname} />
-                        <PersonalField editing={editingPersonal} form={personalForm} setPF={setPF} label="First Name" field="first_name" value={lead.personal.firstName} />
-                        <PersonalField editing={editingPersonal} form={personalForm} setPF={setPF} label="Other Names Used" field="other_names" value={lead.personal.otherNames} />
-                        <PersonalField editing={editingPersonal} form={personalForm} setPF={setPF} label="Gender" field="gender" value={lead.personal.gender} options={GENDER_OPTIONS} />
-                        <PersonalField editing={editingPersonal} form={personalForm} setPF={setPF} label="Marital Status" field="marital_status" value={lead.personal.maritalStatus} options={MARITAL_OPTIONS} />
-                        <PersonalField editing={editingPersonal} form={personalForm} setPF={setPF} label="Date of Birth" field="dob" value={lead.personal.dob} type="date" />
-                        <PersonalField editing={editingPersonal} form={personalForm} setPF={setPF} label="Country of Birth" field="country_of_birth" value={lead.personal.countryOfBirth} />
-                        <PersonalField editing={editingPersonal} form={personalForm} setPF={setPF} label="Place of Birth" field="place_of_birth" value={lead.personal.placeOfBirth} />
-                        <PersonalField editing={editingPersonal} form={personalForm} setPF={setPF} label="Country of Citizenship" field="citizenship" value={lead.personal.citizenship} />
-                        <PersonalField editing={editingPersonal} form={personalForm} setPF={setPF} label="Current Country" field="residence_country" value={lead.country} />
-                        <PersonalField editing={editingPersonal} form={personalForm} setPF={setPF} label="Current Residence" field="residence_city" value={lead.personal.residence} fullWidth />
-                        {importedFamily.preferred_contact_time && (
-                            <DataRow label="Preferred Contact Time" value={importedFamily.preferred_contact_time} />
-                        )}
+                    {({ editing, form, setF, errors }) => (
+                        <FieldGrid>
+                            <Field editing={editing} label="First Name *" field="first_name" form={form} setF={setF} errors={errors} />
+                            <Field editing={editing} label="Middle Name" field="middle_name" form={form} setF={setF} errors={errors} />
+                            <Field editing={editing} label="Surname" field="last_name" form={form} setF={setF} errors={errors} />
+                            <Field editing={editing} label="Suffix" field="suffix" form={form} setF={setF} errors={errors} placeholder="Jr., Sr., III…" />
+                            <Field editing={editing} label="Other Names" field="other_names" form={form} setF={setF} errors={errors} />
+                            <Field editing={editing} label="Preferred Name" field="preferred_name" form={form} setF={setF} errors={errors} />
+                            <Field editing={editing} label="Email" field="email" form={form} setF={setF} errors={errors} type="email" />
+                            <Field editing={editing} label="Phone" field="phone" form={form} setF={setF} errors={errors} type="tel" />
+                            <Field editing={editing} label="WhatsApp" field="whatsapp" form={form} setF={setF} errors={errors} type="tel" />
+                            <Field editing={editing} label="Gender" field="gender" form={form} setF={setF} errors={errors} type="select" options={GENDER_OPTIONS} />
+                            <Field editing={editing} label="Marital Status" field="marital_status" form={form} setF={setF} errors={errors} type="select" options={MARITAL_OPTIONS} />
+                            <Field editing={editing} label="Date of Birth" field="dob" form={form} setF={setF} errors={errors} type="date" />
+                            <Field editing={editing} label="Country of Birth" field="country_of_birth" form={form} setF={setF} errors={errors} />
+                            <Field editing={editing} label="Place of Birth" field="place_of_birth" form={form} setF={setF} errors={errors} />
+                            <Field editing={editing} label="Citizenship" field="citizenship" form={form} setF={setF} errors={errors} />
+                            <Field editing={editing} label="Current Country" field="residence_country" form={form} setF={setF} errors={errors} />
+                            <Field editing={editing} label="Current City" field="residence_city" form={form} setF={setF} errors={errors} />
+                            <Field editing={editing} label="Address Line 1" field="residence_address_line_1" form={form} setF={setF} errors={errors} fullWidth />
+                            <Field editing={editing} label="Address Line 2" field="residence_address_line_2" form={form} setF={setF} errors={errors} fullWidth />
+                            <Field editing={editing} label="Postcode" field="residence_address_postcode" form={form} setF={setF} errors={errors} />
+                            <Field editing={editing} label="Continuous NZ Residence" field="has_been_in_nz_continuously" form={form} setF={setF} errors={errors} type="boolean" />
+                            <Field editing={editing} label="Continuous Residence (months)" field="nz_continuous_residence_months" form={form} setF={setF} errors={errors} type="number" show={form.has_been_in_nz_continuously === true || form.has_been_in_nz_continuously === '1'} />
+                        </FieldGrid>
+                    )}
+                </Section>
 
-                        <div className="col-span-1 md:col-span-2 pt-4 border-t border-gray-100 mt-2">
-                            <h3 className="text-sm font-bold text-gray-900 mb-4 flex items-center gap-2">
-                                Passport Details {lead.personal.hasPassport ? <CheckCircle2 size={16} className="text-emerald-500" /> : <XCircle size={16} className="text-red-500" />}
-                            </h3>
-                            {lead.personal.hasPassport && (
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                    <DataRow label="Expiry Date" value={lead.personal.passportExpiry} />
-                                    <div className="flex flex-col gap-1">
-                                        <span className="text-xs font-semibold text-gray-500 tracking-wide uppercase">Passport Document</span>
-                                        <a href="#" className="inline-flex items-center gap-2 text-sm font-medium text-blue-600 bg-blue-50/50 px-3 py-2 rounded-lg border border-blue-100 hover:bg-blue-100 transition-colors w-max">
-                                            <FileText size={16} /> {lead.personal.passportFile}
-                                        </a>
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                </SectionCard>
+                {/* 2. Passport & Identity Documents */}
+                <Section
+                    leadId={backendLead.id}
+                    sectionKey={2}
+                    currentEditKey={currentEditKey}
+                    setCurrentEditKey={setCurrentEditKey}
+                    title="2. Passport & Identity Documents"
+                    icon={FileText}
+                    initial={snapshotForSection(backendLead, 2)}
+                >
+                    {({ editing, form, setF, errors }) => (
+                        <FieldGrid>
+                            <Field editing={editing} label="Has Passport" field="has_passport" form={form} setF={setF} errors={errors} type="boolean" />
+                            <Field editing={editing} label="Passport Number" field="passport_number"
+                                form={form} setF={setF} errors={errors}
+                                show={form.has_passport === true || form.has_passport === '1'}
+                                hint="Encrypted at rest." />
+                            <Field editing={editing} label="Issuing Country" field="passport_issuing_country"
+                                form={form} setF={setF} errors={errors}
+                                show={form.has_passport === true || form.has_passport === '1'} />
+                            <Field editing={editing} label="Issue Date" field="passport_issue_date"
+                                form={form} setF={setF} errors={errors} type="date"
+                                show={form.has_passport === true || form.has_passport === '1'} />
+                            <Field editing={editing} label="Expiry Date" field="passport_expiry"
+                                form={form} setF={setF} errors={errors} type="date"
+                                show={form.has_passport === true || form.has_passport === '1'} />
+                        </FieldGrid>
+                    )}
+                </Section>
 
-                {/* 2. Study Plans in New Zealand */}
-                <SectionCard title="2. Study Plans in New Zealand" icon={BookOpen}>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-5">
-                        <DataRow label="Preferred Course / Program" value={lead.studyPlans.preferredCourse} />
-                        <DataRow label="Preferred Qualification Level" value={lead.studyPlans.qualificationLevel} />
-                        <DataRow label="Preferred City" value={lead.studyPlans.preferredCity} />
-                        <DataRow label="Preferred Intake" value={lead.studyPlans.preferredIntake} />
-                        {importedFamily.pathway && (
-                            <DataRow label="Pathway Interested In" value={importedFamily.pathway} fullWidth />
-                        )}
-                        {importedFamily.willing_to_invest && (
-                            <DataRow label="Willing to Invest in Study Abroad" value={importedFamily.willing_to_invest} />
-                        )}
-                        {importedFamily.willing_to_proceed && (
-                            <DataRow label="Willing to Proceed with NZ Student Visa" value={importedFamily.willing_to_proceed} />
-                        )}
+                {/* 3. Current NZ Visa */}
+                <Section
+                    leadId={backendLead.id}
+                    sectionKey={3}
+                    currentEditKey={currentEditKey}
+                    setCurrentEditKey={setCurrentEditKey}
+                    title="3. Current NZ Visa"
+                    icon={Globe}
+                    initial={snapshotForSection(backendLead, 3)}
+                >
+                    {({ editing, form, setF, errors }) => (
+                        <FieldGrid>
+                            <Field editing={editing} label="Current Visa Type" field="current_nz_visa_type" form={form} setF={setF} errors={errors} placeholder="e.g. AEWV, Student Visa, Visitor" />
+                            <Field editing={editing} label="Visa Number" field="current_nz_visa_number" form={form} setF={setF} errors={errors} hint="Encrypted at rest." />
+                            <Field editing={editing} label="Issued Date" field="current_nz_visa_issued_date" form={form} setF={setF} errors={errors} type="date" />
+                            <Field editing={editing} label="Expiry Date" field="current_nz_visa_expiry_date" form={form} setF={setF} errors={errors} type="date" />
+                            <Field editing={editing} label="Previous NZ Visa Type" field="previous_nz_visa_type" form={form} setF={setF} errors={errors} fullWidth />
+                        </FieldGrid>
+                    )}
+                </Section>
 
-                        <div className="col-span-1 md:col-span-2 pt-4 border-t border-gray-100 mt-2">
-                            <h3 className="text-sm font-bold text-gray-900 mb-4 flex items-center gap-2">
-                                English Test Details
-                            </h3>
-                            {lead.studyPlans.englishTest.taken ? (
-                                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-4 bg-gray-50/50 p-4 rounded-xl border border-gray-100">
-                                    <div className="col-span-2 sm:col-span-3 md:col-span-2">
-                                        <p className="text-xs text-gray-600 font-medium">Test Type</p>
-                                        <p className="text-sm font-bold text-gray-900">{lead.studyPlans.englishTest.type}</p>
-                                        <p className="text-xs text-gray-600 mt-1">Date: {lead.studyPlans.englishTest.date}</p>
-                                    </div>
-                                    <div className="text-center">
-                                        <p className="text-xs text-gray-600 font-medium">Overall</p>
-                                        <p className="text-xl font-black text-blue-600">{lead.studyPlans.englishTest.overall}</p>
-                                    </div>
-                                    <div className="text-center">
-                                        <p className="text-xs text-gray-600 font-medium">Reading</p>
-                                        <p className="text-lg font-bold text-gray-900">{lead.studyPlans.englishTest.reading}</p>
-                                    </div>
-                                    <div className="text-center">
-                                        <p className="text-xs text-gray-600 font-medium">Listening</p>
-                                        <p className="text-lg font-bold text-gray-900">{lead.studyPlans.englishTest.listening}</p>
-                                    </div>
-                                    <div className="text-center">
-                                        <p className="text-xs text-gray-600 font-medium">Writing/Spkg</p>
-                                        <p className="text-lg font-bold text-gray-900">{lead.studyPlans.englishTest.writing}</p>
-                                    </div>
-                                </div>
-                            ) : (
-                                <p className="text-sm text-gray-600 bg-gray-50 p-3 rounded-lg border border-gray-100">No English test taken yet.</p>
-                            )}
-                        </div>
-                    </div>
-                </SectionCard>
+                {/* 4. Study Plans in NZ */}
+                <Section
+                    leadId={backendLead.id}
+                    sectionKey={4}
+                    currentEditKey={currentEditKey}
+                    setCurrentEditKey={setCurrentEditKey}
+                    title="4. Study Plans in New Zealand"
+                    icon={BookOpen}
+                    initial={snapshotForSection(backendLead, 4)}
+                >
+                    {({ editing, form, setF, errors }) => (
+                        <FieldGrid>
+                            <Field editing={editing} label="Preferred Course" field="preferred_course" form={form} setF={setF} errors={errors} />
+                            <Field editing={editing} label="Preferred Qualification Level" field="preferred_qualification_level" form={form} setF={setF} errors={errors} />
+                            <Field editing={editing} label="Preferred City of Study" field="preferred_city_of_study" form={form} setF={setF} errors={errors} />
+                            <Field editing={editing} label="Preferred Intake" field="preferred_intake" form={form} setF={setF} errors={errors} placeholder="e.g. Feb 2027" />
+                            <Field editing={editing} label="Target Institution" field="target_institution" form={form} setF={setF} errors={errors} fullWidth />
+                            <Field editing={editing} label="English Test Type" field="english_test_type" form={form} setF={setF} errors={errors} type="select" options={ENGLISH_TEST_OPTIONS} />
+                            <Field editing={editing} label="English Test Date" field="english_test_date" form={form} setF={setF} errors={errors} type="date" />
+                            <Field editing={editing} label="Overall Score" field="english_test_overall_score" form={form} setF={setF} errors={errors} type="number" />
+                            <Field editing={editing} label="Listening" field="english_test_listening" form={form} setF={setF} errors={errors} type="number" />
+                            <Field editing={editing} label="Reading" field="english_test_reading" form={form} setF={setF} errors={errors} type="number" />
+                            <Field editing={editing} label="Writing" field="english_test_writing" form={form} setF={setF} errors={errors} type="number" />
+                            <Field editing={editing} label="Speaking" field="english_test_speaking" form={form} setF={setF} errors={errors} type="number" />
+                        </FieldGrid>
+                    )}
+                </Section>
 
-                {/* 3. Financial Information */}
-                <SectionCard title="3. Financial Information" icon={DollarSign}>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-white">
-                        <div className="flex flex-col gap-4">
-                            <div className="flex items-start justify-between p-4 bg-gray-50/50 rounded-xl border border-gray-100">
-                                <div>
-                                    <h4 className="text-sm font-bold text-gray-900">Tuition/School Fees</h4>
-                                    <p className="text-xs text-gray-600 mt-1">Sufficient funds to cover intended program</p>
-                                </div>
-                                {lead.financial.hasTuitionFunds ? (
-                                    <span className="px-2.5 py-1 bg-emerald-100 text-emerald-700 rounded text-xs font-bold border border-emerald-200">YES</span>
-                                ) : (
-                                    <span className="px-2.5 py-1 bg-red-100 text-red-700 rounded text-xs font-bold border border-red-200">NO</span>
-                                )}
-                            </div>
-                            <div className="flex items-start justify-between p-4 bg-gray-50/50 rounded-xl border border-gray-100">
-                                <div>
-                                    <h4 className="text-sm font-bold text-gray-900">Living Expenses</h4>
-                                    <p className="text-xs text-gray-600 mt-1">Has NZ$ 20,000 for living expenses per year</p>
-                                </div>
-                                {lead.financial.hasLivingExpenses ? (
-                                    <span className="px-2.5 py-1 bg-emerald-100 text-emerald-700 rounded text-xs font-bold border border-emerald-200">YES</span>
-                                ) : (
-                                    <span className="px-2.5 py-1 bg-red-100 text-red-700 rounded text-xs font-bold border border-red-200">NO</span>
-                                )}
-                            </div>
-                        </div>
+                {/* 5. Financial Information */}
+                <Section
+                    leadId={backendLead.id}
+                    sectionKey={5}
+                    currentEditKey={currentEditKey}
+                    setCurrentEditKey={setCurrentEditKey}
+                    title="5. Financial Information"
+                    icon={DollarSign}
+                    initial={snapshotForSection(backendLead, 5)}
+                >
+                    {({ editing, form, setF, errors }) => (
+                        <FieldGrid>
+                            <Field editing={editing} label="Funding Source" field="funding_source" form={form} setF={setF} errors={errors} type="select" options={FUNDING_OPTIONS} />
+                            <Field editing={editing} label="Estimated Total Cost (NZD)" field="estimated_total_cost_nzd" form={form} setF={setF} errors={errors} type="number" />
+                            <Field editing={editing} label="Available Funds (NZD)" field="available_funds_nzd" form={form} setF={setF} errors={errors} type="number" />
+                            <Field editing={editing} label="Annual Income" field="annual_income_nzd" form={form} setF={setF} errors={errors} type="number" />
+                            <Field editing={editing} label="Income Currency" field="annual_income_currency" form={form} setF={setF} errors={errors} placeholder="NZD" />
+                            <Field editing={editing} label="Supports Partner / Dependents" field="supports_partner_or_dependents" form={form} setF={setF} errors={errors} type="boolean" />
+                            <Field editing={editing} label="Owns Property in Home Country" field="has_property_in_home_country" form={form} setF={setF} errors={errors} type="boolean" />
+                            <Field editing={editing} label="Bank Funds Evidence Provided" field="bank_funds_evidence_provided" form={form} setF={setF} errors={errors} type="boolean" />
+                        </FieldGrid>
+                    )}
+                </Section>
 
-                        {/* Reference Info Table (from intake form) */}
-                        <div className="bg-blue-50/30 border border-blue-100 rounded-xl p-4">
-                            <h4 className="text-xs font-bold text-blue-800 uppercase tracking-wider mb-3">Indicative Cost Guide</h4>
-                            <ul className="space-y-2 text-xs text-gray-600 font-medium">
-                                <li className="flex justify-between border-b border-blue-100/50 pb-1">
-                                    <span>Diploma (Level 5-6)</span><span>NZD $13k - $22k</span>
-                                </li>
-                                <li className="flex justify-between border-b border-blue-100/50 pb-1">
-                                    <span>Bachelor's (Level 7)</span><span>NZD $20k - $35k</span>
-                                </li>
-                                <li className="flex justify-between border-b border-blue-100/50 pb-1">
-                                    <span>Postgrad (Level 8)</span><span>NZD $22k - $38k</span>
-                                </li>
-                                <li className="flex justify-between pb-1">
-                                    <span>Master's (Level 9)</span><span>NZD $26k - $45k+</span>
-                                </li>
-                            </ul>
-                            <div className="mt-3 pt-3 border-t border-blue-200 text-xs text-gray-600 font-medium flex justify-between">
-                                <span>Visa INZ Fee: <b>NZ$ 850</b></span>
-                                <span>Prof Fee: <b>NZ$ 1,500</b></span>
-                            </div>
-                        </div>
-                    </div>
-                </SectionCard>
+                {/* 6. Employment */}
+                <Section
+                    leadId={backendLead.id}
+                    sectionKey={6}
+                    currentEditKey={currentEditKey}
+                    setCurrentEditKey={setCurrentEditKey}
+                    title="6. Employment"
+                    icon={Briefcase}
+                    initial={snapshotForSection(backendLead, 6)}
+                >
+                    {({ editing, form, setF, errors }) => {
+                        const isEmployed = form.employment_type === 'Employed' || form.employment_type === 'Self-employed';
+                        return (
+                            <FieldGrid>
+                                <Field editing={editing} label="Employment Type" field="employment_type" form={form} setF={setF} errors={errors} type="select" options={EMPLOYMENT_OPTIONS} />
+                                <Field editing={editing} label="Years of Relevant Experience" field="years_of_relevant_experience" form={form} setF={setF} errors={errors} type="number" />
+                                <Field editing={editing} label="Current Employer Name" field="current_employer_name" form={form} setF={setF} errors={errors} show={isEmployed} fullWidth />
+                                <Field editing={editing} label="Position Title" field="current_position_title" form={form} setF={setF} errors={errors} show={isEmployed} />
+                                <Field editing={editing} label="Employer Country" field="current_employer_country" form={form} setF={setF} errors={errors} show={isEmployed} />
+                                <Field editing={editing} label="Employer Phone" field="current_employer_phone" form={form} setF={setF} errors={errors} show={isEmployed} />
+                                <Field editing={editing} label="Employer Email" field="current_employer_email" form={form} setF={setF} errors={errors} type="email" show={isEmployed} />
+                                <Field editing={editing} label="Employment Start Date" field="current_employment_start_date" form={form} setF={setF} errors={errors} type="date" show={isEmployed} />
+                                <Field editing={editing} label="Current Salary (NZD)" field="current_salary_nzd" form={form} setF={setF} errors={errors} type="number" show={isEmployed} />
+                                <Field editing={editing} label="ANZSCO-listed Role" field="has_anzsco_listed_role" form={form} setF={setF} errors={errors} type="boolean" />
+                                <Field editing={editing} label="ANZSCO Code" field="anzsco_code" form={form} setF={setF} errors={errors} show={form.has_anzsco_listed_role === true || form.has_anzsco_listed_role === '1'} />
+                                <Field editing={editing} label="NZ Professional Registration" field="has_nz_professional_registration" form={form} setF={setF} errors={errors} type="boolean" />
+                                <Field editing={editing} label="Registration Body" field="nz_professional_registration_body" form={form} setF={setF} errors={errors} show={form.has_nz_professional_registration === true || form.has_nz_professional_registration === '1'} fullWidth />
+                            </FieldGrid>
+                        );
+                    }}
+                </Section>
 
-                {/* 4. Education Background */}
-                <SectionCard title="4. Education Background" icon={GraduationCap}>
-                    <div className="space-y-6">
+                {/* 7. Education Background */}
+                <Section
+                    leadId={backendLead.id}
+                    sectionKey={7}
+                    currentEditKey={currentEditKey}
+                    setCurrentEditKey={setCurrentEditKey}
+                    title="7. Education Background"
+                    icon={GraduationCap}
+                    initial={snapshotForSection(backendLead, 7)}
+                >
+                    {({ editing, form, setF, errors }) => (
+                        <FieldGrid>
+                            <Field editing={editing} label="Highest Qualification" field="highest_qualification" form={form} setF={setF} errors={errors} type="select" options={QUALIFICATION_OPTIONS} />
+                            <Field editing={editing} label="Year Completed" field="highest_qualification_year_completed" form={form} setF={setF} errors={errors} type="number" placeholder="YYYY" />
+                            <Field editing={editing} label="Field of Study" field="highest_qualification_field" form={form} setF={setF} errors={errors} />
+                            <Field editing={editing} label="Country of Study" field="highest_qualification_country" form={form} setF={setF} errors={errors} />
+                            <Field editing={editing} label="NZQA Assessment Done" field="has_nzqa_assessment" form={form} setF={setF} errors={errors} type="boolean" />
+                            <Field editing={editing} label="NZQA Level" field="nzqa_assessment_level" form={form} setF={setF} errors={errors} show={form.has_nzqa_assessment === true || form.has_nzqa_assessment === '1'} />
+                        </FieldGrid>
+                    )}
+                </Section>
 
-                        {/* Self-reported summary (from CSV / quick-lead intake) */}
-                        {(importedEdu.current_education_attainment || importedEdu.bachelor_course) && (
-                            <div>
-                                <h3 className="text-sm font-bold text-gray-900 mb-3 border-b border-gray-100 pb-2">Self-reported Education</h3>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
-                                    {importedEdu.current_education_attainment && (
-                                        <DataRow label="Current Education Attainment" value={importedEdu.current_education_attainment} />
-                                    )}
-                                    {importedEdu.bachelor_course && (
-                                        <DataRow label="Bachelor's Degree Course" value={importedEdu.bachelor_course} />
-                                    )}
-                                </div>
-                            </div>
-                        )}
+                {/* 8. Family & Partner */}
+                <Section
+                    leadId={backendLead.id}
+                    sectionKey={8}
+                    currentEditKey={currentEditKey}
+                    setCurrentEditKey={setCurrentEditKey}
+                    title="8. Family & Partner"
+                    icon={UserIcon}
+                    initial={snapshotForSection(backendLead, 8)}
+                >
+                    {({ editing, form, setF, errors }) => (
+                        <FieldGrid>
+                            <Field editing={editing} label="Has Children" field="has_children" form={form} setF={setF} errors={errors} type="boolean" />
+                            <Field editing={editing} label="Number of Children" field="number_of_children" form={form} setF={setF} errors={errors} type="number" show={form.has_children === true || form.has_children === '1'} />
+                            <Field editing={editing} label="Has Dependent Partner" field="has_dependent_partner" form={form} setF={setF} errors={errors} type="boolean" />
+                            <Field editing={editing} label="Partner in NZ" field="partner_in_nz" form={form} setF={setF} errors={errors} type="boolean" />
+                            <Field editing={editing} label="Intends to Bring Family" field="intends_to_bring_family" form={form} setF={setF} errors={errors} type="boolean" fullWidth />
+                            <Field
+                                editing={editing}
+                                label="Other Dependent Children — Details"
+                                field="dependent_children_notes"
+                                form={form}
+                                setF={setF}
+                                errors={errors}
+                                type="textarea"
+                                show={form.has_children === true || form.has_children === '1'}
+                                hint="For each other dependent child, list: full name, DOB, gender, country of birth, citizenship and residence, plus passport details if held. (Per-child structured records will replace this in a future build.)"
+                                fullWidth
+                            />
+                        </FieldGrid>
+                    )}
+                </Section>
 
-                        {/* High School */}
-                        <div>
-                            <h3 className="text-sm font-bold text-gray-900 mb-3 border-b border-gray-100 pb-2 flex justify-between items-center">
-                                High School Education
-                                {lead.education.highSchool.completed && <span className="bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded text-[10px] font-bold">COMPLETED</span>}
-                            </h3>
-                            {lead.education.highSchool.completed && (
-                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
-                                    <DataRow label="Level" value={lead.education.highSchool.level} />
-                                    <DataRow label="Institution" value={lead.education.highSchool.institution} fullWidth />
-                                    <DataRow label="Timeline" value={`${lead.education.highSchool.dateStarted} - ${lead.education.highSchool.dateCompleted}`} />
-                                    <DataRow label="Avg Marks" value={lead.education.highSchool.averageMarks} />
-                                </div>
-                            )}
-                        </div>
-
-                        {/* Tertiary Education (Dynamic) */}
-                        <div>
-                            <h3 className="text-sm font-bold text-gray-900 mb-3 border-b border-gray-100 pb-2 flex justify-between items-center">
-                                Tertiary Education
-                                {lead.education.tertiary.completed && <span className="bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded text-[10px] font-bold">COMPLETED</span>}
-                            </h3>
-                            {lead.education.tertiary.completed && lead.education.tertiary.bachelors && (
-                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 bg-gray-50/50 p-4 rounded-xl border border-gray-100">
-                                    <div className="col-span-1 md:col-span-4 mb-2">
-                                        <span className="text-xs font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded uppercase tracking-wider border border-blue-100">Bachelor's Degree</span>
-                                    </div>
-                                    <DataRow label="Field of Study" value={lead.education.tertiary.bachelors.field} />
-                                    <DataRow label="Institution" value={lead.education.tertiary.bachelors.institution} />
-                                    <DataRow label="Timeline" value={`${lead.education.tertiary.bachelors.dateStarted} - ${lead.education.tertiary.bachelors.dateCompleted}`} />
-                                    <DataRow label="Avg Marks" value={lead.education.tertiary.bachelors.averageMarks} />
-                                </div>
-                            )}
-                        </div>
-
-                        {/* Gap & Documents */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
-                            <div>
-                                <h3 className="text-sm font-bold text-gray-900 mb-3">Gap Details</h3>
-                                {lead.education.gap.hasGap ? (
-                                    <div className="bg-amber-50/50 border border-amber-100 p-4 rounded-xl">
-                                        <p className="text-sm font-bold text-amber-900 mb-1">Gap Length: {lead.education.gap.length}</p>
-                                        <p className="text-xs font-medium text-amber-800">Current Activity: {lead.education.gap.activity}</p>
-                                    </div>
-                                ) : (
-                                    <p className="text-sm text-gray-600">No educational gap reported.</p>
-                                )}
-                            </div>
-                            
-                            <div>
-                                <h3 className="text-sm font-bold text-gray-900 mb-3">Documents Available</h3>
-                                <div className="space-y-4">
-                                    <div>
-                                        <p className="text-[10px] font-bold text-gray-600 mb-2 uppercase tracking-wide">Education</p>
-                                        <div className="flex flex-wrap gap-2">
-                                            {lead.education.documents.map((doc, idx) => (
-                                                <span key={`edu-${idx}`} className="inline-flex items-center gap-1.5 text-xs font-medium bg-gray-100 text-gray-700 px-2.5 py-1.5 rounded-lg border border-gray-200">
-                                                    <CheckCircle2 size={12} className="text-emerald-500" /> {doc}
-                                                </span>
-                                            ))}
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <p className="text-[10px] font-bold text-gray-600 mb-2 uppercase tracking-wide">Work & Business</p>
-                                        <div className="flex flex-wrap gap-2">
-                                            {lead.education.workDocuments.map((doc, idx) => (
-                                                <span key={`work-${idx}`} className="inline-flex items-center gap-1.5 text-xs font-medium bg-gray-100 text-gray-700 px-2.5 py-1.5 rounded-lg border border-gray-200">
-                                                    <CheckCircle2 size={12} className="text-blue-500" /> {doc}
-                                                </span>
-                                            ))}
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                    </div>
-                </SectionCard>
-
-                {/* 5. Work Background — self-reported from CSV / quick-lead. */}
-                {(importedWork.current_job || importedWork.current_location) && (
-                    <SectionCard title="5. Work Background" icon={DollarSign}>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-5">
-                            {importedWork.current_job && (
-                                <DataRow label="Current Job / Occupation" value={importedWork.current_job} />
-                            )}
-                            {importedWork.current_location && (
-                                <DataRow label="Current Location" value={importedWork.current_location} />
-                            )}
-                        </div>
-                    </SectionCard>
-                )}
-
-                {/* 6. Family & Partner — partner/spouse + children. */}
-                {(importedFamily.partner_name || importedFamily.partner_age || importedFamily.partner_education
-                    || importedFamily.partner_work_experience || importedFamily.partner_years_experience
-                    || importedFamily.number_of_children || importedFamily.children_ages
-                    || importedFamily.will_bring_children) && (
-                    <SectionCard title="6. Family & Partner" icon={UserIcon}>
-                        <div className="space-y-6">
-                            {/* Partner */}
-                            {(importedFamily.partner_name || importedFamily.partner_age || importedFamily.partner_education
-                                || importedFamily.partner_education_other || importedFamily.partner_work_experience
-                                || importedFamily.partner_years_experience) && (
-                                <div>
-                                    <h3 className="text-sm font-bold text-gray-900 mb-3 border-b border-gray-100 pb-2">Partner / Spouse</h3>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
-                                        {importedFamily.partner_name             && <DataRow label="Full Name"            value={importedFamily.partner_name} />}
-                                        {importedFamily.partner_age              && <DataRow label="Age"                  value={importedFamily.partner_age} />}
-                                        {importedFamily.partner_education        && <DataRow label="Current Education"    value={importedFamily.partner_education} />}
-                                        {importedFamily.partner_education_other  && <DataRow label="Education (Other)"    value={importedFamily.partner_education_other} />}
-                                        {importedFamily.partner_work_experience  && <DataRow label="Current Work"         value={importedFamily.partner_work_experience} />}
-                                        {importedFamily.partner_years_experience && <DataRow label="Years of Experience"  value={importedFamily.partner_years_experience} />}
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* Children */}
-                            {(importedFamily.number_of_children || importedFamily.children_ages
-                                || importedFamily.will_bring_children || importedFamily.will_bring_children_other) && (
-                                <div>
-                                    <h3 className="text-sm font-bold text-gray-900 mb-3 border-b border-gray-100 pb-2">Children</h3>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
-                                        {importedFamily.number_of_children        && <DataRow label="Number of Children" value={importedFamily.number_of_children} />}
-                                        {importedFamily.children_ages             && <DataRow label="Children's Ages"   value={importedFamily.children_ages} />}
-                                        {importedFamily.will_bring_children       && <DataRow label="Will Bring Children" value={importedFamily.will_bring_children} />}
-                                        {importedFamily.will_bring_children_other && <DataRow label="Children — Other Answer" value={importedFamily.will_bring_children_other} />}
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                    </SectionCard>
-                )}
+                {/* 9. Health & Character */}
+                <Section
+                    leadId={backendLead.id}
+                    sectionKey={9}
+                    currentEditKey={currentEditKey}
+                    setCurrentEditKey={setCurrentEditKey}
+                    title="9. Health & Character"
+                    icon={AlertTriangle}
+                    initial={snapshotForSection(backendLead, 9)}
+                >
+                    {({ editing, form, setF, errors }) => (
+                        <FieldGrid cols={1}>
+                            <FieldGrid>
+                                <Field editing={editing} label="Health Disclosure" field="has_health_disclosure" form={form} setF={setF} errors={errors} type="boolean" />
+                                <Field editing={editing} label="Character Disclosure" field="has_character_disclosure" form={form} setF={setF} errors={errors} type="boolean" />
+                                <Field editing={editing} label="Visa Previously Declined" field="has_been_declined_visa" form={form} setF={setF} errors={errors} type="boolean" />
+                                <Field editing={editing} label="Criminal Record" field="has_criminal_record" form={form} setF={setF} errors={errors} type="boolean" />
+                            </FieldGrid>
+                            <Field editing={editing} label="Health Disclosure Notes (min 10 chars)" field="health_disclosure_notes" form={form} setF={setF} errors={errors} type="textarea"
+                                show={form.has_health_disclosure === true || form.has_health_disclosure === '1'} fullWidth />
+                            <Field editing={editing} label="Character Disclosure Notes (min 10 chars)" field="character_disclosure_notes" form={form} setF={setF} errors={errors} type="textarea"
+                                show={form.has_character_disclosure === true || form.has_character_disclosure === '1'} fullWidth />
+                            <Field editing={editing} label="Declined Visa Details (min 10 chars)" field="declined_visa_details" form={form} setF={setF} errors={errors} type="textarea"
+                                show={form.has_been_declined_visa === true || form.has_been_declined_visa === '1'} fullWidth />
+                            <Field editing={editing} label="Criminal Record Details (min 10 chars)" field="criminal_record_details" form={form} setF={setF} errors={errors} type="textarea"
+                                show={form.has_criminal_record === true || form.has_criminal_record === '1'} fullWidth />
+                            <Field
+                                editing={editing}
+                                label="Meets 184-day NZ Presence Rule (2 Years)"
+                                field="meets_184_day_rule_two_years"
+                                form={form}
+                                setF={setF}
+                                errors={errors}
+                                type="boolean"
+                                hint="PRV applicants must have spent at least 184 days in NZ in each of the last two years."
+                                fullWidth
+                            />
+                        </FieldGrid>
+                    )}
+                </Section>
 
             </div>
             </div>
@@ -1155,8 +1152,335 @@ function PersonalField({ editing, label, field, value, form, setPF, type = 'text
 
 // Personal Information edit options — used by the inline editor on the
 // Personal Information card.
-const MARITAL_OPTIONS = ['Single', 'Married', 'De facto', 'Separated', 'Divorced', 'Widowed'];
+const MARITAL_OPTIONS = ['Single', 'Married', 'De Facto', 'Civil Union', 'Separated', 'Divorced', 'Widowed'];
 const GENDER_OPTIONS  = ['Male', 'Female', 'Other'];
+const FUNDING_OPTIONS = ['Self', 'Sponsor', 'Scholarship', 'Loan', 'Mixed'];
+const EMPLOYMENT_OPTIONS = ['Employed', 'Self-employed', 'Unemployed', 'Student', 'Retired'];
+const QUALIFICATION_OPTIONS = ['Doctorate', 'Master', 'Postgraduate Diploma', 'Bachelor', 'Diploma', 'Certificate', 'High School', 'None'];
+const ENGLISH_TEST_OPTIONS = ['IELTS', 'TOEFL', 'PTE', 'NZCEL', 'Cambridge', 'Duolingo'];
+
+// ── Editable Personal-tab primitives ───────────────────────────────────
+//
+// A `Section` wraps SectionCard with self-contained edit/save/cancel
+// state. Children receive `{ editing, form, setF, errors }` via render
+// prop so each Field knows whether to render as a DataRow or an input.
+// Save POSTs only the changed-and-included keys to /admin/leads/{id}/personal
+// so two sections being edited won't overwrite each other.
+
+function Section({ leadId, sectionKey, currentEditKey, setCurrentEditKey,
+                   title, icon, initial, children }) {
+    const editing = currentEditKey === sectionKey;
+    const [form, setForm] = useState(initial);
+    const [errors, setErrors] = useState({});
+    const [saving, setSaving] = useState(false);
+
+    // Reset the form to the initial snapshot whenever (a) the lead prop
+    // changes (page refresh after a sibling section saved) or (b) edit
+    // mode is exited via Cancel.
+    useEffect(() => { setForm(initial); }, [JSON.stringify(initial)]);
+
+    const setF = (k, v) => setForm((f) => ({ ...f, [k]: v }));
+
+    const startEdit = () => {
+        setErrors({});
+        setForm(initial);
+        setCurrentEditKey(sectionKey);
+    };
+    const cancel = () => {
+        setErrors({});
+        setForm(initial);
+        setCurrentEditKey(null);
+    };
+    const save = () => {
+        setSaving(true);
+        setErrors({});
+        // The controller's required `first_name` rule means we must
+        // always include it on every section save, even if the section
+        // doesn't edit name fields directly. Add it to the payload as a
+        // pass-through guard.
+        const payload = { ...form, first_name: form.first_name ?? initial.first_name };
+        router.post(`/admin/leads/${leadId}/personal`, payload, {
+            preserveScroll: true,
+            preserveState: true,
+            onSuccess: () => setCurrentEditKey(null),
+            onError: (errs) => setErrors(errs || {}),
+            onFinish: () => setSaving(false),
+        });
+    };
+
+    const action = editing ? (
+        <div className="flex items-center gap-2">
+            <button
+                type="button"
+                onClick={cancel}
+                disabled={saving}
+                className="px-3 py-1.5 rounded-lg text-xs font-semibold text-gray-600 hover:bg-gray-100 transition-colors disabled:opacity-50"
+            >
+                Cancel
+            </button>
+            <button
+                type="button"
+                onClick={save}
+                disabled={saving}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white bg-gray-900 hover:bg-gray-800 transition-colors disabled:opacity-40"
+            >
+                <Check size={13} /> {saving ? 'Saving…' : 'Save'}
+            </button>
+        </div>
+    ) : (
+        <button
+            type="button"
+            onClick={startEdit}
+            disabled={currentEditKey !== null}
+            title={currentEditKey !== null ? 'Finish editing the other section first.' : 'Edit this section'}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+            <Edit size={13} /> Edit
+        </button>
+    );
+
+    return (
+        <SectionCard title={title} icon={icon} action={action}>
+            {children({ editing, form, setF, errors })}
+        </SectionCard>
+    );
+}
+
+/**
+ * Single inline field. Falls back to DataRow when not in edit mode.
+ * Supports text / email / tel / date / number / textarea / select /
+ * boolean (yes/no select) inputs.
+ *
+ * `show` is an optional render-gate so conditional fields (revealed
+ * only when a parent flag is set) can stay declarative.
+ */
+function Field({ editing, label, field, form, setF, errors = {},
+                 type = 'text', options = null, fullWidth = false,
+                 show = true, placeholder = '', hint = null }) {
+    if (! show) return null;
+    const raw = form[field];
+    const err = errors[field];
+
+    // Read mode — pure display.
+    if (! editing) {
+        let display;
+        if (type === 'boolean') {
+            display = raw === true || raw === 1 || raw === '1' || raw === 'true' ? 'Yes'
+                : (raw === false || raw === 0 || raw === '0' || raw === 'false') ? 'No'
+                : null;
+        } else if (type === 'date' && raw) {
+            try { display = new Date(raw).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short', year: 'numeric' }); }
+            catch { display = String(raw); }
+        } else {
+            display = raw === null || raw === undefined || raw === '' ? null : String(raw);
+        }
+        return <DataRow label={label} value={display} fullWidth={fullWidth} />;
+    }
+
+    // Edit mode — input.
+    const baseCls = `text-sm font-medium text-gray-900 bg-white px-3 py-2 rounded-lg border ${err ? 'border-red-400' : 'border-gray-300'} outline-none focus:border-gray-900 transition-colors`;
+
+    let input;
+    if (type === 'textarea') {
+        input = (
+            <textarea
+                value={raw ?? ''}
+                onChange={(e) => setF(field, e.target.value)}
+                placeholder={placeholder}
+                rows={3}
+                className={baseCls + ' resize-y min-h-[80px]'}
+            />
+        );
+    } else if (type === 'select') {
+        input = (
+            <select value={raw ?? ''} onChange={(e) => setF(field, e.target.value)} className={baseCls}>
+                <option value="">—</option>
+                {(options || []).map((o) => (
+                    <option key={typeof o === 'string' ? o : o.value} value={typeof o === 'string' ? o : o.value}>
+                        {typeof o === 'string' ? o : o.label}
+                    </option>
+                ))}
+            </select>
+        );
+    } else if (type === 'boolean') {
+        // Render boolean as a yes/no select so the empty option remains
+        // distinguishable from explicit "No" (tri-state on the wire).
+        input = (
+            <select
+                value={raw === true || raw === '1' || raw === 1 ? '1'
+                    : raw === false || raw === '0' || raw === 0 ? '0'
+                    : ''}
+                onChange={(e) => {
+                    const v = e.target.value;
+                    setF(field, v === '' ? null : v === '1');
+                }}
+                className={baseCls}
+            >
+                <option value="">—</option>
+                <option value="1">Yes</option>
+                <option value="0">No</option>
+            </select>
+        );
+    } else {
+        input = (
+            <input
+                type={type === 'date' && raw ? 'date' : type}
+                value={type === 'date' && raw ? String(raw).slice(0, 10) : raw ?? ''}
+                onChange={(e) => setF(field, e.target.value)}
+                placeholder={placeholder}
+                className={baseCls}
+            />
+        );
+    }
+
+    return (
+        <div className={`flex flex-col gap-1 ${fullWidth ? 'col-span-1 md:col-span-2' : ''}`}>
+            <span className="text-xs font-semibold text-gray-500 tracking-wide uppercase">{label}</span>
+            {input}
+            {hint && ! err && <span className="text-[11px] text-gray-400 italic">{hint}</span>}
+            {err && <span className="text-[11px] font-semibold text-red-600">{err}</span>}
+        </div>
+    );
+}
+
+// Maps a lead row's columns into the form snapshot for a given section.
+// Section keys (1-9) are kept stable so saving section 2 doesn't blow
+// away section 5's pending edits — even though the page enforces
+// one-section-at-a-time on the UX side.
+function snapshotForSection(lead, key) {
+    const d = (v) => (v ? String(v).slice(0, 10) : '');
+    switch (key) {
+        case 1: // Personal identity
+            return {
+                first_name: lead.first_name || '',
+                last_name: lead.last_name || '',
+                middle_name: lead.middle_name || '',
+                suffix: lead.suffix || '',
+                other_names: lead.other_names || '',
+                preferred_name: lead.preferred_name || '',
+                email: lead.email || '',
+                phone: lead.phone || '',
+                whatsapp: lead.whatsapp || '',
+                gender: lead.gender || '',
+                marital_status: lead.marital_status || '',
+                dob: d(lead.dob),
+                country_of_birth: lead.country_of_birth || '',
+                place_of_birth: lead.place_of_birth || '',
+                citizenship: lead.citizenship || '',
+                residence_city: lead.residence_city || '',
+                residence_country: lead.residence_country || '',
+                residence_address_line_1: lead.residence_address_line_1 || '',
+                residence_address_line_2: lead.residence_address_line_2 || '',
+                residence_address_postcode: lead.residence_address_postcode || '',
+                has_been_in_nz_continuously: lead.has_been_in_nz_continuously,
+                nz_continuous_residence_months: lead.nz_continuous_residence_months ?? '',
+            };
+        case 2: // Passport
+            return {
+                first_name: lead.first_name || '',
+                has_passport: lead.has_passport,
+                passport_number: lead.passport_number || '',
+                passport_issuing_country: lead.passport_issuing_country || '',
+                passport_issue_date: d(lead.passport_issue_date),
+                passport_expiry: d(lead.passport_expiry),
+            };
+        case 3: // Current NZ visa
+            return {
+                first_name: lead.first_name || '',
+                current_nz_visa_type: lead.current_nz_visa_type || '',
+                current_nz_visa_number: lead.current_nz_visa_number || '',
+                current_nz_visa_issued_date: d(lead.current_nz_visa_issued_date),
+                current_nz_visa_expiry_date: d(lead.current_nz_visa_expiry_date),
+                previous_nz_visa_type: lead.previous_nz_visa_type || '',
+            };
+        case 4: // Study plans
+            return {
+                first_name: lead.first_name || '',
+                preferred_course: lead.preferred_course || '',
+                preferred_qualification_level: lead.preferred_qualification_level || '',
+                preferred_city_of_study: lead.preferred_city_of_study || '',
+                preferred_intake: lead.preferred_intake || '',
+                target_institution: lead.target_institution || '',
+                english_test_type: lead.english_test_type || '',
+                english_test_overall_score: lead.english_test_overall_score ?? '',
+                english_test_listening: lead.english_test_listening ?? '',
+                english_test_reading: lead.english_test_reading ?? '',
+                english_test_writing: lead.english_test_writing ?? '',
+                english_test_speaking: lead.english_test_speaking ?? '',
+                english_test_date: d(lead.english_test_date),
+            };
+        case 5: // Financial
+            return {
+                first_name: lead.first_name || '',
+                funding_source: lead.funding_source || '',
+                estimated_total_cost_nzd: lead.estimated_total_cost_nzd ?? '',
+                available_funds_nzd: lead.available_funds_nzd ?? '',
+                annual_income_nzd: lead.annual_income_nzd ?? '',
+                annual_income_currency: lead.annual_income_currency || 'NZD',
+                supports_partner_or_dependents: lead.supports_partner_or_dependents,
+                has_property_in_home_country: lead.has_property_in_home_country,
+                bank_funds_evidence_provided: lead.bank_funds_evidence_provided,
+            };
+        case 6: // Employment
+            return {
+                first_name: lead.first_name || '',
+                employment_type: lead.employment_type || '',
+                current_employer_name: lead.current_employer_name || '',
+                current_position_title: lead.current_position_title || '',
+                current_employer_country: lead.current_employer_country || '',
+                current_employer_phone: lead.current_employer_phone || '',
+                current_employer_email: lead.current_employer_email || '',
+                current_employment_start_date: d(lead.current_employment_start_date),
+                current_salary_nzd: lead.current_salary_nzd ?? '',
+                years_of_relevant_experience: lead.years_of_relevant_experience ?? '',
+                has_anzsco_listed_role: lead.has_anzsco_listed_role,
+                anzsco_code: lead.anzsco_code || '',
+                has_nz_professional_registration: lead.has_nz_professional_registration,
+                nz_professional_registration_body: lead.nz_professional_registration_body || '',
+            };
+        case 7: // Education background
+            return {
+                first_name: lead.first_name || '',
+                highest_qualification: lead.highest_qualification || '',
+                highest_qualification_field: lead.highest_qualification_field || '',
+                highest_qualification_country: lead.highest_qualification_country || '',
+                highest_qualification_year_completed: lead.highest_qualification_year_completed ?? '',
+                has_nzqa_assessment: lead.has_nzqa_assessment,
+                nzqa_assessment_level: lead.nzqa_assessment_level || '',
+            };
+        case 8: // Family
+            return {
+                first_name: lead.first_name || '',
+                has_children: lead.has_children,
+                number_of_children: lead.number_of_children ?? '',
+                dependent_children_notes: lead.dependent_children_notes || '',
+                has_dependent_partner: lead.has_dependent_partner,
+                partner_in_nz: lead.partner_in_nz,
+                intends_to_bring_family: lead.intends_to_bring_family,
+            };
+        case 9: // Health & character
+            return {
+                first_name: lead.first_name || '',
+                has_health_disclosure: lead.has_health_disclosure,
+                health_disclosure_notes: lead.health_disclosure_notes || '',
+                has_character_disclosure: lead.has_character_disclosure,
+                character_disclosure_notes: lead.character_disclosure_notes || '',
+                has_been_declined_visa: lead.has_been_declined_visa,
+                declined_visa_details: lead.declined_visa_details || '',
+                has_criminal_record: lead.has_criminal_record,
+                criminal_record_details: lead.criminal_record_details || '',
+                meets_184_day_rule_two_years: lead.meets_184_day_rule_two_years,
+            };
+        default:
+            return { first_name: lead.first_name || '' };
+    }
+}
+
+// Wrapper grid — used inside every section's render-prop body.
+function FieldGrid({ children, cols = 2 }) {
+    const colsCls = cols === 1 ? 'grid-cols-1' : 'grid-cols-1 md:grid-cols-2';
+    return <div className={`grid ${colsCls} gap-x-6 gap-y-5`}>{children}</div>;
+}
 
 function ProfileGrid({ bag, fields }) {
     return (
@@ -1997,14 +2321,9 @@ function SectionLabel({ children }) {
     );
 }
 
-function Field({ label, children }) {
-    return (
-        <label className="block">
-            <span className="block text-[11px] font-semibold text-gray-600 mb-1.5">{label}</span>
-            {children}
-        </label>
-    );
-}
+// Legacy <Field label children/> helper removed — replaced by the
+// editable <Field/> primitive higher in the file (used across the 9
+// Personal Info section cards). No callsites left for the old shape.
 
 function ActivityLogPanel({ activity = [] }) {
     if (activity.length === 0) {
@@ -2713,6 +3032,65 @@ function TagsPanel({ leadId, tags, allTags }) {
 
 // ── Documents tab — checklist of required NZ application docs ────────────
 
+// Flat checklist table — every required document as a row: name | status.
+// Reads the lead's per-item status (or "Submitted" when files exist / else
+// "Pending") and links each row into its section folder for upload/review.
+function ChecklistTable({ state = {}, checklistFiles = {}, onOpenSection }) {
+    return (
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+            <table className="w-full text-left">
+                <thead>
+                    <tr className="bg-gray-50/60 border-b border-gray-100 text-[10px] font-bold uppercase tracking-widest text-gray-500">
+                        <th className="px-6 py-3">Document Name</th>
+                        <th className="px-6 py-3 w-44">Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {CHECKLIST.map((section) => (
+                        <React.Fragment key={section.key}>
+                            <tr className="bg-gray-50/40 border-b border-gray-100">
+                                <td colSpan={2} className="px-6 py-2 text-[11px] font-bold uppercase tracking-wider text-gray-600">
+                                    {section.section}
+                                </td>
+                            </tr>
+                            {section.items.map((it) => {
+                                const status = state[it.id]?.status;
+                                const files = checklistFiles[it.id]?.length || 0;
+                                const label = status ? STATUS_LABEL[status] : (files > 0 ? 'Submitted' : 'Pending');
+                                const chip = status
+                                    ? STATUS_CHIP[status]
+                                    : (files > 0 ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-gray-100 text-gray-500 border-gray-200');
+                                return (
+                                    <tr
+                                        key={it.id}
+                                        onClick={() => onOpenSection(section.section)}
+                                        className="border-b border-gray-50 hover:bg-emerald-50/30 cursor-pointer transition-colors"
+                                    >
+                                        <td className="px-6 py-3">
+                                            <div className="flex items-center gap-2.5">
+                                                <FileText size={14} className="text-gray-400 shrink-0" />
+                                                <span className="text-sm text-gray-800">{it.name}</span>
+                                                {files > 0 && (
+                                                    <span className="text-[10px] text-gray-400 tabular-nums">· {files} file{files === 1 ? '' : 's'}</span>
+                                                )}
+                                            </div>
+                                        </td>
+                                        <td className="px-6 py-3">
+                                            <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] font-medium ${chip}`}>
+                                                {label}
+                                            </span>
+                                        </td>
+                                    </tr>
+                                );
+                            })}
+                        </React.Fragment>
+                    ))}
+                </tbody>
+            </table>
+        </div>
+    );
+}
+
 function DocumentsPanel({ lead, checklistFiles = {}, currentUser = null }) {
     // The lead's saved checklist state lives on the backend in a JSON column
     // keyed by item id. We keep a local copy here so edits feel instant and
@@ -2815,18 +3193,11 @@ function DocumentsPanel({ lead, checklistFiles = {}, currentUser = null }) {
             {/* Either the folder grid (overview) or one folder's contents
                 (drill-in view) — toggled by openFolder state. */}
             {openFolder === null ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                    {CHECKLIST.map((section, idx) => (
-                        <FolderCard
-                            key={section.section}
-                            section={section}
-                            stats={sectionStats(section, state, checklistFiles)}
-                            verification={verifications[section.key]}
-                            onClick={() => setOpenFolder(section.section)}
-                            paletteIndex={idx}
-                        />
-                    ))}
-                </div>
+                <ChecklistTable
+                    state={state}
+                    checklistFiles={checklistFiles}
+                    onOpenSection={setOpenFolder}
+                />
             ) : (
                 <FolderDetail
                     section={CHECKLIST.find((s) => s.section === openFolder)}

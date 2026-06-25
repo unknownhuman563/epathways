@@ -3,7 +3,7 @@ import { usePage } from "@inertiajs/react";
 import {
     LayoutDashboard, ClipboardCheck, UserSquare2, Globe, FolderOpen,
     Calendar, FileBadge, CalendarDays, FileText, ListChecks, LineChart,
-    User, Bell, CheckSquare,
+    User, Bell, CheckSquare, Ticket,
 } from "lucide-react";
 
 export default function ImmigrationLayout({ children }) {
@@ -32,6 +32,7 @@ export default function ImmigrationLayout({ children }) {
         { name: "Account", section: true },
         { name: "My Profile",    href: "/portal/immigration/profile",       icon: <User size={20} /> },
         { name: "Notifications", href: "/portal/immigration/notifications", icon: <Bell size={20} />, badge: badges.notifications_unread, badgeTone: "warning" },
+        { name: "My Tickets",    href: "/portal/tickets",                  icon: <Ticket size={20} /> },
     ];
 
     return (

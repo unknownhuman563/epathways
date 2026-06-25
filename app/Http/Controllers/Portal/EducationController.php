@@ -82,12 +82,16 @@ class EducationController extends Controller
     public function leads()
     {
         try {
-            $leads = Lead::with([
-                'studyPlans',
-                'event',
-                'portalUser:id,lead_id,last_login_at',
-                'notes' => fn ($q) => $q->latest(),
-            ])
+            // Pipeline only — once a lead is converted (to a student / case /
+            // English / accommodation) it drops off the Leads list and lives
+            // on its department page instead.
+            $leads = Lead::inLeadPipeline()
+                ->with([
+                    'studyPlans',
+                    'event',
+                    'portalUser:id,lead_id,last_login_at',
+                    'notes' => fn ($q) => $q->latest(),
+                ])
                 ->withCount(['notes', 'documents'])
                 ->withCount(['tasks as tasks_open_count' => fn ($q) => $q->where('completed', false)])
                 ->latest()->get();
@@ -813,7 +817,6 @@ class EducationController extends Controller
         return $points;
     }
     public function profile()           { return inertia('portal/education/Profile',  ['portal' => 'education', 'user' => auth()->user()->only(['id','name','email','role'])]); }
-    public function notifications()     { return inertia('portal/education/Notifications', ['portal' => 'education']); }
 
     /**
      * Tasks & follow-ups across every lead, bucketed Today / This Week /

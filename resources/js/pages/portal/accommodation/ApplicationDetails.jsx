@@ -1,9 +1,11 @@
 import { useState } from "react";
 import { Head, Link, router, useForm } from "@inertiajs/react";
-import { ArrowLeft, Trash2, UserCog, Home, StickyNote, History, UserCheck, X } from "lucide-react";
+import { ArrowLeft, Trash2, UserCog, Home, StickyNote, History, UserCheck, X, Mail } from "lucide-react";
 import TransitionModal from "@/components/onboarding/TransitionModal";
 import ConvertTenantModal from "@/components/onboarding/ConvertTenantModal";
+import StageEmailModal from "@/components/onboarding/StageEmailModal";
 import { STATUS_STYLES, STATUS_DOT, statusLabel, tempBadge, daysStyle, STAGE_INPUTS } from "@/lib/onboardingMeta";
+import { hasStageEmail } from "@/lib/stageEmails";
 
 const fmtDate = (v) => { if (!v) return "—"; const d = new Date(v); return isNaN(d.getTime()) ? "—" : d.toLocaleDateString(); };
 const fmtDateTime = (v) => { if (!v) return "—"; const d = new Date(v); return isNaN(d.getTime()) ? "—" : d.toLocaleString(); };
@@ -41,6 +43,7 @@ function Panel({ title, icon, action, children }) {
 export default function ApplicationDetails({ submission, options = {}, allowedTransitions = [] }) {
     const [modal, setModal] = useState(null);          // 'assign' | 'link' | 'note' | 'convert'
     const [transitionTo, setTransitionTo] = useState(null);
+    const [emailTarget, setEmailTarget] = useState(null);  // stage with a static email preview
     const stages = options.stages ?? [];
     const currentIdx = stages.indexOf(submission.status);
     const isTerminal = (options.terminals ?? []).includes(submission.status);
@@ -48,6 +51,7 @@ export default function ApplicationDetails({ submission, options = {}, allowedTr
 
     const go = (target) => {
         if (target === "moved_in") { setModal("convert"); return; }
+        if (hasStageEmail(target)) { setEmailTarget(target); return; }
         if (STAGE_INPUTS[target]) { setTransitionTo(target); return; }
         router.patch(`/portal/accommodation/applications/${submission.id}/status`, { status: target }, { preserveScroll: true });
     };
@@ -60,9 +64,11 @@ export default function ApplicationDetails({ submission, options = {}, allowedTr
 
     const timeline = [
         ["Submitted", submission.created_at],
+        ["Viewing booking email sent", submission.viewing_email_sent_at],
         ["Viewing scheduled", submission.viewing_scheduled_at],
         ["Viewing completed", submission.viewing_completed_at],
-        ["Pre-tenancy form sent", submission.pre_tenancy_form_sent_at],
+        ["Post-viewing follow-up", submission.post_viewing_followup_at],
+        ["Pre-tenancy form email sent", submission.pre_tenancy_form_sent_at],
         ["Pre-tenancy form completed", submission.pre_tenancy_form_completed_at],
         ["Agreement sent", submission.tenancy_agreement_sent_at],
         ["Agreement signed", submission.tenancy_agreement_signed_at],
@@ -144,6 +150,11 @@ export default function ApplicationDetails({ submission, options = {}, allowedTr
                 })}
                 {canConvert && !allowedTransitions.includes("moved_in") && (
                     <button onClick={() => setModal("convert")} className="rounded-full bg-[#1F5A8B] px-4 py-2 text-sm font-semibold text-white hover:bg-[#184A73]">Convert to Tenant</button>
+                )}
+                {(submission.status === "moved_in" || submission.status === "payment_confirmed") && (
+                    <button onClick={() => setEmailTarget("moved_in")} className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50">
+                        <Mail size={14} /> Move-in welcome email
+                    </button>
                 )}
             </div>
 
@@ -247,6 +258,7 @@ export default function ApplicationDetails({ submission, options = {}, allowedTr
             {/* Modals */}
             {transitionTo && <TransitionModal submission={submission} target={transitionTo} onClose={() => setTransitionTo(null)} />}
             {modal === "convert" && <ConvertTenantModal submission={submission} properties={options.properties ?? []} contractTypes={options.contract_types ?? []} onClose={() => setModal(null)} />}
+            {emailTarget && <StageEmailModal submission={submission} target={emailTarget} onClose={() => setEmailTarget(null)} />}
             {modal === "assign" && <AssignModal submission={submission} team={options.team ?? []} onClose={() => setModal(null)} />}
             {modal === "link" && <LinkModal submission={submission} properties={options.properties ?? []} onClose={() => setModal(null)} />}
             {modal === "note" && <NoteModal submission={submission} onClose={() => setModal(null)} />}

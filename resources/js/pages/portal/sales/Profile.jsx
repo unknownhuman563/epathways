@@ -1,6 +1,7 @@
 import { Head } from "@inertiajs/react";
 import { User, Mail, Briefcase, ShieldCheck, Lock } from "lucide-react";
 import PortalPageHeader from "@/components/portal/PortalPageHeader";
+import AvatarUploader from "@/components/AvatarUploader";
 
 export default function SalesProfile({ user }) {
     const initial = (user?.name || "?").slice(0, 1).toUpperCase();
@@ -15,9 +16,7 @@ export default function SalesProfile({ user }) {
 
             <section className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
                 <div className="p-6 flex items-center gap-5">
-                    <div className="w-16 h-16 rounded-2xl bg-blue-600 text-white flex items-center justify-center text-2xl font-bold">
-                        {initial}
-                    </div>
+                    <AvatarUploader accent="bg-blue-600" />
                     <div className="min-w-0">
                         <h2 className="text-xl font-medium text-gray-900 tracking-tight">{user?.name || "—"}</h2>
                         <p className="text-sm text-gray-500 mt-0.5">{user?.email || "—"}</p>

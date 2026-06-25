@@ -24,7 +24,9 @@ function VisaIcon({ name, size = 18, className = '' }) {
     return <Cmp size={size} className={className} />;
 }
 
-export default function VisaTypes({ visaTypes, permissions }) {
+export default function VisaTypes({ visaTypes = [], permissions = {} }) {
+    const rows = Array.isArray(visaTypes) ? visaTypes : [];
+    const perms = permissions ?? {};
     const [editing, setEditing] = useState(null);
     const [creating, setCreating] = useState(false);
     const [deleting, setDeleting] = useState(null);
@@ -46,7 +48,7 @@ export default function VisaTypes({ visaTypes, permissions }) {
                             Price changes require a reason and are audited.
                         </p>
                     </div>
-                    {permissions.canCreate && (
+                    {perms.canCreate && (
                         <button
                             type="button"
                             onClick={() => setCreating(true)}
@@ -58,14 +60,14 @@ export default function VisaTypes({ visaTypes, permissions }) {
                 </header>
 
                 <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-                    {visaTypes.length === 0 ? (
+                    {rows.length === 0 ? (
                         <div className="p-12 text-center">
                             <p className="text-sm font-semibold text-gray-700">No visa types yet</p>
                             <p className="text-xs text-gray-500 mt-1">Seed VisaTypeSeeder to populate the default set.</p>
                         </div>
                     ) : (
                         <ul className="divide-y divide-gray-50">
-                            {visaTypes.map((v) => (
+                            {rows.map((v) => (
                                 <li key={v.id} className="px-6 py-4 flex items-center gap-4 hover:bg-gray-50/40">
                                     <div className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center flex-shrink-0">
                                         <VisaIcon name={v.icon} className="text-gray-700" />
@@ -86,7 +88,7 @@ export default function VisaTypes({ visaTypes, permissions }) {
                                         <p className="text-sm font-bold text-gray-900">${fmt(v.consultation_price_nzd)} NZD</p>
                                         <p className="text-[11px] text-gray-400">{v.consultation_duration_minutes}min</p>
                                     </div>
-                                    {permissions.canUpdate && (
+                                    {perms.canUpdate && (
                                         <button
                                             type="button"
                                             onClick={() => setEditing(v)}
@@ -95,7 +97,7 @@ export default function VisaTypes({ visaTypes, permissions }) {
                                             <Pencil size={13} /> Edit
                                         </button>
                                     )}
-                                    {permissions.canDelete && (
+                                    {perms.canDelete && (
                                         <button
                                             type="button"
                                             onClick={() => setDeleting(v)}
@@ -116,7 +118,7 @@ export default function VisaTypes({ visaTypes, permissions }) {
                 <EditModal
                     visaType={editing}
                     onClose={() => setEditing(null)}
-                    canViewHistory={permissions.canViewHistory}
+                    canViewHistory={perms.canViewHistory}
                 />
             )}
             {creating && (

@@ -23,6 +23,7 @@ class Booking extends Model
         'appointment_date',
         'appointment_time',
         'resident_intake_id',
+        'lead_id',
     ];
 
     protected $casts = [
