@@ -698,6 +698,12 @@ Route::middleware(['auth'])->group(function () {
 
             // WORK
             Route::get('/assessments', [ImmigrationController::class, 'assessments'])->name('assessments');
+            // Per-intake detail page — covers Work / Student / Visitor.
+            // Resident intakes use the dedicated /admin/immigration/
+            // resident-intakes/{id} route (richer document handling).
+            Route::get('/intakes/{type}/{id}', [ImmigrationController::class, 'showIntake'])
+                ->where(['type' => 'work|student|visitor', 'id' => '[0-9]+'])
+                ->name('intakes.show');
             // Convert a visa-interest submission to an immigration case.
             // The {id} route param is Assessment.id (post-Phase-B
             // canonical). The controller also accepts a legacy

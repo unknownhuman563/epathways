@@ -634,9 +634,7 @@ class ImmigrationController extends Controller
                         && ! $isConverted,
                     'detail_url'   => $visaType === 'resident'
                         ? "/admin/immigration/resident-intakes/{$intake->id}"
-                        : ($email !== ''
-                            ? "/portal/immigration/leads?search=" . urlencode($intake->email ?? '')
-                            : null),
+                        : "/portal/immigration/intakes/{$visaType}/{$intake->id}",
                     // Three-step lifecycle: Submitted → Triaged →
                     // Converted to Case. Pay/Book are deliberately
                     // omitted while payment intake stays disabled —
@@ -677,6 +675,69 @@ class ImmigrationController extends Controller
             Log::error('Immigration assessments page failed', ['error' => $e->getMessage()]);
             return inertia('portal/immigration/Assessments', ['intakes' => []]);
         }
+    }
+
+    /**
+     * Generic intake viewer for the Work / Student / Visitor visa types.
+     * Resident intakes already have their own dedicated detail page
+     * (ResidentIntakeController@adminShow) — this method handles the
+     * other three so the Assessments page rows are clickable across
+     * every visa type. The frontend reads the intake row + its paired
+     * Assessment + Booking and renders a clean property-row layout.
+     */
+    public function showIntake(string $type, int $id)
+    {
+        $modelMap = [
+            'work'    => \App\Models\WorkIntake::class,
+            'student' => \App\Models\StudentIntake::class,
+            'visitor' => \App\Models\VisitorIntake::class,
+        ];
+        if (! isset($modelMap[$type])) {
+            abort(404, 'Unknown intake type.');
+        }
+
+        $class  = $modelMap[$type];
+        $intake = $class::findOrFail($id);
+
+        // Paired Assessment (Pay/Book funnel state) + Booking if any.
+        $assessment = \App\Models\Assessment::with('booking')
+            ->where('intakeable_type', $class)
+            ->where('intakeable_id', $intake->id)
+            ->first();
+
+        // If the applicant's email matches a Lead already converted to
+        // an immigration case, link to it so the adviser can jump
+        // straight to the working file instead of re-converting.
+        $email  = strtolower(trim((string) ($intake->email ?? '')));
+        $lead   = null;
+        if ($email !== '') {
+            $lead = Lead::where('is_immigration_case', true)
+                ->whereRaw('LOWER(email) = ?', [$email])
+                ->first(['id', 'lead_id', 'first_name', 'last_name', 'status']);
+        }
+
+        return inertia('portal/immigration/IntakeDetails', [
+            'type'   => $type,
+            'intake' => $intake->toArray(),
+            'assessment' => $assessment ? [
+                'id'      => $assessment->id,
+                'status'  => $assessment->status,
+                'token'   => $assessment->token,
+                'paid_at' => $assessment->paid_at,
+                'booking' => $assessment->booking ? [
+                    'id'               => $assessment->booking->id,
+                    'status'           => $assessment->booking->status,
+                    'appointment_date' => $assessment->booking->appointment_date,
+                    'appointment_time' => $assessment->booking->appointment_time,
+                ] : null,
+            ] : null,
+            'linkedLead' => $lead ? [
+                'id'      => $lead->id,
+                'lead_id' => $lead->lead_id,
+                'name'    => trim("{$lead->first_name} {$lead->last_name}") ?: 'Unknown',
+                'status'  => $lead->status,
+            ] : null,
+        ]);
     }
 
     /** Documents — Queue (pending / stale / rejected) + Folders per case. */

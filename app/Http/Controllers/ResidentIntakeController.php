@@ -300,8 +300,55 @@ class ResidentIntakeController extends Controller
     public function adminShow($id)
     {
         $intake = ResidentIntake::findOrFail($id);
+
+        // Detect if the applicant's email already matches a Lead that
+        // has been converted to an immigration case — the unified
+        // detail page surfaces a "Converted to case" shortcut in the
+        // sidebar when so.
+        $email = strtolower(trim((string) ($intake->email ?? '')));
+        $lead  = null;
+        if ($email !== '') {
+            $lead = \App\Models\Lead::where('is_immigration_case', true)
+                ->whereRaw('LOWER(email) = ?', [$email])
+                ->first(['id', 'lead_id', 'first_name', 'last_name', 'status']);
+        }
+
+        // Paired Assessment (Pay → Book funnel state) + its Booking.
+        $assessment = \App\Models\Assessment::with('booking')
+            ->where('intakeable_type', ResidentIntake::class)
+            ->where('intakeable_id', $intake->id)
+            ->first();
+
         return inertia($this->immigrationPagePath('ResidentIntakeDetails'), [
-            'intake' => $intake,
+            'type'   => 'resident',
+            'intake' => $intake->toArray(),
+            // Documents payload — the unified DocumentsCard reads
+            // `labels` (chrome), `ticked` (checkbox state), `files`
+            // (uploaded files keyed by doc kind), and `other_label`.
+            'documents' => [
+                'labels'      => self::DOCUMENT_LABELS,
+                'ticked'      => $intake->documents ?? (object) [],
+                'files'       => $intake->document_files ?? (object) [],
+                'other_label' => 'Other supporting documents',
+            ],
+            'assessment' => $assessment ? [
+                'id'      => $assessment->id,
+                'status'  => $assessment->status,
+                'token'   => $assessment->token,
+                'paid_at' => $assessment->paid_at,
+                'booking' => $assessment->booking ? [
+                    'id'               => $assessment->booking->id,
+                    'status'           => $assessment->booking->status,
+                    'appointment_date' => $assessment->booking->appointment_date,
+                    'appointment_time' => $assessment->booking->appointment_time,
+                ] : null,
+            ] : null,
+            'linkedLead' => $lead ? [
+                'id'      => $lead->id,
+                'lead_id' => $lead->lead_id,
+                'name'    => trim("{$lead->first_name} {$lead->last_name}") ?: 'Unknown',
+                'status'  => $lead->status,
+            ] : null,
         ]);
     }
 
