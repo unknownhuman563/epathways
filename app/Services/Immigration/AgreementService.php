@@ -82,9 +82,16 @@ class AgreementService
             throw new \DomainException("Only draft agreements can be sent (current status: {$agreement->status}).");
         }
 
-        $agreement->tracker_signing_token = Str::random(48);
-        $agreement->status                = Agreement::STATUS_SENT;
-        $agreement->sent_at               = now();
+        // Idempotency: only mint a token if one isn't already present.
+        // In practice the status guard above already protects against the
+        // common double-click case (status flips to 'sent' on first call,
+        // so the second call's DRAFT check throws). Belt-and-braces in
+        // case a future caller relaxes the status check.
+        if (empty($agreement->tracker_signing_token)) {
+            $agreement->tracker_signing_token = Str::random(48);
+        }
+        $agreement->status  = Agreement::STATUS_SENT;
+        $agreement->sent_at = now();
         $agreement->save();
 
         return $agreement;
