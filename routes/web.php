@@ -180,6 +180,14 @@ Route::middleware('throttle:tracker')->group(function () {
     Route::post('/track/{code}/document', [LeadTrackingController::class, 'uploadDoc'])->name('track.upload');
     Route::post('/track/{code}/document/{doc}', [LeadTrackingController::class, 'updateDoc'])->name('track.doc.update');
     Route::delete('/track/{code}/document/{doc}', [LeadTrackingController::class, 'deleteDoc'])->name('track.doc.delete');
+
+    // Build 11.D Phase 3 — Agreement signing. tracker_signing_token in the
+    // URL is the bearer credential for the agreement; the controller
+    // validates that it belongs to the lead resolved from {code}, so a
+    // valid code paired with a guessed token still 404s.
+    Route::get('/track/{code}/agreements/{token}/sign',     [\App\Http\Controllers\Tracker\TrackerAgreementController::class, 'showSigning'])->name('track.agreements.sign.show');
+    Route::post('/track/{code}/agreements/{token}/sign',    [\App\Http\Controllers\Tracker\TrackerAgreementController::class, 'sign'])->name('track.agreements.sign');
+    Route::get('/track/{code}/agreements/{token}/signed',   [\App\Http\Controllers\Tracker\TrackerAgreementController::class, 'signedConfirmation'])->name('track.agreements.signed');
 });
 
 // Public Registration & Assessment Routes
