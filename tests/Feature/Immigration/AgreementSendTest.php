@@ -116,4 +116,31 @@ class AgreementSendTest extends TestCase
             ->postJson("/portal/immigration/cases/{$case->id}/agreements/{$agreement->id}/send")
             ->assertForbidden();
     }
+
+    /**
+     * Idempotency contract: a second send() on the same agreement must
+     * 422 (the natural status-guard outcome — already 'sent', no longer
+     * 'draft') and MUST NOT regenerate the tracker_signing_token. The
+     * token is single-use semantically; rotating it would break the URL
+     * the client already received.
+     */
+    public function test_send_called_twice_does_not_regenerate_token(): void
+    {
+        $case      = $this->makeCase();
+        $agreement = $this->makeAgreement($case, 'draft');
+
+        $this->actingAs(User::factory()->create(['role' => 'immigration']))
+            ->postJson("/portal/immigration/cases/{$case->id}/agreements/{$agreement->id}/send")
+            ->assertOk();
+
+        $firstToken = $agreement->fresh()->tracker_signing_token;
+        $this->assertNotNull($firstToken);
+
+        // Second send: status is now 'sent' (not 'draft'), service rejects.
+        $this->actingAs(User::factory()->create(['role' => 'immigration']))
+            ->postJson("/portal/immigration/cases/{$case->id}/agreements/{$agreement->id}/send")
+            ->assertStatus(422);
+
+        $this->assertSame($firstToken, $agreement->fresh()->tracker_signing_token);
+    }
 }
