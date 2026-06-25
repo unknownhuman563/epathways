@@ -24,6 +24,7 @@ export default function TrackingPage({
     lead = null,
     info = null,
     documents = [],
+    agreements = [],
     timeline = [],
     visa = null,
     error = null,
@@ -185,6 +186,11 @@ export default function TrackingPage({
                                             onEdit={setEditingDoc}
                                             onDelete={setDeletingDoc}
                                         />
+                                        {agreements.length > 0 && (
+                                            <div className="mt-6">
+                                                <AgreementsPanel agreements={agreements} />
+                                            </div>
+                                        )}
                                     </div>
                                 )}
                                 {activeTab === 'messages' && <MessagesTabStub />}
@@ -2116,4 +2122,56 @@ function formatStamp(iso) {
     } catch {
         return iso;
     }
+}
+
+// Build 11.D Phase 3 — Agreements awaiting (or already done) on the tracker.
+// Sent / viewed agreements get a "View & Sign" CTA; signed ones show muted
+// with a "View signed copy" link so the client can re-read what they signed.
+function AgreementsPanel({ agreements = [] }) {
+    if (! agreements.length) return null;
+
+    return (
+        <section>
+            <header className="mb-2">
+                <h3 className="text-sm font-bold text-gray-900">Agreements</h3>
+                <p className="text-[11px] text-gray-500 mt-0.5">
+                    Consultancy agreements your consultant has shared with you.
+                </p>
+            </header>
+            <ul className="space-y-2">
+                {agreements.map((a) => {
+                    const isSigned = a.status === 'signed';
+                    return (
+                        <li
+                            key={a.id}
+                            className={`flex items-start justify-between gap-3 px-4 py-3 rounded-lg border ${
+                                isSigned ? 'border-gray-100 bg-gray-50/60' : 'border-gray-200 bg-white'
+                            }`}
+                        >
+                            <div className="min-w-0">
+                                <p className={`text-sm font-semibold ${isSigned ? 'text-gray-600' : 'text-gray-900'}`}>
+                                    {a.title}
+                                </p>
+                                <p className="text-[11px] text-gray-500 mt-0.5">
+                                    {isSigned
+                                        ? <>Signed {formatStamp(a.signed_at)}</>
+                                        : <>Sent {formatStamp(a.sent_at)} · Awaiting your signature</>}
+                                </p>
+                            </div>
+                            <a
+                                href={isSigned ? a.signed_url : a.sign_url}
+                                className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-md text-[11px] font-semibold transition-colors flex-shrink-0 ${
+                                    isSigned
+                                        ? 'border border-gray-200 bg-white text-gray-700 hover:bg-gray-100'
+                                        : 'bg-gray-900 text-white hover:bg-black'
+                                }`}
+                            >
+                                {isSigned ? 'View signed copy' : 'View & sign'} →
+                            </a>
+                        </li>
+                    );
+                })}
+            </ul>
+        </section>
+    );
 }
