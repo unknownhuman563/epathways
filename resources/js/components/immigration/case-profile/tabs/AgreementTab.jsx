@@ -204,6 +204,22 @@ function AgreementCard({ agreement: a, lead, busy, onSend, onVoid }) {
 const fmtDateTime = (iso) =>
     iso ? new Date(iso).toLocaleString("en-NZ", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "—";
 
+// CSRF: prefer the XSRF-TOKEN cookie (Laravel rotates it on every response,
+// so it stays fresh across long-lived SPA sessions). Fall back to the meta
+// tag rendered by app.blade.php for the first-paint case. The cookie value
+// is URL-encoded; the X-XSRF-TOKEN header expects the decoded form and
+// Laravel's VerifyCsrfToken middleware decrypts it.
+function csrfHeaders() {
+    const cookie = document.cookie
+        .split("; ")
+        .find((row) => row.startsWith("XSRF-TOKEN="));
+    const xsrf = cookie ? decodeURIComponent(cookie.split("=")[1]) : null;
+    const meta = document.querySelector('meta[name="csrf-token"]')?.getAttribute("content") || "";
+    return xsrf
+        ? { "X-XSRF-TOKEN": xsrf, "X-CSRF-TOKEN": meta }
+        : { "X-CSRF-TOKEN": meta };
+}
+
 async function postJson(url, body = {}) {
     const res = await fetch(url, {
         method: "POST",
@@ -212,7 +228,7 @@ async function postJson(url, body = {}) {
             "Content-Type": "application/json",
             "Accept": "application/json",
             "X-Requested-With": "XMLHttpRequest",
-            "X-CSRF-TOKEN": document.querySelector('meta[name="csrf-token"]')?.getAttribute("content") || "",
+            ...csrfHeaders(),
         },
         body: JSON.stringify(body),
     });

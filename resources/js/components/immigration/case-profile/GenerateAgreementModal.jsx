@@ -90,7 +90,7 @@ export default function GenerateAgreementModal({ lead, onClose, onGenerated }) {
                     "Content-Type": "application/json",
                     "Accept": "application/json",
                     "X-Requested-With": "XMLHttpRequest",
-                    "X-CSRF-TOKEN": document.querySelector('meta[name="csrf-token"]')?.getAttribute("content") || "",
+                    ...csrfHeaders(),
                 },
                 body: JSON.stringify({
                     agreement_template_id: selectedTemplate.id,
@@ -309,3 +309,17 @@ function PreviewStep({ content }) {
 
 const prettyLabel = (key) =>
     key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+
+// CSRF: prefer the XSRF-TOKEN cookie (Laravel keeps it fresh on every
+// response) and fall back to the meta tag from app.blade.php. See the
+// matching helper in AgreementTab.jsx for the longer explanation.
+function csrfHeaders() {
+    const cookie = document.cookie
+        .split("; ")
+        .find((row) => row.startsWith("XSRF-TOKEN="));
+    const xsrf = cookie ? decodeURIComponent(cookie.split("=")[1]) : null;
+    const meta = document.querySelector('meta[name="csrf-token"]')?.getAttribute("content") || "";
+    return xsrf
+        ? { "X-XSRF-TOKEN": xsrf, "X-CSRF-TOKEN": meta }
+        : { "X-CSRF-TOKEN": meta };
+}

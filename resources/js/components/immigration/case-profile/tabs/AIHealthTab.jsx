@@ -1,6 +1,20 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Sparkles, RefreshCw } from "lucide-react";
 import CaseHealthBadge from "@/components/ai/CaseHealthBadge";
+
+// CSRF: prefer XSRF-TOKEN cookie (kept fresh by Laravel) and fall back to
+// the meta tag. The meta tag in app.blade.php is stamped at first paint
+// and goes stale after session rotation, hence the cookie-first preference.
+function csrfHeaders() {
+    const cookie = document.cookie
+        .split("; ")
+        .find((row) => row.startsWith("XSRF-TOKEN="));
+    const xsrf = cookie ? decodeURIComponent(cookie.split("=")[1]) : null;
+    const meta = document.querySelector('meta[name="csrf-token"]')?.getAttribute("content") || "";
+    return xsrf
+        ? { "X-XSRF-TOKEN": xsrf, "X-CSRF-TOKEN": meta }
+        : { "X-CSRF-TOKEN": meta };
+}
 
 // Build 10's CaseHealthBadge already drives the AI case-health UI. This
 // tab embeds it plus a Re-analyze action that hits the existing refresh
@@ -20,7 +34,7 @@ export default function AIHealthTab({ lead }) {
                 method: "POST",
                 credentials: "same-origin",
                 headers: {
-                    "X-CSRF-TOKEN": document.querySelector('meta[name="csrf-token"]')?.getAttribute("content") || "",
+                    ...csrfHeaders(),
                     "Accept": "application/json",
                 },
             });
