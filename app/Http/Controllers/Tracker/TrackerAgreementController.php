@@ -95,6 +95,30 @@ class TrackerAgreementController extends Controller
         return redirect("/track/{$code}/agreements/{$token}/signed");
     }
 
+    /**
+     * GET /track/{code}/agreements/{token}/view — stream the PDF inline.
+     *
+     * Prefers the signed PDF (with embedded signature audit block) when
+     * present, falls back to the draft PDF otherwise. Bearer-credentialed
+     * by the same code+token pair as the signing flow; draft/voided/
+     * expired agreements never resolve here.
+     */
+    public function viewPdf(string $code, string $token)
+    {
+        [, $agreement] = $this->resolveLeadAndAgreement($code, $token);
+
+        $path = $agreement->signed_pdf_path ?: $agreement->pdf_path;
+        abort_unless($path && Storage::disk('local')->exists($path), 404, 'PDF not found.');
+
+        $safeTitle = preg_replace('/[^A-Za-z0-9]+/', '_', (string) $agreement->title) ?: 'agreement';
+        $suffix    = $agreement->signed_pdf_path ? '-signed' : '';
+
+        return response()->file(Storage::disk('local')->path($path), [
+            'Content-Type'        => 'application/pdf',
+            'Content-Disposition' => 'inline; filename="' . $safeTitle . $suffix . '.pdf"',
+        ]);
+    }
+
     /** GET /track/{code}/agreements/{token}/signed — confirmation. */
     public function signedConfirmation(string $code, string $token)
     {

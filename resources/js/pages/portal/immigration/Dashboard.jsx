@@ -13,7 +13,7 @@ export default function ImmigrationDashboard({
 }) {
     const tileSpecs = [
         { label: "My active cases",       value: tiles.active_cases,              tone: "default", icon: <Globe size={14} />,           hint: "Visa cases in motion", href: "/portal/immigration/cases" },
-        { label: "New assessments / wk",  value: tiles.new_assessments_week,      tone: "default", icon: <ClipboardCheck size={14} />,  hint: "Public submissions to triage", href: "/portal/immigration/assessments" },
+        { label: "Visa assessments / wk", value: tiles.new_assessments_week,      tone: "default", icon: <ClipboardCheck size={14} />,  hint: "Public submissions to triage", href: "/portal/immigration/assessments" },
         { label: "Paid, not yet seen",    value: tiles.bookings_paid_unseen,      tone: "warning", icon: <Calendar size={14} />,        hint: "Bookings without a slot", href: "/portal/immigration/appointments" },
         { label: "Docs pending review",   value: tiles.docs_pending_review,       tone: "warning", icon: <FolderOpen size={14} />,      hint: "Across all my cases", href: "/portal/immigration/documents" },
         { label: "Lodged with INZ",       value: tiles.cases_lodged,              tone: "default", icon: <FileBadge size={14} />,       hint: "Needs lodgement tracking", muted: tiles.cases_lodged == null },
@@ -66,7 +66,7 @@ export default function ImmigrationDashboard({
                     <h2 className="text-sm font-bold uppercase tracking-[0.18em] text-gray-800">Urgent actions</h2>
                 </div>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                    <UrgentTile label="Assessments to review" value={urgent.assessments_pending ?? 0} href="/portal/immigration/assessments" tone="amber" />
+                    <UrgentTile label="Visa assessments to review" value={urgent.assessments_pending ?? 0} href="/portal/immigration/assessments" tone="amber" />
                     <UrgentTile label="Paid, not scheduled"   value={urgent.paid_unscheduled ?? 0}    href="/portal/immigration/appointments" tone="orange" />
                     <UrgentTile label="Docs rejected"         value={urgent.rejected_docs ?? 0}       href="/portal/immigration/documents"    tone="rose" />
                     <UrgentTile label="Agreements pending"    value={urgent.agreements_pending ?? 0}  href="/portal/immigration/cases"        tone="violet" />
@@ -135,7 +135,7 @@ export default function ImmigrationDashboard({
 
             {/* Recent public submissions — kept as a compact strip */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                <RecentList title="Recent assessment submissions" icon={<ClipboardCheck size={14} />} href="/portal/immigration/assessments" rows={recent_intakes.map((r) => ({
+                <RecentList title="Recent visa assessments" icon={<ClipboardCheck size={14} />} href="/portal/immigration/assessments" rows={recent_intakes.map((r) => ({
                     id: r.id,
                     title: trim2(`${r.first_name} ${r.last_name}`),
                     subtitle: `${r.current_visa_type || 'Visa enquiry'} · ${fmtDate(r.created_at)}`,

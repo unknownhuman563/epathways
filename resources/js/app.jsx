@@ -11,6 +11,7 @@ import EducationLayout from './components/layout/EducationLayout';
 import EnglishLayout from './components/layout/EnglishLayout';
 import ImmigrationLayout from './components/layout/ImmigrationLayout';
 import AccommodationLayout from './components/layout/AccommodationLayout';
+import FinanceLayout from './components/layout/FinanceLayout';
 import LeadLayout from './components/layout/LeadLayout';
 import FlashToaster from './components/ui/FlashToaster';
 import FloatingContact from './components/ui/FloatingContact';
@@ -24,6 +25,7 @@ const PORTAL_LAYOUTS = {
   'portal/english/': EnglishLayout,
   'portal/immigration/': ImmigrationLayout,
   'portal/accommodation/': AccommodationLayout,
+  'portal/finance/': FinanceLayout,
   'portal/lead/': LeadLayout,
 };
 
@@ -31,6 +33,20 @@ createInertiaApp({
   resolve: name => {
     const pages = import.meta.glob('./pages/**/*.jsx', { eager: true })
     let page = pages[`./pages/${name}.jsx`]
+
+    // Defensive: if the page module isn't in the glob (typo in the
+    // controller's inertia() name, or stale browser bundle from before
+    // the page existed), surface a useful diagnostic instead of the
+    // cryptic "Cannot read properties of undefined (reading 'default')"
+    // that Inertia would otherwise hit on the next line.
+    if (!page || !page.default) {
+      const available = Object.keys(pages).slice(0, 10).join(', ');
+      throw new Error(
+        `Inertia page "${name}" not found. Looked up "./pages/${name}.jsx".\n` +
+        `Available (first 10): ${available}\n` +
+        `Hard-refresh the browser (Ctrl+Shift+R) to bypass any cached bundle.`
+      );
+    }
 
     if (name.startsWith('admin/')) {
       page.default.layout = page.default.layout || ((page) => <AdminLayout>{page}</AdminLayout>);

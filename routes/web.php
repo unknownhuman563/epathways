@@ -513,7 +513,7 @@ Route::middleware(['auth'])->group(function () {
     // group so every department portal that can see the documents tab can
     // also manage and download files. The download controller does its own
     // role-gated check on the specific lead before streaming the file.
-    Route::middleware('portal:admin,sales,education,english,immigration,accommodation')->group(function () {
+    Route::middleware('portal:admin,sales,education,english,immigration,accommodation,finance')->group(function () {
         Route::post('/admin/leads/{id}/documents/checklist/{key}/upload', [LeadDocumentController::class, 'staffChecklistUpload'])
             ->name('admin.leads.documents.checklist.upload');
         // Templated agreement generator — Blade -> PDF -> attached as a
@@ -852,6 +852,15 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/reports', $stub('Reports', 'Weekly, monthly, quarterly and custom reports.'))->name('reports');
             Route::get('/profile', $stub('My Profile', 'Your account details and preferences.'))->name('profile');
             Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications');
+        });
+
+        // Finance portal — placeholder dashboard + cross-portal Task Board
+        // filtered to department='finance'. Sidebar is intentionally lean
+        // (Dashboard + Task Board only) until the payments/invoices data
+        // model lands.
+        Route::middleware('portal:finance')->prefix('finance')->name('portal.finance.')->group(function () {
+            Route::get('/dashboard', [\App\Http\Controllers\Portal\FinanceController::class, 'dashboard'])->name('dashboard');
+            Route::get('/tasks', [\App\Http\Controllers\Portal\FinanceController::class, 'tasks'])->name('tasks');
         });
 
         // Lead Portal — external client-facing dashboard. Each lead-role user

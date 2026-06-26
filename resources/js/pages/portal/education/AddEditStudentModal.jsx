@@ -31,10 +31,18 @@ const STAGES_BY_DEPARTMENT = {
         label: "Immigration",
         field: "immigration_stage",
         stages: [
-            "Endorsed", "Visa Lodged", "Request for Information",
+            "For Assessment", "Endorsed", "Visa Lodged", "Request for Information",
             "Approved in Principle", "Approved Visa", "Decline Visa",
         ],
     },
+};
+
+// Named people who can own a lead at an English / Immigration stage.
+// Free-text labels (mirrors Lead::ENGLISH_STAGE_ASSIGNEES /
+// IMMIGRATION_STAGE_ASSIGNEES) — "DIY" is a handling mode, not a person.
+const STAGE_ASSIGNEES = {
+    english:     ["Paula", "Frank", "DIY"],
+    immigration: ["Hendry", "Tarun", "Dev"],
 };
 
 const COOP_OOP_PRESETS = ["Yes", "No"];
@@ -47,11 +55,12 @@ const DRAFT_KEY = "education.newStudent.draft";
 
 const blankForm = () => ({
     first_name: "", middle_name: "", last_name: "", suffix: "",
-    gender: "", email: "", phone: "",
+    gender: "", email: "", phone: "", referral: "",
     // Department picks WHICH stage column we save to ("education_stage",
     // "english_stage", "immigration_stage"); `stage` is the actual value
     // for that department's list. Default department is education.
-    department: "education", stage: "",
+    department: "education", stage: "", assignee: "",
+    date_of_engagement: "",
     program_text: "", internal_note: "",
     payment: "", intake: "", school_id: "",
     coop: "", oop: "", english_test: "",
@@ -98,6 +107,11 @@ export default function AddEditStudentModal({
                 ? "english"
                 : "education";
         const seedStage = student[STAGES_BY_DEPARTMENT[seedDept].field] ?? "";
+        const seedAssignee = seedDept === "english"
+            ? (student.english_assignee ?? "")
+            : seedDept === "immigration"
+                ? (student.immigration_assignee ?? "")
+                : "";
 
         setForm({
             first_name:      student.name?.split(/\s+/)[0]              ?? "",
@@ -107,8 +121,11 @@ export default function AddEditStudentModal({
             gender:          student.gender                             ?? "",
             email:           student.email                              ?? "",
             phone:           student.phone                              ?? "",
+            referral:        student.referral                           ?? "",
             department:      seedDept,
             stage:           seedStage,
+            assignee:        seedAssignee,
+            date_of_engagement: student.date_engaged                    ?? "",
             program_text:    student.program ?? "",
             internal_note:   student.comments                           ?? "",
             payment:         student.payment                            ?? "",
@@ -156,12 +173,17 @@ export default function AddEditStudentModal({
         // pick are sent as null so a department switch in edit mode
         // clears the previous track's stage.
         const cfg = STAGES_BY_DEPARTMENT[form.department] || STAGES_BY_DEPARTMENT.education;
-        const { department, stage, ...rest } = form;
+        const { department, stage, assignee, ...rest } = form;
         const payload = {
             ...rest,
             education_stage:   cfg.field === "education_stage"   ? (stage || null) : null,
             english_stage:     cfg.field === "english_stage"     ? (stage || null) : null,
             immigration_stage: cfg.field === "immigration_stage" ? (stage || null) : null,
+            // Assignee only applies to the English / Immigration tracks; the
+            // column for the department we *didn't* pick is cleared.
+            english_assignee:     department === "english"     ? (assignee || null) : null,
+            immigration_assignee: department === "immigration" ? (assignee || null) : null,
+            date_of_engagement:   form.date_of_engagement || null,
         };
 
         router.post(url, payload, {
@@ -260,12 +282,15 @@ export default function AddEditStudentModal({
 
                     {/* Contact */}
                     <Section title="Contact">
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                             <Field label="Email" required>
                                 <input type="email" required value={form.email} onChange={set("email")} className={ICls} placeholder="student@example.com" />
                             </Field>
                             <Field label="Contact number" required>
                                 <input type="tel" required value={form.phone} onChange={set("phone")} className={ICls} placeholder="+63 …" />
+                            </Field>
+                            <Field label="Referral" hint="Who referred them · optional">
+                                <input type="text" value={form.referral} onChange={set("referral")} className={ICls} maxLength={191} placeholder="e.g. Agent, friend, FB ad" />
                             </Field>
                         </div>
                     </Section>
@@ -278,10 +303,11 @@ export default function AddEditStudentModal({
                                     value={form.department}
                                     onChange={(e) => {
                                         // Switching department clears whatever
-                                        // stage was set under the previous list
-                                        // so we don't carry an invalid value over.
+                                        // stage / assignee was set under the
+                                        // previous list so we don't carry an
+                                        // invalid value over.
                                         const next = e.target.value;
-                                        setForm((f) => ({ ...f, department: next, stage: "" }));
+                                        setForm((f) => ({ ...f, department: next, stage: "", assignee: "" }));
                                     }}
                                     className={ICls}
                                 >
@@ -297,6 +323,19 @@ export default function AddEditStudentModal({
                                         <option key={s} value={s}>{s}</option>
                                     ))}
                                 </select>
+                            </Field>
+                            {STAGE_ASSIGNEES[form.department] && (
+                                <Field label="Assigned person" hint={`Who's handling this ${STAGES_BY_DEPARTMENT[form.department].label} stage`}>
+                                    <select value={form.assignee} onChange={set("assignee")} className={ICls}>
+                                        <option value="">— Unassigned —</option>
+                                        {STAGE_ASSIGNEES[form.department].map((p) => (
+                                            <option key={p} value={p}>{p}</option>
+                                        ))}
+                                    </select>
+                                </Field>
+                            )}
+                            <Field label="Date engaged" hint="When they became engaged · optional">
+                                <input type="date" value={form.date_of_engagement} onChange={set("date_of_engagement")} className={ICls} />
                             </Field>
                             <Field label="Program offered" hint="Pick from list or type a custom title">
                                 <input

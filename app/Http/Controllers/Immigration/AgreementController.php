@@ -111,8 +111,14 @@ class AgreementController extends Controller
         ]);
     }
 
-    /** GET /portal/immigration/cases/{lead}/agreements/{agreement}/pdf */
-    public function downloadPdf(Lead $lead, Agreement $agreement)
+    /**
+     * GET /portal/immigration/cases/{lead}/agreements/{agreement}/pdf
+     *
+     * ?inline=1 streams with Content-Disposition: inline so the browser
+     * renders the PDF in a new tab instead of forcing a download — same
+     * pattern LeadDocumentController::download uses for the View button.
+     */
+    public function downloadPdf(Request $request, Lead $lead, Agreement $agreement)
     {
         $this->authorizeAccess($lead);
         $this->authorizeOwnership($lead, $agreement);
@@ -120,6 +126,13 @@ class AgreementController extends Controller
         // Prefer the signed PDF (with embedded signature) once Phase 3 ships it.
         $path = $agreement->signed_pdf_path ?: $agreement->pdf_path;
         abort_unless($path && Storage::disk('local')->exists($path), 404, 'PDF not found.');
+
+        if ($request->boolean('inline')) {
+            return response()->file(Storage::disk('local')->path($path), [
+                'Content-Type'        => 'application/pdf',
+                'Content-Disposition' => 'inline; filename="' . $this->downloadFilename($agreement) . '"',
+            ]);
+        }
 
         return response()->download(
             Storage::disk('local')->path($path),

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { router } from "@inertiajs/react";
 import { toast } from "sonner";
 import {
-    FileSignature, Plus, Eye, Download, Send, X, Check, Clock,
+    FileSignature, Plus, Eye, Download, Send, X, Check,
     AlertCircle, Globe, FileText,
 } from "lucide-react";
 import GenerateAgreementModal from "@/components/immigration/case-profile/GenerateAgreementModal";
@@ -167,13 +167,25 @@ function AgreementCard({ agreement: a, lead, busy, onSend, onVoid }) {
 
                 <div className="flex items-center gap-1 flex-wrap">
                     {a.has_pdf && (
-                        <a
-                            href={`/portal/immigration/cases/${lead.id}/agreements/${a.id}/pdf`}
-                            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md text-[11px] font-semibold border border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
-                        >
-                            <Download size={11} />
-                            {a.has_signed_pdf ? "Signed PDF" : "PDF"}
-                        </a>
+                        <>
+                            <a
+                                href={`/portal/immigration/cases/${lead.id}/agreements/${a.id}/pdf?inline=1`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                title={a.has_signed_pdf ? "View signed PDF in browser" : "View PDF in browser"}
+                                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md text-[11px] font-semibold border border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
+                            >
+                                <Eye size={11} /> View
+                            </a>
+                            <a
+                                href={`/portal/immigration/cases/${lead.id}/agreements/${a.id}/pdf`}
+                                title="Download PDF"
+                                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md text-[11px] font-semibold border border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
+                            >
+                                <Download size={11} />
+                                {a.has_signed_pdf ? "Signed" : "PDF"}
+                            </a>
+                        </>
                     )}
                     {isDraft && (
                         <button

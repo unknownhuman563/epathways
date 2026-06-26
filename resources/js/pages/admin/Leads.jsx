@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Head, Link } from '@inertiajs/react';
+import { Head, Link, router } from '@inertiajs/react';
 import { 
     Search, Filter, Plus, MoreVertical, Eye, Edit2, 
     MessageSquare, Calendar, FileText, Award, Mail, Trash2,
@@ -12,8 +12,10 @@ export default function Leads({ leads: backendLeads }) {
         if (backendLeads && backendLeads.length > 0) {
             return backendLeads.map(lead => ({
                 id: lead.lead_id || lead.id,
+                dbId: lead.id, // numeric PK — used for archive/restore routes
                 name: `${lead.first_name || ''} ${lead.last_name || ''}`.trim() || 'Unknown Lead',
                 phone: lead.phone || '—',
+                referral: lead.referral || '',
                 email: lead.email || '—',
                 country: lead.country || lead.work_info?.city || '—',
                 program: lead.study_plans?.[0]?.preferred_course || lead.stage || '—',
@@ -47,6 +49,17 @@ export default function Leads({ leads: backendLeads }) {
         } else {
             setSelectedLeads([...selectedLeads, id]);
         }
+    };
+
+    // Archive (soft-delete) a lead. The record + its notes/tasks/documents
+    // survive and can be restored; it just drops off this list.
+    const deleteLead = (lead) => {
+        setActiveDropdown(null);
+        if (! window.confirm(`Delete "${lead.name}"? This archives the lead — notes, documents and history are kept and it can be restored.`)) return;
+        router.delete(`/admin/leads/${lead.dbId}`, {
+            preserveScroll: true,
+            onSuccess: () => setLeads((rows) => rows.filter((r) => r.dbId !== lead.dbId)),
+        });
     };
 
     const getStatusStyle = (status) => {
@@ -227,6 +240,11 @@ export default function Leads({ leads: backendLeads }) {
                                     <td className="px-6 py-4">
                                         <div className="flex flex-col gap-1">
                                             <span className="text-sm text-gray-900 font-medium">{lead.phone}</span>
+                                            {lead.referral && (
+                                                <span className="text-[10px] font-semibold text-gray-500">
+                                                    Referral: <span className="text-gray-700">{lead.referral}</span>
+                                                </span>
+                                            )}
                                             <span className="text-xs text-blue-600 hover:underline cursor-pointer flex items-center gap-1">
                                                 <Mail size={10} />
                                                 {lead.email}
@@ -298,9 +316,9 @@ export default function Leads({ leads: backendLeads }) {
                                                         <Link href={`/admin/leads/${lead.id}`} className="flex w-full items-center gap-3 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-gray-900 rounded-lg transition-colors">
                                                             <Eye size={16} className="text-gray-500" /> View Details
                                                         </Link>
-                                                        <button className="flex w-full items-center gap-3 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-gray-900 rounded-lg transition-colors">
+                                                        <Link href={`/admin/leads/${lead.id}?tab=personal&edit=1`} className="flex w-full items-center gap-3 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-gray-900 rounded-lg transition-colors">
                                                             <Edit2 size={16} className="text-gray-500" /> Edit Lead
-                                                        </button>
+                                                        </Link>
                                                     </div>
 
                                                     {/* Group: Communication */}
@@ -331,7 +349,7 @@ export default function Leads({ leads: backendLeads }) {
 
                                                     {/* Group: Danger */}
                                                     <div className="px-1 py-1">
-                                                        <button className="flex w-full items-center gap-3 px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors">
+                                                        <button onClick={() => deleteLead(lead)} className="flex w-full items-center gap-3 px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors">
                                                             <Trash2 size={16} /> Delete Lead
                                                         </button>
                                                     </div>

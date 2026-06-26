@@ -2,9 +2,9 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Lead;
 use App\Http\Requests\StoreLeadRequest;
 use App\Jobs\AnalyzeLeadAssessment;
+use App\Models\Lead;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -24,8 +24,9 @@ class LeadController extends Controller
             ->with(['studyPlans', 'event'])
             ->latest()
             ->get();
+
         return inertia('admin/Leads', [
-            'leads' => $leads
+            'leads' => $leads,
         ]);
     }
 
@@ -36,50 +37,49 @@ class LeadController extends Controller
     {
         try {
             DB::beginTransaction();
-            
+
             // 1. Create Base Lead
             $leadData = $request->except(['education', 'study_plans']);
-            
+
             // Generate a temporary unique LP identifier if none provided
-            if (!isset($leadData['lead_id'])) {
-                $leadData['lead_id'] = 'LP-' . rand(10000, 99999);
+            if (! isset($leadData['lead_id'])) {
+                $leadData['lead_id'] = 'LP-'.rand(10000, 99999);
             }
-            
+
             $lead = Lead::create($leadData);
-            
+
             // 2. Attach Education Experiences safely
             if ($request->has('education')) {
                 foreach ($request->input('education') as $edu) {
                     $lead->educationExps()->create($edu);
                 }
             }
-            
+
             // 3. Attach Study Plans safely
             if ($request->has('study_plans')) {
                 foreach ($request->input('study_plans') as $plan) {
                     $lead->studyPlans()->create($plan);
                 }
             }
-            
+
             DB::commit();
-            
+
             return response()->json([
                 'status' => 'success',
                 'message' => 'Lead successfully ingested with related arrays.',
-                'data' => $lead->load(['educationExps', 'studyPlans'])
+                'data' => $lead->load(['educationExps', 'studyPlans']),
             ], 201);
-            
+
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error('Lead storage failed', ['error' => $e->getMessage()]);
-            
+
             return response()->json([
                 'status' => 'error',
-                'message' => 'Failed to create lead due to server error.'
+                'message' => 'Failed to create lead due to server error.',
             ], 500);
         }
     }
-
 
     /**
      * Show the Free Assessment form.
@@ -140,31 +140,31 @@ class LeadController extends Controller
         // their device's local copy.
         $validated = $request->validate([
             'first_name' => 'required|string|max:255',
-            'last_name'  => 'nullable|string|max:255',
-            'email'      => 'required|email|max:255',
-            'phone'      => 'nullable|string|max:40',
+            'last_name' => 'nullable|string|max:255',
+            'email' => 'required|email|max:255',
+            'phone' => 'nullable|string|max:40',
         ], [
             'first_name.required' => 'Add your first name to save the draft online.',
-            'email.required'      => 'Add your email to save the draft online.',
-            'email.email'         => 'Enter a valid email to save the draft online.',
+            'email.required' => 'Add your email to save the draft online.',
+            'email.email' => 'Enter a valid email to save the draft online.',
         ]);
 
         $isEnrolment = $request->is('education-enrolment*');
-        $source      = $isEnrolment ? 'education-enrolment' : 'free-assessment';
+        $source = $isEnrolment ? 'education-enrolment' : 'free-assessment';
 
         try {
             $lead = $intake->ingest($source, [
-                'lead_id'    => ($isEnrolment ? 'EE-' : 'FA-') . strtoupper(uniqid()),
+                'lead_id' => ($isEnrolment ? 'EE-' : 'FA-').strtoupper(uniqid()),
                 'first_name' => $validated['first_name'],
-                'last_name'  => $validated['last_name'] ?? '',
-                'email'      => $validated['email'],
-                'phone'      => $validated['phone'] ?? null,
-                'stage'      => 'Evaluation',
+                'last_name' => $validated['last_name'] ?? '',
+                'email' => $validated['email'],
+                'phone' => $validated['phone'] ?? null,
+                'stage' => 'Evaluation',
             ], $request);
 
             // Promote the lead to Draft only if it's not already further
             // along — never demote a Submitted/Engaged lead back to Draft.
-            $shouldFlipToDraft = !in_array($lead->status, ['Submitted', 'Engaged', 'Converted', 'Completed', 'Closed'], true);
+            $shouldFlipToDraft = ! in_array($lead->status, ['Submitted', 'Engaged', 'Converted', 'Completed', 'Closed'], true);
 
             // The assessment form IS the freshest source of truth for the
             // applicant's identity, so override the conservative "backfill
@@ -172,12 +172,12 @@ class LeadController extends Controller
             // means staff see the current name/phone the applicant is using
             // right now, not whatever they typed into a Quick-Lead months ago.
             $lead->update(array_filter([
-                'first_name'         => $validated['first_name'],
-                'last_name'          => $validated['last_name'] ?? null,
-                'phone'              => $validated['phone'] ?? null,
-                'status'             => $shouldFlipToDraft ? 'Draft' : $lead->status,
-                'source'             => $source,
-                'ai_analysis'        => $request->except(['_token']),
+                'first_name' => $validated['first_name'],
+                'last_name' => $validated['last_name'] ?? null,
+                'phone' => $validated['phone'] ?? null,
+                'status' => $shouldFlipToDraft ? 'Draft' : $lead->status,
+                'source' => $source,
+                'ai_analysis' => $request->except(['_token']),
                 'ai_analysis_status' => 'completed',
             ], fn ($v) => $v !== null));
 
@@ -192,19 +192,21 @@ class LeadController extends Controller
             if ($request->expectsJson() || $request->wantsJson()) {
                 return response()->json([
                     'draft_saved' => true,
-                    'draft_id'    => $lead->lead_id,
-                    'saved_at'    => now()->toIso8601String(),
+                    'draft_id' => $lead->lead_id,
+                    'saved_at' => now()->toIso8601String(),
                 ]);
             }
+
             return back()->with([
                 'draft_saved' => true,
-                'draft_id'    => $lead->lead_id,
+                'draft_id' => $lead->lead_id,
             ]);
         } catch (\Throwable $e) {
             Log::error('Assessment draft save failed', ['error' => $e->getMessage()]);
             if ($request->expectsJson() || $request->wantsJson()) {
                 return response()->json(['error' => 'Could not save draft.'], 500);
             }
+
             return back()->withErrors([
                 'error' => 'Could not save draft — please try again.',
             ]);
@@ -237,76 +239,76 @@ class LeadController extends Controller
             ->all());
 
         $validated = $request->validate([
-            'terms_accepted'        => 'required|accepted',
-            'first_name'            => 'required|string|max:120',
-            'last_name'             => 'required|string|max:120',
-            'dob'                   => 'required|date',
-            'gender'                => 'nullable|string|max:40',
-            'marital_status'        => 'nullable|string|max:40',
-            'email'                 => 'required|email|max:255',
-            'phone'                 => 'required|string|max:40',
-            'country_of_birth'      => 'nullable|string|max:120',
-            'place_of_birth'        => 'nullable|string|max:120',
+            'terms_accepted' => 'required|accepted',
+            'first_name' => 'required|string|max:120',
+            'last_name' => 'required|string|max:120',
+            'dob' => 'required|date',
+            'gender' => 'nullable|string|max:40',
+            'marital_status' => 'nullable|string|max:40',
+            'email' => 'required|email|max:255',
+            'phone' => 'required|string|max:40',
+            'country_of_birth' => 'nullable|string|max:120',
+            'place_of_birth' => 'nullable|string|max:120',
 
-            'citizenship'           => 'required|string|max:120',
-            'residence_country'     => 'required|string|max:120',
-            'residence_city'        => 'nullable|string|max:120',
-            'has_passport'          => 'nullable|in:Yes,No',
-            'passport_number'       => 'nullable|string|max:60',
-            'passport_expiry'       => 'nullable|date',
+            'citizenship' => 'required|string|max:120',
+            'residence_country' => 'required|string|max:120',
+            'residence_city' => 'nullable|string|max:120',
+            'has_passport' => 'nullable|in:Yes,No',
+            'passport_number' => 'nullable|string|max:60',
+            'passport_expiry' => 'nullable|date',
 
-            'preferred_area'        => 'required|string|max:120',
-            'preferred_course'      => 'nullable|string|max:255',
-            'qualification_level'   => 'required|string|max:120',
-            'study_mode'            => 'nullable|string|max:60',
-            'preferred_intake'      => 'nullable|string|max:120',
-            'preferred_city'        => 'nullable|string|max:120',
+            'preferred_area' => 'required|string|max:120',
+            'preferred_course' => 'nullable|string|max:255',
+            'qualification_level' => 'required|string|max:120',
+            'study_mode' => 'nullable|string|max:60',
+            'preferred_intake' => 'nullable|string|max:120',
+            'preferred_city' => 'nullable|string|max:120',
             'preferred_institution' => 'nullable|string|max:255',
-            'has_english_test'      => 'nullable|in:Yes,No',
-            'english_test_type'     => 'nullable|string|max:60',
-            'english_test_score'    => 'nullable|string|max:30',
-            'english_test_date'     => 'nullable|date',
-            'career_goals'          => 'nullable|string',
+            'has_english_test' => 'nullable|in:Yes,No',
+            'english_test_type' => 'nullable|string|max:60',
+            'english_test_score' => 'nullable|string|max:30',
+            'english_test_date' => 'nullable|date',
+            'career_goals' => 'nullable|string',
 
             'highest_qualification' => 'required|string|max:120',
-            'institution_name'      => 'nullable|string|max:255',
-            'country_of_study'      => 'nullable|string|max:120',
-            'qualification_start'   => 'nullable|date',
-            'qualification_end'     => 'nullable|date',
-            'qualification_marks'   => 'nullable|string|max:30',
-            'education_notes'       => 'nullable|string',
+            'institution_name' => 'nullable|string|max:255',
+            'country_of_study' => 'nullable|string|max:120',
+            'qualification_start' => 'nullable|date',
+            'qualification_end' => 'nullable|date',
+            'qualification_marks' => 'nullable|string|max:30',
+            'education_notes' => 'nullable|string',
 
-            'has_funds'             => 'required|in:Yes,No',
-            'funding_source'        => 'nullable|string|max:60',
-            'estimated_budget'      => 'required|string|max:60',
-            'has_sponsor'           => 'nullable|in:Yes,No',
-            'sponsor_relation'      => 'nullable|string|max:120',
-            'sponsor_occupation'    => 'nullable|string|max:120',
-            'sponsor_income'        => 'nullable|string|max:60',
+            'has_funds' => 'required|in:Yes,No',
+            'funding_source' => 'nullable|string|max:60',
+            'estimated_budget' => 'required|string|max:60',
+            'has_sponsor' => 'nullable|in:Yes,No',
+            'sponsor_relation' => 'nullable|string|max:120',
+            'sponsor_occupation' => 'nullable|string|max:120',
+            'sponsor_income' => 'nullable|string|max:60',
 
-            'declaration_accepted'  => 'required|accepted',
-            'signature_name'        => 'nullable|string|max:255',
-            'signature_date'        => 'nullable|date',
+            'declaration_accepted' => 'required|accepted',
+            'signature_name' => 'nullable|string|max:255',
+            'signature_date' => 'nullable|date',
         ]);
 
         try {
             $lead = $intake->ingest('education-enrolment', [
-                'lead_id'    => 'EE-' . strtoupper(uniqid()),
+                'lead_id' => 'EE-'.strtoupper(uniqid()),
                 'first_name' => $validated['first_name'],
-                'last_name'  => $validated['last_name'],
-                'email'      => $validated['email'],
-                'phone'      => $validated['phone'],
-                'country'    => $validated['residence_country'] ?? null,
-                'stage'      => 'Education-Enrolment',
+                'last_name' => $validated['last_name'],
+                'email' => $validated['email'],
+                'phone' => $validated['phone'],
+                'country' => $validated['residence_country'] ?? null,
+                'stage' => 'Education-Enrolment',
             ], $request);
 
             // Persist the rich assessment payload on the lead so staff see
             // the full picture without us adding a dedicated enrolment
             // table. Same place storeFreeAssessment writes its analysis.
             $lead->update([
-                'source'             => 'education-enrolment',
-                'status'             => 'New',
-                'ai_analysis'        => array_diff_key($validated, array_flip([
+                'source' => 'education-enrolment',
+                'status' => 'New',
+                'ai_analysis' => array_diff_key($validated, array_flip([
                     'first_name', 'last_name', 'email', 'phone', 'residence_country',
                 ])),
                 'ai_analysis_status' => 'completed',
@@ -318,6 +320,7 @@ class LeadController extends Controller
             ]);
         } catch (\Throwable $e) {
             \Illuminate\Support\Facades\Log::error('Education enrolment store failed', ['error' => $e->getMessage()]);
+
             return redirect()->back()->withErrors([
                 'error' => 'Something went wrong submitting your enrolment. Please try again.',
             ])->withInput();
@@ -337,94 +340,94 @@ class LeadController extends Controller
             'terms_accepted' => 'required|accepted',
 
             // Step 2 - Personal
-            'first_name'        => 'required|string|max:255',
-            'last_name'         => 'required|string|max:255',
-            'email'             => 'required|email|max:255',
-            'phone'             => 'required|string|max:25',
-            'gender'            => 'required|string|max:50',
-            'dob'               => 'required|date',
-            'country_of_birth'  => 'required|string|max:120',
-            'citizenship'       => 'required|string|max:120',
+            'first_name' => 'required|string|max:255',
+            'last_name' => 'required|string|max:255',
+            'email' => 'required|email|max:255',
+            'phone' => 'required|string|max:25',
+            'gender' => 'required|string|max:50',
+            'dob' => 'required|date',
+            'country_of_birth' => 'required|string|max:120',
+            'citizenship' => 'required|string|max:120',
             'residence_country' => 'required|string|max:120',
-            'has_other_names'   => 'nullable|in:Yes,No',
-            'other_names'       => 'nullable|required_if:has_other_names,Yes|string|max:255',
-            'has_passport'      => 'nullable|in:Yes,No',
-            'passport_number'   => 'nullable|required_if:has_passport,Yes|string|max:60',
-            'passport_expiry'   => 'nullable|required_if:has_passport,Yes|date',
-            'passport_pdf'      => 'nullable|file|mimes:pdf|max:10240',
+            'has_other_names' => 'nullable|in:Yes,No',
+            'other_names' => 'nullable|required_if:has_other_names,Yes|string|max:255',
+            'has_passport' => 'nullable|in:Yes,No',
+            'passport_number' => 'nullable|required_if:has_passport,Yes|string|max:60',
+            'passport_expiry' => 'nullable|required_if:has_passport,Yes|date',
+            'passport_pdf' => 'nullable|file|mimes:pdf|max:10240',
 
             // Step 3 - Study Plans
-            'study_plans'                       => 'nullable|array',
-            'study_plans.preferred_course'      => 'required|string|max:255',
-            'study_plans.qualification_level'   => 'required|string|max:120',
-            'study_plans.has_english_test'      => 'nullable|in:Yes,No',
-            'study_plans.english_test_type'     => 'nullable|required_if:study_plans.has_english_test,Yes|string|max:120',
-            'study_plans.test_score_overall'    => 'nullable|required_if:study_plans.has_english_test,Yes|string|max:20',
+            'study_plans' => 'nullable|array',
+            'study_plans.preferred_course' => 'required|string|max:255',
+            'study_plans.qualification_level' => 'required|string|max:120',
+            'study_plans.has_english_test' => 'nullable|in:Yes,No',
+            'study_plans.english_test_type' => 'nullable|required_if:study_plans.has_english_test,Yes|string|max:120',
+            'study_plans.test_score_overall' => 'nullable|required_if:study_plans.has_english_test,Yes|string|max:20',
 
             // Step 4 - Education
             'education_background' => 'nullable|array',
-            'has_gap'              => 'nullable|in:Yes,No',
-            'gap_length'           => 'nullable|required_if:has_gap,Yes|string|max:120',
-            'gap_activities'       => 'nullable|required_if:has_gap,Yes|array|min:1',
+            'has_gap' => 'nullable|in:Yes,No',
+            'gap_length' => 'nullable|required_if:has_gap,Yes|string|max:120',
+            'gap_activities' => 'nullable|required_if:has_gap,Yes|array|min:1',
 
             // Step 5 - Work
-            'work_experience'                 => 'required|array|min:1',
-            'work_experience.0.company_name'  => 'required|string|max:255',
-            'work_experience.0.job_title'     => 'required|string|max:255',
+            'work_experience' => 'required|array|min:1',
+            'work_experience.0.company_name' => 'required|string|max:255',
+            'work_experience.0.job_title' => 'required|string|max:255',
 
             // Step 6 - Financial
-            'financial_info'                    => 'required|array',
-            'financial_info.funding_source'     => 'required|array|min:1',
-            'financial_info.estimated_budget'   => 'required|string|max:120',
-            'financial_info.has_sponsors'       => 'nullable|in:Yes,No',
-            'financial_info.sponsor_relation'   => 'nullable|required_if:financial_info.has_sponsors,Yes|string|max:120',
+            'financial_info' => 'required|array',
+            'financial_info.funding_source' => 'required|array|min:1',
+            'financial_info.estimated_budget' => 'required|string|max:120',
+            'financial_info.has_sponsors' => 'nullable|in:Yes,No',
+            'financial_info.sponsor_relation' => 'nullable|required_if:financial_info.has_sponsors,Yes|string|max:120',
 
             // Step 7 - Source of funds
-            'source_of_funds_info'                          => 'required|array',
-            'source_of_funds_info.sources'                  => 'required|array|min:1',
-            'source_of_funds_info.will_use_sponsor'         => 'nullable|in:Yes,No',
-            'source_of_funds_info.sponsor_relation'         => 'nullable|required_if:source_of_funds_info.will_use_sponsor,Yes|string|max:120',
-            'source_of_funds_info.sponsor_occupation'       => 'nullable|required_if:source_of_funds_info.will_use_sponsor,Yes|string|max:120',
-            'source_of_funds_info.sponsor_annual_income'    => 'nullable|required_if:source_of_funds_info.will_use_sponsor,Yes|string|max:120',
+            'source_of_funds_info' => 'required|array',
+            'source_of_funds_info.sources' => 'required|array|min:1',
+            'source_of_funds_info.will_use_sponsor' => 'nullable|in:Yes,No',
+            'source_of_funds_info.sponsor_relation' => 'nullable|required_if:source_of_funds_info.will_use_sponsor,Yes|string|max:120',
+            'source_of_funds_info.sponsor_occupation' => 'nullable|required_if:source_of_funds_info.will_use_sponsor,Yes|string|max:120',
+            'source_of_funds_info.sponsor_annual_income' => 'nullable|required_if:source_of_funds_info.will_use_sponsor,Yes|string|max:120',
 
             // Step 8 - Immigration
-            'immigration_info'                              => 'required|array',
-            'immigration_info.submission_country'           => 'required|string|max:120',
-            'immigration_info.has_travelled_overseas'       => 'nullable|in:Yes,No',
-            'immigration_info.overseas_travel_details'      => 'nullable|required_if:immigration_info.has_travelled_overseas,Yes|string',
-            'immigration_info.has_applied_nz_visa'          => 'nullable|in:Yes,No',
-            'immigration_info.nz_visa_details'              => 'nullable|required_if:immigration_info.has_applied_nz_visa,Yes|string',
-            'immigration_info.has_applied_other_visa'       => 'nullable|in:Yes,No',
-            'immigration_info.other_visa_details'           => 'nullable|required_if:immigration_info.has_applied_other_visa,Yes|string',
-            'immigration_info.has_visa_refusal'             => 'nullable|in:Yes,No',
-            'immigration_info.visa_refusal_details'         => 'nullable|required_if:immigration_info.has_visa_refusal,Yes|string',
+            'immigration_info' => 'required|array',
+            'immigration_info.submission_country' => 'required|string|max:120',
+            'immigration_info.has_travelled_overseas' => 'nullable|in:Yes,No',
+            'immigration_info.overseas_travel_details' => 'nullable|required_if:immigration_info.has_travelled_overseas,Yes|string',
+            'immigration_info.has_applied_nz_visa' => 'nullable|in:Yes,No',
+            'immigration_info.nz_visa_details' => 'nullable|required_if:immigration_info.has_applied_nz_visa,Yes|string',
+            'immigration_info.has_applied_other_visa' => 'nullable|in:Yes,No',
+            'immigration_info.other_visa_details' => 'nullable|required_if:immigration_info.has_applied_other_visa,Yes|string',
+            'immigration_info.has_visa_refusal' => 'nullable|in:Yes,No',
+            'immigration_info.visa_refusal_details' => 'nullable|required_if:immigration_info.has_visa_refusal,Yes|string',
 
             // Step 9 - Character / Health (optional structure)
             'character_info' => 'nullable|array',
-            'health_info'    => 'nullable|array',
+            'health_info' => 'nullable|array',
 
             // Step 10 - Family
             'family_info' => 'nullable|array',
 
             // Step 11 - Additional
-            'nz_contacts_info'                          => 'nullable|array',
-            'nz_contacts_info.has_nz_contacts'          => 'nullable|in:Yes,No',
-            'nz_contacts_info.contact_first_name'       => 'nullable|required_if:nz_contacts_info.has_nz_contacts,Yes|string|max:120',
-            'nz_contacts_info.contact_family_name'      => 'nullable|required_if:nz_contacts_info.has_nz_contacts,Yes|string|max:120',
-            'military_info'  => 'nullable|array',
+            'nz_contacts_info' => 'nullable|array',
+            'nz_contacts_info.has_nz_contacts' => 'nullable|in:Yes,No',
+            'nz_contacts_info.contact_first_name' => 'nullable|required_if:nz_contacts_info.has_nz_contacts,Yes|string|max:120',
+            'nz_contacts_info.contact_family_name' => 'nullable|required_if:nz_contacts_info.has_nz_contacts,Yes|string|max:120',
+            'military_info' => 'nullable|array',
             'home_ties_info' => 'nullable|array',
 
             // Step 12 - Documents (Education Enrolment only — Free Assessment
             // doesn't send these so the nullable rule keeps it backwards-
             // compatible). Each file: up to 10 MB, in the formats listed
             // by the dropzone widget.
-            'cv_files'           => 'nullable|array|max:10',
-            'cv_files.*'         => 'file|mimes:pdf,doc,docx,xls,csv,jpg,jpeg,png,gif|max:10240',
-            'passport_files'     => 'nullable|array|max:10',
-            'passport_files.*'   => 'file|mimes:pdf,doc,docx,xls,csv,jpg,jpeg,png,gif|max:10240',
-            'diploma_files'      => 'nullable|array|max:10',
-            'diploma_files.*'    => 'file|mimes:pdf,doc,docx,xls,csv,jpg,jpeg,png,gif|max:10240',
-            'transcript_files'   => 'nullable|array|max:10',
+            'cv_files' => 'nullable|array|max:10',
+            'cv_files.*' => 'file|mimes:pdf,doc,docx,xls,csv,jpg,jpeg,png,gif|max:10240',
+            'passport_files' => 'nullable|array|max:10',
+            'passport_files.*' => 'file|mimes:pdf,doc,docx,xls,csv,jpg,jpeg,png,gif|max:10240',
+            'diploma_files' => 'nullable|array|max:10',
+            'diploma_files.*' => 'file|mimes:pdf,doc,docx,xls,csv,jpg,jpeg,png,gif|max:10240',
+            'transcript_files' => 'nullable|array|max:10',
             'transcript_files.*' => 'file|mimes:pdf,doc,docx,xls,csv,jpg,jpeg,png,gif|max:10240',
 
             // Step 13 - Declaration
@@ -448,10 +451,10 @@ class LeadController extends Controller
             $intake = app(\App\Services\LeadIntakeService::class);
             $existing = $intake->ingest('free-assessment', [
                 'first_name' => $validated['first_name'],
-                'last_name'  => $validated['last_name'],
-                'email'      => $validated['email'],
-                'phone'      => $validated['phone'] ?? null,
-                'country'    => $data['residence_country'] ?? null,
+                'last_name' => $validated['last_name'],
+                'email' => $validated['email'],
+                'phone' => $validated['phone'] ?? null,
+                'country' => $data['residence_country'] ?? null,
             ], $request);
 
             // Was this an existing lead? Yes if its lead_id doesn't already
@@ -459,66 +462,66 @@ class LeadController extends Controller
             // historical references (assessment-result URL, ai_analysis)
             // stay stable.
             $payload = [
-                'lead_id'           => str_starts_with((string) $existing->lead_id, 'FA-')
+                'lead_id' => str_starts_with((string) $existing->lead_id, 'FA-')
                     ? $existing->lead_id
-                    : 'FA-' . strtoupper(uniqid()),
-                'first_name'        => $validated['first_name'],
-                'last_name'         => $validated['last_name'],
-                'email'             => $validated['email'],
-                'phone'             => $validated['phone'] ?? null,
-                'dob'               => $data['dob'] ?? null,
-                'other_names'       => $data['other_names'] ?? null,
-                'gender'            => $data['gender'] ?? null,
-                'marital_status'    => $data['marital_status'] ?? null,
-                'terms_accepted'    => $request->boolean('terms_accepted'),
-                
+                    : 'FA-'.strtoupper(uniqid()),
+                'first_name' => $validated['first_name'],
+                'last_name' => $validated['last_name'],
+                'email' => $validated['email'],
+                'phone' => $validated['phone'] ?? null,
+                'dob' => $data['dob'] ?? null,
+                'other_names' => $data['other_names'] ?? null,
+                'gender' => $data['gender'] ?? null,
+                'marital_status' => $data['marital_status'] ?? null,
+                'terms_accepted' => $request->boolean('terms_accepted'),
+
                 // Residency
-                'country_of_birth'  => $data['country_of_birth'] ?? null,
-                'place_of_birth'    => $data['place_of_birth'] ?? null,
-                'citizenship'       => $data['citizenship'] ?? null,
-                'residence_city'    => $data['residence_city'] ?? null,
-                'residence_state'   => $data['residence_state'] ?? null,
+                'country_of_birth' => $data['country_of_birth'] ?? null,
+                'place_of_birth' => $data['place_of_birth'] ?? null,
+                'citizenship' => $data['citizenship'] ?? null,
+                'residence_city' => $data['residence_city'] ?? null,
+                'residence_state' => $data['residence_state'] ?? null,
                 'residence_country' => $data['residence_country'] ?? null,
 
                 // Passport
-                'has_passport'      => $data['has_passport'] ?? 'No',
-                'passport_number'   => $data['passport_number'] ?? null,
-                'passport_expiry'   => $data['passport_expiry'] ?? null,
-                'passport_path'     => $passportPath,
+                'has_passport' => $data['has_passport'] ?? 'No',
+                'passport_number' => $data['passport_number'] ?? null,
+                'passport_expiry' => $data['passport_expiry'] ?? null,
+                'passport_path' => $passportPath,
 
                 // JSON/Text Info
-                'financial_info'    => $data['financial_info'] ?? null,
-                'work_info'         => $data['work_experience'] ?? null,
-                'gap_explanation'   => $data['gap_explanation'] ?? null,
-                'education_notes'   => [
+                'financial_info' => $data['financial_info'] ?? null,
+                'work_info' => $data['work_experience'] ?? null,
+                'gap_explanation' => $data['gap_explanation'] ?? null,
+                'education_notes' => [
                     'high_school_completed' => $data['high_school_completed'] ?? 'No',
-                    'high_school_level'     => $data['high_school_level'] ?? null,
+                    'high_school_level' => $data['high_school_level'] ?? null,
                     'high_school_institution' => $data['high_school_institution'] ?? null,
-                    'high_school_start'     => $data['high_school_start'] ?? null,
-                    'high_school_end'       => $data['high_school_end'] ?? null,
-                    'high_school_marks'     => $data['high_school_marks'] ?? null,
-                    'education_docs'        => $data['education_docs'] ?? [],
-                    'has_gap'               => $data['has_gap'] ?? 'No',
-                    'gap_length'            => $data['gap_length'] ?? null,
-                    'gap_activities'        => $data['gap_activities'] ?? [],
+                    'high_school_start' => $data['high_school_start'] ?? null,
+                    'high_school_end' => $data['high_school_end'] ?? null,
+                    'high_school_marks' => $data['high_school_marks'] ?? null,
+                    'education_docs' => $data['education_docs'] ?? [],
+                    'has_gap' => $data['has_gap'] ?? 'No',
+                    'gap_length' => $data['gap_length'] ?? null,
+                    'gap_activities' => $data['gap_activities'] ?? [],
                 ],
 
                 // New assessment sections
-                'immigration_info'      => $data['immigration_info'] ?? null,
-                'character_info'        => $data['character_info'] ?? null,
-                'health_info'           => $data['health_info'] ?? null,
-                'family_info'           => $data['family_info'] ?? null,
-                'nz_contacts_info'      => $data['nz_contacts_info'] ?? null,
-                'military_info'         => $data['military_info'] ?? null,
-                'source_of_funds_info'  => $data['source_of_funds_info'] ?? null,
-                'home_ties_info'        => $data['home_ties_info'] ?? null,
-                'declaration_accepted'  => $request->boolean('declaration_accepted'),
+                'immigration_info' => $data['immigration_info'] ?? null,
+                'character_info' => $data['character_info'] ?? null,
+                'health_info' => $data['health_info'] ?? null,
+                'family_info' => $data['family_info'] ?? null,
+                'nz_contacts_info' => $data['nz_contacts_info'] ?? null,
+                'military_info' => $data['military_info'] ?? null,
+                'source_of_funds_info' => $data['source_of_funds_info'] ?? null,
+                'home_ties_info' => $data['home_ties_info'] ?? null,
+                'declaration_accepted' => $request->boolean('declaration_accepted'),
 
                 // The applicant has explicitly clicked "Submit" — flip the
                 // lead to 'Submitted' so the Education / Sales Assessments
                 // queues can render the progress bar at the right stage.
                 'status' => 'Submitted',
-                'stage'  => 'Evaluation',
+                'stage' => 'Evaluation',
                 // Same form, two URLs — keep the source tag accurate so
                 // reporting can split free-assessment vs enrolment leads.
                 'source' => $request->is('education-enrolment') ? 'education-enrolment' : 'free-assessment',
@@ -535,16 +538,20 @@ class LeadController extends Controller
             // public disk; the stored paths are merged into education_notes
             // so the existing JSON column carries them — no migration needed.
             $docMap = [
-                'cv_files'         => 'cv',
-                'passport_files'   => 'passport',
-                'diploma_files'    => 'diploma',
+                'cv_files' => 'cv',
+                'passport_files' => 'passport',
+                'diploma_files' => 'diploma',
                 'transcript_files' => 'transcript',
             ];
             $uploaded = [];
             foreach ($docMap as $field => $folder) {
-                if (! $request->hasFile($field)) continue;
+                if (! $request->hasFile($field)) {
+                    continue;
+                }
                 foreach ((array) $request->file($field) as $uploadedFile) {
-                    if (! $uploadedFile) continue;
+                    if (! $uploadedFile) {
+                        continue;
+                    }
                     $uploaded[$folder][] = $uploadedFile->store(
                         "enrolment-docs/{$lead->lead_id}/{$folder}",
                         'public'
@@ -559,36 +566,36 @@ class LeadController extends Controller
             }
 
             // 4. Relational Data Mapping: Study Plans
-            if (!empty($data['study_plans'])) {
+            if (! empty($data['study_plans'])) {
                 $plans = $data['study_plans'];
                 $lead->studyPlans()->create([
-                    'preferred_course'    => $plans['preferred_course'] ?? null,
+                    'preferred_course' => $plans['preferred_course'] ?? null,
                     'qualification_level' => $plans['qualification_level'] ?? null,
-                    'preferred_city'      => $plans['preferred_city'] ?? null,
-                    'preferred_intake'    => $plans['preferred_intake'] ?? null,
-                    'english_test_taken'  => ($plans['has_english_test'] ?? 'No') === 'Yes',
-                    'english_test_type'   => $plans['english_test_type'] ?? null,
-                    'score_overall'       => $plans['test_score_overall'] ?? null,
-                    'score_reading'       => $plans['test_score_reading'] ?? null,
-                    'score_writing'       => $plans['test_score_writing'] ?? null,
-                    'score_listening'     => $plans['test_score_listening'] ?? null,
-                    'score_speaking'      => $plans['test_score_speaking'] ?? null,
-                    'english_test_date'   => $plans['test_date'] ?? null,
+                    'preferred_city' => $plans['preferred_city'] ?? null,
+                    'preferred_intake' => $plans['preferred_intake'] ?? null,
+                    'english_test_taken' => ($plans['has_english_test'] ?? 'No') === 'Yes',
+                    'english_test_type' => $plans['english_test_type'] ?? null,
+                    'score_overall' => $plans['test_score_overall'] ?? null,
+                    'score_reading' => $plans['test_score_reading'] ?? null,
+                    'score_writing' => $plans['test_score_writing'] ?? null,
+                    'score_listening' => $plans['test_score_listening'] ?? null,
+                    'score_speaking' => $plans['test_score_speaking'] ?? null,
+                    'english_test_date' => $plans['test_date'] ?? null,
                 ]);
             }
 
             // 5. Relational Data Mapping: Education Background (only completed entries)
-            if (!empty($data['education_background'])) {
+            if (! empty($data['education_background'])) {
                 foreach ($data['education_background'] as $edu) {
                     if (empty($edu['completed'])) {
                         continue;
                     }
                     $lead->educationExps()->create([
-                        'level'         => $edu['level'] ?? null,
+                        'level' => $edu['level'] ?? null,
                         'field_of_study' => $edu['field_of_study'] ?? null,
-                        'institution'   => $edu['institution'] ?? null,
-                        'start_date'    => $edu['start_date'] ?? null,
-                        'end_date'      => $edu['end_date'] ?? null,
+                        'institution' => $edu['institution'] ?? null,
+                        'start_date' => $edu['start_date'] ?? null,
+                        'end_date' => $edu['end_date'] ?? null,
                         'average_marks' => $edu['marks_percentage'] ?? null,
                     ]);
                 }
@@ -607,7 +614,8 @@ class LeadController extends Controller
             Log::error('Free assessment mapping failed', ['error' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
             $message = app()->environment('production')
                 ? 'Submission failed due to a server error. Our team has been notified.'
-                : 'Submission failed: ' . $e->getMessage();
+                : 'Submission failed: '.$e->getMessage();
+
             return redirect()->back()->withErrors(['error' => $message])->withInput();
         }
     }
@@ -643,14 +651,14 @@ class LeadController extends Controller
         if ($lead->is_immigration_case && auth()->check() && ! auth()->user()->isLead()) {
             try {
                 \App\Models\CaseAuditView::create([
-                    'lead_id'     => $lead->id,
-                    'viewer_id'   => auth()->id(),
+                    'lead_id' => $lead->id,
+                    'viewer_id' => auth()->id(),
                     'viewer_name' => auth()->user()->name,
                     'viewer_role' => auth()->user()->role,
-                    'action'      => 'view',
-                    'context'     => 'lead detail',
-                    'ip'          => request()->ip(),
-                    'viewed_at'   => now(),
+                    'action' => 'view',
+                    'context' => 'lead detail',
+                    'ip' => request()->ip(),
+                    'viewed_at' => now(),
                 ]);
             } catch (\Throwable $e) {
                 \Illuminate\Support\Facades\Log::warning('Case audit view write failed', ['lead_id' => $lead->id, 'error' => $e->getMessage()]);
@@ -666,13 +674,13 @@ class LeadController extends Controller
             ->limit(80)
             ->get()
             ->map(fn ($log) => [
-                'id'          => $log->id,
-                'action'      => $log->action,
+                'id' => $log->id,
+                'action' => $log->action,
                 'description' => $log->description,
-                'actor_name'  => $log->actor_name ?: 'System',
-                'actor_role'  => $log->actor_role ?: 'public',
-                'changes'     => data_get($log->properties, 'changes'),
-                'created_at'  => $log->created_at,
+                'actor_name' => $log->actor_name ?: 'System',
+                'actor_role' => $log->actor_role ?: 'public',
+                'changes' => data_get($log->properties, 'changes'),
+                'created_at' => $log->created_at,
             ]);
 
         // Render under the correct portal chrome based on which URL prefix
@@ -695,20 +703,20 @@ class LeadController extends Controller
             ->orderByDesc('created_at')
             ->get()
             ->map(fn ($n) => [
-                'id'                  => $n->id,
-                'body'                => $n->body,
-                'author_name'         => $n->author_name ?: 'Unknown',
-                'author_role'         => $n->author_role ?: 'staff',
-                'user_id'             => $n->user_id,
-                'pinned'              => $n->pinned,
-                'kind'                => $n->kind ?: 'general',
-                'pre_screened_by'     => $n->pre_screened_by,
-                'pre_screen_mode'     => $n->pre_screen_mode,
-                'pre_screen_date'     => $n->pre_screen_date,
+                'id' => $n->id,
+                'body' => $n->body,
+                'author_name' => $n->author_name ?: 'Unknown',
+                'author_role' => $n->author_role ?: 'staff',
+                'user_id' => $n->user_id,
+                'pinned' => $n->pinned,
+                'kind' => $n->kind ?: 'general',
+                'pre_screened_by' => $n->pre_screened_by,
+                'pre_screen_mode' => $n->pre_screen_mode,
+                'pre_screen_date' => $n->pre_screen_date,
                 'goal_setting_status' => $n->goal_setting_status,
-                'goal_setting_by'     => $n->goal_setting_by,
-                'created_at'          => $n->created_at,
-                'updated_at'          => $n->updated_at,
+                'goal_setting_by' => $n->goal_setting_by,
+                'created_at' => $n->created_at,
+                'updated_at' => $n->updated_at,
             ]);
 
         // Tags attached to this lead + a hint list of every tag in the
@@ -726,9 +734,9 @@ class LeadController extends Controller
         // task was created from. Attachments are eager-loaded so the panel
         // can render a paperclip + file list inline.
         $tasks = \App\Models\LeadTask::with([
-                'assignee:id,name', 'creator:id,name',
-                'attachments', 'attachments.uploader:id,name',
-            ])
+            'assignee:id,name', 'creator:id,name',
+            'attachments', 'attachments.uploader:id,name',
+        ])
             ->where(function ($q) use ($lead) {
                 $q->where('lead_id', $lead->id)
                     ->orWhereJsonContains('additional_lead_ids', $lead->id);
@@ -738,31 +746,31 @@ class LeadController extends Controller
             ->orderByDesc('created_at')
             ->get()
             ->map(fn ($t) => [
-                'id'           => $t->id,
-                'title'        => $t->title,
-                'description'  => $t->description,
-                'note'         => $t->note,
-                'status'       => $t->status,
-                'type'         => $t->type,
-                'progress'     => $t->progress,
-                'due_at'       => $t->due_at,
-                'priority'     => $t->priority,
-                'completed'    => $t->completed,
+                'id' => $t->id,
+                'title' => $t->title,
+                'description' => $t->description,
+                'note' => $t->note,
+                'status' => $t->status,
+                'type' => $t->type,
+                'progress' => $t->progress,
+                'due_at' => $t->due_at,
+                'priority' => $t->priority,
+                'completed' => $t->completed,
                 'completed_at' => $t->completed_at,
-                'overdue'      => ! $t->completed && $t->due_at && $t->due_at->isPast(),
-                'assignee'     => $t->assignee ? ['id' => $t->assignee->id, 'name' => $t->assignee->name] : null,
+                'overdue' => ! $t->completed && $t->due_at && $t->due_at->isPast(),
+                'assignee' => $t->assignee ? ['id' => $t->assignee->id, 'name' => $t->assignee->name] : null,
                 'additional_assignee_ids' => $t->additional_assignee_ids ?? [],
-                'additional_lead_ids'     => $t->additional_lead_ids ?? [],
-                'created_by'   => $t->created_by,
-                'creator'      => $t->creator ? ['id' => $t->creator->id, 'name' => $t->creator->name] : null,
-                'attachments'  => $t->attachments->map(fn ($a) => [
-                    'id'                => $a->id,
-                    'url'               => $a->url,
+                'additional_lead_ids' => $t->additional_lead_ids ?? [],
+                'created_by' => $t->created_by,
+                'creator' => $t->creator ? ['id' => $t->creator->id, 'name' => $t->creator->name] : null,
+                'attachments' => $t->attachments->map(fn ($a) => [
+                    'id' => $a->id,
+                    'url' => $a->url,
                     'original_filename' => $a->original_filename,
-                    'mime_type'         => $a->mime_type,
-                    'size'              => $a->size,
-                    'is_image'          => $a->is_image,
-                    'uploader'          => $a->uploader ? ['id' => $a->uploader->id, 'name' => $a->uploader->name] : null,
+                    'mime_type' => $a->mime_type,
+                    'size' => $a->size,
+                    'is_image' => $a->is_image,
+                    'uploader' => $a->uploader ? ['id' => $a->uploader->id, 'name' => $a->uploader->name] : null,
                 ])->values(),
             ]);
 
@@ -790,31 +798,31 @@ class LeadController extends Controller
             ->get()
             ->groupBy('checklist_key')
             ->map(fn ($files) => $files->map(fn ($f) => [
-                'id'             => $f->id,
-                'original_name'  => $f->original_name,
-                'mime'           => $f->mime,
-                'size'           => $f->size,
-                'status'         => $f->status,
-                'source'         => $f->source,
+                'id' => $f->id,
+                'original_name' => $f->original_name,
+                'mime' => $f->mime,
+                'size' => $f->size,
+                'status' => $f->status,
+                'source' => $f->source,
                 'source_variant' => $f->source_variant,
-                'uploaded_by'    => optional($f->uploader)->name,
-                'created_at'     => $f->created_at,
+                'uploaded_by' => optional($f->uploader)->name,
+                'created_at' => $f->created_at,
             ])->values());
 
         return inertia($page, [
-            'lead'           => $lead,
-            'activity'       => $activity,
-            'stageTimeline'  => $stageTimeline,
+            'lead' => $lead,
+            'activity' => $activity,
+            'stageTimeline' => $stageTimeline,
             'checklistFiles' => $checklistFiles,
-            'notes'         => $notes,
-            'tags'          => $leadTags,
-            'allTags'       => $allTags,
-            'tasks'         => $tasks,
-            'staffOptions'  => $staffOptions,
-            'currentUser'   => auth()->user()
+            'notes' => $notes,
+            'tags' => $leadTags,
+            'allTags' => $allTags,
+            'tasks' => $tasks,
+            'staffOptions' => $staffOptions,
+            'currentUser' => auth()->user()
                 ? ['id' => auth()->id(), 'name' => auth()->user()->name, 'role' => auth()->user()->role, 'is_admin' => auth()->user()->isAdmin()]
                 : null,
-            'statuses'      => \App\Models\Lead::STAGES,
+            'statuses' => \App\Models\Lead::STAGES,
         ]);
     }
 
@@ -848,23 +856,23 @@ class LeadController extends Controller
             : $lead->status;
 
         $events->push([
-            'type'       => 'stage',
-            'stage'      => $initialStage,
+            'type' => 'stage',
+            'stage' => $initialStage,
             'entered_at' => $iso($lead->created_at),
             'actor_name' => null,
             'is_current' => false,
-            'detail'     => null,
+            'detail' => null,
         ]);
 
         // 2. Each subsequent stage transition.
         foreach ($stageChanges as $change) {
             $events->push([
-                'type'       => 'stage',
-                'stage'      => $change['changes']['status']['new'] ?? null,
+                'type' => 'stage',
+                'stage' => $change['changes']['status']['new'] ?? null,
                 'entered_at' => $iso($change['created_at']),
                 'actor_name' => $change['actor_name'] ?? null,
                 'is_current' => false,
-                'detail'     => null,
+                'detail' => null,
             ]);
         }
 
@@ -872,18 +880,22 @@ class LeadController extends Controller
         // or prescreened_notes.
         foreach ($history as $h) {
             $c = $h['changes'] ?? null;
-            if (! is_array($c)) continue;
-            if (! isset($c['prescreened_by']) && ! isset($c['prescreened_notes'])) continue;
+            if (! is_array($c)) {
+                continue;
+            }
+            if (! isset($c['prescreened_by']) && ! isset($c['prescreened_notes'])) {
+                continue;
+            }
 
-            $by    = $c['prescreened_by']['new']    ?? null;
+            $by = $c['prescreened_by']['new'] ?? null;
             $notes = $c['prescreened_notes']['new'] ?? null;
             $events->push([
-                'type'       => 'prescreen',
-                'stage'      => $by ? "Pre-screened by {$by}" : 'Pre-screening updated',
+                'type' => 'prescreen',
+                'stage' => $by ? "Pre-screened by {$by}" : 'Pre-screening updated',
                 'entered_at' => $iso($h['created_at']),
                 'actor_name' => $h['actor_name'] ?? null,
                 'is_current' => false,
-                'detail'     => $notes ? \Illuminate\Support\Str::limit($notes, 160) : null,
+                'detail' => $notes ? \Illuminate\Support\Str::limit($notes, 160) : null,
             ]);
         }
 
@@ -891,24 +903,28 @@ class LeadController extends Controller
         // goal_setting_by, or goal_setting_notes.
         foreach ($history as $h) {
             $c = $h['changes'] ?? null;
-            if (! is_array($c)) continue;
-            if (! isset($c['goal_setting_status']) && ! isset($c['goal_setting_by']) && ! isset($c['goal_setting_notes'])) continue;
+            if (! is_array($c)) {
+                continue;
+            }
+            if (! isset($c['goal_setting_status']) && ! isset($c['goal_setting_by']) && ! isset($c['goal_setting_notes'])) {
+                continue;
+            }
 
             $status = $c['goal_setting_status']['new'] ?? null;
-            $by     = $c['goal_setting_by']['new']     ?? null;
-            $notes  = $c['goal_setting_notes']['new']  ?? null;
+            $by = $c['goal_setting_by']['new'] ?? null;
+            $notes = $c['goal_setting_notes']['new'] ?? null;
 
             $label = $status
                 ? "Goal-setting: {$status}"
                 : ($by ? "Goal-setting by {$by}" : 'Goal-setting updated');
 
             $events->push([
-                'type'       => 'goal',
-                'stage'      => $label,
+                'type' => 'goal',
+                'stage' => $label,
                 'entered_at' => $iso($h['created_at']),
                 'actor_name' => $h['actor_name'] ?? null,
                 'is_current' => false,
-                'detail'     => $notes ? \Illuminate\Support\Str::limit($notes, 160) : null,
+                'detail' => $notes ? \Illuminate\Support\Str::limit($notes, 160) : null,
             ]);
         }
 
@@ -925,7 +941,7 @@ class LeadController extends Controller
         if ($lastStageKey !== null) {
             $entry = $sorted[$lastStageKey];
             $entry['is_current'] = true;
-            $entry['stage']      = $lead->status ?: $entry['stage'];
+            $entry['stage'] = $lead->status ?: $entry['stage'];
             $sorted[$lastStageKey] = $entry;
         }
 
@@ -944,14 +960,14 @@ class LeadController extends Controller
         // 1. Source touchpoints — origin + bookings + event + resubmits.
         foreach ($this->collectSources($lead) as $src) {
             $items->push([
-                'kind'       => 'source.' . $src['kind'],
-                'title'      => $src['label'],
-                'detail'     => $src['detail'],
-                'reference'  => $src['reference'],
+                'kind' => 'source.'.$src['kind'],
+                'title' => $src['label'],
+                'detail' => $src['detail'],
+                'reference' => $src['reference'],
                 'actor_name' => null,
                 'actor_role' => null,
-                'changes'    => null,
-                'date'       => $src['date'],
+                'changes' => null,
+                'date' => $src['date'],
             ]);
         }
 
@@ -961,14 +977,14 @@ class LeadController extends Controller
             in_array($h['action'], ['lead.created', 'lead.resubmitted'], true)
                 ? null
                 : $items->push([
-                    'kind'       => $h['action'],
-                    'title'      => $h['description'],
-                    'detail'     => null,
-                    'reference'  => null,
+                    'kind' => $h['action'],
+                    'title' => $h['description'],
+                    'detail' => null,
+                    'reference' => null,
                     'actor_name' => $h['actor_name'],
                     'actor_role' => $h['actor_role'],
-                    'changes'    => $h['changes'],
-                    'date'       => $h['created_at'] ? \Illuminate\Support\Carbon::parse($h['created_at'])->toIso8601String() : null,
+                    'changes' => $h['changes'],
+                    'date' => $h['created_at'] ? \Illuminate\Support\Carbon::parse($h['created_at'])->toIso8601String() : null,
                 ]);
         }
 
@@ -987,11 +1003,11 @@ class LeadController extends Controller
         // 1. Original creation — derive the form type from source / lead_id prefix.
         $originLabel = $this->originLabel($lead);
         $items->push([
-            'kind'      => 'origin',
-            'label'     => $originLabel,
+            'kind' => 'origin',
+            'label' => $originLabel,
             'reference' => $lead->lead_id,
-            'date'      => optional($lead->created_at)->toIso8601String(),
-            'detail'    => $lead->source ?: null,
+            'date' => optional($lead->created_at)->toIso8601String(),
+            'detail' => $lead->source ?: null,
         ]);
 
         // 2. Bookings linked to this lead — surfaces every consultation booking.
@@ -999,23 +1015,23 @@ class LeadController extends Controller
             ->orderBy('created_at')
             ->get()
             ->each(fn ($b) => $items->push([
-                'kind'      => 'booking',
-                'label'     => 'Booking — ' . ($b->service_type ?: 'Consultation'),
-                'reference' => 'BK-' . $b->id,
-                'date'      => optional($b->created_at)->toIso8601String(),
-                'detail'    => $b->status
-                    ? "Status: {$b->status}" . ($b->appointment_date ? ' · ' . \Illuminate\Support\Carbon::parse($b->appointment_date)->toFormattedDateString() : '')
+                'kind' => 'booking',
+                'label' => 'Booking — '.($b->service_type ?: 'Consultation'),
+                'reference' => 'BK-'.$b->id,
+                'date' => optional($b->created_at)->toIso8601String(),
+                'detail' => $b->status
+                    ? "Status: {$b->status}".($b->appointment_date ? ' · '.\Illuminate\Support\Carbon::parse($b->appointment_date)->toFormattedDateString() : '')
                     : null,
             ]));
 
         // 3. Event registration — single direct link via leads.event_id.
         $lead->event
             ? $items->push([
-                'kind'      => 'event',
-                'label'     => 'Event — ' . $lead->event->name,
+                'kind' => 'event',
+                'label' => 'Event — '.$lead->event->name,
                 'reference' => $lead->event->event_code,
-                'date'      => optional($lead->created_at)->toIso8601String(),
-                'detail'    => $lead->event->type ?: null,
+                'date' => optional($lead->created_at)->toIso8601String(),
+                'detail' => $lead->event->type ?: null,
             ])
             : null;
 
@@ -1025,12 +1041,12 @@ class LeadController extends Controller
             ->orderBy('created_at')
             ->get()
             ->each(fn ($a) => $items->push([
-                'kind'      => 'resubmit',
-                'label'     => data_get($a->properties, 'form_type') ?: 'Resubmitted',
+                'kind' => 'resubmit',
+                'label' => data_get($a->properties, 'form_type') ?: 'Resubmitted',
                 'reference' => null,
-                'date'      => optional($a->created_at)->toIso8601String(),
-                'detail'    => count(data_get($a->properties, 'backfilled', [])) > 0
-                    ? 'Backfilled: ' . implode(', ', data_get($a->properties, 'backfilled', []))
+                'date' => optional($a->created_at)->toIso8601String(),
+                'detail' => count(data_get($a->properties, 'backfilled', [])) > 0
+                    ? 'Backfilled: '.implode(', ', data_get($a->properties, 'backfilled', []))
                     : null,
             ]));
 
@@ -1044,12 +1060,12 @@ class LeadController extends Controller
 
         return match (true) {
             str_starts_with((string) $lead->lead_id, 'FA-') => 'Free Assessment',
-            $src === 'free-assessment'                      => 'Free Assessment',
-            str_starts_with($src, 'quick-lead')             => 'Quick Lead — ' . trim(str_replace(['quick-lead:', 'quick-lead'], '', $src), ': '),
-            $src === 'booking'                              => 'Booking',
-            str_starts_with($src, 'event:')                 => 'Event Registration',
-            $src !== ''                                     => ucwords(str_replace(['-', '_', ':'], ' ', $src)),
-            default                                         => 'Lead created',
+            $src === 'free-assessment' => 'Free Assessment',
+            str_starts_with($src, 'quick-lead') => 'Quick Lead — '.trim(str_replace(['quick-lead:', 'quick-lead'], '', $src), ': '),
+            $src === 'booking' => 'Booking',
+            str_starts_with($src, 'event:') => 'Event Registration',
+            $src !== '' => ucwords(str_replace(['-', '_', ':'], ' ', $src)),
+            default => 'Lead created',
         };
     }
 
@@ -1073,6 +1089,7 @@ class LeadController extends Controller
             return back()->with('success', "Stage updated to {$validated['status']}.");
         } catch (\Throwable $e) {
             \Illuminate\Support\Facades\Log::error('Lead stage update failed', ['id' => $id, 'error' => $e->getMessage()]);
+
             return back()->with('error', 'Could not update the stage.');
         }
     }
@@ -1099,111 +1116,112 @@ class LeadController extends Controller
     {
         $rules = [
             // ── Section 1 · Personal identity ────────────────────────
-            'first_name'                       => 'required|string|max:120',
-            'last_name'                        => 'nullable|string|max:120',
-            'middle_name'                      => 'nullable|string|max:120',
-            'suffix'                           => 'nullable|string|max:20',
-            'other_names'                      => 'nullable|string|max:200',
-            'preferred_name'                   => 'nullable|string|max:100',
-            'email'                            => 'nullable|email|max:200',
-            'phone'                            => 'nullable|string|max:40',
-            'whatsapp'                         => 'nullable|string|max:40',
-            'gender'                           => 'nullable|string|max:30',
-            'marital_status'                   => ['nullable', \Illuminate\Validation\Rule::in([
+            'first_name' => 'required|string|max:120',
+            'last_name' => 'nullable|string|max:120',
+            'middle_name' => 'nullable|string|max:120',
+            'suffix' => 'nullable|string|max:20',
+            'other_names' => 'nullable|string|max:200',
+            'preferred_name' => 'nullable|string|max:100',
+            'email' => 'nullable|email|max:200',
+            'phone' => 'nullable|string|max:40',
+            'whatsapp' => 'nullable|string|max:40',
+            'referral' => 'nullable|string|max:191',
+            'gender' => 'nullable|string|max:30',
+            'marital_status' => ['nullable', \Illuminate\Validation\Rule::in([
                 'Single', 'Married', 'De Facto', 'Civil Union', 'Divorced', 'Widowed', 'Separated',
             ])],
-            'dob'                              => 'nullable|date|before:today',
-            'country_of_birth'                 => 'nullable|string|max:120',
-            'place_of_birth'                   => 'nullable|string|max:120',
-            'citizenship'                      => 'nullable|string|max:120',
-            'residence_city'                   => 'nullable|string|max:160',
-            'residence_country'                => 'nullable|string|max:120',
-            'residence_address_line_1'         => 'nullable|string|max:200',
-            'residence_address_line_2'         => 'nullable|string|max:200',
-            'residence_address_postcode'       => 'nullable|string|max:20',
-            'has_been_in_nz_continuously'      => 'nullable|boolean',
-            'nz_continuous_residence_months'   => 'nullable|integer|min:0|max:600',
+            'dob' => 'nullable|date|before:today',
+            'country_of_birth' => 'nullable|string|max:120',
+            'place_of_birth' => 'nullable|string|max:120',
+            'citizenship' => 'nullable|string|max:120',
+            'residence_city' => 'nullable|string|max:160',
+            'residence_country' => 'nullable|string|max:120',
+            'residence_address_line_1' => 'nullable|string|max:200',
+            'residence_address_line_2' => 'nullable|string|max:200',
+            'residence_address_postcode' => 'nullable|string|max:20',
+            'has_been_in_nz_continuously' => 'nullable|boolean',
+            'nz_continuous_residence_months' => 'nullable|integer|min:0|max:600',
 
             // ── Section 2 · Passport ─────────────────────────────────
-            'has_passport'                     => 'nullable|boolean',
-            'passport_number'                  => 'nullable|string|max:50',
-            'passport_issuing_country'         => 'nullable|string|max:120',
-            'passport_issue_date'              => 'nullable|date',
-            'passport_expiry'                  => 'nullable|date',
+            'has_passport' => 'nullable|boolean',
+            'passport_number' => 'nullable|string|max:50',
+            'passport_issuing_country' => 'nullable|string|max:120',
+            'passport_issue_date' => 'nullable|date',
+            'passport_expiry' => 'nullable|date',
 
             // ── Section 3 · Current NZ visa ──────────────────────────
-            'current_nz_visa_type'             => 'nullable|string|max:120',
-            'current_nz_visa_number'           => 'nullable|string|max:50',
-            'current_nz_visa_issued_date'      => 'nullable|date',
-            'current_nz_visa_expiry_date'      => 'nullable|date',
-            'previous_nz_visa_type'            => 'nullable|string|max:120',
+            'current_nz_visa_type' => 'nullable|string|max:120',
+            'current_nz_visa_number' => 'nullable|string|max:50',
+            'current_nz_visa_issued_date' => 'nullable|date',
+            'current_nz_visa_expiry_date' => 'nullable|date',
+            'previous_nz_visa_type' => 'nullable|string|max:120',
 
             // ── Section 4 · Study plans ──────────────────────────────
-            'preferred_course'                 => 'nullable|string|max:200',
-            'preferred_qualification_level'    => 'nullable|string|max:120',
-            'preferred_city_of_study'          => 'nullable|string|max:120',
-            'preferred_intake'                 => 'nullable|string|max:120',
-            'english_test_type'                => 'nullable|string|max:30',
-            'english_test_overall_score'       => 'nullable|numeric|min:0|max:100',
-            'english_test_listening'           => 'nullable|numeric|min:0|max:100',
-            'english_test_reading'             => 'nullable|numeric|min:0|max:100',
-            'english_test_writing'             => 'nullable|numeric|min:0|max:100',
-            'english_test_speaking'            => 'nullable|numeric|min:0|max:100',
-            'english_test_date'                => 'nullable|date',
-            'target_institution'               => 'nullable|string|max:200',
+            'preferred_course' => 'nullable|string|max:200',
+            'preferred_qualification_level' => 'nullable|string|max:120',
+            'preferred_city_of_study' => 'nullable|string|max:120',
+            'preferred_intake' => 'nullable|string|max:120',
+            'english_test_type' => 'nullable|string|max:30',
+            'english_test_overall_score' => 'nullable|numeric|min:0|max:100',
+            'english_test_listening' => 'nullable|numeric|min:0|max:100',
+            'english_test_reading' => 'nullable|numeric|min:0|max:100',
+            'english_test_writing' => 'nullable|numeric|min:0|max:100',
+            'english_test_speaking' => 'nullable|numeric|min:0|max:100',
+            'english_test_date' => 'nullable|date',
+            'target_institution' => 'nullable|string|max:200',
 
             // ── Section 5 · Financial ────────────────────────────────
-            'funding_source'                   => ['nullable', \Illuminate\Validation\Rule::in(['Self', 'Sponsor', 'Scholarship', 'Loan', 'Mixed'])],
-            'estimated_total_cost_nzd'         => 'nullable|numeric|min:0|max:10000000',
-            'available_funds_nzd'              => 'nullable|numeric|min:0|max:10000000',
-            'supports_partner_or_dependents'   => 'nullable|boolean',
-            'has_property_in_home_country'     => 'nullable|boolean',
-            'annual_income_nzd'                => 'nullable|numeric|min:0|max:10000000',
-            'annual_income_currency'           => 'nullable|string|size:3',
-            'bank_funds_evidence_provided'     => 'nullable|boolean',
+            'funding_source' => ['nullable', \Illuminate\Validation\Rule::in(['Self', 'Sponsor', 'Scholarship', 'Loan', 'Mixed'])],
+            'estimated_total_cost_nzd' => 'nullable|numeric|min:0|max:10000000',
+            'available_funds_nzd' => 'nullable|numeric|min:0|max:10000000',
+            'supports_partner_or_dependents' => 'nullable|boolean',
+            'has_property_in_home_country' => 'nullable|boolean',
+            'annual_income_nzd' => 'nullable|numeric|min:0|max:10000000',
+            'annual_income_currency' => 'nullable|string|size:3',
+            'bank_funds_evidence_provided' => 'nullable|boolean',
 
             // ── Section 6 · Employment ───────────────────────────────
-            'employment_type'                  => ['nullable', \Illuminate\Validation\Rule::in(['Employed', 'Self-employed', 'Unemployed', 'Student', 'Retired'])],
-            'current_employer_name'            => 'nullable|string|max:200',
-            'current_position_title'           => 'nullable|string|max:200',
-            'current_employer_country'         => 'nullable|string|max:120',
-            'current_employer_phone'           => 'nullable|string|max:50',
-            'current_employer_email'           => 'nullable|email|max:200',
-            'current_employment_start_date'    => 'nullable|date',
-            'current_salary_nzd'               => 'nullable|numeric|min:0|max:10000000',
-            'years_of_relevant_experience'     => 'nullable|integer|min:0|max:80',
-            'has_anzsco_listed_role'           => 'nullable|boolean',
-            'anzsco_code'                      => 'nullable|string|max:10',
+            'employment_type' => ['nullable', \Illuminate\Validation\Rule::in(['Employed', 'Self-employed', 'Unemployed', 'Student', 'Retired'])],
+            'current_employer_name' => 'nullable|string|max:200',
+            'current_position_title' => 'nullable|string|max:200',
+            'current_employer_country' => 'nullable|string|max:120',
+            'current_employer_phone' => 'nullable|string|max:50',
+            'current_employer_email' => 'nullable|email|max:200',
+            'current_employment_start_date' => 'nullable|date',
+            'current_salary_nzd' => 'nullable|numeric|min:0|max:10000000',
+            'years_of_relevant_experience' => 'nullable|integer|min:0|max:80',
+            'has_anzsco_listed_role' => 'nullable|boolean',
+            'anzsco_code' => 'nullable|string|max:10',
             'has_nz_professional_registration' => 'nullable|boolean',
             'nz_professional_registration_body' => 'nullable|string|max:200',
 
             // ── Section 7 · Education background ─────────────────────
-            'highest_qualification'                 => ['nullable', \Illuminate\Validation\Rule::in([
+            'highest_qualification' => ['nullable', \Illuminate\Validation\Rule::in([
                 'Doctorate', 'Master', 'Postgraduate Diploma', 'Bachelor', 'Diploma', 'Certificate', 'High School', 'None',
             ])],
-            'highest_qualification_field'           => 'nullable|string|max:200',
-            'highest_qualification_country'         => 'nullable|string|max:120',
-            'highest_qualification_year_completed'  => 'nullable|integer|min:1900|max:2050',
-            'has_nzqa_assessment'                   => 'nullable|boolean',
-            'nzqa_assessment_level'                 => 'nullable|string|max:120',
+            'highest_qualification_field' => 'nullable|string|max:200',
+            'highest_qualification_country' => 'nullable|string|max:120',
+            'highest_qualification_year_completed' => 'nullable|integer|min:1900|max:2050',
+            'has_nzqa_assessment' => 'nullable|boolean',
+            'nzqa_assessment_level' => 'nullable|string|max:120',
 
             // ── Section 8 · Family ───────────────────────────────────
-            'has_children'              => 'nullable|boolean',
-            'number_of_children'        => 'nullable|integer|min:0|max:20',
-            'dependent_children_notes'  => 'nullable|string|max:5000',
-            'has_dependent_partner'     => 'nullable|boolean',
-            'partner_in_nz'             => 'nullable|boolean',
-            'intends_to_bring_family'   => 'nullable|boolean',
+            'has_children' => 'nullable|boolean',
+            'number_of_children' => 'nullable|integer|min:0|max:20',
+            'dependent_children_notes' => 'nullable|string|max:5000',
+            'has_dependent_partner' => 'nullable|boolean',
+            'partner_in_nz' => 'nullable|boolean',
+            'intends_to_bring_family' => 'nullable|boolean',
 
             // ── Section 9 · Health & character ───────────────────────
-            'has_health_disclosure'        => 'nullable|boolean',
-            'health_disclosure_notes'      => 'nullable|string|max:2000',
-            'has_character_disclosure'     => 'nullable|boolean',
-            'character_disclosure_notes'   => 'nullable|string|max:2000',
-            'has_been_declined_visa'       => 'nullable|boolean',
-            'declined_visa_details'        => 'nullable|string|max:2000',
-            'has_criminal_record'          => 'nullable|boolean',
-            'criminal_record_details'      => 'nullable|string|max:2000',
+            'has_health_disclosure' => 'nullable|boolean',
+            'health_disclosure_notes' => 'nullable|string|max:2000',
+            'has_character_disclosure' => 'nullable|boolean',
+            'character_disclosure_notes' => 'nullable|string|max:2000',
+            'has_been_declined_visa' => 'nullable|boolean',
+            'declined_visa_details' => 'nullable|string|max:2000',
+            'has_criminal_record' => 'nullable|boolean',
+            'criminal_record_details' => 'nullable|string|max:2000',
             'meets_184_day_rule_two_years' => 'nullable|boolean',
         ];
 
@@ -1215,6 +1233,7 @@ class LeadController extends Controller
         $validator->after(function ($v) use ($request) {
             $bool = function ($key) use ($request): bool {
                 $val = $request->input($key);
+
                 return $val === true || $val === 'true' || $val === 1 || $val === '1';
             };
 
@@ -1230,14 +1249,14 @@ class LeadController extends Controller
             }
 
             $disclosurePairs = [
-                'has_health_disclosure'    => ['health_disclosure_notes',    'Health disclosure notes are required when "Has health disclosure" is yes.'],
+                'has_health_disclosure' => ['health_disclosure_notes',    'Health disclosure notes are required when "Has health disclosure" is yes.'],
                 'has_character_disclosure' => ['character_disclosure_notes', 'Character disclosure notes are required when "Has character disclosure" is yes.'],
-                'has_been_declined_visa'   => ['declined_visa_details',      'Declined-visa details are required when "Has been declined a visa" is yes.'],
-                'has_criminal_record'      => ['criminal_record_details',    'Criminal-record details are required when "Has criminal record" is yes.'],
+                'has_been_declined_visa' => ['declined_visa_details',      'Declined-visa details are required when "Has been declined a visa" is yes.'],
+                'has_criminal_record' => ['criminal_record_details',    'Criminal-record details are required when "Has criminal record" is yes.'],
             ];
             foreach ($disclosurePairs as $flag => [$noteKey, $msg]) {
                 if ($bool($flag) && strlen(trim((string) $request->input($noteKey, ''))) < 10) {
-                    $v->errors()->add($noteKey, $msg . ' (min 10 characters)');
+                    $v->errors()->add($noteKey, $msg.' (min 10 characters)');
                 }
             }
 
@@ -1276,6 +1295,7 @@ class LeadController extends Controller
             });
         } catch (\Throwable $e) {
             \Illuminate\Support\Facades\Log::error('Lead personal update failed', ['id' => $id, 'error' => $e->getMessage()]);
+
             return back()->with('error', 'Could not update personal information.');
         }
     }
@@ -1289,14 +1309,14 @@ class LeadController extends Controller
     {
         $validated = $request->validate([
             'date_of_first_contact' => 'nullable|date',
-            'date_of_engagement'    => 'nullable|date',
-            'prescreened_by'        => 'nullable|string|max:120',
-            'prescreened_notes'     => 'nullable|string|max:2000',
-            'goal_setting_status'   => ['nullable', \Illuminate\Validation\Rule::in([
+            'date_of_engagement' => 'nullable|date',
+            'prescreened_by' => 'nullable|string|max:120',
+            'prescreened_notes' => 'nullable|string|max:2000',
+            'goal_setting_status' => ['nullable', \Illuminate\Validation\Rule::in([
                 'Consultation Done', 'For Proposal', 'Proposal Sent', 'No Show',
             ])],
-            'goal_setting_by'       => 'nullable|string|max:120',
-            'goal_setting_notes'    => 'nullable|string|max:2000',
+            'goal_setting_by' => 'nullable|string|max:120',
+            'goal_setting_notes' => 'nullable|string|max:2000',
         ]);
 
         try {
@@ -1307,6 +1327,7 @@ class LeadController extends Controller
             return back()->with('success', 'Journey updated.');
         } catch (\Throwable $e) {
             \Illuminate\Support\Facades\Log::error('Lead journey update failed', ['id' => $id, 'error' => $e->getMessage()]);
+
             return back()->with('error', 'Could not save the journey changes.');
         }
     }
@@ -1340,6 +1361,41 @@ class LeadController extends Controller
         }
     }
 
+    /**
+     * Archive a lead — a soft delete. The row drops off every list (the
+     * SoftDeletes global scope hides trashed leads) but notes, tasks,
+     * documents and history all survive, and `restore()` brings it back.
+     */
+    public function destroy($id)
+    {
+        try {
+            $lead = Lead::findOrFail($id);
+            $label = $lead->lead_id ?: trim("{$lead->first_name} {$lead->last_name}");
+            $lead->delete();
+
+            return redirect()->route('admin.leads')->with('success', "Lead {$label} archived.");
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('Lead archive failed', ['id' => $id, 'error' => $e->getMessage()]);
+
+            return back()->with('error', 'Could not archive this lead.');
+        }
+    }
+
+    /** Restore a previously archived (soft-deleted) lead. */
+    public function restore($id)
+    {
+        try {
+            $lead = Lead::withTrashed()->findOrFail($id);
+            $lead->restore();
+
+            return back()->with('success', "Lead {$lead->lead_id} restored.");
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('Lead restore failed', ['id' => $id, 'error' => $e->getMessage()]);
+
+            return back()->with('error', 'Could not restore this lead.');
+        }
+    }
+
     public function convertToStudent($id)
     {
         try {
@@ -1348,14 +1404,16 @@ class LeadController extends Controller
                 return back()->with('error', 'This lead is already a student.');
             }
             $lead->fill([
-                'is_student'           => true,
+                'is_student' => true,
                 'student_converted_at' => now(),
                 'student_converted_by' => auth()->id(),
             ])->save();
             $this->notifyDepartmentOfConversion($lead, ['education'], 'Education');
+
             return back()->with('success', "Lead {$lead->lead_id} is now a student.");
         } catch (\Throwable $e) {
             \Illuminate\Support\Facades\Log::error('Convert to student failed', ['id' => $id, 'error' => $e->getMessage()]);
+
             return back()->with('error', 'Could not convert this lead.');
         }
     }
@@ -1372,7 +1430,7 @@ class LeadController extends Controller
             // Extension allow-list (csv/txt/xls/xlsx). Real CSVs — including
             // BOM-prefixed ones — are detected as text/plain and pass; binaries
             // like .exe/.php are rejected.
-            'file' => 'required|' . \App\Support\UploadValidation::spreadsheet(),
+            'file' => 'required|'.\App\Support\UploadValidation::spreadsheet(),
         ]);
 
         // Big imports can run long — give them room.
@@ -1381,20 +1439,29 @@ class LeadController extends Controller
 
         try {
             $path = $request->file('file')->getRealPath();
-            $fh   = fopen($path, 'r');
-            if (! $fh) return back()->with('error', 'Could not read the file.');
+            $fh = fopen($path, 'r');
+            if (! $fh) {
+                return back()->with('error', 'Could not read the file.');
+            }
 
             // Strip a UTF-8 BOM if Excel left one in the first cell.
             $bom = fread($fh, 3);
-            if ($bom !== "\xEF\xBB\xBF") rewind($fh);
+            if ($bom !== "\xEF\xBB\xBF") {
+                rewind($fh);
+            }
 
             $headerRaw = fgetcsv($fh);
-            if (! $headerRaw) return back()->with('error', 'The file appears to be empty.');
+            if (! $headerRaw) {
+                return back()->with('error', 'The file appears to be empty.');
+            }
 
             // Normalise headers: lowercase, alnum-only, used as the lookup key.
             $headers = array_map(fn ($h) => preg_replace('/[^a-z0-9]/', '', strtolower((string) $h)), $headerRaw);
 
-            $created = 0; $updated = 0; $skipped = 0; $errors = [];
+            $created = 0;
+            $updated = 0;
+            $skipped = 0;
+            $errors = [];
             $rowNum = 1;
 
             while (($row = fgetcsv($fh)) !== false) {
@@ -1406,7 +1473,10 @@ class LeadController extends Controller
 
                 // Pre-declare so the row-level catch can reference them
                 // even if the throw happened before assignment.
-                $first = ''; $last = ''; $email = ''; $phone = '';
+                $first = '';
+                $last = '';
+                $email = '';
+                $phone = '';
 
                 // Each row gets its own try/catch — one bad row no longer
                 // aborts the entire import. Errors land in the summary so
@@ -1414,201 +1484,218 @@ class LeadController extends Controller
                 // those rows after fixing.
                 try {
 
-                $raw = $this->mapRow($headers, $row);
-                $first = trim((string) ($raw['firstname'] ?? $raw['first'] ?? ''));
-                $last  = trim((string) ($raw['lastname']  ?? $raw['surname'] ?? $raw['familyname'] ?? $raw['last'] ?? ''));
-                $email = trim((string) ($raw['email'] ?? $raw['emailaddress'] ?? ''));
-                $phone = trim((string) ($raw['phone'] ?? $raw['mobile'] ?? $raw['phonenumber'] ?? ''));
+                    $raw = $this->mapRow($headers, $row);
+                    $first = trim((string) ($raw['firstname'] ?? $raw['first'] ?? ''));
+                    $last = trim((string) ($raw['lastname'] ?? $raw['surname'] ?? $raw['familyname'] ?? $raw['last'] ?? ''));
+                    $email = trim((string) ($raw['email'] ?? $raw['emailaddress'] ?? ''));
+                    $phone = trim((string) ($raw['phone'] ?? $raw['mobile'] ?? $raw['phonenumber'] ?? ''));
 
-                // Need at least one of: email, OR (first + last + phone).
-                if (! $email && ! ($first && $last && $phone)) {
-                    $skipped++;
-                    $id = $first || $last ? trim("{$first} {$last}") : '(no name)';
-                    $missing = [];
-                    if (! $email) $missing[] = 'email';
-                    if (! $first || ! $last) $missing[] = 'name';
-                    if (! $phone) $missing[] = 'phone';
-                    $errors[] = "Row {$rowNum} [{$id}] — missing " . implode(' + ', $missing);
-                    continue;
-                }
-
-                // Normalise stage to the canonical Lead::STAGES casing so
-                // the pipeline filters and dashboards group these leads
-                // alongside everything else.
-                $normalisedStage = $this->normaliseStage($raw['stage'] ?? null);
-
-                // Build the payload from known direct mappings. first_name
-                // and last_name are NOT NULL in the schema; substitute ''
-                // when the CSV only has one half so the insert succeeds.
-                $optional = array_filter([
-                    'email'                 => $email ?: null,
-                    'phone'                 => $phone ?: null,
-                    'stage'                 => $normalisedStage,
-                    'dob'                   => $this->parseDate($raw['dateofbirth'] ?? $raw['dob'] ?? null),
-                    'age'                   => isset($raw['age']) && is_numeric($raw['age']) ? (int) $raw['age'] : null,
-                    'marital_status'        => $raw['maritalstatus'] ?? null,
-                    'residence_city'        => $raw['city'] ?? $raw['currentcity'] ?? null,
-                    'gender'                => $raw['gender'] ?? null,
-                    // Sales-dashboard mirror columns. Only set when the
-                    // value is a real link / parseable date so we don't
-                    // overwrite real data with the literal labels staff
-                    // sometimes type into the sheet ("ePathways PH Call
-                    // Update Form" etc).
-                    'calendar_date'         => $this->parseDate($raw['calendar'] ?? null),
-                    'client_info_link'      => filter_var($raw['clientinformationlink'] ?? '', FILTER_VALIDATE_URL) ?: null,
-                    'call_update_form_link' => filter_var($raw['callupdateformlink'] ?? '', FILTER_VALIDATE_URL) ?: null,
-                ], fn ($v) => $v !== null && $v !== '');
-
-                $payload = array_merge([
-                    'first_name' => $first,
-                    'last_name'  => $last,
-                ], $optional);
-
-                // JSON buckets — mapped against the actual normalised CSV
-                // headers. Falls back through several variants so an
-                // adjacent column name still maps cleanly.
-                $educationNotes = array_filter([
-                    'current_education_attainment' => $raw['currenteducationattainment'] ?? $raw['currenteducation'] ?? null,
-                    'bachelor_course'              => $raw['ifbachelorsdegreewhatcourse'] ?? $raw['ifbachelor'] ?? null,
-                ], fn ($v) => $v !== null && $v !== '');
-
-                $workInfo = array_filter([
-                    'current_job'      => $raw['currentjoboccupation'] ?? $raw['currentjob'] ?? null,
-                    'current_location' => $raw['currentlocation'] ?? null,
-                ], fn ($v) => $v !== null && $v !== '');
-
-                $familyInfo = array_filter([
-                    // Pathway / intent
-                    'pathway'                  => $raw['whatpathwayareyouinterestedin'] ?? $raw['whatpathway'] ?? $raw['whatpath'] ?? null,
-                    'willing_to_invest'        => $raw['areyouwillingtoinvestinstudyingabroad'] ?? null,
-                    'willing_to_proceed'       => $raw['areyouwillingtoproceedwithyourstudentvisaapplicationfornewzealand'] ?? null,
-                    'preferred_contact_time'   => $raw['preferredtimeforacallaftercompletingtheform'] ?? $raw['preferredtime'] ?? null,
-
-                    // Partner / spouse
-                    'partner_name'             => $raw['fullnameofpartnerspouse'] ?? $raw['partnersp'] ?? null,
-                    'partner_age'              => $raw['ageofpartnerspouse'] ?? $raw['ageofpartner'] ?? null,
-                    'partner_education'        => $raw['partnerspousecurrenteducationlevel'] ?? null,
-                    'partner_education_other'  => $raw['otherpartnerspousecurrenteducationlevel'] ?? $raw['otherpartnersp'] ?? null,
-                    'partner_work_experience'  => $raw['partnerspousecurrentworkexperience'] ?? null,
-                    'partner_years_experience' => $raw['partnerspouseyearsofexperience'] ?? $raw['partneryearsofexperience'] ?? $raw['yearsofexperience'] ?? null,
-
-                    // Children
-                    'number_of_children'       => $raw['numberofchildren'] ?? $raw['numberofchild'] ?? null,
-                    'children_ages'            => $raw['childage'] ?? $raw['childrenages'] ?? null,
-                    'will_bring_children'      => $raw['willyoubringyourchildren'] ?? $raw['willyoubring'] ?? null,
-                    'will_bring_children_other'=> $raw['otherwillyoubringyourchildren'] ?? $raw['otherwillpartnerspouse'] ?? null,
-                ], fn ($v) => $v !== null && $v !== '');
-
-                // Call Notes — write as a LeadNote row, NOT on the lead itself.
-                $callNotes = trim((string) ($raw['callnotes'] ?? ''));
-
-                // ── Dedupe ────────────────────────────────────────────────
-                $existing = Lead::where(function ($q) use ($email, $first, $last, $phone) {
-                    if ($email) $q->whereRaw('LOWER(email) = ?', [strtolower($email)]);
-                    if ($first && $last && $phone) {
-                        $q->orWhere(function ($q2) use ($first, $last, $phone) {
-                            $q2->whereRaw('LOWER(first_name) = ?', [strtolower($first)])
-                               ->whereRaw('LOWER(last_name)  = ?', [strtolower($last)])
-                               ->where('phone', $phone);
-                        });
-                    }
-                })->first();
-
-                if ($existing) {
-                    // Backfill only — don't overwrite filled fields.
-                    $backfill = collect($payload)->filter(fn ($v, $k) => empty($existing->{$k}))->all();
-
-                    // Status/stage casing-fix — if the existing lead's
-                    // status doesn't match a canonical Lead::STAGES value
-                    // (likely from a prior import with UPPERCASE), but the
-                    // normalised version of it does, snap it to canonical.
-                    if ($normalisedStage && in_array($normalisedStage, Lead::STAGES, true)) {
-                        if (! in_array($existing->status, Lead::STAGES, true)) {
-                            $backfill['status'] = $normalisedStage;
+                    // Need at least one of: email, OR (first + last + phone).
+                    if (! $email && ! ($first && $last && $phone)) {
+                        $skipped++;
+                        $id = $first || $last ? trim("{$first} {$last}") : '(no name)';
+                        $missing = [];
+                        if (! $email) {
+                            $missing[] = 'email';
                         }
-                        if (! in_array($existing->stage, Lead::STAGES, true)) {
-                            $backfill['stage'] = $normalisedStage;
+                        if (! $first || ! $last) {
+                            $missing[] = 'name';
+                        }
+                        if (! $phone) {
+                            $missing[] = 'phone';
+                        }
+                        $errors[] = "Row {$rowNum} [{$id}] — missing ".implode(' + ', $missing);
+
+                        continue;
+                    }
+
+                    // Normalise stage to the canonical Lead::STAGES casing so
+                    // the pipeline filters and dashboards group these leads
+                    // alongside everything else.
+                    $normalisedStage = $this->normaliseStage($raw['stage'] ?? null);
+
+                    // Build the payload from known direct mappings. first_name
+                    // and last_name are NOT NULL in the schema; substitute ''
+                    // when the CSV only has one half so the insert succeeds.
+                    $optional = array_filter([
+                        'email' => $email ?: null,
+                        'phone' => $phone ?: null,
+                        'stage' => $normalisedStage,
+                        'dob' => $this->parseDate($raw['dateofbirth'] ?? $raw['dob'] ?? null),
+                        'age' => isset($raw['age']) && is_numeric($raw['age']) ? (int) $raw['age'] : null,
+                        'marital_status' => $raw['maritalstatus'] ?? null,
+                        'residence_city' => $raw['city'] ?? $raw['currentcity'] ?? null,
+                        'gender' => $raw['gender'] ?? null,
+                        // Sales-dashboard mirror columns. Only set when the
+                        // value is a real link / parseable date so we don't
+                        // overwrite real data with the literal labels staff
+                        // sometimes type into the sheet ("ePathways PH Call
+                        // Update Form" etc).
+                        'calendar_date' => $this->parseDate($raw['calendar'] ?? null),
+                        'client_info_link' => filter_var($raw['clientinformationlink'] ?? '', FILTER_VALIDATE_URL) ?: null,
+                        'call_update_form_link' => filter_var($raw['callupdateformlink'] ?? '', FILTER_VALIDATE_URL) ?: null,
+                    ], fn ($v) => $v !== null && $v !== '');
+
+                    $payload = array_merge([
+                        'first_name' => $first,
+                        'last_name' => $last,
+                    ], $optional);
+
+                    // JSON buckets — mapped against the actual normalised CSV
+                    // headers. Falls back through several variants so an
+                    // adjacent column name still maps cleanly.
+                    $educationNotes = array_filter([
+                        'current_education_attainment' => $raw['currenteducationattainment'] ?? $raw['currenteducation'] ?? null,
+                        'bachelor_course' => $raw['ifbachelorsdegreewhatcourse'] ?? $raw['ifbachelor'] ?? null,
+                    ], fn ($v) => $v !== null && $v !== '');
+
+                    $workInfo = array_filter([
+                        'current_job' => $raw['currentjoboccupation'] ?? $raw['currentjob'] ?? null,
+                        'current_location' => $raw['currentlocation'] ?? null,
+                    ], fn ($v) => $v !== null && $v !== '');
+
+                    $familyInfo = array_filter([
+                        // Pathway / intent
+                        'pathway' => $raw['whatpathwayareyouinterestedin'] ?? $raw['whatpathway'] ?? $raw['whatpath'] ?? null,
+                        'willing_to_invest' => $raw['areyouwillingtoinvestinstudyingabroad'] ?? null,
+                        'willing_to_proceed' => $raw['areyouwillingtoproceedwithyourstudentvisaapplicationfornewzealand'] ?? null,
+                        'preferred_contact_time' => $raw['preferredtimeforacallaftercompletingtheform'] ?? $raw['preferredtime'] ?? null,
+
+                        // Partner / spouse
+                        'partner_name' => $raw['fullnameofpartnerspouse'] ?? $raw['partnersp'] ?? null,
+                        'partner_age' => $raw['ageofpartnerspouse'] ?? $raw['ageofpartner'] ?? null,
+                        'partner_education' => $raw['partnerspousecurrenteducationlevel'] ?? null,
+                        'partner_education_other' => $raw['otherpartnerspousecurrenteducationlevel'] ?? $raw['otherpartnersp'] ?? null,
+                        'partner_work_experience' => $raw['partnerspousecurrentworkexperience'] ?? null,
+                        'partner_years_experience' => $raw['partnerspouseyearsofexperience'] ?? $raw['partneryearsofexperience'] ?? $raw['yearsofexperience'] ?? null,
+
+                        // Children
+                        'number_of_children' => $raw['numberofchildren'] ?? $raw['numberofchild'] ?? null,
+                        'children_ages' => $raw['childage'] ?? $raw['childrenages'] ?? null,
+                        'will_bring_children' => $raw['willyoubringyourchildren'] ?? $raw['willyoubring'] ?? null,
+                        'will_bring_children_other' => $raw['otherwillyoubringyourchildren'] ?? $raw['otherwillpartnerspouse'] ?? null,
+                    ], fn ($v) => $v !== null && $v !== '');
+
+                    // Call Notes — write as a LeadNote row, NOT on the lead itself.
+                    $callNotes = trim((string) ($raw['callnotes'] ?? ''));
+
+                    // ── Dedupe ────────────────────────────────────────────────
+                    $existing = Lead::where(function ($q) use ($email, $first, $last, $phone) {
+                        if ($email) {
+                            $q->whereRaw('LOWER(email) = ?', [strtolower($email)]);
+                        }
+                        if ($first && $last && $phone) {
+                            $q->orWhere(function ($q2) use ($first, $last, $phone) {
+                                $q2->whereRaw('LOWER(first_name) = ?', [strtolower($first)])
+                                    ->whereRaw('LOWER(last_name)  = ?', [strtolower($last)])
+                                    ->where('phone', $phone);
+                            });
+                        }
+                    })->first();
+
+                    if ($existing) {
+                        // Backfill only — don't overwrite filled fields.
+                        $backfill = collect($payload)->filter(fn ($v, $k) => empty($existing->{$k}))->all();
+
+                        // Status/stage casing-fix — if the existing lead's
+                        // status doesn't match a canonical Lead::STAGES value
+                        // (likely from a prior import with UPPERCASE), but the
+                        // normalised version of it does, snap it to canonical.
+                        if ($normalisedStage && in_array($normalisedStage, Lead::STAGES, true)) {
+                            if (! in_array($existing->status, Lead::STAGES, true)) {
+                                $backfill['status'] = $normalisedStage;
+                            }
+                            if (! in_array($existing->stage, Lead::STAGES, true)) {
+                                $backfill['stage'] = $normalisedStage;
+                            }
+                        }
+
+                        // Merge JSON columns rather than replacing.
+                        $existingEducation = is_array($existing->education_notes) ? $existing->education_notes : [];
+                        $existingWork = is_array($existing->work_info) ? $existing->work_info : [];
+                        $existingFamily = is_array($existing->family_info) ? $existing->family_info : [];
+
+                        $mergedEducation = array_merge($educationNotes, $existingEducation);
+                        $mergedWork = array_merge($workInfo, $existingWork);
+                        $mergedFamily = array_merge($familyInfo, $existingFamily);
+
+                        if ($mergedEducation !== $existingEducation) {
+                            $backfill['education_notes'] = $mergedEducation;
+                        }
+                        if ($mergedWork !== $existingWork) {
+                            $backfill['work_info'] = $mergedWork;
+                        }
+                        if ($mergedFamily !== $existingFamily) {
+                            $backfill['family_info'] = $mergedFamily;
+                        }
+
+                        if (! empty($backfill)) {
+                            $existing->fill($backfill)->save();
+                        }
+                        $leadForNote = $existing;
+                        $updated++;
+                    } else {
+                        // Create new.
+                        $payload['lead_id'] = 'LP-'.str_pad((string) ((int) Lead::max('id') + 1001), 5, '0', STR_PAD_LEFT);
+                        $payload['source'] = 'csv-import';
+                        // status uses the canonical stage too — keeps the
+                        // pipeline filter chips matching after import.
+                        $payload['status'] = $normalisedStage ?: 'New Leads';
+                        $payload['education_notes'] = $educationNotes ?: null;
+                        $payload['work_info'] = $workInfo ?: null;
+                        $payload['family_info'] = $familyInfo ?: null;
+
+                        $leadForNote = Lead::create($payload);
+                        $created++;
+
+                        // Preserve the source-system's original Created /
+                        // Updated timestamps if the CSV provided them. Uses
+                        // saveQuietly so the LogsActivity trait doesn't fire
+                        // a spurious "lead.updated" entry for the back-dating.
+                        $csvCreated = $this->parseTs($raw['created'] ?? null);
+                        $csvUpdated = $this->parseTs($raw['updated'] ?? null);
+                        if ($csvCreated || $csvUpdated) {
+                            $leadForNote->forceFill([
+                                'created_at' => $csvCreated ?? $leadForNote->created_at,
+                                'updated_at' => $csvUpdated ?? $csvCreated ?? $leadForNote->updated_at,
+                            ])->saveQuietly();
                         }
                     }
 
-                    // Merge JSON columns rather than replacing.
-                    $existingEducation = is_array($existing->education_notes) ? $existing->education_notes : [];
-                    $existingWork      = is_array($existing->work_info) ? $existing->work_info : [];
-                    $existingFamily    = is_array($existing->family_info) ? $existing->family_info : [];
-
-                    $mergedEducation = array_merge($educationNotes, $existingEducation);
-                    $mergedWork      = array_merge($workInfo, $existingWork);
-                    $mergedFamily    = array_merge($familyInfo, $existingFamily);
-
-                    if ($mergedEducation !== $existingEducation) $backfill['education_notes'] = $mergedEducation;
-                    if ($mergedWork      !== $existingWork)      $backfill['work_info']       = $mergedWork;
-                    if ($mergedFamily    !== $existingFamily)    $backfill['family_info']     = $mergedFamily;
-
-                    if (! empty($backfill)) {
-                        $existing->fill($backfill)->save();
+                    // Capture Call Notes as a real LeadNote row.
+                    if ($callNotes && $leadForNote) {
+                        try {
+                            \App\Models\LeadNote::create([
+                                'lead_id' => $leadForNote->id,
+                                'user_id' => auth()->id(),
+                                'author_name' => optional(auth()->user())->name ?: 'CSV Import',
+                                'author_role' => optional(auth()->user())->role ?: 'system',
+                                'body' => $callNotes,
+                            ]);
+                        } catch (\Throwable $e) {
+                            \Illuminate\Support\Facades\Log::warning('Import note create failed', ['lead_id' => $leadForNote->id, 'error' => $e->getMessage()]);
+                        }
                     }
-                    $leadForNote = $existing;
-                    $updated++;
-                } else {
-                    // Create new.
-                    $payload['lead_id']    = 'LP-' . str_pad((string) ((int) Lead::max('id') + 1001), 5, '0', STR_PAD_LEFT);
-                    $payload['source']     = 'csv-import';
-                    // status uses the canonical stage too — keeps the
-                    // pipeline filter chips matching after import.
-                    $payload['status']     = $normalisedStage ?: 'New Leads';
-                    $payload['education_notes'] = $educationNotes ?: null;
-                    $payload['work_info']       = $workInfo ?: null;
-                    $payload['family_info']     = $familyInfo ?: null;
-
-                    $leadForNote = Lead::create($payload);
-                    $created++;
-
-                    // Preserve the source-system's original Created /
-                    // Updated timestamps if the CSV provided them. Uses
-                    // saveQuietly so the LogsActivity trait doesn't fire
-                    // a spurious "lead.updated" entry for the back-dating.
-                    $csvCreated = $this->parseTs($raw['created'] ?? null);
-                    $csvUpdated = $this->parseTs($raw['updated'] ?? null);
-                    if ($csvCreated || $csvUpdated) {
-                        $leadForNote->forceFill([
-                            'created_at' => $csvCreated ?? $leadForNote->created_at,
-                            'updated_at' => $csvUpdated ?? $csvCreated ?? $leadForNote->updated_at,
-                        ])->saveQuietly();
-                    }
-                }
-
-                // Capture Call Notes as a real LeadNote row.
-                if ($callNotes && $leadForNote) {
-                    try {
-                        \App\Models\LeadNote::create([
-                            'lead_id'    => $leadForNote->id,
-                            'user_id'    => auth()->id(),
-                            'author_name'=> optional(auth()->user())->name ?: 'CSV Import',
-                            'author_role'=> optional(auth()->user())->role ?: 'system',
-                            'body'       => $callNotes,
-                        ]);
-                    } catch (\Throwable $e) {
-                        \Illuminate\Support\Facades\Log::warning('Import note create failed', ['lead_id' => $leadForNote->id, 'error' => $e->getMessage()]);
-                    }
-                }
 
                 } catch (\Throwable $e) {
                     // One row failed — log it, continue with the rest.
                     $skipped++;
                     $id = ($first || $last) ? trim("{$first} {$last}") : ($email ?: '(no name)');
-                    $errors[] = "Row {$rowNum} [{$id}] — " . $e->getMessage();
+                    $errors[] = "Row {$rowNum} [{$id}] — ".$e->getMessage();
                     \Illuminate\Support\Facades\Log::warning('Lead import row failed', ['row' => $rowNum, 'error' => $e->getMessage()]);
                 }
             }
             fclose($fh);
 
             $msg = "Import complete — created {$created}, updated {$updated}, skipped {$skipped}.";
+
             return back()
                 ->with('success', $msg)
                 ->with('import_summary', ['created' => $created, 'updated' => $updated, 'skipped' => $skipped, 'errors' => array_slice($errors, 0, 50)]);
         } catch (\Throwable $e) {
             \Illuminate\Support\Facades\Log::error('Lead import failed', ['error' => $e->getMessage()]);
-            return back()->with('error', 'Import failed: ' . $e->getMessage());
+
+            return back()->with('error', 'Import failed: '.$e->getMessage());
         }
     }
 
@@ -1622,12 +1709,15 @@ class LeadController extends Controller
     {
         $out = [];
         foreach ($headers as $i => $h) {
-            if ($h === '') continue;
+            if ($h === '') {
+                continue;
+            }
             $val = trim((string) ($row[$i] ?? ''));
             if (! isset($out[$h]) || $out[$h] === '') {
                 $out[$h] = $val;
             }
         }
+
         return $out;
     }
 
@@ -1639,7 +1729,9 @@ class LeadController extends Controller
     private function normaliseStage(?string $raw): ?string
     {
         $s = trim((string) $raw);
-        if ($s === '') return null;
+        if ($s === '') {
+            return null;
+        }
         $needle = preg_replace('/[^a-z0-9]/', '', strtolower($s));
 
         // Build lookup once per request.
@@ -1658,7 +1750,9 @@ class LeadController extends Controller
     private function parseDate(?string $s): ?string
     {
         $s = trim((string) $s);
-        if (! $s) return null;
+        if (! $s) {
+            return null;
+        }
         try {
             return \Illuminate\Support\Carbon::parse($s)->toDateString();
         } catch (\Throwable $e) {
@@ -1674,7 +1768,9 @@ class LeadController extends Controller
     private function parseTs(?string $s)
     {
         $s = trim((string) $s);
-        if (! $s) return null;
+        if (! $s) {
+            return null;
+        }
         try {
             return \Illuminate\Support\Carbon::parse($s);
         } catch (\Throwable $e) {
@@ -1686,16 +1782,20 @@ class LeadController extends Controller
     {
         try {
             $lead = Lead::findOrFail($id);
-            if ($lead->is_immigration_case) return back()->with('error', 'Already an immigration case.');
+            if ($lead->is_immigration_case) {
+                return back()->with('error', 'Already an immigration case.');
+            }
             $lead->fill([
-                'is_immigration_case'      => true,
+                'is_immigration_case' => true,
                 'immigration_converted_at' => now(),
                 'immigration_converted_by' => auth()->id(),
             ])->save();
             $this->notifyDepartmentOfConversion($lead, ['immigration', 'immigration_manager', 'immigration_adviser'], 'Immigration');
+
             return back()->with('success', "Lead {$lead->lead_id} is now an immigration case.");
         } catch (\Throwable $e) {
             \Illuminate\Support\Facades\Log::error('Convert to case failed', ['id' => $id, 'error' => $e->getMessage()]);
+
             return back()->with('error', 'Could not convert this lead.');
         }
     }
@@ -1705,6 +1805,7 @@ class LeadController extends Controller
         try {
             $lead = Lead::findOrFail($id);
             $lead->fill(['is_immigration_case' => false, 'immigration_converted_at' => null, 'immigration_converted_by' => null])->save();
+
             return back()->with('success', "Lead {$lead->lead_id} reverted.");
         } catch (\Throwable $e) {
             return back()->with('error', 'Could not revert.');
@@ -1715,16 +1816,20 @@ class LeadController extends Controller
     {
         try {
             $lead = Lead::findOrFail($id);
-            if ($lead->is_accommodation_client) return back()->with('error', 'Already an accommodation client.');
+            if ($lead->is_accommodation_client) {
+                return back()->with('error', 'Already an accommodation client.');
+            }
             $lead->fill([
-                'is_accommodation_client'    => true,
+                'is_accommodation_client' => true,
                 'accommodation_converted_at' => now(),
                 'accommodation_converted_by' => auth()->id(),
             ])->save();
             $this->notifyDepartmentOfConversion($lead, ['accommodation'], 'Accommodation');
+
             return back()->with('success', "Lead {$lead->lead_id} is now an accommodation client.");
         } catch (\Throwable $e) {
             \Illuminate\Support\Facades\Log::error('Convert to accommodation failed', ['id' => $id, 'error' => $e->getMessage()]);
+
             return back()->with('error', 'Could not convert this lead.');
         }
     }
@@ -1734,6 +1839,7 @@ class LeadController extends Controller
         try {
             $lead = Lead::findOrFail($id);
             $lead->fill(['is_accommodation_client' => false, 'accommodation_converted_at' => null, 'accommodation_converted_by' => null])->save();
+
             return back()->with('success', "Lead {$lead->lead_id} reverted.");
         } catch (\Throwable $e) {
             return back()->with('error', 'Could not revert.');
@@ -1754,14 +1860,16 @@ class LeadController extends Controller
                 return back()->with('error', 'Already an English student.');
             }
             $lead->fill([
-                'is_english_student'   => true,
+                'is_english_student' => true,
                 'english_converted_at' => now(),
                 'english_converted_by' => auth()->id(),
             ])->save();
             $this->notifyDepartmentOfConversion($lead, ['english'], 'English');
+
             return back()->with('success', "Lead {$lead->lead_id} is now an English student.");
         } catch (\Throwable $e) {
             \Illuminate\Support\Facades\Log::error('Convert to English failed', ['id' => $id, 'error' => $e->getMessage()]);
+
             return back()->with('error', 'Could not convert this lead.');
         }
     }
@@ -1771,10 +1879,11 @@ class LeadController extends Controller
         try {
             $lead = Lead::findOrFail($id);
             $lead->fill([
-                'is_english_student'   => false,
+                'is_english_student' => false,
                 'english_converted_at' => null,
                 'english_converted_by' => null,
             ])->save();
+
             return back()->with('success', "Lead {$lead->lead_id} reverted.");
         } catch (\Throwable $e) {
             return back()->with('error', 'Could not revert.');
@@ -1801,12 +1910,13 @@ class LeadController extends Controller
             }
         } catch (\Throwable $e) {
             \Illuminate\Support\Facades\Log::error('Manual TrackerWelcome failed', ['lead_id' => $lead->id, 'error' => $e->getMessage()]);
+
             return back()->with('error', 'Could not send the tracker link. Please try again.');
         }
 
         \App\Models\ActivityLog::record('lead.tracker_link_sent', [
             'entity_type' => Lead::class,
-            'entity_id'   => $lead->id,
+            'entity_id' => $lead->id,
             'description' => "Tracker link emailed to {$lead->email}",
         ]);
 
@@ -1820,10 +1930,10 @@ class LeadController extends Controller
     public function updateInz(\Illuminate\Http\Request $request, $id)
     {
         $validated = $request->validate([
-            'inz_visa_type'   => 'nullable|string|max:120',
-            'inz_lodged_at'   => 'nullable|date',
-            'inz_reference'   => 'nullable|string|max:60',
-            'inz_status'      => ['nullable', \Illuminate\Validation\Rule::in([
+            'inz_visa_type' => 'nullable|string|max:120',
+            'inz_lodged_at' => 'nullable|date',
+            'inz_reference' => 'nullable|string|max:60',
+            'inz_status' => ['nullable', \Illuminate\Validation\Rule::in([
                 'Lodged', 'Info Requested', 'Decision Pending', 'Approved', 'Declined', 'Withdrawn',
             ])],
             'inz_decision_at' => 'nullable|date',
@@ -1832,9 +1942,11 @@ class LeadController extends Controller
         try {
             $lead = Lead::findOrFail($id);
             $lead->fill($validated)->save();
+
             return back()->with('success', 'INZ tracking updated.');
         } catch (\Throwable $e) {
             \Illuminate\Support\Facades\Log::error('INZ update failed', ['id' => $id, 'error' => $e->getMessage()]);
+
             return back()->with('error', 'Could not update INZ tracking.');
         }
     }
@@ -1844,13 +1956,15 @@ class LeadController extends Controller
         try {
             $lead = Lead::findOrFail($id);
             $lead->fill([
-                'is_student'           => false,
+                'is_student' => false,
                 'student_converted_at' => null,
                 'student_converted_by' => null,
             ])->save();
+
             return back()->with('success', "Lead {$lead->lead_id} reverted to non-student.");
         } catch (\Throwable $e) {
             \Illuminate\Support\Facades\Log::error('Revert student failed', ['id' => $id, 'error' => $e->getMessage()]);
+
             return back()->with('error', 'Could not revert this conversion.');
         }
     }
@@ -1864,12 +1978,12 @@ class LeadController extends Controller
     public function updateDocumentChecklist(\Illuminate\Http\Request $request, $id)
     {
         $validated = $request->validate([
-            'key'    => 'required|string|max:120',
+            'key' => 'required|string|max:120',
             'status' => ['nullable', \Illuminate\Validation\Rule::in([
                 'not_applicable', 'available', 'in_progress', 'uploaded',
             ])],
-            'date'   => 'nullable|date',
-            'notes'  => 'nullable|string|max:2000',
+            'date' => 'nullable|date',
+            'notes' => 'nullable|string|max:2000',
         ]);
 
         try {
@@ -1878,8 +1992,8 @@ class LeadController extends Controller
 
             $checklist[$validated['key']] = array_filter([
                 'status' => $validated['status'] ?? null,
-                'date'   => $validated['date']   ?? null,
-                'notes'  => $validated['notes']  ?? null,
+                'date' => $validated['date'] ?? null,
+                'notes' => $validated['notes'] ?? null,
             ], fn ($v) => $v !== null && $v !== '');
 
             // Drop empty entries entirely so leads with no progress stay clean.
@@ -1893,6 +2007,7 @@ class LeadController extends Controller
             return back()->with('success', 'Document checklist updated.');
         } catch (\Throwable $e) {
             \Illuminate\Support\Facades\Log::error('Lead document checklist update failed', ['id' => $id, 'error' => $e->getMessage()]);
+
             return back()->with('error', 'Could not save the checklist change.');
         }
     }
@@ -1905,10 +2020,10 @@ class LeadController extends Controller
     {
         $validated = $request->validate([
             'section_key' => 'required|string|max:60',
-            'status'      => ['required', \Illuminate\Validation\Rule::in([
+            'status' => ['required', \Illuminate\Validation\Rule::in([
                 'pending', 'in_review', 'verified', 'revisions_needed',
             ])],
-            'notes'       => 'nullable|string|max:1000',
+            'notes' => 'nullable|string|max:1000',
         ]);
 
         try {
@@ -1916,19 +2031,20 @@ class LeadController extends Controller
             $sections = is_array($lead->section_verifications) ? $lead->section_verifications : [];
 
             $sections[$validated['section_key']] = array_filter([
-                'status'         => $validated['status'],
-                'notes'          => $validated['notes'] ?? null,
-                'verified_at'    => $validated['status'] === 'verified' ? now()->toIso8601String() : null,
-                'verified_by'    => $validated['status'] === 'verified' ? optional(auth()->user())->name : null,
+                'status' => $validated['status'],
+                'notes' => $validated['notes'] ?? null,
+                'verified_at' => $validated['status'] === 'verified' ? now()->toIso8601String() : null,
+                'verified_by' => $validated['status'] === 'verified' ? optional(auth()->user())->name : null,
                 'verified_by_id' => $validated['status'] === 'verified' ? auth()->id() : null,
             ], fn ($v) => $v !== null && $v !== '');
 
             $lead->section_verifications = $sections;
             $lead->save();
 
-            return back()->with('success', 'Section ' . str_replace('_', ' ', $validated['status']) . '.');
+            return back()->with('success', 'Section '.str_replace('_', ' ', $validated['status']).'.');
         } catch (\Throwable $e) {
             \Illuminate\Support\Facades\Log::error('Section verification update failed', ['id' => $id, 'error' => $e->getMessage()]);
+
             return back()->with('error', 'Could not update section verification.');
         }
     }

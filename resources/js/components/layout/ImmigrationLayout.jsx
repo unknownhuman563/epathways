@@ -14,7 +14,7 @@ export default function ImmigrationLayout({ children }) {
         { name: "Dashboard", href: "/portal/immigration/dashboard", icon: <LayoutDashboard size={20} /> },
 
         { name: "Work", section: true },
-        { name: "Assessments",  href: "/portal/immigration/assessments",  icon: <ClipboardCheck size={20} />, badge: badges.new_assessments, badgeTone: "default" },
+        { name: "Visa Assessment", href: "/portal/immigration/assessments",  icon: <ClipboardCheck size={20} />, badge: badges.new_assessments, badgeTone: "default" },
         { name: "Leads",        href: "/portal/immigration/leads",        icon: <UserSquare2 size={20} />,    badge: badges.new_leads_today, badgeTone: "default" },
         { name: "Cases",        href: "/portal/immigration/cases",        icon: <Globe size={20} />,          badge: badges.active_cases, badgeTone: "default" },
         { name: "Documents",    href: "/portal/immigration/documents",    icon: <FolderOpen size={20} />,     badge: badges.docs_pending_review, badgeTone: "warning" },

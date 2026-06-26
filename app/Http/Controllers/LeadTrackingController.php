@@ -490,6 +490,7 @@ class LeadTrackingController extends Controller
                 'sent_at'    => $a->sent_at?->toIso8601String(),
                 'signed_at'  => $a->signed_at?->toIso8601String(),
                 'sign_url'   => "/track/{$code}/agreements/{$a->tracker_signing_token}/sign",
+                'view_url'   => "/track/{$code}/agreements/{$a->tracker_signing_token}/view",
                 'signed_url' => "/track/{$code}/agreements/{$a->tracker_signing_token}/signed",
             ])
             ->all();

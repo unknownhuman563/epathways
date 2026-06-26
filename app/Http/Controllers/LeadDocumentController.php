@@ -524,19 +524,27 @@ class LeadDocumentController extends Controller
             abort_unless($user->lead_id === $doc->lead_id, 403);
         }
 
-        abort_unless(Storage::disk(self::DISK)->exists($doc->file_path), 404);
+        // Disk inconsistency: tracker-side uploads (LeadTrackingController::uploadDoc)
+        // land on the 'public' disk; staff-side uploads (staffChecklistUpload, leadUpload)
+        // land on the 'local' (private) disk. The download controller has to handle
+        // both so a file uploaded via either path is viewable. Local wins when present
+        // to keep private uploads from being accidentally moved to a public disk later.
+        $disk = Storage::disk(self::DISK)->exists($doc->file_path)
+            ? self::DISK
+            : (Storage::disk('public')->exists($doc->file_path) ? 'public' : null);
+        abort_unless($disk, 404);
 
         // ?inline=1 streams with Content-Disposition: inline so the browser
         // renders the PDF in-tab instead of forcing a download — used by the
         // "View" button on the agreements panel.
         if ($request->boolean('inline')) {
-            return response()->file(Storage::disk(self::DISK)->path($doc->file_path), [
+            return response()->file(Storage::disk($disk)->path($doc->file_path), [
                 'Content-Type'        => $doc->mime ?: 'application/pdf',
                 'Content-Disposition' => 'inline; filename="' . $doc->original_name . '"',
             ]);
         }
 
-        return Storage::disk(self::DISK)->download($doc->file_path, $doc->original_name);
+        return Storage::disk($disk)->download($doc->file_path, $doc->original_name);
     }
 
     // ── Helpers ─────────────────────────────────────────────────────────────

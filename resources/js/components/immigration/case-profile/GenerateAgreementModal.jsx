@@ -123,7 +123,7 @@ export default function GenerateAgreementModal({ lead, onClose, onGenerated }) {
             aria-modal="true"
         >
             <div
-                className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] flex flex-col"
+                className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] flex flex-col"
                 onClick={(e) => e.stopPropagation()}
             >
                 <header className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
