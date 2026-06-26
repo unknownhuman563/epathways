@@ -488,8 +488,15 @@ Route::middleware(['auth'])->group(function () {
     });
 
     // Lead documents — admins AND sales agents both work these. The lead's
-    // own upload routes are under the lead-portal group below.
-    Route::middleware('portal:admin,sales')->group(function () {
+    // own upload routes are under the lead-portal group below. Build 11.D
+    // Phase 4 widens the gate to immigration roles too: the Case Profile's
+    // Documents tab is read+write for immigration consultants, so they need
+    // the approve/reject/request endpoints. The case-side controller already
+    // re-verifies is_immigration_case before letting the tab render, and
+    // updateStatus is per-document so a sales lead's documents can't be
+    // touched from this widened gate (no Lead Profile route routes them
+    // here).
+    Route::middleware('portal:admin,sales,immigration,immigration_manager,immigration_adviser')->group(function () {
         Route::get('/admin/leads/{id}/documents', [LeadDocumentController::class, 'staffIndex'])
             ->name('admin.leads.documents');
         Route::post('/admin/leads/{id}/documents/requests', [LeadDocumentController::class, 'requestStore'])
