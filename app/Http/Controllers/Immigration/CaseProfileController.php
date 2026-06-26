@@ -11,9 +11,9 @@ use App\Models\LeadNote;
 use App\Models\ResidentIntake;
 use App\Models\StudentIntake;
 use App\Models\User;
-use App\Models\VisaType;
 use App\Models\VisitorIntake;
 use App\Models\WorkIntake;
+use App\Services\Immigration\CaseChecklistService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
@@ -39,7 +39,7 @@ use Inertia\Inertia;
  */
 class CaseProfileController extends Controller
 {
-    public function show(Lead $lead)
+    public function show(Lead $lead, CaseChecklistService $checklist)
     {
         $user = auth()->user();
         abort_unless($user instanceof User, 403);
@@ -55,14 +55,26 @@ class CaseProfileController extends Controller
         [$intakeType, $intake] = $this->resolveIntake($lead);
 
         return Inertia::render('portal/immigration/CaseProfile', [
-            'lead'           => $this->serializeLead($lead),
-            'intake'         => $intake ? ['type' => $intakeType, 'data' => $intake] : null,
-            'documents'      => $this->loadDocuments($lead),
-            'checklist'      => $this->loadVisaChecklist($lead),
-            'communications' => $this->loadCommunications($lead),
-            'agreements'     => $this->loadAgreements($lead),
-            'notes'          => $this->loadNotes($lead),
-            'activity'       => $this->loadActivity($lead),
+            'lead'                  => $this->serializeLead($lead),
+            'intake'                => $intake ? ['type' => $intakeType, 'data' => $intake] : null,
+            'documents'             => $this->loadDocuments($lead),
+            // Build 11.D Phase 4 — checklist resolution delegated to
+            // CaseChecklistService. `items` is the flat list (kept for
+            // backward-compat with the existing table view); `grouped`
+            // partitions the same items by category; `unstructured` covers
+            // docs uploaded under a no-longer-matching key; `progress`
+            // drives the "X of Y required approved" header.
+            'checklist'             => array_merge(
+                $checklist->sourceFor($lead),
+                ['items' => $checklist->withStatuses($lead)],
+            ),
+            'checklistGrouped'      => $checklist->groupedByCategory($lead),
+            'unstructuredDocuments' => $checklist->unstructuredDocuments($lead),
+            'checklistProgress'     => $checklist->progress($lead),
+            'communications'        => $this->loadCommunications($lead),
+            'agreements'            => $this->loadAgreements($lead),
+            'notes'                 => $this->loadNotes($lead),
+            'activity'              => $this->loadActivity($lead),
         ]);
     }
 
@@ -218,34 +230,10 @@ class CaseProfileController extends Controller
             ->all();
     }
 
-    /**
-     * Phase 1 returns the raw visa-type checklist + a per-lead override.
-     * Phase 2 builds CaseChecklistService to merge in document statuses
-     * by checklist_key. Resolution order:
-     *   1. lead.document_checklist (per-case override JSON) when populated
-     *   2. visa_types.checklist_items by inz_visa_type string match
-     *   3. empty array
-     */
-    private function loadVisaChecklist(Lead $lead): array
-    {
-        if (! empty($lead->document_checklist)) {
-            return [
-                'source'   => 'lead_override',
-                'visa'     => $lead->inz_visa_type,
-                'items'    => $lead->document_checklist,
-            ];
-        }
-
-        $visaType = $lead->inz_visa_type
-            ? VisaType::where('name', $lead->inz_visa_type)->first()
-            : null;
-
-        return [
-            'source' => $visaType ? 'visa_type' : 'none',
-            'visa'   => $visaType?->name,
-            'items'  => $visaType?->checklist_items ?? [],
-        ];
-    }
+    // (loadVisaChecklist was here in Phase 1; Phase 4 moved it into
+    // App\Services\Immigration\CaseChecklistService so the resolution
+    // logic is testable in isolation and reusable by the optional
+    // refresh endpoint below.)
 
     private function loadCommunications(Lead $lead): array
     {

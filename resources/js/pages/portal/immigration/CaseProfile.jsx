@@ -30,6 +30,8 @@ export default function CaseProfile() {
     const { props } = usePage();
     const {
         lead = {}, intake = null, documents = [], checklist = { items: [] },
+        checklistGrouped = {}, unstructuredDocuments = [],
+        checklistProgress = { required_total: 0, required_approved: 0, total: 0, approved: 0 },
         communications = [], agreements = [], notes = [], activity = [],
     } = props;
 
@@ -50,7 +52,10 @@ export default function CaseProfile() {
         window.history.replaceState({}, "", url);
     }, [activeTab]);
 
-    const tabProps = { lead, intake, documents, checklist, communications, agreements, notes, activity };
+    const tabProps = {
+        lead, intake, documents, checklist, checklistGrouped, unstructuredDocuments, checklistProgress,
+        communications, agreements, notes, activity,
+    };
     const ActiveTab = TABS.find((t) => t.key === activeTab)?.Comp ?? AssessmentTab;
 
     const fullName = `${lead.first_name ?? ""} ${lead.last_name ?? ""}`.trim() || lead.lead_id || "Case";
