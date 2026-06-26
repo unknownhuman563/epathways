@@ -331,4 +331,47 @@ class TenantControllerTest extends TestCase
                 ->component('portal/accommodation/TenantDetail')
                 ->has('historical', 1));
     }
+
+    public function test_archive_soft_deletes_and_hides_from_default_list(): void
+    {
+        $t = $this->tenant();
+
+        $this->actingAs($this->user())
+            ->from('/portal/accommodation/tenants')
+            ->patch("/portal/accommodation/tenants/{$t->id}/archive")
+            ->assertRedirect();
+
+        $this->assertSoftDeleted('accommodation_tenants', ['id' => $t->id]);
+
+        // Default list excludes archived tenants.
+        $this->actingAs($this->user())->get('/portal/accommodation/tenants')
+            ->assertInertia(fn (AssertInertia $page) => $page->has('tenants.data', 0));
+    }
+
+    public function test_archived_filter_shows_only_archived_tenants(): void
+    {
+        $active = $this->tenant(['first_name' => 'Active']);
+        $archived = $this->tenant(['first_name' => 'Gone']);
+        $archived->delete();
+
+        $this->actingAs($this->user())->get('/portal/accommodation/tenants?archived=1')
+            ->assertInertia(fn (AssertInertia $page) => $page
+                ->has('tenants.data', 1)
+                ->where('tenants.data.0.id', $archived->id));
+    }
+
+    public function test_restore_brings_back_an_archived_tenant(): void
+    {
+        $t = $this->tenant();
+        $t->delete();
+
+        $this->actingAs($this->user())
+            ->from('/portal/accommodation/tenants?archived=1')
+            ->patch("/portal/accommodation/tenants/{$t->id}/restore")
+            ->assertRedirect();
+
+        $this->assertNull($t->fresh()->deleted_at);
+        $this->actingAs($this->user())->get('/portal/accommodation/tenants')
+            ->assertInertia(fn (AssertInertia $page) => $page->has('tenants.data', 1));
+    }
 }

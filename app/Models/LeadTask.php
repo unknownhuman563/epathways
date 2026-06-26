@@ -13,7 +13,7 @@ class LeadTask extends Model
 
     public const PRIORITIES = ['low', 'normal', 'high', 'urgent'];
     public const TYPES      = ['call', 'email', 'meeting', 'document', 'follow_up', 'internal', 'other'];
-    public const DEPARTMENTS = ['sales', 'education', 'immigration', 'accommodation', 'admin'];
+    public const DEPARTMENTS = ['sales', 'education', 'immigration', 'accommodation', 'finance', 'admin'];
     public const STATUSES   = ['not_started', 'in_progress', 'in_review', 'completed'];
 
     protected $fillable = [

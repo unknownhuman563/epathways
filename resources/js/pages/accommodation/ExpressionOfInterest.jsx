@@ -6,7 +6,7 @@ import Footer from '@/components/layout/Footer';
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
-const PRIMARY = '#436235';
+const PRIMARY = '#1F5A8B';
 
 const SECTIONS = [
     'Personal Details',
@@ -155,7 +155,7 @@ function TextInput({ value, onChange, type = 'text', placeholder, min, className
             onChange={onChange}
             placeholder={placeholder}
             min={min}
-            className={`w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#436235]/30 focus:border-[#436235] transition ${className}`}
+            className={`w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1F5A8B]/30 focus:border-[#1F5A8B] transition ${className}`}
         />
     );
 }
@@ -167,7 +167,7 @@ function Textarea({ value, onChange, rows = 4, placeholder }) {
             onChange={onChange}
             rows={rows}
             placeholder={placeholder}
-            className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#436235]/30 focus:border-[#436235] transition resize-none"
+            className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1F5A8B]/30 focus:border-[#1F5A8B] transition resize-none"
         />
     );
 }
@@ -180,7 +180,7 @@ function RadioGroup({ options, value, onChange, name }) {
                     key={opt}
                     className={`flex items-start gap-3 cursor-pointer rounded-xl border px-4 py-3 text-sm transition ${
                         value === opt
-                            ? 'border-[#436235] bg-[#436235]/5 font-medium text-[#436235]'
+                            ? 'border-[#1F5A8B] bg-[#1F5A8B]/5 font-medium text-[#1F5A8B]'
                             : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'
                     }`}
                 >
@@ -190,7 +190,7 @@ function RadioGroup({ options, value, onChange, name }) {
                         value={opt}
                         checked={value === opt}
                         onChange={() => onChange(opt)}
-                        className="mt-0.5 accent-[#436235] shrink-0"
+                        className="mt-0.5 accent-[#1F5A8B] shrink-0"
                     />
                     {opt}
                 </label>
@@ -207,7 +207,7 @@ function YesNoRadio({ value, onChange, name }) {
                     key={label}
                     className={`flex items-center gap-2 cursor-pointer rounded-xl border px-5 py-2.5 text-sm font-medium transition ${
                         value === val
-                            ? 'border-[#436235] bg-[#436235]/5 text-[#436235]'
+                            ? 'border-[#1F5A8B] bg-[#1F5A8B]/5 text-[#1F5A8B]'
                             : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'
                     }`}
                 >
@@ -216,7 +216,7 @@ function YesNoRadio({ value, onChange, name }) {
                         name={name}
                         checked={value === val}
                         onChange={() => onChange(val)}
-                        className="accent-[#436235]"
+                        className="accent-[#1F5A8B]"
                     />
                     {label}
                 </label>
@@ -733,7 +733,7 @@ function Section8({ data, setData, localErrors, serverErrors }) {
                         type="checkbox"
                         checked={data.confirm_accurate}
                         onChange={(e) => setData('confirm_accurate', e.target.checked)}
-                        className="w-4 h-4 accent-[#436235] rounded"
+                        className="w-4 h-4 accent-[#1F5A8B] rounded"
                     />
                     <span className="text-sm font-medium text-gray-800">I agree</span>
                 </label>
@@ -750,7 +750,7 @@ function Section8({ data, setData, localErrors, serverErrors }) {
                         type="checkbox"
                         checked={data.consent_collection}
                         onChange={(e) => setData('consent_collection', e.target.checked)}
-                        className="w-4 h-4 accent-[#436235] rounded"
+                        className="w-4 h-4 accent-[#1F5A8B] rounded"
                     />
                     <span className="text-sm font-medium text-gray-800">I agree</span>
                 </label>

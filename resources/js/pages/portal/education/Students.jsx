@@ -235,6 +235,7 @@ const englishStageClass = (s) => ENGLISH_STAGE_STYLES[s] || "bg-gray-100 text-gr
 
 // Immigration-team sub-stage list (mirrors Lead::IMMIGRATION_STAGES).
 const IMMIGRATION_STAGES = [
+    "For Assessment",
     "Endorsed",
     "Visa Lodged",
     "Request for Information",
@@ -243,7 +244,15 @@ const IMMIGRATION_STAGES = [
     "Decline Visa",
 ];
 
+// Named people who can own a lead at an English / Immigration stage
+// (mirrors Lead::ENGLISH_STAGE_ASSIGNEES / IMMIGRATION_STAGE_ASSIGNEES).
+const STAGE_ASSIGNEES = {
+    english:     ["Paula", "Frank", "DIY"],
+    immigration: ["Hendry", "Tarun", "Dev"],
+};
+
 const IMMIGRATION_STAGE_STYLES = {
+    "For Assessment":         "bg-amber-100 text-amber-800 border-amber-200",
     "Endorsed":               "bg-indigo-100 text-indigo-800 border-indigo-200",
     "Visa Lodged":            "bg-violet-100 text-violet-800 border-violet-200",
     "Request for Information":"bg-orange-100 text-orange-800 border-orange-200",
@@ -311,7 +320,7 @@ export default function EducationStudents({ students = [], schoolOptions = [], p
     const closeStudentModal = () => { setStudentModalOpen(false); setEditingStudent(null); };
 
     const deleteStudent = (s) => {
-        if (! window.confirm(`Remove "${s.name}" from the Students list? Their lead record stays; just the student flag clears.`)) return;
+        if (! window.confirm(`Delete "${s.name}"? This archives the record — it drops off every list but notes, documents and history are kept and can be restored.`)) return;
         router.post(`/portal/education/students/${s.id}/destroy`, {}, { preserveScroll: true, preserveState: true });
     };
 
@@ -765,7 +774,7 @@ export default function EducationStudents({ students = [], schoolOptions = [], p
                                                         },
                                                         {
                                                             key: 'delete',
-                                                            label: 'Remove from students',
+                                                            label: 'Delete student',
                                                             icon: Trash2,
                                                             onClick: () => deleteStudent(s),
                                                             danger: true,
@@ -861,8 +870,18 @@ function StudentDashboardPanel({ student: s }) {
                         stage. Lives in the expander so the row column
                         stays compact. */}
                     <ReadOnlyField icon={UserPlus}  label="Endorsed by"    value={s.endorsed_by} />
+                    <ReadOnlyField icon={Users}     label="Referral"       value={s.referral} />
+                    <ReadOnlyField icon={UserPlus}  label="Assigned person" value={s.immigration_assignee || s.english_assignee} />
                 </div>
             </section>
+
+            {/* ── Status timeline · dated history of every stage move ─ */}
+            {Array.isArray(s.stage_history) && s.stage_history.length > 0 && (
+                <section>
+                    <PanelTitle>Status timeline</PanelTitle>
+                    <StatusTimeline history={s.stage_history} />
+                </section>
+            )}
 
             {/* ── Journey · unified Education → Immigration stepper ─ */}
             <section>
@@ -1374,6 +1393,37 @@ function StageDistribution({ stats, students }) {
 
 function PanelTitle({ children }) {
     return <h4 className="text-[10px] font-bold uppercase tracking-[0.18em] text-gray-500 mb-2.5">{children}</h4>;
+}
+
+// Dated timeline of every status change across departments. Newest first.
+// Each entry: { department, stage, assignee, at, by_name }.
+function StatusTimeline({ history = [] }) {
+    const DEPT_LABEL = { education: "Education", english: "English", immigration: "Immigration" };
+    const ordered = [...history].reverse();
+    return (
+        <ol className="relative border-l border-gray-200 ml-2 space-y-3">
+            {ordered.map((h, i) => (
+                <li key={i} className="ml-4">
+                    <span className="absolute -left-1.5 mt-1 w-3 h-3 rounded-full bg-indigo-400 border-2 border-white" />
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                        <span className="text-xs font-semibold text-gray-900">{h.stage || "Not started"}</span>
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">
+                            {DEPT_LABEL[h.department] || h.department}
+                        </span>
+                        {h.assignee && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 font-semibold">
+                                {h.assignee}
+                            </span>
+                        )}
+                    </div>
+                    <div className="flex items-center gap-1 text-[11px] text-gray-500 mt-0.5">
+                        <Clock size={10} className="text-gray-300" />
+                        {fmtDate(h.at)}{h.by_name ? ` · ${h.by_name}` : ""}
+                    </div>
+                </li>
+            ))}
+        </ol>
+    );
 }
 
 function SortableTh({ label, sortKey, current, dir, onSort }) {

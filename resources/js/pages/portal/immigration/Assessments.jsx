@@ -111,10 +111,10 @@ export default function ImmigrationAssessments({ intakes = [] }) {
 
     return (
         <div className="space-y-5 max-w-[1400px] mx-auto pb-12">
-            <Head title="Assessments — Immigration" />
+            <Head title="Visa Assessment — Immigration" />
             <PortalPageHeader
                 eyebrow="Work"
-                title="Assessments"
+                title="Visa Assessment"
                 description="Public visa-assessment submissions — free enquiries plus paid bookings — awaiting adviser triage."
             />
 

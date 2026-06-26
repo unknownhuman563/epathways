@@ -92,9 +92,9 @@ Route::get('/accommodation/expression-of-interest-cold', [PublicAccommodationCon
 Route::post('/accommodation/expression-of-interest-cold', [PublicAccommodationController::class, 'eoiStore'])->name('accommodation.eoi.store');
 Route::get('/accommodation/expression-of-interest-hot', [PublicAccommodationController::class, 'eoiHotForm'])->name('accommodation.eoi-hot');
 Route::post('/accommodation/expression-of-interest-hot', [PublicAccommodationController::class, 'eoiHotStore'])->name('accommodation.eoi-hot.store');
-// Public tenant complaint form — declared before /accommodation/{slug}.
-Route::get('/accommodation/complaint', [App\Http\Controllers\ComplaintController::class, 'form'])->name('accommodation.complaint');
-Route::post('/accommodation/complaint', [App\Http\Controllers\ComplaintController::class, 'store'])->name('accommodation.complaint.store');
+// Public tenant concern form — declared before /accommodation/{slug}.
+Route::get('/accommodation/concern', [App\Http\Controllers\ConcernController::class, 'form'])->name('accommodation.concern');
+Route::post('/accommodation/concern', [App\Http\Controllers\ConcernController::class, 'store'])->name('accommodation.concern.store');
 
 Route::get('/accommodation/{slug}', [PublicAccommodationController::class, 'show']);
 
@@ -180,6 +180,14 @@ Route::middleware('throttle:tracker')->group(function () {
     Route::post('/track/{code}/document', [LeadTrackingController::class, 'uploadDoc'])->name('track.upload');
     Route::post('/track/{code}/document/{doc}', [LeadTrackingController::class, 'updateDoc'])->name('track.doc.update');
     Route::delete('/track/{code}/document/{doc}', [LeadTrackingController::class, 'deleteDoc'])->name('track.doc.delete');
+
+    // Build 11.D Phase 3 — Agreement signing. tracker_signing_token in the
+    // URL is the bearer credential for the agreement; the controller
+    // validates that it belongs to the lead resolved from {code}, so a
+    // valid code paired with a guessed token still 404s.
+    Route::get('/track/{code}/agreements/{token}/sign',     [\App\Http\Controllers\Tracker\TrackerAgreementController::class, 'showSigning'])->name('track.agreements.sign.show');
+    Route::post('/track/{code}/agreements/{token}/sign',    [\App\Http\Controllers\Tracker\TrackerAgreementController::class, 'sign'])->name('track.agreements.sign');
+    Route::get('/track/{code}/agreements/{token}/signed',   [\App\Http\Controllers\Tracker\TrackerAgreementController::class, 'signedConfirmation'])->name('track.agreements.signed');
 });
 
 // Public Registration & Assessment Routes
@@ -480,8 +488,15 @@ Route::middleware(['auth'])->group(function () {
     });
 
     // Lead documents — admins AND sales agents both work these. The lead's
-    // own upload routes are under the lead-portal group below.
-    Route::middleware('portal:admin,sales')->group(function () {
+    // own upload routes are under the lead-portal group below. Build 11.D
+    // Phase 4 widens the gate to immigration roles too: the Case Profile's
+    // Documents tab is read+write for immigration consultants, so they need
+    // the approve/reject/request endpoints. The case-side controller already
+    // re-verifies is_immigration_case before letting the tab render, and
+    // updateStatus is per-document so a sales lead's documents can't be
+    // touched from this widened gate (no Lead Profile route routes them
+    // here).
+    Route::middleware('portal:admin,sales,immigration,immigration_manager,immigration_adviser')->group(function () {
         Route::get('/admin/leads/{id}/documents', [LeadDocumentController::class, 'staffIndex'])
             ->name('admin.leads.documents');
         Route::post('/admin/leads/{id}/documents/requests', [LeadDocumentController::class, 'requestStore'])
@@ -498,7 +513,7 @@ Route::middleware(['auth'])->group(function () {
     // group so every department portal that can see the documents tab can
     // also manage and download files. The download controller does its own
     // role-gated check on the specific lead before streaming the file.
-    Route::middleware('portal:admin,sales,education,english,immigration,accommodation')->group(function () {
+    Route::middleware('portal:admin,sales,education,english,immigration,accommodation,finance')->group(function () {
         Route::post('/admin/leads/{id}/documents/checklist/{key}/upload', [LeadDocumentController::class, 'staffChecklistUpload'])
             ->name('admin.leads.documents.checklist.upload');
         // Templated agreement generator — Blade -> PDF -> attached as a
@@ -716,6 +731,27 @@ Route::middleware(['auth'])->group(function () {
             // Inline stage update from the Cases table — mirrors the
             // EducationController dashboard-field pattern.
             Route::post('/cases/{id}/stage', [ImmigrationController::class, 'updateCaseStage'])->name('cases.stage');
+
+            // Build 11.D — purpose-built Case Profile page. The {lead} binding
+            // is the Lead model; controller hard-404s when is_immigration_case
+            // is false so this endpoint stays case-only. Sales leads continue
+            // to use LeadController::show via /admin/leads/{id}.
+            Route::get('/cases/{lead}/profile', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'show'])
+                ->name('cases.profile');
+
+            // Build 11.D Phase 2 — Managed agreement endpoints. Each call
+            // re-checks is_immigration_case + agreement<->lead ownership so
+            // a cross-case URL guess still 404s. The route order matters:
+            // /agreements/templates must come before /agreements/{agreement}
+            // or the literal 'templates' would be captured as an Agreement id.
+            Route::prefix('cases/{lead}/agreements')->name('cases.agreements.')->group(function () {
+                Route::get('/',                       [\App\Http\Controllers\Immigration\AgreementController::class, 'index'])->name('index');
+                Route::get('/templates',              [\App\Http\Controllers\Immigration\AgreementController::class, 'templates'])->name('templates');
+                Route::post('/',                      [\App\Http\Controllers\Immigration\AgreementController::class, 'generate'])->name('generate');
+                Route::post('/{agreement}/send',      [\App\Http\Controllers\Immigration\AgreementController::class, 'send'])->name('send');
+                Route::get('/{agreement}/pdf',        [\App\Http\Controllers\Immigration\AgreementController::class, 'downloadPdf'])->name('pdf');
+                Route::post('/{agreement}/void',      [\App\Http\Controllers\Immigration\AgreementController::class, 'void'])->name('void');
+            });
             Route::get('/documents', [ImmigrationController::class, 'documents'])->name('documents');
             Route::get('/appointments', [ImmigrationController::class, 'appointments'])->name('appointments');
 
@@ -770,6 +806,8 @@ Route::middleware(['auth'])->group(function () {
             Route::post('/tenants/{tenant}/vacate', [TenantController::class, 'markVacated'])->name('tenants.vacate');
             Route::post('/tenants/{tenant}/renew', [TenantController::class, 'markRenewed'])->name('tenants.renew');
             Route::post('/tenants/{tenant}/move', [TenantController::class, 'moveToProperty'])->name('tenants.move');
+            Route::patch('/tenants/{tenant}/archive', [TenantController::class, 'archive'])->name('tenants.archive');
+            Route::patch('/tenants/{tenant}/restore', [TenantController::class, 'restore'])->name('tenants.restore')->withTrashed();
             Route::resource('tenants', TenantController::class);
 
             // Onboarding pipeline (EOI submissions). Route NAMES stay
@@ -806,7 +844,8 @@ Route::middleware(['auth'])->group(function () {
             Route::patch('/rent-utilities/tenants/{tenant}/rent', [RentUtilitiesController::class, 'saveRentUtilities'])->name('rent-utilities.rent');
             Route::get('/payment-schedule', [PaymentScheduleController::class, 'index'])->name('payment-schedule');
             Route::get('/gas-delivery', [GasDeliveryController::class, 'index'])->name('gas-delivery');
-            Route::get('/complaints', [App\Http\Controllers\ComplaintController::class, 'index'])->name('complaints');
+            Route::get('/concerns', [App\Http\Controllers\ConcernController::class, 'index'])->name('concerns');
+            Route::patch('/concerns/{concern}', [App\Http\Controllers\ConcernController::class, 'update'])->name('concerns.update');
             Route::get('/message-templates', [MessageTemplateController::class, 'index'])->name('message-templates');
             Route::post('/message-templates', [MessageTemplateController::class, 'store'])->name('message-templates.store');
             Route::patch('/message-templates/{template}', [MessageTemplateController::class, 'update'])->name('message-templates.update');
@@ -816,6 +855,15 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/reports', $stub('Reports', 'Weekly, monthly, quarterly and custom reports.'))->name('reports');
             Route::get('/profile', $stub('My Profile', 'Your account details and preferences.'))->name('profile');
             Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications');
+        });
+
+        // Finance portal — placeholder dashboard + cross-portal Task Board
+        // filtered to department='finance'. Sidebar is intentionally lean
+        // (Dashboard + Task Board only) until the payments/invoices data
+        // model lands.
+        Route::middleware('portal:finance')->prefix('finance')->name('portal.finance.')->group(function () {
+            Route::get('/dashboard', [\App\Http\Controllers\Portal\FinanceController::class, 'dashboard'])->name('dashboard');
+            Route::get('/tasks', [\App\Http\Controllers\Portal\FinanceController::class, 'tasks'])->name('tasks');
         });
 
         // Lead Portal — external client-facing dashboard. Each lead-role user

@@ -10,7 +10,7 @@ import {
     User as UserIcon, ArrowRight, Sparkles, FolderOpen, Copy, Info, Undo2, Send,
     Globe, Home, Wand2, Users as UsersIcon, Eye,
     Paperclip, FileImage, Film, Music,
-    Briefcase,
+    Briefcase, Trash2,
 } from 'lucide-react';
 import { CHECKLIST, STATUSES, STATUS_CHIP, STATUS_LABEL, SECTION_STATUSES, IMPORTANT_NOTES, renderFilename, currentSectionIndex } from '@/data/leadDocumentChecklist';
 import LeadHealthBadge from '@/components/ai/LeadHealthBadge';
@@ -62,6 +62,33 @@ export default function LeadDetails({ lead: backendLead, activity = [], stageTim
     const [activeTab, setActiveTab] = useState(initialTab);
     const [composeOpen, setComposeOpen] = useState(false);
     const [stageOpen, setStageOpen] = useState(false);
+
+    // "Edit Lead as a whole" — when true, every Personal Info section opens
+    // in edit mode at once instead of the one-at-a-time gate. Driven by the
+    // header "Edit Lead" button and the ?edit=1 deep-link from the Leads
+    // table's row menu.
+    const editParam = (() => {
+        const q = currentUrl.includes('?') ? currentUrl.split('?')[1] : '';
+        return new URLSearchParams(q).get('edit') === '1';
+    })();
+    const [editAll, setEditAll] = useState(editParam);
+
+    // Archive (soft-delete) this lead — recoverable. Notes, documents, tasks
+    // and history all survive; it just drops off the lists.
+    const archiveLead = () => {
+        if (! window.confirm('Delete this lead? It will be archived — notes, documents and history are kept and it can be restored.')) return;
+        router.delete(`/admin/leads/${backendLead.id}`);
+    };
+
+    // Toggle whole-record edit mode and make sure the Personal Info tab is
+    // showing so the now-open section forms are visible.
+    const toggleEditAll = () => {
+        setEditAll((on) => {
+            const next = ! on;
+            if (next) setActiveTab('personal');
+            return next;
+        });
+    };
     const [savingStage, setSavingStage] = useState(false);
     const stageRef = useRef(null);
 
@@ -469,8 +496,18 @@ export default function LeadDetails({ lead: backendLead, activity = [], stageTim
                     <button className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 text-sm font-semibold transition-colors shadow-sm">
                         <Download size={16} /> Export PDF
                     </button>
-                    <button className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 text-sm font-semibold transition-colors shadow-sm">
-                        <Edit size={16} /> Edit Lead
+                    <button
+                        onClick={toggleEditAll}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-colors shadow-sm ${editAll ? 'bg-gray-900 text-white hover:bg-black' : 'bg-blue-600 text-white hover:bg-blue-700'}`}
+                    >
+                        <Edit size={16} /> {editAll ? 'Done Editing' : 'Edit Lead'}
+                    </button>
+                    <button
+                        onClick={archiveLead}
+                        title="Archive this lead (recoverable)"
+                        className="flex items-center gap-2 px-4 py-2 bg-white border border-red-200 text-red-600 rounded-xl hover:bg-red-50 text-sm font-semibold transition-colors shadow-sm"
+                    >
+                        <Trash2 size={16} /> Delete
                     </button>
                 </div>
             </div>
@@ -748,6 +785,7 @@ export default function LeadDetails({ lead: backendLead, activity = [], stageTim
                     sectionKey={1}
                     currentEditKey={currentEditKey}
                     setCurrentEditKey={setCurrentEditKey}
+                    editAll={editAll}
                     title="1. Personal Information"
                     icon={User}
                     initial={snapshotForSection(backendLead, 1)}
@@ -763,6 +801,7 @@ export default function LeadDetails({ lead: backendLead, activity = [], stageTim
                             <Field editing={editing} label="Email" field="email" form={form} setF={setF} errors={errors} type="email" />
                             <Field editing={editing} label="Phone" field="phone" form={form} setF={setF} errors={errors} type="tel" />
                             <Field editing={editing} label="WhatsApp" field="whatsapp" form={form} setF={setF} errors={errors} type="tel" />
+                            <Field editing={editing} label="Referral" field="referral" form={form} setF={setF} errors={errors} placeholder="Who referred them" />
                             <Field editing={editing} label="Gender" field="gender" form={form} setF={setF} errors={errors} type="select" options={GENDER_OPTIONS} />
                             <Field editing={editing} label="Marital Status" field="marital_status" form={form} setF={setF} errors={errors} type="select" options={MARITAL_OPTIONS} />
                             <Field editing={editing} label="Date of Birth" field="dob" form={form} setF={setF} errors={errors} type="date" />
@@ -786,6 +825,7 @@ export default function LeadDetails({ lead: backendLead, activity = [], stageTim
                     sectionKey={2}
                     currentEditKey={currentEditKey}
                     setCurrentEditKey={setCurrentEditKey}
+                    editAll={editAll}
                     title="2. Passport & Identity Documents"
                     icon={FileText}
                     initial={snapshotForSection(backendLead, 2)}
@@ -816,6 +856,7 @@ export default function LeadDetails({ lead: backendLead, activity = [], stageTim
                     sectionKey={3}
                     currentEditKey={currentEditKey}
                     setCurrentEditKey={setCurrentEditKey}
+                    editAll={editAll}
                     title="3. Current NZ Visa"
                     icon={Globe}
                     initial={snapshotForSection(backendLead, 3)}
@@ -837,6 +878,7 @@ export default function LeadDetails({ lead: backendLead, activity = [], stageTim
                     sectionKey={4}
                     currentEditKey={currentEditKey}
                     setCurrentEditKey={setCurrentEditKey}
+                    editAll={editAll}
                     title="4. Study Plans in New Zealand"
                     icon={BookOpen}
                     initial={snapshotForSection(backendLead, 4)}
@@ -865,6 +907,7 @@ export default function LeadDetails({ lead: backendLead, activity = [], stageTim
                     sectionKey={5}
                     currentEditKey={currentEditKey}
                     setCurrentEditKey={setCurrentEditKey}
+                    editAll={editAll}
                     title="5. Financial Information"
                     icon={DollarSign}
                     initial={snapshotForSection(backendLead, 5)}
@@ -889,6 +932,7 @@ export default function LeadDetails({ lead: backendLead, activity = [], stageTim
                     sectionKey={6}
                     currentEditKey={currentEditKey}
                     setCurrentEditKey={setCurrentEditKey}
+                    editAll={editAll}
                     title="6. Employment"
                     icon={Briefcase}
                     initial={snapshotForSection(backendLead, 6)}
@@ -921,6 +965,7 @@ export default function LeadDetails({ lead: backendLead, activity = [], stageTim
                     sectionKey={7}
                     currentEditKey={currentEditKey}
                     setCurrentEditKey={setCurrentEditKey}
+                    editAll={editAll}
                     title="7. Education Background"
                     icon={GraduationCap}
                     initial={snapshotForSection(backendLead, 7)}
@@ -943,6 +988,7 @@ export default function LeadDetails({ lead: backendLead, activity = [], stageTim
                     sectionKey={8}
                     currentEditKey={currentEditKey}
                     setCurrentEditKey={setCurrentEditKey}
+                    editAll={editAll}
                     title="8. Family & Partner"
                     icon={UserIcon}
                     initial={snapshotForSection(backendLead, 8)}
@@ -976,6 +1022,7 @@ export default function LeadDetails({ lead: backendLead, activity = [], stageTim
                     sectionKey={9}
                     currentEditKey={currentEditKey}
                     setCurrentEditKey={setCurrentEditKey}
+                    editAll={editAll}
                     title="9. Health & Character"
                     icon={AlertTriangle}
                     initial={snapshotForSection(backendLead, 9)}
@@ -1167,9 +1214,11 @@ const ENGLISH_TEST_OPTIONS = ['IELTS', 'TOEFL', 'PTE', 'NZCEL', 'Cambridge', 'Du
 // Save POSTs only the changed-and-included keys to /admin/leads/{id}/personal
 // so two sections being edited won't overwrite each other.
 
-function Section({ leadId, sectionKey, currentEditKey, setCurrentEditKey,
+function Section({ leadId, sectionKey, currentEditKey, setCurrentEditKey, editAll = false,
                    title, icon, initial, children }) {
-    const editing = currentEditKey === sectionKey;
+    // `editAll` (header "Edit Lead" button) opens every section at once;
+    // otherwise the single-section gate applies.
+    const editing = editAll || currentEditKey === sectionKey;
     const [form, setForm] = useState(initial);
     const [errors, setErrors] = useState({});
     const [saving, setSaving] = useState(false);
@@ -1189,7 +1238,9 @@ function Section({ leadId, sectionKey, currentEditKey, setCurrentEditKey,
     const cancel = () => {
         setErrors({});
         setForm(initial);
-        setCurrentEditKey(null);
+        // In edit-all mode the per-section Cancel just resets this card's
+        // fields; the global "Done Editing" button exits the mode.
+        if (! editAll) setCurrentEditKey(null);
     };
     const save = () => {
         setSaving(true);
@@ -1202,12 +1253,14 @@ function Section({ leadId, sectionKey, currentEditKey, setCurrentEditKey,
         router.post(`/admin/leads/${leadId}/personal`, payload, {
             preserveScroll: true,
             preserveState: true,
-            onSuccess: () => setCurrentEditKey(null),
+            onSuccess: () => { if (! editAll) setCurrentEditKey(null); },
             onError: (errs) => setErrors(errs || {}),
             onFinish: () => setSaving(false),
         });
     };
 
+    // In edit-all mode the per-section Edit button is suppressed (every
+    // card is already open); only Save / Cancel show.
     const action = editing ? (
         <div className="flex items-center gap-2">
             <button
@@ -1361,6 +1414,7 @@ function snapshotForSection(lead, key) {
                 email: lead.email || '',
                 phone: lead.phone || '',
                 whatsapp: lead.whatsapp || '',
+                referral: lead.referral || '',
                 gender: lead.gender || '',
                 marital_status: lead.marital_status || '',
                 dob: d(lead.dob),
@@ -3032,53 +3086,105 @@ function TagsPanel({ leadId, tags, allTags }) {
 
 // ── Documents tab — checklist of required NZ application docs ────────────
 
-// Flat checklist table — every required document as a row: name | status.
-// Reads the lead's per-item status (or "Submitted" when files exist / else
-// "Pending") and links each row into its section folder for upload/review.
-function ChecklistTable({ state = {}, checklistFiles = {}, onOpenSection }) {
+// Flat checklist table — one row per required document, with the columns
+// staff asked for: File · Attachment · Status (dropdown) · Notes. Status and
+// Notes persist inline via onSave (POST /documents/checklist); the file name
+// and the "Upload" affordance open the section folder for the full
+// upload/preview/delete flow.
+function ChecklistTable({ state = {}, checklistFiles = {}, onOpenSection, onSave }) {
     return (
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
             <table className="w-full text-left">
                 <thead>
                     <tr className="bg-gray-50/60 border-b border-gray-100 text-[10px] font-bold uppercase tracking-widest text-gray-500">
-                        <th className="px-6 py-3">Document Name</th>
-                        <th className="px-6 py-3 w-44">Status</th>
+                        <th className="px-6 py-3">File</th>
+                        <th className="px-6 py-3">Attachment</th>
+                        <th className="px-6 py-3 w-40">Status</th>
+                        <th className="px-6 py-3 w-64">Notes</th>
                     </tr>
                 </thead>
                 <tbody>
                     {CHECKLIST.map((section) => (
                         <React.Fragment key={section.key}>
                             <tr className="bg-gray-50/40 border-b border-gray-100">
-                                <td colSpan={2} className="px-6 py-2 text-[11px] font-bold uppercase tracking-wider text-gray-600">
+                                <td colSpan={4} className="px-6 py-2 text-[11px] font-bold uppercase tracking-wider text-gray-600">
                                     {section.section}
                                 </td>
                             </tr>
                             {section.items.map((it) => {
-                                const status = state[it.id]?.status;
-                                const files = checklistFiles[it.id]?.length || 0;
-                                const label = status ? STATUS_LABEL[status] : (files > 0 ? 'Submitted' : 'Pending');
-                                const chip = status
-                                    ? STATUS_CHIP[status]
-                                    : (files > 0 ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-gray-100 text-gray-500 border-gray-200');
+                                const itemState = state[it.id] || {};
+                                const files = checklistFiles[it.id] || [];
                                 return (
-                                    <tr
-                                        key={it.id}
-                                        onClick={() => onOpenSection(section.section)}
-                                        className="border-b border-gray-50 hover:bg-emerald-50/30 cursor-pointer transition-colors"
-                                    >
+                                    <tr key={it.id} className="border-b border-gray-50 hover:bg-emerald-50/20 transition-colors align-top">
+                                        {/* File — opens the section folder for the full flow */}
                                         <td className="px-6 py-3">
-                                            <div className="flex items-center gap-2.5">
+                                            <button
+                                                type="button"
+                                                onClick={() => onOpenSection(section.section)}
+                                                className="flex items-center gap-2.5 text-left group"
+                                                title="Open folder to upload / preview"
+                                            >
                                                 <FileText size={14} className="text-gray-400 shrink-0" />
-                                                <span className="text-sm text-gray-800">{it.name}</span>
-                                                {files > 0 && (
-                                                    <span className="text-[10px] text-gray-400 tabular-nums">· {files} file{files === 1 ? '' : 's'}</span>
-                                                )}
-                                            </div>
+                                                <span className="text-sm text-gray-800 group-hover:text-emerald-700">{it.name}</span>
+                                            </button>
                                         </td>
+
+                                        {/* Attachment — download links, or an Upload shortcut */}
                                         <td className="px-6 py-3">
-                                            <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] font-medium ${chip}`}>
-                                                {label}
-                                            </span>
+                                            {files.length > 0 ? (
+                                                <ul className="space-y-1">
+                                                    {files.map((f) => (
+                                                        <li key={f.id}>
+                                                            <a
+                                                                href={`/admin/documents/${f.id}/download?inline=1`}
+                                                                target="_blank"
+                                                                rel="noreferrer"
+                                                                className="inline-flex items-center gap-1.5 text-[11px] font-medium text-gray-700 hover:text-blue-600 max-w-[220px]"
+                                                                title={f.original_name}
+                                                            >
+                                                                {f.source === 'generated'
+                                                                    ? <Wand2 size={11} className="text-violet-500 shrink-0" />
+                                                                    : <Paperclip size={11} className="text-gray-400 shrink-0" />}
+                                                                <span className="truncate">{f.original_name}</span>
+                                                            </a>
+                                                        </li>
+                                                    ))}
+                                                </ul>
+                                            ) : (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => onOpenSection(section.section)}
+                                                    className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-gray-400 hover:text-emerald-700"
+                                                >
+                                                    <Paperclip size={11} /> Upload
+                                                </button>
+                                            )}
+                                        </td>
+
+                                        {/* Status — inline dropdown */}
+                                        <td className="px-6 py-3">
+                                            <select
+                                                value={itemState.status || ''}
+                                                onChange={(e) => onSave(it.id, { status: e.target.value || null })}
+                                                className={`w-full rounded-lg border px-2 py-1.5 text-[11px] font-medium outline-none focus:border-gray-400 ${
+                                                    itemState.status
+                                                        ? STATUS_CHIP[itemState.status]
+                                                        : (files.length > 0 ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-white text-gray-500 border-gray-200')
+                                                }`}
+                                            >
+                                                <option value="">{files.length > 0 ? 'Submitted' : 'Pending'}</option>
+                                                {STATUSES.map((s) => (
+                                                    <option key={s.key} value={s.key}>{s.label}</option>
+                                                ))}
+                                            </select>
+                                        </td>
+
+                                        {/* Notes — inline, saved on blur */}
+                                        <td className="px-6 py-3">
+                                            <ChecklistNotesCell
+                                                value={itemState.notes || ''}
+                                                onSave={(notes) => onSave(it.id, { notes })}
+                                            />
                                         </td>
                                     </tr>
                                 );
@@ -3088,6 +3194,23 @@ function ChecklistTable({ state = {}, checklistFiles = {}, onOpenSection }) {
                 </tbody>
             </table>
         </div>
+    );
+}
+
+// Inline notes input for a checklist row — keeps a local draft so typing is
+// smooth and only persists (onSave) when the value actually changed on blur.
+function ChecklistNotesCell({ value, onSave }) {
+    const [draft, setDraft] = useState(value);
+    useEffect(() => { setDraft(value); }, [value]);
+    return (
+        <input
+            type="text"
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onBlur={() => { if (draft !== value) onSave(draft); }}
+            placeholder="Add a note…"
+            className="w-full rounded-lg border border-gray-200 px-2 py-1.5 text-[11px] text-gray-700 outline-none focus:border-gray-400"
+        />
     );
 }
 
@@ -3197,6 +3320,7 @@ function DocumentsPanel({ lead, checklistFiles = {}, currentUser = null }) {
                     state={state}
                     checklistFiles={checklistFiles}
                     onOpenSection={setOpenFolder}
+                    onSave={save}
                 />
             ) : (
                 <FolderDetail

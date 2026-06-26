@@ -51,13 +51,14 @@ class LeadTrackingController extends Controller
         $code = $code ?: $request->query('code');
 
         $payload = [
-            'code'      => $code,
-            'lead'      => null,
-            'info'      => null,
-            'documents' => [],
-            'timeline'  => [],
-            'visa'      => null,
-            'error'     => null,
+            'code'       => $code,
+            'lead'       => null,
+            'info'       => null,
+            'documents'  => [],
+            'agreements' => [],
+            'timeline'   => [],
+            'visa'       => null,
+            'error'      => null,
         ];
 
         if (! $code) {
@@ -76,9 +77,10 @@ class LeadTrackingController extends Controller
 
         $this->recordVisit($request, $lead);
 
-        $payload['lead']      = $this->publicLeadShape($lead);
-        $payload['info']      = $this->editableInfo($lead);
-        $payload['documents'] = $this->publicDocuments($lead);
+        $payload['lead']       = $this->publicLeadShape($lead);
+        $payload['info']       = $this->editableInfo($lead);
+        $payload['documents']  = $this->publicDocuments($lead);
+        $payload['agreements'] = $this->publicAgreements($lead, $code);
         // Immigration cases get the 12-step "My Visa Application Journey"
         // roadmap; everyone else (general leads / education students)
         // keeps the high-level 7-step pipeline view.
@@ -460,6 +462,36 @@ class LeadTrackingController extends Controller
                 // controller rejects the change anyway, but we surface the
                 // flag so the UI can hide the action buttons cleanly.
                 'is_editable'   => $d->status === LeadDocument::STATUS_SUBMITTED,
+            ])
+            ->all();
+    }
+
+    /**
+     * Build 11.D Phase 3 — Agreements awaiting (or already done) on the
+     * tracker. Drafts / voided / expired never surface here; signed ones
+     * show with a "view confirmation" link so the client can re-read what
+     * they signed without bouncing through their inbox.
+     */
+    private function publicAgreements(Lead $lead, string $code): array
+    {
+        return $lead->agreements()
+            ->whereIn('status', [
+                \App\Models\Agreement::STATUS_SENT,
+                \App\Models\Agreement::STATUS_VIEWED,
+                \App\Models\Agreement::STATUS_SIGNED,
+            ])
+            ->whereNotNull('tracker_signing_token')
+            ->orderByDesc('created_at')
+            ->get()
+            ->map(fn (\App\Models\Agreement $a) => [
+                'id'         => $a->id,
+                'title'      => $a->title,
+                'status'     => $a->status,
+                'sent_at'    => $a->sent_at?->toIso8601String(),
+                'signed_at'  => $a->signed_at?->toIso8601String(),
+                'sign_url'   => "/track/{$code}/agreements/{$a->tracker_signing_token}/sign",
+                'view_url'   => "/track/{$code}/agreements/{$a->tracker_signing_token}/view",
+                'signed_url' => "/track/{$code}/agreements/{$a->tracker_signing_token}/signed",
             ])
             ->all();
     }
