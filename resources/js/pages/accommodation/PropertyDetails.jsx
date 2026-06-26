@@ -60,7 +60,7 @@ const PropertyDetails = ({ property }) => {
   })();
 
   return (
-    <div className="bg-[#fafafa] min-h-screen font-urbanist text-black selection:bg-[#436235] selection:text-white">
+    <div className="bg-[#fafafa] min-h-screen font-urbanist text-black selection:bg-[#1F5A8B] selection:text-white">
       <Navbar />
 
       <main className="container mx-auto px-4 py-12 max-w-7xl">
@@ -145,7 +145,7 @@ const PropertyDetails = ({ property }) => {
                     type="button"
                     onClick={() => setActiveImage(i)}
                     className={`relative h-20 w-28 shrink-0 rounded-2xl overflow-hidden border-2 transition ${
-                      i === activeImage ? 'border-[#436235]' : 'border-transparent opacity-60 hover:opacity-100'
+                      i === activeImage ? 'border-[#1F5A8B]' : 'border-transparent opacity-60 hover:opacity-100'
                     }`}
                   >
                     <img src={img} alt={`View ${i + 1}`} className="w-full h-full object-cover" />
@@ -182,16 +182,16 @@ const PropertyDetails = ({ property }) => {
           {/* Sidebar */}
           <div className="lg:w-1/3">
             <div className="sticky top-28 bg-white p-8 rounded-[2rem] shadow-[0_8px_30px_rgb(0,0,0,0.08)] border border-gray-100">
-              <div className="mb-6 rounded-2xl border border-[#436235]/15 bg-[#436235]/5 p-5">
+              <div className="mb-6 rounded-2xl border border-[#1F5A8B]/15 bg-[#1F5A8B]/5 p-5">
                 <div className="flex items-baseline justify-between gap-2">
-                  <span className="text-[11px] font-bold uppercase tracking-[0.15em] text-[#436235]">Single</span>
+                  <span className="text-[11px] font-bold uppercase tracking-[0.15em] text-[#1F5A8B]">Single</span>
                   <span className="text-4xl font-extrabold text-[#282728] leading-none">
                     {money(property?.rent_single)}<span className="text-sm text-gray-400 font-medium">/wk</span>
                   </span>
                 </div>
                 {property?.rent_couple != null && (
-                  <div className="mt-4 pt-4 border-t border-[#436235]/15 flex items-baseline justify-between gap-2">
-                    <span className="text-[11px] font-bold uppercase tracking-[0.15em] text-[#436235]">Couple</span>
+                  <div className="mt-4 pt-4 border-t border-[#1F5A8B]/15 flex items-baseline justify-between gap-2">
+                    <span className="text-[11px] font-bold uppercase tracking-[0.15em] text-[#1F5A8B]">Couple</span>
                     <span className="text-3xl font-extrabold text-[#282728] leading-none">
                       {money(property.rent_couple)}<span className="text-sm text-gray-400 font-medium">/wk</span>
                     </span>
@@ -200,7 +200,7 @@ const PropertyDetails = ({ property }) => {
                 <p className="text-[11px] text-gray-400 mt-4">single occupant{property?.bills_excluded ? ' · excludes bills' : ''}</p>
               </div>
 
-              <a href={`/accommodation/expression-of-interest-hot?property=${encodeURIComponent([property?.name, property?.suburb].filter(Boolean).join(' — '))}`} className="w-full py-4 bg-black text-white rounded-full font-bold hover:bg-gray-800 transition-colors shadow-lg shadow-black/20 text-center block">
+              <a href={`/accommodation/expression-of-interest-hot?property=${encodeURIComponent([property?.name, property?.suburb].filter(Boolean).join(' — '))}`} className="w-full py-4 bg-[#1F5A8B] text-white rounded-full font-bold hover:bg-[#184A73] transition-colors shadow-lg shadow-[#1F5A8B]/20 text-center block">
                 Interested? Click here
               </a>
               <p className="text-center text-xs text-gray-500 mt-4">We'll get back to you within 24 hours</p>

@@ -37,7 +37,7 @@ const Checkout = ({ id }) => {
         <Navbar />
         <main className="flex-1 flex flex-col items-center justify-center p-4">
           <div className="bg-white p-12 rounded-[2rem] shadow-lg text-center max-w-md w-full">
-            <div className="w-20 h-20 bg-green-100 text-green-500 rounded-full flex items-center justify-center mx-auto mb-6">
+            <div className="w-20 h-20 bg-[#1F5A8B]/10 text-[#1F5A8B] rounded-full flex items-center justify-center mx-auto mb-6">
               <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7"></path></svg>
             </div>
             <h2 className="text-3xl font-bold mb-4">Payment Successful!</h2>

@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Head, Link, router } from "@inertiajs/react";
-import { Plus, Pencil, Eye, Users, Search, Download } from "lucide-react";
+import { Plus, Pencil, Eye, Users, Search, Download, Archive, ArchiveRestore } from "lucide-react";
 import Pagination from "@/components/ui/Pagination";
 
 const STATUS_STYLES = {
@@ -40,6 +40,7 @@ export default function Tenants({ tenants = {}, filters = {}, options = {} }) {
     const sort = filters.sort ?? "days_to_end";
     const missingDocs = Boolean(filters.missing_docs);
     const hasEmail = Boolean(filters.has_email);
+    const archived = Boolean(filters.archived);
     const hasFilters = Boolean(search) || propertyId !== "all" || status !== "all" || missingDocs || hasEmail;
 
     const applyFilters = (next = {}) => {
@@ -50,6 +51,7 @@ export default function Tenants({ tenants = {}, filters = {}, options = {} }) {
             sort: next.sort !== undefined ? next.sort : sort,
             missing_docs: next.missing_docs !== undefined ? next.missing_docs : missingDocs,
             has_email: next.has_email !== undefined ? next.has_email : hasEmail,
+            archived: next.archived !== undefined ? next.archived : archived,
         };
         const query = {};
         if (merged.search) query.search = merged.search;
@@ -58,7 +60,17 @@ export default function Tenants({ tenants = {}, filters = {}, options = {} }) {
         if (merged.sort !== "days_to_end") query.sort = merged.sort;
         if (merged.missing_docs) query.missing_docs = 1;
         if (merged.has_email) query.has_email = 1;
+        if (merged.archived) query.archived = 1;
         router.get("/portal/accommodation/tenants", query, { preserveState: true, preserveScroll: true, replace: true });
+    };
+
+    const archiveTenant = (t) => {
+        if (confirm(`Archive ${t.display_name}? They'll be hidden from the list but kept on record (you can restore them anytime).`)) {
+            router.patch(`/portal/accommodation/tenants/${t.id}/archive`, {}, { preserveScroll: true });
+        }
+    };
+    const restoreTenant = (t) => {
+        router.patch(`/portal/accommodation/tenants/${t.id}/restore`, {}, { preserveScroll: true });
     };
 
     useEffect(() => {
@@ -119,13 +131,14 @@ export default function Tenants({ tenants = {}, filters = {}, options = {} }) {
                 </select>
                 <button onClick={() => applyFilters({ missing_docs: !missingDocs })} className={toggle(missingDocs)}>Missing docs</button>
                 <button onClick={() => applyFilters({ has_email: !hasEmail })} className={toggle(hasEmail)}>Has email</button>
+                <button onClick={() => applyFilters({ archived: !archived })} className={toggle(archived)}>Archived</button>
             </div>
 
             {rows.length === 0 ? (
                 <div className="rounded-3xl border border-dashed border-gray-200 bg-white p-16 text-center">
                     <Users className="mx-auto mb-3 text-gray-300" size={40} />
-                    <p className="font-semibold text-gray-900">{hasFilters ? "No matching tenants" : "No tenants yet"}</p>
-                    <p className="text-sm text-gray-500">{hasFilters ? "Try adjusting your search or filters." : "Add your first tenant to a property."}</p>
+                    <p className="font-semibold text-gray-900">{archived ? "No archived tenants" : hasFilters ? "No matching tenants" : "No tenants yet"}</p>
+                    <p className="text-sm text-gray-500">{archived ? "Tenants you archive will appear here." : hasFilters ? "Try adjusting your search or filters." : "Add your first tenant to a property."}</p>
                 </div>
             ) : (
                 <div className="overflow-x-auto rounded-3xl border border-gray-50 bg-white shadow-sm">
@@ -180,8 +193,15 @@ export default function Tenants({ tenants = {}, filters = {}, options = {} }) {
                                     </td>
                                     <td className="px-4 py-3">
                                         <div className="flex items-center justify-end gap-1">
-                                            <Link href={`/portal/accommodation/tenants/${t.id}`} className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-900" title="View"><Eye size={16} /></Link>
-                                            <Link href={`/portal/accommodation/tenants/${t.id}/edit`} className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-900" title="Edit"><Pencil size={16} /></Link>
+                                            {archived ? (
+                                                <button onClick={() => restoreTenant(t)} className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold text-[#1F5A8B] hover:bg-[#1F5A8B]/5" title="Restore"><ArchiveRestore size={14} /> Restore</button>
+                                            ) : (
+                                                <>
+                                                    <Link href={`/portal/accommodation/tenants/${t.id}`} className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-900" title="View"><Eye size={16} /></Link>
+                                                    <Link href={`/portal/accommodation/tenants/${t.id}/edit`} className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-900" title="Edit"><Pencil size={16} /></Link>
+                                                    <button onClick={() => archiveTenant(t)} className="rounded-lg p-2 text-gray-500 hover:bg-amber-50 hover:text-amber-600" title="Archive"><Archive size={16} /></button>
+                                                </>
+                                            )}
                                         </div>
                                     </td>
                                 </tr>

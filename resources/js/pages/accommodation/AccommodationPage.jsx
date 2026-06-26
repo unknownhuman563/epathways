@@ -4,8 +4,6 @@ import { Autoplay } from 'swiper';
 import 'swiper/css';
 import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
-import CrossPillarBundles from '@/components/ui/CrossPillarBundles';
-import BeforeFooterCTA from '@/components/ui/BeforeFooterCTA';
 
 // Split the free-text "includes" into bullets on commas — but ignore commas
 // inside parentheses, e.g. "Shared common areas (fridge, dining table)" stays one item.
@@ -132,7 +130,7 @@ const Accommodation = ({ properties = [] }) => {
               </a>
               <a
                 href="/booking"
-                className="px-8 py-3.5 bg-[#436235] hover:bg-[#385029] text-white rounded-full text-sm font-bold transition-colors flex items-center space-x-2"
+                className="px-8 py-3.5 bg-[#1F5A8B] hover:bg-[#184A73] text-white rounded-full text-sm font-bold transition-colors flex items-center space-x-2"
               >
                 <span>Talk to us</span>
               </a>
@@ -344,16 +342,16 @@ const Accommodation = ({ properties = [] }) => {
 
                 {/* Column 3: Rent & Info */}
                 <div className="h-full py-4 lg:px-6 lg:border-r border-gray-100">
-                  <div className="mb-6 rounded-2xl border border-[#436235]/15 bg-[#436235]/5 p-4">
+                  <div className="mb-6 rounded-2xl border border-[#1F5A8B]/15 bg-[#1F5A8B]/5 p-4">
                     <div className="flex items-baseline justify-between gap-2">
-                      <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-[#436235]">Single</span>
+                      <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-[#1F5A8B]">Single</span>
                       <span className="text-3xl font-extrabold text-[#282728] leading-none">
                         {money(acc.rent_single)}<span className="text-xs text-gray-400 font-medium">/wk</span>
                       </span>
                     </div>
                     {acc.rent_couple != null && (
-                      <div className="flex items-baseline justify-between gap-2 mt-3 pt-3 border-t border-[#436235]/15">
-                        <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-[#436235]">Couple</span>
+                      <div className="flex items-baseline justify-between gap-2 mt-3 pt-3 border-t border-[#1F5A8B]/15">
+                        <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-[#1F5A8B]">Couple</span>
                         <span className="text-2xl font-extrabold text-[#282728] leading-none">
                           {money(acc.rent_couple)}<span className="text-xs text-gray-400 font-medium">/wk</span>
                         </span>
@@ -379,7 +377,7 @@ const Accommodation = ({ properties = [] }) => {
                       <ul className="space-y-2">
                         {splitIncludes(acc.includes).map((item, i) => (
                           <li key={i} className="flex items-start gap-2 text-[12px] text-gray-700 leading-snug">
-                            <svg className="w-4 h-4 text-[#436235] shrink-0 mt-0.5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                            <svg className="w-4 h-4 text-[#1F5A8B] shrink-0 mt-0.5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                             </svg>
                             <span>{item}</span>
@@ -390,7 +388,7 @@ const Accommodation = ({ properties = [] }) => {
                       <p className="text-[11px] text-gray-400 leading-relaxed">Contact us for the full list of inclusions.</p>
                     )}
                   </div>
-                  <a href={`/accommodation/${acc.slug}`} className="w-full mt-8 py-4 bg-black text-white rounded-full text-sm font-bold hover:bg-gray-800 transition-colors shadow-lg shadow-black/20 text-center block">
+                  <a href={`/accommodation/${acc.slug}`} className="w-full mt-8 py-4 bg-[#1F5A8B] text-white rounded-full text-sm font-bold hover:bg-[#184A73] transition-colors shadow-lg shadow-[#1F5A8B]/20 text-center block">
                     View details
                   </a>
                 </div>
@@ -401,20 +399,23 @@ const Accommodation = ({ properties = [] }) => {
         </div>
       </section>
 
-      <CrossPillarBundles exclude="accommodation" />
-
-      <BeforeFooterCTA
-          source="accommodation-page"
-          eyebrow="Where you'll live"
-          headline="A home in Auckland."
-          sublineAccent="Sorted before you fly."
-          paragraph="Share your study city and arrival dates — our accommodation team will send a curated shortlist within 24 hours, plus airport pickup if you need it."
-          trust={[
-              "Hand-selected homestays, apartments and student halls",
-              "Free for students — no agency fees",
-              "Real arrival support, not just a booking link",
-          ]}
-      />
+      {/* Concern CTA */}
+      <section className="border-t border-gray-100 bg-white">
+        <div className="mx-auto max-w-3xl px-4 py-16 text-center sm:px-6">
+          <span className="text-[11px] font-bold uppercase tracking-[0.15em] text-[#1F5A8B]">Already a tenant?</span>
+          <h2 className="mt-3 text-2xl font-bold text-gray-900 sm:text-3xl">Have a concern about your place?</h2>
+          <p className="mx-auto mt-3 max-w-xl text-sm leading-relaxed text-gray-500">
+            Living in one of our properties and something's not right? Let us know — just enter your name and email, pick your
+            property, and we'll make sure the right person looks into it.
+          </p>
+          <a
+            href="/accommodation/concern"
+            className="mt-6 inline-flex items-center justify-center rounded-full bg-[#1F5A8B] px-8 py-3.5 text-sm font-bold text-white shadow-lg shadow-[#1F5A8B]/20 transition-colors hover:bg-[#184A73]"
+          >
+            Submit a concern
+          </a>
+        </div>
+      </section>
 
       <Footer />
     </div>

@@ -92,9 +92,9 @@ Route::get('/accommodation/expression-of-interest-cold', [PublicAccommodationCon
 Route::post('/accommodation/expression-of-interest-cold', [PublicAccommodationController::class, 'eoiStore'])->name('accommodation.eoi.store');
 Route::get('/accommodation/expression-of-interest-hot', [PublicAccommodationController::class, 'eoiHotForm'])->name('accommodation.eoi-hot');
 Route::post('/accommodation/expression-of-interest-hot', [PublicAccommodationController::class, 'eoiHotStore'])->name('accommodation.eoi-hot.store');
-// Public tenant complaint form — declared before /accommodation/{slug}.
-Route::get('/accommodation/complaint', [App\Http\Controllers\ComplaintController::class, 'form'])->name('accommodation.complaint');
-Route::post('/accommodation/complaint', [App\Http\Controllers\ComplaintController::class, 'store'])->name('accommodation.complaint.store');
+// Public tenant concern form — declared before /accommodation/{slug}.
+Route::get('/accommodation/concern', [App\Http\Controllers\ConcernController::class, 'form'])->name('accommodation.concern');
+Route::post('/accommodation/concern', [App\Http\Controllers\ConcernController::class, 'store'])->name('accommodation.concern.store');
 
 Route::get('/accommodation/{slug}', [PublicAccommodationController::class, 'show']);
 
@@ -806,6 +806,8 @@ Route::middleware(['auth'])->group(function () {
             Route::post('/tenants/{tenant}/vacate', [TenantController::class, 'markVacated'])->name('tenants.vacate');
             Route::post('/tenants/{tenant}/renew', [TenantController::class, 'markRenewed'])->name('tenants.renew');
             Route::post('/tenants/{tenant}/move', [TenantController::class, 'moveToProperty'])->name('tenants.move');
+            Route::patch('/tenants/{tenant}/archive', [TenantController::class, 'archive'])->name('tenants.archive');
+            Route::patch('/tenants/{tenant}/restore', [TenantController::class, 'restore'])->name('tenants.restore')->withTrashed();
             Route::resource('tenants', TenantController::class);
 
             // Onboarding pipeline (EOI submissions). Route NAMES stay
@@ -842,7 +844,8 @@ Route::middleware(['auth'])->group(function () {
             Route::patch('/rent-utilities/tenants/{tenant}/rent', [RentUtilitiesController::class, 'saveRentUtilities'])->name('rent-utilities.rent');
             Route::get('/payment-schedule', [PaymentScheduleController::class, 'index'])->name('payment-schedule');
             Route::get('/gas-delivery', [GasDeliveryController::class, 'index'])->name('gas-delivery');
-            Route::get('/complaints', [App\Http\Controllers\ComplaintController::class, 'index'])->name('complaints');
+            Route::get('/concerns', [App\Http\Controllers\ConcernController::class, 'index'])->name('concerns');
+            Route::patch('/concerns/{concern}', [App\Http\Controllers\ConcernController::class, 'update'])->name('concerns.update');
             Route::get('/message-templates', [MessageTemplateController::class, 'index'])->name('message-templates');
             Route::post('/message-templates', [MessageTemplateController::class, 'store'])->name('message-templates.store');
             Route::patch('/message-templates/{template}', [MessageTemplateController::class, 'update'])->name('message-templates.update');
