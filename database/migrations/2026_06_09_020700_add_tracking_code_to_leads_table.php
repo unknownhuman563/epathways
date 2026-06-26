@@ -23,7 +23,15 @@ return new class extends Migration
         // Backfill every existing lead so legacy rows are also trackable.
         // The generator handles collision avoidance against rows already
         // assigned in earlier loop iterations.
-        Lead::whereNull('tracking_code')->each(function (Lead $lead) {
+        //
+        // withoutGlobalScopes() so the SoftDeletes trait (added to the Lead
+        // model in 2026_06_26_..._soft_deletes_to_leads.php) doesn't append
+        // `WHERE deleted_at IS NULL` here — that column doesn't exist on the
+        // leads table yet at this migration's point in the chain, and the
+        // appended predicate would fatal RefreshDatabase in the test suite.
+        // Production already ran this migration so the change is a no-op
+        // there; only fresh migrate runs (tests, fresh installs) re-execute.
+        Lead::withoutGlobalScopes()->whereNull('tracking_code')->each(function (Lead $lead) {
             $lead->tracking_code = Lead::generateTrackingCode();
             $lead->saveQuietly();
         });

@@ -28,7 +28,7 @@ class User extends Authenticatable
     public const ROLE_LEAD = 'lead';
 
     /** Department portals a non-admin user can be assigned to. */
-    public const PORTAL_ROLES = ['sales', 'education', 'english', 'immigration', 'accommodation'];
+    public const PORTAL_ROLES = ['sales', 'education', 'english', 'immigration', 'accommodation', 'finance'];
 
     /** Roles that resolve to the Immigration portal. */
     public const IMMIGRATION_ROLES = [

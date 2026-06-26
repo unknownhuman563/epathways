@@ -14,13 +14,13 @@ import { ReviewCard, StarRow } from "@/components/ui/ReviewsSection";
 // Assets
 import MigrationLogo  from "@assets/Immigration/migration_logo.png";
 import HeroBg         from "@assets/NewSections/nz_hero.png";
-import GuidanceImg   from "@assets/NewSections/immigration_guidance.png";
-import NZCityImg     from "@assets/NewSections/nz_city.png";
+// GuidanceImg removed — was only used by the deleted Guidance + General Assessment cards.
+// NZCityImg removed — was only used by the deleted visaTabs.Residency entry.
 
 import StudentVisaImg from "@assets/NewSections/student_visa.png";
 import VisitorVisaImg from "@assets/NewSections/visitor_visa.png";
 import WorkVisaImg    from "@assets/NewSections/work_visa.png";
-import SettleVisaImg  from "@assets/NewSections/settle_visa.png";
+// SettleVisaImg removed — was only used by the deleted Services + Select-your-pathway sections.
 import ResidencyImg   from "@assets/NewSections/residency_visa.png";
 import BrandBanner   from "@assets/banner/team_immigration.png";
 
@@ -30,23 +30,13 @@ import EmmaImg        from "@assets/team/emma.png";
 import EmilyImg       from "@assets/team/emily.png";
 import TarunImg       from "@assets/team/tarun.png";
 import LicensedBadge  from "@assets/banner/licensed.png";
-import VisaImg        from "@assets/Services/visa.png";
-import AgentsImg      from "@assets/Services/agents.png";
-import SettlementImg  from "@assets/Services/settlement.png";
-import PathwaysImg    from "@assets/Services/pathways.png";
-import JobImg         from "@assets/Services/job.png";
-import EducationImg   from "@assets/Services/education.png";
+// Services/* imports removed — used only by the deleted topVisas list.
 
 // ─── Data ───────────────────────────────────────────────────────────────────
 
-const topVisas = [
-    { emoji: "🛂", label: "Skilled Migrant",  sub: "Residence · 6–12 mos",   img: VisaImg },
-    { emoji: "💼", label: "Work Visa (AEWV)", sub: "Work · 4–8 wks",         img: AgentsImg },
-    { emoji: "🎓", label: "Student Visa",     sub: "Study · 4–6 wks",        img: EducationImg },
-    { emoji: "👨‍👩‍👧", label: "Family Visa",      sub: "Family · 3–9 mos",       img: SettlementImg },
-    { emoji: "🌿", label: "Green List",       sub: "Residence · 1–3 mos",    img: PathwaysImg },
-    { emoji: "✈️", label: "Visitor Visa",     sub: "Visit · 1–4 wks",        img: JobImg },
-];
+// `topVisas` constant removed — the "Most sought visas" section that
+// rendered it has been superseded by the prominent Visa Assessment
+// section above the fold.
 
 const services = []; // Removed in favor of ImmigrationServices component
 
@@ -132,6 +122,134 @@ function FaqItem({ item, i }) {
                 )}
             </AnimatePresence>
         </motion.div>
+    );
+}
+
+// ─── Visa Assessment Section ─────────────────────────────────────────────
+// Big, prominent CTA section right under the hero. Four bold cards —
+// Resident · Work · Student · Visitor — each linking straight to its
+// intake form so a client knows in one look where to begin.
+
+const VISA_ASSESSMENT_CARDS = [
+    {
+        eyebrow: 'Permanent',
+        title:   'Resident Visa',
+        sub:     'Skilled Migrant, partner, family pathways.',
+        href:    '/resident-interest',
+        accent:  'from-emerald-500 to-teal-600',
+        img:     ResidencyImg,
+        meta:    '6–12 months',
+    },
+    {
+        eyebrow: 'Career',
+        title:   'Work Visa',
+        sub:     'AEWV, post-study, accredited employer pathways.',
+        href:    '/work-interest',
+        accent:  'from-amber-500 to-orange-600',
+        img:     WorkVisaImg,
+        meta:    '4–8 weeks',
+    },
+    {
+        eyebrow: 'Study',
+        title:   'Student Visa',
+        sub:     'University, polytechnic, English-language study.',
+        href:    '/student-interest',
+        accent:  'from-purple-500 to-fuchsia-600',
+        img:     StudentVisaImg,
+        meta:    '4–6 weeks',
+    },
+    {
+        eyebrow: 'Visit',
+        title:   'Visitor Visa',
+        sub:     'Tourism, family visits, short-term stays.',
+        href:    '/visitor-interest',
+        accent:  'from-sky-500 to-blue-600',
+        img:     VisitorVisaImg,
+        meta:    '1–4 weeks',
+    },
+];
+
+function VisaAssessmentSection() {
+    return (
+        <section id="visa-assessment" className="bg-gradient-to-b from-white via-[#f7faf8] to-white py-16 lg:py-20 font-urbanist">
+            <div className="container mx-auto px-6 md:px-12 max-w-7xl">
+                {/* Header */}
+                <div className="text-center mb-10">
+                    <motion.h2
+                        initial={{ opacity: 0, y: 16 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}
+                        className="text-3xl md:text-4xl lg:text-5xl font-medium tracking-tight text-[#282728]"
+                    >
+                        Take your free visa assessment
+                    </motion.h2>
+                    <motion.p
+                        initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true }}
+                        className="mt-3 text-gray-600 text-sm md:text-base max-w-2xl mx-auto leading-relaxed"
+                    >
+                        Pick the visa that fits your plans. A licensed adviser will review your submission and reach out
+                        with the next steps — no payment required to start.
+                    </motion.p>
+                </div>
+
+                {/* 4-card grid — tall photo-overlay cards (the design
+                    the user liked from the old "Select your visa pathway"
+                    section). Each card is one clickable surface that
+                    routes straight to its intake form. */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-5">
+                    {VISA_ASSESSMENT_CARDS.map((c, i) => (
+                        <motion.a
+                            key={c.title}
+                            href={c.href}
+                            initial={{ opacity: 0, y: 24 }}
+                            whileInView={{ opacity: 1, y: 0 }}
+                            viewport={{ once: true }}
+                            transition={{ delay: i * 0.06 }}
+                            className="group relative h-[300px] md:h-[320px] rounded-2xl overflow-hidden bg-[#282728] block shadow-sm hover:shadow-2xl transition-shadow duration-300"
+                        >
+                            {/* Full-bleed photo, dimmed by default so the
+                                white text reads cleanly; brightens slightly
+                                on hover. */}
+                            <img
+                                src={c.img}
+                                alt={c.title}
+                                className="absolute inset-0 w-full h-full object-cover opacity-60 group-hover:opacity-50 group-hover:scale-105 transition-all duration-700"
+                            />
+                            {/* Bottom-to-top dark gradient to lock in
+                                readability across any photo brightness. */}
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent" />
+
+                            {/* Eyebrow chip — top-left, sits over the
+                                photo's dimmer portion. */}
+                            <span className="absolute top-4 left-4 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/90 backdrop-blur-sm text-[10px] font-bold uppercase tracking-[0.2em] text-[#282728]">
+                                {c.eyebrow}
+                            </span>
+
+                            {/* Card content pinned to the bottom of the
+                                card so the title sits over the darkest
+                                part of the gradient. */}
+                            <div className="absolute inset-0 p-6 flex flex-col justify-end items-start">
+                                <span className="text-[10px] font-bold uppercase tracking-widest text-white/70 mb-2">
+                                    {c.meta}
+                                </span>
+                                <h3 className="text-xl md:text-2xl font-semibold text-white mb-2 leading-tight">
+                                    {c.title}
+                                </h3>
+                                <p className="text-gray-300 text-xs leading-relaxed mb-4 max-w-[95%] group-hover:text-white transition-colors duration-300">
+                                    {c.sub}
+                                </p>
+                                <span className="inline-flex items-center gap-2 bg-white text-[#282728] px-4 py-2 rounded-lg text-[10px] font-bold uppercase tracking-[0.2em] group-hover:bg-[#00A693] group-hover:text-white transition-all duration-300">
+                                    Start assessment <ArrowRight size={12} />
+                                </span>
+                            </div>
+                        </motion.a>
+                    ))}
+                </div>
+
+                {/* Soft footer line */}
+                <p className="mt-8 text-center text-[12px] text-gray-500">
+                    Not sure which visa to pick? <a href="/booking" className="text-[#00A693] font-semibold hover:underline">Book a free consultation</a>
+                </p>
+            </div>
+        </section>
     );
 }
 
@@ -270,8 +388,6 @@ function ResidentIntakeSection() {
 // ─── Page ────────────────────────────────────────────────────────────────────
 
 export default function Immigration({ reviews = [], stats = { count: 0, average: 0 }, news = [] }) {
-    const [activeTab, setActiveTab] = useState('Student');
-
     // The 3 most recent featured reviews drive the "Featured stories" grid
     // that used to be hardcoded `successStories`. If no published reviews
     // exist yet, the grid hides and the section falls back gracefully.
@@ -279,26 +395,8 @@ export default function Immigration({ reviews = [], stats = { count: 0, average:
         .filter((r) => r.is_featured)
         .slice(0, 3);
 
-    const visaTabs = {
-        Student: {
-            tag: "Education",
-            title: "Study at universities worldwide",
-            desc: "Access top institutions globally with full visa sponsorship. We handle admissions, scholarships, and pre-departure orientation to set you up for success.",
-            img: StudentVisaImg
-        },
-        Work: {
-            tag: "Career",
-            title: "Expand your career horizons",
-            desc: "Secure employment abroad through skilled migration programs. We assess eligibility and manage the entire sponsorship process for a seamless transition.",
-            img: WorkVisaImg
-        },
-        Residency: {
-            tag: "Life",
-            title: "Build your future in NZ",
-            desc: "Navigate the complex path to permanent residency with confidence. Our experts provide end-to-end guidance for families and individuals.",
-            img: NZCityImg
-        }
-    };
+    // `visaTabs` + `activeTab` state removed — the "Most sought visas"
+    // tab strip that used them is gone (see Visa Assessment section).
 
     const [activeStep, setActiveStep] = useState('Assessment');
 
@@ -421,361 +519,33 @@ export default function Immigration({ reviews = [], stats = { count: 0, average:
                     </div>
                 </div>
             </section>
-            
-            {/* ══════════════════════════════════════════════════════════════
-                GUIDANCE SECTION  —  White / Editorial Style
-                Tightened to match the rest of the system: smaller heading
-                scale, lighter padding, image fixed to a 420px frame so it
-                doesn't dwarf the surrounding cards.
-            ══════════════════════════════════════════════════════════════ */}
-            <section className="bg-white text-[#282728] py-20 font-urbanist overflow-hidden">
-                <div className="container mx-auto px-6 md:px-12 max-w-6xl">
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
-                        {/* Left Content */}
-                        <motion.div
-                            initial={{ opacity: 0, x: -30 }}
-                            whileInView={{ opacity: 1, x: 0 }}
-                            viewport={{ once: true }}
-                            transition={{ duration: 0.8 }}
-                        >
-                            <span className="text-[11px] font-bold tracking-[0.3em] uppercase text-gray-500 mb-4 block">
-                                Guidance
-                            </span>
-                            <h2 className="text-3xl md:text-4xl lg:text-5xl font-medium leading-tight mb-5">
-                                We handle immigration with <br />
-                                <span className="text-gray-300 italic">care and precision</span>
-                            </h2>
-                            <p className="text-gray-600 text-sm md:text-base leading-relaxed mb-8 max-w-md">
-                                ePathways connects you with licensed advisers who know the terrain.
-                                We've guided thousands through visa applications, residency pathways, and new beginnings abroad.
-                            </p>
-
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-8">
-                                {/* Feature 1 */}
-                                <div className="space-y-2.5">
-                                    <div className="w-9 h-9 rounded-full bg-gray-50 flex items-center justify-center text-[#00A693]">
-                                        <CheckCircle size={16} />
-                                    </div>
-                                    <h3 className="text-base font-bold">Expert team</h3>
-                                    <p className="text-gray-500 text-xs leading-relaxed">
-                                        Certified professionals with years of real-world immigration experience.
-                                    </p>
-                                </div>
-
-                                {/* Feature 2 */}
-                                <div className="space-y-2.5">
-                                    <div className="w-9 h-9 rounded-full bg-gray-50 flex items-center justify-center text-[#00A693]">
-                                        <MapPin size={16} />
-                                    </div>
-                                    <h3 className="text-base font-bold">Proven results</h3>
-                                    <p className="text-gray-500 text-xs leading-relaxed">
-                                        High approval rates backed by meticulous preparation and attention to detail.
-                                    </p>
-                                </div>
-                            </div>
-
-                            <a
-                                href="/booking"
-                                className="inline-flex items-center gap-2 border border-gray-200 px-6 py-2.5 text-[10px] font-bold uppercase tracking-widest hover:bg-[#282728] hover:text-white transition-all duration-500"
-                            >
-                                Learn <ArrowRight size={12} />
-                            </a>
-                        </motion.div>
-
-                        {/* Right Content - Image */}
-                        <motion.div
-                            initial={{ opacity: 0, scale: 0.95 }}
-                            whileInView={{ opacity: 1, scale: 1 }}
-                            viewport={{ once: true }}
-                            transition={{ duration: 1 }}
-                            className="relative h-[300px] md:h-[380px] lg:h-[420px] overflow-hidden rounded-2xl"
-                        >
-                            <img
-                                src={GuidanceImg}
-                                alt="Immigration Guidance"
-                                className="w-full h-full object-cover transition-all duration-700"
-                            />
-                            {/* Decorative overlay */}
-                            <div className="absolute inset-0 bg-gradient-to-t from-[#0c1611]/60 to-transparent" />
-                        </motion.div>
-                    </div>
-                </div>
-            </section>
 
             {/* ══════════════════════════════════════════════════════════════
-                VISA PATHWAYS SECTION  —  Dark Green Grid
-                Trimmed: smaller padding, headings, card heights so the
-                whole section matches the rest of the page's density.
+                VISA ASSESSMENT SECTION  —  The first thing clients see
+                after the hero. Four bold cards (Resident · Work · Student
+                · Visitor) each link straight to their intake form so a
+                visitor knows in seconds where to click to start.
             ══════════════════════════════════════════════════════════════ */}
-            <section className="bg-[#0c1611] text-white py-16 font-urbanist overflow-hidden border-t border-white/5">
-                <div className="container mx-auto px-6 md:px-12 max-w-7xl">
-                    {/* Header */}
-                    <div className="text-center mb-12">
-                        <motion.span
-                            initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true }}
-                            className="text-[11px] font-bold tracking-[0.4em] uppercase text-[#00A693] mb-3 block"
-                        >
-                            Services
-                        </motion.span>
-                        <motion.h2
-                            initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}
-                            className="text-3xl md:text-4xl font-medium mb-4 tracking-tight"
-                        >
-                            Visa pathways tailored to your goals
-                        </motion.h2>
-                        <motion.p
-                            initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true }}
-                            className="text-white/50 text-sm max-w-xl mx-auto leading-relaxed"
-                        >
-                            Whether you're seeking education abroad, work opportunities, or permanent residence, we offer comprehensive support across all major visa categories.
-                        </motion.p>
-                    </div>
+            <VisaAssessmentSection />
 
-                    {/* Grid */}
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-                        {/* Left: Large Card (Student Visa) */}
-                        <motion.div
-                            initial={{ opacity: 0, y: 30 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}
-                            className="bg-white/5 border border-white/10 rounded-2xl overflow-hidden flex flex-col group"
-                        >
-                            <div className="p-6 md:p-8 flex-1">
-                                <span className="text-[10px] font-bold tracking-widest uppercase text-[#00A693] mb-3 block">Study</span>
-                                <h3 className="text-2xl md:text-3xl font-medium mb-4 leading-tight">Student visa</h3>
-                                <p className="text-white/50 text-xs md:text-sm leading-relaxed mb-6 max-w-md">
-                                    Study at world-class institutions with full visa support, from application to arrival.
-                                    We guide course selection, admissions, and pre-departure logistics.
-                                </p>
-                                <a href="/booking" className="inline-flex items-center gap-2 border border-white/20 px-5 py-2.5 text-[10px] font-bold uppercase tracking-widest hover:bg-white hover:text-[#0c1611] transition-all duration-500">
-                                    Explore <ArrowRight size={12} />
-                                </a>
-                            </div>
-                            <div className="h-44 md:h-52 relative overflow-hidden">
-                                <img src={StudentVisaImg} alt="Student Visa" className="w-full h-full object-cover group-hover:scale-105 transition-all duration-700" />
-                            </div>
-                        </motion.div>
+            {/* GUIDANCE SECTION removed — focus stays on the Visa
+                Assessment CTA above. */}
 
-                        {/* Right: 2x2 Grid of Smaller Cards */}
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                            {[
-                                {
-                                    tag: "Travel", title: "Visitor visa", img: VisitorVisaImg,
-                                    desc: "Travel with confidence. Our advisers prepare documentation and applications for tourism, family visits, and short-term stays."
-                                },
-                                {
-                                    tag: "Career", title: "Work visa", img: WorkVisaImg,
-                                    desc: "Secure employment abroad through skilled migration programs. We assess eligibility and manage the entire sponsorship process."
-                                },
-                                {
-                                    tag: "Settle", title: "Study abroad fully supported", img: SettleVisaImg,
-                                    desc: "Enroll at universities worldwide with complete visa sponsorship and guidance throughout the entire process."
-                                },
-                                {
-                                    tag: "Visit", title: "Travel with proper documentation", img: VisitorVisaImg,
-                                    desc: "Tourism and family visits handled with care and precision throughout. We ensure your documents are perfectly in order."
-                                }
-                            ].map((card, i) => (
-                                <motion.div
-                                    key={i}
-                                    initial={{ opacity: 0, y: 30 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: i * 0.1 }}
-                                    className="bg-white/5 border border-white/10 rounded-2xl overflow-hidden flex flex-col group"
-                                >
-                                    <div className="p-5 flex-1">
-                                        <span className="text-[9px] font-bold tracking-widest uppercase text-[#00A693] mb-2 block">{card.tag}</span>
-                                        <h3 className="text-lg font-medium mb-3 leading-tight">{card.title}</h3>
-                                        <p className="text-white/40 text-[11px] leading-relaxed mb-4 line-clamp-3">
-                                            {card.desc}
-                                        </p>
-                                        <a href="/booking" className="text-[10px] font-bold uppercase tracking-widest inline-flex items-center gap-1.5 text-white hover:text-[#00A693] transition-colors group/link">
-                                            Explore <ArrowRight size={10} className="group-hover/link:translate-x-1 transition-transform" />
-                                        </a>
-                                    </div>
-                                    <div className="h-32 relative overflow-hidden border-t border-white/5">
-                                        <img src={card.img} alt={card.title} className="w-full h-full object-cover group-hover:scale-105 transition-all duration-700" />
-                                    </div>
-                                </motion.div>
-                            ))}
-                        </div>
-                    </div>
-                </div>
-            </section>
+            {/* SERVICES / VISA PATHWAYS section removed — the Visa
+                Assessment cards above already cover the four visa
+                categories with direct intake-form links. */}
 
-            {/* ══════════════════════════════════════════════════════════════
-                MOST SOUGHT VISAS SECTION  —  Tabbed Layout
-                Sized to match the "Select your visa pathway" cards below
-                so the page reads as one consistent system instead of one
-                oversized hero followed by compact cards.
-            ══════════════════════════════════════════════════════════════ */}
-            <section id="top-visas" className="py-20 bg-white">
-                <div className="container mx-auto px-6 md:px-12 max-w-7xl">
-                    {/* Header */}
-                    <div className="text-center mb-10">
-                        <motion.span
-                            initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true }}
-                            className="text-[11px] font-bold tracking-[0.4em] uppercase text-gray-500 mb-3 block"
-                        >
-                            Popular
-                        </motion.span>
-                        <motion.h2
-                            initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}
-                            className="text-3xl md:text-4xl lg:text-5xl font-medium mb-4 tracking-tight text-[#282728]"
-                        >
-                            Most sought visas
-                        </motion.h2>
-                        <motion.p
-                            initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true }}
-                            className="text-gray-600 text-sm max-w-xl mx-auto leading-relaxed mb-6"
-                        >
-                            These pathways open doors for thousands each year. Explore what might work for you.
-                        </motion.p>
-                        <a
-                            href="/booking"
-                            className="inline-flex items-center gap-2 border border-gray-200 px-6 py-2.5 text-[10px] font-bold uppercase tracking-widest hover:border-[#282728] transition-all duration-300"
-                        >
-                            Discover <ArrowRight size={12} />
-                        </a>
-                    </div>
-
-                    {/* Tabs */}
-                    <div className="flex justify-center gap-6 md:gap-8 mb-8 border-b border-gray-100">
-                        {Object.keys(visaTabs).map((tab) => (
-                            <button
-                                key={tab}
-                                onClick={() => setActiveTab(tab)}
-                                className={`pb-3 text-[11px] md:text-xs font-bold tracking-widest uppercase transition-all relative ${activeTab === tab ? 'text-[#282728]' : 'text-gray-300 hover:text-gray-600'}`}
-                            >
-                                {tab}
-                                {activeTab === tab && (
-                                    <motion.div layoutId="activeTab" className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#282728]" />
-                                )}
-                            </button>
-                        ))}
-                    </div>
-
-                    {/* Tab Content — compact split card. Matches the card
-                        scale used in the visa-pathway grid (300px tall) so
-                        the page reads as a consistent system. */}
-                    <AnimatePresence mode="wait">
-                        <motion.div
-                            key={activeTab}
-                            initial={{ opacity: 0, x: 20 }}
-                            animate={{ opacity: 1, x: 0 }}
-                            exit={{ opacity: 0, x: -20 }}
-                            transition={{ duration: 0.4 }}
-                            className="grid grid-cols-1 md:grid-cols-2 gap-0 items-stretch bg-gray-50 rounded-2xl overflow-hidden max-w-5xl mx-auto"
-                        >
-                            <div className="relative overflow-hidden h-[240px] md:h-auto md:min-h-[320px]">
-                                <img
-                                    src={visaTabs[activeTab].img}
-                                    alt={activeTab}
-                                    className="absolute inset-0 w-full h-full object-cover"
-                                />
-                            </div>
-                            <div className="p-6 md:p-8 lg:p-10 flex flex-col justify-center">
-                                <span className="text-[10px] font-bold tracking-widest uppercase text-[#00A693] mb-3 block">
-                                    {visaTabs[activeTab].tag}
-                                </span>
-                                <h3 className="text-xl md:text-2xl lg:text-3xl font-medium mb-4 leading-tight text-[#282728]">
-                                    {visaTabs[activeTab].title}
-                                </h3>
-                                <p className="text-gray-600 text-xs md:text-sm leading-relaxed mb-6 max-w-md">
-                                    {visaTabs[activeTab].desc}
-                                </p>
-                                <a
-                                    href="/booking"
-                                    className="inline-flex items-center gap-2 border border-gray-200 px-5 py-2.5 text-[10px] font-bold uppercase tracking-widest hover:bg-[#282728] hover:text-white transition-all duration-300 self-start"
-                                >
-                                    Learn more <ArrowRight size={12} />
-                                </a>
-                            </div>
-                        </motion.div>
-                    </AnimatePresence>
-                </div>
-            </section>
+            {/* MOST SOUGHT VISAS section removed — superseded by the
+                prominent Visa Assessment section directly under the hero. */}
 
             {/* Resident Intake hero section removed — the Residency Visa
-                card in the "Select your visa pathway" grid below routes
+                card in the "Select your visa pathway" grid above routes
                 directly to /resident-interest, so the duplicate CTA hero
                 is no longer needed. */}
 
-            {/* ══════════════════════════════════════════════════════════════
-                ASSESSMENT VISAS SECTION
-            ══════════════════════════════════════════════════════════════ */}
-            <section className="py-32 bg-white">
-                <div className="container mx-auto px-6 md:px-12 max-w-7xl">
-                    <div className="text-center mb-16">
-                        <span className="text-[11px] font-bold tracking-[0.4em] uppercase text-[#00A693] mb-4 block">
-                            Assessment
-                        </span>
-                        <h2 className="text-4xl md:text-5xl font-medium mb-6 tracking-tight text-[#282728]">
-                            Select your visa pathway
-                        </h2>
-                        <p className="text-gray-600 text-sm md:text-base max-w-3xl mx-auto leading-relaxed">
-                            Choose a visa category below to start your assessment.<br className="hidden md:block" /> We will evaluate your qualifications and help you find the best path forward.
-                        </p>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-                        {[
-                            { title: "Student Visa",      desc: "Study at leading institutions with full support for admissions and visa processing.",        img: StudentVisaImg, link: "/student-interest" },
-                            { title: "Work Visa",         desc: "Secure international employment through skilled migration and employer programs.",            img: WorkVisaImg,    link: "/work-interest" },
-                            { title: "Visitor Visa",      desc: "Experience new destinations for tourism, business, or visiting family and friends.",          img: VisitorVisaImg, link: "/visitor-interest" },
-                            { title: "Residency Visa",    desc: "Navigate the complex path to permanent residency with end-to-end expert guidance.",           img: ResidencyImg,   link: "/resident-interest" },
-                            { title: "Family Visa",       desc: "Reunite with your loved ones through partner, parent, and dependent child pathways.",         img: SettleVisaImg,  comingSoon: true },
-                            { title: "General Assessment", desc: "Unsure which visa suits you? Let our experts evaluate your profile and find the best option.", img: GuidanceImg,    comingSoon: true },
-                        ].map((visa, idx) => (
-                            <motion.div
-                                key={idx}
-                                initial={{ opacity: 0, y: 20 }}
-                                whileInView={{ opacity: 1, y: 0 }}
-                                viewport={{ once: true }}
-                                transition={{ delay: idx * 0.08 }}
-                                className={`group relative h-[280px] md:h-[300px] rounded-2xl overflow-hidden bg-[#282728] ${visa.comingSoon ? 'opacity-90' : ''}`}
-                            >
-                                <img
-                                    src={visa.img}
-                                    alt={visa.title}
-                                    className={`absolute inset-0 w-full h-full object-cover transition-all duration-700 ${
-                                        visa.comingSoon
-                                            ? 'opacity-40 grayscale'
-                                            : 'opacity-60 group-hover:opacity-40 group-hover:scale-105'
-                                    }`}
-                                />
-                                <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent"></div>
-
-                                {visa.comingSoon && (
-                                    <span className="absolute top-4 right-4 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-400/90 text-amber-950 text-[10px] font-black uppercase tracking-[0.2em] shadow-md">
-                                        <span className="w-1.5 h-1.5 rounded-full bg-amber-900" />
-                                        Coming soon
-                                    </span>
-                                )}
-
-                                <div className="absolute inset-0 p-6 flex flex-col justify-end items-start">
-                                    <h3 className="text-xl font-semibold text-white mb-2">
-                                        {visa.title}
-                                    </h3>
-                                    <p className="text-gray-300 text-xs leading-relaxed mb-4 max-w-[95%] group-hover:text-white transition-colors duration-300">
-                                        {visa.desc}
-                                    </p>
-                                    {visa.comingSoon ? (
-                                        <span className="inline-flex items-center gap-2 bg-white/15 backdrop-blur-sm text-white/80 px-4 py-2 rounded-lg text-[10px] font-bold uppercase tracking-[0.2em] cursor-not-allowed">
-                                            Available soon
-                                        </span>
-                                    ) : (
-                                        <a
-                                            href={visa.link}
-                                            className="inline-flex items-center gap-2 bg-white text-[#282728] px-4 py-2 rounded-lg text-[10px] font-bold uppercase tracking-[0.2em] hover:bg-[#00A693] hover:text-white transition-all duration-300"
-                                        >
-                                            Assess now <ArrowRight size={12} />
-                                        </a>
-                                    )}
-                                </div>
-                            </motion.div>
-                        ))}
-                    </div>
-                </div>
-            </section>
-
-
+            {/* ASSESSMENT VISAS / "Select your visa pathway" section
+                removed — redundant with the Visa Assessment cards above
+                the fold that link to the same four intake forms. */}
 
             {/* ══════════════════════════════════════════════════════════════
                 PARTNER / CREDENTIAL STRIP (Moved below Top Visas)
@@ -1098,19 +868,34 @@ export default function Immigration({ reviews = [], stats = { count: 0, average:
             })()}
 
             {/* ══════════════════════════════════════════════════════════════
-                NEWSLETTER CTA SECTION
+                NEWSLETTER CTA SECTION  —  Background is the team brand
+                banner; a dark gradient overlay keeps the white text +
+                form readable on top.
             ══════════════════════════════════════════════════════════════ */}
-            <section className="py-20 bg-[#0c1611] text-white overflow-hidden relative">
+            <section className="py-20 text-white overflow-hidden relative bg-[#0c1611]">
+                {/* Background image */}
+                <img
+                    src={BrandBanner}
+                    alt=""
+                    aria-hidden="true"
+                    className="absolute inset-0 w-full h-full object-cover opacity-50"
+                />
+                {/* Dark gradient overlay — heavier in the middle where the
+                    text sits so the headline + email field always read
+                    cleanly, regardless of which faces sit behind. */}
+                <div className="absolute inset-0 bg-gradient-to-r from-[#0c1611]/95 via-[#0c1611]/70 to-[#0c1611]/95" />
+                <div className="absolute inset-0 bg-gradient-to-b from-[#0c1611]/60 via-transparent to-[#0c1611]/60" />
+
                 <div className="container mx-auto px-6 md:px-12 max-w-3xl text-center relative z-10">
                     <motion.h2
                         initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}
-                        className="text-2xl md:text-3xl lg:text-4xl font-medium mb-4 tracking-tight"
+                        className="text-2xl md:text-3xl lg:text-4xl font-medium mb-4 tracking-tight drop-shadow-md"
                     >
                         Stay updated on policy changes
                     </motion.h2>
                     <motion.p
                         initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true }}
-                        className="text-white/50 text-sm mb-8 max-w-xl mx-auto leading-relaxed"
+                        className="text-white/80 text-sm mb-8 max-w-xl mx-auto leading-relaxed drop-shadow"
                     >
                         Join our newsletter to receive the latest New Zealand immigration updates and exclusive expert insights delivered directly to your inbox.
                     </motion.p>
@@ -1123,40 +908,24 @@ export default function Immigration({ reviews = [], stats = { count: 0, average:
                         <input
                             type="email"
                             placeholder="Enter your email"
-                            className="flex-1 bg-white/5 border border-white/10 px-5 py-3 text-sm focus:outline-none focus:border-[#00A693] transition-colors"
+                            className="flex-1 bg-white/10 backdrop-blur-sm border border-white/20 px-5 py-3 text-sm text-white placeholder:text-white/50 focus:outline-none focus:border-[#00A693] focus:bg-white/15 transition-colors"
                         />
                         <button
                             type="submit"
-                            className="bg-[#00A693] text-white font-bold uppercase tracking-[0.2em] text-[10px] px-8 py-3 hover:bg-[#008c7c] transition-all"
+                            className="bg-[#00A693] text-white font-bold uppercase tracking-[0.2em] text-[10px] px-8 py-3 hover:bg-[#008c7c] transition-all shadow-lg shadow-[#00A693]/20"
                         >
                             Sign up
                         </button>
                     </motion.form>
-                    <p className="text-[10px] text-white/30">
+                    <p className="text-[10px] text-white/60">
                         By clicking Sign Up you're confirming that you agree with our Terms and Conditions.
                     </p>
                 </div>
             </section>
 
-            {/* ══════════════════════════════════════════════════════════════
-                FINAL BRAND BANNER
-            ══════════════════════════════════════════════════════════════ */}
-            <section className="bg-white py-32">
-                <div className="container mx-auto px-6 md:px-12 max-w-7xl">
-                    <motion.div
-                        initial={{ opacity: 0, scale: 0.95 }} whileInView={{ opacity: 1, scale: 1 }} viewport={{ once: true }}
-                        transition={{ duration: 1.2 }}
-                        className="relative w-full overflow-hidden rounded-sm shadow-2xl group"
-                    >
-                        <img
-                            src={BrandBanner}
-                            alt="Immigration Team"
-                            className="w-full h-auto transition-transform duration-1000 group-hover:scale-105"
-                        />
-                        <div className="absolute inset-0 bg-gradient-to-t from-[#0a0f0a]/30 to-transparent pointer-events-none"></div>
-                    </motion.div>
-                </div>
-            </section>
+            {/* FINAL BRAND BANNER removed — the team image now lives as
+                the background of the newsletter "Stay updated" section
+                above, so showing it twice would be redundant. */}
 
             {/* FAQ section removed per request. */}
 

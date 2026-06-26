@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Head, router, useForm, usePage } from '@inertiajs/react';
+import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
 import {
     Search, Plus, Edit2, Trash2, ChevronDown, ChevronLeft, ChevronRight,
     Users as UsersIcon, ShieldCheck, Briefcase, X, AlertCircle, AlertTriangle, Mail,
+    Building2, UserPlus, GraduationCap, FileSignature, ArrowRight,
 } from 'lucide-react';
 
 const ROLE_STYLES = {
@@ -164,9 +165,28 @@ function UserModal({ open, onClose, editing, roles }) {
     );
 }
 
-export default function Users({ users = [], roles = [] }) {
+export default function Users({ users = [], roles = [], leads = [], students = [], cases = [] }) {
     const { props } = usePage();
     const currentUserId = props.auth?.user?.id;
+
+    // Read initial tab from ?tab= so direct links work; write changes back
+    // via history.replaceState so the URL stays shareable without a fresh
+    // Inertia round-trip. Mirrors the same pattern used on /track.
+    const [activeTab, setActiveTab] = useState(() => {
+        if (typeof window === 'undefined') return 'organization';
+        const t = new URLSearchParams(window.location.search).get('tab');
+        return ['organization', 'leads', 'students', 'cases'].includes(t) ? t : 'organization';
+    });
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        const url = new URL(window.location.href);
+        if (activeTab === 'organization') url.searchParams.delete('tab');
+        else url.searchParams.set('tab', activeTab);
+        const next = url.pathname + url.search + url.hash;
+        if (next !== window.location.pathname + window.location.search + window.location.hash) {
+            window.history.replaceState({}, '', next);
+        }
+    }, [activeTab]);
 
     const [search, setSearch] = useState('');
     const [roleFilter, setRoleFilter] = useState('All');
@@ -246,14 +266,32 @@ export default function Users({ users = [], roles = [] }) {
                     <h1 className="text-2xl font-bold text-gray-900 tracking-tight">User Management</h1>
                     <p className="text-sm text-gray-500 mt-1">Add staff accounts and control which admin area or department portal they can reach.</p>
                 </div>
-                <button
-                    onClick={openCreate}
-                    className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-xl hover:bg-gray-800 text-sm font-semibold transition-colors shadow-sm"
-                >
-                    <Plus size={16} /> Add User
-                </button>
+                {activeTab === 'organization' && (
+                    <button
+                        onClick={openCreate}
+                        className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-xl hover:bg-gray-800 text-sm font-semibold transition-colors shadow-sm"
+                    >
+                        <Plus size={16} /> Add User
+                    </button>
+                )}
             </div>
 
+            <UserMgmtTabs
+                active={activeTab}
+                onChange={setActiveTab}
+                counts={{
+                    organization: users.length,
+                    leads: leads.length,
+                    students: students.length,
+                    cases: cases.length,
+                }}
+            />
+
+            {activeTab === 'leads' && <LeadsTab rows={leads} />}
+            {activeTab === 'students' && <StudentsTab rows={students} />}
+            {activeTab === 'cases' && <CasesTab rows={cases} />}
+
+            {activeTab === 'organization' && (<>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 {summaryCards.map((card, idx) => (
                     <div
@@ -436,6 +474,8 @@ export default function Users({ users = [], roles = [] }) {
                 )}
             </div>
 
+            </>)}
+
             <UserModal open={showModal} onClose={closeModal} editing={editing} roles={roles} />
 
             {deleteTarget && (
@@ -484,5 +524,174 @@ export default function Users({ users = [], roles = [] }) {
                 </>
             )}
         </div>
+    );
+}
+
+// ─── Tab strip + per-tab views ──────────────────────────────────────────
+
+function UserMgmtTabs({ active, onChange, counts = {} }) {
+    const items = [
+        { key: 'organization', label: 'Organization', Icon: Building2,       badge: counts.organization },
+        { key: 'leads',        label: 'Leads',        Icon: UserPlus,        badge: counts.leads },
+        { key: 'students',     label: 'Students',     Icon: GraduationCap,   badge: counts.students },
+        { key: 'cases',        label: 'Cases',        Icon: FileSignature,   badge: counts.cases },
+    ];
+    return (
+        <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden">
+            <div className="flex overflow-x-auto">
+                {items.map((it) => {
+                    const isActive = active === it.key;
+                    return (
+                        <button
+                            key={it.key}
+                            type="button"
+                            onClick={() => onChange(it.key)}
+                            className={`flex items-center gap-2 px-5 py-3 text-[13px] font-semibold tracking-tight whitespace-nowrap transition-colors border-b-2 ${
+                                isActive
+                                    ? 'text-gray-900 border-gray-900'
+                                    : 'text-gray-500 border-transparent hover:text-gray-900'
+                            }`}
+                            aria-current={isActive ? 'page' : undefined}
+                        >
+                            <it.Icon size={14} strokeWidth={2} />
+                            <span>{it.label}</span>
+                            {typeof it.badge === 'number' && it.badge > 0 && (
+                                <span className={`text-[10px] font-bold tracking-wide px-1.5 py-0.5 rounded ${
+                                    isActive ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600'
+                                }`}>
+                                    {it.badge}
+                                </span>
+                            )}
+                        </button>
+                    );
+                })}
+            </div>
+        </div>
+    );
+}
+
+/**
+ * Shared thin-list table used by the Leads / Students / Cases tabs. Each
+ * row renders a name + email + arbitrary "stage" pill columns + a
+ * drill-in link to /admin/leads/{id}. Read-only — finance staff observe
+ * dept data, they don't mutate it from this screen.
+ */
+function ThinListTable({ rows, columns, emptyLabel }) {
+    return (
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+            <div className="overflow-x-auto min-h-[200px]">
+                <table className="w-full text-left border-collapse whitespace-nowrap">
+                    <thead>
+                        <tr className="bg-gray-50/50 border-b border-gray-100">
+                            {columns.map((c) => (
+                                <th key={c.key} className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                                    {c.label}
+                                </th>
+                            ))}
+                            <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider text-right pr-8">
+                                Open
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-50">
+                        {rows.length === 0 ? (
+                            <tr>
+                                <td colSpan={columns.length + 1} className="px-6 py-16 text-center text-gray-400">
+                                    <UsersIcon className="w-10 h-10 mx-auto mb-3 text-gray-200" />
+                                    <p className="font-semibold">{emptyLabel}</p>
+                                </td>
+                            </tr>
+                        ) : rows.map((row) => (
+                            <tr key={row.id} className="hover:bg-blue-50/30 transition-colors">
+                                {columns.map((c) => (
+                                    <td key={c.key} className="px-6 py-3 text-sm text-gray-700">
+                                        {c.render ? c.render(row) : (row[c.key] ?? '—')}
+                                    </td>
+                                ))}
+                                <td className="px-6 py-3 text-right pr-6">
+                                    <Link
+                                        href={`/admin/leads/${row.id}`}
+                                        className="inline-flex items-center gap-1 text-[12px] font-bold text-gray-700 hover:text-gray-900"
+                                    >
+                                        Open <ArrowRight size={12} />
+                                    </Link>
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+            {rows.length >= 500 && (
+                <p className="text-[11px] text-gray-400 italic text-center px-4 py-3 border-t border-gray-100">
+                    Showing the first 500 records. Use the dedicated department page for full search and filtering.
+                </p>
+            )}
+        </div>
+    );
+}
+
+function nameOf(row) {
+    return [row.first_name, row.last_name].filter(Boolean).join(' ') || '—';
+}
+
+function StagePill({ value, tone = 'gray' }) {
+    if (!value) return <span className="text-gray-400">—</span>;
+    const tones = {
+        gray:    'bg-gray-50 text-gray-700 border-gray-200',
+        blue:    'bg-blue-50 text-blue-700 border-blue-200',
+        emerald: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+        amber:   'bg-amber-50 text-amber-700 border-amber-200',
+        rose:    'bg-rose-50 text-rose-700 border-rose-200',
+    };
+    return (
+        <span className={`inline-block px-2 py-0.5 text-[10px] font-bold tracking-[0.12em] uppercase border ${tones[tone] || tones.gray}`}>
+            {value}
+        </span>
+    );
+}
+
+function LeadsTab({ rows }) {
+    return (
+        <ThinListTable
+            rows={rows}
+            emptyLabel="No leads in the pipeline."
+            columns={[
+                { key: 'name',    label: 'Name',    render: nameOf },
+                { key: 'email',   label: 'Email' },
+                { key: 'phone',   label: 'Phone',   render: (r) => r.phone || '—' },
+                { key: 'stage',   label: 'Stage',   render: (r) => <StagePill value={r.stage} tone="blue" /> },
+                { key: 'status',  label: 'Status',  render: (r) => <StagePill value={r.status} tone="gray" /> },
+            ]}
+        />
+    );
+}
+
+function StudentsTab({ rows }) {
+    return (
+        <ThinListTable
+            rows={rows}
+            emptyLabel="No students yet."
+            columns={[
+                { key: 'name',            label: 'Name',            render: nameOf },
+                { key: 'email',           label: 'Email' },
+                { key: 'education_stage', label: 'Education Stage', render: (r) => <StagePill value={r.education_stage} tone="emerald" /> },
+                { key: 'english_stage',   label: 'English Stage',   render: (r) => <StagePill value={r.english_stage} tone="amber" /> },
+            ]}
+        />
+    );
+}
+
+function CasesTab({ rows }) {
+    return (
+        <ThinListTable
+            rows={rows}
+            emptyLabel="No active immigration cases."
+            columns={[
+                { key: 'name',              label: 'Name',              render: nameOf },
+                { key: 'email',             label: 'Email' },
+                { key: 'inz_visa_type',     label: 'Visa Type',         render: (r) => r.inz_visa_type || '—' },
+                { key: 'immigration_stage', label: 'Immigration Stage', render: (r) => <StagePill value={r.immigration_stage} tone="rose" /> },
+            ]}
+        />
     );
 }

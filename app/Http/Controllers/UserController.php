@@ -20,11 +20,41 @@ class UserController extends Controller
 
     public function index()
     {
-        $users = User::orderBy('name')->get(['id', 'name', 'email', 'role', 'created_at']);
+        // Organization tab is staff only — external Lead Portal accounts
+        // ('lead' / 'revoked_lead') belong on the Leads tab, not in the
+        // staff directory.
+        $users = User::whereNotIn('role', ['lead', 'revoked_lead'])
+            ->orderBy('name')
+            ->get(['id', 'name', 'email', 'role', 'created_at']);
+
+        // Cross-link rolls for the User Management tabs. Each list is a
+        // thin name + email + stage projection that the frontend renders
+        // into a sortable table with a drill-in link to /admin/leads/{id}.
+        // Capped at 500 rows per tab; if a tenant outgrows that, we'll
+        // switch to paginated partial reloads per tab.
+        $leadCols = ['id', 'lead_id', 'first_name', 'last_name', 'email', 'phone', 'stage', 'status', 'created_at'];
+
+        $leads = \App\Models\Lead::inLeadPipeline()
+            ->orderByDesc('created_at')
+            ->limit(500)
+            ->get($leadCols);
+
+        $students = \App\Models\Lead::where('is_student', true)
+            ->orderByDesc('created_at')
+            ->limit(500)
+            ->get(array_merge($leadCols, ['education_stage', 'english_stage', 'student_converted_at']));
+
+        $cases = \App\Models\Lead::immigrationCase()
+            ->orderByDesc('created_at')
+            ->limit(500)
+            ->get(array_merge($leadCols, ['immigration_stage', 'inz_visa_type', 'immigration_converted_at']));
 
         return inertia('admin/Users', [
-            'users' => $users,
-            'roles' => $this->roleValues(),
+            'users'    => $users,
+            'roles'    => $this->roleValues(),
+            'leads'    => $leads,
+            'students' => $students,
+            'cases'    => $cases,
         ]);
     }
 

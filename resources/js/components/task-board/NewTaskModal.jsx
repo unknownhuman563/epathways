@@ -67,7 +67,7 @@ const TYPE_OPTIONS = [
     ["other", "Other"],
 ];
 
-const ALL_DEPARTMENTS = ["sales", "education", "immigration", "accommodation", "admin"];
+const ALL_DEPARTMENTS = ["sales", "education", "immigration", "accommodation", "finance", "admin"];
 
 const todayIso = () => new Date().toISOString().slice(0, 10);
 

@@ -80,6 +80,16 @@ class NotificationFormatter
                 'color' => 'red',
                 'title' => $data['title'] ?? 'AI flagged a case as critical',
             ],
+            'AgreementSigned' => [
+                'icon'  => 'FileSignature',
+                'color' => 'emerald',
+                'title' => $data['title'] ?? 'Agreement signed',
+            ],
+            'AgreementSignedNotification' => [
+                'icon'  => 'FileSignature',
+                'color' => 'emerald',
+                'title' => $data['title'] ?? 'Agreement signed',
+            ],
             default => [
                 'icon'  => 'Bell',
                 'color' => 'gray',

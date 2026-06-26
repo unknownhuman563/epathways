@@ -24,6 +24,7 @@ const DEPARTMENT_LABEL = {
     education:     "Education",
     immigration:   "Immigration",
     accommodation: "Accommodation",
+    finance:       "Finance",
     admin:         "Admin",
 };
 
@@ -61,6 +62,15 @@ const CATEGORIES_BY_DEPT = {
         "Reporting consolidation", "Branding updates",
         "Email provider management", "Vendor management",
         "Compliance audits", "Other",
+    ],
+    // Finance categorises by which department's work the task relates to,
+    // so a finance staffer marking "Education" means "Education-team
+    // billing / invoicing / reconciliation". The "Other" option opens a
+    // free-text input for anything outside these buckets.
+    finance: [
+        "Education", "English", "Immigration", "Accommodation", "Sales",
+        "Invoicing", "Receivables", "Payments", "Reconciliation",
+        "Reporting", "Department meeting prep", "Other",
     ],
 };
 

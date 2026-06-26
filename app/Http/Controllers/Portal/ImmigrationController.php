@@ -30,7 +30,7 @@ class ImmigrationController extends Controller
     {
         try {
             $now = now();
-            $weekStart  = $now->copy()->startOfWeek();
+            $weekStart = $now->copy()->startOfWeek();
             $monthStart = $now->copy()->startOfMonth();
 
             // ── Top tiles ──────────────────────────────────────────────────
@@ -38,12 +38,12 @@ class ImmigrationController extends Controller
             // one (is_immigration_case) OR the Education team's hand-off
             // stage was set to one of the immigration stages — see
             // Lead::scopeImmigrationCase().
-            $activeCases   = Lead::immigrationCase()->count();
+            $activeCases = Lead::immigrationCase()->count();
             $newAssessmentsThisWeek = ResidentIntake::where('created_at', '>=', $weekStart)->count();
             $bookingsPaidUnseen = Booking::where('status', 'Confirmed')->whereNull('appointment_date')->count();
-            $docsPendingReview  = LeadDocument::whereIn('status', ['Submitted', 'UnderReview'])->count();
-            $casesLodged        = Lead::immigrationCase()->whereIn('inz_status', ['Lodged', 'Decision Pending', 'Info Requested'])->count();
-            $infoRequests       = Lead::immigrationCase()->where('inz_status', 'Info Requested')->count();
+            $docsPendingReview = LeadDocument::whereIn('status', ['Submitted', 'UnderReview'])->count();
+            $casesLodged = Lead::immigrationCase()->whereIn('inz_status', ['Lodged', 'Decision Pending', 'Info Requested'])->count();
+            $infoRequests = Lead::immigrationCase()->where('inz_status', 'Info Requested')->count();
 
             // ── INZ pipeline aging (green / amber / red) ─────────────────
             $visaTypes = \App\Models\VisaType::pluck('expected_processing_days', 'name')->all();
@@ -61,15 +61,15 @@ class ImmigrationController extends Controller
                     : ($daysSince >= ($window - 5) ? 'amber' : 'green');
                 $inzAging[$bucket]++;
                 $inzAging['rows'][] = [
-                    'id'            => $c->id,
-                    'lead_id'       => $c->lead_id,
-                    'name'          => trim("{$c->first_name} {$c->last_name}") ?: 'Unknown',
-                    'visa_type'     => $c->inz_visa_type,
-                    'lodged_at'     => $c->inz_lodged_at,
-                    'days_since'    => $daysSince,
+                    'id' => $c->id,
+                    'lead_id' => $c->lead_id,
+                    'name' => trim("{$c->first_name} {$c->last_name}") ?: 'Unknown',
+                    'visa_type' => $c->inz_visa_type,
+                    'lodged_at' => $c->inz_lodged_at,
+                    'days_since' => $daysSince,
                     'expected_days' => $window,
-                    'bucket'        => $bucket,
-                    'status'        => $c->inz_status,
+                    'bucket' => $bucket,
+                    'status' => $c->inz_status,
                 ];
             }
             // Sort rows by aging (worst first).
@@ -82,9 +82,9 @@ class ImmigrationController extends Controller
                 $expiry = $me->iaa_licence_expiry;
                 $iaa = [
                     'licence_number' => $me->iaa_licence_number,
-                    'expiry'         => $expiry ? $expiry->toDateString() : null,
+                    'expiry' => $expiry ? $expiry->toDateString() : null,
                     'days_to_expiry' => $expiry ? (int) now()->diffInDays($expiry, false) : null,
-                    'status'         => ! $me->iaa_licence_number ? 'missing'
+                    'status' => ! $me->iaa_licence_number ? 'missing'
                         : (! $expiry ? 'no_expiry'
                             : ((int) now()->diffInDays($expiry, false) < 0 ? 'expired'
                                 : ((int) now()->diffInDays($expiry, false) <= 60 ? 'expiring' : 'ok'))),
@@ -95,9 +95,9 @@ class ImmigrationController extends Controller
             $monthly = [];
             for ($i = 5; $i >= 0; $i--) {
                 $mStart = $now->copy()->subMonths($i)->startOfMonth();
-                $mEnd   = $now->copy()->subMonths($i)->endOfMonth();
+                $mEnd = $now->copy()->subMonths($i)->endOfMonth();
                 $monthly[] = [
-                    'label'   => $mStart->format('M'),
+                    'label' => $mStart->format('M'),
                     'intakes' => ResidentIntake::whereBetween('created_at', [$mStart, $mEnd])->count(),
                 ];
             }
@@ -113,10 +113,10 @@ class ImmigrationController extends Controller
 
             // ── Urgent actions feed ────────────────────────────────────────
             $urgent = [
-                'assessments_pending'  => ResidentIntake::whereIn('status', ['New', null])->count(),
-                'paid_unscheduled'     => $bookingsPaidUnseen,
-                'rejected_docs'        => LeadDocument::where('status', 'Rejected')->where('reviewed_at', '>', $now->copy()->subDays(14))->count(),
-                'agreements_pending'   => Lead::where('status', 'Consultancy Agreement')->count(),
+                'assessments_pending' => ResidentIntake::whereIn('status', ['New', null])->count(),
+                'paid_unscheduled' => $bookingsPaidUnseen,
+                'rejected_docs' => LeadDocument::where('status', 'Rejected')->where('reviewed_at', '>', $now->copy()->subDays(14))->count(),
+                'agreements_pending' => Lead::where('status', 'Consultancy Agreement')->count(),
             ];
 
             // ── This week's appointments ───────────────────────────────────
@@ -125,30 +125,30 @@ class ImmigrationController extends Controller
                 ->orderBy('appointment_date')->orderBy('appointment_time')
                 ->limit(8)->get()
                 ->map(fn ($b) => [
-                    'id'               => $b->id,
-                    'name'             => trim("{$b->first_name} {$b->last_name}") ?: 'Unknown',
-                    'service_type'     => $b->service_type,
-                    'consultant_name'  => $b->consultant_name,
-                    'platform'         => $b->platform,
-                    'status'           => $b->status ?: 'Pending',
+                    'id' => $b->id,
+                    'name' => trim("{$b->first_name} {$b->last_name}") ?: 'Unknown',
+                    'service_type' => $b->service_type,
+                    'consultant_name' => $b->consultant_name,
+                    'platform' => $b->platform,
+                    'status' => $b->status ?: 'Pending',
                     'appointment_date' => $b->appointment_date ? \Illuminate\Support\Carbon::parse($b->appointment_date)->toDateString() : null,
                     'appointment_time' => $b->appointment_time,
                 ]);
 
             return inertia('portal/immigration/Dashboard', [
                 'tiles' => [
-                    'active_cases'             => $activeCases,
-                    'new_assessments_week'     => $newAssessmentsThisWeek,
-                    'bookings_paid_unseen'     => $bookingsPaidUnseen,
-                    'docs_pending_review'      => $docsPendingReview,
-                    'cases_lodged'             => $casesLodged,
-                    'info_requests_outstanding'=> $infoRequests,
+                    'active_cases' => $activeCases,
+                    'new_assessments_week' => $newAssessmentsThisWeek,
+                    'bookings_paid_unseen' => $bookingsPaidUnseen,
+                    'docs_pending_review' => $docsPendingReview,
+                    'cases_lodged' => $casesLodged,
+                    'info_requests_outstanding' => $infoRequests,
                 ],
-                'pipeline'      => $pipeline,
-                'inz_aging'     => $inzAging,
-                'iaa'           => $iaa,
-                'monthly'       => $monthly,
-                'urgent'        => $urgent,
+                'pipeline' => $pipeline,
+                'inz_aging' => $inzAging,
+                'iaa' => $iaa,
+                'monthly' => $monthly,
+                'urgent' => $urgent,
                 'week_appointments' => $weekAppts,
                 'recent_intakes' => ResidentIntake::latest()->take(5)->get([
                     'id', 'intake_id', 'first_name', 'last_name', 'email',
@@ -160,6 +160,7 @@ class ImmigrationController extends Controller
             ]);
         } catch (\Throwable $e) {
             Log::error('Immigration dashboard failed', ['error' => $e->getMessage()]);
+
             return inertia('portal/immigration/Dashboard', [
                 'tiles' => [], 'pipeline' => [], 'monthly' => [], 'urgent' => [],
                 'week_appointments' => [], 'recent_intakes' => [], 'recent_reviews' => [],
@@ -175,15 +176,16 @@ class ImmigrationController extends Controller
     {
         try {
             return inertia('portal/immigration/Leads', [
-                'portal'   => 'immigration',
+                'portal' => 'immigration',
                 'statuses' => self::LEAD_STATUSES,
                 // Pipeline only — converted leads (cases) move to the Cases page.
-                'leads'    => Lead::inLeadPipeline()
+                'leads' => Lead::inLeadPipeline()
                     ->with(['studyPlans', 'event', 'portalUser:id,lead_id,last_login_at'])
                     ->latest()->get()->map(fn ($l) => $this->leadRow($l)),
             ]);
         } catch (\Throwable $e) {
             Log::error('Immigration leads list failed', ['error' => $e->getMessage()]);
+
             return inertia('portal/immigration/Leads', [
                 'portal' => 'immigration', 'statuses' => self::LEAD_STATUSES, 'leads' => collect(),
             ]);
@@ -199,9 +201,11 @@ class ImmigrationController extends Controller
             $lead = Lead::findOrFail($id);
             $lead->status = $validated['status'];
             $lead->save();
+
             return back()->with('success', "Lead {$lead->lead_id} updated.");
         } catch (\Throwable $e) {
             Log::error('Immigration lead update failed', ['id' => $id, 'error' => $e->getMessage()]);
+
             return back()->with('error', 'Could not update that lead. Please try again.');
         }
     }
@@ -215,50 +219,50 @@ class ImmigrationController extends Controller
     {
         try {
             $cases = Lead::with([
-                    'documents',
-                    'portalUser:id,lead_id,last_login_at',
-                    'immigrationConverter:id,name',
-                    'studentConverter:id,name',
-                    'stageUpdater:id,name',
-                ])
+                'documents',
+                'portalUser:id,lead_id,last_login_at',
+                'immigrationConverter:id,name',
+                'studentConverter:id,name',
+                'stageUpdater:id,name',
+            ])
                 ->immigrationCase()
                 ->orderByDesc('updated_at')
                 ->limit(200)
                 ->get()
                 ->map(fn ($l) => [
-                    'id'                => $l->id,
-                    'lead_id'           => $l->lead_id,
+                    'id' => $l->id,
+                    'lead_id' => $l->lead_id,
                     // Customer-shareable tracking code — drives the
                     // "Copy tracking link" row action so staff can paste a
                     // /track/{code} URL straight to the client.
-                    'tracking_code'     => $l->tracking_code,
+                    'tracking_code' => $l->tracking_code,
                     // Most recent stage-mover (falls back to the original
                     // converter if the row predates stage-update
                     // tracking). Drives "Updated [date] · Endorsed by
                     // [Name]" under the stage chip.
-                    'endorsed_by'       => optional($l->stageUpdater)->name
+                    'endorsed_by' => optional($l->stageUpdater)->name
                                             ?? optional($l->immigrationConverter)->name
                                             ?? optional($l->studentConverter)->name,
-                    'stage_updated_at'  => optional($l->stage_updated_at)?->toIso8601String(),
-                    'name'              => trim("{$l->first_name} {$l->last_name}") ?: 'Unknown',
-                    'email'             => $l->email,
-                    'phone'             => $l->phone,
-                    'country'           => $l->residence_country,
-                    'status'            => $l->status,
-                    'inz_status'        => $l->inz_status,
-                    'inz_visa_type'     => $l->inz_visa_type,
-                    'inz_reference'     => $l->inz_reference,
-                    'inz_lodged_at'     => $l->inz_lodged_at,
+                    'stage_updated_at' => optional($l->stage_updated_at)?->toIso8601String(),
+                    'name' => trim("{$l->first_name} {$l->last_name}") ?: 'Unknown',
+                    'email' => $l->email,
+                    'phone' => $l->phone,
+                    'country' => $l->residence_country,
+                    'status' => $l->status,
+                    'inz_status' => $l->inz_status,
+                    'inz_visa_type' => $l->inz_visa_type,
+                    'inz_reference' => $l->inz_reference,
+                    'inz_lodged_at' => $l->inz_lodged_at,
                     // Immigration-team sub-stage. Drives both the inline
                     // status picker on each row and the distribution graph
                     // up top. Pre-existing leads still on `inz_status`
                     // fall back to "Unassigned".
                     'immigration_stage' => $l->immigration_stage,
-                    'docs_total'        => $l->documents->count(),
-                    'docs_approved'     => $l->documents->where('status', 'Approved')->count(),
-                    'docs_pending'      => $l->documents->whereIn('status', ['Submitted', 'UnderReview'])->count(),
-                    'docs_rejected'     => $l->documents->where('status', 'Rejected')->count(),
-                    'updated_at'        => $l->updated_at,
+                    'docs_total' => $l->documents->count(),
+                    'docs_approved' => $l->documents->where('status', 'Approved')->count(),
+                    'docs_pending' => $l->documents->whereIn('status', ['Submitted', 'UnderReview'])->count(),
+                    'docs_rejected' => $l->documents->where('status', 'Rejected')->count(),
+                    'updated_at' => $l->updated_at,
                 ]);
 
             // Distribution payload for the stacked-bar graph that replaces
@@ -286,13 +290,14 @@ class ImmigrationController extends Controller
                 ->get(['id', 'code', 'name', 'category']);
 
             return inertia('portal/immigration/Cases', [
-                'cases'        => $cases,
+                'cases' => $cases,
                 'distribution' => $distribution,
-                'stages'       => Lead::IMMIGRATION_STAGES,
-                'visaTypes'    => $visaTypes,
+                'stages' => Lead::IMMIGRATION_STAGES,
+                'visaTypes' => $visaTypes,
             ]);
         } catch (\Throwable $e) {
             Log::error('Immigration cases list failed', ['error' => $e->getMessage()]);
+
             return inertia('portal/immigration/Cases', [
                 'cases' => [],
                 'distribution' => [],
@@ -312,58 +317,58 @@ class ImmigrationController extends Controller
     public function storeCase(\Illuminate\Http\Request $request)
     {
         $data = $request->validate([
-            'first_name'        => 'required|string|max:80',
-            'middle_name'       => 'nullable|string|max:80',
-            'last_name'         => 'required|string|max:80',
-            'suffix'            => 'nullable|string|max:20',
-            'gender'            => 'nullable|string|max:30',
-            'email'             => 'required|email|max:120',
-            'phone'             => 'required|string|max:40',
+            'first_name' => 'required|string|max:80',
+            'middle_name' => 'nullable|string|max:80',
+            'last_name' => 'required|string|max:80',
+            'suffix' => 'nullable|string|max:20',
+            'gender' => 'nullable|string|max:30',
+            'email' => 'required|email|max:120',
+            'phone' => 'required|string|max:40',
             // Stage is now optional — if the staff member doesn't pick
             // one we default to the first canonical value ("Endorsed")
             // below so the new case lands cleanly on the journey rail.
             'immigration_stage' => ['nullable', \Illuminate\Validation\Rule::in(Lead::IMMIGRATION_STAGES)],
-            'internal_note'     => 'nullable|string|max:5000',
-            'payment'           => 'nullable|string|max:120',
-            'visa_type_id'      => 'required|integer|exists:visa_types,id',
+            'internal_note' => 'nullable|string|max:5000',
+            'payment' => 'nullable|string|max:120',
+            'visa_type_id' => 'required|integer|exists:visa_types,id',
         ]);
 
         $visa = \App\Models\VisaType::find($data['visa_type_id']);
 
         $lead = Lead::create([
-            'lead_id'                  => 'IC-'.strtoupper(uniqid()),
-            'first_name'               => $data['first_name'],
-            'middle_name'              => $data['middle_name'] ?? null,
-            'last_name'                => $data['last_name'],
-            'suffix'                   => $data['suffix'] ?? null,
-            'gender'                   => $data['gender'] ?? null,
-            'email'                    => $data['email'],
-            'phone'                    => $data['phone'],
-            'immigration_stage'        => $data['immigration_stage'] ?? Lead::IMMIGRATION_STAGES[0],
-            'inz_visa_type'            => $visa?->name,
-            'student_payment'          => $data['payment'] ?? null,
+            'lead_id' => 'IC-'.strtoupper(uniqid()),
+            'first_name' => $data['first_name'],
+            'middle_name' => $data['middle_name'] ?? null,
+            'last_name' => $data['last_name'],
+            'suffix' => $data['suffix'] ?? null,
+            'gender' => $data['gender'] ?? null,
+            'email' => $data['email'],
+            'phone' => $data['phone'],
+            'immigration_stage' => $data['immigration_stage'] ?? Lead::IMMIGRATION_STAGES[0],
+            'inz_visa_type' => $visa?->name,
+            'student_payment' => $data['payment'] ?? null,
             // Mark immediately as an immigration case so scopeImmigrationCase
             // picks it up without waiting for a stage hand-off.
-            'is_immigration_case'      => true,
+            'is_immigration_case' => true,
             'immigration_converted_at' => now(),
             'immigration_converted_by' => auth()->id(),
             // Initial stage stamp — drives "Updated [date] · Endorsed by
             // [Name]" subtitle in the Cases table.
-            'stage_updated_at'         => now(),
-            'stage_updated_by'         => auth()->id(),
-            'source'                   => 'manual.immigration',
-            'status'                   => 'New',
-            'stage'                    => 'Visa Process',
+            'stage_updated_at' => now(),
+            'stage_updated_by' => auth()->id(),
+            'source' => 'manual.immigration',
+            'status' => 'New',
+            'stage' => 'Visa Process',
         ]);
 
         // Internal note → LeadNote so it surfaces in the same notes feed
         // the rest of the system writes to, rather than getting buried in
         // a free-form column.
-        if (!empty($data['internal_note'])) {
+        if (! empty($data['internal_note'])) {
             \App\Models\LeadNote::create([
-                'lead_id'     => $lead->id,
-                'kind'        => 'general',
-                'body'        => $data['internal_note'],
+                'lead_id' => $lead->id,
+                'kind' => 'general',
+                'body' => $data['internal_note'],
                 'author_name' => auth()->user()?->name ?? 'System',
                 'author_role' => auth()->user()?->role ?? 'immigration',
             ]);
@@ -383,16 +388,27 @@ class ImmigrationController extends Controller
 
         $data = $request->validate([
             'immigration_stage' => ['nullable', \Illuminate\Validation\Rule::in(Lead::IMMIGRATION_STAGES)],
+            'immigration_assignee' => ['nullable', \Illuminate\Validation\Rule::in(Lead::IMMIGRATION_STAGE_ASSIGNEES)],
         ]);
 
         $newStage = $data['immigration_stage'] ?? null;
-        if (($lead->immigration_stage ?? null) !== $newStage) {
+        $stageMoved = ($lead->immigration_stage ?? null) !== $newStage;
+
+        if (array_key_exists('immigration_assignee', $data)) {
+            $lead->immigration_assignee = $data['immigration_assignee'] ?: null;
+        }
+
+        if ($stageMoved) {
             $lead->immigration_stage = $newStage;
             // Only stamp the stage-tracking columns when the stage
             // actually moved — re-saving the same value shouldn't refresh
             // the "Updated [date]" subtitle the table shows.
-            $lead->stage_updated_at  = now();
-            $lead->stage_updated_by  = auth()->id();
+            $lead->stage_updated_at = now();
+            $lead->stage_updated_by = auth()->id();
+            $lead->pushStageHistory('immigration', $newStage, $lead->immigration_assignee);
+        }
+
+        if ($stageMoved || $lead->isDirty('immigration_assignee')) {
             $lead->save();
         }
 
@@ -441,12 +457,14 @@ class ImmigrationController extends Controller
 
             if (! $assessment) {
                 Log::warning('Convert-to-case: no Assessment or ResidentIntake matched.', ['id' => $id]);
+
                 return back()->with('error', 'Could not find this submission.');
             }
 
             $intake = $assessment->intakeable;
             if (! $intake) {
                 Log::error('Convert-to-case: Assessment has no intakeable.', ['assessment_id' => $assessment->id]);
+
                 return back()->with('error', 'Submission data is incomplete; please contact support.');
             }
 
@@ -463,23 +481,23 @@ class ImmigrationController extends Controller
                 // Find-or-create the Lead by email. firstOrNew lets us
                 // populate snapshot fields only on a fresh row.
                 $email = $intake->email ?: $assessment->applicant_email;
-                $lead  = $email ? Lead::where('email', $email)->first() : null;
+                $lead = $email ? Lead::where('email', $email)->first() : null;
 
                 if (! $lead) {
                     $lead = Lead::create([
-                        'lead_id'           => 'LP-' . str_pad((string) (Lead::max('id') + 1000), 5, '0', STR_PAD_LEFT),
-                        'first_name'        => $intake->first_name ?? $assessment->applicant_first_name,
-                        'last_name'         => $lastName ?? $assessment->applicant_last_name,
-                        'email'             => $email,
-                        'phone'             => $intake->phone ?? $assessment->applicant_phone,
-                        'dob'               => $intake->dob ?? null,
-                        'citizenship'       => $intake->country_of_citizenship ?? $intake->nationality ?? null,
-                        'country_of_birth'  => $intake->country_of_birth ?? null,
-                        'place_of_birth'    => $intake->place_of_birth ?? null,
-                        'passport_number'   => $intake->passport_number ?? null,
-                        'passport_expiry'   => $intake->passport_expiry ?? null,
-                        'source'            => self::sourceForIntake($intake),
-                        'status'            => 'New Leads',
+                        'lead_id' => 'LP-'.str_pad((string) (Lead::max('id') + 1000), 5, '0', STR_PAD_LEFT),
+                        'first_name' => $intake->first_name ?? $assessment->applicant_first_name,
+                        'last_name' => $lastName ?? $assessment->applicant_last_name,
+                        'email' => $email,
+                        'phone' => $intake->phone ?? $assessment->applicant_phone,
+                        'dob' => $intake->dob ?? null,
+                        'citizenship' => $intake->country_of_citizenship ?? $intake->nationality ?? null,
+                        'country_of_birth' => $intake->country_of_birth ?? null,
+                        'place_of_birth' => $intake->place_of_birth ?? null,
+                        'passport_number' => $intake->passport_number ?? null,
+                        'passport_expiry' => $intake->passport_expiry ?? null,
+                        'source' => self::sourceForIntake($intake),
+                        'status' => 'New Leads',
                     ]);
                 }
 
@@ -489,11 +507,11 @@ class ImmigrationController extends Controller
                 // label without changing the conversion date.
                 $patch = ['inz_visa_type' => $visaName];
                 if (! $lead->is_immigration_case) {
-                    $patch['is_immigration_case']      = true;
+                    $patch['is_immigration_case'] = true;
                     $patch['immigration_converted_at'] = now();
                     $patch['immigration_converted_by'] = auth()->id();
-                    $patch['stage_updated_at']         = now();
-                    $patch['stage_updated_by']         = auth()->id();
+                    $patch['stage_updated_at'] = now();
+                    $patch['stage_updated_by'] = auth()->id();
                 }
                 $lead->fill($patch)->save();
 
@@ -508,9 +526,10 @@ class ImmigrationController extends Controller
             });
         } catch (\Throwable $e) {
             Log::error('Assessment to case conversion failed', [
-                'id'    => $id,
+                'id' => $id,
                 'error' => $e->getMessage(),
             ]);
+
             return back()->with('error', 'Could not convert this assessment.');
         }
     }
@@ -526,23 +545,23 @@ class ImmigrationController extends Controller
             $lead = Lead::where('email', $intake->email)->first();
             if (! $lead) {
                 $lead = Lead::create([
-                    'lead_id'    => 'LP-' . str_pad((string) (Lead::max('id') + 1000), 5, '0', STR_PAD_LEFT),
+                    'lead_id' => 'LP-'.str_pad((string) (Lead::max('id') + 1000), 5, '0', STR_PAD_LEFT),
                     'first_name' => $intake->first_name,
-                    'last_name'  => $intake->last_name,
-                    'email'      => $intake->email,
-                    'phone'      => $intake->phone,
-                    'source'     => 'resident-intake',
-                    'status'     => 'New Leads',
+                    'last_name' => $intake->last_name,
+                    'email' => $intake->email,
+                    'phone' => $intake->phone,
+                    'source' => 'resident-intake',
+                    'status' => 'New Leads',
                 ]);
             }
 
             if (! $lead->is_immigration_case) {
                 $lead->fill([
-                    'is_immigration_case'      => true,
+                    'is_immigration_case' => true,
                     'immigration_converted_at' => now(),
                     'immigration_converted_by' => auth()->id(),
-                    'stage_updated_at'         => now(),
-                    'stage_updated_by'         => auth()->id(),
+                    'stage_updated_at' => now(),
+                    'stage_updated_by' => auth()->id(),
                 ])->save();
             }
             $intake->update(['status' => 'Engaged']);
@@ -557,9 +576,9 @@ class ImmigrationController extends Controller
     {
         return match ($intake::class) {
             \App\Models\ResidentIntake::class => 'resident-intake',
-            \App\Models\WorkIntake::class     => 'work-intake',
-            \App\Models\StudentIntake::class  => 'student-intake',
-            \App\Models\VisitorIntake::class  => 'visitor-intake',
+            \App\Models\WorkIntake::class => 'work-intake',
+            \App\Models\StudentIntake::class => 'student-intake',
+            \App\Models\VisitorIntake::class => 'visitor-intake',
             default => 'visa-intake',
         };
     }
@@ -572,7 +591,10 @@ class ImmigrationController extends Controller
             // about to show. Indexed by intakeable id so the normalizer can
             // look up the journey state without N+1 queries.
             $loadAssessments = function (string $modelClass, $intakes) {
-                if ($intakes->isEmpty()) return collect();
+                if ($intakes->isEmpty()) {
+                    return collect();
+                }
+
                 return \App\Models\Assessment::with('booking:id,status,appointment_date,appointment_time')
                     ->where('intakeable_type', $modelClass)
                     ->whereIn('intakeable_id', $intakes->pluck('id'))
@@ -593,9 +615,9 @@ class ImmigrationController extends Controller
                 ->flip(); // O(1) lookup via array key
 
             $normalize = function ($intake, string $visaType, $assessment) use ($caseEmails): array {
-                $first   = (string) ($intake->first_name ?? '');
-                $last    = (string) ($intake->last_name ?? $intake->family_name ?? '');
-                $email   = strtolower(trim((string) ($intake->email ?? '')));
+                $first = (string) ($intake->first_name ?? '');
+                $last = (string) ($intake->last_name ?? $intake->family_name ?? '');
+                $email = strtolower(trim((string) ($intake->email ?? '')));
                 $hasAssessment = (bool) $assessment;
 
                 // Triaged — staff have changed the intake status away from
@@ -612,27 +634,27 @@ class ImmigrationController extends Controller
                     || $intake->status === 'Engaged';
 
                 return [
-                    'id'           => $intake->id,
+                    'id' => $intake->id,
                     'assessment_id' => $assessment?->id,
-                    'intake_id'    => $intake->intake_id,
-                    'visa_type'    => $visaType, // resident | work | student | visitor
-                    'name'         => trim("{$first} {$last}") ?: 'Unknown',
-                    'email'        => $intake->email,
-                    'phone'        => $intake->phone,
-                    'status'       => $intake->status,
-                    'created_at'   => $intake->created_at,
-                    'extra'        => $visaType === 'resident'
-                        ? trim(($intake->current_visa_type ?? '') . ($intake->job_title ? ' · ' . $intake->job_title : ''))
+                    'intake_id' => $intake->intake_id,
+                    'visa_type' => $visaType, // resident | work | student | visitor
+                    'name' => trim("{$first} {$last}") ?: 'Unknown',
+                    'email' => $intake->email,
+                    'phone' => $intake->phone,
+                    'status' => $intake->status,
+                    'created_at' => $intake->created_at,
+                    'extra' => $visaType === 'resident'
+                        ? trim(($intake->current_visa_type ?? '').($intake->job_title ? ' · '.$intake->job_title : ''))
                         : null,
                     // Convert is available to all four visa types now,
                     // gated on (1) a paired Assessment exists, (2) the
                     // intake isn't already Engaged, (3) no existing
                     // Lead with matching email is already an
                     // immigration case.
-                    'can_convert'  => $hasAssessment
+                    'can_convert' => $hasAssessment
                         && $intake->status !== 'Engaged'
                         && ! $isConverted,
-                    'detail_url'   => $visaType === 'resident'
+                    'detail_url' => $visaType === 'resident'
                         ? "/admin/immigration/resident-intakes/{$intake->id}"
                         : "/portal/immigration/intakes/{$visaType}/{$intake->id}",
                     // Three-step lifecycle: Submitted → Triaged →
@@ -641,11 +663,11 @@ class ImmigrationController extends Controller
                     // re-add when AssessmentController::simulatePay
                     // gets a real Stripe body.
                     'journey' => [
-                        'submitted'        => true, // any visible row exists
-                        'submitted_at'     => $intake->created_at,
-                        'triaged'          => $isTriaged,
-                        'converted'        => $isConverted,
-                        'assessment_status'=> $assessment?->status,
+                        'submitted' => true, // any visible row exists
+                        'submitted_at' => $intake->created_at,
+                        'triaged' => $isTriaged,
+                        'converted' => $isConverted,
+                        'assessment_status' => $assessment?->status,
                     ],
                 ];
             };
@@ -653,26 +675,27 @@ class ImmigrationController extends Controller
             // Pull each intake table, then their assessments in a single
             // query each.
             $resident = ResidentIntake::latest()->limit(200)->get();
-            $work     = \App\Models\WorkIntake::latest()->limit(200)->get();
-            $student  = \App\Models\StudentIntake::latest()->limit(200)->get();
-            $visitor  = \App\Models\VisitorIntake::latest()->limit(200)->get();
+            $work = \App\Models\WorkIntake::latest()->limit(200)->get();
+            $student = \App\Models\StudentIntake::latest()->limit(200)->get();
+            $visitor = \App\Models\VisitorIntake::latest()->limit(200)->get();
 
-            $aResident = $loadAssessments(ResidentIntake::class,           $resident);
-            $aWork     = $loadAssessments(\App\Models\WorkIntake::class,    $work);
-            $aStudent  = $loadAssessments(\App\Models\StudentIntake::class, $student);
-            $aVisitor  = $loadAssessments(\App\Models\VisitorIntake::class, $visitor);
+            $aResident = $loadAssessments(ResidentIntake::class, $resident);
+            $aWork = $loadAssessments(\App\Models\WorkIntake::class, $work);
+            $aStudent = $loadAssessments(\App\Models\StudentIntake::class, $student);
+            $aVisitor = $loadAssessments(\App\Models\VisitorIntake::class, $visitor);
 
             $rows = collect()
                 ->concat($resident->map(fn ($r) => $normalize($r, 'resident', $aResident->get($r->id))))
-                ->concat($work    ->map(fn ($r) => $normalize($r, 'work',     $aWork    ->get($r->id))))
-                ->concat($student ->map(fn ($r) => $normalize($r, 'student',  $aStudent ->get($r->id))))
-                ->concat($visitor ->map(fn ($r) => $normalize($r, 'visitor',  $aVisitor ->get($r->id))));
+                ->concat($work->map(fn ($r) => $normalize($r, 'work', $aWork->get($r->id))))
+                ->concat($student->map(fn ($r) => $normalize($r, 'student', $aStudent->get($r->id))))
+                ->concat($visitor->map(fn ($r) => $normalize($r, 'visitor', $aVisitor->get($r->id))));
 
             $intakes = $rows->sortByDesc('created_at')->values();
 
             return inertia('portal/immigration/Assessments', ['intakes' => $intakes]);
         } catch (\Throwable $e) {
             Log::error('Immigration assessments page failed', ['error' => $e->getMessage()]);
+
             return inertia('portal/immigration/Assessments', ['intakes' => []]);
         }
     }
@@ -688,7 +711,7 @@ class ImmigrationController extends Controller
     public function showIntake(string $type, int $id)
     {
         $modelMap = [
-            'work'    => \App\Models\WorkIntake::class,
+            'work' => \App\Models\WorkIntake::class,
             'student' => \App\Models\StudentIntake::class,
             'visitor' => \App\Models\VisitorIntake::class,
         ];
@@ -696,7 +719,7 @@ class ImmigrationController extends Controller
             abort(404, 'Unknown intake type.');
         }
 
-        $class  = $modelMap[$type];
+        $class = $modelMap[$type];
         $intake = $class::findOrFail($id);
 
         // Paired Assessment (Pay/Book funnel state) + Booking if any.
@@ -708,8 +731,8 @@ class ImmigrationController extends Controller
         // If the applicant's email matches a Lead already converted to
         // an immigration case, link to it so the adviser can jump
         // straight to the working file instead of re-converting.
-        $email  = strtolower(trim((string) ($intake->email ?? '')));
-        $lead   = null;
+        $email = strtolower(trim((string) ($intake->email ?? '')));
+        $lead = null;
         if ($email !== '') {
             $lead = Lead::where('is_immigration_case', true)
                 ->whereRaw('LOWER(email) = ?', [$email])
@@ -717,25 +740,25 @@ class ImmigrationController extends Controller
         }
 
         return inertia('portal/immigration/IntakeDetails', [
-            'type'   => $type,
+            'type' => $type,
             'intake' => $intake->toArray(),
             'assessment' => $assessment ? [
-                'id'      => $assessment->id,
-                'status'  => $assessment->status,
-                'token'   => $assessment->token,
+                'id' => $assessment->id,
+                'status' => $assessment->status,
+                'token' => $assessment->token,
                 'paid_at' => $assessment->paid_at,
                 'booking' => $assessment->booking ? [
-                    'id'               => $assessment->booking->id,
-                    'status'           => $assessment->booking->status,
+                    'id' => $assessment->booking->id,
+                    'status' => $assessment->booking->status,
                     'appointment_date' => $assessment->booking->appointment_date,
                     'appointment_time' => $assessment->booking->appointment_time,
                 ] : null,
             ] : null,
             'linkedLead' => $lead ? [
-                'id'      => $lead->id,
+                'id' => $lead->id,
                 'lead_id' => $lead->lead_id,
-                'name'    => trim("{$lead->first_name} {$lead->last_name}") ?: 'Unknown',
-                'status'  => $lead->status,
+                'name' => trim("{$lead->first_name} {$lead->last_name}") ?: 'Unknown',
+                'status' => $lead->status,
             ] : null,
         ]);
     }
@@ -765,12 +788,12 @@ class ImmigrationController extends Controller
                 ->with('documents:id,lead_id,status,checklist_key')
                 ->orderBy('first_name')->limit(200)->get()
                 ->map(fn ($l) => [
-                    'id'       => $l->id,
-                    'lead_id'  => $l->lead_id,
-                    'name'     => trim("{$l->first_name} {$l->last_name}") ?: 'Unknown',
-                    'total'    => $l->documents->count(),
+                    'id' => $l->id,
+                    'lead_id' => $l->lead_id,
+                    'name' => trim("{$l->first_name} {$l->last_name}") ?: 'Unknown',
+                    'total' => $l->documents->count(),
                     'approved' => $l->documents->where('status', 'Approved')->count(),
-                    'pending'  => $l->documents->whereIn('status', ['Submitted', 'UnderReview'])->count(),
+                    'pending' => $l->documents->whereIn('status', ['Submitted', 'UnderReview'])->count(),
                     'rejected' => $l->documents->where('status', 'Rejected')->count(),
                 ]);
 
@@ -779,6 +802,7 @@ class ImmigrationController extends Controller
             ]);
         } catch (\Throwable $e) {
             Log::error('Immigration documents page failed', ['error' => $e->getMessage()]);
+
             return inertia('portal/immigration/Documents', ['pending' => [], 'stale' => [], 'rejected' => [], 'folders' => []]);
         }
     }
@@ -786,18 +810,18 @@ class ImmigrationController extends Controller
     private function docQueueRow($d, $bucket): array
     {
         return [
-            'id'            => $d->id,
-            'bucket'        => $bucket,
+            'id' => $d->id,
+            'bucket' => $bucket,
             'original_name' => $d->original_name,
-            'status'        => $d->status,
-            'note'          => $d->note,
-            'created_at'    => $d->created_at,
-            'reviewed_at'   => $d->reviewed_at,
+            'status' => $d->status,
+            'note' => $d->note,
+            'created_at' => $d->created_at,
+            'reviewed_at' => $d->reviewed_at,
             'checklist_key' => $d->checklist_key,
             'lead' => $d->lead ? [
-                'id'      => $d->lead->id,
+                'id' => $d->lead->id,
                 'lead_id' => $d->lead->lead_id,
-                'name'    => trim("{$d->lead->first_name} {$d->lead->last_name}") ?: 'Unknown',
+                'name' => trim("{$d->lead->first_name} {$d->lead->last_name}") ?: 'Unknown',
             ] : null,
         ];
     }
@@ -807,33 +831,36 @@ class ImmigrationController extends Controller
         try {
             $rows = Booking::orderByDesc('appointment_date')->limit(100)->get()
                 ->map(fn ($b) => [
-                    'id'               => $b->id,
-                    'name'             => trim("{$b->first_name} {$b->last_name}") ?: 'Unknown',
-                    'email'            => $b->email,
-                    'service_type'     => $b->service_type,
-                    'consultant_name'  => $b->consultant_name,
-                    'platform'         => $b->platform,
-                    'status'           => $b->status ?: 'Pending',
+                    'id' => $b->id,
+                    'name' => trim("{$b->first_name} {$b->last_name}") ?: 'Unknown',
+                    'email' => $b->email,
+                    'service_type' => $b->service_type,
+                    'consultant_name' => $b->consultant_name,
+                    'platform' => $b->platform,
+                    'status' => $b->status ?: 'Pending',
                     'appointment_date' => $b->appointment_date ? \Illuminate\Support\Carbon::parse($b->appointment_date)->toDateString() : null,
                     'appointment_time' => $b->appointment_time,
                 ]);
+
             return inertia('portal/immigration/Appointments', ['appointments' => $rows]);
         } catch (\Throwable $e) {
             Log::error('Immigration appointments page failed', ['error' => $e->getMessage()]);
+
             return inertia('portal/immigration/Appointments', ['appointments' => []]);
         }
     }
 
     public function reports(Request $request)
     {
-        $period = in_array($request->input('period', 'weekly'), ['weekly','monthly','quarterly','custom'], true)
+        $period = in_array($request->input('period', 'weekly'), ['weekly', 'monthly', 'quarterly', 'custom'], true)
             ? $request->input('period', 'weekly') : 'weekly';
+
         return inertia('portal/immigration/Reports', [
             'period' => $period,
-            'tiles'  => [
-                'active_cases'       => Lead::where('status', 'Visa Process')->count(),
-                'new_assessments'    => ResidentIntake::where('created_at', '>=', now()->startOfWeek())->count(),
-                'docs_pending'       => LeadDocument::whereIn('status', ['Submitted', 'UnderReview'])->count(),
+            'tiles' => [
+                'active_cases' => Lead::where('status', 'Visa Process')->count(),
+                'new_assessments' => ResidentIntake::where('created_at', '>=', now()->startOfWeek())->count(),
+                'docs_pending' => LeadDocument::whereIn('status', ['Submitted', 'UnderReview'])->count(),
             ],
             'generated_at' => now()->toIso8601String(),
             'generated_by' => optional(auth()->user())->name,
@@ -841,13 +868,30 @@ class ImmigrationController extends Controller
     }
 
     // Stubs — coming-soon pages.
-    public function visaTypes()         { return inertia('portal/immigration/VisaTypes',         []); }
-    public function intakes()           { return inertia('portal/immigration/Intakes',           []); }
-    public function inzForms()          { return inertia('portal/immigration/InzForms',          []); }
-    public function checklistTemplates(){ return inertia('portal/immigration/ChecklistTemplates',[]); }
+    public function visaTypes()
+    {
+        return inertia('portal/immigration/VisaTypes', []);
+    }
+
+    public function intakes()
+    {
+        return inertia('portal/immigration/Intakes', []);
+    }
+
+    public function inzForms()
+    {
+        return inertia('portal/immigration/InzForms', []);
+    }
+
+    public function checklistTemplates()
+    {
+        return inertia('portal/immigration/ChecklistTemplates', []);
+    }
+
     public function profile()
     {
         $me = auth()->user();
+
         return inertia('portal/immigration/Profile', [
             'user' => $me->only(['id', 'name', 'email', 'role', 'iaa_licence_number', 'iaa_licence_expiry']),
         ]);
@@ -862,9 +906,11 @@ class ImmigrationController extends Controller
         try {
             $me = auth()->user();
             $me->fill($validated)->save();
+
             return back()->with('success', 'Profile updated.');
         } catch (\Throwable $e) {
             Log::error('Immigration profile update failed', ['error' => $e->getMessage()]);
+
             return back()->with('error', 'Could not update profile.');
         }
     }
@@ -879,11 +925,11 @@ class ImmigrationController extends Controller
     public function tasks(Request $request)
     {
         try {
-            $userId   = $request->user()->id;
-            $scope    = $request->input('scope', 'mine');
-            $now      = now();
+            $userId = $request->user()->id;
+            $scope = $request->input('scope', 'mine');
+            $now = now();
             $todayEnd = $now->copy()->endOfDay();
-            $weekEnd  = $now->copy()->endOfWeek();
+            $weekEnd = $now->copy()->endOfWeek();
 
             $base = \App\Models\LeadTask::with(['lead:id,lead_id,first_name,last_name,email,status', 'assignee:id,name', 'creator:id,name', 'attachments'])
                 ->withCount('comments')
@@ -891,67 +937,68 @@ class ImmigrationController extends Controller
                 ->when($scope === 'department', fn ($q) => $q->where('department', 'immigration'));
 
             $serialize = fn ($t) => [
-                'id'           => $t->id,
-                'title'        => $t->title,
-                'description'  => $t->description,
-                'note'         => $t->note,
+                'id' => $t->id,
+                'title' => $t->title,
+                'description' => $t->description,
+                'note' => $t->note,
                 'comments_count' => (int) ($t->comments_count ?? 0),
-                'priority'     => $t->priority,
-                'progress'     => (int) ($t->progress ?? 0),
-                'due_at'       => $t->due_at,
-                'completed'    => $t->completed,
+                'priority' => $t->priority,
+                'progress' => (int) ($t->progress ?? 0),
+                'due_at' => $t->due_at,
+                'completed' => $t->completed,
                 'completed_at' => $t->completed_at,
-                'overdue'      => ! $t->completed && $t->due_at && $t->due_at->isPast(),
-                'type'         => $t->type,
-                'category'     => $t->category,
-                'department'   => $t->department,
-                'tags'         => $t->tags,
-                'status'       => $t->status,
+                'overdue' => ! $t->completed && $t->due_at && $t->due_at->isPast(),
+                'type' => $t->type,
+                'category' => $t->category,
+                'department' => $t->department,
+                'tags' => $t->tags,
+                'status' => $t->status,
                 'completion_notes' => $t->completion_notes,
-                'attachments'  => $t->attachments->map(fn ($a) => [
-                    'id'                => $a->id,
-                    'url'               => $a->url,
+                'attachments' => $t->attachments->map(fn ($a) => [
+                    'id' => $a->id,
+                    'url' => $a->url,
                     'original_filename' => $a->original_filename,
-                    'is_image'          => $a->is_image,
-                    'mime_type'         => $a->mime_type,
-                    'size'              => $a->size,
+                    'is_image' => $a->is_image,
+                    'mime_type' => $a->mime_type,
+                    'size' => $a->size,
                 ])->values(),
-                'assignee'     => $t->assignee ? ['id' => $t->assignee->id, 'name' => $t->assignee->name] : null,
+                'assignee' => $t->assignee ? ['id' => $t->assignee->id, 'name' => $t->assignee->name] : null,
                 'additional_assignee_ids' => $t->additional_assignee_ids ?? [],
-                'additional_lead_ids'     => $t->additional_lead_ids ?? [],
-                'creator'      => $t->creator  ? ['id' => $t->creator->id,  'name' => $t->creator->name]  : null,
-                'lead'         => $t->lead ? [
-                    'id'      => $t->lead->id,
+                'additional_lead_ids' => $t->additional_lead_ids ?? [],
+                'creator' => $t->creator ? ['id' => $t->creator->id,  'name' => $t->creator->name] : null,
+                'lead' => $t->lead ? [
+                    'id' => $t->lead->id,
                     'lead_id' => $t->lead->lead_id,
-                    'name'    => trim("{$t->lead->first_name} {$t->lead->last_name}"),
-                    'status'  => $t->lead->status,
+                    'name' => trim("{$t->lead->first_name} {$t->lead->last_name}"),
+                    'status' => $t->lead->status,
                 ] : null,
             ];
 
             // Full task set for the kanban (all dates, all statuses).
-            $allTasks     = (clone $base)->orderByDesc('created_at')->limit(1000)->get()->map($serialize);
-            $today        = (clone $base)->where('completed', false)->whereBetween('due_at', [$now, $todayEnd])->orderBy('due_at')->get()->map($serialize);
-            $overdue      = (clone $base)->where('completed', false)->whereNotNull('due_at')->where('due_at', '<', $now)->orderBy('due_at')->get()->map($serialize);
-            $thisWeek     = (clone $base)->where('completed', false)->whereBetween('due_at', [$todayEnd, $weekEnd])->orderBy('due_at')->get()->map($serialize);
-            $undated      = (clone $base)->where('completed', false)->whereNull('due_at')->orderByDesc('created_at')->limit(50)->get()->map($serialize);
+            $allTasks = (clone $base)->orderByDesc('created_at')->limit(1000)->get()->map($serialize);
+            $today = (clone $base)->where('completed', false)->whereBetween('due_at', [$now, $todayEnd])->orderBy('due_at')->get()->map($serialize);
+            $overdue = (clone $base)->where('completed', false)->whereNotNull('due_at')->where('due_at', '<', $now)->orderBy('due_at')->get()->map($serialize);
+            $thisWeek = (clone $base)->where('completed', false)->whereBetween('due_at', [$todayEnd, $weekEnd])->orderBy('due_at')->get()->map($serialize);
+            $undated = (clone $base)->where('completed', false)->whereNull('due_at')->orderByDesc('created_at')->limit(50)->get()->map($serialize);
             $recentlyDone = (clone $base)->where('completed', true)->where('completed_at', '>=', $now->copy()->subDays(7))->orderByDesc('completed_at')->limit(50)->get()->map($serialize);
 
             return inertia('portal/immigration/Tasks', [
-                'portal'        => 'immigration',
-                'scope'         => $scope,
-                'all_tasks'     => $allTasks,
-                'today'         => $today,
-                'overdue'       => $overdue,
-                'this_week'     => $thisWeek,
-                'undated'       => $undated,
+                'portal' => 'immigration',
+                'scope' => $scope,
+                'all_tasks' => $allTasks,
+                'today' => $today,
+                'overdue' => $overdue,
+                'this_week' => $thisWeek,
+                'undated' => $undated,
                 'recently_done' => $recentlyDone,
-                'staffOptions'  => \App\Models\User::whereNotIn('role', ['lead', 'revoked_lead'])->orderBy('name')->get(['id', 'name', 'role']),
+                'staffOptions' => \App\Models\User::whereNotIn('role', ['lead', 'revoked_lead'])->orderBy('name')->get(['id', 'name', 'role']),
                 'recent_activity' => \App\Models\ActivityLog::where('action', 'like', 'lead_task.%')
                     ->latest()->limit(30)
                     ->get(['id', 'action', 'description', 'actor_name', 'actor_role', 'properties', 'created_at']),
             ]);
         } catch (\Throwable $e) {
             Log::error('Immigration tasks page failed', ['error' => $e->getMessage()]);
+
             return inertia('portal/immigration/Tasks', ['portal' => 'immigration', 'scope' => 'mine', 'today' => [], 'overdue' => [], 'this_week' => [], 'undated' => [], 'recently_done' => [], 'staffOptions' => []]);
         }
     }

@@ -7,11 +7,12 @@ use App\Traits\LogsActivity;
 use Illuminate\Database\Eloquent\Attributes\ObservedBy;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 #[ObservedBy([LeadObserver::class])]
 class Lead extends Model
 {
-    use LogsActivity;
+    use LogsActivity, SoftDeletes;
 
     /**
      * Education-team-specific lifecycle stages. Distinct from the global
@@ -67,6 +68,7 @@ class Lead extends Model
      * routes the lead to the Immigration tab.
      */
     public const IMMIGRATION_STAGES = [
+        'For Assessment',
         'Endorsed',
         'Visa Lodged',
         'Request for Information',
@@ -74,6 +76,17 @@ class Lead extends Model
         'Approved Visa',
         'Decline Visa',
     ];
+
+    /**
+     * Named people who can be assigned to a lead while it sits at a given
+     * sub-stage. Free-text labels (not user FKs) — "DIY" is a handling mode,
+     * not a person — surfaced as a dropdown beside the stage in the Students
+     * dashboard + New Student modal. Stored on `english_assignee` /
+     * `immigration_assignee`.
+     */
+    public const ENGLISH_STAGE_ASSIGNEES = ['Paula', 'Frank', 'DIY'];
+
+    public const IMMIGRATION_STAGE_ASSIGNEES = ['Hendry', 'Tarun', 'Dev'];
 
     /**
      * Query scope — leads currently in the Immigration team's queue.
@@ -95,7 +108,7 @@ class Lead extends Model
     {
         return $query->where(function ($q) {
             $q->where('is_immigration_case', true)
-              ->orWhereIn('education_stage', self::EDUCATION_STAGES_IMMIGRATION);
+                ->orWhereIn('education_stage', self::EDUCATION_STAGES_IMMIGRATION);
         });
     }
 
@@ -108,10 +121,34 @@ class Lead extends Model
     public function scopeInLeadPipeline($query)
     {
         return $query
-            ->where('is_student',              false)
-            ->where('is_immigration_case',     false)
+            ->where('is_student', false)
+            ->where('is_immigration_case', false)
             ->where('is_accommodation_client', false)
-            ->where('is_english_student',      false);
+            ->where('is_english_student', false);
+    }
+
+    /**
+     * Append a dated entry to the lead's status timeline. Callers mutate the
+     * attribute here and persist with their own save(), so a single stage
+     * update writes one history row. `at` is captured per change so the
+     * Pipeline can show exactly when each status was reached, and `by_name`
+     * snapshots the acting staff member.
+     */
+    public function pushStageHistory(string $department, ?string $stage, ?string $assignee = null): void
+    {
+        $history = $this->stage_history ?? [];
+        $user = auth()->user();
+
+        $history[] = [
+            'department' => $department,
+            'stage' => $stage,
+            'assignee' => $assignee,
+            'at' => now()->toIso8601String(),
+            'by_id' => $user?->id,
+            'by_name' => $user?->name,
+        ];
+
+        $this->stage_history = $history;
     }
 
     /**
@@ -142,7 +179,7 @@ class Lead extends Model
     ];
 
     protected $fillable = [
-        'lead_id', 'tracking_code', 'first_name', 'middle_name', 'last_name', 'suffix', 'dob', 'other_names', 'email', 'phone', 'school_id',
+        'lead_id', 'tracking_code', 'first_name', 'middle_name', 'last_name', 'suffix', 'dob', 'other_names', 'email', 'phone', 'referral', 'school_id',
         'gender', 'marital_status', 'branch', 'stage', 'status',
         'country_of_birth', 'place_of_birth', 'citizenship',
         'residence_city', 'residence_state', 'residence_country',
@@ -197,8 +234,12 @@ class Lead extends Model
         // signal of actual pipeline movement.
         'stage_updated_at', 'stage_updated_by',
         // English / Immigration sub-stage tracks (see ENGLISH_STAGES,
-        // IMMIGRATION_STAGES).
-        'english_stage', 'immigration_stage',
+        // IMMIGRATION_STAGES). Each carries an optional named assignee.
+        'english_stage', 'english_assignee',
+        'immigration_stage', 'immigration_assignee',
+        // Full dated timeline of every department status change — drives the
+        // Pipeline "when did this status happen" view. See recordStageChange().
+        'stage_history',
 
         // ── Wide profile-info build — columns surfaced by the
         //    LeadController::updatePersonal allow-list and rendered
@@ -265,73 +306,74 @@ class Lead extends Model
         'ai_analysis' => 'array',
         'age' => 'integer',
         'portal_invitation_requested_at' => 'datetime',
-        'portal_invitation_approved_at'  => 'datetime',
-        'portal_invitation_expires_at'   => 'datetime',
-        'portal_invitation_accepted_at'  => 'datetime',
-        'date_of_first_contact'          => 'date',
-        'date_of_engagement'             => 'date',
-        'calendar_date'                  => 'date',
-        'document_checklist'             => 'array',
-        'section_verifications'          => 'array',
-        'agreements_acknowledged_at'     => 'datetime',
-        'stage_updated_at'               => 'datetime',
-        'last_seen_at'                   => 'datetime',
-        'is_student'                     => 'boolean',
-        'student_converted_at'           => 'datetime',
-        'is_immigration_case'            => 'boolean',
-        'immigration_converted_at'       => 'datetime',
-        'is_accommodation_client'        => 'boolean',
-        'accommodation_converted_at'     => 'datetime',
-        'inz_lodged_at'                  => 'datetime',
-        'inz_decision_at'                => 'datetime',
-        'services_agreement_signed_at'   => 'datetime',
+        'portal_invitation_approved_at' => 'datetime',
+        'portal_invitation_expires_at' => 'datetime',
+        'portal_invitation_accepted_at' => 'datetime',
+        'date_of_first_contact' => 'date',
+        'date_of_engagement' => 'date',
+        'calendar_date' => 'date',
+        'document_checklist' => 'array',
+        'section_verifications' => 'array',
+        'agreements_acknowledged_at' => 'datetime',
+        'stage_updated_at' => 'datetime',
+        'stage_history' => 'array',
+        'last_seen_at' => 'datetime',
+        'is_student' => 'boolean',
+        'student_converted_at' => 'datetime',
+        'is_immigration_case' => 'boolean',
+        'immigration_converted_at' => 'datetime',
+        'is_accommodation_client' => 'boolean',
+        'accommodation_converted_at' => 'datetime',
+        'inz_lodged_at' => 'datetime',
+        'inz_decision_at' => 'datetime',
+        'services_agreement_signed_at' => 'datetime',
 
         // ── Wide profile-info build (column shapes match the
         //    widen_lead_personal_info_columns migration). ──────────────
-        'dob'                            => 'date',
-        'passport_expiry'                => 'date',
-        'passport_issue_date'            => 'date',
-        'current_nz_visa_issued_date'    => 'date',
-        'current_nz_visa_expiry_date'    => 'date',
-        'current_employment_start_date'  => 'date',
-        'english_test_date'              => 'date',
+        'dob' => 'date',
+        'passport_expiry' => 'date',
+        'passport_issue_date' => 'date',
+        'current_nz_visa_issued_date' => 'date',
+        'current_nz_visa_expiry_date' => 'date',
+        'current_employment_start_date' => 'date',
+        'english_test_date' => 'date',
         // Encrypted at rest — Crypt::decryptString runs on read,
         // Crypt::encryptString on write. Existing plain-text passport
         // numbers were re-encrypted by the migration.
-        'passport_number'                => 'encrypted',
-        'current_nz_visa_number'         => 'encrypted',
+        'passport_number' => 'encrypted',
+        'current_nz_visa_number' => 'encrypted',
         // Booleans (mirrors migration column types).
-        'has_been_in_nz_continuously'    => 'boolean',
-        'meets_184_day_rule_two_years'   => 'boolean',
-        'has_passport'                   => 'boolean',
+        'has_been_in_nz_continuously' => 'boolean',
+        'meets_184_day_rule_two_years' => 'boolean',
+        'has_passport' => 'boolean',
         'supports_partner_or_dependents' => 'boolean',
-        'has_property_in_home_country'   => 'boolean',
-        'bank_funds_evidence_provided'   => 'boolean',
-        'has_anzsco_listed_role'         => 'boolean',
+        'has_property_in_home_country' => 'boolean',
+        'bank_funds_evidence_provided' => 'boolean',
+        'has_anzsco_listed_role' => 'boolean',
         'has_nz_professional_registration' => 'boolean',
-        'has_nzqa_assessment'            => 'boolean',
-        'has_children'                   => 'boolean',
-        'has_dependent_partner'          => 'boolean',
-        'partner_in_nz'                  => 'boolean',
-        'intends_to_bring_family'        => 'boolean',
-        'has_health_disclosure'          => 'boolean',
-        'has_character_disclosure'       => 'boolean',
-        'has_been_declined_visa'         => 'boolean',
-        'has_criminal_record'            => 'boolean',
+        'has_nzqa_assessment' => 'boolean',
+        'has_children' => 'boolean',
+        'has_dependent_partner' => 'boolean',
+        'partner_in_nz' => 'boolean',
+        'intends_to_bring_family' => 'boolean',
+        'has_health_disclosure' => 'boolean',
+        'has_character_disclosure' => 'boolean',
+        'has_been_declined_visa' => 'boolean',
+        'has_criminal_record' => 'boolean',
         // Numeric.
-        'nz_continuous_residence_months'      => 'integer',
-        'years_of_relevant_experience'        => 'integer',
-        'highest_qualification_year_completed'=> 'integer',
-        'number_of_children'                  => 'integer',
-        'estimated_total_cost_nzd'            => 'decimal:2',
-        'available_funds_nzd'                 => 'decimal:2',
-        'annual_income_nzd'                   => 'decimal:2',
-        'current_salary_nzd'                  => 'decimal:2',
-        'english_test_overall_score'          => 'decimal:2',
-        'english_test_listening'              => 'decimal:2',
-        'english_test_reading'                => 'decimal:2',
-        'english_test_writing'                => 'decimal:2',
-        'english_test_speaking'               => 'decimal:2',
+        'nz_continuous_residence_months' => 'integer',
+        'years_of_relevant_experience' => 'integer',
+        'highest_qualification_year_completed' => 'integer',
+        'number_of_children' => 'integer',
+        'estimated_total_cost_nzd' => 'decimal:2',
+        'available_funds_nzd' => 'decimal:2',
+        'annual_income_nzd' => 'decimal:2',
+        'current_salary_nzd' => 'decimal:2',
+        'english_test_overall_score' => 'decimal:2',
+        'english_test_listening' => 'decimal:2',
+        'english_test_reading' => 'decimal:2',
+        'english_test_writing' => 'decimal:2',
+        'english_test_speaking' => 'decimal:2',
     ];
 
     /** Portal account (User row with role='lead'), if one exists. */
@@ -383,6 +425,7 @@ class Lead extends Model
             }
         }
         $legacy = $this->attributes['age'] ?? null;
+
         return $legacy !== null ? (int) $legacy : null;
     }
 
@@ -420,6 +463,7 @@ class Lead extends Model
         }
         try {
             $expiry = \Illuminate\Support\Carbon::parse($this->attributes['passport_expiry']);
+
             return $expiry->isFuture()
                 && $expiry->diffInDays(\Illuminate\Support\Carbon::now()) <= $days;
         } catch (\Throwable $e) {
@@ -492,6 +536,18 @@ class Lead extends Model
         return $this->hasMany(LeadDocument::class);
     }
 
+    /**
+     * Managed agreements for this lead (Build 11.D Phase 2). Distinct from
+     * documents — agreements have their own lifecycle (draft → sent → signed)
+     * and the signing audit trail. The pre-existing AgreementGenerator
+     * service writes generated PDFs as LeadDocument rows; that channel
+     * still works and is unrelated.
+     */
+    public function agreements()
+    {
+        return $this->hasMany(\App\Models\Agreement::class);
+    }
+
     /** AI analysis is written by a background job — don't log it as a user edit. */
     public function activityIgnoredAttributes(): array
     {
@@ -502,7 +558,7 @@ class Lead extends Model
     {
         return $this->hasMany(LeadEducationExp::class);
     }
-    
+
     public function studyPlans(): HasMany
     {
         return $this->hasMany(LeadStudyPlan::class);
@@ -517,7 +573,7 @@ class Lead extends Model
     {
         return $this->belongsTo(School::class);
     }
-    
+
     public function eventSession()
     {
         return $this->belongsTo(EventSession::class);

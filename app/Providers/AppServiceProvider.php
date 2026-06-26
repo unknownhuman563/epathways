@@ -27,6 +27,15 @@ class AppServiceProvider extends ServiceProvider
                 ? new \App\Services\Sms\TwilioSmsProvider($sid, config('services.twilio.token'), config('services.twilio.from'))
                 : new \App\Services\Sms\NullSmsProvider();
         });
+
+        // Build 11.D Phase 3 — E-signature provider. StubSignatureProvider
+        // is the in-CRM stub (typed name + canvas + IP + UA + timestamp).
+        // Build 11.E will rebind this to a real provider (HelloSign /
+        // DocuSign) without touching controllers or views.
+        $this->app->bind(
+            \App\Contracts\SignatureProvider::class,
+            \App\Services\Immigration\StubSignatureProvider::class,
+        );
     }
 
     /**

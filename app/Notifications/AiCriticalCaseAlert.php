@@ -42,7 +42,7 @@ class AiCriticalCaseAlert extends Notification
             'case_reference'  => $this->case->inz_reference,
             'applicant_name'  => $name,
             'recommendations' => $this->analysis->recommendations ?? [],
-            'link'            => "/portal/immigration/leads/{$this->case->id}",
+            'link'            => "/portal/immigration/cases/{$this->case->id}/profile",
         ];
     }
 }
