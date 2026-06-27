@@ -8,15 +8,20 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class MessageLog extends Model
 {
     public const STATUS_QUEUED = 'queued';
-    public const STATUS_SENT   = 'sent';
+
+    public const STATUS_SENT = 'sent';
+
     public const STATUS_FAILED = 'failed';
+
     public const STATUS_BOUNCED = 'bounced';
 
     public const CHANNEL_EMAIL = 'email';
-    public const CHANNEL_SMS   = 'sms';
+
+    public const CHANNEL_SMS = 'sms';
 
     protected $fillable = [
         'template_key',
+        'campaign_id',
         'channel',
         'recipient_type',
         'recipient_id',
@@ -32,7 +37,7 @@ class MessageLog extends Model
     ];
 
     protected $casts = [
-        'sent_at'   => 'datetime',
+        'sent_at' => 'datetime',
         'failed_at' => 'datetime',
     ];
 

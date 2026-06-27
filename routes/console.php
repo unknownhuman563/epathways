@@ -16,3 +16,9 @@ Schedule::call(fn () => (new NewsFeedService())->refresh())
     ->hourly()
     ->name('news-feed-refresh')
     ->withoutOverlapping();
+
+// Fire any bulk-email campaign whose scheduled time has arrived.
+Schedule::command('campaigns:dispatch-due')
+    ->everyMinute()
+    ->name('dispatch-due-campaigns')
+    ->withoutOverlapping();

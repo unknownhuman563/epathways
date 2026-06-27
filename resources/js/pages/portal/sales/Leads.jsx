@@ -894,6 +894,33 @@ function ImportLeadsButton() {
 function RowMenu({ lead, open, onToggle, onClose, onRequestPortal, isSaving, portalBase = "/portal/sales", canRequestInvite = true }) {
     const menuRef = useRef(null);
     const triggerRef = useRef(null);
+    const [menuStyle, setMenuStyle] = useState(null);
+
+    // Position the menu as a fixed-position portal anchored to the trigger so
+    // it escapes the table's overflow-x-auto scroll container (which would
+    // otherwise clip it). Flip above the row when there's no room below.
+    useEffect(() => {
+        if (!open) { setMenuStyle(null); return; }
+        const place = () => {
+            const r = triggerRef.current?.getBoundingClientRect();
+            if (!r) return;
+            const left = Math.max(8, Math.min(r.right - 260, window.innerWidth - 268));
+            const spaceBelow = window.innerHeight - r.bottom;
+            setMenuStyle(spaceBelow < 260 && r.top > 260
+                ? { left, bottom: window.innerHeight - r.top + 4 }
+                : { left, top: r.bottom + 4 });
+        };
+        place();
+        // Close on scroll/resize rather than chase the trigger — keeps the menu
+        // from ever floating away from its row.
+        const close = () => onClose();
+        window.addEventListener("resize", close);
+        window.addEventListener("scroll", close, true);
+        return () => {
+            window.removeEventListener("resize", close);
+            window.removeEventListener("scroll", close, true);
+        };
+    }, [open, onClose]);
 
     useEffect(() => {
         if (!open) return;
@@ -929,11 +956,12 @@ function RowMenu({ lead, open, onToggle, onClose, onRequestPortal, isSaving, por
                 <MoreHorizontal size={12} />
             </button>
 
-            {open && (
+            {open && menuStyle && createPortal(
                 <div
                     ref={menuRef}
                     role="menu"
-                    className="absolute z-30 top-full right-0 mt-1 bg-white rounded-xl shadow-2xl border border-gray-100 py-2 w-[260px] text-left"
+                    style={{ position: "fixed", ...menuStyle }}
+                    className="z-[100] bg-white rounded-xl shadow-2xl border border-gray-100 py-2 w-[260px] text-left max-h-[70vh] overflow-y-auto"
                 >
                     {/* Section: Lead actions */}
                     <p className="px-3 pb-1 text-[9px] font-bold text-gray-400 uppercase tracking-[0.2em]">Lead</p>
@@ -1037,7 +1065,8 @@ function RowMenu({ lead, open, onToggle, onClose, onRequestPortal, isSaving, por
                         </p>
                     )}
                     </>)}
-                </div>
+                </div>,
+                document.body,
             )}
         </div>
     );

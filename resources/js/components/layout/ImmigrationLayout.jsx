@@ -3,7 +3,7 @@ import { usePage } from "@inertiajs/react";
 import {
     LayoutDashboard, ClipboardCheck, UserSquare2, Globe, FolderOpen,
     Calendar, FileBadge, CalendarDays, FileText, ListChecks, LineChart,
-    User, Bell, CheckSquare, Ticket,
+    User, Bell, CheckSquare, Ticket, Mail,
 } from "lucide-react";
 
 export default function ImmigrationLayout({ children }) {
@@ -26,6 +26,7 @@ export default function ImmigrationLayout({ children }) {
         { name: "Intakes",             href: "/portal/immigration/intakes",             icon: <CalendarDays size={20} /> },
         { name: "INZ Forms",           href: "/portal/immigration/inz-forms",           icon: <FileText size={20} /> },
         { name: "Checklist Templates", href: "/portal/immigration/checklist-templates", icon: <ListChecks size={20} /> },
+        { name: "Email Templates",     href: "/portal/immigration/email-templates",     icon: <Mail size={20} /> },
 
         { name: "Reports", href: "/portal/immigration/reports", icon: <LineChart size={20} /> },
 

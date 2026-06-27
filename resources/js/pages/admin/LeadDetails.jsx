@@ -10,9 +10,10 @@ import {
     User as UserIcon, ArrowRight, Sparkles, FolderOpen, Copy, Info, Undo2,
     Globe, Home, Wand2, Users as UsersIcon, Eye,
     Paperclip, FileImage, Film, Music,
-    Briefcase,
+    Briefcase, Send,
 } from 'lucide-react';
 import { CHECKLIST, STATUSES, STATUS_CHIP, STATUS_LABEL, SECTION_STATUSES, IMPORTANT_NOTES, renderFilename, currentSectionIndex } from '@/data/leadDocumentChecklist';
+import SendUpdateModal from '@/components/leads/SendUpdateModal';
 
 // Stage colour map — kept consistent with the leads list.
 const STAGE_STYLES = {
@@ -56,6 +57,7 @@ export default function LeadDetails({ lead: backendLead, activity = [], stageTim
     })();
 
     const [activeTab, setActiveTab] = useState(initialTab);
+    const [showSendUpdate, setShowSendUpdate] = useState(false);
     const [stageOpen, setStageOpen] = useState(false);
     const [savingStage, setSavingStage] = useState(false);
     const stageRef = useRef(null);
@@ -383,75 +385,107 @@ export default function LeadDetails({ lead: backendLead, activity = [], stageTim
                     </div>
                 </div>
 
-                <div className="flex items-center gap-3 flex-wrap">
-                    {/* Multi-service conversion — three independent flags
-                        the lead can carry, collapsed into a single
-                        "Move to" menu. Active flags show as badges in
-                        the menu with an admin-only undo. */}
-                    <ConvertMenu
-                        lead={backendLead}
-                        canRevert={currentUser?.is_admin}
-                    />
+                {/* Action toolbar — grouped by purpose (Manage · Tracker ·
+                    Email · Export) so related actions sit together rather
+                    than in one undifferentiated row. */}
+                <div className="flex items-end gap-3 flex-wrap">
+                    {/* Manage — pipeline conversion + edit. */}
+                    <div className="flex flex-col gap-1">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 px-1">Manage</span>
+                        <div className="flex items-center gap-2">
+                            <ConvertMenu lead={backendLead} canRevert={currentUser?.is_admin} />
+                            <button className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 text-sm font-semibold transition-colors shadow-sm">
+                                <Edit size={16} /> Edit Lead
+                            </button>
+                        </div>
+                    </div>
 
-
-                    {/* Copy the public tracking link to the clipboard so
-                        the department can paste it straight into an email
-                        / WhatsApp / SMS. The lead opens that link and
-                        sees their information + documents + timeline,
-                        and can edit their information there. */}
-                    {lead.lastSeenAt && (
-                        <span
-                            title={`Lead last opened their tracker on ${new Date(lead.lastSeenAt).toLocaleString()}`}
-                            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-50 text-emerald-700 text-xs font-semibold"
-                        >
-                            <Eye size={14} /> Tracker seen {new Date(lead.lastSeenAt).toLocaleDateString()}
-                        </span>
-                    )}
-
+                    {/* Tracker — copy / email the public /track link. The lead
+                        opens it to see their info, documents and timeline. */}
                     {lead.trackingCode && (
-                        <button
-                            type="button"
-                            title="Copy public tracking link + code for this lead"
-                            onClick={() => {
-                                const url = `${window.location.origin}/track/${lead.trackingCode}`;
-                                // Multi-line payload so staff can paste
-                                // straight into WhatsApp / email and the
-                                // client sees both the URL and the code
-                                // they should type into the search box.
-                                const payload =
-                                    `Link: ${url}\n` +
-                                    `Application Tracking Code: ${lead.trackingCode}`;
-                                navigator.clipboard?.writeText(payload).then(
-                                    () => toast.success('Tracking link + code copied', { description: payload }),
-                                    () => toast.error('Could not copy — your browser blocked clipboard access')
-                                );
-                            }}
-                            className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 text-sm font-semibold transition-colors shadow-sm"
-                        >
-                            <Copy size={16} /> Copy Track Link
-                        </button>
+                        <>
+                            <div className="hidden sm:block w-px h-9 bg-gray-200 self-end mb-1" />
+                            <div className="flex flex-col gap-1">
+                                <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 px-1">Tracker</span>
+                                <div className="flex items-center gap-2">
+                                    {lead.lastSeenAt && (
+                                        <span
+                                            title={`Lead last opened their tracker on ${new Date(lead.lastSeenAt).toLocaleString()}`}
+                                            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-50 text-emerald-700 text-xs font-semibold"
+                                        >
+                                            <Eye size={14} /> Seen {new Date(lead.lastSeenAt).toLocaleDateString()}
+                                        </span>
+                                    )}
+                                    <button
+                                        type="button"
+                                        title="Copy public tracking link + code for this lead"
+                                        onClick={() => {
+                                            const url = `${window.location.origin}/track/${lead.trackingCode}`;
+                                            // Multi-line payload so staff can paste straight
+                                            // into WhatsApp / email and the client sees both
+                                            // the URL and the code for the search box.
+                                            const payload =
+                                                `Link: ${url}\n` +
+                                                `Application Tracking Code: ${lead.trackingCode}`;
+                                            navigator.clipboard?.writeText(payload).then(
+                                                () => toast.success('Tracking link + code copied', { description: payload }),
+                                                () => toast.error('Could not copy — your browser blocked clipboard access')
+                                            );
+                                        }}
+                                        className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 text-sm font-semibold transition-colors shadow-sm"
+                                    >
+                                        <Copy size={16} /> Copy Track Link
+                                    </button>
+                                    <button
+                                        type="button"
+                                        disabled={!backendLead.email}
+                                        title={backendLead.email ? 'Email this lead their tracker link' : 'Lead has no email on file'}
+                                        onClick={() => router.post(`/admin/leads/${backendLead.id}/send-tracker-link`, {}, { preserveScroll: true, preserveState: true })}
+                                        className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 text-sm font-semibold transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                        <Mail size={16} /> Send Tracker Link
+                                    </button>
+                                </div>
+                            </div>
+                        </>
                     )}
 
-                    {lead.trackingCode && (
-                        <button
-                            type="button"
-                            disabled={!backendLead.email}
-                            title={backendLead.email ? 'Email this lead their tracker link' : 'Lead has no email on file'}
-                            onClick={() => router.post(`/admin/leads/${backendLead.id}/send-tracker-link`, {}, { preserveScroll: true, preserveState: true })}
-                            className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 text-sm font-semibold transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                            <Mail size={16} /> Send Tracker Link
-                        </button>
-                    )}
+                    {/* Email — send the lead an application status update. */}
+                    <div className="hidden sm:block w-px h-9 bg-gray-200 self-end mb-1" />
+                    <div className="flex flex-col gap-1">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 px-1">Email</span>
+                        <div className="flex items-center gap-2">
+                            <button
+                                type="button"
+                                disabled={!backendLead.email}
+                                title={backendLead.email ? 'Email this lead an application status update' : 'Lead has no email on file'}
+                                onClick={() => setShowSendUpdate(true)}
+                                className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 text-sm font-semibold transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                <Send size={16} /> Send Update
+                            </button>
+                        </div>
+                    </div>
 
-                    <button className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 text-sm font-semibold transition-colors shadow-sm">
-                        <Download size={16} /> Export PDF
-                    </button>
-                    <button className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 text-sm font-semibold transition-colors shadow-sm">
-                        <Edit size={16} /> Edit Lead
-                    </button>
+                    {/* Export. */}
+                    <div className="hidden sm:block w-px h-9 bg-gray-200 self-end mb-1" />
+                    <div className="flex flex-col gap-1">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 px-1">Export</span>
+                        <div className="flex items-center gap-2">
+                            <button className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 text-sm font-semibold transition-colors shadow-sm">
+                                <Download size={16} /> Export PDF
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
+
+            <SendUpdateModal
+                leadId={backendLead.id}
+                leadEmail={backendLead.email}
+                open={showSendUpdate}
+                onClose={() => setShowSendUpdate(false)}
+            />
 
             {/* Tab strip */}
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">

@@ -1,5 +1,5 @@
 import TemplateEditorView from "@/components/templates/TemplateEditorView";
 
-export default function MessageTemplateEditor(props) {
+export default function EmailTemplateEditor(props) {
     return <TemplateEditorView {...props} />;
 }
