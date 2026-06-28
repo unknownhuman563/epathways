@@ -81,6 +81,12 @@ Route::middleware(['auth', 'portal:admin,immigration'])->post('/admin/immigratio
 Route::middleware(['auth', 'portal:admin,education'])->post('/admin/education/user-reviews/{id}', [UserReviewController::class, 'adminUpdate'])
     ->name('admin.education.user-reviews.update');
 
+// Public inbound webhook from Zernio (new messages / comments). No auth — it's
+// verified by Zernio's HMAC-SHA256 signature (X-Zernio-Signature) against
+// ZERNIO_WEBHOOK_SECRET, and CSRF-exempt (see bootstrap/app.php). Bumps the
+// inbox signal so open browsers refresh.
+Route::post('/webhook/zernio', [App\Http\Controllers\AiAdsWebhookController::class, 'zernioWebhook'])->name('webhook.zernio');
+
 Route::get('/accommodation', [PublicAccommodationController::class, 'index']);
 // Expression of Interest — must be declared BEFORE /accommodation/{id} so the
 // literal path isn't captured as an {id}.
@@ -353,6 +359,24 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/list-accounts', [App\Http\Controllers\AiAdsWebhookController::class, 'listAccounts'])->name('list-accounts');
             Route::post('/start-oauth', [App\Http\Controllers\AiAdsWebhookController::class, 'startOauth'])->name('start-oauth');
             Route::post('/disconnect', [App\Http\Controllers\AiAdsWebhookController::class, 'disconnectAccount'])->name('disconnect');
+
+            // Inbox (Phase 3) — conversations, messages, comments.
+            Route::get('/inbox-conversations', [App\Http\Controllers\AiAdsWebhookController::class, 'inboxConversations'])->name('inbox-conversations');
+            Route::get('/inbox-messages', [App\Http\Controllers\AiAdsWebhookController::class, 'inboxMessages'])->name('inbox-messages');
+            Route::post('/inbox-send', [App\Http\Controllers\AiAdsWebhookController::class, 'inboxSend'])->name('inbox-send');
+            Route::post('/inbox-read', [App\Http\Controllers\AiAdsWebhookController::class, 'inboxRead'])->name('inbox-read');
+            Route::get('/inbox-signal', [App\Http\Controllers\AiAdsWebhookController::class, 'inboxSignal'])->name('inbox-signal');
+            Route::get('/inbox-comments', [App\Http\Controllers\AiAdsWebhookController::class, 'inboxComments'])->name('inbox-comments');
+            Route::post('/inbox-reply-comment', [App\Http\Controllers\AiAdsWebhookController::class, 'inboxReplyComment'])->name('inbox-reply-comment');
+
+            // Ads (Phase 3) — list, ad accounts, boost, analytics.
+            Route::get('/ads-list', [App\Http\Controllers\AiAdsWebhookController::class, 'adsList'])->name('ads-list');
+            Route::get('/ad-accounts', [App\Http\Controllers\AiAdsWebhookController::class, 'adAccounts'])->name('ad-accounts');
+            Route::post('/ads-boost', [App\Http\Controllers\AiAdsWebhookController::class, 'adsBoost'])->name('ads-boost');
+            Route::get('/ad-analytics', [App\Http\Controllers\AiAdsWebhookController::class, 'adAnalytics'])->name('ad-analytics');
+
+            // Performance (Phase 2b) — post analytics joined with lead counts.
+            Route::get('/analytics', [App\Http\Controllers\AiAdsWebhookController::class, 'analytics'])->name('analytics');
         });
 
         // Lead Portal invitations — admin approval / rejection / revocation.
