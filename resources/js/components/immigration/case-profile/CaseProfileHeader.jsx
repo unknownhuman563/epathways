@@ -1,8 +1,9 @@
-import { Link } from "@inertiajs/react";
+import { Link, router } from "@inertiajs/react";
+import { toast } from "sonner";
 import CaseHealthBadge from "@/components/ai/CaseHealthBadge";
 import {
     ArrowLeft, Globe, FileSignature, MessageSquarePlus, FilePlus2,
-    BadgeCheck, Briefcase,
+    BadgeCheck, Briefcase, Archive,
 } from "lucide-react";
 
 const fmtDate = (iso) =>
@@ -17,6 +18,21 @@ export default function CaseProfileHeader({ lead = {}, intake = null }) {
     const stage = lead.immigration_stage || lead.stage || "Stage not set";
     const conversionOrigin = lead.is_assessment_converted ? "Assessment-converted" : "Sales-converted";
 
+    // Soft-delete (archive) — the case row stays in the database, notes
+    // and tasks survive, and it can be restored from the archive view.
+    // Confirm dialog gates the destructive action; on success Inertia
+    // follows the controller's redirect back to /admin/leads (Cases list
+    // re-renders without this row).
+    const archive = () => {
+        if (! lead?.id) return;
+        if (! window.confirm(`Archive ${fullName}?\n\nThe case will be hidden from the Cases list. Notes, tasks, documents, and audit history are preserved and the case can be restored later.`)) return;
+        router.delete(`/admin/leads/${lead.id}`, {
+            preserveScroll: false,
+            onSuccess: () => toast.success(`${fullName} archived`),
+            onError: () => toast.error('Could not archive — please try again.'),
+        });
+    };
+
     return (
         <div className="space-y-3">
             <div className="flex items-center justify-between gap-3">
@@ -26,6 +42,14 @@ export default function CaseProfileHeader({ lead = {}, intake = null }) {
                 >
                     <ArrowLeft size={14} /> Back to cases
                 </Link>
+                <button
+                    type="button"
+                    onClick={archive}
+                    title="Archive (soft-delete) this case"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold border border-gray-200 bg-white text-gray-600 hover:text-red-700 hover:bg-red-50 hover:border-red-200 transition-colors"
+                >
+                    <Archive size={12} /> Archive
+                </button>
             </div>
 
             <section className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">

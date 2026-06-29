@@ -6,6 +6,7 @@ import {
     Globe, ChevronRight, ChevronDown, AlertTriangle, Search,
     FileText, ExternalLink, Users, Calendar, ArrowUpDown,
     ArrowUp, ArrowDown, Plus, X, TrendingUp, Copy, MoreHorizontal,
+    Archive,
 } from "lucide-react";
 import PortalPageHeader from "@/components/portal/PortalPageHeader";
 
@@ -703,6 +704,13 @@ function CaseRow({ c, stages, isExpanded, onExpand, stageMenuOpen, onStageMenuTo
                                 icon: ExternalLink,
                                 href: `/portal/immigration/cases/${c.id}/profile`,
                             },
+                            {
+                                key: 'archive',
+                                label: 'Archive case',
+                                icon: Archive,
+                                danger: true,
+                                onClick: () => archiveCase(c.id, c.name),
+                            },
                         ].filter(Boolean)}
                     />
                 </td>
@@ -1001,27 +1009,38 @@ function RowMenu({ items = [] }) {
                     }}
                     className="z-[60] bg-white rounded-xl shadow-2xl border border-gray-100 py-1.5"
                 >
-                    {items.map((it) => {
+                    {items.map((it, idx) => {
                         const Icon = it.icon;
+                        // Destructive items (Archive, Delete) sit at the
+                        // bottom of the menu separated by a divider.
+                        const showDivider = it.danger && items[idx - 1] && ! items[idx - 1].danger;
+                        const itemTone = it.danger
+                            ? 'text-red-700 hover:bg-red-50'
+                            : 'text-gray-700 hover:bg-gray-50';
+                        const iconTone = it.danger ? 'text-red-400' : 'text-gray-400';
                         const inner = (
-                            <span className="flex items-center gap-2.5 px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 cursor-pointer">
-                                {Icon && <Icon size={13} className="text-gray-400" />}
+                            <span className={`flex items-center gap-2.5 px-3 py-2 text-xs cursor-pointer ${itemTone}`}>
+                                {Icon && <Icon size={13} className={iconTone} />}
                                 {it.label}
                             </span>
                         );
-                        return it.href ? (
-                            <Link key={it.key} href={it.href} onClick={() => setOpen(false)} className="block">
-                                {inner}
-                            </Link>
-                        ) : (
-                            <button
-                                key={it.key}
-                                type="button"
-                                onClick={() => handleClick(it)}
-                                className="w-full text-left block"
-                            >
-                                {inner}
-                            </button>
+                        return (
+                            <React.Fragment key={it.key}>
+                                {showDivider && <div className="my-1 border-t border-gray-100" />}
+                                {it.href ? (
+                                    <Link href={it.href} onClick={() => setOpen(false)} className="block">
+                                        {inner}
+                                    </Link>
+                                ) : (
+                                    <button
+                                        type="button"
+                                        onClick={() => handleClick(it)}
+                                        className="w-full text-left block"
+                                    >
+                                        {inner}
+                                    </button>
+                                )}
+                            </React.Fragment>
                         );
                     })}
                 </div>,
@@ -1037,9 +1056,22 @@ function RowMenu({ items = [] }) {
 function copyTrackingLink(code) {
     if (!code) return;
     const url = `${window.location.origin}/track/${code}`;
-    const payload = `Link: ${url}\nApplication Tracking Code: ${code}`;
-    navigator.clipboard?.writeText(payload).then(
-        () => toast.success('Tracking link + code copied', { description: payload }),
+    navigator.clipboard?.writeText(url).then(
+        () => toast.success('Tracking link copied', { description: url }),
         () => toast.error('Could not copy — your browser blocked clipboard access')
     );
+}
+
+// Soft-delete (archive) a case. The Lead row is soft-deleted via the
+// admin/leads/{id} DELETE endpoint; notes/tasks/documents survive and
+// the case can be restored from the archive view. A confirm dialog
+// gates the destructive action — there's no undo button in the table.
+function archiveCase(id, name) {
+    const label = (name || 'this case').trim();
+    if (! window.confirm(`Archive ${label}?\n\nThe case will be hidden from the Cases list. Notes, tasks, and documents are preserved and the case can be restored later.`)) return;
+    router.delete(`/admin/leads/${id}`, {
+        preserveScroll: true,
+        onSuccess: () => toast.success(`${label} archived`),
+        onError: () => toast.error('Could not archive — please try again.'),
+    });
 }
