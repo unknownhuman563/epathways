@@ -21,6 +21,15 @@ const COMMON_COUNTRIES = [
     ['CN', 'China'], ['ID', 'Indonesia'], ['TH', 'Thailand'], ['MM', 'Myanmar'],
     ['FJ', 'Fiji'], ['MY', 'Malaysia'], ['AU', 'Australia'], ['US', 'United States'], ['GB', 'United Kingdom'],
 ];
+// Group platforms so a Meta ad account matches Facebook + Instagram posts, etc.
+const PLATFORM_GROUP = {
+    facebook: 'meta', instagram: 'meta', metaads: 'meta',
+    tiktok: 'tiktok', tiktokads: 'tiktok',
+    linkedin: 'linkedin', linkedinads: 'linkedin',
+    google: 'google', googleads: 'google',
+    pinterest: 'pinterest', twitter: 'x', xads: 'x',
+};
+const groupOf = (p) => { const k = String(p || '').toLowerCase(); return PLATFORM_GROUP[k] || k; };
 
 function Metric({ label, value }) {
     return (
@@ -96,6 +105,9 @@ function BoostModal({ onClose, onBoosted }) {
     const acct = (adAccounts || []).find((a) => a.id === form.adAccountId) || null;
     const accountId = acct?.accountId || '';
     const acctPlatform = () => acct?.platform || form.platform;
+    // Only show posts in the chosen ad account's platform family (a Meta ad
+    // account boosts Facebook/Instagram posts, etc.).
+    const visiblePosts = (posts || []).filter((p) => acct && groupOf(p.platform) === groupOf(acct.platform));
 
     useEffect(() => {
         social.adAccounts().then((r) => setAdAccounts(r?.adAccounts || []), () => setAdAccounts([]));
@@ -233,23 +245,26 @@ function BoostModal({ onClose, onBoosted }) {
                 ) : (
                     <div className="space-y-3">
                         <label className="block"><span className={lbl}>Campaign name</span><input className={inp} value={form.name} onChange={(e) => set('name', e.target.value)} /></label>
-                        <label className="block"><span className={lbl}>Post to boost</span>
+                        <label className="block"><span className={lbl}>Ad account</span>
+                            <select className={inp} value={form.adAccountId} onChange={(e) => { set('adAccountId', e.target.value); set('postId', ''); }}>
+                                <option value="">Select…</option>
+                                {adAccounts.map((a) => <option key={a.id} value={a.id}>{a.name} ({a.platform}{a.currency ? `, ${a.currency}` : ''})</option>)}
+                            </select>
+                        </label>
+                        <label className="block">
+                            <span className={lbl}>Post to boost {acct ? <span className="text-gray-400 font-normal">· {acct.platform} posts</span> : null}</span>
                             {posts === null ? (
                                 <div className={inp + ' text-gray-400'}>Loading published posts…</div>
-                            ) : posts.length > 0 ? (
+                            ) : !acct ? (
+                                <div className={inp + ' text-gray-400'}>Pick an ad account first</div>
+                            ) : visiblePosts.length > 0 ? (
                                 <select className={inp} value={form.postId} onChange={(e) => selectPost(e.target.value)}>
                                     <option value="">Select a published post…</option>
-                                    {posts.map((p) => <option key={p.id} value={p.id}>{(p.platform ? p.platform + ' · ' : '') + p.preview}</option>)}
+                                    {visiblePosts.map((p) => <option key={p.id} value={p.id}>{(p.account ? p.account + ' · ' : '') + p.preview}</option>)}
                                 </select>
                             ) : (
-                                <input className={inp} value={form.postId} onChange={(e) => set('postId', e.target.value)} placeholder="No published posts found — paste a post ID" />
+                                <input className={inp} value={form.postId} onChange={(e) => set('postId', e.target.value)} placeholder={`No published ${acct.platform} posts — paste a post ID`} />
                             )}
-                        </label>
-                        <label className="block"><span className={lbl}>Ad account</span>
-                            <select className={inp} value={form.adAccountId} onChange={(e) => set('adAccountId', e.target.value)}>
-                                <option value="">Select…</option>
-                                {adAccounts.map((a) => <option key={a.id} value={a.id}>{a.name} ({a.platform})</option>)}
-                            </select>
                         </label>
                         <div className="grid grid-cols-2 gap-3">
                             <label className="block"><span className={lbl}>Goal</span>
@@ -262,13 +277,14 @@ function BoostModal({ onClose, onBoosted }) {
                                     {BOOST_PLATFORMS.map((p) => <option key={p} value={p}>{p}</option>)}
                                 </select>
                             </label>
-                            <label className="block"><span className={lbl}>Budget</span><input type="number" min="1" className={inp} value={form.budgetAmount} onChange={(e) => set('budgetAmount', e.target.value)} /></label>
+                            <label className="block"><span className={lbl}>Budget {acct?.currency ? <span className="text-gray-400 font-normal">({acct.currency})</span> : null}</span><input type="number" min="1" className={inp} value={form.budgetAmount} onChange={(e) => set('budgetAmount', e.target.value)} /></label>
                             <label className="block"><span className={lbl}>Budget type</span>
                                 <select className={inp} value={form.budgetType} onChange={(e) => set('budgetType', e.target.value)}>
                                     <option value="daily">daily</option><option value="lifetime">lifetime</option>
                                 </select>
                             </label>
                         </div>
+                        {acct?.currency && <p className="text-[11px] text-gray-400 leading-snug -mt-1">Meta enforces a minimum daily budget in {acct.currency}. If the boost says the budget is too low, raise it.</p>}
 
                         {/* ── Audience targeting ─────────────────────────────── */}
                         <div className="rounded-xl border border-gray-200 p-3 space-y-3">
