@@ -466,6 +466,16 @@ class AiAdsWebhookController extends Controller
 
     // ── Ads (Phase 3) ───────────────────────────────────────────────────
 
+    /** GET /webhook/social/published-posts — published posts available to boost. */
+    public function publishedPosts(Request $request)
+    {
+        if ($z = $this->zernio()) {
+            return $this->zernioJson(fn () => $z->publishedPosts());
+        }
+
+        return response()->json(['posts' => []]);
+    }
+
     /** GET /webhook/social/ads-list */
     public function adsList(Request $request)
     {

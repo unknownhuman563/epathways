@@ -151,4 +151,19 @@ class AdTargetingTest extends TestCase
             ])
             ->assertStatus(422);
     }
+
+    public function test_published_posts_listed_for_picker(): void
+    {
+        $this->configureZernio();
+        Http::fake(['*/posts*' => Http::response(['data' => [
+            ['id' => 'post1', 'content' => 'Study in NZ — free assessment!', 'platforms' => [['platform' => 'facebook']], 'publishedAt' => '2026-06-20T00:00:00Z'],
+        ]])]);
+
+        $this->actingAs($this->admin())
+            ->getJson('/webhook/social/published-posts')
+            ->assertOk()
+            ->assertJsonPath('posts.0.id', 'post1')
+            ->assertJsonPath('posts.0.platform', 'facebook')
+            ->assertJsonPath('posts.0.content', 'Study in NZ — free assessment!');
+    }
 }

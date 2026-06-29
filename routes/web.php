@@ -413,6 +413,7 @@ Route::middleware(['auth'])->group(function () {
             Route::post('/inbox-reply-comment', [App\Http\Controllers\AiAdsWebhookController::class, 'inboxReplyComment'])->name('inbox-reply-comment');
 
             // Ads (Phase 3) — list, ad accounts, boost, analytics.
+            Route::get('/published-posts', [App\Http\Controllers\AiAdsWebhookController::class, 'publishedPosts'])->name('published-posts');
             Route::get('/ads-list', [App\Http\Controllers\AiAdsWebhookController::class, 'adsList'])->name('ads-list');
             Route::get('/ad-accounts', [App\Http\Controllers\AiAdsWebhookController::class, 'adAccounts'])->name('ad-accounts');
             Route::post('/ads-boost', [App\Http\Controllers\AiAdsWebhookController::class, 'adsBoost'])->name('ads-boost');

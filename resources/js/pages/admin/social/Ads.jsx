@@ -88,6 +88,7 @@ function BoostModal({ onClose, onBoosted }) {
     const [iResults, setIResults] = useState([]);
     const [iSearching, setISearching] = useState(false);
     const [presets, setPresets] = useState([]);
+    const [posts, setPosts] = useState(null);
 
     const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
     // Ad accounts hang off a social account: the selected ad account carries the
@@ -98,7 +99,20 @@ function BoostModal({ onClose, onBoosted }) {
 
     useEffect(() => {
         social.adAccounts().then((r) => setAdAccounts(r?.adAccounts || []), () => setAdAccounts([]));
+        social.publishedPosts().then((r) => setPosts(r?.posts || []), () => setPosts([]));
     }, []);
+
+    // Pick a published post to boost: set its id, infer the platform, and seed
+    // the AI-targeting box with the post's own copy (unless already typed).
+    const selectPost = (id) => {
+        const p = posts?.find((x) => x.id === id);
+        setForm((f) => ({
+            ...f,
+            postId: id,
+            platform: p && BOOST_PLATFORMS.includes(p.platform) ? p.platform : f.platform,
+            content: f.content?.trim() ? f.content : (p?.content || ''),
+        }));
+    };
 
     // Saved-targeting presets for the chosen ad account.
     useEffect(() => {
@@ -219,7 +233,18 @@ function BoostModal({ onClose, onBoosted }) {
                 ) : (
                     <div className="space-y-3">
                         <label className="block"><span className={lbl}>Campaign name</span><input className={inp} value={form.name} onChange={(e) => set('name', e.target.value)} /></label>
-                        <label className="block"><span className={lbl}>Published post ID (Zernio)</span><input className={inp} value={form.postId} onChange={(e) => set('postId', e.target.value)} placeholder="from a published post" /></label>
+                        <label className="block"><span className={lbl}>Post to boost</span>
+                            {posts === null ? (
+                                <div className={inp + ' text-gray-400'}>Loading published posts…</div>
+                            ) : posts.length > 0 ? (
+                                <select className={inp} value={form.postId} onChange={(e) => selectPost(e.target.value)}>
+                                    <option value="">Select a published post…</option>
+                                    {posts.map((p) => <option key={p.id} value={p.id}>{(p.platform ? p.platform + ' · ' : '') + p.preview}</option>)}
+                                </select>
+                            ) : (
+                                <input className={inp} value={form.postId} onChange={(e) => set('postId', e.target.value)} placeholder="No published posts found — paste a post ID" />
+                            )}
+                        </label>
                         <label className="block"><span className={lbl}>Ad account</span>
                             <select className={inp} value={form.adAccountId} onChange={(e) => set('adAccountId', e.target.value)}>
                                 <option value="">Select…</option>

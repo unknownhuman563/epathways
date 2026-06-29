@@ -88,6 +88,7 @@ export const social = {
     replyComment:    (postId, accountId, text)    => request('POST', 'inbox-reply-comment', { body: { postId, accountId, text } }),
 
     // Ads ──────────────────────────────────────────────────────────────────
+    publishedPosts:  ()                           => request('GET',  'published-posts'),
     adsList:         ()                           => request('GET',  'ads-list'),
     adAccounts:      ()                           => request('GET',  'ad-accounts'),
     boostPost:       (payload)                    => request('POST', 'ads-boost',       { body: payload }),

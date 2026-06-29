@@ -101,6 +101,29 @@ class ZernioService
         ], is_array($rows) ? $rows : []));
     }
 
+    /**
+     * GET /posts?status=published — published posts available to boost. Returns
+     * the full content (for AI targeting) plus a short preview and the post's
+     * platform, so the boost picker can fill the form on selection.
+     */
+    public function publishedPosts(): array
+    {
+        $res = $this->client()->get('/posts', ['status' => 'published', 'limit' => 50])->throw();
+        $rows = $res->json('data') ?? $res->json('posts') ?? $res->json() ?? [];
+
+        return ['posts' => array_values(array_map(function ($p) {
+            $content = (string) ($p['content'] ?? '');
+
+            return [
+                'id' => (string) ($p['_id'] ?? $p['id'] ?? ''),
+                'platform' => $p['platforms'][0]['platform'] ?? ($p['platform'] ?? null),
+                'content' => $content,
+                'preview' => Str::limit($content, 70) ?: '(no caption)',
+                'published_at' => $p['publishedAt'] ?? $p['publishedFor'] ?? $p['createdAt'] ?? null,
+            ];
+        }, is_array($rows) ? $rows : []))];
+    }
+
     /** PUT /posts/{id} — used to reschedule. */
     public function updatePost(string $postId, array $body): array
     {
