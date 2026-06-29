@@ -83,9 +83,9 @@ function ConversationsPane() {
         }, () => {});
     };
 
-    // Event-driven refresh: poll a cheap local "signal" every 1.5s; when the
+    // Event-driven refresh: poll a cheap local "signal" every 0.8s; when the
     // Zernio webhook has bumped it, pull the latest list + open thread — so new
-    // messages appear within ~1.5s of arriving, not on a fixed timer. A slow
+    // messages appear within ~0.8s of arriving, not on a fixed timer. A slow
     // fallback keeps things fresh even if the webhook isn't configured yet.
     useEffect(() => {
         let lastAt = null;
@@ -95,7 +95,7 @@ function ConversationsPane() {
                 if (lastAt === null) { lastAt = at; return; }
                 if (at > lastAt) { lastAt = at; refreshConversations(); refreshMessages(); }
             }, () => {});
-        }, 1500);
+        }, 800);
         const slow = setInterval(() => { refreshConversations(); refreshMessages(); }, 30000);
         return () => { clearInterval(fast); clearInterval(slow); };
     }, []);
