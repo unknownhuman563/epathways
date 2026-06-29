@@ -10,10 +10,14 @@ import {
     User as UserIcon, ArrowRight, Sparkles, FolderOpen, Copy, Info, Undo2, Send,
     Globe, Home, Wand2, Users as UsersIcon, Eye,
     Paperclip, FileImage, Film, Music,
-    Briefcase, Send,
+    Briefcase,
 } from 'lucide-react';
 import { CHECKLIST, STATUSES, STATUS_CHIP, STATUS_LABEL, SECTION_STATUSES, IMPORTANT_NOTES, renderFilename, currentSectionIndex } from '@/data/leadDocumentChecklist';
 import SendUpdateModal from '@/components/leads/SendUpdateModal';
+import LeadHealthBadge from '@/components/ai/LeadHealthBadge';
+import CaseHealthBadge from '@/components/ai/CaseHealthBadge';
+import CommunicationsPanel from '@/components/sales/CommunicationsPanel';
+import ComposeMessagePanel from '@/components/sales/ComposeMessagePanel';
 
 // Stage colour map — kept consistent with the leads list.
 const STAGE_STYLES = {
