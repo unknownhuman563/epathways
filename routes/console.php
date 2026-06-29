@@ -17,5 +17,8 @@ Schedule::call(fn () => (new NewsFeedService())->refresh())
     ->name('news-feed-refresh')
     ->withoutOverlapping();
 
-// Prune long-expired AI lead analyses so the cache table stays small.
-Schedule::command('ai:cleanup-expired')->daily();
+// Fire any bulk-email campaign whose scheduled time has arrived.
+Schedule::command('campaigns:dispatch-due')
+    ->everyMinute()
+    ->name('dispatch-due-campaigns')
+    ->withoutOverlapping();

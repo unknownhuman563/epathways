@@ -77,4 +77,22 @@ export const social = {
     listAccounts:    ()                           => request('GET',  'list-accounts'),
     startOauth:      (platform)                   => request('POST', 'start-oauth',     { body: { platform } }),
     disconnectAccount:(accountId)                 => request('POST', 'disconnect',      { body: { accountId } }),
+
+    // Inbox ────────────────────────────────────────────────────────────────
+    inboxConversations: ()                        => request('GET',  'inbox-conversations'),
+    inboxMessages:   (conversationId, accountId)  => request('GET',  'inbox-messages',  { query: { conversationId, accountId } }),
+    inboxSend:       (conversationId, accountId, text) => request('POST', 'inbox-send',  { body: { conversationId, accountId, text } }),
+    inboxMarkRead:   (conversationId, accountId)  => request('POST', 'inbox-read',      { body: { conversationId, accountId } }),
+    inboxSignal:     ()                           => request('GET',  'inbox-signal'),
+    inboxComments:   ()                           => request('GET',  'inbox-comments'),
+    replyComment:    (postId, accountId, text)    => request('POST', 'inbox-reply-comment', { body: { postId, accountId, text } }),
+
+    // Ads ──────────────────────────────────────────────────────────────────
+    adsList:         ()                           => request('GET',  'ads-list'),
+    adAccounts:      ()                           => request('GET',  'ad-accounts'),
+    boostPost:       (payload)                    => request('POST', 'ads-boost',       { body: payload }),
+    adAnalytics:     (adId)                       => request('GET',  'ad-analytics',    { query: { adId } }),
+
+    // Performance ────────────────────────────────────────────────────────────
+    performance:     ({ fromDate, toDate } = {})  => request('GET',  'analytics',       { query: { fromDate, toDate } }),
 };

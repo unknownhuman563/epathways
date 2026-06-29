@@ -1,27 +1,292 @@
-import { Head } from "@inertiajs/react";
-import { Send } from "lucide-react";
-import PortalPageHeader from "@/components/portal/PortalPageHeader";
-import ComingSoonPanel from "@/components/portal/ComingSoonPanel";
+import { useMemo, useState } from "react";
+import { Head, router } from "@inertiajs/react";
+import { toast } from "sonner";
+import {
+    Send, Clock, History, Users, Search, CalendarClock,
+    Mail, Ban, CheckCircle2, XCircle, Loader2, ChevronRight,
+} from "lucide-react";
 
-export default function SalesBulkEmail() {
+const inp = "w-full px-3 py-2 rounded-lg border border-gray-200 text-sm outline-none focus:ring-2 focus:ring-gray-300 focus:border-gray-300";
+const fmt = (iso) => (iso ? new Date(iso).toLocaleString("en-US", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "—");
+
+const STATUS_CHIP = {
+    scheduled: "bg-amber-50 text-amber-700",
+    sending: "bg-blue-50 text-blue-700",
+    sent: "bg-emerald-50 text-emerald-700",
+    failed: "bg-rose-50 text-rose-700",
+    canceled: "bg-gray-100 text-gray-500",
+    draft: "bg-gray-100 text-gray-500",
+};
+
+// Mirror of the server-side {{var}} substitution, for the live preview only.
+function fillPreview(text, lead) {
+    if (!text) return "";
+    const name = lead?.name || "Alex Taylor";
+    const [first, ...rest] = name.split(" ");
+    const ctx = {
+        first_name: first || "Alex",
+        last_name: rest.join(" ") || "Taylor",
+        full_name: name,
+        email: lead?.email || "alex@example.com",
+        phone: "",
+        stage: lead?.stage || lead?.status || "Qualified",
+        status: lead?.status || "Qualified",
+        status_detail: "",
+        tracker_url: `${window.location.origin}/track/SAMPLE`,
+        assigned_staff_name: "the ePathways team",
+    };
+    return text.replace(/\{\{\s*([a-z0-9_]+)\s*\}\}/gi, (_, k) => ctx[k.toLowerCase()] ?? "");
+}
+
+export default function SalesBulkEmail({ templates = [], recipients = [], campaigns = [] }) {
+    const [tab, setTab] = useState("compose");
+
+    const scheduled = campaigns.filter((c) => c.status === "scheduled");
+    const history = campaigns.filter((c) => c.status !== "scheduled");
+
     return (
-        <div className="space-y-6 max-w-4xl mx-auto pb-12">
+        <div className="space-y-6 max-w-6xl mx-auto pb-12">
             <Head title="Bulk Email — Sales" />
-            <PortalPageHeader
-                eyebrow="Outreach"
-                title="Bulk Email"
-                description="Send personalised emails to a list of leads — one off, or scheduled."
-            />
-            <ComingSoonPanel
-                icon={<Send size={22} />}
-                title="Compose · Schedule · History"
-                lines={[
-                    "Compose flow — pick recipients from a saved segment or tick leads from a list.",
-                    "Template picker with live personalisation preview (e.g. {{first_name}}, {{stage}}).",
-                    "Send immediately or schedule for later — queued worker dispatches at the chosen time.",
-                    "Full history of past sends with status (sent / failed / scheduled).",
-                ]}
-            />
+
+            <header>
+                <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">Outreach</p>
+                <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2"><Mail className="w-6 h-6 text-gray-700" /> Bulk Email</h1>
+                <p className="text-sm text-gray-500 mt-1">Send a personalised email to many leads — now or scheduled.</p>
+            </header>
+
+            <div className="flex items-center gap-1 border-b border-gray-100">
+                {[
+                    { key: "compose", label: "Compose", icon: <Send size={15} /> },
+                    { key: "scheduled", label: `Scheduled${scheduled.length ? ` (${scheduled.length})` : ""}`, icon: <Clock size={15} /> },
+                    { key: "history", label: "History", icon: <History size={15} /> },
+                ].map((t) => (
+                    <button
+                        key={t.key}
+                        onClick={() => setTab(t.key)}
+                        className={`flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 -mb-px transition-colors ${tab === t.key ? "border-gray-900 text-gray-900" : "border-transparent text-gray-400 hover:text-gray-700"}`}
+                    >
+                        {t.icon} {t.label}
+                    </button>
+                ))}
+            </div>
+
+            {tab === "compose" && <Compose templates={templates} recipients={recipients} />}
+            {tab === "scheduled" && <CampaignTable rows={scheduled} empty="No scheduled campaigns." showCancel />}
+            {tab === "history" && <CampaignTable rows={history} empty="No campaigns sent yet." />}
+        </div>
+    );
+}
+
+function Compose({ templates, recipients }) {
+    const [name, setName] = useState("");
+    const [templateId, setTemplateId] = useState(templates[0]?.id ? String(templates[0].id) : "");
+    const [selected, setSelected] = useState(() => new Set());
+    const [search, setSearch] = useState("");
+    const [stage, setStage] = useState("");
+    const [action, setAction] = useState("send_now");
+    const [scheduledAt, setScheduledAt] = useState("");
+    const [sending, setSending] = useState(false);
+
+    const template = templates.find((t) => String(t.id) === String(templateId));
+
+    const stages = useMemo(
+        () => Array.from(new Set(recipients.map((r) => r.stage || r.status).filter(Boolean))).sort(),
+        [recipients],
+    );
+
+    const filtered = useMemo(() => {
+        const q = search.trim().toLowerCase();
+        return recipients.filter((r) => {
+            if (stage && (r.stage || r.status) !== stage) return false;
+            if (q && !(`${r.name} ${r.email}`.toLowerCase().includes(q))) return false;
+            return true;
+        });
+    }, [recipients, search, stage]);
+
+    const previewLead = recipients.find((r) => selected.has(r.id)) || filtered[0] || null;
+
+    const toggle = (id) => setSelected((prev) => {
+        const next = new Set(prev);
+        next.has(id) ? next.delete(id) : next.add(id);
+        return next;
+    });
+    const selectAllMatching = () => setSelected((prev) => new Set([...prev, ...filtered.map((r) => r.id)]));
+    const clearAll = () => setSelected(new Set());
+
+    const canSend = name.trim() && templateId && selected.size > 0 && (action === "send_now" || scheduledAt) && !sending;
+
+    const submit = () => {
+        if (!canSend) return;
+        setSending(true);
+        router.post("/portal/sales/bulk-email", {
+            name, template_id: templateId, recipient_lead_ids: [...selected],
+            action, scheduled_at: action === "schedule" ? scheduledAt : null,
+        }, {
+            preserveScroll: true,
+            onError: (e) => toast.error(Object.values(e)[0] || "Could not start the campaign."),
+            onFinish: () => setSending(false),
+        });
+    };
+
+    return (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Left: setup */}
+            <div className="space-y-5">
+                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-4">
+                    <label className="block">
+                        <span className="block text-xs font-semibold text-gray-600 mb-1">Campaign name <span className="text-gray-400 font-normal">(internal)</span></span>
+                        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="June re-engagement" className={inp} />
+                    </label>
+                    <label className="block">
+                        <span className="block text-xs font-semibold text-gray-600 mb-1">Template</span>
+                        <select value={templateId} onChange={(e) => setTemplateId(e.target.value)} className={inp} disabled={!templates.length}>
+                            {!templates.length && <option value="">No active email templates</option>}
+                            {templates.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                        </select>
+                        <span className="text-[11px] text-gray-400 mt-1 block">Manage templates in Email Templates. Bulk email sends on the email channel only.</span>
+                    </label>
+
+                    {/* Schedule */}
+                    <div className="space-y-2">
+                        <span className="block text-xs font-semibold text-gray-600">When to send</span>
+                        <div className="flex gap-2">
+                            <button type="button" onClick={() => setAction("send_now")} className={`flex-1 px-3 py-2 rounded-lg text-sm font-semibold border ${action === "send_now" ? "border-gray-900 bg-gray-900 text-white" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}>
+                                <Send size={14} className="inline mr-1.5" /> Send now
+                            </button>
+                            <button type="button" onClick={() => setAction("schedule")} className={`flex-1 px-3 py-2 rounded-lg text-sm font-semibold border ${action === "schedule" ? "border-gray-900 bg-gray-900 text-white" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}>
+                                <CalendarClock size={14} className="inline mr-1.5" /> Schedule
+                            </button>
+                        </div>
+                        {action === "schedule" && (
+                            <input type="datetime-local" value={scheduledAt} onChange={(e) => setScheduledAt(e.target.value)} className={inp} />
+                        )}
+                    </div>
+
+                    <button onClick={submit} disabled={!canSend} className="w-full px-4 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-xl hover:bg-blue-700 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
+                        {sending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
+                        {action === "schedule" ? "Schedule campaign" : "Send"} {selected.size > 0 && `· ${selected.size} lead${selected.size === 1 ? "" : "s"}`}
+                    </button>
+                </div>
+
+                {/* Recipients */}
+                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-3">
+                    <div className="flex items-center justify-between">
+                        <h3 className="text-sm font-bold text-gray-700 flex items-center gap-1.5"><Users size={15} /> Recipients</h3>
+                        <span className="text-xs text-gray-500">{selected.size} selected · {filtered.length} shown</span>
+                    </div>
+                    <div className="flex gap-2">
+                        <div className="relative flex-1">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+                            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search name or email" className={`${inp} pl-8`} />
+                        </div>
+                        <select value={stage} onChange={(e) => setStage(e.target.value)} className={`${inp} w-40`}>
+                            <option value="">All stages</option>
+                            {stages.map((s) => <option key={s} value={s}>{s}</option>)}
+                        </select>
+                    </div>
+                    <div className="flex gap-2 text-xs">
+                        <button onClick={selectAllMatching} className="px-2.5 py-1 rounded-md bg-gray-100 text-gray-700 hover:bg-gray-200 font-medium">Select all matching ({filtered.length})</button>
+                        <button onClick={clearAll} className="px-2.5 py-1 rounded-md text-gray-500 hover:bg-gray-50 font-medium">Clear</button>
+                    </div>
+                    <ul className="max-h-72 overflow-y-auto divide-y divide-gray-50 -mx-2">
+                        {filtered.length === 0 ? (
+                            <li className="px-2 py-8 text-center text-sm text-gray-400">No leads match.</li>
+                        ) : filtered.slice(0, 500).map((r) => (
+                            <li key={r.id}>
+                                <label className="flex items-center gap-3 px-2 py-2 hover:bg-gray-50 cursor-pointer rounded-lg">
+                                    <input type="checkbox" checked={selected.has(r.id)} onChange={() => toggle(r.id)} className="rounded" />
+                                    <span className="flex-1 min-w-0">
+                                        <span className="block text-sm text-gray-800 truncate">{r.name}</span>
+                                        <span className="block text-[11px] text-gray-400 truncate">{r.email}{(r.stage || r.status) ? ` · ${r.stage || r.status}` : ""}</span>
+                                    </span>
+                                </label>
+                            </li>
+                        ))}
+                    </ul>
+                    {filtered.length > 500 && <p className="text-[11px] text-amber-600">Showing first 500 — narrow with search/stage to reach the rest. "Select all matching" still selects every match.</p>}
+                </div>
+            </div>
+
+            {/* Right: live preview */}
+            <div className="space-y-3">
+                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden sticky top-4">
+                    <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
+                        <span className="text-xs font-bold uppercase tracking-wider text-gray-500">Live preview</span>
+                        <span className="text-[11px] text-gray-400">{previewLead ? `as ${previewLead.name}` : "sample lead"}</span>
+                    </div>
+                    {template ? (
+                        <div className="p-5 space-y-3">
+                            <div>
+                                <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Subject</span>
+                                <p className="text-sm font-semibold text-gray-900">{fillPreview(template.subject, previewLead)}</p>
+                            </div>
+                            <div>
+                                <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Body</span>
+                                <pre className="whitespace-pre-wrap font-sans text-sm text-gray-700 mt-1 leading-relaxed">{fillPreview(template.body, previewLead)}</pre>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="p-8 text-center text-sm text-gray-400">Pick a template to preview.</div>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+}
+
+function CampaignTable({ rows, empty, showCancel = false }) {
+    const cancel = (c) => {
+        if (!window.confirm(`Cancel "${c.name}"? It won't be sent.`)) return;
+        router.post(`/portal/sales/bulk-email/${c.id}/cancel`, {}, { preserveScroll: true });
+    };
+
+    return (
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+            <div className="overflow-x-auto">
+                <table className="w-full text-left">
+                    <thead>
+                        <tr className="bg-gray-50/50 border-y border-gray-100 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                            <th className="px-5 py-3">Campaign</th>
+                            <th className="px-5 py-3">Status</th>
+                            <th className="px-5 py-3">Recipients</th>
+                            <th className="px-5 py-3">{showCancel ? "Scheduled for" : "Completed"}</th>
+                            <th className="px-5 py-3"></th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-50">
+                        {rows.length === 0 ? (
+                            <tr><td colSpan={5} className="px-5 py-14 text-center text-sm text-gray-400">{empty}</td></tr>
+                        ) : rows.map((c) => (
+                            <tr key={c.id} className="hover:bg-gray-50/40">
+                                <td className="px-5 py-3">
+                                    <span className="font-semibold text-gray-900 text-sm">{c.name}</span>
+                                    <span className="block text-[11px] text-gray-400">by {c.created_by || "—"} · {fmt(c.created_at)}</span>
+                                </td>
+                                <td className="px-5 py-3">
+                                    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium capitalize ${STATUS_CHIP[c.status] || "bg-gray-100 text-gray-500"}`}>{c.status}</span>
+                                </td>
+                                <td className="px-5 py-3 text-sm text-gray-600">
+                                    {c.status === "sent" || c.status === "failed" ? (
+                                        <span className="inline-flex items-center gap-1">
+                                            <CheckCircle2 size={12} className="text-emerald-500" /> {c.sent}
+                                            {c.failed > 0 && <span className="text-rose-600 inline-flex items-center gap-0.5"> · <XCircle size={12} /> {c.failed}</span>}
+                                            <span className="text-gray-400"> · {c.total} total</span>
+                                        </span>
+                                    ) : `${c.total} leads`}
+                                </td>
+                                <td className="px-5 py-3 text-sm text-gray-500">{showCancel ? fmt(c.scheduled_at) : fmt(c.completed_at)}</td>
+                                <td className="px-5 py-3 text-right">
+                                    {showCancel && c.cancelable ? (
+                                        <button onClick={() => cancel(c)} className="inline-flex items-center gap-1 text-xs text-rose-600 hover:bg-rose-50 px-2 py-1 rounded-md font-medium"><Ban size={13} /> Cancel</button>
+                                    ) : (
+                                        <button onClick={() => router.visit(`/portal/sales/bulk-email/${c.id}`)} className="inline-flex items-center gap-1 text-xs text-gray-500 hover:text-gray-900 px-2 py-1 rounded-md font-medium">Details <ChevronRight size={13} /></button>
+                                    )}
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
         </div>
     );
 }

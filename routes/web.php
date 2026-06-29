@@ -85,6 +85,12 @@ Route::middleware(['auth', 'portal:admin,immigration'])->post('/admin/immigratio
 Route::middleware(['auth', 'portal:admin,education'])->post('/admin/education/user-reviews/{id}', [UserReviewController::class, 'adminUpdate'])
     ->name('admin.education.user-reviews.update');
 
+// Public inbound webhook from Zernio (new messages / comments). No auth — it's
+// verified by Zernio's HMAC-SHA256 signature (X-Zernio-Signature) against
+// ZERNIO_WEBHOOK_SECRET, and CSRF-exempt (see bootstrap/app.php). Bumps the
+// inbox signal so open browsers refresh.
+Route::post('/webhook/zernio', [App\Http\Controllers\AiAdsWebhookController::class, 'zernioWebhook'])->name('webhook.zernio');
+
 Route::get('/accommodation', [PublicAccommodationController::class, 'index']);
 // Expression of Interest — must be declared BEFORE /accommodation/{id} so the
 // literal path isn't captured as an {id}.
@@ -396,6 +402,24 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/list-accounts', [App\Http\Controllers\AiAdsWebhookController::class, 'listAccounts'])->name('list-accounts');
             Route::post('/start-oauth', [App\Http\Controllers\AiAdsWebhookController::class, 'startOauth'])->name('start-oauth');
             Route::post('/disconnect', [App\Http\Controllers\AiAdsWebhookController::class, 'disconnectAccount'])->name('disconnect');
+
+            // Inbox (Phase 3) — conversations, messages, comments.
+            Route::get('/inbox-conversations', [App\Http\Controllers\AiAdsWebhookController::class, 'inboxConversations'])->name('inbox-conversations');
+            Route::get('/inbox-messages', [App\Http\Controllers\AiAdsWebhookController::class, 'inboxMessages'])->name('inbox-messages');
+            Route::post('/inbox-send', [App\Http\Controllers\AiAdsWebhookController::class, 'inboxSend'])->name('inbox-send');
+            Route::post('/inbox-read', [App\Http\Controllers\AiAdsWebhookController::class, 'inboxRead'])->name('inbox-read');
+            Route::get('/inbox-signal', [App\Http\Controllers\AiAdsWebhookController::class, 'inboxSignal'])->name('inbox-signal');
+            Route::get('/inbox-comments', [App\Http\Controllers\AiAdsWebhookController::class, 'inboxComments'])->name('inbox-comments');
+            Route::post('/inbox-reply-comment', [App\Http\Controllers\AiAdsWebhookController::class, 'inboxReplyComment'])->name('inbox-reply-comment');
+
+            // Ads (Phase 3) — list, ad accounts, boost, analytics.
+            Route::get('/ads-list', [App\Http\Controllers\AiAdsWebhookController::class, 'adsList'])->name('ads-list');
+            Route::get('/ad-accounts', [App\Http\Controllers\AiAdsWebhookController::class, 'adAccounts'])->name('ad-accounts');
+            Route::post('/ads-boost', [App\Http\Controllers\AiAdsWebhookController::class, 'adsBoost'])->name('ads-boost');
+            Route::get('/ad-analytics', [App\Http\Controllers\AiAdsWebhookController::class, 'adAnalytics'])->name('ad-analytics');
+
+            // Performance (Phase 2b) — post analytics joined with lead counts.
+            Route::get('/analytics', [App\Http\Controllers\AiAdsWebhookController::class, 'analytics'])->name('analytics');
         });
 
         // Lead Portal invitations — admin approval / rejection / revocation.
@@ -541,6 +565,35 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/api/tasks/related-records', [App\Http\Controllers\TaskController::class, 'relatedRecords'])->name('api.tasks.related-records');
     });
 
+    // Department-scoped email/SMS templates — every department portal manages
+    // its own set through the shared MessageTemplateController, which scopes
+    // itself to the acting staff member's department. Admins manage all via
+    // /admin/message-templates above. The immigration portal middleware also
+    // admits the immigration manager/adviser sub-roles.
+    foreach (\App\Models\User::PORTAL_ROLES as $deptRole) {
+        Route::middleware("portal:{$deptRole}")
+            ->prefix("portal/{$deptRole}")
+            ->name("portal.{$deptRole}.")
+            ->group(function () {
+                $c = \App\Http\Controllers\MessageTemplateController::class;
+                Route::get('/email-templates', [$c, 'index'])->name('email-templates');
+                Route::get('/email-templates/create', [$c, 'create'])->name('email-templates.create');
+                Route::post('/email-templates', [$c, 'store'])->name('email-templates.store');
+                Route::get('/email-templates/{id}', [$c, 'show'])->name('email-templates.show');
+                Route::put('/email-templates/{id}', [$c, 'update'])->name('email-templates.update');
+                Route::delete('/email-templates/{id}', [$c, 'destroy'])->name('email-templates.destroy');
+                Route::post('/email-templates/{id}/test', [$c, 'sendTest'])->name('email-templates.test');
+            });
+    }
+
+    // Manual lead status-update emails — staff send a department (or shared)
+    // template to a lead from the lead detail screen. Available to admins and
+    // every department portal. The GET lists templates the user may send.
+    Route::middleware('portal:admin,sales,education,english,immigration,accommodation')->group(function () {
+        Route::get('/lead-message/templates', [\App\Http\Controllers\LeadMessageController::class, 'templates'])->name('lead-message.templates');
+        Route::post('/leads/{lead}/send-message', [\App\Http\Controllers\LeadMessageController::class, 'send'])->name('leads.send-message');
+    });
+
     // Immigration management screens — shared between admins and immigration-role staff.
     // They live under /admin/immigration/... for historical reasons; the immigration
     // portal's sidebar deep-links here.
@@ -619,9 +672,13 @@ Route::middleware(['auth'])->group(function () {
             // Public assessment submissions (free-assessment + education-enrolment).
             Route::get('/assessments', [SalesController::class, 'assessments'])->name('assessments');
 
-            // OUTREACH — placeholders until the email backbone ships.
-            Route::get('/bulk-email', [SalesController::class, 'bulkEmail'])->name('bulk-email');
-            Route::get('/email-templates', [SalesController::class, 'emailTemplates'])->name('email-templates');
+            // OUTREACH — /email-templates is served by MessageTemplateController
+            // (department-scoped, registered above for every portal). Bulk email
+            // (compose / schedule / history) is the BulkEmailController.
+            Route::get('/bulk-email', [\App\Http\Controllers\BulkEmailController::class, 'index'])->name('bulk-email');
+            Route::post('/bulk-email', [\App\Http\Controllers\BulkEmailController::class, 'store'])->name('bulk-email.store');
+            Route::get('/bulk-email/{id}', [\App\Http\Controllers\BulkEmailController::class, 'show'])->name('bulk-email.show');
+            Route::post('/bulk-email/{id}/cancel', [\App\Http\Controllers\BulkEmailController::class, 'cancel'])->name('bulk-email.cancel');
             Route::get('/campaigns', [SalesController::class, 'campaigns'])->name('campaigns');
 
             // ACCOUNT

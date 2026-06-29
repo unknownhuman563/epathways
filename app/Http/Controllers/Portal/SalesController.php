@@ -465,16 +465,6 @@ class SalesController extends Controller
             ])->all();
     }
 
-    public function bulkEmail()
-    {
-        return inertia('portal/sales/BulkEmail', ['portal' => 'sales']);
-    }
-
-    public function emailTemplates()
-    {
-        return inertia('portal/sales/EmailTemplates', ['portal' => 'sales']);
-    }
-
     public function campaigns()
     {
         return inertia('portal/sales/Campaigns', ['portal' => 'sales']);

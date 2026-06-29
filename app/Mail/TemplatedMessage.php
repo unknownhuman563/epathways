@@ -5,6 +5,7 @@ namespace App\Mail;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Mail\Mailable;
+use Illuminate\Mail\Mailables\Attachment;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
@@ -13,6 +14,10 @@ use Illuminate\Queue\SerializesModels;
  * Generic mailable for the template system — renders an already-
  * substituted markdown body under the standard ePathways email shell.
  * Queued by default.
+ *
+ * $attachmentFiles is a list of ['path' => <local-disk path>, 'name' =>
+ * <original filename>] — stored on the private 'local' disk so the paths
+ * survive serialization onto the queue.
  */
 class TemplatedMessage extends Mailable implements ShouldQueue
 {
@@ -21,6 +26,7 @@ class TemplatedMessage extends Mailable implements ShouldQueue
     public function __construct(
         public string $subjectLine,
         public string $markdownBody,
+        public array $attachmentFiles = [],
     ) {}
 
     public function envelope(): Envelope
@@ -34,5 +40,12 @@ class TemplatedMessage extends Mailable implements ShouldQueue
             markdown: 'emails.templated',
             with: ['body' => $this->markdownBody],
         );
+    }
+
+    public function attachments(): array
+    {
+        return collect($this->attachmentFiles)
+            ->map(fn ($a) => Attachment::fromStorageDisk('local', $a['path'])->as($a['name']))
+            ->all();
     }
 }
