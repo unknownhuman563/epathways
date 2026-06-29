@@ -262,6 +262,7 @@ class CommunicationService
             'phone' => $lead->phone ?? '',
             'stage' => $lead->stage ?? ($lead->status ?? ''),
             'tracker_url' => rtrim((string) config('app.url'), '/').'/track/'.$lead->tracking_code,
+            'client_portal_url' => $this->clientPortalUrl($lead),
             'assigned_staff_name' => $staff?->name ?? 'the ePathways team',
         ], $extra);
     }

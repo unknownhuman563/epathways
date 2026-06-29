@@ -91,7 +91,7 @@ class RentUtilitiesController extends Controller
             'amount' => ['nullable', 'numeric', 'min:0'],
         ]);
 
-        $weekStart = RentRoll::snapToMonday(Carbon::parse($data['week_start']))->toDateString();
+        $weekStart = RentRoll::snapToMonday(Carbon::parse($data['week_start']));
         $amount = $data['amount'] ?? null;
 
         if ($amount === null || (float) $amount === 0.0) {
