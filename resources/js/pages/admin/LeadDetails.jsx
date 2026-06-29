@@ -10,7 +10,7 @@ import {
     User as UserIcon, ArrowRight, Sparkles, FolderOpen, Copy, Info, Undo2, Send,
     Globe, Home, Wand2, Users as UsersIcon, Eye,
     Paperclip, FileImage, Film, Music,
-    Briefcase,
+    Briefcase, Trash2,
 } from 'lucide-react';
 import { CHECKLIST, STATUSES, STATUS_CHIP, STATUS_LABEL, SECTION_STATUSES, IMPORTANT_NOTES, renderFilename, currentSectionIndex } from '@/data/leadDocumentChecklist';
 import SendUpdateModal from '@/components/leads/SendUpdateModal';
@@ -62,6 +62,7 @@ export default function LeadDetails({ lead: backendLead, activity = [], stageTim
 
     const [activeTab, setActiveTab] = useState(initialTab);
     const [showSendUpdate, setShowSendUpdate] = useState(false);
+    const [composeOpen, setComposeOpen] = useState(false);
     const [stageOpen, setStageOpen] = useState(false);
 
     // "Edit Lead as a whole" — when true, every Personal Info section opens
@@ -433,8 +434,18 @@ export default function LeadDetails({ lead: backendLead, activity = [], stageTim
                         <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 px-1">Manage</span>
                         <div className="flex items-center gap-2">
                             <ConvertMenu lead={backendLead} canRevert={currentUser?.is_admin} />
-                            <button className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 text-sm font-semibold transition-colors shadow-sm">
-                                <Edit size={16} /> Edit Lead
+                            <button
+                                onClick={toggleEditAll}
+                                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-colors shadow-sm ${editAll ? 'bg-gray-900 text-white hover:bg-black' : 'bg-blue-600 text-white hover:bg-blue-700'}`}
+                            >
+                                <Edit size={16} /> {editAll ? 'Done Editing' : 'Edit Lead'}
+                            </button>
+                            <button
+                                onClick={archiveLead}
+                                title="Archive this lead (recoverable)"
+                                className="flex items-center gap-2 px-4 py-2 bg-white border border-red-200 text-red-600 rounded-xl hover:bg-red-50 text-sm font-semibold transition-colors shadow-sm"
+                            >
+                                <Trash2 size={16} /> Delete
                             </button>
                         </div>
                     </div>
@@ -502,6 +513,14 @@ export default function LeadDetails({ lead: backendLead, activity = [], stageTim
                                 className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 text-sm font-semibold transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                                 <Send size={16} /> Send Update
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setComposeOpen(true)}
+                                title="Send this lead an email or SMS"
+                                className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-xl hover:bg-black text-sm font-semibold transition-colors shadow-sm"
+                            >
+                                <Send size={16} /> Compose Message
                             </button>
                         </div>
                     </div>
