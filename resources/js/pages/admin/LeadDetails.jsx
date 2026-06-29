@@ -468,17 +468,15 @@ export default function LeadDetails({ lead: backendLead, activity = [], stageTim
                                     )}
                                     <button
                                         type="button"
-                                        title="Copy public tracking link + code for this lead"
+                                        title="Copy public tracking link for this lead"
                                         onClick={() => {
                                             const url = `${window.location.origin}/track/${lead.trackingCode}`;
-                                            // Multi-line payload so staff can paste straight
-                                            // into WhatsApp / email and the client sees both
-                                            // the URL and the code for the search box.
-                                            const payload =
-                                                `Link: ${url}\n` +
-                                                `Application Tracking Code: ${lead.trackingCode}`;
-                                            navigator.clipboard?.writeText(payload).then(
-                                                () => toast.success('Tracking link + code copied', { description: payload }),
+                                            // Just the URL — gets auto-linked in WhatsApp /
+                                            // SMS / email and the code lives in the path
+                                            // anyway, so a duplicate "Code: ..." line is
+                                            // just noise to the client.
+                                            navigator.clipboard?.writeText(url).then(
+                                                () => toast.success('Tracking link copied', { description: url }),
                                                 () => toast.error('Could not copy — your browser blocked clipboard access')
                                             );
                                         }}
