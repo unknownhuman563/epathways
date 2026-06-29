@@ -78,6 +78,87 @@ class CerebrasService
         ], $parsed['variants']);
     }
 
+    /**
+     * Suggest paid-ad audience targeting for a boosted post: an age range, ISO
+     * country codes and interest keyword names (resolved to Zernio interest ids
+     * by the caller), plus a one-line rationale. Grounded in the ePathways
+     * audience — students/migrants bound for New Zealand.
+     */
+    public function suggestAdTargeting(array $brief): array
+    {
+        $response = Http::withHeaders([
+            'Authorization' => 'Bearer '.$this->apiKey,
+            'Content-Type' => 'application/json',
+        ])->timeout(60)->post("{$this->baseUrl}/chat/completions", [
+            'model' => $this->model,
+            'messages' => [
+                ['role' => 'system', 'content' => $this->buildTargetingPrompt()],
+                ['role' => 'user', 'content' => 'Suggest the audience for this ad:'."\n\n".json_encode([
+                    'goal' => $brief['goal'] ?? 'traffic',
+                    'platform' => $brief['platform'] ?? 'facebook',
+                    'post_content' => mb_substr((string) ($brief['content'] ?? ''), 0, 1200),
+                ], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE)],
+            ],
+            'temperature' => 0.5,
+        ]);
+
+        if (! $response->successful()) {
+            Log::error('Cerebras targeting API error', ['status' => $response->status()]);
+            throw new \RuntimeException('Cerebras request failed: '.$response->status());
+        }
+
+        $content = $response->json('choices.0.message.content');
+        $parsed = json_decode($this->extractJson((string) $content), true);
+
+        if (json_last_error() !== JSON_ERROR_NONE || ! is_array($parsed)) {
+            Log::error('Cerebras targeting parse error', ['content' => $content]);
+            throw new \RuntimeException('Failed to parse targeting suggestion');
+        }
+
+        $ageMin = (int) ($parsed['age_min'] ?? 18);
+        $ageMax = (int) ($parsed['age_max'] ?? 45);
+
+        return [
+            'ageMin' => max(13, min(65, $ageMin)),
+            'ageMax' => max(13, min(65, max($ageMin, $ageMax))),
+            'countries' => array_values(array_filter(array_map(
+                fn ($c) => strtoupper(substr((string) $c, 0, 2)),
+                (array) ($parsed['countries'] ?? [])
+            ))),
+            'interests' => array_values(array_filter(array_map(
+                fn ($i) => trim((string) $i),
+                (array) ($parsed['interests'] ?? [])
+            ))),
+            'rationale' => (string) ($parsed['rationale'] ?? ''),
+        ];
+    }
+
+    private function buildTargetingPrompt(): string
+    {
+        return <<<'PROMPT'
+        You are a paid-social media buyer for ePathways, a New Zealand education & immigration consultancy. Given an ad's goal, platform and post content, propose the best paid-ad AUDIENCE.
+
+        Context: ePathways helps international students and migrants move to New Zealand to study and settle. Typical prospects are 18-40, in source markets like India, the Philippines, Nepal, Sri Lanka, Vietnam, Pakistan and Bangladesh, plus onshore audiences already in New Zealand. Interests skew to study abroad, overseas education, student visas, IELTS/PTE, immigration, working in New Zealand, and fields like nursing, IT, business and trades.
+
+        ## Output Format
+        CRITICAL: Respond with ONLY a single valid JSON object. No markdown, no code fences, no preamble.
+
+        Shape:
+        {
+          "age_min": 18,
+          "age_max": 40,
+          "countries": ["IN", "PH", "NP"],
+          "interests": ["Study abroad", "Student visa", "New Zealand", "IELTS"],
+          "rationale": "One short sentence on who and why."
+        }
+
+        Rules:
+        - countries: 2-6 ISO 3166-1 alpha-2 codes most likely to convert for this post.
+        - interests: 4-8 short, real interest names a platform's targeting tool would recognise (no # or hashtags).
+        - Keep ages within 13-65 and age_min <= age_max.
+        PROMPT;
+    }
+
     private function buildSocialVariantPrompt(array $brief, int $count): string
     {
         $platform = $brief['platform'] ?? 'facebook';

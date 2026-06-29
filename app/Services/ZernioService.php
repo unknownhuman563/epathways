@@ -246,14 +246,40 @@ class ZernioService
     /** GET /ads/accounts → connected ad accounts (for boost targeting). */
     public function listAdAccounts(): array
     {
-        $res = $this->client()->get('/ads/accounts')->throw();
-        $rows = $res->json('data') ?? $res->json('accounts') ?? $res->json() ?? [];
+        // GET /ads/accounts requires the SOCIAL accountId (ad accounts are scoped
+        // per connected account), so walk every account and collect its ad
+        // accounts, tagging each with the social accountId + platform it hangs
+        // off. Page-only connections that can't list ad accounts (422) are skipped.
+        $adAccounts = [];
 
-        return ['adAccounts' => array_values(array_map(fn ($a) => [
-            'id' => $a['_id'] ?? $a['id'] ?? null,
-            'platform' => $a['platform'] ?? null,
-            'name' => $a['name'] ?? $a['adAccountName'] ?? '—',
-        ], is_array($rows) ? $rows : []))];
+        foreach ($this->listAccounts()['accounts'] as $acct) {
+            $accountId = $acct['id'] ?? null;
+            if (! $accountId) {
+                continue;
+            }
+
+            try {
+                $res = $this->client()->get('/ads/accounts', ['accountId' => $accountId])->throw();
+                $rows = $res->json('accounts') ?? $res->json('data') ?? [];
+                foreach (is_array($rows) ? $rows : [] as $a) {
+                    $id = $a['id'] ?? $a['_id'] ?? null;
+                    if (! $id) {
+                        continue;
+                    }
+                    $adAccounts[] = [
+                        'id' => (string) $id,                  // platform ad account id (act_…)
+                        'name' => $a['name'] ?? $a['adAccountName'] ?? '—',
+                        'platform' => $acct['platform'] ?? null,
+                        'accountId' => (string) $accountId,     // the social account it hangs off
+                        'currency' => $a['currency'] ?? null,
+                    ];
+                }
+            } catch (\Throwable $e) {
+                // This account can't list ad accounts (page-only / no ads) — skip it.
+            }
+        }
+
+        return ['adAccounts' => $adAccounts];
     }
 
     /** POST /ads/boost — turn a published post into a paid campaign. */
@@ -279,6 +305,66 @@ class ZernioService
             'cpc' => $a['cpc'] ?? 0,
             'cpm' => $a['cpm'] ?? 0,
         ];
+    }
+
+    /**
+     * GET /ads/targeting/search — resolve a human query into a platform's
+     * targeting ids. dimension: interest|geo|behavior|income. For geo pass
+     * geoType (country|region|city|…). Returns [{id, name, type, path, size}].
+     */
+    public function searchTargeting(string $accountId, string $q, string $dimension = 'interest', array $opts = []): array
+    {
+        $query = array_filter([
+            'accountId' => $accountId,
+            'q' => $q,
+            'dimension' => $dimension,
+            'geoType' => $opts['geoType'] ?? null,
+            'countryCode' => $opts['countryCode'] ?? null,
+            'limit' => $opts['limit'] ?? 20,
+        ], fn ($v) => $v !== null && $v !== '');
+
+        $res = $this->client()->get('/ads/targeting/search', $query)->throw();
+        $rows = $res->json('data') ?? $res->json() ?? [];
+
+        return ['results' => array_values(array_map(fn ($r) => [
+            'id' => (string) ($r['id'] ?? ''),
+            'name' => (string) ($r['name'] ?? ''),
+            'type' => $r['type'] ?? $dimension,
+            'path' => array_values((array) ($r['path'] ?? [])),
+            'size' => $r['audienceSize'] ?? null,
+        ], is_array($rows) ? $rows : []))];
+    }
+
+    /** GET /ads/audiences?type=saved_targeting — stored targeting presets. */
+    public function listSavedAudiences(string $accountId, string $adAccountId, ?string $platform = null): array
+    {
+        $res = $this->client()->get('/ads/audiences', array_filter([
+            'accountId' => $accountId,
+            'adAccountId' => $adAccountId,
+            'platform' => $platform,
+            'type' => 'saved_targeting',
+        ], fn ($v) => $v !== null && $v !== ''))->throw();
+        $rows = $res->json('data') ?? $res->json('audiences') ?? $res->json() ?? [];
+
+        return ['presets' => array_values(array_map(fn ($a) => [
+            'id' => (string) ($a['id'] ?? $a['platformAudienceId'] ?? ''),
+            'name' => (string) ($a['name'] ?? '—'),
+            'spec' => $a['spec'] ?? null,
+        ], is_array($rows) ? $rows : []))];
+    }
+
+    /** POST /ads/audiences — store a reusable targeting spec (a preset). */
+    public function createSavedAudience(string $accountId, string $name, array $spec): array
+    {
+        $res = $this->client()->post('/ads/audiences', [
+            'type' => 'saved_targeting',
+            'accountId' => $accountId,
+            'name' => $name,
+            'spec' => $spec,
+        ])->throw();
+        $a = $res->json('audience') ?? $res->json() ?? [];
+
+        return ['ok' => true, 'id' => $a['id'] ?? $a['_id'] ?? null, 'name' => $a['name'] ?? $name];
     }
 
     // ─── Analytics / Performance (Phase 2b) ───────────────────────────────

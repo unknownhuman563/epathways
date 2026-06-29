@@ -500,10 +500,19 @@ class AiAdsWebhookController extends Controller
             'budgetType' => 'required|in:daily,lifetime',
             'startDate' => 'nullable|date',
             'endDate' => 'nullable|date|after:startDate',
+            'targeting' => 'nullable|array',
+            'targeting.ageMin' => 'nullable|integer|min:13|max:65',
+            'targeting.ageMax' => 'nullable|integer|min:13|max:65',
+            'targeting.countries' => 'nullable|array|max:25',
+            'targeting.countries.*' => 'string|size:2',
+            'targeting.interests' => 'nullable|array|max:30',
+            'targeting.interests.*.id' => 'required_with:targeting.interests|string|max:120',
+            'targeting.interests.*.name' => 'required_with:targeting.interests|string|max:160',
+            'targeting.advantageAudience' => 'nullable|boolean',
         ]);
 
         if ($z = $this->zernio()) {
-            return $this->zernioJson(fn () => $z->boostPost([
+            return $this->zernioJson(fn () => $z->boostPost(array_filter([
                 'postId' => $data['postId'],
                 'accountId' => $data['accountId'],
                 'adAccountId' => $data['adAccountId'],
@@ -515,10 +524,139 @@ class AiAdsWebhookController extends Controller
                     'startDate' => $data['startDate'] ?? null,
                     'endDate' => $data['endDate'] ?? null,
                 ]),
-            ]));
+                'targeting' => $this->boostTargeting($data['targeting'] ?? []),
+            ], fn ($v) => $v !== null && $v !== [])));
         }
 
         return response()->json(['error' => 'Connect Zernio (and a linked ad account) to boost.'], 422);
+    }
+
+    /** Shape the boost targeting payload for Zernio (drops empty fields). */
+    private function boostTargeting(array $t): array
+    {
+        $targeting = array_filter([
+            'ageMin' => $t['ageMin'] ?? null,
+            'ageMax' => $t['ageMax'] ?? null,
+            'countries' => ! empty($t['countries']) ? array_values(array_map('strtoupper', $t['countries'])) : null,
+            'interests' => ! empty($t['interests']) ? array_values(array_map(fn ($i) => [
+                'id' => (string) $i['id'], 'name' => (string) $i['name'],
+            ], $t['interests'])) : null,
+        ], fn ($v) => $v !== null && $v !== []);
+
+        if (! empty($t['advantageAudience'])) {
+            $targeting['advantage_audience'] = 1;
+        }
+
+        return $targeting;
+    }
+
+    /** GET /webhook/social/ad-targeting-search?q=&dimension=&accountId=&geoType=&countryCode= */
+    public function adTargetingSearch(Request $request)
+    {
+        $data = $request->validate([
+            'q' => 'required|string|max:120',
+            'accountId' => 'required|string|max:120',
+            'dimension' => 'nullable|in:interest,geo,behavior,income',
+            'geoType' => 'nullable|in:country,region,city,zip,metro',
+            'countryCode' => 'nullable|string|size:2',
+        ]);
+
+        if ($z = $this->zernio()) {
+            return $this->zernioJson(fn () => $z->searchTargeting(
+                $data['accountId'], $data['q'], $data['dimension'] ?? 'interest',
+                array_filter(['geoType' => $data['geoType'] ?? null, 'countryCode' => $data['countryCode'] ?? null])
+            ));
+        }
+
+        return response()->json(['results' => []]);
+    }
+
+    /**
+     * POST /webhook/social/ai-targeting — Cerebras suggests an audience for the
+     * post, then we resolve the suggested interest names to Zernio interest ids.
+     */
+    public function aiTargeting(Request $request)
+    {
+        $data = $request->validate([
+            'content' => 'required|string|max:4000',
+            'accountId' => 'required|string|max:120',
+            'goal' => 'nullable|string|max:40',
+            'platform' => 'nullable|string|max:32',
+        ]);
+
+        $cerebras = app(\App\Services\CerebrasService::class);
+        if (! $cerebras->configured()) {
+            return response()->json(['error' => 'Set CEREBRAS_API_KEY to use AI targeting.'], 422);
+        }
+
+        try {
+            $s = $cerebras->suggestAdTargeting([
+                'content' => $data['content'],
+                'goal' => $data['goal'] ?? 'traffic',
+                'platform' => $data['platform'] ?? 'facebook',
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('AI targeting failed', ['error' => $e->getMessage()]);
+
+            return response()->json(['error' => 'AI targeting failed: '.$e->getMessage()], 502);
+        }
+
+        // Resolve interest keyword names → Zernio {id, name}. Best-effort.
+        $interests = [];
+        $unresolved = [];
+        if ($z = $this->zernio()) {
+            foreach ($s['interests'] as $name) {
+                try {
+                    $hit = $z->searchTargeting($data['accountId'], $name, 'interest', ['limit' => 1])['results'][0] ?? null;
+                    $hit && $hit['id'] !== '' ? $interests[] = ['id' => $hit['id'], 'name' => $hit['name']] : $unresolved[] = $name;
+                } catch (\Throwable $e) {
+                    $unresolved[] = $name;
+                }
+            }
+        } else {
+            $unresolved = $s['interests'];
+        }
+
+        return response()->json([
+            'ageMin' => $s['ageMin'],
+            'ageMax' => $s['ageMax'],
+            'countries' => $s['countries'],
+            'interests' => $interests,
+            'unresolved' => $unresolved,
+            'rationale' => $s['rationale'],
+        ]);
+    }
+
+    /** GET /webhook/social/ad-audiences?accountId=&adAccountId=&platform= — saved targeting presets. */
+    public function adAudiences(Request $request)
+    {
+        $data = $request->validate([
+            'accountId' => 'required|string|max:120',
+            'adAccountId' => 'required|string|max:120',
+            'platform' => 'nullable|string|max:32',
+        ]);
+
+        if ($z = $this->zernio()) {
+            return $this->zernioJson(fn () => $z->listSavedAudiences($data['accountId'], $data['adAccountId'], $data['platform'] ?? null));
+        }
+
+        return response()->json(['presets' => []]);
+    }
+
+    /** POST /webhook/social/ad-audience-save — store the current targeting as a preset. */
+    public function adAudienceSave(Request $request)
+    {
+        $data = $request->validate([
+            'accountId' => 'required|string|max:120',
+            'name' => 'required|string|max:160',
+            'spec' => 'required|array',
+        ]);
+
+        if ($z = $this->zernio()) {
+            return $this->zernioJson(fn () => $z->createSavedAudience($data['accountId'], $data['name'], $data['spec']));
+        }
+
+        return response()->json(['error' => 'Connect Zernio to save audiences.'], 422);
     }
 
     /** GET /webhook/social/ad-analytics?adId= */

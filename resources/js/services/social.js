@@ -92,6 +92,10 @@ export const social = {
     adAccounts:      ()                           => request('GET',  'ad-accounts'),
     boostPost:       (payload)                    => request('POST', 'ads-boost',       { body: payload }),
     adAnalytics:     (adId)                       => request('GET',  'ad-analytics',    { query: { adId } }),
+    targetingSearch: (params)                     => request('GET',  'ad-targeting-search', { query: params }),
+    aiTargeting:     (payload)                    => request('POST', 'ai-targeting',    { body: payload }),
+    adAudiences:     (params)                     => request('GET',  'ad-audiences',    { query: params }),
+    saveAudience:    (payload)                    => request('POST', 'ad-audience-save', { body: payload }),
 
     // Performance ────────────────────────────────────────────────────────────
     performance:     ({ fromDate, toDate } = {})  => request('GET',  'analytics',       { query: { fromDate, toDate } }),
