@@ -33,6 +33,9 @@ const Navbar = () => {
     const closeMenu = () => setIsOpen(false);
     const isShowingGetStarted = currentPath !== "/booking";
     const isAccommodation = currentPath.startsWith("/accommodation");
+    // Accommodation is branded blue (Exalt logo); the rest of the site is green.
+    const navHover = isAccommodation ? "hover:text-[#1F5A8B]" : "hover:text-[#436235]";
+    const navActive = isAccommodation ? "text-[#1F5A8B]" : "text-[#436235]";
 
     return (
         <nav className="sticky top-0 z-50 bg-white text-black shadow-md font-urbanist">
@@ -54,8 +57,8 @@ const Navbar = () => {
                         <li key={link.href}>
                             <a
                                 href={link.href}
-                                className={`hover:text-[#436235] transition-colors ${
-                                    currentPath === link.href ? "text-[#436235]" : ""
+                                className={`${navHover} transition-colors ${
+                                    currentPath === link.href ? navActive : ""
                                 }`}
                             >
                                 {link.label}
@@ -111,8 +114,8 @@ const Navbar = () => {
                                     <a
                                         href={link.href}
                                         onClick={closeMenu}
-                                        className={`block py-3 text-base font-medium transition-colors hover:text-[#436235] ${
-                                            currentPath === link.href ? "text-[#436235]" : ""
+                                        className={`block py-3 text-base font-medium transition-colors ${navHover} ${
+                                            currentPath === link.href ? navActive : ""
                                         }`}
                                     >
                                         {link.label}

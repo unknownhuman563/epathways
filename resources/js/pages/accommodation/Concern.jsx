@@ -2,16 +2,16 @@ import { useForm, usePage, Link } from "@inertiajs/react";
 import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
 
-const PRIMARY = "#436235";
-const FIELD = "w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#436235]/30 focus:border-[#436235] transition";
+const PRIMARY = "#1F5A8B";
+const FIELD = "w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1F5A8B]/30 focus:border-[#1F5A8B] transition";
 
-export default function Complaint() {
+export default function Concern({ properties = [] }) {
     const { flash } = usePage().props;
-    const { data, setData, post, processing, errors } = useForm({ name: "", email: "", message: "" });
+    const { data, setData, post, processing, errors } = useForm({ name: "", email: "", property_id: "", message: "" });
 
     const submit = (e) => {
         e.preventDefault();
-        post("/accommodation/complaint");
+        post("/accommodation/concern");
     };
 
     if (flash?.success) {
@@ -25,8 +25,8 @@ export default function Complaint() {
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                             </svg>
                         </div>
-                        <h1 className="mb-3 text-xl font-bold text-gray-900 sm:text-2xl">Thanks — your complaint has been submitted.</h1>
-                        <p className="mb-8 text-sm leading-relaxed text-gray-500">Our property management team will review it and be in touch via the email you provided.</p>
+                        <h1 className="mb-3 text-xl font-bold text-gray-900 sm:text-2xl">Thanks — your concern has been submitted.</h1>
+                        <p className="mb-8 text-sm leading-relaxed text-gray-500">Our property management team will look into it and be in touch via the email you provided.</p>
                         <Link href="/accommodation" className="inline-block w-full rounded-xl px-6 py-3 text-sm font-semibold text-white transition hover:opacity-90 sm:w-auto" style={{ backgroundColor: PRIMARY }}>
                             Back to accommodation
                         </Link>
@@ -42,10 +42,10 @@ export default function Complaint() {
             <Navbar />
 
             <main className="mx-auto w-full max-w-xl flex-1 px-4 pb-20 pt-12 sm:px-6 sm:pt-16">
-                <h1 className="mb-3 text-2xl font-bold text-gray-900 sm:text-3xl">Submit a Complaint</h1>
+                <h1 className="mb-3 text-2xl font-bold text-gray-900 sm:text-3xl">Raise a Concern</h1>
                 <p className="mb-8 text-sm leading-relaxed text-gray-500">
                     Living in one of our properties and something's not right? Let us know below. Enter the name and email
-                    on your tenancy and we'll automatically link your complaint to your property.
+                    on your tenancy and pick your property — we'll make sure the right person looks into it.
                 </p>
 
                 <form onSubmit={submit} className="space-y-5 rounded-2xl border border-gray-100 bg-white p-5 shadow-sm sm:p-8">
@@ -57,16 +57,25 @@ export default function Complaint() {
                     <div>
                         <label className="mb-1 block text-sm font-semibold text-gray-800">Email <span className="text-red-500">*</span></label>
                         <input type="email" className={FIELD} value={data.email} onChange={(e) => setData("email", e.target.value)} placeholder="you@example.com" />
-                        <p className="mt-1 text-xs text-gray-400">Use the email on your tenancy so we can match your property.</p>
+                        <p className="mt-1 text-xs text-gray-400">Use the email on your tenancy so we can match you to your tenant record.</p>
                         {errors.email && <p className="mt-1 text-sm text-red-500">{errors.email}</p>}
                     </div>
                     <div>
-                        <label className="mb-1 block text-sm font-semibold text-gray-800">Complaint <span className="text-red-500">*</span></label>
+                        <label className="mb-1 block text-sm font-semibold text-gray-800">Property / House <span className="text-red-500">*</span></label>
+                        <select className={FIELD} value={data.property_id} onChange={(e) => setData("property_id", e.target.value)}>
+                            <option value="">Select your property…</option>
+                            {properties.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
+                        </select>
+                        <p className="mt-1 text-xs text-gray-400">Pick the property you're staying at — this routes your concern correctly even if your email has a typo.</p>
+                        {errors.property_id && <p className="mt-1 text-sm text-red-500">{errors.property_id}</p>}
+                    </div>
+                    <div>
+                        <label className="mb-1 block text-sm font-semibold text-gray-800">Concern <span className="text-red-500">*</span></label>
                         <textarea rows={6} className={FIELD} value={data.message} onChange={(e) => setData("message", e.target.value)} placeholder="Describe the issue with your room or property…" />
                         {errors.message && <p className="mt-1 text-sm text-red-500">{errors.message}</p>}
                     </div>
                     <button type="submit" disabled={processing} className="w-full rounded-xl px-6 py-3 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-60 sm:w-auto" style={{ backgroundColor: PRIMARY }}>
-                        {processing ? "Submitting…" : "Submit complaint"}
+                        {processing ? "Submitting…" : "Submit concern"}
                     </button>
                 </form>
             </main>

@@ -31,7 +31,7 @@ class TenantController extends Controller
 
         return inertia('portal/accommodation/Tenants', [
             'tenants' => $tenants,
-            'filters' => $request->only(['search', 'property_id', 'status', 'missing_docs', 'has_email', 'bond_paid', 'sort']),
+            'filters' => $request->only(['search', 'property_id', 'status', 'missing_docs', 'has_email', 'bond_paid', 'sort', 'archived']),
             'options' => [
                 'properties' => $this->propertyOptions(),
                 'statuses' => Tenant::STATUSES,
@@ -104,6 +104,22 @@ class TenantController extends Controller
 
         return redirect()->route('portal.accommodation.tenants.index')
             ->with('success', 'Tenant deleted.');
+    }
+
+    /** Archive a tenant (soft delete) — hides them from the list but keeps the record. */
+    public function archive(Tenant $tenant)
+    {
+        $tenant->delete();
+
+        return redirect()->back()->with('success', 'Tenant archived.');
+    }
+
+    /** Restore a previously archived (soft-deleted) tenant. */
+    public function restore(Tenant $tenant)
+    {
+        $tenant->restore();
+
+        return redirect()->back()->with('success', 'Tenant restored.');
     }
 
     // ---- Custom lifecycle actions ----------------------------------------
@@ -242,7 +258,7 @@ class TenantController extends Controller
         $status = $request->query('status');
         $sort = $request->query('sort', 'days_to_end');
 
-        $query = Tenant::query()
+        $query = ($request->boolean('archived') ? Tenant::onlyTrashed() : Tenant::query())
             ->when($search, fn ($q) => $q->where(fn ($w) => $w
                 ->where('first_name', 'like', "%{$search}%")
                 ->orWhere('family_name', 'like', "%{$search}%")

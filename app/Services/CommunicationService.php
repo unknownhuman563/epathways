@@ -21,23 +21,52 @@ class CommunicationService
 
     /**
      * Send a keyed template to a lead across its configured channels.
+     * When $department is given, the department's own version of the template
+     * is preferred, falling back to the shared/global template of that key.
      *
      * @return array{email: ?MessageLog, sms: ?MessageLog}
      */
-    public function sendTemplated(string $key, Lead $lead, array $extraContext = []): array
+    public function sendTemplated(string $key, Lead $lead, array $extraContext = [], ?string $department = null): array
+    {
+        $template = MessageTemplate::resolve($key, $department);
+        if (! $template) {
+            Log::warning("CommunicationService: no active template '{$key}'", [
+                'lead_id' => $lead->id, 'department' => $department,
+            ]);
+
+            return ['email' => null, 'sms' => null];
+        }
+
+        return $this->dispatch($template, $lead, $extraContext);
+    }
+
+    /**
+     * Send a specific template instance to a lead (no key/department lookup).
+     * Used by the editor's "send test" and the lead "send update" compose flow,
+     * the latter optionally attaching files.
+     *
+     * @param  list<array{path: string, name: string}>  $attachments
+     * @return array{email: ?MessageLog, sms: ?MessageLog}
+     */
+    public function sendTemplate(MessageTemplate $template, Lead $lead, array $extraContext = [], array $attachments = []): array
+    {
+        return $this->dispatch($template, $lead, $extraContext, $attachments);
+    }
+
+    /**
+     * Render a resolved template's channels and send each configured one.
+     * Attachments (if any) ride along on the email channel only.
+     *
+     * @param  list<array{path: string, name: string}>  $attachments
+     * @return array{email: ?MessageLog, sms: ?MessageLog}
+     */
+    private function dispatch(MessageTemplate $template, Lead $lead, array $extraContext, array $attachments = []): array
     {
         $result = ['email' => null, 'sms' => null];
 
-        $template = MessageTemplate::active()->where('key', $key)->first();
-        if (! $template) {
-            Log::warning("CommunicationService: no active template '{$key}'", ['lead_id' => $lead->id]);
-
-            return $result;
-        }
-
         $channels = $template->channels ?? [];
         if (empty($channels)) {
-            Log::warning("CommunicationService: template '{$key}' has no channels", ['lead_id' => $lead->id]);
+            Log::warning("CommunicationService: template '{$template->key}' has no channels", ['lead_id' => $lead->id]);
 
             return $result;
         }
@@ -46,13 +75,13 @@ class CommunicationService
 
         if (in_array('email', $channels, true) && ! empty($lead->email)) {
             $subject = $this->substitute((string) $template->email_subject, $context, false);
-            $body    = $this->substitute((string) $template->email_body, $context, true);
-            $result['email'] = $this->sendEmail($lead, $subject, $body, $key);
+            $body = $this->substitute((string) $template->email_body, $context, true);
+            $result['email'] = $this->sendEmail($lead, $subject, $body, $template->key, $attachments);
         }
 
         if (in_array('sms', $channels, true) && ! empty($lead->phone)) {
             $body = $this->substitute((string) $template->sms_body, $context, false);
-            $result['sms'] = $this->sendSms($lead, $body, $key);
+            $result['sms'] = $this->sendSms($lead, $body, $template->key);
         }
 
         return $result;
@@ -144,13 +173,40 @@ class CommunicationService
 
     // ─── Channels ─────────────────────────────────────────────────────────
 
-    private function sendEmail(Lead $lead, string $subject, string $body, ?string $key): MessageLog
+    /**
+     * Substitute and send a raw subject/body to a lead as part of a bulk
+     * campaign, logging the row against that campaign. Returns true on a
+     * successful queue so the job can tally sent/failed counts.
+     */
+    public function sendCampaignEmail(Lead $lead, string $subject, string $body, int $campaignId, array $extraContext = []): bool
+    {
+        if (empty($lead->email)) {
+            $this->log([
+                'campaign_id' => $campaignId, 'channel' => MessageLog::CHANNEL_EMAIL,
+                'recipient_id' => $lead->id, 'recipient_address' => '',
+                'subject' => $subject, 'status' => MessageLog::STATUS_FAILED,
+                'error_message' => 'Lead has no email address.', 'failed_at' => now(),
+            ]);
+
+            return false;
+        }
+
+        $context = $this->buildContext($lead, $extraContext);
+        $sub = $this->substitute($subject, $context, false);
+        $bod = $this->substitute($body, $context, true);
+
+        $log = $this->sendEmail($lead, $sub, $bod, null, [], $campaignId);
+
+        return $log->status !== MessageLog::STATUS_FAILED;
+    }
+
+    private function sendEmail(Lead $lead, string $subject, string $body, ?string $key, array $attachments = [], ?int $campaignId = null): MessageLog
     {
         try {
-            Mail::to($lead->email)->queue(new TemplatedMessage($subject, $body));
+            Mail::to($lead->email)->queue(new TemplatedMessage($subject, $body, $attachments));
 
             return $this->log([
-                'template_key' => $key, 'channel' => MessageLog::CHANNEL_EMAIL,
+                'template_key' => $key, 'campaign_id' => $campaignId, 'channel' => MessageLog::CHANNEL_EMAIL,
                 'recipient_id' => $lead->id, 'recipient_address' => $lead->email,
                 'subject' => $subject, 'body' => $body, 'status' => MessageLog::STATUS_QUEUED,
             ]);
@@ -158,7 +214,7 @@ class CommunicationService
             Log::error('CommunicationService email failed', ['lead_id' => $lead->id, 'error' => $e->getMessage()]);
 
             return $this->log([
-                'template_key' => $key, 'channel' => MessageLog::CHANNEL_EMAIL,
+                'template_key' => $key, 'campaign_id' => $campaignId, 'channel' => MessageLog::CHANNEL_EMAIL,
                 'recipient_id' => $lead->id, 'recipient_address' => (string) $lead->email,
                 'subject' => $subject, 'body' => $body,
                 'status' => MessageLog::STATUS_FAILED, 'error_message' => $e->getMessage(), 'failed_at' => now(),
@@ -199,13 +255,14 @@ class CommunicationService
         $staff = $lead->assignee;
 
         return array_merge([
-            'first_name'          => $lead->first_name ?? '',
-            'last_name'           => $lead->last_name ?? '',
-            'full_name'           => trim("{$lead->first_name} {$lead->last_name}"),
-            'email'               => $lead->email ?? '',
-            'phone'               => $lead->phone ?? '',
-            'tracker_url'         => rtrim((string) config('app.url'), '/') . '/track/' . $lead->tracking_code,
-            'client_portal_url'   => $this->clientPortalUrl($lead),
+            'first_name' => $lead->first_name ?? '',
+            'last_name' => $lead->last_name ?? '',
+            'full_name' => trim("{$lead->first_name} {$lead->last_name}"),
+            'email' => $lead->email ?? '',
+            'phone' => $lead->phone ?? '',
+            'stage' => $lead->stage ?? ($lead->status ?? ''),
+            'tracker_url' => rtrim((string) config('app.url'), '/').'/track/'.$lead->tracking_code,
+            'client_portal_url' => $this->clientPortalUrl($lead),
             'assigned_staff_name' => $staff?->name ?? 'the ePathways team',
         ], $extra);
     }
@@ -283,18 +340,18 @@ class CommunicationService
             return $digits;
         }
         if (str_starts_with($digits, '0')) {           // NZ national → +64
-            return '+64' . ltrim($digits, '0');
+            return '+64'.ltrim($digits, '0');
         }
 
-        return strlen($digits) >= 8 ? '+' . $digits : null;
+        return strlen($digits) >= 8 ? '+'.$digits : null;
     }
 
     private function log(array $data): MessageLog
     {
         return MessageLog::create(array_merge([
-            'recipient_type'       => 'lead',
+            'recipient_type' => 'lead',
             'triggered_by_user_id' => auth()->id(),
-            'sent_at'              => null,
+            'sent_at' => null,
         ], $data));
     }
 }

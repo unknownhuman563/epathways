@@ -75,7 +75,43 @@ class DefaultMessageTemplatesSeeder extends Seeder
         ];
 
         foreach ($templates as $t) {
-            MessageTemplate::updateOrCreate(['key' => $t['key']], $t);
+            $t['department'] = $t['department'] ?? '';   // '' = shared/global
+            MessageTemplate::updateOrCreate(
+                ['key' => $t['key'], 'department' => $t['department']],
+                $t,
+            );
+        }
+
+        $this->seedDepartmentStatusUpdates($standardVars);
+    }
+
+    /**
+     * Give every department a starter "application status update" template it
+     * can edit. Staff send these manually from a lead to tell the customer
+     * their application has moved forward.
+     */
+    private function seedDepartmentStatusUpdates(array $standardVars): void
+    {
+        $statusVars = array_merge($standardVars, [
+            ['name' => 'status', 'description' => 'The new application status'],
+            ['name' => 'status_detail', 'description' => 'Optional note describing the change'],
+        ]);
+
+        foreach (MessageTemplate::DEPARTMENTS as $department) {
+            $label = ucfirst($department);
+
+            MessageTemplate::updateOrCreate(
+                ['key' => 'application_status_update', 'department' => $department],
+                [
+                    'name' => "{$label} — Application Status Update",
+                    'description' => "Manual update staff send a {$label} lead when their application status changes.",
+                    'channels' => ['email'],
+                    'email_subject' => 'An update on your ePathways application',
+                    'email_body' => "# An update on your application, {{first_name}}\n\nThere's been an update on your application with our {$label} team.\n\n**Current status:** {{status}}\n\n{{status_detail}}\n\nYou can see the latest at any time on your tracker — no login required:\n\n[Open my tracker]({{tracker_url}})\n\nIf you have any questions, just reply to this email and {{assigned_staff_name}} will help.\n\nNgā mihi,\nThe ePathways team",
+                    'sms_body' => 'Hi {{first_name}}, an update on your ePathways application — status: {{status}}. Details: {{tracker_url}}',
+                    'variables_documented' => $statusVars,
+                ],
+            );
         }
     }
 }
