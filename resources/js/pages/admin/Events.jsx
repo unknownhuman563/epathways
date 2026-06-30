@@ -567,13 +567,15 @@ function EventFormModal({ open, onClose, editingEvent, defaultFormFields = [], c
     const isEditing = !!editingEvent;
     const [step, setStep] = useState(1);
     const [hasSessions, setHasSessions] = useState(false);
+    // Whether the "Event Type" picker is in free-text ("Other") mode.
+    const [useOtherType, setUseOtherType] = useState(false);
     // URL of the banner already stored on the server (edit mode), shown until
     // the user picks a replacement file.
     const [existingBanner, setExistingBanner] = useState(null);
 
     const { data, setData, post, processing, errors, setError, clearErrors, reset, transform } = useForm({
         name: '', type: '', description: '', date_from: '', date_to: '',
-        status: 'upcoming', mode: 'in-person', organizer_id: '', notes: '',
+        status: 'upcoming', mode: 'in-person', location: '', organizer_id: '', notes: '',
         banner_image: null,
         sessions: [emptySession()],
         // Per-event registration-form schema. Seeded from the canonical
@@ -604,6 +606,7 @@ function EventFormModal({ open, onClose, editingEvent, defaultFormFields = [], c
                 date_to: toDateInput(editingEvent.date_to),
                 status: editingEvent.status || 'upcoming',
                 mode: editingEvent.mode || 'in-person',
+                location: editingEvent.location || '',
                 organizer_id: editingEvent.organizer_id || '',
                 notes: editingEvent.notes || '',
                 banner_image: null,
@@ -614,10 +617,13 @@ function EventFormModal({ open, onClose, editingEvent, defaultFormFields = [], c
             });
             setHasSessions(sessions.length > 0);
             setExistingBanner(editingEvent.banner_image_url || null);
+            // A saved type that isn't one of the presets is a custom "Other" value.
+            setUseOtherType(!!editingEvent.type && !EVENT_TYPES.includes(editingEvent.type));
         } else {
             reset();
             setHasSessions(false);
             setExistingBanner(null);
+            setUseOtherType(false);
         }
         setStep(1);
         clearErrors();
@@ -663,8 +669,9 @@ function EventFormModal({ open, onClose, editingEvent, defaultFormFields = [], c
 
     const validateStep1 = () => {
         if (!data.name.trim()) return 'Event name is required.';
-        if (!data.type) return 'Event type is required.';
+        if (!data.type.trim()) return 'Event type is required.';
         if (!data.status) return 'Status is required.';
+        if (data.mode === 'in-person' && !data.location.trim()) return 'Address / venue is required for in-person events.';
         return null;
     };
 
@@ -745,10 +752,30 @@ function EventFormModal({ open, onClose, editingEvent, defaultFormFields = [], c
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <Label required>Event Type</Label>
-                                    <Select value={data.type} onChange={e => setField('type', e.target.value)}>
+                                    <Select
+                                        value={useOtherType ? '__other__' : data.type}
+                                        onChange={e => {
+                                            if (e.target.value === '__other__') {
+                                                setUseOtherType(true);
+                                                setField('type', '');
+                                            } else {
+                                                setUseOtherType(false);
+                                                setField('type', e.target.value);
+                                            }
+                                        }}
+                                    >
                                         <option value="">Select type…</option>
                                         {EVENT_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                                        <option value="__other__">Other…</option>
                                     </Select>
+                                    {useOtherType && (
+                                        <Input
+                                            className="mt-2"
+                                            placeholder="Type the event type…"
+                                            value={data.type}
+                                            onChange={e => setField('type', e.target.value)}
+                                        />
+                                    )}
                                 </div>
                                 <div>
                                     <Label required>Status</Label>
@@ -796,6 +823,18 @@ function EventFormModal({ open, onClose, editingEvent, defaultFormFields = [], c
                                     </Select>
                                 </div>
                             </div>
+
+                            {/* Address / venue — only for in-person & hybrid events */}
+                            {data.mode !== 'online' && (
+                                <div>
+                                    <Label required={data.mode === 'in-person'}>Address / Venue</Label>
+                                    <Input
+                                        placeholder="e.g. SMX Convention Center, Manila"
+                                        value={data.location}
+                                        onChange={e => setField('location', e.target.value)}
+                                    />
+                                </div>
+                            )}
 
                             {/* Banner Image */}
                             <div>

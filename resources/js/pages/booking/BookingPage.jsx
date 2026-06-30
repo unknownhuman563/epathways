@@ -141,7 +141,7 @@ const consultants = {
         {
             id: 1,
             readOnly: true,
-            name: 'Dinah Suarin',
+            name: 'Dinah Jabone',
             role: 'CEO / Founder',
             image: dinaImg,
             bio: "Dinah brings 8 years of hands-on experience helping international students navigate New Zealand's tertiary education system. She has placed over 300 students in top NZ universities and polytechnics, and specialises in tailoring pathways for students from Southeast Asia and the Pacific.",
