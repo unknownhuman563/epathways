@@ -47,18 +47,27 @@ jobs:
 
       - name: Rsync code to VPS
         run: |
-          rsync -rlptvz -e "ssh -o StrictHostKeyChecking=accept-new" --delete --no-owner --no-group \
-            --exclude='.git' \
-            --exclude='.github' \
-            --exclude='.env' \
-            --exclude='node_modules' \
-            --exclude='storage/logs/*' \
-            --exclude='storage/framework/cache/*' \
-            --exclude='storage/framework/sessions/*' \
-            --exclude='storage/framework/views/*' \
-            --exclude='storage/app/public/*' \
-            --exclude='storage/app/private/*' \
-            ./ ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/var/www/epathways-staging/
+          sync_to_vps() {
+            rsync -rlptvz -e "ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=30 -o ServerAliveInterval=15 -o ServerAliveCountMax=4" --delete --no-owner --no-group \
+              --exclude='.git' \
+              --exclude='.github' \
+              --exclude='.env' \
+              --exclude='node_modules' \
+              --exclude='storage/logs/*' \
+              --exclude='storage/framework/cache/*' \
+              --exclude='storage/framework/sessions/*' \
+              --exclude='storage/framework/views/*' \
+              --exclude='storage/app/public/*' \
+              --exclude='storage/app/private/*' \
+              ./ ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/var/www/epathways-staging/
+          }
+          for attempt in 1 2 3; do
+            echo "rsync attempt $attempt/3..."
+            sync_to_vps && exit 0
+            echo "rsync attempt $attempt failed (SSH/network); retrying in 20s..." && sleep 20
+          done
+          echo "rsync failed after 3 attempts — VPS unreachable on port 22" >&2
+          exit 1
 
       - name: Run post-deploy commands on VPS
         run: |

@@ -4,17 +4,20 @@ import { Megaphone, Loader2, Sparkles, ImagePlus } from 'lucide-react';
 import { social } from '@/services/social';
 import { Skeleton } from '@/components/social/atoms';
 import TargetingFields from '@/components/social/TargetingFields';
+import { compressImage } from '@/utils/image';
 
 const inp = 'w-full px-3 py-2 rounded-lg border border-gray-200 text-sm outline-none focus:ring-2 focus:ring-gray-300';
 const lbl = 'text-xs font-semibold text-gray-600';
 const CREATE_GOALS = [['engagement', 'Engagement'], ['traffic', 'Traffic'], ['awareness', 'Awareness'], ['video_views', 'Video Views']];
 const PLATFORMS = ['facebook', 'instagram', 'tiktok', 'linkedin', 'google'];
-const CTA_OPTIONS = ['LEARN_MORE', 'SIGN_UP', 'CONTACT_US', 'APPLY', 'REGISTER', 'BOOK_TRAVEL', 'GET_QUOTE', 'SUBSCRIBE', 'DOWNLOAD', 'SHOP_NOW'];
+// Meta-accepted call-to-actions, in Zernio's own order (it rejects anything
+// else, e.g. APPLY/REGISTER). SIGN_UP is the registration/enrolment equivalent.
+const CTA_OPTIONS = ['LEARN_MORE', 'SHOP_NOW', 'SIGN_UP', 'BOOK_TRAVEL', 'CONTACT_US', 'DOWNLOAD', 'GET_OFFER', 'GET_QUOTE', 'SUBSCRIBE', 'WATCH_MORE'];
 
 const blankForm = {
     name: '', adAccountId: '', platform: 'facebook', goal: 'traffic',
     body: '', headline: '', linkUrl: '', callToAction: 'LEARN_MORE',
-    budgetAmount: '5', budgetType: 'daily', brief: '',
+    budgetAmount: '100', budgetType: 'daily', brief: '',
 };
 const blankTargeting = {
     ageMin: 18, ageMax: 45, gender: 'all', incomeTier: '',
@@ -59,6 +62,7 @@ export default function CreateAdForm() {
     const submit = async () => {
         if (!form.name || !form.adAccountId || !form.body) { toast.error('Fill ad name, ad account and primary text.'); return; }
         if (!accountId) { toast.error('That ad account is missing its social account.'); return; }
+        if (!media) { toast.error('Attach an image — Meta ads require a creative.'); return; }
         setBusy(true);
         try {
             const fd = new FormData();
@@ -129,12 +133,12 @@ export default function CreateAdForm() {
                         </div>
 
                         <div>
-                            <span className={lbl}>Media</span>
-                            <input type="file" accept="image/*,video/*" id="create-ad-media" className="hidden" onChange={(e) => setMedia(e.target.files?.[0] || null)} />
+                            <span className={lbl}>Media <span className="text-red-500">*</span></span>
+                            <input type="file" accept="image/*,video/*" id="create-ad-media" className="hidden" onChange={async (e) => { const f = e.target.files?.[0]; setMedia(f ? await compressImage(f) : null); }} />
                             <label htmlFor="create-ad-media" className="mt-1 flex flex-col items-center justify-center gap-1 border-2 border-dashed border-gray-200 rounded-xl py-6 cursor-pointer hover:border-gray-400 text-center">
                                 <ImagePlus size={20} className="text-gray-400" />
                                 <span className="text-xs text-gray-500">{media ? media.name : 'Click to upload an image or video'}</span>
-                                <span className="text-[10px] text-gray-400">JPG/PNG recommended 1200×628, max 30MB</span>
+                                <span className="text-[10px] text-gray-400">Required · JPG/PNG 1200×628 recommended · auto-compressed on upload</span>
                             </label>
                         </div>
 
@@ -184,7 +188,7 @@ export default function CreateAdForm() {
                                     <option value="daily">per day</option><option value="lifetime">total</option>
                                 </select>
                             </div>
-                            {acct?.currency && <p className="text-[11px] text-gray-400 leading-snug mt-1">Meta enforces a minimum daily budget in {acct.currency} — raise it if the ad won't deliver.</p>}
+                            {acct?.currency && <p className="text-[11px] text-gray-400 leading-snug mt-1">Amount is in <b>{acct.currency}</b> (your ad account's currency), not USD. Meta enforces a minimum daily budget — raise it if the ad won't deliver.</p>}
                         </div>
 
                         <TargetingFields

@@ -16,7 +16,7 @@ const fmtDate = (iso) => { try { return new Date(iso).toLocaleDateString('en-NZ'
 export default function BoostModal({ onClose, onBoosted }) {
     const [adAccounts, setAdAccounts] = useState(null);
     const [posts, setPosts] = useState(null);
-    const [form, setForm] = useState({ adAccountId: '', name: '', goal: 'engagement', budgetAmount: '5', budgetType: 'daily', postId: '' });
+    const [form, setForm] = useState({ adAccountId: '', name: '', goal: 'engagement', budgetAmount: '100', budgetType: 'daily', postId: '' });
     const [targeting, setTargeting] = useState({ ageMin: 18, ageMax: 65, gender: 'all', countries: [] });
     const [cq, setCq] = useState('');
     const [busy, setBusy] = useState(false);
@@ -138,7 +138,7 @@ export default function BoostModal({ onClose, onBoosted }) {
                                         <option value="daily">per day</option><option value="lifetime">total</option>
                                     </select>
                                 </div>
-                                {acct?.currency && <p className="text-[11px] text-gray-400 leading-snug mt-1">Meta enforces a minimum daily budget in {acct.currency} — raise it if the ad won't deliver.</p>}
+                                {acct?.currency && <p className="text-[11px] text-gray-400 leading-snug mt-1">Amount is in <b>{acct.currency}</b> (your ad account's currency), not USD. Meta enforces a minimum daily budget — raise it if the ad won't deliver.</p>}
                             </div>
 
                             {/* Targeting (boost supports countries / age / gender) */}

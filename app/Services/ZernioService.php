@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use Illuminate\Http\Client\PendingRequest;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 
@@ -34,9 +35,11 @@ class ZernioService
 
     /**
      * The profile every account/post query is scoped to, so accounts and posts
-     * from OTHER profiles (e.g. a separate accommodation page) never leak in.
-     * Uses ZERNIO_PROFILE_ID; if that's unset and the key sees exactly one
-     * profile, uses it. Null only when several profiles exist and none is set.
+     * from OTHER profiles (e.g. a separate accommodation page in the workspace's
+     * "Default" profile) never leak in. Uses ZERNIO_PROFILE_ID when set;
+     * otherwise auto-detects the single profile that actually holds connected
+     * accounts (empty profiles carry no data). Null only when several non-empty
+     * profiles exist and none is configured.
      */
     private function profileId(): ?string
     {
@@ -50,10 +53,29 @@ class ZernioService
             return $this->resolvedProfileId = (string) $configured;
         }
 
-        $profiles = $this->listProfiles()['profiles'];
-        if (count($profiles) === 1) {
-            $this->resolvedProfileId = $profiles[0]['id'];
-        }
+        // Cache the detection so its extra calls run at most twice an hour.
+        $key = 'zernio:auto_profile:'.md5((string) config('services.zernio.api_key'));
+        $found = Cache::remember($key, now()->addMinutes(30), function () {
+            $profiles = $this->listProfiles()['profiles'];
+            if (count($profiles) === 1) {
+                return $profiles[0]['id'];
+            }
+
+            $withAccounts = [];
+            foreach ($profiles as $p) {
+                try {
+                    if (count($this->accountsForProfile($p['id'])) > 0) {
+                        $withAccounts[] = $p['id'];
+                    }
+                } catch (\Throwable $e) {
+                    // Can't read this profile's accounts — ignore it.
+                }
+            }
+
+            return count($withAccounts) === 1 ? $withAccounts[0] : 'NONE';
+        });
+
+        $this->resolvedProfileId = $found === 'NONE' ? null : $found;
 
         return $this->resolvedProfileId;
     }
@@ -82,6 +104,19 @@ class ZernioService
         } catch (\Throwable $e) {
             return ['profiles' => []];
         }
+    }
+
+    /** Raw account list for an explicit profile (diagnostics — bypasses scoping). */
+    public function accountsForProfile(?string $profileId): array
+    {
+        $res = $this->client()->get('/accounts', array_filter(['profileId' => $profileId]))->throw();
+        $rows = $res->json('data') ?? $res->json('accounts') ?? $res->json() ?? [];
+
+        return array_values(array_map(fn ($a) => [
+            'id' => (string) ($a['_id'] ?? $a['id'] ?? ''),
+            'platform' => (string) ($a['platform'] ?? ''),
+            'handle' => (string) ($a['username'] ?? $a['handle'] ?? $a['name'] ?? ''),
+        ], is_array($rows) ? $rows : []));
     }
 
     /** GET /accounts → [{id, platform, handle, status, last_post_at}], scoped to the profile. */
@@ -231,11 +266,20 @@ class ZernioService
         $media = is_array($media) ? $media : [];
         $first = $media[0] ?? null;
 
+        // Zernio posts carry accountId as a populated object, externals as a
+        // string/null — normalise both to an id + readable name.
+        $acct = $pf['accountId'] ?? $p['accountId'] ?? '';
+        $acctName = $pf['accountName'] ?? $pf['username'] ?? $pf['handle'] ?? $p['accountName'] ?? '';
+        if (is_array($acct)) {
+            $acctName = $acctName ?: ($acct['username'] ?? $acct['name'] ?? $acct['handle'] ?? '');
+            $acct = $acct['_id'] ?? $acct['id'] ?? '';
+        }
+
         return [
             'id' => (string) ($p['_id'] ?? $p['id'] ?? ''),
             'platform' => $pf['platform'] ?? ($p['platform'] ?? null),
-            'account_id' => (string) ($pf['accountId'] ?? $p['accountId'] ?? ''),
-            'account' => (string) ($pf['accountName'] ?? $pf['username'] ?? $pf['handle'] ?? $p['accountName'] ?? ''),
+            'account_id' => (string) $acct,
+            'account' => (string) $acctName,
             'content' => $content,
             'preview' => Str::limit($content, 60) ?: '(no caption)',
             'thumbnail' => is_array($first) ? ($first['thumbnailUrl'] ?? $first['url'] ?? null) : (is_string($first) ? $first : null),
@@ -542,7 +586,7 @@ class ZernioService
      */
     public function analytics(array $query = []): array
     {
-        $res = $this->client()->get('/analytics', $query)->throw();
+        $res = $this->client()->get('/analytics', $this->scoped($query))->throw();
         $json = $res->json();
         // The endpoint returns a list under data/posts, or a single post object.
         $rows = $res->json('data') ?? $res->json('posts')

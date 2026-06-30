@@ -6,6 +6,7 @@ use App\Models\Lead;
 use App\Models\SocialPost;
 use App\Services\CerebrasService;
 use App\Services\ZernioService;
+use Illuminate\Http\Client\RequestException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
@@ -613,7 +614,7 @@ class AiAdsWebhookController extends Controller
             'goal' => 'required|string|max:40',
             'body' => 'required|string|max:2000',
             'headline' => 'nullable|string|max:255',
-            'callToAction' => 'nullable|string|max:40',
+            'callToAction' => 'nullable|in:LEARN_MORE,SHOP_NOW,SIGN_UP,BOOK_TRAVEL,CONTACT_US,DOWNLOAD,GET_OFFER,GET_QUOTE,SUBSCRIBE,WATCH_MORE',
             'linkUrl' => 'nullable|url|max:2000',
             'budgetAmount' => 'required|numeric|min:1',
             'budgetType' => 'required|in:daily,lifetime',
@@ -851,10 +852,23 @@ class AiAdsWebhookController extends Controller
     {
         try {
             return response()->json($fn());
+        } catch (RequestException $e) {
+            // Zernio/the ad platform returned an HTTP error — surface its own
+            // human message (Meta's error_user_msg, else Zernio's `error`) and
+            // map 4xx to 422 (user-actionable: billing, budget, CTA…) rather
+            // than a scary 502, which we keep for genuine gateway failures.
+            $body = $e->response?->json() ?? [];
+            $title = $body['platformError']['error_user_title'] ?? null;
+            $msg = $body['platformError']['error_user_msg'] ?? $body['error'] ?? $e->getMessage();
+            $message = $title ? $title.': '.$msg : $msg;
+            $status = $e->response && $e->response->status() >= 400 && $e->response->status() < 500 ? 422 : 502;
+            Log::warning('Zernio request rejected', ['status' => $e->response?->status(), 'error' => $message]);
+
+            return response()->json(['error' => $message], $status);
         } catch (\Throwable $e) {
             Log::error('Zernio call failed', ['error' => $e->getMessage()]);
 
-            return response()->json(['error' => 'Zernio: '.$e->getMessage()], 502);
+            return response()->json(['error' => 'Could not reach Zernio: '.$e->getMessage()], 502);
         }
     }
 

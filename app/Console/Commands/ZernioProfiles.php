@@ -9,7 +9,7 @@ class ZernioProfiles extends Command
 {
     protected $signature = 'zernio:profiles';
 
-    protected $description = 'List Zernio profiles so you can set ZERNIO_PROFILE_ID to the one holding your active accounts';
+    protected $description = 'List Zernio profiles and the accounts inside each, so you can set ZERNIO_PROFILE_ID';
 
     public function handle(ZernioService $zernio): int
     {
@@ -19,6 +19,10 @@ class ZernioProfiles extends Command
             return self::FAILURE;
         }
 
+        $configured = config('services.zernio.profile_id');
+        $this->line('Configured ZERNIO_PROFILE_ID: '.($configured ?: '(none — currently NOT scoped)'));
+        $this->newLine();
+
         $profiles = $zernio->listProfiles()['profiles'];
 
         if (empty($profiles)) {
@@ -27,10 +31,25 @@ class ZernioProfiles extends Command
             return self::SUCCESS;
         }
 
-        $this->table(['Profile ID', 'Name'], array_map(fn ($p) => [$p['id'], $p['name']], $profiles));
-        $this->newLine();
-        $this->info('Set ZERNIO_PROFILE_ID in .env to the profile that holds your active accounts');
-        $this->info('(the one shown in Zernio when you boost), then run: php artisan config:clear');
+        foreach ($profiles as $p) {
+            $active = $configured && $configured === $p['id'] ? '  <-- ACTIVE' : '';
+            $this->info("PROFILE  {$p['name']}   id={$p['id']}{$active}");
+
+            try {
+                $accounts = $zernio->accountsForProfile($p['id']);
+                if (empty($accounts)) {
+                    $this->line('    (no accounts)');
+                }
+                foreach ($accounts as $a) {
+                    $this->line("    - {$a['platform']}  {$a['handle']}   ({$a['id']})");
+                }
+            } catch (\Throwable $e) {
+                $this->line('    (could not list accounts: '.$e->getMessage().')');
+            }
+            $this->newLine();
+        }
+
+        $this->info('Set ZERNIO_PROFILE_ID to the profile that holds your Klyvera accounts, then run: php artisan config:clear');
 
         return self::SUCCESS;
     }
