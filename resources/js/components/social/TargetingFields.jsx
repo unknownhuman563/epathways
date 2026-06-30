@@ -6,7 +6,6 @@ import { COUNTRIES, COUNTRY_NAME } from '@/data/countries';
 
 const inp = 'w-full px-3 py-2 rounded-lg border border-gray-200 text-sm outline-none focus:ring-2 focus:ring-gray-300';
 const lbl = 'text-xs font-semibold text-gray-600';
-const GEO_TYPES = ['country', 'region', 'city', 'metro', 'zip'];
 const INCOME_TIERS = [['', 'No income filter'], ['top_5', 'Top 5%'], ['top_10', 'Top 10%'], ['top_10_25', 'Top 10–25%'], ['top_25_50', 'Top 25–50%']];
 
 /**
@@ -87,7 +86,6 @@ export default function TargetingFields({ accountId, platform, value, onChange, 
     const [aiBusy, setAiBusy] = useState(false);
     const [rationale, setRationale] = useState('');
     const [presets, setPresets] = useState([]);
-    const [geoType, setGeoType] = useState('country');
 
     useEffect(() => {
         if (!accountId) { setPresets([]); return; }
@@ -95,22 +93,32 @@ export default function TargetingFields({ accountId, platform, value, onChange, 
             .then((r) => setPresets(r?.presets || []), () => setPresets([]));
     }, [accountId, platform]);
 
-    // ── Location search (country = offline list; others = Zernio geo search) ──
-    const geoBucket = { country: 'countries', region: 'regions', city: 'cities', metro: 'metros', zip: 'zips' };
-    const searchGeo = (q) => {
-        if (geoType === 'country') {
-            return COUNTRIES.filter(([code, name]) => name.toLowerCase().includes(q.toLowerCase()) || code.toLowerCase() === q.toLowerCase())
-                .slice(0, 40).map(([code, name]) => ({ value: code, label: name }));
+    // ── Unified location search: type anything (country / region / city) — we
+    // search all of them at once and each result routes to the right bucket. ──
+    const searchGeo = async (q) => {
+        const countryHits = COUNTRIES
+            .filter(([code, name]) => name.toLowerCase().includes(q.toLowerCase()) || code.toLowerCase() === q.toLowerCase())
+            .slice(0, 5)
+            .map(([code, name]) => ({ value: `country:${code}`, label: name, sub: 'Country', _t: 'country', _code: code }));
+
+        let geoHits = [];
+        if (accountId) {
+            const [regions, cities] = await Promise.all([
+                social.targetingSearch({ q, accountId, dimension: 'geo', geoType: 'region' }).then((r) => r?.results || [], () => []),
+                social.targetingSearch({ q, accountId, dimension: 'geo', geoType: 'city' }).then((r) => r?.results || [], () => []),
+            ]);
+            geoHits = [
+                ...regions.map((x) => ({ value: `region:${x.id}`, label: x.name, sub: ['Region', ...(x.path || [])].join(' · '), _t: 'regions', _key: x.id, _name: x.name })),
+                ...cities.map((x) => ({ value: `city:${x.id}`, label: x.name, sub: ['City', ...(x.path || [])].join(' · '), _t: 'cities', _key: x.id, _name: x.name })),
+            ];
         }
-        return social.targetingSearch({ q, accountId, dimension: 'geo', geoType })
-            .then((r) => (r?.results || []).map((x) => ({ value: x.id, label: x.name, sub: (x.path || []).join(' / ') })));
+        return [...countryHits, ...geoHits];
     };
     const addGeo = (r) => {
-        const bucket = geoBucket[geoType];
-        if (geoType === 'country') {
-            if (!list('countries').includes(r.value)) patch({ countries: [...list('countries'), r.value] });
-        } else if (!list(bucket).some((g) => g.key === r.value)) {
-            patch({ [bucket]: [...list(bucket), { key: r.value, name: r.label }] });
+        if (r._t === 'country') {
+            if (!list('countries').includes(r._code)) patch({ countries: [...list('countries'), r._code] });
+        } else if (!list(r._t).some((g) => g.key === r._key)) {
+            patch({ [r._t]: [...list(r._t), { key: r._key, name: r._name }] });
         }
     };
     // Flatten every selected location into one chip list for display.
@@ -191,21 +199,12 @@ export default function TargetingFields({ accountId, platform, value, onChange, 
             </button>
             {rationale && <p className="text-xs text-indigo-700 bg-indigo-50/60 rounded-lg px-3 py-2 leading-relaxed">{rationale}</p>}
 
-            {/* Locations */}
+            {/* Locations — one box, searches countries + regions + cities */}
             <div>
                 <span className={lbl}>Locations</span>
-                <div className="flex gap-1 my-1">
-                    {GEO_TYPES.map((g) => (
-                        <button key={g} type="button" onClick={() => setGeoType(g)}
-                            className={`text-[11px] capitalize px-2 py-1 rounded-md border ${geoType === g ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'}`}>
-                            {g}
-                        </button>
-                    ))}
-                </div>
                 <SearchPicker
-                    key={geoType}
-                    placeholder={`Search ${geoType === 'zip' ? 'ZIP/postal' : geoType}…`}
-                    disabled={geoType !== 'country' && !accountId}
+                    placeholder="Search a country, region or city…"
+                    disabled={!accountId}
                     search={searchGeo}
                     selected={geoSelected}
                     onAdd={addGeo}
