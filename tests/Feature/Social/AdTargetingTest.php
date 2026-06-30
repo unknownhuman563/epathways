@@ -29,7 +29,7 @@ class AdTargetingTest extends TestCase
     public function test_targeting_search_proxies_zernio(): void
     {
         $this->configureZernio();
-        Http::fake(['*/ads/targeting/search*' => Http::response(['data' => [
+        Http::fake(['*/ads/targeting/search*' => Http::response(['results' => [
             ['id' => 'i1', 'name' => 'Study abroad', 'type' => 'interest', 'path' => ['Education'], 'audienceSize' => 1000000],
         ]])]);
 
@@ -69,7 +69,7 @@ class AdTargetingTest extends TestCase
                 'age_min' => 20, 'age_max' => 35, 'countries' => ['IN', 'PH'],
                 'interests' => ['Study abroad'], 'rationale' => 'Young prospective students.',
             ])]]]]),
-            '*/ads/targeting/search*' => Http::response(['data' => [
+            '*/ads/targeting/search*' => Http::response(['results' => [
                 ['id' => 'i_abroad', 'name' => 'Study abroad', 'type' => 'interest'],
             ]]),
         ]);

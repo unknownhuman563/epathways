@@ -389,7 +389,9 @@ class ZernioService
         ], fn ($v) => $v !== null && $v !== '');
 
         $res = $this->client()->get('/ads/targeting/search', $query)->throw();
-        $rows = $res->json('data') ?? $res->json() ?? [];
+        // Zernio wraps the array in `results` (not `data`). Falling through to the
+        // whole body would mangle every item into empty id/name.
+        $rows = $res->json('results') ?? $res->json('data') ?? [];
 
         return ['results' => array_values(array_map(fn ($r) => [
             'id' => (string) ($r['id'] ?? ''),
