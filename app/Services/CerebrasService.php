@@ -9,20 +9,187 @@ use Illuminate\Support\Facades\Log;
 class CerebrasService
 {
     private string $apiKey;
+
     private string $baseUrl;
+
     private string $model;
 
     public function __construct()
     {
-        $this->apiKey = config('services.cerebras.api_key');
-        $this->baseUrl = config('services.cerebras.base_url');
-        $this->model = config('services.cerebras.model');
+        $this->apiKey = (string) config('services.cerebras.api_key');
+        $this->baseUrl = (string) config('services.cerebras.base_url', 'https://api.cerebras.ai/v1');
+        $this->model = (string) config('services.cerebras.model', 'gpt-oss-120b');
+    }
+
+    /** Whether a Cerebras key is configured (else callers fall back to stubs). */
+    public function configured(): bool
+    {
+        return ! empty($this->apiKey);
+    }
+
+    /**
+     * Generate social-post variants in the {headline, body, cta, hashtags}
+     * shape the Social MVP review queue expects (distinct from generateAdCopy,
+     * which produces {post, hashtags} or email subjects).
+     *
+     * @return list<array{headline: string, body: string, cta: string, hashtags: array}>
+     */
+    public function generateSocialVariants(array $brief): array
+    {
+        $count = max(1, min(5, (int) ($brief['variant_count'] ?? 3)));
+
+        $response = Http::withHeaders([
+            'Authorization' => 'Bearer '.$this->apiKey,
+            'Content-Type' => 'application/json',
+        ])->timeout(60)->post("{$this->baseUrl}/chat/completions", [
+            'model' => $this->model,
+            'messages' => [
+                ['role' => 'system', 'content' => $this->buildSocialVariantPrompt($brief, $count)],
+                ['role' => 'user', 'content' => 'Write the variants for this brief:'."\n\n".json_encode([
+                    'campaign_name' => $brief['campaign_name'] ?? null,
+                    'service' => $brief['service'] ?? 'education',
+                    'platform' => $brief['platform'] ?? 'facebook',
+                    'hook_angle' => $brief['hook_angle'] ?? null,
+                    'target_audience' => $brief['target_audience'] ?? null,
+                    'tone' => $brief['tone'] ?? 'friendly',
+                ], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE)],
+            ],
+            'temperature' => 0.85,
+        ]);
+
+        if (! $response->successful()) {
+            Log::error('Cerebras social-variant API error', ['status' => $response->status()]);
+            throw new \RuntimeException('Cerebras request failed: '.$response->status());
+        }
+
+        $content = $response->json('choices.0.message.content');
+        $parsed = json_decode($this->extractJson((string) $content), true);
+
+        if (json_last_error() !== JSON_ERROR_NONE || ! isset($parsed['variants']) || ! is_array($parsed['variants'])) {
+            Log::error('Cerebras social-variant parse error', ['content' => $content]);
+            throw new \RuntimeException('Failed to parse social variants');
+        }
+
+        return array_map(fn ($v) => [
+            'headline' => (string) ($v['headline'] ?? ''),
+            'body' => (string) ($v['body'] ?? ''),
+            'cta' => (string) ($v['cta'] ?? ''),
+            'hashtags' => array_values(array_filter((array) ($v['hashtags'] ?? []))),
+        ], $parsed['variants']);
+    }
+
+    /**
+     * Suggest paid-ad audience targeting for a boosted post: an age range, ISO
+     * country codes and interest keyword names (resolved to Zernio interest ids
+     * by the caller), plus a one-line rationale. Grounded in the ePathways
+     * audience — students/migrants bound for New Zealand.
+     */
+    public function suggestAdTargeting(array $brief): array
+    {
+        $response = Http::withHeaders([
+            'Authorization' => 'Bearer '.$this->apiKey,
+            'Content-Type' => 'application/json',
+        ])->timeout(60)->post("{$this->baseUrl}/chat/completions", [
+            'model' => $this->model,
+            'messages' => [
+                ['role' => 'system', 'content' => $this->buildTargetingPrompt()],
+                ['role' => 'user', 'content' => 'Suggest the audience for this ad:'."\n\n".json_encode([
+                    'goal' => $brief['goal'] ?? 'traffic',
+                    'platform' => $brief['platform'] ?? 'facebook',
+                    'post_content' => mb_substr((string) ($brief['content'] ?? ''), 0, 1200),
+                ], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE)],
+            ],
+            'temperature' => 0.5,
+        ]);
+
+        if (! $response->successful()) {
+            Log::error('Cerebras targeting API error', ['status' => $response->status()]);
+            throw new \RuntimeException('Cerebras request failed: '.$response->status());
+        }
+
+        $content = $response->json('choices.0.message.content');
+        $parsed = json_decode($this->extractJson((string) $content), true);
+
+        if (json_last_error() !== JSON_ERROR_NONE || ! is_array($parsed)) {
+            Log::error('Cerebras targeting parse error', ['content' => $content]);
+            throw new \RuntimeException('Failed to parse targeting suggestion');
+        }
+
+        $ageMin = (int) ($parsed['age_min'] ?? 18);
+        $ageMax = (int) ($parsed['age_max'] ?? 45);
+
+        return [
+            'ageMin' => max(13, min(65, $ageMin)),
+            'ageMax' => max(13, min(65, max($ageMin, $ageMax))),
+            'countries' => array_values(array_filter(array_map(
+                fn ($c) => strtoupper(substr((string) $c, 0, 2)),
+                (array) ($parsed['countries'] ?? [])
+            ))),
+            'interests' => array_values(array_filter(array_map(
+                fn ($i) => trim((string) $i),
+                (array) ($parsed['interests'] ?? [])
+            ))),
+            'rationale' => (string) ($parsed['rationale'] ?? ''),
+        ];
+    }
+
+    private function buildTargetingPrompt(): string
+    {
+        return <<<'PROMPT'
+        You are a paid-social media buyer for ePathways, a New Zealand education & immigration consultancy. Given an ad's goal, platform and post content, propose the best paid-ad AUDIENCE.
+
+        Context: ePathways helps international students and migrants move to New Zealand to study and settle. Typical prospects are 18-40, in source markets like India, the Philippines, Nepal, Sri Lanka, Vietnam, Pakistan and Bangladesh, plus onshore audiences already in New Zealand. Interests skew to study abroad, overseas education, student visas, IELTS/PTE, immigration, working in New Zealand, and fields like nursing, IT, business and trades.
+
+        ## Output Format
+        CRITICAL: Respond with ONLY a single valid JSON object. No markdown, no code fences, no preamble.
+
+        Shape:
+        {
+          "age_min": 18,
+          "age_max": 40,
+          "countries": ["IN", "PH", "NP"],
+          "interests": ["Study abroad", "Student visa", "New Zealand", "IELTS"],
+          "rationale": "One short sentence on who and why."
+        }
+
+        Rules:
+        - countries: 2-6 ISO 3166-1 alpha-2 codes most likely to convert for this post.
+        - interests: 4-8 short, real interest names a platform's targeting tool would recognise (no # or hashtags).
+        - Keep ages within 13-65 and age_min <= age_max.
+        PROMPT;
+    }
+
+    private function buildSocialVariantPrompt(array $brief, int $count): string
+    {
+        $platform = $brief['platform'] ?? 'facebook';
+
+        return <<<PROMPT
+        You are a senior social-media copywriter for ePathways, a New Zealand education & immigration consultancy. Write platform-ready {$platform} post variants for a paid/organic campaign.
+
+        Voice: warm, credible, specific. Real value props (free assessment, licensed immigration advisers, NZQA-recognised programmes, end-to-end support). No fake urgency. Tasteful emojis okay (1-4). Match the requested tone exactly.
+
+        ## Output Format
+        CRITICAL: Respond with ONLY a single valid JSON object. No markdown, no code fences, no preamble.
+
+        Produce exactly {$count} variants. Each variant has:
+        - "headline": string (a short scroll-stopping hook, max ~80 characters)
+        - "body": string (the post copy, 60-180 words depending on platform; LinkedIn longer, Instagram/Facebook shorter)
+        - "cta": string (a short call to action, e.g. "Take the free assessment")
+        - "hashtags": array of 6-12 lowercase hashtag strings WITHOUT the # symbol
+
+        Shape:
+        {
+          "variants": [
+            { "headline": "...", "body": "...", "cta": "...", "hashtags": ["...", "..."] }
+          ]
+        }
+        PROMPT;
     }
 
     public function generateAdCopy(array $brief): array
     {
         $response = Http::withHeaders([
-            'Authorization' => 'Bearer ' . $this->apiKey,
+            'Authorization' => 'Bearer '.$this->apiKey,
             'Content-Type' => 'application/json',
         ])->timeout(60)->post("{$this->baseUrl}/chat/completions", [
             'model' => $this->model,
@@ -33,24 +200,24 @@ class CerebrasService
             'temperature' => 0.8,
         ]);
 
-        if (!$response->successful()) {
+        if (! $response->successful()) {
             Log::error('Cerebras ad-copy API error', [
                 'status' => $response->status(),
                 'body' => $response->body(),
             ]);
-            throw new \RuntimeException('Cerebras API request failed: ' . $response->status());
+            throw new \RuntimeException('Cerebras API request failed: '.$response->status());
         }
 
         $content = $response->json('choices.0.message.content');
 
-        if (!$content) {
+        if (! $content) {
             throw new \RuntimeException('Cerebras API returned empty content');
         }
 
         $jsonString = $this->extractJson($content);
         $parsed = json_decode($jsonString, true);
 
-        if (json_last_error() !== JSON_ERROR_NONE || !isset($parsed['variants']) || !is_array($parsed['variants'])) {
+        if (json_last_error() !== JSON_ERROR_NONE || ! isset($parsed['variants']) || ! is_array($parsed['variants'])) {
             Log::error('Cerebras ad-copy parse error', [
                 'error' => json_last_error_msg(),
                 'content' => $content,
@@ -120,19 +287,19 @@ PROMPT;
     private function buildAdUserMessage(array $brief): string
     {
         $payload = [
-            'ad_type'       => $brief['ad_type']       ?? 'social',
-            'platform'      => $brief['platform']      ?? null,
-            'topic'         => $brief['topic']         ?? null,
-            'product'       => $brief['product']       ?? null,
-            'audience'      => $brief['audience']      ?? null,
-            'tone'          => $brief['tone']          ?? 'warm and professional',
-            'key_points'    => $brief['key_points']    ?? null,
-            'cta'           => $brief['cta']           ?? null,
-            'language'      => $brief['language']      ?? 'English',
+            'ad_type' => $brief['ad_type'] ?? 'social',
+            'platform' => $brief['platform'] ?? null,
+            'topic' => $brief['topic'] ?? null,
+            'product' => $brief['product'] ?? null,
+            'audience' => $brief['audience'] ?? null,
+            'tone' => $brief['tone'] ?? 'warm and professional',
+            'key_points' => $brief['key_points'] ?? null,
+            'cta' => $brief['cta'] ?? null,
+            'language' => $brief['language'] ?? 'English',
             'variant_count' => $brief['variant_count'] ?? 3,
         ];
 
-        return "Write the ad copy for this brief:\n\n" . json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+        return "Write the ad copy for this brief:\n\n".json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
     }
 
     public function analyze(Lead $lead): array
@@ -140,7 +307,7 @@ PROMPT;
         $lead->loadMissing(['studyPlans', 'educationExps', 'tags', 'documents', 'documentRequests']);
 
         $response = Http::withHeaders([
-            'Authorization' => 'Bearer ' . $this->apiKey,
+            'Authorization' => 'Bearer '.$this->apiKey,
             'Content-Type' => 'application/json',
         ])->timeout(60)->post("{$this->baseUrl}/chat/completions", [
             'model' => $this->model,
@@ -151,18 +318,18 @@ PROMPT;
             'temperature' => 0.3,
         ]);
 
-        if (!$response->successful()) {
+        if (! $response->successful()) {
             Log::error('Cerebras API error', [
                 'status' => $response->status(),
                 'body' => $response->body(),
                 'lead_id' => $lead->lead_id,
             ]);
-            throw new \RuntimeException('Cerebras API request failed: ' . $response->status());
+            throw new \RuntimeException('Cerebras API request failed: '.$response->status());
         }
 
         $content = $response->json('choices.0.message.content');
 
-        if (!$content) {
+        if (! $content) {
             throw new \RuntimeException('Cerebras API returned empty content');
         }
 
@@ -179,7 +346,7 @@ PROMPT;
             throw new \RuntimeException('Failed to parse Cerebras response as JSON');
         }
 
-        if (!isset($analysis['overall_score'], $analysis['categories'])) {
+        if (! isset($analysis['overall_score'], $analysis['categories'])) {
             Log::error('Cerebras response missing required fields', [
                 'content' => $content,
                 'lead_id' => $lead->lead_id,
@@ -315,14 +482,14 @@ PROMPT;
         $educationExps = $lead->educationExps;
 
         $data = [
-            'lead_status'  => $lead->status,
-            'staff_tags'   => $lead->tags->pluck('name')->all(),
-            'documents'    => [
+            'lead_status' => $lead->status,
+            'staff_tags' => $lead->tags->pluck('name')->all(),
+            'documents' => [
                 'submitted_count' => $lead->documents->count(),
                 'requested_count' => $lead->documentRequests->count(),
-                'requested_labels'=> $lead->documentRequests->pluck('label')->filter()->unique()->values()->all(),
-                'approved_count'  => $lead->documents->where('status', 'Approved')->count(),
-                'rejected_count'  => $lead->documents->where('status', 'Rejected')->count(),
+                'requested_labels' => $lead->documentRequests->pluck('label')->filter()->unique()->values()->all(),
+                'approved_count' => $lead->documents->where('status', 'Approved')->count(),
+                'rejected_count' => $lead->documents->where('status', 'Rejected')->count(),
             ],
             'personal' => [
                 'first_name' => $lead->first_name,
@@ -350,7 +517,7 @@ PROMPT;
             ] : null,
             'education' => [
                 'notes' => $lead->education_notes,
-                'qualifications' => $educationExps->map(fn($e) => [
+                'qualifications' => $educationExps->map(fn ($e) => [
                     'level' => $e->level,
                     'field_of_study' => $e->field_of_study,
                     'institution' => $e->institution,
@@ -372,6 +539,6 @@ PROMPT;
             'home_ties_info' => $lead->home_ties_info,
         ];
 
-        return "Analyze this applicant's eligibility for studying in New Zealand:\n\n" . json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+        return "Analyze this applicant's eligibility for studying in New Zealand:\n\n".json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
     }
 }

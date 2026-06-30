@@ -77,4 +77,29 @@ export const social = {
     listAccounts:    ()                           => request('GET',  'list-accounts'),
     startOauth:      (platform)                   => request('POST', 'start-oauth',     { body: { platform } }),
     disconnectAccount:(accountId)                 => request('POST', 'disconnect',      { body: { accountId } }),
+
+    // Inbox ────────────────────────────────────────────────────────────────
+    inboxConversations: ()                        => request('GET',  'inbox-conversations'),
+    inboxMessages:   (conversationId, accountId)  => request('GET',  'inbox-messages',  { query: { conversationId, accountId } }),
+    inboxSend:       (conversationId, accountId, text) => request('POST', 'inbox-send',  { body: { conversationId, accountId, text } }),
+    inboxMarkRead:   (conversationId, accountId)  => request('POST', 'inbox-read',      { body: { conversationId, accountId } }),
+    inboxSignal:     ()                           => request('GET',  'inbox-signal'),
+    inboxComments:   ()                           => request('GET',  'inbox-comments'),
+    replyComment:    (postId, accountId, text)    => request('POST', 'inbox-reply-comment', { body: { postId, accountId, text } }),
+
+    // Ads ──────────────────────────────────────────────────────────────────
+    publishedPosts:  (params = {})                => request('GET',  'published-posts', { query: params }),
+    adsList:         ()                           => request('GET',  'ads-list'),
+    adAccounts:      ()                           => request('GET',  'ad-accounts'),
+    boostPost:       (payload)                    => request('POST', 'ads-boost',       { body: payload }),
+    createAd:        (formData)                   => request('POST', 'create-ad',       { body: formData }),
+    aiAdCopy:        (payload)                    => request('POST', 'ai-ad-copy',      { body: payload }),
+    adAnalytics:     (adId)                       => request('GET',  'ad-analytics',    { query: { adId } }),
+    targetingSearch: (params)                     => request('GET',  'ad-targeting-search', { query: params }),
+    aiTargeting:     (payload)                    => request('POST', 'ai-targeting',    { body: payload }),
+    adAudiences:     (params)                     => request('GET',  'ad-audiences',    { query: params }),
+    saveAudience:    (payload)                    => request('POST', 'ad-audience-save', { body: payload }),
+
+    // Performance ────────────────────────────────────────────────────────────
+    performance:     ({ fromDate, toDate } = {})  => request('GET',  'analytics',       { query: { fromDate, toDate } }),
 };

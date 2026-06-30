@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { Head, Link, router, usePage } from "@inertiajs/react";
 import { toast } from "sonner";
 import BulkEmailModal from "@/components/sales/BulkEmailModal";
+import { getJson } from "@/lib/http";
 import {
     DndContext, DragOverlay, KeyboardSensor, PointerSensor,
     useDraggable, useDroppable, useSensor, useSensors,
@@ -13,7 +14,7 @@ import {
     Filter, ArrowUpDown, ArrowUp, ArrowDown, ChevronLeft, ChevronRight,
     MoreHorizontal, ChevronDown, ChevronRight as ChevronRightIcon, ExternalLink, UserCheck,
     Upload, Loader, Plus, X, CalendarClock, Link2, FileText as FileTextIcon,
-    Pencil, StickyNote,
+    Pencil, StickyNote, Calendar, MapPin, Users,
 } from "lucide-react";
 
 // ── Stage colour map ───────────────────────────────────────────────────────
@@ -139,7 +140,7 @@ const PAGE_SIZE = 20;
 // prop is missing.
 const PORTAL_LABEL = { sales: "Sales", education: "Education", immigration: "Immigration" };
 
-export default function SalesLeads({ leads = [], statuses = [], programs = [], staffOptions = [], portal = "sales" }) {
+export default function SalesLeads({ leads = [], statuses = [], programs = [], staffOptions = [], events = [], portal = "sales" }) {
     const portalBase = `/portal/${portal}`;
     const portalLabel = PORTAL_LABEL[portal] || "Sales";
     // Sales, Education, and Immigration can all request portal invitations
@@ -271,12 +272,21 @@ export default function SalesLeads({ leads = [], statuses = [], programs = [], s
                         >
                             Kanban
                         </button>
-                        <button className="px-3 py-3 text-xs font-medium text-gray-400 hover:text-gray-700">
-                            + List
+                        <button
+                            type="button"
+                            onClick={() => setView("events")}
+                            className={`px-3 py-3 text-xs font-bold transition-colors -mb-px ${
+                                view === "events"
+                                    ? "text-gray-900 border-b-2 border-gray-900"
+                                    : "text-gray-400 border-b-2 border-transparent hover:text-gray-700"
+                            }`}
+                        >
+                            Events
                         </button>
                     </div>
                 </div>
 
+                {view !== "events" && (
                 <div className="flex flex-col lg:flex-row gap-3 lg:items-center lg:justify-between p-4 sm:p-5">
                     <div className="flex flex-wrap items-center gap-2">
                         <div className="flex flex-wrap gap-1.5 max-w-3xl">
@@ -344,6 +354,7 @@ export default function SalesLeads({ leads = [], statuses = [], programs = [], s
                         </div>
                     </div>
                 </div>
+                )}
             </div>
 
             {/* Table */}
@@ -573,7 +584,197 @@ export default function SalesLeads({ leads = [], statuses = [], programs = [], s
                 <LeadsKanban filtered={filtered} statuses={statuses} portalBase={portalBase} />
             )}
 
+            {view === "events" && (
+                <EventsTab events={events} portalBase={portalBase} statuses={statuses} />
+            )}
+
             <BulkEmailModal open={bulkOpen} onClose={() => setBulkOpen(false)} leadIds={[...selectedIds]} />
+        </div>
+    );
+}
+
+// ── Events tab — list events + view their registrants in an opportunities-
+//    style table (with pipeline-stage badges) ───────────────────────────────
+
+const fmtEventDate = (iso) =>
+    iso ? new Date(iso).toLocaleDateString("en-NZ", { day: "numeric", month: "short", year: "numeric" }) : "—";
+
+function EventsTab({ events = [], portalBase, statuses = [] }) {
+    const [active, setActive] = useState(null);        // event whose registrants are open
+    const [registrants, setRegistrants] = useState([]);
+    const [loading, setLoading] = useState(false);
+    const [savingId, setSavingId] = useState(null);    // registrant whose stage is saving
+
+    const openRegistrants = async (ev) => {
+        setActive(ev);
+        setRegistrants([]);
+        setLoading(true);
+        const { data } = await getJson(`/portal/sales/events/${ev.id}/registrations`);
+        setRegistrants(data?.registrations ?? []);
+        setLoading(false);
+    };
+
+    // Update a registrant's pipeline stage — works regardless of which
+    // department the lead now sits in (the sales updateLead endpoint just
+    // sets the status on any lead).
+    const changeRegistrantStage = (reg, stage) => {
+        setSavingId(reg.id);
+        router.post(`${portalBase}/leads/${reg.id}`, { status: stage }, {
+            preserveScroll: true,
+            preserveState: true,
+            onSuccess: () => setRegistrants((prev) => prev.map((r) => (r.id === reg.id ? { ...r, status: stage } : r))),
+            onFinish: () => setSavingId(null),
+        });
+    };
+
+    return (
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+            {events.length === 0 ? (
+                <div className="px-6 py-20 text-center text-gray-400">
+                    <Calendar size={26} className="mx-auto mb-2 text-gray-300" />
+                    <p className="text-sm font-medium">No events yet</p>
+                </div>
+            ) : (
+                <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs">
+                        <thead>
+                            <tr className="bg-gray-50/60 border-b border-gray-200 text-[10px] font-bold text-gray-500 uppercase tracking-wider">
+                                <th className="px-4 py-3">Event</th>
+                                <th className="px-3 py-3">Date</th>
+                                <th className="px-3 py-3">Where</th>
+                                <th className="px-3 py-3">Type</th>
+                                <th className="px-3 py-3 text-center">Registered</th>
+                                <th className="px-3 py-3 text-right pr-4">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                            {events.map((ev) => (
+                                <tr key={ev.id} className="hover:bg-gray-50/60 transition-colors">
+                                    <td className="px-4 py-3">
+                                        <div className="font-semibold text-gray-900">{ev.name}</div>
+                                        {ev.event_code && <div className="text-[10px] text-gray-400 tabular-nums">{ev.event_code}</div>}
+                                    </td>
+                                    <td className="px-3 py-3 text-gray-600 whitespace-nowrap">{fmtEventDate(ev.date_from)}</td>
+                                    <td className="px-3 py-3 text-gray-600">
+                                        <span className="inline-flex items-center gap-1.5">
+                                            <MapPin size={12} className="text-gray-400" />
+                                            <span className="max-w-[200px] truncate">{ev.location || ev.mode || "—"}</span>
+                                        </span>
+                                    </td>
+                                    <td className="px-3 py-3 text-gray-600">{ev.type || "—"}</td>
+                                    <td className="px-3 py-3 text-center">
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-gray-100 text-gray-700 font-bold tabular-nums">
+                                            <Users size={11} /> {ev.registrations_count}
+                                        </span>
+                                    </td>
+                                    <td className="px-3 py-3 text-right pr-4">
+                                        <button
+                                            type="button"
+                                            onClick={() => openRegistrants(ev)}
+                                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-900 text-white text-[11px] font-semibold hover:bg-black"
+                                        >
+                                            View registrants
+                                        </button>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            )}
+
+            {active && (
+                <RegistrantsModal
+                    event={active}
+                    registrants={registrants}
+                    loading={loading}
+                    portalBase={portalBase}
+                    statuses={statuses}
+                    savingId={savingId}
+                    onStageChange={changeRegistrantStage}
+                    onClose={() => setActive(null)}
+                />
+            )}
+        </div>
+    );
+}
+
+// Centered (large, not full-screen) modal showing one event's registrants in
+// the opportunities table style, with an editable pipeline-stage dropdown.
+function RegistrantsModal({ event, registrants = [], loading, portalBase, statuses = [], savingId, onStageChange, onClose }) {
+    const [openStageId, setOpenStageId] = useState(null);
+
+    return (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4" onMouseDown={onClose}>
+            <div className="absolute inset-0 bg-black/40" />
+            <div
+                className="relative bg-white rounded-2xl shadow-2xl w-full max-w-5xl h-[72vh] max-h-[85vh] flex flex-col overflow-hidden"
+                onMouseDown={(e) => e.stopPropagation()}
+            >
+                <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+                    <div className="min-w-0">
+                        <h2 className="text-base font-bold text-gray-900 truncate">Registrants · {event.name}</h2>
+                        <p className="text-[11px] text-gray-400">{registrants.length} registered</p>
+                    </div>
+                    <button onClick={onClose} className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100"><X size={18} /></button>
+                </div>
+
+                <div className="flex-1 overflow-auto">
+                    {loading ? (
+                        <div className="p-10 flex items-center justify-center text-gray-400 text-sm gap-2">
+                            <Loader size={16} className="animate-spin" /> Loading…
+                        </div>
+                    ) : registrants.length === 0 ? (
+                        <div className="p-12 text-center text-gray-400">
+                            <Users size={24} className="mx-auto mb-2 text-gray-300" />
+                            <p className="text-sm font-medium">No one has registered yet</p>
+                        </div>
+                    ) : (
+                        <table className="w-full text-left text-xs">
+                            <thead>
+                                <tr className="bg-gray-50/60 border-b border-gray-200 text-[10px] font-bold text-gray-500 uppercase tracking-wider">
+                                    <th className="px-5 py-3">Lead</th>
+                                    <th className="px-3 py-3">Stage</th>
+                                    <th className="px-3 py-3">Email</th>
+                                    <th className="px-3 py-3">Phone</th>
+                                    <th className="px-3 py-3 text-right pr-5">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100">
+                                {registrants.map((r) => (
+                                    <tr key={r.id} className="hover:bg-gray-50/60 transition-colors">
+                                        <td className="px-5 py-3">
+                                            <div className="font-semibold text-gray-900">{r.name}</div>
+                                            {r.lead_id && <div className="text-[10px] text-gray-400 tabular-nums">{r.lead_id}</div>}
+                                        </td>
+                                        <td className="px-3 py-3 relative">
+                                            <StagePicker
+                                                lead={r}
+                                                stages={statuses}
+                                                open={openStageId === r.id}
+                                                onToggle={() => setOpenStageId(openStageId === r.id ? null : r.id)}
+                                                onClose={() => setOpenStageId(null)}
+                                                onSelect={(stage) => { onStageChange(r, stage); setOpenStageId(null); }}
+                                                isSaving={savingId === r.id}
+                                            />
+                                        </td>
+                                        <td className="px-3 py-3 text-gray-600">{r.email || "—"}</td>
+                                        <td className="px-3 py-3 text-gray-600">{r.phone || "—"}</td>
+                                        <td className="px-3 py-3 text-right pr-5">
+                                            <Link
+                                                href={`${portalBase}/leads/${r.id}`}
+                                                className="inline-flex items-center gap-1 text-[11px] font-semibold text-gray-600 hover:text-gray-900"
+                                            >
+                                                Open <ExternalLink size={11} />
+                                            </Link>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    )}
+                </div>
+            </div>
         </div>
     );
 }
@@ -907,6 +1108,33 @@ function ImportLeadsButton() {
 function RowMenu({ lead, open, onToggle, onClose, onRequestPortal, isSaving, portalBase = "/portal/sales", canRequestInvite = true }) {
     const menuRef = useRef(null);
     const triggerRef = useRef(null);
+    const [menuStyle, setMenuStyle] = useState(null);
+
+    // Position the menu as a fixed-position portal anchored to the trigger so
+    // it escapes the table's overflow-x-auto scroll container (which would
+    // otherwise clip it). Flip above the row when there's no room below.
+    useEffect(() => {
+        if (!open) { setMenuStyle(null); return; }
+        const place = () => {
+            const r = triggerRef.current?.getBoundingClientRect();
+            if (!r) return;
+            const left = Math.max(8, Math.min(r.right - 260, window.innerWidth - 268));
+            const spaceBelow = window.innerHeight - r.bottom;
+            setMenuStyle(spaceBelow < 260 && r.top > 260
+                ? { left, bottom: window.innerHeight - r.top + 4 }
+                : { left, top: r.bottom + 4 });
+        };
+        place();
+        // Close on scroll/resize rather than chase the trigger — keeps the menu
+        // from ever floating away from its row.
+        const close = () => onClose();
+        window.addEventListener("resize", close);
+        window.addEventListener("scroll", close, true);
+        return () => {
+            window.removeEventListener("resize", close);
+            window.removeEventListener("scroll", close, true);
+        };
+    }, [open, onClose]);
 
     useEffect(() => {
         if (!open) return;
@@ -942,11 +1170,12 @@ function RowMenu({ lead, open, onToggle, onClose, onRequestPortal, isSaving, por
                 <MoreHorizontal size={12} />
             </button>
 
-            {open && (
+            {open && menuStyle && createPortal(
                 <div
                     ref={menuRef}
                     role="menu"
-                    className="absolute z-30 top-full right-0 mt-1 bg-white rounded-xl shadow-2xl border border-gray-100 py-2 w-[260px] text-left"
+                    style={{ position: "fixed", ...menuStyle }}
+                    className="z-[100] bg-white rounded-xl shadow-2xl border border-gray-100 py-2 w-[260px] text-left max-h-[70vh] overflow-y-auto"
                 >
                     {/* Section: Lead actions */}
                     <p className="px-3 pb-1 text-[9px] font-bold text-gray-400 uppercase tracking-[0.2em]">Lead</p>
@@ -974,14 +1203,11 @@ function RowMenu({ lead, open, onToggle, onClose, onRequestPortal, isSaving, por
                             role="menuitem"
                             onClick={() => {
                                 const url = `${window.location.origin}/track/${lead.tracking_code}`;
-                                // Multi-line payload so the message reads
-                                // cleanly when staff pastes it directly
-                                // into WhatsApp / email / SMS.
-                                const payload =
-                                    `Link: ${url}\n` +
-                                    `Application Tracking Code: ${lead.tracking_code}`;
-                                navigator.clipboard?.writeText(payload).then(
-                                    () => toast.success('Tracking link + code copied', { description: payload }),
+                                // Just the URL — gets auto-linked in WhatsApp /
+                                // SMS / email and the code is already in the
+                                // path, so the duplicate line was noise.
+                                navigator.clipboard?.writeText(url).then(
+                                    () => toast.success('Tracking link copied', { description: url }),
                                     () => toast.error('Could not copy — your browser blocked clipboard access')
                                 );
                                 onClose?.();
@@ -1050,7 +1276,8 @@ function RowMenu({ lead, open, onToggle, onClose, onRequestPortal, isSaving, por
                         </p>
                     )}
                     </>)}
-                </div>
+                </div>,
+                document.body,
             )}
         </div>
     );
@@ -1496,10 +1723,23 @@ function SortableTh({ label, sortKey, current, dir, onSort }) {
 function StagePicker({ lead, stages, open, onToggle, onClose, onSelect, isSaving }) {
     const menuRef = useRef(null);
     const triggerRef = useRef(null);
+    const [menuPos, setMenuPos] = useState(null);
 
-    // Close on outside click + ESC
+    // Position the (portalled, fixed) menu at the trigger; flip up when low.
+    // Close on outside click + ESC.
     useEffect(() => {
-        if (!open) return;
+        if (!open) { setMenuPos(null); return; }
+        const r = triggerRef.current?.getBoundingClientRect();
+        if (r) {
+            const MENU_MAX = 360;
+            const spaceBelow = window.innerHeight - r.bottom;
+            const flipUp = spaceBelow < MENU_MAX && r.top > spaceBelow;
+            setMenuPos({
+                left: Math.max(8, r.left),
+                top: flipUp ? undefined : Math.round(r.bottom + 4),
+                bottom: flipUp ? Math.round(window.innerHeight - r.top + 4) : undefined,
+            });
+        }
         const onDocClick = (e) => {
             if (menuRef.current?.contains(e.target) || triggerRef.current?.contains(e.target)) return;
             onClose();
@@ -1528,11 +1768,12 @@ function StagePicker({ lead, stages, open, onToggle, onClose, onSelect, isSaving
                 <ChevronDown size={10} strokeWidth={2.5} className="flex-shrink-0 opacity-60" />
             </button>
 
-            {open && (
+            {open && menuPos && createPortal(
                 <div
                     ref={menuRef}
                     role="listbox"
-                    className="absolute z-30 top-full left-3 mt-1 bg-white rounded-xl shadow-2xl border border-gray-100 py-1.5 w-[280px] max-h-[420px] overflow-y-auto"
+                    style={{ position: "fixed", left: menuPos.left, top: menuPos.top, bottom: menuPos.bottom }}
+                    className="z-[90] bg-white rounded-xl shadow-2xl border border-gray-100 py-1.5 w-[280px] max-h-[360px] overflow-y-auto"
                 >
                     <p className="px-3 pt-2 pb-1.5 text-[9px] font-bold text-gray-400 uppercase tracking-[0.2em]">
                         Move to stage
@@ -1559,7 +1800,8 @@ function StagePicker({ lead, stages, open, onToggle, onClose, onSelect, isSaving
                             </button>
                         );
                     })}
-                </div>
+                </div>,
+                document.body
             )}
         </>
     );

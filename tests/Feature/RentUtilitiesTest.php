@@ -168,12 +168,18 @@ class RentUtilitiesTest extends TestCase
             ->from('/portal/accommodation/rent-utilities')
             ->patch("/portal/accommodation/rent-utilities/tenants/{$t->id}/payment", ['week_start' => '2026-06-17', 'amount' => 250])
             ->assertRedirect();
-        $this->assertDatabaseHas('accommodation_rent_payments', ['tenant_id' => $t->id, 'week_start' => $monday, 'amount_nzd' => 250.00]);
+        // Assert through the model so the date check is DB-agnostic: MySQL's DATE
+        // column drops the time, but SQLite (test DB) keeps "00:00:00", which would
+        // break a literal assertDatabaseHas on the bare date string.
+        $payment = RentPayment::where('tenant_id', $t->id)->first();
+        $this->assertNotNull($payment);
+        $this->assertSame($monday, $payment->week_start->toDateString());
+        $this->assertSame(250.0, (float) $payment->amount_nzd);
 
         $this->actingAs($this->staff())
             ->patch("/portal/accommodation/rent-utilities/tenants/{$t->id}/payment", ['week_start' => '2026-06-17', 'amount' => 300]);
         $this->assertDatabaseCount('accommodation_rent_payments', 1);
-        $this->assertDatabaseHas('accommodation_rent_payments', ['tenant_id' => $t->id, 'week_start' => $monday, 'amount_nzd' => 300.00]);
+        $this->assertSame(300.0, (float) RentPayment::where('tenant_id', $t->id)->first()->amount_nzd);
     }
 
     public function test_save_payment_zero_or_blank_deletes(): void

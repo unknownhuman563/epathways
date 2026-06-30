@@ -809,6 +809,70 @@ class LeadController extends Controller
                 'created_at' => $f->created_at,
             ])->values());
 
+        // Event registration snapshot — only when this lead came in via
+        // an event registration form. Reconstructs the form-as-filled by
+        // looking up each field's value from wherever it landed (lead
+        // columns, JSON buckets, related rows, or event_response for
+        // custom fields). Staff sees one tidy "what they submitted" card
+        // instead of having to know which field maps where.
+        $eventRegistration = null;
+        if ($lead->event) {
+            $eventFields = $lead->event->effectiveFields();
+            $eduFirst    = $lead->educationExps->first();
+            $planFirst   = $lead->studyPlans->first();
+            $work        = is_array($lead->work_info)      ? $lead->work_info      : [];
+            $finance     = is_array($lead->financial_info) ? $lead->financial_info : [];
+            $custom      = is_array($lead->event_response) ? $lead->event_response : [];
+
+            $resolveValue = function (array $field) use ($lead, $custom, $work, $finance, $eduFirst, $planFirst) {
+                $key = $field['key'];
+                if (array_key_exists($key, $custom)) {
+                    return $custom[$key];
+                }
+                return match ($key) {
+                    'first_name'         => $lead->first_name,
+                    'last_name'          => $lead->last_name,
+                    'email'              => $lead->email,
+                    'phone'              => $lead->phone,
+                    'country'            => $lead->country ?: $lead->residence_country,
+                    'city'               => $work['city']               ?? $lead->residence_city,
+                    'employment_status'  => $work['employment_status']  ?? null,
+                    'remarks'            => $work['remarks']            ?? null,
+                    'funding_source'     => $finance['funding_source']  ?? null,
+                    'education_level'    => optional($eduFirst)->level,
+                    'field_of_study'     => optional($eduFirst)->field_of_study,
+                    'interest'           => optional($planFirst)->preferred_course,
+                    'planning_timeline'  => optional($planFirst)->preferred_intake,
+                    default              => null,
+                };
+            };
+
+            $registeredFields = collect($eventFields)
+                ->filter(fn ($f) => ($f['locked'] ?? false) === true || ($f['enabled'] ?? true) !== false)
+                ->map(fn ($f) => [
+                    'key'      => $f['key'],
+                    'label'    => $f['label']   ?? $f['key'],
+                    'type'     => $f['type']    ?? 'text',
+                    'section'  => $f['section'] ?? 'Additional',
+                    'options'  => $f['options'] ?? null,
+                    'value'    => $resolveValue($f),
+                ])
+                ->values()
+                ->all();
+
+            $eventRegistration = [
+                'event' => [
+                    'id'         => $lead->event->id,
+                    'name'       => $lead->event->name,
+                    'event_code' => $lead->event->event_code,
+                    'type'       => $lead->event->type,
+                    'date_from'  => optional($lead->event->date_from)->toIso8601String(),
+                ],
+                'registered_at' => optional($lead->created_at)->toIso8601String(),
+                'fields'        => $registeredFields,
+            ];
+        }
+
         return inertia($page, [
             'lead' => $lead,
             'activity' => $activity,
@@ -819,6 +883,7 @@ class LeadController extends Controller
             'allTags' => $allTags,
             'tasks' => $tasks,
             'staffOptions' => $staffOptions,
+            'eventRegistration' => $eventRegistration,
             'currentUser' => auth()->user()
                 ? ['id' => auth()->id(), 'name' => auth()->user()->name, 'role' => auth()->user()->role, 'is_admin' => auth()->user()->isAdmin()]
                 : null,

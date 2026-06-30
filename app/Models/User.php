@@ -38,10 +38,10 @@ class User extends Authenticatable
 
     /** Tier names mapped to a numeric weight — bigger = more power. */
     private const ROLE_RANK = [
-        self::ROLE_SUPER_ADMIN          => 100,
-        self::ROLE_ADMIN                => 80,
-        self::ROLE_IMMIGRATION_MANAGER  => 50,
-        self::ROLE_IMMIGRATION_ADVISER  => 20,
+        self::ROLE_SUPER_ADMIN => 100,
+        self::ROLE_ADMIN => 80,
+        self::ROLE_IMMIGRATION_MANAGER => 50,
+        self::ROLE_IMMIGRATION_ADVISER => 20,
     ];
 
     /**
@@ -81,8 +81,8 @@ class User extends Authenticatable
     protected function casts(): array
     {
         return [
-            'email_verified_at'  => 'datetime',
-            'last_login_at'      => 'datetime',
+            'email_verified_at' => 'datetime',
+            'last_login_at' => 'datetime',
             'iaa_licence_expiry' => 'date',
             'password' => 'hashed',
         ];
@@ -153,8 +153,9 @@ class User extends Authenticatable
      */
     public function isAtLeast(string $tier): bool
     {
-        $mine   = self::ROLE_RANK[$this->role] ?? 0;
-        $needed = self::ROLE_RANK[$tier]       ?? PHP_INT_MAX;
+        $mine = self::ROLE_RANK[$this->role] ?? 0;
+        $needed = self::ROLE_RANK[$tier] ?? PHP_INT_MAX;
+
         return $mine >= $needed;
     }
 
@@ -171,11 +172,31 @@ class User extends Authenticatable
         if ($portal === self::ROLE_SUPER_ADMIN) {
             return $this->isSuperAdmin();
         }
-        if ($this->isAdmin()) return true;
+        if ($this->isAdmin()) {
+            return true;
+        }
         if ($portal === 'immigration' && in_array($this->role, self::IMMIGRATION_ROLES, true)) {
             return true;
         }
+
         return $this->role === $portal;
+    }
+
+    /**
+     * Which department's message templates this user manages, or null for
+     * admins/super-admins (who manage every department's templates plus the
+     * shared/global set). Immigration sub-roles resolve to 'immigration'.
+     */
+    public function templateDepartment(): ?string
+    {
+        if ($this->isAdmin()) {
+            return null;
+        }
+        if (in_array($this->role, self::IMMIGRATION_ROLES, true)) {
+            return 'immigration';
+        }
+
+        return in_array($this->role, self::PORTAL_ROLES, true) ? $this->role : null;
     }
 
     /**
@@ -192,6 +213,7 @@ class User extends Authenticatable
         if (in_array($this->role, self::IMMIGRATION_ROLES, true)) {
             return '/portal/immigration/dashboard';
         }
+
         return in_array($this->role, self::PORTAL_ROLES, true)
             ? "/portal/{$this->role}/dashboard"
             : '/admin/dashboard';

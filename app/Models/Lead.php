@@ -185,7 +185,7 @@ class Lead extends Model
         'residence_city', 'residence_state', 'residence_country',
         'has_passport', 'passport_number', 'passport_expiry', 'passport_path',
         'terms_accepted', 'work_info', 'financial_info', 'gap_explanation',
-        'education_notes', 'event_id', 'event_session_id',
+        'education_notes', 'event_id', 'event_session_id', 'event_response',
         'immigration_info', 'character_info', 'health_info', 'family_info',
         'nz_contacts_info', 'military_info', 'source_of_funds_info',
         'home_ties_info', 'declaration_accepted',
@@ -293,6 +293,7 @@ class Lead extends Model
 
     protected $casts = [
         'work_info' => 'array',
+        'event_response' => 'array',
         'financial_info' => 'array',
         'education_notes' => 'array',
         'immigration_info' => 'array',

@@ -28,7 +28,10 @@ class EventController extends Controller
         });
 
         return inertia('admin/Events', [
-            'events' => $events,
+            'events'              => $events,
+            'defaultFormFields'   => Event::DEFAULT_FIELDS,
+            'customFieldTypes'    => Event::CUSTOM_FIELD_TYPES,
+            'lockedFieldKeys'     => Event::LOCKED_KEYS,
         ]);
     }
 
@@ -66,9 +69,25 @@ class EventController extends Controller
             'date_to' => 'nullable|date|after_or_equal:date_from',
             'status' => 'required|in:draft,upcoming,ongoing,completed,cancelled',
             'mode' => 'required|in:in-person,online,hybrid',
+            'location' => 'nullable|string|max:255',
             'organizer_id' => 'nullable|string|max:255',
             'notes' => 'nullable|string',
             'banner_image' => 'nullable|image|mimes:jpeg,png,jpg,webp,gif|max:4096',
+            // Custom registration-form schema. Null/missing = default fields.
+            'form_fields'                 => 'nullable|array',
+            'form_fields.*.key'           => 'required|string|max:60|regex:/^[a-z][a-z0-9_]*$/',
+            'form_fields.*.label'         => 'required|string|max:120',
+            'form_fields.*.type'          => 'required|string|in:text,email,tel,textarea,select,pills',
+            'form_fields.*.required'      => 'nullable|boolean',
+            'form_fields.*.locked'        => 'nullable|boolean',
+            'form_fields.*.default'       => 'nullable|boolean',
+            'form_fields.*.enabled'       => 'nullable|boolean',
+            'form_fields.*.placeholder'   => 'nullable|string|max:200',
+            'form_fields.*.hint'          => 'nullable|string|max:300',
+            'form_fields.*.section'       => 'nullable|string|max:120',
+            'form_fields.*.order'         => 'nullable|integer|min:0',
+            'form_fields.*.options'       => 'nullable|array',
+            'form_fields.*.options.*'     => 'string|max:120',
             // sessions are fully optional
             'sessions' => 'nullable|array',
             'sessions.*.venue_name' => 'nullable|string|max:255',
@@ -144,9 +163,25 @@ class EventController extends Controller
             'date_to' => 'nullable|date|after_or_equal:date_from',
             'status' => 'required|in:draft,upcoming,ongoing,completed,cancelled',
             'mode' => 'required|in:in-person,online,hybrid',
+            'location' => 'nullable|string|max:255',
             'organizer_id' => 'nullable|string|max:255',
             'notes' => 'nullable|string',
             'banner_image' => 'nullable|image|mimes:jpeg,png,jpg,webp,gif|max:4096',
+            // Custom registration-form schema. Null/missing = default fields.
+            'form_fields'                 => 'nullable|array',
+            'form_fields.*.key'           => 'required|string|max:60|regex:/^[a-z][a-z0-9_]*$/',
+            'form_fields.*.label'         => 'required|string|max:120',
+            'form_fields.*.type'          => 'required|string|in:text,email,tel,textarea,select,pills',
+            'form_fields.*.required'      => 'nullable|boolean',
+            'form_fields.*.locked'        => 'nullable|boolean',
+            'form_fields.*.default'       => 'nullable|boolean',
+            'form_fields.*.enabled'       => 'nullable|boolean',
+            'form_fields.*.placeholder'   => 'nullable|string|max:200',
+            'form_fields.*.hint'          => 'nullable|string|max:300',
+            'form_fields.*.section'       => 'nullable|string|max:120',
+            'form_fields.*.order'         => 'nullable|integer|min:0',
+            'form_fields.*.options'       => 'nullable|array',
+            'form_fields.*.options.*'     => 'string|max:120',
             'sessions' => 'nullable|array',
             'sessions.*.id' => 'nullable|integer',
             'sessions.*.venue_name' => 'nullable|string|max:255',
@@ -265,6 +300,11 @@ class EventController extends Controller
             $event->banner_image_url = Storage::disk('public')->url($event->banner_image);
         }
 
+        // Hand the effective field schema to the React page so it can
+        // render the form dynamically. Falls back to DEFAULT_FIELDS
+        // when the event has no custom form_fields configured.
+        $event->effective_fields = $event->effectiveFields();
+
         return inertia('registration/RegistrationPage', [
             'event' => $event,
         ]);
@@ -277,72 +317,103 @@ class EventController extends Controller
     {
         $event = Event::where('event_code', $event_code)->firstOrFail();
 
-        $validated = $request->validate([
-            'first_name' => 'required|string|max:255',
-            'last_name' => 'required|string|max:255',
-            'email' => 'required|email|max:255',
-            'phone' => 'required|string|max:20',
-            'city' => 'required|string|max:100',
-            'country' => 'required|string|max:100',
-            'employment_status' => 'required|string',
-            'interest' => 'required|string',
-            'education_level' => 'required|string',
-            'field_of_study' => 'required|string',
-            'planning_timeline' => 'required|string',
-            'funding_source' => 'required|string',
-            'event_session_id' => 'nullable|exists:event_sessions,id',
-            'remarks' => 'nullable|string',
-        ]);
+        // Build the dynamic validator from the event's effective field
+        // schema. Locked keys (first_name / last_name / email / phone) are
+        // always required regardless of admin config so the lead-follow-up
+        // flow can never break.
+        $fields = $event->effectiveFields();
+        $rules  = ['event_session_id' => 'nullable|exists:event_sessions,id'];
+
+        foreach ($fields as $f) {
+            $enabled  = ($f['enabled'] ?? true) !== false;
+            $locked   = ($f['locked']  ?? false) === true;
+            $required = ($f['required']?? false) === true;
+            if (! $enabled && ! $locked) continue;
+
+            $rule = ($required || $locked) ? 'required' : 'nullable';
+            $rule .= '|' . match ($f['type'] ?? 'text') {
+                'email'    => 'email|max:255',
+                'tel'      => 'string|max:40',
+                'textarea' => 'string|max:5000',
+                'select', 'pills' => isset($f['options']) && count($f['options']) > 0
+                    ? 'string|in:'.implode(',', $f['options'])
+                    : 'string|max:255',
+                default    => 'string|max:255',
+            };
+            $rules[$f['key']] = $rule;
+        }
+
+        $validated = $request->validate($rules);
 
         try {
             DB::beginTransaction();
 
-            // 1. Find-or-create the Lead through the unified intake — a
-            // repeat registrant by the same email no longer creates a
-            // duplicate row, instead a `lead.resubmitted` activity entry
-            // is appended to their history.
+            // 1. Find-or-create the Lead through the unified intake —
+            // repeat registrants by the same email are de-duped (a
+            // 'lead.resubmitted' activity entry gets appended instead).
             $intake = app(\App\Services\LeadIntakeService::class);
-            $lead = $intake->ingest("event:{$event->event_code}", [
-                'first_name' => $validated['first_name'],
-                'last_name' => $validated['last_name'],
-                'email' => $validated['email'],
-                'phone' => $validated['phone'],
-                'country' => $validated['country'],
-                'stage' => $validated['interest'],
-            ], $request);
+            $lead = $intake->ingest("event:{$event->event_code}", array_filter([
+                'first_name' => $validated['first_name'] ?? null,
+                'last_name'  => $validated['last_name']  ?? null,
+                'email'      => $validated['email']      ?? null,
+                'phone'      => $validated['phone']      ?? null,
+                'country'    => $validated['country']    ?? null,
+                'stage'      => $validated['interest']   ?? null,
+            ], fn ($v) => ! is_null($v) && $v !== ''), $request);
 
-            // Attach the event-specific context — branch, work_info,
-            // financial_info, event link — but only if this is a fresh
-            // intake or the existing lead doesn't already have them.
+            // Split responses into "known" (mapped to dedicated columns
+            // on the lead / its related rows) and "custom" (everything
+            // else — lands in lead.event_response JSON). The known set
+            // matches Event::DEFAULT_FIELDS so newly-added custom fields
+            // automatically take the JSON path.
+            $knownKeys = array_column(\App\Models\Event::DEFAULT_FIELDS, 'key');
+            $customResponses = collect($validated)
+                ->except(array_merge($knownKeys, ['event_session_id']))
+                ->all();
+
+            // Attach event-level + work + financial context. Only fields
+            // that were actually submitted contribute — null/missing
+            // entries fall through array_filter and don't overwrite
+            // anything the lead already had.
+            $workInfo = array_filter([
+                'employment_status' => $validated['employment_status'] ?? null,
+                'city'              => $validated['city']              ?? null,
+                'remarks'           => $validated['remarks']           ?? null,
+            ], fn ($v) => ! is_null($v) && $v !== '');
+
+            $financialInfo = array_filter([
+                'funding_source' => $validated['funding_source'] ?? null,
+            ], fn ($v) => ! is_null($v) && $v !== '');
+
             $eventAttrs = array_filter([
-                'branch' => $lead->branch ?: 'Online Registration',
-                'event_id' => $event->id,
+                'branch'           => $lead->branch ?: 'Online Registration',
+                'event_id'         => $event->id,
                 'event_session_id' => $validated['event_session_id'] ?? null,
-                'work_info' => $lead->work_info ?: [
-                    'employment_status' => $validated['employment_status'],
-                    'city' => $validated['city'],
-                    'remarks' => $validated['remarks'] ?? null,
-                ],
-                'financial_info' => $lead->financial_info ?: [
-                    'funding_source' => $validated['funding_source'],
-                ],
+                'work_info'        => $lead->work_info      ?: ($workInfo      ?: null),
+                'financial_info'   => $lead->financial_info ?: ($financialInfo ?: null),
+                'event_response'   => $customResponses ?: null,
             ], fn ($v) => ! is_null($v));
             $lead->update($eventAttrs);
 
-            // 2. Add Education Experience
-            $lead->educationExps()->create([
-                'level' => $validated['education_level'],
-                'field_of_study' => $validated['field_of_study'],
-                'institution' => 'N/A', // Collected during follow-up
-            ]);
+            // 2. Add Education Experience — only when the relevant
+            // default fields were submitted.
+            if (! empty($validated['education_level']) || ! empty($validated['field_of_study'])) {
+                $lead->educationExps()->create([
+                    'level'          => $validated['education_level']  ?? null,
+                    'field_of_study' => $validated['field_of_study']   ?? null,
+                    'institution'    => 'N/A',
+                ]);
+            }
 
-            // 3. Add Study Plan
-            $lead->studyPlans()->create([
-                'preferred_course' => $validated['interest'],
-                'preferred_intake' => $validated['planning_timeline'],
-                'preferred_city' => 'New Zealand', // Default focus as per request
-                'qualification_level' => $validated['education_level'],
-            ]);
+            // 3. Add Study Plan — same gating.
+            if (! empty($validated['interest']) || ! empty($validated['planning_timeline'])) {
+                $lead->studyPlans()->create([
+                    'preferred_course'    => $validated['interest']           ?? null,
+                    'preferred_intake'    => $validated['planning_timeline']  ?? null,
+                    'preferred_city'      => 'New Zealand',
+                    'qualification_level' => $validated['education_level']    ?? null,
+                ]);
+            }
 
             DB::commit();
 

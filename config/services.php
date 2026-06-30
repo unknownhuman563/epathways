@@ -54,8 +54,8 @@ return [
     // stay server-side. `webhook_secret` verifies signatures on the
     // POST /stripe/webhook callback.
     'stripe' => [
-        'key'            => env('STRIPE_KEY'),
-        'secret'         => env('STRIPE_SECRET'),
+        'key' => env('STRIPE_KEY'),
+        'secret' => env('STRIPE_SECRET'),
         'webhook_secret' => env('STRIPE_WEBHOOK_SECRET'),
     ],
 
@@ -63,9 +63,9 @@ return [
     // TWILIO_SID empty to disable SMS (the system falls back to a no-op
     // provider that logs a 'failed' MessageLog with a clear reason).
     'twilio' => [
-        'sid'   => env('TWILIO_SID'),
+        'sid' => env('TWILIO_SID'),
         'token' => env('TWILIO_TOKEN'),
-        'from'  => env('TWILIO_FROM_NUMBER'),
+        'from' => env('TWILIO_FROM_NUMBER'),
     ],
 
     // Calendar sync — token used by SyncController to authenticate inbound
@@ -80,8 +80,8 @@ return [
     // Requires an Enterprise account; key is generated under
     // PLAI dashboard → profile → Developer Center → Generate API Key.
     'plai' => [
-        'api_key'      => env('PLAI_API_KEY'),
-        'base_url'     => env('PLAI_BASE_URL', 'https://partner.plai.io'),
+        'api_key' => env('PLAI_API_KEY'),
+        'base_url' => env('PLAI_BASE_URL', 'https://partner.plai.io'),
         'workspace_id' => env('PLAI_WORKSPACE_ID'),
     ],
 
@@ -91,19 +91,35 @@ return [
     // never reach the browser. Leave SOCIAL_WEBHOOK_BASE unset to run the
     // UI against the controller's stub fixtures during early development.
     'social' => [
-        'webhook_base'   => env('SOCIAL_WEBHOOK_BASE'),
+        'webhook_base' => env('SOCIAL_WEBHOOK_BASE'),
         'webhook_secret' => env('SOCIAL_WEBHOOK_SECRET'),
+    ],
+
+    // Zernio — unified social API (publish / schedule / accounts / inbox /
+    // ads / analytics). Used by App\Services\ZernioService and surfaced
+    // through AiAdsWebhookController. The bearer key (sk_…) is generated in
+    // the Zernio dashboard → API Keys. Leave ZERNIO_API_KEY unset to keep the
+    // Social MVP on n8n / stub fixtures. The webhook secret verifies inbound
+    // events Zernio pushes to /webhook/social/*.
+    'zernio' => [
+        'api_key' => env('ZERNIO_API_KEY'),
+        'base_url' => env('ZERNIO_BASE_URL', 'https://zernio.com/api/v1'),
+        'webhook_secret' => env('ZERNIO_WEBHOOK_SECRET'),
+        // Restrict every Zernio call to ONE profile so accounts/posts from
+        // other profiles (e.g. a separate accommodation page) never leak in.
+        // Find the id with `php artisan zernio:profiles`.
+        'profile_id' => env('ZERNIO_PROFILE_ID'),
     ],
 
     // Public contact destinations surfaced in floating widgets, the mobile
     // sticky CTA bar, and the footer. All optional — components hide a
     // channel if its value is empty so the bar collapses gracefully.
     'contact' => [
-        'phone'     => env('CONTACT_PHONE', '+64277775586'),
-        'whatsapp'  => env('CONTACT_WHATSAPP'),       // e.g. "63XXXXXXXXXX" — no +, no spaces
+        'phone' => env('CONTACT_PHONE', '+64277775586'),
+        'whatsapp' => env('CONTACT_WHATSAPP'),       // e.g. "63XXXXXXXXXX" — no +, no spaces
         'messenger' => env('CONTACT_MESSENGER', 'https://m.me/epathwaysnz'),
-        'facebook'  => env('CONTACT_FACEBOOK', 'https://www.facebook.com/epathwaysnz'),
-        'email'     => env('CONTACT_EMAIL', 'info@epathways.co.nz'),
+        'facebook' => env('CONTACT_FACEBOOK', 'https://www.facebook.com/epathwaysnz'),
+        'email' => env('CONTACT_EMAIL', 'info@epathways.co.nz'),
     ],
 
 ];

@@ -126,20 +126,462 @@ const emptySession = () => ({
     _key: Math.random(),
 });
 
+// ─── Form-Fields builder (Step 3 of EventFormModal) ──────────────────────────
+//
+// Renders the per-event registration-form schema as an editable list.
+//
+//   - Default fields with locked=true (first_name / last_name / email /
+//     phone) show as read-only "Always required" — admin can't hide or
+//     edit them because lead follow-up depends on them.
+//   - Default toggleable fields show with two switches: Enabled (visible
+//     on the public form) and Required (must be filled to submit).
+//   - Custom (admin-added) fields show with the same two switches plus
+//     Edit / Delete actions. Custom fields are added via the form below
+//     the list and stored alongside default fields in the same array.
+//
+// The whole value is the form_fields JSON for the event. Order in the
+// public form is determined by the per-field `order` property; here we
+// just preserve list order, which produces stable per-section ordering
+// when fields are grouped on the public page.
+//
+// Default section names that came from the canonical schema. Renaming
+// these would orphan locked fields (which reference them) so the UI
+// blocks rename for these specific names. Custom sections are freely
+// renamable + deletable.
+const DEFAULT_SECTIONS = ['Personal information', 'Education', 'Background', 'NZ pathway', 'Anything else?'];
+
+const TYPE_LABEL = {
+    text: 'Text', email: 'Email', tel: 'Phone', textarea: 'Long text',
+    select: 'Dropdown', pills: 'Choice pills',
+};
+
+const blankDraft = (section = 'Additional') => ({
+    key: '', label: '', type: 'text', required: false, options: '',
+    section, placeholder: '',
+});
+
+function FormFieldsStep({ value, onChange, customFieldTypes, lockedFieldKeys, defaultFieldKeys }) {
+    const fields = Array.isArray(value) ? value : [];
+
+    const lockedSet  = React.useMemo(() => new Set(lockedFieldKeys || []), [lockedFieldKeys]);
+    const defaultSet = React.useMemo(() => new Set(defaultFieldKeys  || []), [defaultFieldKeys]);
+
+    // The section list: union of sections referenced by fields + any
+    // sections the admin added but hasn't dropped a field into yet
+    // (those live in local state until a field lands in them).
+    const fieldSections = React.useMemo(() => {
+        const out = [];
+        const seen = new Set();
+        for (const f of fields) {
+            const s = f.section || 'Additional';
+            if (! seen.has(s)) { seen.add(s); out.push(s); }
+        }
+        return out;
+    }, [fields]);
+
+    const [pendingSections, setPendingSections] = useState([]);
+
+    const allSections = React.useMemo(() => {
+        const merged = [...fieldSections];
+        for (const s of pendingSections) {
+            if (! merged.includes(s)) merged.push(s);
+        }
+        return merged;
+    }, [fieldSections, pendingSections]);
+
+    // Only one inline "add field" form open at a time, keyed by the
+    // section it'll add into.
+    const [addingTo, setAddingTo] = useState(null);
+    const [draft, setDraft] = useState(blankDraft());
+
+    const openAdd = (section) => { setAddingTo(section); setDraft(blankDraft(section)); };
+    const closeAdd = () => { setAddingTo(null); setDraft(blankDraft()); };
+
+    const updateField = (idx, patch) => {
+        onChange(fields.map((f, i) => (i === idx ? { ...f, ...patch } : f)));
+    };
+
+    const removeField = (idx) => {
+        if (! confirm('Remove this custom field? Responses already collected stay on file.')) return;
+        onChange(fields.filter((_, i) => i !== idx));
+    };
+
+    const handleAddField = () => {
+        const key = draft.key.trim().toLowerCase().replace(/[^a-z0-9_]/g, '_');
+        if (! key)                                       return alert('Field key is required.');
+        if (! /^[a-z][a-z0-9_]*$/.test(key))             return alert('Field key must start with a letter; use only lowercase letters, numbers, and underscores.');
+        if (fields.some((f) => f.key === key))           return alert(`A field with key "${key}" already exists.`);
+        if (! draft.label.trim())                        return alert('Field label is required.');
+
+        const needsOptions = draft.type === 'select' || draft.type === 'pills';
+        const options = needsOptions
+            ? draft.options.split(/\r?\n|,/).map((s) => s.trim()).filter(Boolean)
+            : null;
+        if (needsOptions && options.length === 0) return alert('Add at least one option for select/pills fields.');
+
+        const section = (draft.section || 'Additional').trim() || 'Additional';
+        const sectionFieldCount = fields.filter((f) => (f.section || 'Additional') === section).length;
+
+        const newField = {
+            key,
+            label: draft.label.trim(),
+            type: draft.type,
+            required: !! draft.required,
+            locked: false,
+            default: false,
+            enabled: true,
+            placeholder: draft.placeholder.trim() || undefined,
+            section,
+            order: sectionFieldCount + 1,
+            ...(options ? { options } : {}),
+        };
+        onChange([...fields, newField]);
+        // Section is now non-empty; drop it from pending if it was there.
+        setPendingSections((prev) => prev.filter((s) => s !== section));
+        closeAdd();
+    };
+
+    const addSection = () => {
+        const name = prompt('Name the new section:');
+        if (! name) return;
+        const trimmed = name.trim();
+        if (! trimmed) return;
+        if (allSections.includes(trimmed)) return alert('A section with that name already exists.');
+        setPendingSections((prev) => [...prev, trimmed]);
+    };
+
+    const renameSection = (oldName) => {
+        const name = prompt('Rename section to:', oldName);
+        if (! name) return;
+        const trimmed = name.trim();
+        if (! trimmed || trimmed === oldName) return;
+        if (allSections.includes(trimmed)) return alert('A section with that name already exists.');
+        // Move every field that lives in the old section across.
+        onChange(fields.map((f) => ((f.section || 'Additional') === oldName ? { ...f, section: trimmed } : f)));
+        setPendingSections((prev) => prev.map((s) => (s === oldName ? trimmed : s)));
+    };
+
+    const removeEmptySection = (name) => {
+        // Only pending (zero-field) sections can be removed here.
+        setPendingSections((prev) => prev.filter((s) => s !== name));
+    };
+
+    // Bulk-toggle every non-locked field in a section. The section's
+    // "enabled" state is derived from "at least one toggleable field is
+    // still enabled" — flipping the section toggle just batches what
+    // the admin could do field-by-field. Locked fields are never
+    // affected because the registration form depends on them.
+    const toggleSection = (section, enabled) => {
+        onChange(fields.map((f) => {
+            if ((f.section || 'Additional') !== section) return f;
+            if (lockedSet.has(f.key) || f.locked === true) return f;
+            return { ...f, enabled };
+        }));
+    };
+
+    return (
+        <div className="space-y-4">
+            <div className="p-4 bg-gray-50 rounded-xl border border-gray-200">
+                <p className="text-sm font-semibold text-gray-800">Customise the registration form</p>
+                <p className="text-xs text-gray-500 mt-1 leading-relaxed">
+                    Fields are grouped into sections. First 4 fields (name + email + phone)
+                    are always required so we can follow up. Add a field to any section, or
+                    create a brand-new section for event-specific questions.
+                </p>
+            </div>
+
+            {allSections.map((section) => {
+                const sectionFields = fields
+                    .map((f, idx) => ({ f, idx }))
+                    .filter(({ f }) => (f.section || 'Additional') === section);
+                const isEmpty   = sectionFields.length === 0;
+                const isDefault = DEFAULT_SECTIONS.includes(section);
+
+                // Section toggle is derived from its fields' enabled
+                // state. "Enabled" = at least one toggleable field is on.
+                // Sections that contain only locked fields don't get a
+                // toggle at all (nothing to flip).
+                const toggleable = sectionFields.filter(({ f }) => ! (lockedSet.has(f.key) || f.locked === true));
+                const hasToggleable = toggleable.length > 0;
+                const sectionEnabled = toggleable.some(({ f }) => f.enabled !== false);
+
+                return (
+                    <div
+                        key={section}
+                        className={`border rounded-xl bg-white overflow-hidden transition-opacity ${
+                            hasToggleable && ! sectionEnabled && ! isEmpty ? 'border-gray-200 opacity-60' : 'border-gray-200'
+                        }`}
+                    >
+                        {/* Section header */}
+                        <div className="px-4 py-3 bg-gray-50 border-b border-gray-100 flex items-center justify-between gap-3">
+                            <div className="flex items-center gap-2 flex-wrap min-w-0">
+                                <p className="text-sm font-bold text-gray-900 tracking-tight">{section}</p>
+                                {isDefault && (
+                                    <span className="text-[10px] font-bold tracking-[0.14em] uppercase bg-gray-100 text-gray-600 border border-gray-200 px-1.5 py-0.5">
+                                        Default
+                                    </span>
+                                )}
+                                {isEmpty && (
+                                    <span className="text-[10px] font-bold tracking-[0.14em] uppercase bg-amber-50 text-amber-700 border border-amber-200 px-1.5 py-0.5">
+                                        Empty — add a field to save
+                                    </span>
+                                )}
+                                {hasToggleable && ! sectionEnabled && ! isEmpty && (
+                                    <span className="text-[10px] font-bold tracking-[0.14em] uppercase bg-gray-200 text-gray-700 border border-gray-300 px-1.5 py-0.5">
+                                        Hidden
+                                    </span>
+                                )}
+                            </div>
+                            <div className="flex items-center gap-2">
+                                {hasToggleable && (
+                                    <ToggleSmall
+                                        label="Visible"
+                                        checked={sectionEnabled}
+                                        onChange={(v) => toggleSection(section, v)}
+                                    />
+                                )}
+                                {! isDefault && (
+                                    <>
+                                        <button
+                                            type="button"
+                                            onClick={() => renameSection(section)}
+                                            className="px-2 py-1 text-[11px] font-semibold text-gray-600 hover:text-gray-900 hover:bg-white rounded-lg transition-colors"
+                                        >
+                                            Rename
+                                        </button>
+                                        {isEmpty && (
+                                            <button
+                                                type="button"
+                                                onClick={() => removeEmptySection(section)}
+                                                className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                                title="Remove empty section"
+                                            >
+                                                <Trash2 size={14} />
+                                            </button>
+                                        )}
+                                    </>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Field rows */}
+                        <div className="p-3 space-y-2">
+                            {sectionFields.map(({ f, idx }) => (
+                                <FieldRow
+                                    key={f.key + ':' + idx}
+                                    field={f}
+                                    isLocked={lockedSet.has(f.key) || f.locked === true}
+                                    isDefault={defaultSet.has(f.key) || f.default === true}
+                                    onUpdate={(patch) => updateField(idx, patch)}
+                                    onRemove={() => removeField(idx)}
+                                />
+                            ))}
+
+                            {/* Inline add-field form (only when targeting THIS section) */}
+                            {addingTo === section ? (
+                                <AddFieldForm
+                                    draft={draft}
+                                    setDraft={setDraft}
+                                    customFieldTypes={customFieldTypes}
+                                    onSubmit={handleAddField}
+                                    onCancel={closeAdd}
+                                />
+                            ) : (
+                                <button
+                                    type="button"
+                                    onClick={() => openAdd(section)}
+                                    className="w-full py-2 border-2 border-dashed border-gray-200 rounded-lg text-[12px] font-semibold text-gray-500 hover:border-gray-400 hover:text-gray-700 hover:bg-gray-50/60 transition-all flex items-center justify-center gap-1.5"
+                                >
+                                    <Plus size={13} /> Add field to {section}
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                );
+            })}
+
+            {/* Add a new section */}
+            <button
+                type="button"
+                onClick={addSection}
+                className="w-full py-3 border-2 border-dashed border-gray-300 rounded-xl text-sm font-semibold text-gray-600 hover:border-gray-900 hover:text-gray-900 hover:bg-gray-50 transition-all flex items-center justify-center gap-2"
+            >
+                <Plus size={16} /> Add section
+            </button>
+        </div>
+    );
+}
+
+function FieldRow({ field, isLocked, isDefault, onUpdate, onRemove }) {
+    const enabled = isLocked ? true : (field.enabled !== false);
+    return (
+        <div
+            className={`border rounded-lg p-3 transition-colors ${
+                isLocked ? 'bg-gray-50/70 border-gray-200' :
+                enabled  ? 'bg-white border-gray-200' :
+                           'bg-gray-50/40 border-gray-100 opacity-70'
+            }`}
+        >
+            <div className="flex items-start justify-between gap-3">
+                <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                        <p className="text-sm font-semibold text-gray-900">{field.label}</p>
+                        <span className="text-[10px] font-bold tracking-[0.14em] uppercase bg-gray-100 text-gray-600 border border-gray-200 px-1.5 py-0.5">
+                            {TYPE_LABEL[field.type] || field.type}
+                        </span>
+                        {isLocked && (
+                            <span className="text-[10px] font-bold tracking-[0.14em] uppercase bg-gray-900 text-white px-1.5 py-0.5">
+                                Always on
+                            </span>
+                        )}
+                        {! isDefault && (
+                            <span className="text-[10px] font-bold tracking-[0.14em] uppercase bg-blue-50 text-blue-700 border border-blue-200 px-1.5 py-0.5">
+                                Custom
+                            </span>
+                        )}
+                    </div>
+                    <p className="text-[11px] text-gray-500 mt-1 font-mono">{field.key}</p>
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                    {! isLocked && (
+                        <ToggleSmall label="Enabled"  checked={enabled}        onChange={(v) => onUpdate({ enabled: v })} />
+                    )}
+                    {! isLocked && (
+                        <ToggleSmall label="Required" checked={!! field.required} onChange={(v) => onUpdate({ required: v })} />
+                    )}
+                    {! isDefault && ! isLocked && (
+                        <button
+                            type="button"
+                            onClick={onRemove}
+                            className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                            title="Delete custom field"
+                        >
+                            <Trash2 size={14} />
+                        </button>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+}
+
+function AddFieldForm({ draft, setDraft, customFieldTypes, onSubmit, onCancel }) {
+    return (
+        <div className="border-2 border-dashed border-gray-300 rounded-lg p-3.5 space-y-3 bg-white">
+            <p className="text-[11px] font-bold uppercase tracking-wider text-gray-600">
+                Add field to {draft.section}
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+                <div>
+                    <Label required>Key</Label>
+                    <Input
+                        placeholder="snake_case_id"
+                        value={draft.key}
+                        onChange={(e) => setDraft({ ...draft, key: e.target.value })}
+                    />
+                </div>
+                <div>
+                    <Label required>Label</Label>
+                    <Input
+                        placeholder="Shown to the registrant"
+                        value={draft.label}
+                        onChange={(e) => setDraft({ ...draft, label: e.target.value })}
+                    />
+                </div>
+            </div>
+            <div>
+                <Label>Type</Label>
+                <Select value={draft.type} onChange={(e) => setDraft({ ...draft, type: e.target.value })}>
+                    {customFieldTypes.map((t) => (
+                        <option key={t} value={t}>{TYPE_LABEL[t] || t}</option>
+                    ))}
+                </Select>
+            </div>
+            {(draft.type === 'select' || draft.type === 'pills') && (
+                <div>
+                    <Label required>Options (one per line or comma-separated)</Label>
+                    <Textarea
+                        placeholder={'Option A\nOption B\nOption C'}
+                        value={draft.options}
+                        onChange={(e) => setDraft({ ...draft, options: e.target.value })}
+                    />
+                </div>
+            )}
+            {['text', 'email', 'tel', 'textarea'].includes(draft.type) && (
+                <div>
+                    <Label>Placeholder (optional)</Label>
+                    <Input
+                        placeholder="e.g. yourname@example.com"
+                        value={draft.placeholder}
+                        onChange={(e) => setDraft({ ...draft, placeholder: e.target.value })}
+                    />
+                </div>
+            )}
+            <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer select-none">
+                <input
+                    type="checkbox"
+                    checked={!! draft.required}
+                    onChange={(e) => setDraft({ ...draft, required: e.target.checked })}
+                    className="w-4 h-4 accent-gray-900"
+                />
+                Required field
+            </label>
+            <div className="flex items-center justify-end gap-2 pt-1">
+                <button
+                    type="button"
+                    onClick={onCancel}
+                    className="px-3 py-1.5 text-sm font-semibold text-gray-600 hover:text-gray-900"
+                >
+                    Cancel
+                </button>
+                <button
+                    type="button"
+                    onClick={onSubmit}
+                    className="px-4 py-1.5 bg-gray-900 text-white text-sm font-semibold rounded-xl hover:bg-gray-800 transition-colors"
+                >
+                    Add field
+                </button>
+            </div>
+        </div>
+    );
+}
+
+function ToggleSmall({ label, checked, onChange }) {
+    return (
+        <label className="flex items-center gap-1.5 cursor-pointer select-none">
+            <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-gray-500">{label}</span>
+            <button
+                type="button"
+                onClick={() => onChange(!checked)}
+                className={`relative w-9 h-5 rounded-full transition-colors flex-shrink-0 ${checked ? 'bg-gray-900' : 'bg-gray-300'}`}
+                aria-pressed={checked}
+            >
+                <span className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${checked ? 'translate-x-4' : 'translate-x-0'}`} />
+            </button>
+        </label>
+    );
+}
+
 // ─── Create / Edit Event Slide-Over ───────────────────────────────────────────
-function EventFormModal({ open, onClose, editingEvent }) {
+function EventFormModal({ open, onClose, editingEvent, defaultFormFields = [], customFieldTypes = ['text','email','tel','textarea','select','pills'], lockedFieldKeys = ['first_name','last_name','email','phone'] }) {
     const isEditing = !!editingEvent;
     const [step, setStep] = useState(1);
     const [hasSessions, setHasSessions] = useState(false);
+    // Whether the "Event Type" picker is in free-text ("Other") mode.
+    const [useOtherType, setUseOtherType] = useState(false);
     // URL of the banner already stored on the server (edit mode), shown until
     // the user picks a replacement file.
     const [existingBanner, setExistingBanner] = useState(null);
 
     const { data, setData, post, processing, errors, setError, clearErrors, reset, transform } = useForm({
         name: '', type: '', description: '', date_from: '', date_to: '',
-        status: 'upcoming', mode: 'in-person', organizer_id: '', notes: '',
+        status: 'upcoming', mode: 'in-person', location: '', organizer_id: '', notes: '',
         banner_image: null,
         sessions: [emptySession()],
+        // Per-event registration-form schema. Seeded from the canonical
+        // default set so admins start with the full form visible and
+        // toggle/remove fields rather than build from scratch.
+        form_fields: defaultFormFields,
     });
 
     // Hydrate the form whenever the slide-over opens for a specific event.
@@ -164,26 +606,46 @@ function EventFormModal({ open, onClose, editingEvent }) {
                 date_to: toDateInput(editingEvent.date_to),
                 status: editingEvent.status || 'upcoming',
                 mode: editingEvent.mode || 'in-person',
+                location: editingEvent.location || '',
                 organizer_id: editingEvent.organizer_id || '',
                 notes: editingEvent.notes || '',
                 banner_image: null,
                 sessions: sessions.length ? sessions : [emptySession()],
+                form_fields: Array.isArray(editingEvent.form_fields) && editingEvent.form_fields.length > 0
+                    ? editingEvent.form_fields
+                    : defaultFormFields,
             });
             setHasSessions(sessions.length > 0);
             setExistingBanner(editingEvent.banner_image_url || null);
+            // A saved type that isn't one of the presets is a custom "Other" value.
+            setUseOtherType(!!editingEvent.type && !EVENT_TYPES.includes(editingEvent.type));
         } else {
             reset();
             setHasSessions(false);
             setExistingBanner(null);
+            setUseOtherType(false);
         }
         setStep(1);
         clearErrors();
     }, [open, editingEvent]);
 
-    // Transform data before submission
+    // Transform data before submission. Booleans in form_fields are
+    // converted to 1/0 ints because Inertia serializes the request as
+    // FormData (forceFormData is on for the banner upload) — and FormData
+    // turns booleans into the strings "true"/"false" which Laravel's
+    // `boolean` validation rule rejects. Ints round-trip cleanly.
     transform((data) => ({
         ...data,
         sessions: hasSessions ? data.sessions.map(({ _key, ...rest }) => rest) : [],
+        form_fields: Array.isArray(data.form_fields)
+            ? data.form_fields.map((f) => ({
+                ...f,
+                required: f.required ? 1 : 0,
+                locked:   f.locked   ? 1 : 0,
+                default:  f.default  ? 1 : 0,
+                enabled:  f.enabled === false ? 0 : 1,
+            }))
+            : data.form_fields,
     }));
 
     const setField = (key, val) => setData(key, val);
@@ -207,8 +669,9 @@ function EventFormModal({ open, onClose, editingEvent }) {
 
     const validateStep1 = () => {
         if (!data.name.trim()) return 'Event name is required.';
-        if (!data.type) return 'Event type is required.';
+        if (!data.type.trim()) return 'Event type is required.';
         if (!data.status) return 'Status is required.';
+        if (data.mode === 'in-person' && !data.location.trim()) return 'Address / venue is required for in-person events.';
         return null;
     };
 
@@ -246,7 +709,9 @@ function EventFormModal({ open, onClose, editingEvent }) {
                 <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between flex-shrink-0">
                     <div>
                         <h2 className="text-lg font-bold text-gray-900">{isEditing ? 'Edit Event' : 'Create Event'}</h2>
-                        <p className="text-xs text-gray-500 mt-0.5">Step {step} of 2 — {step === 1 ? 'Event Details' : 'Sessions (Optional)'}</p>
+                        <p className="text-xs text-gray-500 mt-0.5">
+                            Step {step} of 3 — {step === 1 ? 'Event Details' : step === 2 ? 'Sessions (Optional)' : 'Registration Form Fields'}
+                        </p>
                     </div>
                     <button onClick={resetAndClose} className="p-2 rounded-xl text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors">
                         <X size={20} />
@@ -256,10 +721,10 @@ function EventFormModal({ open, onClose, editingEvent }) {
                 {/* Step Indicator */}
                 <div className="px-6 pt-4 flex-shrink-0">
                     <div className="flex items-center gap-2">
-                        {[1, 2].map(s => (
+                        {[1, 2, 3].map(s => (
                             <React.Fragment key={s}>
                                 <div className={`flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold transition-all ${step >= s ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-500'}`}>{s}</div>
-                                {s < 2 && <div className={`flex-1 h-0.5 rounded-full transition-all ${step >= 2 ? 'bg-gray-900' : 'bg-gray-100'}`} />}
+                                {s < 3 && <div className={`flex-1 h-0.5 rounded-full transition-all ${step > s ? 'bg-gray-900' : 'bg-gray-100'}`} />}
                             </React.Fragment>
                         ))}
                     </div>
@@ -287,10 +752,30 @@ function EventFormModal({ open, onClose, editingEvent }) {
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <Label required>Event Type</Label>
-                                    <Select value={data.type} onChange={e => setField('type', e.target.value)}>
+                                    <Select
+                                        value={useOtherType ? '__other__' : data.type}
+                                        onChange={e => {
+                                            if (e.target.value === '__other__') {
+                                                setUseOtherType(true);
+                                                setField('type', '');
+                                            } else {
+                                                setUseOtherType(false);
+                                                setField('type', e.target.value);
+                                            }
+                                        }}
+                                    >
                                         <option value="">Select type…</option>
                                         {EVENT_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                                        <option value="__other__">Other…</option>
                                     </Select>
+                                    {useOtherType && (
+                                        <Input
+                                            className="mt-2"
+                                            placeholder="Type the event type…"
+                                            value={data.type}
+                                            onChange={e => setField('type', e.target.value)}
+                                        />
+                                    )}
                                 </div>
                                 <div>
                                     <Label required>Status</Label>
@@ -339,6 +824,18 @@ function EventFormModal({ open, onClose, editingEvent }) {
                                 </div>
                             </div>
 
+                            {/* Address / venue — only for in-person & hybrid events */}
+                            {data.mode !== 'online' && (
+                                <div>
+                                    <Label required={data.mode === 'in-person'}>Address / Venue</Label>
+                                    <Input
+                                        placeholder="e.g. SMX Convention Center, Manila"
+                                        value={data.location}
+                                        onChange={e => setField('location', e.target.value)}
+                                    />
+                                </div>
+                            )}
+
                             {/* Banner Image */}
                             <div>
                                 <Label>Banner Image</Label>
@@ -384,7 +881,7 @@ function EventFormModal({ open, onClose, editingEvent }) {
                                 <Textarea placeholder="Any internal notes or reminders…" value={data.notes} onChange={e => setField('notes', e.target.value)} />
                             </div>
                         </div>
-                    ) : (
+                    ) : step === 2 ? (
                         // ─── Step 2: Sessions ──────────────────────────────────────────
                         <div className="space-y-4">
                             {/* Toggle */}
@@ -469,6 +966,15 @@ function EventFormModal({ open, onClose, editingEvent }) {
                                 </>
                             )}
                         </div>
+                    ) : (
+                        // ─── Step 3: Form Fields ────────────────────────────────────────
+                        <FormFieldsStep
+                            value={data.form_fields}
+                            onChange={(next) => setData('form_fields', next)}
+                            customFieldTypes={customFieldTypes}
+                            lockedFieldKeys={lockedFieldKeys}
+                            defaultFieldKeys={defaultFormFields.map(f => f.key)}
+                        />
                     )}
                 </div>
 
@@ -486,9 +992,21 @@ function EventFormModal({ open, onClose, editingEvent }) {
                                 Next: Sessions <ChevronRight size={16} />
                             </button>
                         </>
+                    ) : step === 2 ? (
+                        <>
+                            <button onClick={() => { setStep(1); clearErrors(); }} className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-gray-600 hover:text-gray-900 transition-colors">
+                                <ChevronLeft size={16} /> Back
+                            </button>
+                            <button
+                                onClick={() => setStep(3)}
+                                className="flex items-center gap-2 px-5 py-2.5 bg-gray-900 text-white text-sm font-semibold rounded-xl hover:bg-gray-800 transition-colors shadow-sm"
+                            >
+                                Next: Form Fields <ChevronRight size={16} />
+                            </button>
+                        </>
                     ) : (
                         <>
-                            <button onClick={() => { setStep(1); setError(''); }} className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-gray-600 hover:text-gray-900 transition-colors">
+                            <button onClick={() => { setStep(2); clearErrors(); }} className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-gray-600 hover:text-gray-900 transition-colors">
                                 <ChevronLeft size={16} /> Back
                             </button>
                             <button
@@ -509,7 +1027,7 @@ function EventFormModal({ open, onClose, editingEvent }) {
 }
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
-export default function Events({ events: backendEvents }) {
+export default function Events({ events: backendEvents, defaultFormFields = [], customFieldTypes = [], lockedFieldKeys = [] }) {
     const events = backendEvents && backendEvents.length > 0 ? backendEvents : MOCK_EVENTS;
     const [selectedEvents, setSelectedEvents] = useState([]);
     const [activeDropdown, setActiveDropdown] = useState(null);
@@ -775,6 +1293,9 @@ export default function Events({ events: backendEvents }) {
                 open={modalOpen}
                 onClose={() => setModalOpen(false)}
                 editingEvent={editingEvent}
+                defaultFormFields={defaultFormFields}
+                customFieldTypes={customFieldTypes}
+                lockedFieldKeys={lockedFieldKeys}
             />
 
             <style dangerouslySetInnerHTML={{ __html: `

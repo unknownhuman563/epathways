@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Portal;
 
 use App\Http\Controllers\Controller;
 use App\Models\Booking;
+use App\Models\Event;
 use App\Models\Lead;
 use App\Models\Program;
 use App\Traits\BuildsLeadRow;
@@ -135,12 +136,60 @@ class SalesController extends Controller
                 'programs' => Program::orderBy('title')->pluck('title')->filter()->values(),
                 'staffOptions' => $this->dashboardStaff(),
                 'leads' => $leads->map(fn ($l) => $this->leadRow($l)),
+                'events' => $this->eventsSummary(),
             ]);
         } catch (\Throwable $e) {
             Log::error('Sales leads list failed', ['error' => $e->getMessage()]);
 
             return inertia('portal/sales/Leads', ['portal' => 'sales', 'statuses' => self::LEAD_STATUSES, 'programs' => Program::orderBy('title')->pluck('title')->filter()->values(), 'staffOptions' => $this->dashboardStaff(), 'leads' => collect()]);
         }
+    }
+
+    /** Events list for the Leads page "Events" tab — each with a registrant count. */
+    private function eventsSummary()
+    {
+        return Event::withCount('leads')
+            ->orderByDesc('date_from')
+            ->latest()
+            ->get()
+            ->map(fn (Event $e) => [
+                'id'                  => $e->id,
+                'name'                => $e->name,
+                'event_code'          => $e->event_code,
+                'type'                => $e->type,
+                'mode'                => $e->mode,
+                'location'            => $e->location,
+                'date_from'           => optional($e->date_from)->toIso8601String(),
+                'status'              => $e->status,
+                'registrations_count' => $e->leads_count,
+            ]);
+    }
+
+    /**
+     * GET /portal/sales/events/{id}/registrations — the leads who registered
+     * for an event (all of them, incl. converted), for the Events-tab drawer.
+     */
+    public function eventRegistrations($id)
+    {
+        $event = Event::findOrFail($id);
+
+        $registrations = $event->leads()
+            ->latest()
+            ->get()
+            ->map(fn (Lead $l) => [
+                'id'         => $l->id,
+                'lead_id'    => $l->lead_id,
+                'name'       => trim("{$l->first_name} {$l->last_name}") ?: 'Unnamed lead',
+                'email'      => $l->email,
+                'phone'      => $l->phone,
+                'status'     => $l->status,
+                'created_at' => optional($l->created_at)->toIso8601String(),
+            ]);
+
+        return response()->json([
+            'event'         => ['id' => $event->id, 'name' => $event->name],
+            'registrations' => $registrations,
+        ]);
     }
 
     /** Manually add a lead from the dashboard "Add Lead" form. */
@@ -463,16 +512,6 @@ class SalesController extends Controller
                 'when' => optional($l->updated_at)->toIso8601String(),
                 'href' => "/admin/leads/{$l->id}",
             ])->all();
-    }
-
-    public function bulkEmail()
-    {
-        return inertia('portal/sales/BulkEmail', ['portal' => 'sales']);
-    }
-
-    public function emailTemplates()
-    {
-        return inertia('portal/sales/EmailTemplates', ['portal' => 'sales']);
     }
 
     public function campaigns()
