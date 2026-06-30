@@ -68,7 +68,13 @@ const Navbar = () => {
                 </ul>
 
                 {/* Desktop CTA */}
-                <div className="hidden lg:block flex-shrink-0">
+                <div className="hidden lg:flex items-center gap-2.5 flex-shrink-0">
+                    <a
+                        href="/register"
+                        className="bg-[#436235] hover:bg-[#354d2a] text-white px-4 xl:px-5 py-2 xl:py-2.5 rounded text-xs xl:text-sm font-semibold whitespace-nowrap transition-colors"
+                    >
+                        Register
+                    </a>
                     {isShowingGetStarted && (
                         <a
                             href="/login"
@@ -123,8 +129,15 @@ const Navbar = () => {
                                 </li>
                             ))}
                         </ul>
-                        {isShowingGetStarted && (
-                            <div className="px-4 sm:px-6 pb-6">
+                        <div className="px-4 sm:px-6 pb-6 space-y-2.5">
+                            <a
+                                href="/register"
+                                onClick={closeMenu}
+                                className="block w-full text-center bg-[#436235] hover:bg-[#354d2a] text-white px-4 py-3 rounded text-sm font-semibold"
+                            >
+                                Register
+                            </a>
+                            {isShowingGetStarted && (
                                 <a
                                     href="/login"
                                     onClick={closeMenu}
@@ -132,8 +145,8 @@ const Navbar = () => {
                                 >
                                     Log in
                                 </a>
-                            </div>
-                        )}
+                            )}
+                        </div>
                     </motion.div>
                 )}
             </AnimatePresence>

@@ -119,6 +119,44 @@ function Textarea({ ...props }) {
     );
 }
 
+// Time input with a visible Clock affordance on the right. The icon
+// button calls input.showPicker() — the modern way to programmatically
+// open the native time picker. Falls back gracefully (focus only) on
+// browsers where showPicker isn't available.
+function TimeInput({ label, value, onChange }) {
+    const inputRef = React.useRef(null);
+    const openPicker = () => {
+        const el = inputRef.current;
+        if (! el) return;
+        if (typeof el.showPicker === 'function') {
+            try { el.showPicker(); return; } catch (e) { /* fall through to focus */ }
+        }
+        el.focus();
+    };
+    return (
+        <div>
+            <Label>{label}</Label>
+            <div className="relative">
+                <input
+                    ref={inputRef}
+                    type="time"
+                    value={value}
+                    onChange={(e) => onChange(e.target.value)}
+                    className="w-full pl-3 pr-10 py-2.5 border border-gray-200 rounded-xl text-sm bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-gray-900 transition-all placeholder-gray-400"
+                />
+                <button
+                    type="button"
+                    onClick={openPicker}
+                    aria-label={`Open ${label.toLowerCase()} picker`}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-lg text-gray-500 hover:text-gray-900 hover:bg-gray-100 transition-colors"
+                >
+                    <Clock size={15} />
+                </button>
+            </div>
+        </div>
+    );
+}
+
 // ─── Empty session template ───────────────────────────────────────────────────
 const emptySession = () => ({
     venue_name: '', address: '', city: '', date: '',
@@ -575,6 +613,9 @@ function EventFormModal({ open, onClose, editingEvent, defaultFormFields = [], c
 
     const { data, setData, post, processing, errors, setError, clearErrors, reset, transform } = useForm({
         name: '', type: '', description: '', date_from: '', date_to: '',
+        // Event-level start/end times — used when the event has no
+        // sessions. Sessions still own their own time columns.
+        time_start: '', time_end: '',
         status: 'upcoming', mode: 'in-person', location: '', organizer_id: '', notes: '',
         banner_image: null,
         sessions: [emptySession()],
@@ -604,6 +645,8 @@ function EventFormModal({ open, onClose, editingEvent, defaultFormFields = [], c
                 description: editingEvent.description || '',
                 date_from: toDateInput(editingEvent.date_from),
                 date_to: toDateInput(editingEvent.date_to),
+                time_start: editingEvent.time_start ? String(editingEvent.time_start).slice(0, 5) : '',
+                time_end:   editingEvent.time_end   ? String(editingEvent.time_end).slice(0, 5)   : '',
                 status: editingEvent.status || 'upcoming',
                 mode: editingEvent.mode || 'in-person',
                 location: editingEvent.location || '',
@@ -800,6 +843,27 @@ function EventFormModal({ open, onClose, editingEvent, defaultFormFields = [], c
                                     <Input type="date" value={data.date_to} onChange={e => setField('date_to', e.target.value)} />
                                 </div>
                             </div>
+
+                            {/* Time Range — only used when the event has
+                                no sessions (sessions carry their own
+                                times). Both fields optional. The Clock
+                                button calls input.showPicker() so the
+                                native time picker opens when clicked. */}
+                            <div className="grid grid-cols-2 gap-4">
+                                <TimeInput
+                                    label="Start Time"
+                                    value={data.time_start}
+                                    onChange={(v) => setField('time_start', v)}
+                                />
+                                <TimeInput
+                                    label="End Time"
+                                    value={data.time_end}
+                                    onChange={(v) => setField('time_end', v)}
+                                />
+                            </div>
+                            <p className="text-[11px] text-gray-500 -mt-2">
+                                Optional — only used when the event has no sessions. Sessions carry their own times.
+                            </p>
 
                             {/* Description */}
                             <div>
