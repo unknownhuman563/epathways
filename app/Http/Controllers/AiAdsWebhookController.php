@@ -632,30 +632,17 @@ class AiAdsWebhookController extends Controller
             'goal' => 'nullable|string|max:40',
         ]);
 
-        $cerebras = app(\App\Services\CerebrasService::class);
-        if (! $cerebras->configured()) {
-            return response()->json(['error' => 'Set CEREBRAS_API_KEY to generate ad copy.'], 422);
+        $ai = app(\App\Services\AIService::class);
+        if (! $ai->configured()) {
+            return response()->json(['error' => 'Set OPENROUTER_API_KEY to generate ad copy.'], 422);
         }
 
-        try {
-            $variants = $cerebras->generateSocialVariants([
-                'campaign_name' => $data['brief'],
-                'platform' => $data['platform'] ?? 'facebook',
-                'hook_angle' => $data['brief'],
-                'variant_count' => 1,
-            ]);
-            $v = $variants[0] ?? [];
-
-            return response()->json([
-                'headline' => $v['headline'] ?? '',
-                'body' => $v['body'] ?? '',
-                'cta' => $v['cta'] ?? '',
-            ]);
-        } catch (\Throwable $e) {
-            Log::error('AI ad copy failed', ['error' => $e->getMessage()]);
-
-            return response()->json(['error' => 'AI copy failed: '.$e->getMessage()], 502);
+        $copy = $ai->generateAdCreative($data['brief'], $data['platform'] ?? 'facebook');
+        if ($copy['headline'] === '' && $copy['body'] === '') {
+            return response()->json(['error' => 'AI copy generation failed — please try again.'], 502);
         }
+
+        return response()->json(['headline' => $copy['headline'], 'body' => $copy['body'], 'cta' => '']);
     }
 
     /** GET /webhook/social/ad-targeting-search?q=&dimension=&accountId=&geoType=&countryCode= */
@@ -692,22 +679,16 @@ class AiAdsWebhookController extends Controller
             'platform' => 'nullable|string|max:32',
         ]);
 
-        $cerebras = app(\App\Services\CerebrasService::class);
-        if (! $cerebras->configured()) {
-            return response()->json(['error' => 'Set CEREBRAS_API_KEY to use AI targeting.'], 422);
+        $ai = app(\App\Services\AIService::class);
+        if (! $ai->configured()) {
+            return response()->json(['error' => 'Set OPENROUTER_API_KEY to use AI targeting.'], 422);
         }
 
-        try {
-            $s = $cerebras->suggestAdTargeting([
-                'content' => $data['content'],
-                'goal' => $data['goal'] ?? 'traffic',
-                'platform' => $data['platform'] ?? 'facebook',
-            ]);
-        } catch (\Throwable $e) {
-            Log::error('AI targeting failed', ['error' => $e->getMessage()]);
-
-            return response()->json(['error' => 'AI targeting failed: '.$e->getMessage()], 502);
-        }
+        $s = $ai->suggestAdTargeting([
+            'content' => $data['content'],
+            'goal' => $data['goal'] ?? 'traffic',
+            'platform' => $data['platform'] ?? 'facebook',
+        ]);
 
         // Resolve interest keyword names → Zernio {id, name}. Best-effort.
         $interests = [];

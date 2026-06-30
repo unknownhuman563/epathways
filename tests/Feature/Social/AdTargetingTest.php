@@ -21,13 +21,9 @@ class AdTargetingTest extends TestCase
         config(['services.zernio.api_key' => 'sk_test', 'services.zernio.base_url' => 'https://zernio.com/api/v1']);
     }
 
-    private function configureCerebras(): void
+    private function configureAi(): void
     {
-        config([
-            'services.cerebras.api_key' => 'sk_cb',
-            'services.cerebras.base_url' => 'https://api.cerebras.ai/v1',
-            'services.cerebras.model' => 'test-model',
-        ]);
+        config(['ai.api_key' => 'sk_or']); // OpenRouter key; base_url + model come from config/ai.php
     }
 
     public function test_targeting_search_proxies_zernio(): void
@@ -53,10 +49,10 @@ class AdTargetingTest extends TestCase
             ->assertOk()->assertExactJson(['results' => []]);
     }
 
-    public function test_ai_targeting_requires_cerebras(): void
+    public function test_ai_targeting_requires_ai_key(): void
     {
         $this->configureZernio();
-        config(['services.cerebras.api_key' => '']);
+        config(['ai.api_key' => '']);
 
         $this->actingAs($this->admin())
             ->postJson('/webhook/social/ai-targeting', ['content' => 'Study nursing in NZ', 'accountId' => 'acc_meta'])
@@ -66,7 +62,7 @@ class AdTargetingTest extends TestCase
     public function test_ai_targeting_suggests_and_resolves_interests(): void
     {
         $this->configureZernio();
-        $this->configureCerebras();
+        $this->configureAi();
 
         Http::fake([
             '*/chat/completions' => Http::response(['choices' => [['message' => ['content' => json_encode([
@@ -181,16 +177,16 @@ class AdTargetingTest extends TestCase
             && ($r['targeting']['countries'] ?? []) === ['NZ']);
     }
 
-    public function test_ai_ad_copy_requires_cerebras_and_generates(): void
+    public function test_ai_ad_copy_requires_ai_key_and_generates(): void
     {
-        config(['services.cerebras.api_key' => '']);
+        config(['ai.api_key' => '']);
         $this->actingAs($this->admin())
             ->postJson('/webhook/social/ai-ad-copy', ['brief' => 'Nursing in NZ'])
             ->assertStatus(422);
 
-        $this->configureCerebras();
+        $this->configureAi();
         Http::fake(['*/chat/completions' => Http::response(['choices' => [['message' => ['content' => json_encode([
-            'variants' => [['headline' => 'Your NZ future', 'body' => 'Study nursing in New Zealand.', 'cta' => 'Apply now', 'hashtags' => []]],
+            'headline' => 'Your NZ future', 'body' => 'Study nursing in New Zealand.',
         ])]]]])]);
 
         $this->actingAs($this->admin())

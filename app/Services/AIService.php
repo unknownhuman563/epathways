@@ -28,9 +28,9 @@ class AIService
         $model = $model ?: config('ai.default_model');
 
         $payload = [
-            'model'       => $model,
-            'messages'    => $messages,
-            'max_tokens'  => (int) config('ai.max_tokens', 1500),
+            'model' => $model,
+            'messages' => $messages,
+            'max_tokens' => (int) config('ai.max_tokens', 1500),
             'temperature' => (float) config('ai.temperature', 0.7),
         ];
 
@@ -46,7 +46,7 @@ class AIService
             if (! $response->successful()) {
                 Log::warning('AIService: OpenRouter request failed', [
                     'status' => $response->status(),
-                    'body'   => mb_substr($response->body(), 0, 500),
+                    'body' => mb_substr($response->body(), 0, 500),
                 ]);
 
                 return $this->emptyEnvelope($model);
@@ -56,8 +56,8 @@ class AIService
 
             return [
                 'content' => data_get($data, 'choices.0.message.content'),
-                'tokens'  => data_get($data, 'usage.total_tokens'),
-                'model'   => data_get($data, 'model', $model),
+                'tokens' => data_get($data, 'usage.total_tokens'),
+                'model' => data_get($data, 'model', $model),
             ];
         } catch (\Throwable $e) {
             // Network timeout, DNS failure, malformed response, etc. Never
@@ -83,33 +83,123 @@ class AIService
         $scope = $this->roleScopeDescription($user);
 
         return trim(config('ai.system_prompt'))
-            . "\n\nYou are assisting {$user->name} (role: {$user->role}). {$scope}";
+            ."\n\nYou are assisting {$user->name} (role: {$user->role}). {$scope}";
+    }
+
+    /** Whether an OpenRouter key is configured (else AI features are off). */
+    public function configured(): bool
+    {
+        return ! empty(config('ai.api_key'));
+    }
+
+    /**
+     * Write one ad creative (primary text + headline) from a short brief.
+     * Returns ['headline' => string, 'body' => string]; empty strings on failure.
+     */
+    public function generateAdCreative(string $brief, string $platform = 'facebook'): array
+    {
+        $system = <<<'PROMPT'
+        You are a senior paid-social copywriter for ePathways, a New Zealand education & immigration consultancy. Write ONE high-performing ad creative for the given platform and brief.
+
+        Voice: warm, credible, specific. Real value props (free assessment, licensed immigration advisers, NZQA-recognised programmes, end-to-end support). No fake urgency. Tasteful emoji okay.
+
+        CRITICAL: Respond with ONLY a single valid JSON object. No markdown, no code fences, no preamble.
+        Shape: { "headline": "short scroll-stopping headline, max ~40 chars", "body": "the primary text, 1-3 short sentences" }
+        PROMPT;
+
+        $res = $this->chat([
+            ['role' => 'system', 'content' => $system],
+            ['role' => 'user', 'content' => "Platform: {$platform}\nBrief: {$brief}"],
+        ]);
+
+        $parsed = json_decode($this->extractJson((string) ($res['content'] ?? '')), true) ?: [];
+
+        return [
+            'headline' => (string) ($parsed['headline'] ?? ''),
+            'body' => (string) ($parsed['body'] ?? ''),
+        ];
+    }
+
+    /**
+     * Suggest paid-ad audience targeting from a post/brief: age range, ISO
+     * country codes, interest keyword names and a one-line rationale.
+     */
+    public function suggestAdTargeting(array $brief): array
+    {
+        $system = <<<'PROMPT'
+        You are a paid-social media buyer for ePathways, a New Zealand education & immigration consultancy. Given an ad's goal, platform and post content, propose the best paid-ad AUDIENCE.
+
+        Context: ePathways helps international students and migrants move to New Zealand to study and settle. Typical prospects are 18-40, in source markets like India, the Philippines, Nepal, Sri Lanka, Vietnam, Pakistan and Bangladesh, plus onshore audiences already in New Zealand. Interests skew to study abroad, overseas education, student visas, IELTS/PTE, immigration, working in New Zealand, and fields like nursing, IT, business and trades.
+
+        CRITICAL: Respond with ONLY a single valid JSON object. No markdown, no code fences, no preamble.
+        Shape:
+        { "age_min": 18, "age_max": 40, "countries": ["IN", "PH", "NP"], "interests": ["Study abroad", "Student visa"], "rationale": "One short sentence on who and why." }
+
+        Rules: countries = 2-6 ISO 3166-1 alpha-2 codes; interests = 4-8 short real interest names (no #); keep ages 13-65 and age_min <= age_max.
+        PROMPT;
+
+        $res = $this->chat([
+            ['role' => 'system', 'content' => $system],
+            ['role' => 'user', 'content' => 'Suggest the audience for this ad:'."\n\n".json_encode([
+                'goal' => $brief['goal'] ?? 'traffic',
+                'platform' => $brief['platform'] ?? 'facebook',
+                'post_content' => mb_substr((string) ($brief['content'] ?? ''), 0, 1200),
+            ])],
+        ]);
+
+        $parsed = json_decode($this->extractJson((string) ($res['content'] ?? '')), true) ?: [];
+        $ageMin = (int) ($parsed['age_min'] ?? 18);
+        $ageMax = (int) ($parsed['age_max'] ?? 45);
+
+        return [
+            'ageMin' => max(13, min(65, $ageMin)),
+            'ageMax' => max(13, min(65, max($ageMin, $ageMax))),
+            'countries' => array_values(array_filter(array_map(fn ($c) => strtoupper(substr((string) $c, 0, 2)), (array) ($parsed['countries'] ?? [])))),
+            'interests' => array_values(array_filter(array_map(fn ($i) => trim((string) $i), (array) ($parsed['interests'] ?? [])))),
+            'rationale' => (string) ($parsed['rationale'] ?? ''),
+        ];
+    }
+
+    /** Pull the first JSON object out of a model response (tolerates fences/prose). */
+    private function extractJson(string $content): string
+    {
+        $trimmed = trim($content);
+        if (preg_match('/```(?:json)?\s*(.+?)\s*```/s', $trimmed, $m)) {
+            return trim($m[1]);
+        }
+        $start = strpos($trimmed, '{');
+        $end = strrpos($trimmed, '}');
+        if ($start !== false && $end !== false && $end > $start) {
+            return substr($trimmed, $start, $end - $start + 1);
+        }
+
+        return $trimmed;
     }
 
     private function roleScopeDescription(User $user): string
     {
         return match ($user->role) {
             User::ROLE_SUPER_ADMIN, User::ROLE_ADMIN => 'They are an administrator with visibility across every department (sales, education, immigration, English, accommodation).',
-            'sales'         => 'They work in Sales and focus on leads still in the sales pipeline (not yet converted).',
-            'education'     => 'They work in Education advising and focus on enrolled students.',
-            'english'       => 'They work in English language training and focus on English students.',
+            'sales' => 'They work in Sales and focus on leads still in the sales pipeline (not yet converted).',
+            'education' => 'They work in Education advising and focus on enrolled students.',
+            'english' => 'They work in English language training and focus on English students.',
             'immigration', User::ROLE_IMMIGRATION_MANAGER, User::ROLE_IMMIGRATION_ADVISER => 'They work in Immigration consulting and focus on immigration cases.',
             'accommodation' => 'They work in Accommodation and focus on accommodation clients.',
-            default         => 'Keep guidance general and remind them you cannot see records outside their remit.',
+            default => 'Keep guidance general and remind them you cannot see records outside their remit.',
         };
     }
 
     private function post(array $payload)
     {
         return Http::withHeaders([
-            'Authorization' => 'Bearer ' . config('ai.api_key'),
-            'Content-Type'  => 'application/json',
+            'Authorization' => 'Bearer '.config('ai.api_key'),
+            'Content-Type' => 'application/json',
             // OpenRouter attribution headers (optional but recommended).
-            'HTTP-Referer'  => config('app.url'),
-            'X-Title'       => 'ePathways CRM',
+            'HTTP-Referer' => config('app.url'),
+            'X-Title' => 'ePathways CRM',
         ])
             ->timeout((int) config('ai.timeout_seconds', 30))
-            ->post(rtrim(config('ai.base_url'), '/') . '/chat/completions', $payload);
+            ->post(rtrim(config('ai.base_url'), '/').'/chat/completions', $payload);
     }
 
     private function emptyEnvelope(string $model): array
