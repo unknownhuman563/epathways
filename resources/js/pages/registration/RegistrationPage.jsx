@@ -449,8 +449,8 @@ export default function Registration({ event }) {
                         {event.date_from && (
                             <MetaChip icon={<Calendar size={13} />}>{fmtDate(event.date_from)}</MetaChip>
                         )}
-                        {event.mode && (
-                            <MetaChip icon={<MapPin size={13} />}>{event.mode}</MetaChip>
+                        {(event.location || event.mode) && (
+                            <MetaChip icon={<MapPin size={13} />}>{event.location || event.mode}</MetaChip>
                         )}
                         {event.sessions && event.sessions.length > 0 && (
                             <MetaChip icon={<Users size={13} />}>

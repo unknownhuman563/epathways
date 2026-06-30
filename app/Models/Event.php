@@ -11,7 +11,7 @@ class Event extends Model
 
     protected $fillable = [
         'name', 'description', 'type', 'event_code', 'date_from', 'date_to',
-        'status', 'organizer_id', 'registration_link', 'notes', 'mode', 'banner_image',
+        'status', 'organizer_id', 'registration_link', 'notes', 'mode', 'location', 'banner_image',
         'form_fields',
     ];
 

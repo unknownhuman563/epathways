@@ -96,7 +96,7 @@
     <div class="bank-box">
         <div class="heading">Payment for School Enrollment and Documentation Fee</div>
         <div class="row"><span class="label">Bank Name:</span> <strong>RCBC</strong></div>
-        <div class="row"><span class="label">Account Name:</span> <strong>Dinah Suarin</strong></div>
+        <div class="row"><span class="label">Account Name:</span> <strong>Dinah Jabone</strong></div>
         <div class="row"><span class="label">Account Number:</span> <strong>9045440503</strong></div>
         <div class="row"><span class="label">Reference:</span> <strong>#{{ $client_reference }}</strong></div>
     </div>

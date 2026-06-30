@@ -649,6 +649,9 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/dashboard', [SalesController::class, 'dashboard'])->name('dashboard');
             Route::get('/leads', [SalesController::class, 'leads'])->name('leads');
 
+            // Events tab — registrants for one event (JSON drawer).
+            Route::get('/events/{id}/registrations', [SalesController::class, 'eventRegistrations'])->name('events.registrations');
+
             // Bulk email (Build 11.A) — preview + send to the selected leads.
             // Declared before /leads/{id} so the two static segments win.
             Route::post('/leads/bulk-email/preview', [\App\Http\Controllers\Sales\BulkEmailController::class, 'preview'])->name('leads.bulk-email.preview');

@@ -19,14 +19,14 @@ import NovaImg from "@assets/team/nova.png";
 // NOTE: values marked with TODO are PLACEHOLDER demo content — replace them.
 export const team = [
   {
-    slug: "dev-bhageerutty",
+    slug: "david-bhageerutty",
     name: "Dev Bhageerutty",
     role: "Licence Immigration Adviser (Provisional) — 202401351",
     location: "New Zealand",
     image: DevImg,
     bio: "Guiding students and skilled migrants through every step of their New Zealand journey.",
     links: {
-      booking: "https://calendly.com/epathways/dev", // TODO: replace with Dev's paid-booking calendar URL
+      booking: "https://calendar.app.google/FYfMdmB1HxfBs7A28",
       whatsapp: "+64 22 188 2800",
       email: "dev@epathways.co.nz",
       facebook: "https://www.facebook.com/dev.bhageerutty",
@@ -37,7 +37,7 @@ export const team = [
   },
   {
     slug: "dinah-suarin",
-    name: "Dinah Suarin",
+    name: "Dinah Jabone",
     role: "Co-Founding Member",
     location: "New Zealand",
     image: DinaImg,
