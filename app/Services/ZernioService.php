@@ -28,10 +28,67 @@ class ZernioService
             ->timeout(30);
     }
 
-    /** GET /accounts → [{id, platform, handle, status, last_post_at}]. */
+    private ?string $resolvedProfileId = null;
+
+    private bool $profileResolved = false;
+
+    /**
+     * The profile every account/post query is scoped to, so accounts and posts
+     * from OTHER profiles (e.g. a separate accommodation page) never leak in.
+     * Uses ZERNIO_PROFILE_ID; if that's unset and the key sees exactly one
+     * profile, uses it. Null only when several profiles exist and none is set.
+     */
+    private function profileId(): ?string
+    {
+        if ($this->profileResolved) {
+            return $this->resolvedProfileId;
+        }
+        $this->profileResolved = true;
+
+        $configured = config('services.zernio.profile_id');
+        if (! empty($configured)) {
+            return $this->resolvedProfileId = (string) $configured;
+        }
+
+        $profiles = $this->listProfiles()['profiles'];
+        if (count($profiles) === 1) {
+            $this->resolvedProfileId = $profiles[0]['id'];
+        }
+
+        return $this->resolvedProfileId;
+    }
+
+    /** Add the profile scope to a query array (no-op when unscoped). */
+    private function scoped(array $query): array
+    {
+        if (($pid = $this->profileId()) && empty($query['profileId'])) {
+            $query['profileId'] = $pid;
+        }
+
+        return $query;
+    }
+
+    /** GET /profiles → [{id, name}]. */
+    public function listProfiles(): array
+    {
+        try {
+            $res = $this->client()->get('/profiles')->throw();
+            $rows = $res->json('profiles') ?? $res->json('data') ?? [];
+
+            return ['profiles' => array_values(array_map(fn ($p) => [
+                'id' => (string) ($p['_id'] ?? $p['id'] ?? ''),
+                'name' => (string) ($p['name'] ?? '—'),
+            ], is_array($rows) ? $rows : []))];
+        } catch (\Throwable $e) {
+            return ['profiles' => []];
+        }
+    }
+
+    /** GET /accounts → [{id, platform, handle, status, last_post_at}], scoped to the profile. */
     public function listAccounts(): array
     {
-        $res = $this->client()->get('/accounts')->throw();
+        $query = array_filter(['profileId' => $this->profileId()], fn ($v) => $v !== null && $v !== '');
+        $res = $this->client()->get('/accounts', $query)->throw();
         $rows = $res->json('data') ?? $res->json('accounts') ?? $res->json() ?? [];
 
         return ['accounts' => array_values(array_map(fn ($a) => [
@@ -115,7 +172,7 @@ class ZernioService
     /** GET /posts → [{id, platform, headline, schedule_at, status, campaign_name}]. */
     public function listPosts(array $query = []): array
     {
-        $res = $this->client()->get('/posts', $query)->throw();
+        $res = $this->client()->get('/posts', $this->scoped($query))->throw();
         $rows = $res->json('data') ?? $res->json('posts') ?? $res->json() ?? [];
 
         return array_values(array_map(fn ($p) => [
@@ -147,7 +204,7 @@ class ZernioService
             try {
                 $query = array_filter([
                     'status' => 'published', 'source' => $source,
-                    'accountId' => $accountId, 'limit' => 50,
+                    'accountId' => $accountId, 'profileId' => $this->profileId(), 'limit' => 50,
                 ], fn ($v) => $v !== null && $v !== '');
                 $res = $this->client()->get('/posts', $query)->throw();
                 $rows = $res->json('posts') ?? $res->json('data') ?? [];
@@ -224,7 +281,7 @@ class ZernioService
     /** GET /inbox/conversations → [{id, account_id, platform, name, snippet, unread, updated_at}]. */
     public function listConversations(array $query = []): array
     {
-        $res = $this->client()->get('/inbox/conversations', $query)->throw();
+        $res = $this->client()->get('/inbox/conversations', $this->scoped($query))->throw();
         $rows = $res->json('data') ?? $res->json('conversations') ?? $res->json() ?? [];
 
         return ['conversations' => array_values(array_map(function ($c) {
@@ -285,7 +342,7 @@ class ZernioService
      */
     public function listComments(array $query = []): array
     {
-        $res = $this->client()->get('/inbox/comments', $query)->throw();
+        $res = $this->client()->get('/inbox/comments', $this->scoped($query))->throw();
         $rows = $res->json('data') ?? $res->json('comments') ?? $res->json() ?? [];
 
         return ['comments' => array_values(array_map(fn ($c) => [
@@ -317,7 +374,7 @@ class ZernioService
     /** GET /ads → [{id, name, platform, status, objective}]. */
     public function listAds(array $query = []): array
     {
-        $res = $this->client()->get('/ads', $query)->throw();
+        $res = $this->client()->get('/ads', $this->scoped($query))->throw();
         $rows = $res->json('data') ?? $res->json('ads') ?? $res->json() ?? [];
 
         return ['ads' => array_values(array_map(fn ($a) => [
