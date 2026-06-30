@@ -413,10 +413,15 @@ Route::middleware(['auth'])->group(function () {
             Route::post('/inbox-reply-comment', [App\Http\Controllers\AiAdsWebhookController::class, 'inboxReplyComment'])->name('inbox-reply-comment');
 
             // Ads (Phase 3) — list, ad accounts, boost, analytics.
+            Route::get('/published-posts', [App\Http\Controllers\AiAdsWebhookController::class, 'publishedPosts'])->name('published-posts');
             Route::get('/ads-list', [App\Http\Controllers\AiAdsWebhookController::class, 'adsList'])->name('ads-list');
             Route::get('/ad-accounts', [App\Http\Controllers\AiAdsWebhookController::class, 'adAccounts'])->name('ad-accounts');
             Route::post('/ads-boost', [App\Http\Controllers\AiAdsWebhookController::class, 'adsBoost'])->name('ads-boost');
             Route::get('/ad-analytics', [App\Http\Controllers\AiAdsWebhookController::class, 'adAnalytics'])->name('ad-analytics');
+            Route::get('/ad-targeting-search', [App\Http\Controllers\AiAdsWebhookController::class, 'adTargetingSearch'])->name('ad-targeting-search');
+            Route::post('/ai-targeting', [App\Http\Controllers\AiAdsWebhookController::class, 'aiTargeting'])->name('ai-targeting');
+            Route::get('/ad-audiences', [App\Http\Controllers\AiAdsWebhookController::class, 'adAudiences'])->name('ad-audiences');
+            Route::post('/ad-audience-save', [App\Http\Controllers\AiAdsWebhookController::class, 'adAudienceSave'])->name('ad-audience-save');
 
             // Performance (Phase 2b) — post analytics joined with lead counts.
             Route::get('/analytics', [App\Http\Controllers\AiAdsWebhookController::class, 'analytics'])->name('analytics');
