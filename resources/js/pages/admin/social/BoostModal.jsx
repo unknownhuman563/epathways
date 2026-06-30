@@ -11,11 +11,6 @@ const BOOST_GOALS = [
     ['engagement', 'Engagement'], ['traffic', 'Traffic'], ['awareness', 'Awareness'], ['video_views', 'Video Views'],
     ['lead_generation', 'Lead Generation'], ['conversions', 'Conversions'], ['app_promotion', 'App Promotion'],
 ];
-const PLATFORM_GROUP = {
-    facebook: 'meta', instagram: 'meta', metaads: 'meta', tiktok: 'tiktok', tiktokads: 'tiktok',
-    linkedin: 'linkedin', linkedinads: 'linkedin', google: 'google', googleads: 'google', pinterest: 'pinterest', twitter: 'x', xads: 'x',
-};
-const groupOf = (p) => { const k = String(p || '').toLowerCase(); return PLATFORM_GROUP[k] || k; };
 const fmtDate = (iso) => { try { return new Date(iso).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short', year: 'numeric' }); } catch { return ''; } };
 
 export default function BoostModal({ onClose, onBoosted }) {
@@ -30,7 +25,7 @@ export default function BoostModal({ onClose, onBoosted }) {
     const acct = (adAccounts || []).find((a) => a.id === form.adAccountId) || null;
     const accountId = acct?.accountId || '';
     const post = (posts || []).find((p) => p.id === form.postId) || null;
-    const visiblePosts = (posts || []).filter((p) => !acct || groupOf(p.platform) === groupOf(acct.platform));
+    const visiblePosts = posts || [];
     const countryMatches = cq.trim()
         ? COUNTRIES.filter(([code, name]) => name.toLowerCase().includes(cq.toLowerCase()) || code.toLowerCase() === cq.toLowerCase()).slice(0, 40)
         : [];
@@ -87,7 +82,7 @@ export default function BoostModal({ onClose, onBoosted }) {
                                 {posts === null ? (
                                     [0, 1, 2].map((i) => <Skeleton key={i} className="h-16 w-full rounded-xl" />)
                                 ) : visiblePosts.length === 0 ? (
-                                    <p className="text-xs text-gray-400 py-6 text-center">{acct ? `No published ${acct.platform} posts.` : 'Pick an ad account to see its posts.'}</p>
+                                    <p className="text-xs text-gray-400 py-6 text-center">No published posts yet.</p>
                                 ) : visiblePosts.map((p) => (
                                     <button key={p.id} type="button" onClick={() => set('postId', p.id)}
                                         className={`w-full flex items-center gap-3 px-3 py-2.5 text-left rounded-xl border transition-colors ${form.postId === p.id ? 'border-blue-500 bg-blue-50/40' : 'border-gray-100 hover:bg-gray-50'}`}>
@@ -108,7 +103,7 @@ export default function BoostModal({ onClose, onBoosted }) {
                             <label className="block"><span className={lbl}>Ad account</span>
                                 <select className={inp} value={form.adAccountId} onChange={(e) => { set('adAccountId', e.target.value); set('postId', ''); }}>
                                     <option value="">Select…</option>
-                                    {adAccounts.map((a) => <option key={a.id} value={a.id}>{a.name} ({a.platform}{a.currency ? `, ${a.currency}` : ''})</option>)}
+                                    {adAccounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
                                 </select>
                             </label>
 

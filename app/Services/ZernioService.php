@@ -309,13 +309,15 @@ class ZernioService
         // per connected account), so walk every account and collect its ad
         // accounts, tagging each with the social accountId + platform it hangs
         // off. Page-only connections that can't list ad accounts (422) are skipped.
-        $adAccounts = [];
+        $byId = [];
+        $pagePlatforms = ['facebook', 'instagram'];
 
         foreach ($this->listAccounts()['accounts'] as $acct) {
             $accountId = $acct['id'] ?? null;
             if (! $accountId) {
                 continue;
             }
+            $platform = $acct['platform'] ?? null;
 
             try {
                 $res = $this->client()->get('/ads/accounts', ['accountId' => $accountId])->throw();
@@ -325,20 +327,29 @@ class ZernioService
                     if (! $id) {
                         continue;
                     }
-                    $adAccounts[] = [
-                        'id' => (string) $id,                  // platform ad account id (act_…)
+                    $id = (string) $id;
+                    $entry = [
+                        'id' => $id,                            // platform ad account id (act_…)
                         'name' => $a['name'] ?? $a['adAccountName'] ?? '—',
-                        'platform' => $acct['platform'] ?? null,
+                        'platform' => $platform,
                         'accountId' => (string) $accountId,     // the social account it hangs off
                         'currency' => $a['currency'] ?? null,
                     ];
+                    // The SAME ad account often surfaces under several connected
+                    // accounts (e.g. a Facebook Page + a Meta Ads connection).
+                    // Keep one entry, preferring a page connection — that's the
+                    // account that owns the posts being boosted.
+                    $existing = $byId[$id] ?? null;
+                    if (! $existing || (in_array($platform, $pagePlatforms, true) && ! in_array($existing['platform'], $pagePlatforms, true))) {
+                        $byId[$id] = $entry;
+                    }
                 }
             } catch (\Throwable $e) {
                 // This account can't list ad accounts (page-only / no ads) — skip it.
             }
         }
 
-        return ['adAccounts' => $adAccounts];
+        return ['adAccounts' => array_values($byId)];
     }
 
     /** POST /ads/boost — turn a published post into a paid campaign. */
