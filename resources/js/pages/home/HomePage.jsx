@@ -10,6 +10,7 @@ import SuccessStories from "./SuccessStories";
 import WhyUs from "./WhyUs";
 import ProcessSteps from "./ProcessSteps";
 import PartnerLogos from "./PartnerLogos";
+import QuickForms from "./QuickForms";
 import AboutBrief from "./AboutBrief";
 import ScrollToTop from "@/components/ui/ScrollToTop";
 import Modal from "@/components/ui/Modal";
@@ -44,6 +45,12 @@ export default function Home({ events = [], programGroups = [], activePromos = [
         <section>
           <PartnerLogos />
         </section>
+
+        {/* Quick Forms — three top-of-funnel CTAs (Pre Assessment,
+            Enrolment, Visa Assessment) sit between the trust logos and
+            the About section so a returning visitor can jump straight
+            into the form they came back for. */}
+        <QuickForms />
 
         {/* About Brief Section */}
         <AboutBrief />
