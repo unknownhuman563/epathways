@@ -586,7 +586,7 @@ class ZernioService
      */
     public function analytics(array $query = []): array
     {
-        $res = $this->client()->get('/analytics', $query)->throw();
+        $res = $this->client()->get('/analytics', $this->scoped($query))->throw();
         $json = $res->json();
         // The endpoint returns a list under data/posts, or a single post object.
         $rows = $res->json('data') ?? $res->json('posts')
