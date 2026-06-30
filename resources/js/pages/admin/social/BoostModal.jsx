@@ -25,18 +25,22 @@ export default function BoostModal({ onClose, onBoosted }) {
     const acct = (adAccounts || []).find((a) => a.id === form.adAccountId) || null;
     const accountId = acct?.accountId || '';
     const post = (posts || []).find((p) => p.id === form.postId) || null;
-    // Show only the selected account's posts (posts carry their owning
-    // account_id; the ad account carries the same parent accountId). If a post
-    // has no account_id we keep it rather than hide it.
-    const visiblePosts = !accountId ? [] : (posts || []).filter((p) => !p.account_id || p.account_id === accountId);
+    const visiblePosts = posts || [];
     const countryMatches = cq.trim()
         ? COUNTRIES.filter(([code, name]) => name.toLowerCase().includes(cq.toLowerCase()) || code.toLowerCase() === cq.toLowerCase()).slice(0, 40)
         : [];
 
     useEffect(() => {
         social.adAccounts().then((r) => setAdAccounts(r?.adAccounts || []), () => setAdAccounts([]));
-        social.publishedPosts().then((r) => setPosts(r?.posts || []), () => setPosts([]));
     }, []);
+
+    // Fetch the selected account's published posts (scoped server-side so the
+    // list mirrors Zernio — only this account's posts, not the whole workspace).
+    useEffect(() => {
+        if (!accountId) { setPosts(null); return; }
+        setPosts(null);
+        social.publishedPosts({ accountId }).then((r) => setPosts(r?.posts || []), () => setPosts([]));
+    }, [accountId]);
 
     const addCountry = (c) => { if (!targeting.countries.includes(c)) setTargeting((t) => ({ ...t, countries: [...t.countries, c] })); setCq(''); };
     const removeCountry = (c) => setTargeting((t) => ({ ...t, countries: t.countries.filter((x) => x !== c) }));
@@ -82,10 +86,10 @@ export default function BoostModal({ onClose, onBoosted }) {
                         <div>
                             <span className={lbl}>Published post</span>
                             <div className="mt-1 space-y-1.5 max-h-[420px] overflow-y-auto pr-1">
-                                {posts === null ? (
-                                    [0, 1, 2].map((i) => <Skeleton key={i} className="h-16 w-full rounded-xl" />)
-                                ) : !accountId ? (
+                                {!accountId ? (
                                     <p className="text-xs text-gray-400 py-6 text-center">Pick an ad account to see its posts.</p>
+                                ) : posts === null ? (
+                                    [0, 1, 2].map((i) => <Skeleton key={i} className="h-16 w-full rounded-xl" />)
                                 ) : visiblePosts.length === 0 ? (
                                     <p className="text-xs text-gray-400 py-6 text-center">No published posts for this account.</p>
                                 ) : visiblePosts.map((p) => (

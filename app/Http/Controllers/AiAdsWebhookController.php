@@ -478,7 +478,7 @@ class AiAdsWebhookController extends Controller
     public function publishedPosts(Request $request)
     {
         if ($z = $this->zernio()) {
-            return $this->zernioJson(fn () => $z->publishedPosts());
+            return $this->zernioJson(fn () => $z->publishedPosts($request->query('accountId')));
         }
 
         return response()->json(['posts' => []]);

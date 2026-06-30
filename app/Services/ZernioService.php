@@ -134,17 +134,22 @@ class ZernioService
      * the full content (for AI targeting) plus a short preview and the post's
      * platform, so the boost picker can fill the form on selection.
      */
-    public function publishedPosts(): array
+    public function publishedPosts(?string $accountId = null): array
     {
         // Zernio splits posts into source=zernio (created here) and source=
         // external (already live on the connected account). /posts defaults to
-        // zernio, so externally-published posts are missed — Zernio's own boost
-        // picker shows both, so fetch both sources and merge (dedup by id).
+        // zernio, so externally-published posts are missed — fetch both sources
+        // and merge. Scoped to the selected account (accountId) so the picker
+        // mirrors Zernio: only that page's posts, not the whole workspace.
         $byId = [];
 
         foreach (['zernio', 'external'] as $source) {
             try {
-                $res = $this->client()->get('/posts', ['status' => 'published', 'source' => $source, 'limit' => 50])->throw();
+                $query = array_filter([
+                    'status' => 'published', 'source' => $source,
+                    'accountId' => $accountId, 'limit' => 50,
+                ], fn ($v) => $v !== null && $v !== '');
+                $res = $this->client()->get('/posts', $query)->throw();
                 $rows = $res->json('posts') ?? $res->json('data') ?? [];
                 foreach (is_array($rows) ? $rows : [] as $p) {
                     $mapped = $this->mapBoostablePost($p);
