@@ -43,7 +43,7 @@ const STAGE_STYLES = {
 };
 const stageClass = (s) => STAGE_STYLES[s] || "bg-gray-100 text-gray-700 border-gray-200";
 
-export default function LeadDetails({ lead: backendLead, activity = [], stageTimeline = [], checklistFiles = {}, statuses = [], notes = [], tags = [], allTags = [], tasks = [], staffOptions = [], currentUser = null }) {
+export default function LeadDetails({ lead: backendLead, activity = [], stageTimeline = [], checklistFiles = {}, statuses = [], notes = [], tags = [], allTags = [], tasks = [], staffOptions = [], eventRegistration = null, currentUser = null }) {
     // Derive the "Back to Leads" URL from the current path so sales users
     // return to /portal/sales/leads, education users to /portal/education/leads,
     // and admins to /admin/leads — never a 403.
@@ -683,6 +683,13 @@ export default function LeadDetails({ lead: backendLead, activity = [], stageTim
                     </div>
                 </div>
             </div>
+
+            {/* Event Registration Form — shown when this lead came in via
+                an event registration. Rebuilt server-side from wherever
+                each field's value landed (lead columns, work_info JSON,
+                educationExps/studyPlans rows, event_response for custom
+                fields). Read-only snapshot of what the lead submitted. */}
+            {eventRegistration && <EventRegistrationCard data={eventRegistration} />}
 
             {/* AI Analysis Section */}
             {aiStatus !== 'pending' && (
@@ -4575,3 +4582,108 @@ function formatVal(v) {
     const s = String(v);
     return s.length > 60 ? s.slice(0, 60) + '…' : s;
 }
+
+// ── Event registration snapshot ─────────────────────────────────────────────
+//
+// Read-only card that reconstructs the public registration form as the
+// lead filled it. Grouped by section, lays out two-up on wider screens.
+// Data comes pre-resolved from the controller — values for default
+// fields come from their dedicated lead columns / JSON buckets, custom
+// fields come straight from event_response. Nothing here is editable
+// (lead profile edits already happen below in the Personal Info tab).
+function EventRegistrationCard({ data }) {
+    const { event, registered_at, fields = [] } = data || {};
+    if (! event || fields.length === 0) return null;
+
+    // Group fields by section so the card mirrors the public registration
+    // page layout.
+    const sectionGroups = (() => {
+        const map = new Map();
+        const order = [];
+        for (const f of fields) {
+            const sec = f.section || 'Additional';
+            if (! map.has(sec)) { map.set(sec, []); order.push(sec); }
+            map.get(sec).push(f);
+        }
+        return order.map((sec) => ({ section: sec, items: map.get(sec) }));
+    })();
+
+    const fmtDate = (iso) => iso
+        ? new Date(iso).toLocaleDateString('en-NZ', { day: '2-digit', month: 'short', year: 'numeric' })
+        : null;
+    const registeredAtPretty = registered_at
+        ? new Date(registered_at).toLocaleString('en-NZ', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+        : null;
+
+    return (
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+            <div className="flex items-center gap-3 px-6 py-4 border-b border-gray-100 bg-gray-50/30">
+                <div className="w-8 h-8 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center">
+                    <Calendar size={16} />
+                </div>
+                <div className="flex-1 min-w-0">
+                    <h2 className="text-lg font-bold text-gray-900 truncate">
+                        Event registration
+                    </h2>
+                    <p className="text-[12px] text-gray-500 mt-0.5">
+                        <span className="font-semibold text-gray-700">{event.name}</span>
+                        {event.type ? <span className="text-gray-400"> · {event.type}</span> : null}
+                        {event.date_from ? <span className="text-gray-400"> · {fmtDate(event.date_from)}</span> : null}
+                    </p>
+                </div>
+                {registeredAtPretty && (
+                    <span className="hidden sm:inline-flex items-center gap-1.5 text-[11px] font-semibold text-gray-500 bg-white border border-gray-200 px-2.5 py-1 rounded-md">
+                        <Clock size={11} /> {registeredAtPretty}
+                    </span>
+                )}
+            </div>
+
+            <div className="p-6 space-y-6">
+                {sectionGroups.map(({ section, items }) => (
+                    <section key={section}>
+                        <h3 className="text-[11px] font-bold uppercase tracking-[0.18em] text-gray-500 mb-3 pb-2 border-b border-gray-100">
+                            {section}
+                        </h3>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
+                            {items.map((f) => (
+                                <EventResponseRow key={f.key} field={f} />
+                            ))}
+                        </div>
+                    </section>
+                ))}
+                {event.event_code && (
+                    <p className="text-[11px] text-gray-400 italic pt-2 border-t border-gray-50">
+                        Registration code:{' '}
+                        <span className="font-mono">{event.event_code}</span>
+                    </p>
+                )}
+            </div>
+        </div>
+    );
+}
+
+function EventResponseRow({ field }) {
+    const { label, type, value } = field;
+    const fullWidth = type === 'textarea';
+    const isEmpty = value === null || value === undefined || value === '';
+
+    return (
+        <div className={fullWidth ? 'sm:col-span-2' : ''}>
+            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-gray-400 mb-1">
+                {label}
+            </p>
+            {isEmpty ? (
+                <p className="text-[13px] text-gray-300 italic">Not provided</p>
+            ) : type === 'textarea' ? (
+                <p className="text-[13px] text-gray-800 leading-relaxed whitespace-pre-wrap bg-gray-50/60 border border-gray-100 rounded-lg px-3 py-2.5">
+                    {String(value)}
+                </p>
+            ) : (
+                <p className="text-[13px] text-gray-800 font-medium">
+                    {String(value)}
+                </p>
+            )}
+        </div>
+    );
+}
+
