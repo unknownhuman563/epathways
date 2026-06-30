@@ -417,6 +417,8 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/ads-list', [App\Http\Controllers\AiAdsWebhookController::class, 'adsList'])->name('ads-list');
             Route::get('/ad-accounts', [App\Http\Controllers\AiAdsWebhookController::class, 'adAccounts'])->name('ad-accounts');
             Route::post('/ads-boost', [App\Http\Controllers\AiAdsWebhookController::class, 'adsBoost'])->name('ads-boost');
+            Route::post('/create-ad', [App\Http\Controllers\AiAdsWebhookController::class, 'createAd'])->name('create-ad');
+            Route::post('/ai-ad-copy', [App\Http\Controllers\AiAdsWebhookController::class, 'aiAdCopy'])->name('ai-ad-copy');
             Route::get('/ad-analytics', [App\Http\Controllers\AiAdsWebhookController::class, 'adAnalytics'])->name('ad-analytics');
             Route::get('/ad-targeting-search', [App\Http\Controllers\AiAdsWebhookController::class, 'adTargetingSearch'])->name('ad-targeting-search');
             Route::post('/ai-targeting', [App\Http\Controllers\AiAdsWebhookController::class, 'aiTargeting'])->name('ai-targeting');

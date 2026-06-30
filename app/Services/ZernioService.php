@@ -345,6 +345,17 @@ class ZernioService
         return ['ok' => true, 'ad_id' => $ad['_id'] ?? $ad['id'] ?? null];
     }
 
+    /** POST /ads/create — launch a standalone ad with custom creative. */
+    public function createAd(array $payload): array
+    {
+        $res = $this->client()->timeout(60)
+            ->post('/ads/create', array_filter($payload, fn ($v) => $v !== null && $v !== '' && $v !== []))
+            ->throw();
+        $ad = $res->json('ad') ?? $res->json() ?? [];
+
+        return ['ok' => true, 'ad_id' => $ad['_id'] ?? $ad['id'] ?? null];
+    }
+
     /** GET /ads/{id}/analytics → {spend, impressions, clicks, ctr, cpc, cpm}. */
     public function adAnalytics(string $adId): array
     {

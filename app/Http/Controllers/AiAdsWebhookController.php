@@ -568,6 +568,96 @@ class AiAdsWebhookController extends Controller
         return $targeting;
     }
 
+    /** POST /webhook/social/create-ad — launch a standalone ad with custom creative. */
+    public function createAd(Request $request)
+    {
+        $data = $request->validate([
+            'accountId' => 'required|string|max:120',
+            'adAccountId' => 'required|string|max:120',
+            'platform' => 'required|string|max:32',
+            'name' => 'required|string|max:255',
+            'goal' => 'required|string|max:40',
+            'body' => 'required|string|max:2000',
+            'headline' => 'nullable|string|max:255',
+            'callToAction' => 'nullable|string|max:40',
+            'linkUrl' => 'nullable|url|max:2000',
+            'budgetAmount' => 'required|numeric|min:1',
+            'budgetType' => 'required|in:daily,lifetime',
+            'media' => 'nullable|file|max:30720',
+            'targeting' => 'nullable|array',
+            'targeting.ageMin' => 'nullable|integer|min:13|max:65',
+            'targeting.ageMax' => 'nullable|integer|min:13|max:65',
+            'targeting.countries' => 'nullable|array|max:25',
+            'targeting.countries.*' => 'string|size:2',
+            'targeting.interests' => 'nullable|array|max:30',
+            'targeting.interests.*.id' => 'required_with:targeting.interests|string|max:120',
+            'targeting.interests.*.name' => 'required_with:targeting.interests|string|max:160',
+            'targeting.advantageAudience' => 'nullable|boolean',
+        ]);
+
+        if ($z = $this->zernio()) {
+            return $this->zernioJson(function () use ($z, $data, $request) {
+                $imageUrl = null;
+                if ($request->hasFile('media')) {
+                    $imageUrl = $z->uploadMedia($request->file('media'))['url'] ?? null;
+                }
+
+                return $z->createAd([
+                    'accountId' => $data['accountId'],
+                    'adAccountId' => $data['adAccountId'],
+                    'platform' => $data['platform'],
+                    'name' => $data['name'],
+                    'goal' => $data['goal'],
+                    'body' => $data['body'],
+                    'headline' => $data['headline'] ?? null,
+                    'callToAction' => $data['callToAction'] ?? null,
+                    'linkUrl' => $data['linkUrl'] ?? null,
+                    'imageUrl' => $imageUrl,
+                    'budgetAmount' => (float) $data['budgetAmount'],
+                    'budgetType' => $data['budgetType'],
+                    'targeting' => $this->boostTargeting($data['targeting'] ?? []),
+                ]);
+            });
+        }
+
+        return response()->json(['error' => 'Connect Zernio (and a linked ad account) to create ads.'], 422);
+    }
+
+    /** POST /webhook/social/ai-ad-copy — Cerebras writes the primary text + headline. */
+    public function aiAdCopy(Request $request)
+    {
+        $data = $request->validate([
+            'brief' => 'required|string|max:2000',
+            'platform' => 'nullable|string|max:32',
+            'goal' => 'nullable|string|max:40',
+        ]);
+
+        $cerebras = app(\App\Services\CerebrasService::class);
+        if (! $cerebras->configured()) {
+            return response()->json(['error' => 'Set CEREBRAS_API_KEY to generate ad copy.'], 422);
+        }
+
+        try {
+            $variants = $cerebras->generateSocialVariants([
+                'campaign_name' => $data['brief'],
+                'platform' => $data['platform'] ?? 'facebook',
+                'hook_angle' => $data['brief'],
+                'variant_count' => 1,
+            ]);
+            $v = $variants[0] ?? [];
+
+            return response()->json([
+                'headline' => $v['headline'] ?? '',
+                'body' => $v['body'] ?? '',
+                'cta' => $v['cta'] ?? '',
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('AI ad copy failed', ['error' => $e->getMessage()]);
+
+            return response()->json(['error' => 'AI copy failed: '.$e->getMessage()], 502);
+        }
+    }
+
     /** GET /webhook/social/ad-targeting-search?q=&dimension=&accountId=&geoType=&countryCode= */
     public function adTargetingSearch(Request $request)
     {
