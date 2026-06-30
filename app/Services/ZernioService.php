@@ -136,28 +136,50 @@ class ZernioService
      */
     public function publishedPosts(): array
     {
-        $res = $this->client()->get('/posts', ['status' => 'published', 'limit' => 50])->throw();
-        $rows = $res->json('data') ?? $res->json('posts') ?? $res->json() ?? [];
+        // Zernio splits posts into source=zernio (created here) and source=
+        // external (already live on the connected account). /posts defaults to
+        // zernio, so externally-published posts are missed — Zernio's own boost
+        // picker shows both, so fetch both sources and merge (dedup by id).
+        $byId = [];
 
-        return ['posts' => array_values(array_map(function ($p) {
-            $content = (string) ($p['content'] ?? '');
-            $pf = $p['platforms'][0] ?? [];
-            $media = $p['mediaItems'] ?? $p['media'] ?? $p['mediaUrls'] ?? [];
-            $media = is_array($media) ? $media : [];
-            $first = $media[0] ?? null;
+        foreach (['zernio', 'external'] as $source) {
+            try {
+                $res = $this->client()->get('/posts', ['status' => 'published', 'source' => $source, 'limit' => 50])->throw();
+                $rows = $res->json('posts') ?? $res->json('data') ?? [];
+                foreach (is_array($rows) ? $rows : [] as $p) {
+                    $mapped = $this->mapBoostablePost($p);
+                    if ($mapped['id'] !== '') {
+                        $byId[$mapped['id']] = $mapped;
+                    }
+                }
+            } catch (\Throwable $e) {
+                // This source isn't available for the plan/account — skip it.
+            }
+        }
 
-            return [
-                'id' => (string) ($p['_id'] ?? $p['id'] ?? ''),
-                'platform' => $pf['platform'] ?? ($p['platform'] ?? null),
-                'account_id' => (string) ($pf['accountId'] ?? $p['accountId'] ?? ''),
-                'account' => (string) ($pf['accountName'] ?? $pf['username'] ?? $pf['handle'] ?? $p['accountName'] ?? ''),
-                'content' => $content,
-                'preview' => Str::limit($content, 60) ?: '(no caption)',
-                'thumbnail' => is_array($first) ? ($first['thumbnailUrl'] ?? $first['url'] ?? null) : (is_string($first) ? $first : null),
-                'media_count' => count($media),
-                'published_at' => $p['publishedAt'] ?? $p['publishedFor'] ?? $p['createdAt'] ?? null,
-            ];
-        }, is_array($rows) ? $rows : []))];
+        return ['posts' => array_values($byId)];
+    }
+
+    /** Shape a Zernio post for the boost/create-ad post picker. */
+    private function mapBoostablePost(array $p): array
+    {
+        $content = (string) ($p['content'] ?? '');
+        $pf = $p['platforms'][0] ?? [];
+        $media = $p['mediaItems'] ?? $p['media'] ?? $p['mediaUrls'] ?? [];
+        $media = is_array($media) ? $media : [];
+        $first = $media[0] ?? null;
+
+        return [
+            'id' => (string) ($p['_id'] ?? $p['id'] ?? ''),
+            'platform' => $pf['platform'] ?? ($p['platform'] ?? null),
+            'account_id' => (string) ($pf['accountId'] ?? $p['accountId'] ?? ''),
+            'account' => (string) ($pf['accountName'] ?? $pf['username'] ?? $pf['handle'] ?? $p['accountName'] ?? ''),
+            'content' => $content,
+            'preview' => Str::limit($content, 60) ?: '(no caption)',
+            'thumbnail' => is_array($first) ? ($first['thumbnailUrl'] ?? $first['url'] ?? null) : (is_string($first) ? $first : null),
+            'media_count' => count($media),
+            'published_at' => $p['publishedAt'] ?? $p['publishedFor'] ?? $p['createdAt'] ?? null,
+        ];
     }
 
     /** PUT /posts/{id} — used to reschedule. */

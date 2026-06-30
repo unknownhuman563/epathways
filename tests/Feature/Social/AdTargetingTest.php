@@ -199,7 +199,7 @@ class AdTargetingTest extends TestCase
     public function test_published_posts_listed_for_picker(): void
     {
         $this->configureZernio();
-        Http::fake(['*/posts*' => Http::response(['data' => [
+        Http::fake(['*/posts*' => Http::response(['posts' => [
             ['id' => 'post1', 'content' => 'Study in NZ — free assessment!', 'platforms' => [['platform' => 'facebook']], 'publishedAt' => '2026-06-20T00:00:00Z'],
         ]])]);
 
