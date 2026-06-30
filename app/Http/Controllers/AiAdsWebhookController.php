@@ -266,15 +266,23 @@ class AiAdsWebhookController extends Controller
         ]);
 
         if ($z = $this->zernio()) {
-            // Phase 1 sends text-only; media upload (Zernio MediaApi / public
-            // URL) lands in a later phase.
-            return $this->zernioJson(function () use ($z, $data) {
+            return $this->zernioJson(function () use ($z, $data, $request) {
                 $targets = $z->platformTargets($data['platforms']);
                 if (empty($targets)) {
                     abort(422, 'None of the selected platforms have a connected Zernio account.');
                 }
 
-                return $z->createPost($data['text'], $targets, $data['schedule_at'] ?? null);
+                // Upload an attached image/video to Zernio first, then reference
+                // its public URL on the post.
+                $mediaItems = [];
+                if ($request->hasFile('media')) {
+                    $item = $z->uploadMedia($request->file('media'));
+                    if (! empty($item['url'])) {
+                        $mediaItems[] = $item;
+                    }
+                }
+
+                return $z->createPost($data['text'], $targets, $data['schedule_at'] ?? null, null, $mediaItems);
             });
         }
 

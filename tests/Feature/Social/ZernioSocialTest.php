@@ -34,6 +34,9 @@ class ZernioSocialTest extends TestCase
             if (str_contains($url, '/connect/')) {
                 return Http::response(['url' => 'https://zernio.com/oauth/facebook']);
             }
+            if (str_contains($url, '/media/upload-direct')) {
+                return Http::response(['url' => 'https://cdn.zernio.com/u/abc.jpg', 'filename' => 'abc.jpg', 'contentType' => 'image/jpeg', 'size' => 1234]);
+            }
             if (str_contains($url, '/posts')) {
                 if ($request->method() === 'POST') {
                     return Http::response(['post' => ['_id' => 'post_123']]);
@@ -98,6 +101,27 @@ class ZernioSocialTest extends TestCase
         $this->actingAs($this->admin())
             ->postJson('/webhook/social/quick-post', ['text' => 'Hi', 'platforms' => ['tiktok']])
             ->assertStatus(502); // wrapped abort(422) → Zernio call helper returns 502
+    }
+
+    public function test_quick_post_uploads_media_and_attaches_it(): void
+    {
+        $this->fakeZernio();
+
+        $this->actingAs($this->admin())
+            ->post('/webhook/social/quick-post', [
+                'text' => 'With image',
+                'platforms' => ['facebook'],
+                'media' => \Illuminate\Http\UploadedFile::fake()->image('post.jpg'),
+            ])
+            ->assertOk()->assertJsonPath('post_id', 'post_123');
+
+        // The file was uploaded to Zernio…
+        Http::assertSent(fn ($r) => str_contains($r->url(), '/media/upload-direct') && $r->method() === 'POST');
+        // …and its URL was attached to the post as a mediaItem.
+        Http::assertSent(fn ($r) => str_contains($r->url(), '/posts')
+            && $r->method() === 'POST'
+            && ($r['mediaItems'][0]['url'] ?? null) === 'https://cdn.zernio.com/u/abc.jpg'
+            && ($r['mediaItems'][0]['type'] ?? null) === 'image');
     }
 
     public function test_list_scheduled_returns_zernio_posts(): void

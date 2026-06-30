@@ -68,9 +68,12 @@ class ZernioService
      * POST /posts — publish now (no schedule) or schedule for a future time.
      * $targets is the [{platform, accountId}] array from platformTargets().
      */
-    public function createPost(string $content, array $targets, ?string $scheduledFor = null, ?string $timezone = null): array
+    public function createPost(string $content, array $targets, ?string $scheduledFor = null, ?string $timezone = null, array $mediaItems = []): array
     {
         $body = ['content' => $content, 'platforms' => $targets];
+        if (! empty($mediaItems)) {
+            $body['mediaItems'] = array_values($mediaItems);
+        }
         if ($scheduledFor) {
             $body['scheduledFor'] = $scheduledFor;
             $body['timezone'] = $timezone ?: (string) config('app.timezone', 'UTC');
@@ -82,6 +85,31 @@ class ZernioService
         $post = $res->json('post') ?? $res->json() ?? [];
 
         return ['ok' => true, 'post_id' => $post['_id'] ?? $post['id'] ?? null];
+    }
+
+    /**
+     * POST /media/upload-direct — upload a file to Zernio and return a MediaItem
+     * ({url, type, filename, mimeType, size}) ready to drop into a post's
+     * mediaItems. The returned URL is publicly reachable over HTTPS.
+     */
+    public function uploadMedia(\Illuminate\Http\UploadedFile $file): array
+    {
+        $res = $this->client()
+            ->timeout(120)
+            ->attach('file', file_get_contents($file->getRealPath()), $file->getClientOriginalName())
+            ->post('/media/upload-direct')
+            ->throw();
+
+        $m = $res->json();
+        $mime = (string) ($m['contentType'] ?? $file->getMimeType() ?? '');
+
+        return array_filter([
+            'url' => (string) ($m['url'] ?? ''),
+            'type' => str_starts_with($mime, 'video') ? 'video' : (str_starts_with($mime, 'image') ? 'image' : null),
+            'filename' => $m['filename'] ?? $file->getClientOriginalName(),
+            'mimeType' => $mime ?: null,
+            'size' => $m['size'] ?? null,
+        ], fn ($v) => $v !== null && $v !== '');
     }
 
     /** GET /posts → [{id, platform, headline, schedule_at, status, campaign_name}]. */

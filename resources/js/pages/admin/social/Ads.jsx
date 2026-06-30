@@ -248,7 +248,7 @@ function BoostModal({ onClose, onBoosted }) {
                         <label className="block"><span className={lbl}>Ad account</span>
                             <select className={inp} value={form.adAccountId} onChange={(e) => { set('adAccountId', e.target.value); set('postId', ''); }}>
                                 <option value="">Select…</option>
-                                {adAccounts.map((a) => <option key={a.id} value={a.id}>{a.name} ({a.platform}{a.currency ? `, ${a.currency}` : ''})</option>)}
+                                {adAccounts.map((a) => <option key={a.id} value={a.id}>{a.name} ({a.platform})</option>)}
                             </select>
                         </label>
                         <label className="block">
