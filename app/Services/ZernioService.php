@@ -142,6 +142,9 @@ class ZernioService
         return ['posts' => array_values(array_map(function ($p) {
             $content = (string) ($p['content'] ?? '');
             $pf = $p['platforms'][0] ?? [];
+            $media = $p['mediaItems'] ?? $p['media'] ?? $p['mediaUrls'] ?? [];
+            $media = is_array($media) ? $media : [];
+            $first = $media[0] ?? null;
 
             return [
                 'id' => (string) ($p['_id'] ?? $p['id'] ?? ''),
@@ -150,6 +153,8 @@ class ZernioService
                 'account' => (string) ($pf['accountName'] ?? $pf['username'] ?? $pf['handle'] ?? $p['accountName'] ?? ''),
                 'content' => $content,
                 'preview' => Str::limit($content, 60) ?: '(no caption)',
+                'thumbnail' => is_array($first) ? ($first['thumbnailUrl'] ?? $first['url'] ?? null) : (is_string($first) ? $first : null),
+                'media_count' => count($media),
                 'published_at' => $p['publishedAt'] ?? $p['publishedFor'] ?? $p['createdAt'] ?? null,
             ];
         }, is_array($rows) ? $rows : []))];

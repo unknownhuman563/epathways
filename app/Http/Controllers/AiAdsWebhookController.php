@@ -521,6 +521,7 @@ class AiAdsWebhookController extends Controller
             'targeting' => 'nullable|array',
             'targeting.ageMin' => 'nullable|integer|min:13|max:65',
             'targeting.ageMax' => 'nullable|integer|min:13|max:65',
+            'targeting.gender' => 'nullable|in:all,male,female',
             'targeting.countries' => 'nullable|array|max:25',
             'targeting.countries.*' => 'string|size:2',
             'targeting.interests' => 'nullable|array|max:30',
@@ -555,6 +556,7 @@ class AiAdsWebhookController extends Controller
         $targeting = array_filter([
             'ageMin' => $t['ageMin'] ?? null,
             'ageMax' => $t['ageMax'] ?? null,
+            'gender' => in_array($t['gender'] ?? 'all', ['male', 'female'], true) ? $t['gender'] : null,
             'countries' => ! empty($t['countries']) ? array_values(array_map('strtoupper', $t['countries'])) : null,
             'interests' => ! empty($t['interests']) ? array_values(array_map(fn ($i) => [
                 'id' => (string) $i['id'], 'name' => (string) $i['name'],
