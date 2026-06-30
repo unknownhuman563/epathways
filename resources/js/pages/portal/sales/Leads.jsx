@@ -1002,14 +1002,11 @@ function RowMenu({ lead, open, onToggle, onClose, onRequestPortal, isSaving, por
                             role="menuitem"
                             onClick={() => {
                                 const url = `${window.location.origin}/track/${lead.tracking_code}`;
-                                // Multi-line payload so the message reads
-                                // cleanly when staff pastes it directly
-                                // into WhatsApp / email / SMS.
-                                const payload =
-                                    `Link: ${url}\n` +
-                                    `Application Tracking Code: ${lead.tracking_code}`;
-                                navigator.clipboard?.writeText(payload).then(
-                                    () => toast.success('Tracking link + code copied', { description: payload }),
+                                // Just the URL — gets auto-linked in WhatsApp /
+                                // SMS / email and the code is already in the
+                                // path, so the duplicate line was noise.
+                                navigator.clipboard?.writeText(url).then(
+                                    () => toast.success('Tracking link copied', { description: url }),
                                     () => toast.error('Could not copy — your browser blocked clipboard access')
                                 );
                                 onClose?.();

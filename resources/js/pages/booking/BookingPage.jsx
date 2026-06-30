@@ -222,6 +222,8 @@ export default function BookingPage() {
             phoneNumber: '',
             country: '',
             inquiryType: '',
+            appointmentDate: '',
+            appointmentTime: '',
             message: '',
             agreeTerms: false
         }
@@ -259,61 +261,91 @@ export default function BookingPage() {
         }
     };
 
-    // Listen to GoHighLevel iframe postMessage events to capture the user's details
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [bookingSuccess, setBookingSuccess] = useState(false);
+    const [error, setError] = useState(null);
+    // Guard so the auto-capture only records one booking per completed widget flow.
+    const submittedRef = useRef(false);
+
+    // Record the booking on our side from whatever details we captured. Called
+    // automatically when the embedded GoHighLevel widget reports a completed
+    // booking — its postMessage carries the name/email the visitor entered, so
+    // no form fields are needed on our page.
+    const createBooking = async (info) => {
+        if (submittedRef.current) return;
+        const firstName = (info.firstName || '').trim();
+        const email = (info.email || '').trim();
+        if (!firstName || !email) return; // not enough to record yet
+        submittedRef.current = true;
+        setIsSubmitting(true);
+        try {
+            const response = await fetch('/bookings', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content'),
+                },
+                body: JSON.stringify({
+                    first_name: firstName,
+                    last_name: info.lastName || null,
+                    email,
+                    phone: info.phoneNumber || null,
+                    current_country: info.country || null,
+                    service_type: selection.category?.title,
+                    consultant_name: selection.consultant?.name,
+                    platform: selection.consultant?.bookingUrl?.includes('go.epathways') ? 'GoHighLevel' : 'Google Calendar',
+                }),
+            });
+            if (response.ok) {
+                setBookingSuccess(true);
+            } else {
+                submittedRef.current = false; // allow another attempt
+            }
+        } catch {
+            submittedRef.current = false;
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    // Listen to the embedded GoHighLevel widget. It posts the contact's details
+    // as the visitor fills them in, and a completion event when they finish —
+    // at which point we auto-create the booking in our system (name + email).
     useEffect(() => {
+        const applyCaptured = (data) => {
+            const possibleName = data.full_name || data.fullName || data.name || '';
+            const captured = {
+                firstName: data.first_name || (possibleName ? possibleName.trim().split(' ')[0] : ''),
+                lastName: data.last_name || (possibleName ? possibleName.trim().split(' ').slice(1).join(' ') : ''),
+                email: data.email || '',
+                phoneNumber: data.phone || '',
+            };
+            setSelection(prev => ({ ...prev, info: { ...prev.info, ...captured } }));
+            return captured;
+        };
+
         const handleIframeMessage = (event) => {
             const isGHLArray = Array.isArray(event.data) && event.data.length >= 3;
             const inputStr = isGHLArray ? event.data[2] : null;
-            
+
             if (isGHLArray && typeof inputStr === 'string' && ['contact_id', 'first_name', 'email', 'name', 'full_name'].some(k => inputStr.includes(k))) {
                 try {
                     const payload = JSON.parse(inputStr);
-                    const possibleName = payload.full_name || payload.fullName || payload.name || '';
-                    
-                    if (payload.first_name || payload.email || possibleName) {
-                        setSelection(prev => ({
-                            ...prev,
-                            info: {
-                                ...prev.info,
-                                firstName: payload.first_name || (possibleName ? possibleName.trim().split(' ')[0] : ''),
-                                lastName: payload.last_name || (possibleName ? possibleName.trim().split(' ').slice(1).join(' ') : ''),
-                                email: payload.email || '',
-                                phoneNumber: payload.phone || ''
-                            }
-                        }));
-                    }
-                } catch (e) {
-                    console.error('Error parsing GHL payload', e);
-                }
+                    if (payload.first_name || payload.email || payload.full_name || payload.name) applyCaptured(payload);
+                } catch { /* not the payload we expect — ignore */ }
             } else if (event.data && typeof event.data === 'object') {
                 const payload = event.data;
                 if (['booking_completed', 'ghl_booking_complete'].includes(payload.event || payload.action || payload.type)) {
-                     const data = payload.data || payload;
-                     const possibleName = data.full_name || data.fullName || data.name || '';
-                     
-                     if (data.first_name || data.email || possibleName) {
-                         setSelection(prev => ({
-                            ...prev,
-                            info: {
-                                ...prev.info,
-                                firstName: data.first_name || (possibleName ? possibleName.trim().split(' ')[0] : ''),
-                                lastName: data.last_name || (possibleName ? possibleName.trim().split(' ').slice(1).join(' ') : ''),
-                                email: data.email || '',
-                                phoneNumber: data.phone || ''
-                            }
-                        }));
-                     }
+                    const captured = applyCaptured(payload.data || payload);
+                    createBooking({ ...selection.info, ...captured });
                 }
             }
         };
 
         window.addEventListener('message', handleIframeMessage);
         return () => window.removeEventListener('message', handleIframeMessage);
-    }, []);
-
-    const [isSubmitting, setIsSubmitting] = useState(false);
-    const [bookingSuccess, setBookingSuccess] = useState(false);
-    const [error, setError] = useState(null);
+    }, [selection.consultant, selection.category]);
 
     const nextStep = () => setStep(s => s + 1);
     const prevStep = () => setStep(s => s - 1);
@@ -369,7 +401,7 @@ export default function BookingPage() {
     const handleBookingSubmit = async (e) => {
         e?.preventDefault();
         
-        if (!selection.info.firstName) return setError("Please complete the booking in the calendar widget above first. Once finished, we will safely capture your details.");
+        if (!selection.info.firstName) return setError("Please fill in your details below so we can confirm your booking.");
 
         setIsSubmitting(true);
         setError(null);
@@ -391,6 +423,8 @@ export default function BookingPage() {
                     service_type: selection.category?.title,
                     consultant_name: selection.consultant?.name,
                     inquiry_type: selection.info.inquiryType,
+                    appointment_date: selection.info.appointmentDate || null,
+                    appointment_time: selection.info.appointmentTime || null,
                     message: selection.info.message,
                     platform: selection.consultant?.bookingUrl?.includes('go.epathways') ? 'GoHighLevel' : 'Google Calendar'
                 })
@@ -830,155 +864,38 @@ export default function BookingPage() {
 
                                             {/* Right Column: Form */}
                                             <div className="lg:col-span-8">
-                                                <form className="space-y-8" onSubmit={handleBookingSubmit}>
-
-                                                    {/* Row 1 - Commented Out */}
-                                                    {/*
-                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                                        <div>
-                                                            <label className="block text-sm font-light text-gray-800 mb-2">First name</label>
-                                                            <input
-                                                                type="text"
-                                                                name="firstName"
-                                                                value={selection.info.firstName}
-                                                                onChange={handleInputChange}
-                                                                required
-                                                                className="w-full bg-[#F3F4F6] border-none py-3 px-4 rounded-sm focus:ring-1 focus:ring-gray-300"
-                                                            />
-                                                        </div>
-                                                        <div>
-                                                            <label className="block text-sm font-light text-gray-800 mb-2">Last name</label>
-                                                            <input
-                                                                type="text"
-                                                                name="lastName"
-                                                                value={selection.info.lastName}
-                                                                onChange={handleInputChange}
-                                                                required
-                                                                className="w-full bg-[#F3F4F6] border-none py-3 px-4 rounded-sm focus:ring-1 focus:ring-gray-300"
-                                                            />
-                                                        </div>
-                                                    </div>
-                                                    */}
-
-                                                    {/* Row 2 - Commented Out */}
-                                                    {/*
-                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                                        <div>
-                                                            <label className="block text-sm font-light text-gray-800 mb-2">Email</label>
-                                                            <input
-                                                                type="email"
-                                                                name="email"
-                                                                value={selection.info.email}
-                                                                onChange={handleInputChange}
-                                                                required
-                                                                className="w-full bg-[#F3F4F6] border-none py-3 px-4 rounded-sm focus:ring-1 focus:ring-gray-300"
-                                                            />
-                                                        </div>
-                                                        <div>
-                                                            <label className="block text-sm font-light text-gray-800 mb-2">Phone number</label>
-                                                            <input
-                                                                type="tel"
-                                                                name="phoneNumber"
-                                                                value={selection.info.phoneNumber}
-                                                                onChange={handleInputChange}
-                                                                required
-                                                                className="w-full bg-[#F3F4F6] border-none py-3 px-4 rounded-sm focus:ring-1 focus:ring-gray-300"
-                                                            />
-                                                        </div>
-                                                    </div>
-                                                    */}
-
-                                                    {/* Row 3 - Commented Out */}
-                                                    {/*
+                                                {selection.consultant?.bookingUrl && (
                                                     <div>
-                                                        <label className="block text-sm font-light text-gray-800 mb-2">Your country of residence</label>
-                                                        <select
-                                                            name="country"
-                                                            value={selection.info.country}
-                                                            onChange={handleInputChange}
-                                                            required
-                                                            className="w-full bg-[#F3F4F6] border-none py-3 px-4 rounded-sm focus:ring-1 focus:ring-gray-300 text-gray-600"
-                                                        >
-                                                            <option value="" disabled>Select your country</option>
-                                                            <option value="ph">Philippines</option>
-                                                            <option value="in">India</option>
-                                                            <option value="ae">UAE</option>
-                                                            <option value="cn">China</option>
-                                                            <option value="other">Other</option>
-                                                        </select>
-                                                    </div>
-                                                    */}
-
-                                                    {/* Row 4 - Commented Out */}
-                                                    {/*
-                                                    <div>
-                                                        <label className="block text-sm font-light text-gray-800 mb-4">What brings you here?</label>
-                                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-4 gap-x-8">
-                                                            {['Student visa', 'Work visa', 'Permanent residency', 'Study abroad', 'Housing assistance', 'Other'].map((type) => (
-                                                                <label key={type} className="flex items-center gap-3 cursor-pointer group">
-                                                                    <div className={`w-5 h-5 rounded-full border flex flex-shrink-0 items-center justify-center transition-colors ${selection.info.inquiryType === type ? 'border-[#436235]' : 'border-gray-300 group-hover:border-gray-400'}`}>
-                                                                        {selection.info.inquiryType === type && <div className="w-2.5 h-2.5 rounded-full bg-[#436235]" />}
-                                                                    </div>
-                                                                    <input
-                                                                        type="radio"
-                                                                        name="inquiryType"
-                                                                        value={type}
-                                                                        checked={selection.info.inquiryType === type}
-                                                                        onChange={handleInputChange}
-                                                                        className="hidden"
-                                                                    />
-                                                                    <span className="text-sm text-gray-700">{type}</span>
-                                                                </label>
-                                                            ))}
+                                                        <div className="flex items-center justify-between mb-2 gap-3 flex-wrap">
+                                                            <label className="block text-sm font-light text-gray-800">Pick a time on the calendar</label>
+                                                            <a
+                                                                href={selection.consultant.bookingUrl}
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                                className="inline-flex items-center gap-1.5 text-xs font-medium text-gray-500 hover:text-[#436235] transition-colors"
+                                                            >
+                                                                <Calendar size={14} /> Open in new tab
+                                                            </a>
                                                         </div>
-                                                    </div>
-                                                    */}
-
-                                                    {/* Booking Widget Calendar */}
-                                                    <div>
-                                                        <label className="block text-sm font-light text-gray-800 mb-2">Book your consultation below</label>
-                                                        <div className="w-full bg-white rounded-sm border border-gray-200 overflow-hidden h-[850px]">
+                                                        <div className="w-full bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
                                                             <iframe
-                                                                src={selection.consultant?.bookingUrl}
+                                                                src={selection.consultant.bookingUrl}
+                                                                title="Booking calendar"
+                                                                className="w-full h-[640px] lg:h-[760px] block"
                                                                 style={{ border: 0 }}
-                                                                width="100%"
-                                                                height="100%"
                                                                 frameBorder="0"
+                                                                loading="lazy"
                                                             ></iframe>
                                                         </div>
                                                     </div>
+                                                )}
 
-                                                    {/* Row 5 - Commented Out */}
-                                                    {/*
-                                                    <div>
-                                                        <label className="block text-sm font-light text-gray-800 mb-2">Additional details</label>
-                                                        <textarea
-                                                            rows="5"
-                                                            name="message"
-                                                            value={selection.info.message}
-                                                            onChange={handleInputChange}
-                                                            className="w-full bg-[#F3F4F6] border-none py-3 px-4 rounded-sm focus:ring-1 focus:ring-gray-300 resize-none"
-                                                            placeholder="Tell us anything else we should know"
-                                                        ></textarea>
-                                                    </div>
-                                                    */}
-
-                                                    {/* Submit & Error */}
-                                                    <div className="pt-6">
-                                                        {error && (
-                                                            <div className="mb-6 bg-red-50 border border-red-100 text-red-600 px-4 py-3 rounded-lg text-sm font-medium animate-fade-in">
-                                                                {error}
-                                                            </div>
-                                                        )}
-                                                        <button
-                                                            type="submit"
-                                                            disabled={isSubmitting}
-                                                            className="bg-[#436235] text-white px-8 py-3 rounded-sm font-medium hover:bg-black transition-all flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed w-fit"
-                                                        >
-                                                            {isSubmitting ? 'Processing...' : 'Done'}
-                                                        </button>
-                                                    </div>
-                                                </form>
+                                                {/* No fields — once the visitor completes the booking in the
+                                                    widget above, their name + email are captured automatically
+                                                    and recorded on our side. */}
+                                                <p className="mt-4 text-xs text-gray-400">
+                                                    Your details are captured automatically when you complete the booking above — no need to retype them.
+                                                </p>
                                             </div>
                                         </div>
                                     ) : (

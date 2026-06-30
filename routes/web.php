@@ -730,6 +730,12 @@ Route::middleware(['auth'])->group(function () {
 
             // SETUP
             Route::get('/programs', [EducationController::class, 'programs'])->name('programs');
+            // Education staff can add / edit / remove programs from their portal
+            // — same ProgramController as admin (each action redirects back),
+            // just reachable under the education prefix.
+            Route::post('/programs', [ProgramController::class, 'store'])->name('programs.store');
+            Route::post('/programs/{id}', [ProgramController::class, 'update'])->name('programs.update');
+            Route::delete('/programs/{id}', [ProgramController::class, 'destroy'])->name('programs.destroy');
             Route::get('/checklist-templates', [EducationController::class, 'checklistTemplates'])->name('checklist-templates');
 
             // REPORTS — single page; period (weekly|monthly|quarterly|custom)

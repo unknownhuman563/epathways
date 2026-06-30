@@ -36,9 +36,8 @@ const initials = (name = "") =>
 function copyTrackingLink(code) {
     if (!code) return;
     const url = `${window.location.origin}/track/${code}`;
-    const payload = `Link: ${url}\nApplication Tracking Code: ${code}`;
-    navigator.clipboard?.writeText(payload).then(
-        () => toast.success("Tracking link + code copied", { description: payload }),
+    navigator.clipboard?.writeText(url).then(
+        () => toast.success("Tracking link copied", { description: url }),
         () => toast.error("Could not copy — your browser blocked clipboard access")
     );
 }

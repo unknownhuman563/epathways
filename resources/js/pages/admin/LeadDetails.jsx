@@ -43,7 +43,7 @@ const STAGE_STYLES = {
 };
 const stageClass = (s) => STAGE_STYLES[s] || "bg-gray-100 text-gray-700 border-gray-200";
 
-export default function LeadDetails({ lead: backendLead, activity = [], stageTimeline = [], checklistFiles = {}, statuses = [], notes = [], tags = [], allTags = [], tasks = [], staffOptions = [], currentUser = null }) {
+export default function LeadDetails({ lead: backendLead, activity = [], stageTimeline = [], checklistFiles = {}, statuses = [], notes = [], tags = [], allTags = [], tasks = [], staffOptions = [], eventRegistration = null, currentUser = null }) {
     // Derive the "Back to Leads" URL from the current path so sales users
     // return to /portal/sales/leads, education users to /portal/education/leads,
     // and admins to /admin/leads — never a 403.
@@ -468,17 +468,15 @@ export default function LeadDetails({ lead: backendLead, activity = [], stageTim
                                     )}
                                     <button
                                         type="button"
-                                        title="Copy public tracking link + code for this lead"
+                                        title="Copy public tracking link for this lead"
                                         onClick={() => {
                                             const url = `${window.location.origin}/track/${lead.trackingCode}`;
-                                            // Multi-line payload so staff can paste straight
-                                            // into WhatsApp / email and the client sees both
-                                            // the URL and the code for the search box.
-                                            const payload =
-                                                `Link: ${url}\n` +
-                                                `Application Tracking Code: ${lead.trackingCode}`;
-                                            navigator.clipboard?.writeText(payload).then(
-                                                () => toast.success('Tracking link + code copied', { description: payload }),
+                                            // Just the URL — gets auto-linked in WhatsApp /
+                                            // SMS / email and the code lives in the path
+                                            // anyway, so a duplicate "Code: ..." line is
+                                            // just noise to the client.
+                                            navigator.clipboard?.writeText(url).then(
+                                                () => toast.success('Tracking link copied', { description: url }),
                                                 () => toast.error('Could not copy — your browser blocked clipboard access')
                                             );
                                         }}
@@ -685,6 +683,13 @@ export default function LeadDetails({ lead: backendLead, activity = [], stageTim
                     </div>
                 </div>
             </div>
+
+            {/* Event Registration Form — shown when this lead came in via
+                an event registration. Rebuilt server-side from wherever
+                each field's value landed (lead columns, work_info JSON,
+                educationExps/studyPlans rows, event_response for custom
+                fields). Read-only snapshot of what the lead submitted. */}
+            {eventRegistration && <EventRegistrationCard data={eventRegistration} />}
 
             {/* AI Analysis Section */}
             {aiStatus !== 'pending' && (
@@ -3119,12 +3124,13 @@ function TagsPanel({ leadId, tags, allTags }) {
 
 // ── Documents tab — checklist of required NZ application docs ────────────
 
-// Flat checklist table — one row per required document, with the columns
-// staff asked for: File · Attachment · Status (dropdown) · Notes. Status and
-// Notes persist inline via onSave (POST /documents/checklist); the file name
-// and the "Upload" affordance open the section folder for the full
-// upload/preview/delete flow.
-function ChecklistTable({ state = {}, checklistFiles = {}, onOpenSection, onSave }) {
+// Flat checklist table — one self-contained row per required document, with
+// the columns staff asked for: File · Attachment · Status (dropdown) · Notes.
+// Everything happens inline: upload a file straight from the row, generate the
+// system agreements, set status / notes — no drill-in page. Each section
+// header row carries the per-section verify / request-revisions controls that
+// gate the lead-portal flow.
+function ChecklistTable({ state = {}, checklistFiles = {}, lead, onSave, verifications = {}, onVerifySection }) {
     return (
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
             <table className="w-full text-left">
@@ -3137,96 +3143,198 @@ function ChecklistTable({ state = {}, checklistFiles = {}, onOpenSection, onSave
                     </tr>
                 </thead>
                 <tbody>
-                    {CHECKLIST.map((section) => (
-                        <React.Fragment key={section.key}>
-                            <tr className="bg-gray-50/40 border-b border-gray-100">
-                                <td colSpan={4} className="px-6 py-2 text-[11px] font-bold uppercase tracking-wider text-gray-600">
-                                    {section.section}
-                                </td>
-                            </tr>
-                            {section.items.map((it) => {
-                                const itemState = state[it.id] || {};
-                                const files = checklistFiles[it.id] || [];
-                                return (
-                                    <tr key={it.id} className="border-b border-gray-50 hover:bg-emerald-50/20 transition-colors align-top">
-                                        {/* File — opens the section folder for the full flow */}
-                                        <td className="px-6 py-3">
-                                            <button
-                                                type="button"
-                                                onClick={() => onOpenSection(section.section)}
-                                                className="flex items-center gap-2.5 text-left group"
-                                                title="Open folder to upload / preview"
-                                            >
-                                                <FileText size={14} className="text-gray-400 shrink-0" />
-                                                <span className="text-sm text-gray-800 group-hover:text-emerald-700">{it.name}</span>
-                                            </button>
-                                        </td>
-
-                                        {/* Attachment — download links, or an Upload shortcut */}
-                                        <td className="px-6 py-3">
-                                            {files.length > 0 ? (
-                                                <ul className="space-y-1">
-                                                    {files.map((f) => (
-                                                        <li key={f.id}>
-                                                            <a
-                                                                href={`/admin/documents/${f.id}/download?inline=1`}
-                                                                target="_blank"
-                                                                rel="noreferrer"
-                                                                className="inline-flex items-center gap-1.5 text-[11px] font-medium text-gray-700 hover:text-blue-600 max-w-[220px]"
-                                                                title={f.original_name}
-                                                            >
-                                                                {f.source === 'generated'
-                                                                    ? <Wand2 size={11} className="text-violet-500 shrink-0" />
-                                                                    : <Paperclip size={11} className="text-gray-400 shrink-0" />}
-                                                                <span className="truncate">{f.original_name}</span>
-                                                            </a>
-                                                        </li>
-                                                    ))}
-                                                </ul>
-                                            ) : (
-                                                <button
-                                                    type="button"
-                                                    onClick={() => onOpenSection(section.section)}
-                                                    className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-gray-400 hover:text-emerald-700"
-                                                >
-                                                    <Paperclip size={11} /> Upload
-                                                </button>
-                                            )}
-                                        </td>
-
-                                        {/* Status — inline dropdown */}
-                                        <td className="px-6 py-3">
+                    {CHECKLIST.map((section) => {
+                        const ver = verifications[section.key]?.status || null;
+                        const verMeta = ver ? SECTION_STATUSES[ver] : null;
+                        // Section verification — Verify / Request-revisions are
+                        // now just options in this single status dropdown.
+                        // Choosing "Revisions needed" prompts for an optional
+                        // note to the lead.
+                        const setSectionStatus = (value) => {
+                            if (! value) return;
+                            if (value === 'revisions_needed') {
+                                const note = window.prompt('Revision note for the lead (optional):', verifications[section.key]?.notes || '');
+                                onVerifySection(section.key, 'revisions_needed', note || null);
+                            } else {
+                                onVerifySection(section.key, value, null);
+                            }
+                        };
+                        return (
+                            <React.Fragment key={section.key}>
+                                <tr className="bg-gray-50/40 border-b border-gray-100">
+                                    <td colSpan={4} className="px-6 py-2">
+                                        <div className="flex items-center justify-between gap-3 flex-wrap">
+                                            <span className="text-[11px] font-bold uppercase tracking-wider text-gray-600">{section.section}</span>
                                             <select
-                                                value={itemState.status || ''}
-                                                onChange={(e) => onSave(it.id, { status: e.target.value || null })}
-                                                className={`w-full rounded-lg border px-2 py-1.5 text-[11px] font-medium outline-none focus:border-gray-400 ${
-                                                    itemState.status
-                                                        ? STATUS_CHIP[itemState.status]
-                                                        : (files.length > 0 ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-white text-gray-500 border-gray-200')
-                                                }`}
+                                                value={ver || ''}
+                                                onChange={(e) => setSectionStatus(e.target.value)}
+                                                className={`rounded-md border px-2 py-1 text-[10px] font-bold uppercase tracking-wider outline-none focus:border-gray-400 ${verMeta ? verMeta.chip : 'bg-white text-gray-400 border-gray-200'}`}
                                             >
-                                                <option value="">{files.length > 0 ? 'Submitted' : 'Pending'}</option>
-                                                {STATUSES.map((s) => (
-                                                    <option key={s.key} value={s.key}>{s.label}</option>
+                                                <option value="">Set status</option>
+                                                {Object.entries(SECTION_STATUSES).map(([key, meta]) => (
+                                                    <option key={key} value={key}>{meta.label}</option>
                                                 ))}
                                             </select>
-                                        </td>
-
-                                        {/* Notes — inline, saved on blur */}
-                                        <td className="px-6 py-3">
-                                            <ChecklistNotesCell
-                                                value={itemState.notes || ''}
-                                                onSave={(notes) => onSave(it.id, { notes })}
-                                            />
-                                        </td>
-                                    </tr>
-                                );
-                            })}
-                        </React.Fragment>
-                    ))}
+                                        </div>
+                                    </td>
+                                </tr>
+                                {section.items.map((it) => (
+                                    <ChecklistRow
+                                        key={it.id}
+                                        item={it}
+                                        lead={lead}
+                                        entry={state[it.id] || {}}
+                                        files={checklistFiles[it.id] || []}
+                                        onSave={onSave}
+                                    />
+                                ))}
+                            </React.Fragment>
+                        );
+                    })}
                 </tbody>
             </table>
         </div>
+    );
+}
+
+// One checklist row — owns its own upload / generate state so the File,
+// Attachment, Status and Notes columns all work inline without leaving the
+// table.
+function ChecklistRow({ item, lead, entry, files = [], onSave }) {
+    const [uploading, setUploading] = useState(false);
+    const [generating, setGenerating] = useState(false);
+    const [variantOpen, setVariantOpen] = useState(false);
+    const fileInputRef = useRef(null);
+
+    // System agreements that can be auto-generated from a Blade template.
+    const canGenerate = item.id === 'agree.consultancy' || item.id === 'agree.engagement_english';
+    const needsVariantPicker = item.id === 'agree.consultancy'; // Single / Partner
+    const hasGenerated = files.some((f) => f.source === 'generated');
+
+    const runGenerate = (variant) => {
+        setGenerating(true);
+        const form = new FormData();
+        if (variant) form.append('variant', variant);
+        router.post(`/admin/leads/${lead.id}/documents/checklist/${item.id}/generate`, form, {
+            preserveScroll: true,
+            preserveState: true,
+            forceFormData: true,
+            onFinish: () => { setGenerating(false); setVariantOpen(false); },
+        });
+    };
+    const handleGenerateClick = () => (needsVariantPicker ? setVariantOpen((o) => !o) : runGenerate(null));
+
+    const handleFiles = (e) => {
+        const picked = Array.from(e.target.files || []);
+        if (picked.length === 0) return;
+        const form = new FormData();
+        picked.forEach((f) => form.append('files[]', f));
+        setUploading(true);
+        router.post(`/admin/leads/${lead.id}/documents/checklist/${item.id}/upload`, form, {
+            preserveScroll: true,
+            preserveState: true,
+            forceFormData: true,
+            onFinish: () => {
+                setUploading(false);
+                if (fileInputRef.current) fileInputRef.current.value = '';
+            },
+        });
+    };
+
+    return (
+        <tr className="border-b border-gray-50 hover:bg-emerald-50/20 transition-colors align-top">
+            {/* File */}
+            <td className="px-6 py-3">
+                <div className="flex items-center gap-2.5">
+                    <FileText size={14} className="text-gray-400 shrink-0" />
+                    <span className="text-sm text-gray-800">{item.name}</span>
+                    {item.system && (
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-widest bg-[#436235]/10 text-[#436235] border border-[#436235]/20">
+                            System
+                        </span>
+                    )}
+                </div>
+            </td>
+
+            {/* Attachment — file links + inline upload + generate */}
+            <td className="px-6 py-3">
+                <div className="flex flex-col gap-1.5">
+                    {files.map((f) => (
+                        <a
+                            key={f.id}
+                            href={`/admin/documents/${f.id}/download?inline=1`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center gap-1.5 text-[11px] font-medium text-gray-700 hover:text-blue-600 max-w-[260px]"
+                            title={f.original_name}
+                        >
+                            {f.source === 'generated'
+                                ? <Wand2 size={11} className="text-violet-500 shrink-0" />
+                                : <Paperclip size={11} className="text-gray-400 shrink-0" />}
+                            <span className="truncate">{f.original_name}</span>
+                        </a>
+                    ))}
+
+                    <input ref={fileInputRef} type="file" multiple onChange={handleFiles} className="hidden" />
+
+                    <div className="flex items-center gap-2 flex-wrap">
+                        <button
+                            type="button"
+                            onClick={() => fileInputRef.current?.click()}
+                            disabled={uploading}
+                            className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-gray-500 hover:text-emerald-700 disabled:opacity-50"
+                        >
+                            <Paperclip size={11} />
+                            {uploading ? 'Uploading…' : files.length > 0 ? 'Upload another' : 'Upload'}
+                        </button>
+
+                        {canGenerate && (
+                            <div className="relative">
+                                <button
+                                    type="button"
+                                    onClick={handleGenerateClick}
+                                    disabled={generating}
+                                    style={{ backgroundColor: '#7c3aed', color: '#ffffff' }}
+                                    className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider hover:opacity-90 transition-all disabled:opacity-60"
+                                >
+                                    <Wand2 size={11} />
+                                    {generating ? 'Generating…' : hasGenerated ? 'Re-generate' : 'Generate'}
+                                </button>
+                                {variantOpen && (
+                                    <div className="absolute z-20 top-full mt-1 left-0 bg-white border border-gray-200 rounded-md shadow-lg py-1 min-w-[120px]">
+                                        <button type="button" onClick={() => runGenerate('single')} className="block w-full text-left px-3 py-1.5 text-[11px] font-semibold text-gray-700 hover:bg-gray-50">Single</button>
+                                        <button type="button" onClick={() => runGenerate('partner')} className="block w-full text-left px-3 py-1.5 text-[11px] font-semibold text-gray-700 hover:bg-gray-50">Partner</button>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </td>
+
+            {/* Status — inline dropdown */}
+            <td className="px-6 py-3">
+                <select
+                    value={entry.status || ''}
+                    onChange={(e) => onSave(item.id, { status: e.target.value || null })}
+                    className={`w-full rounded-lg border px-2 py-1.5 text-[11px] font-medium outline-none focus:border-gray-400 ${
+                        entry.status
+                            ? STATUS_CHIP[entry.status]
+                            : (files.length > 0 ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-white text-gray-500 border-gray-200')
+                    }`}
+                >
+                    <option value="">{files.length > 0 ? 'Submitted' : 'Pending'}</option>
+                    {STATUSES.map((s) => (
+                        <option key={s.key} value={s.key}>{s.label}</option>
+                    ))}
+                </select>
+            </td>
+
+            {/* Notes — inline, saved on blur */}
+            <td className="px-6 py-3">
+                <ChecklistNotesCell value={entry.notes || ''} onSave={(notes) => onSave(item.id, { notes })} />
+            </td>
+        </tr>
     );
 }
 
@@ -3254,8 +3362,6 @@ function DocumentsPanel({ lead, checklistFiles = {}, currentUser = null }) {
     const initial = lead?.document_checklist || {};
     const [state, setState] = useState(initial);
     const [verifications, setVerifications] = useState(lead?.section_verifications || {});
-    // Which section folder is currently open — null = show the folder grid.
-    const [openFolder, setOpenFolder] = useState(null);
 
     const saveSectionStatus = (sectionKey, status, notes = null) => {
         const next = { ...verifications, [sectionKey]: { ...(verifications[sectionKey] || {}), status, ...(notes !== null ? { notes } : {}) } };
@@ -3346,28 +3452,16 @@ function DocumentsPanel({ lead, checklistFiles = {}, currentUser = null }) {
                 </div>
             </div>
 
-            {/* Either the folder grid (overview) or one folder's contents
-                (drill-in view) — toggled by openFolder state. */}
-            {openFolder === null ? (
-                <ChecklistTable
-                    state={state}
-                    checklistFiles={checklistFiles}
-                    onOpenSection={setOpenFolder}
-                    onSave={save}
-                />
-            ) : (
-                <FolderDetail
-                    section={CHECKLIST.find((s) => s.section === openFolder)}
-                    lead={lead}
-                    state={state}
-                    onSave={save}
-                    checklistFiles={checklistFiles}
-                    currentUser={currentUser}
-                    verification={verifications[CHECKLIST.find((s) => s.section === openFolder)?.key]}
-                    onVerify={(status, notes) => saveSectionStatus(CHECKLIST.find((s) => s.section === openFolder).key, status, notes)}
-                    onBack={() => setOpenFolder(null)}
-                />
-            )}
+            {/* Single self-contained checklist table — upload, generate,
+                status, notes and per-section verification all happen inline. */}
+            <ChecklistTable
+                state={state}
+                checklistFiles={checklistFiles}
+                lead={lead}
+                onSave={save}
+                verifications={verifications}
+                onVerifySection={saveSectionStatus}
+            />
         </div>
     );
 }
@@ -4488,3 +4582,108 @@ function formatVal(v) {
     const s = String(v);
     return s.length > 60 ? s.slice(0, 60) + '…' : s;
 }
+
+// ── Event registration snapshot ─────────────────────────────────────────────
+//
+// Read-only card that reconstructs the public registration form as the
+// lead filled it. Grouped by section, lays out two-up on wider screens.
+// Data comes pre-resolved from the controller — values for default
+// fields come from their dedicated lead columns / JSON buckets, custom
+// fields come straight from event_response. Nothing here is editable
+// (lead profile edits already happen below in the Personal Info tab).
+function EventRegistrationCard({ data }) {
+    const { event, registered_at, fields = [] } = data || {};
+    if (! event || fields.length === 0) return null;
+
+    // Group fields by section so the card mirrors the public registration
+    // page layout.
+    const sectionGroups = (() => {
+        const map = new Map();
+        const order = [];
+        for (const f of fields) {
+            const sec = f.section || 'Additional';
+            if (! map.has(sec)) { map.set(sec, []); order.push(sec); }
+            map.get(sec).push(f);
+        }
+        return order.map((sec) => ({ section: sec, items: map.get(sec) }));
+    })();
+
+    const fmtDate = (iso) => iso
+        ? new Date(iso).toLocaleDateString('en-NZ', { day: '2-digit', month: 'short', year: 'numeric' })
+        : null;
+    const registeredAtPretty = registered_at
+        ? new Date(registered_at).toLocaleString('en-NZ', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+        : null;
+
+    return (
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+            <div className="flex items-center gap-3 px-6 py-4 border-b border-gray-100 bg-gray-50/30">
+                <div className="w-8 h-8 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center">
+                    <Calendar size={16} />
+                </div>
+                <div className="flex-1 min-w-0">
+                    <h2 className="text-lg font-bold text-gray-900 truncate">
+                        Event registration
+                    </h2>
+                    <p className="text-[12px] text-gray-500 mt-0.5">
+                        <span className="font-semibold text-gray-700">{event.name}</span>
+                        {event.type ? <span className="text-gray-400"> · {event.type}</span> : null}
+                        {event.date_from ? <span className="text-gray-400"> · {fmtDate(event.date_from)}</span> : null}
+                    </p>
+                </div>
+                {registeredAtPretty && (
+                    <span className="hidden sm:inline-flex items-center gap-1.5 text-[11px] font-semibold text-gray-500 bg-white border border-gray-200 px-2.5 py-1 rounded-md">
+                        <Clock size={11} /> {registeredAtPretty}
+                    </span>
+                )}
+            </div>
+
+            <div className="p-6 space-y-6">
+                {sectionGroups.map(({ section, items }) => (
+                    <section key={section}>
+                        <h3 className="text-[11px] font-bold uppercase tracking-[0.18em] text-gray-500 mb-3 pb-2 border-b border-gray-100">
+                            {section}
+                        </h3>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
+                            {items.map((f) => (
+                                <EventResponseRow key={f.key} field={f} />
+                            ))}
+                        </div>
+                    </section>
+                ))}
+                {event.event_code && (
+                    <p className="text-[11px] text-gray-400 italic pt-2 border-t border-gray-50">
+                        Registration code:{' '}
+                        <span className="font-mono">{event.event_code}</span>
+                    </p>
+                )}
+            </div>
+        </div>
+    );
+}
+
+function EventResponseRow({ field }) {
+    const { label, type, value } = field;
+    const fullWidth = type === 'textarea';
+    const isEmpty = value === null || value === undefined || value === '';
+
+    return (
+        <div className={fullWidth ? 'sm:col-span-2' : ''}>
+            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-gray-400 mb-1">
+                {label}
+            </p>
+            {isEmpty ? (
+                <p className="text-[13px] text-gray-300 italic">Not provided</p>
+            ) : type === 'textarea' ? (
+                <p className="text-[13px] text-gray-800 leading-relaxed whitespace-pre-wrap bg-gray-50/60 border border-gray-100 rounded-lg px-3 py-2.5">
+                    {String(value)}
+                </p>
+            ) : (
+                <p className="text-[13px] text-gray-800 font-medium">
+                    {String(value)}
+                </p>
+            )}
+        </div>
+    );
+}
+

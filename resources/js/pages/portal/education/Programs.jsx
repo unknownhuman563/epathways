@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
-import { Head, Link } from "@inertiajs/react";
-import { GraduationCap, Search, MapPin, Building2, Users, ExternalLink } from "lucide-react";
+import { Head, Link, useForm } from "@inertiajs/react";
+import { GraduationCap, Search, MapPin, Building2, Users, ExternalLink, Plus, X, Save } from "lucide-react";
 import PortalPageHeader from "@/components/portal/PortalPageHeader";
 
 const STATUS_STYLE = {
@@ -12,6 +12,7 @@ const STATUS_STYLE = {
 export default function EducationPrograms({ programs = [] }) {
     const [search, setSearch] = useState("");
     const [status, setStatus] = useState("all");
+    const [addOpen, setAddOpen] = useState(false);
 
     const filtered = useMemo(() => {
         const q = search.toLowerCase().trim();
@@ -37,6 +38,15 @@ export default function EducationPrograms({ programs = [] }) {
                 eyebrow="Setup"
                 title="Programs"
                 description="The NZ programs you advise on — the same catalogue admin maintains."
+                action={(
+                    <button
+                        type="button"
+                        onClick={() => setAddOpen(true)}
+                        className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-gray-900 text-white text-xs font-bold hover:bg-gray-800 transition-colors"
+                    >
+                        <Plus size={14} /> Add Program
+                    </button>
+                )}
             />
 
             {/* Toolbar */}
@@ -142,6 +152,138 @@ export default function EducationPrograms({ programs = [] }) {
                     </table>
                 </div>
             </div>
+
+            <AddProgramModal open={addOpen} onClose={() => setAddOpen(false)} />
+        </div>
+    );
+}
+
+// Compact "Add Program" form for education staff. Posts the core fields to the
+// shared ProgramController via the education-prefixed route; admin can enrich
+// the rest (entry requirements, fees, outcomes) later from the full editor.
+function AddProgramModal({ open, onClose }) {
+    const { data, setData, post, processing, errors, reset } = useForm({
+        title: "",
+        institution: "",
+        location: "",
+        level: 7,
+        category: "bachelors",
+        status: "draft",
+        price_text: "",
+        duration_months: "",
+        intake_months: "",
+        description: "",
+        image: null,
+    });
+
+    if (! open) return null;
+
+    const submit = (e) => {
+        e.preventDefault();
+        post("/portal/education/programs", {
+            forceFormData: true,
+            preserveScroll: true,
+            onSuccess: () => { reset(); onClose(); },
+        });
+    };
+
+    const IC = "w-full px-3 py-2 rounded-lg border border-gray-200 text-sm bg-white focus:border-gray-400 outline-none transition-colors";
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-0 sm:p-6" onClick={(e) => { if (e.target === e.currentTarget && ! processing) onClose(); }}>
+            <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl w-full max-w-2xl max-h-[92vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
+                <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+                    <div className="flex items-center gap-2.5">
+                        <div className="w-9 h-9 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center">
+                            <GraduationCap size={16} />
+                        </div>
+                        <div>
+                            <h2 className="text-base font-bold text-gray-900 leading-none">Add program</h2>
+                            <p className="text-[11px] text-gray-500 mt-0.5">Add a program to the shared catalogue</p>
+                        </div>
+                    </div>
+                    <button type="button" onClick={onClose} disabled={processing} className="p-1.5 rounded-md hover:bg-gray-100 text-gray-500 disabled:opacity-40">
+                        <X size={16} />
+                    </button>
+                </div>
+
+                <form onSubmit={submit} className="flex-1 overflow-y-auto px-6 py-6 space-y-4">
+                    {Object.keys(errors).length > 0 && (
+                        <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-[12px]">
+                            <ul className="list-disc pl-4 space-y-0.5">
+                                {Object.values(errors).map((m, i) => <li key={i}>{m}</li>)}
+                            </ul>
+                        </div>
+                    )}
+
+                    <Field label="Program title" required>
+                        <input type="text" required value={data.title} onChange={(e) => setData("title", e.target.value)} className={IC} maxLength={255} placeholder="e.g. Bachelor of Nursing" />
+                    </Field>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <Field label="Institution">
+                            <input type="text" value={data.institution} onChange={(e) => setData("institution", e.target.value)} className={IC} maxLength={255} />
+                        </Field>
+                        <Field label="Location">
+                            <input type="text" value={data.location} onChange={(e) => setData("location", e.target.value)} className={IC} maxLength={255} placeholder="e.g. Auckland" />
+                        </Field>
+                        <Field label="Level (1–10)" required>
+                            <input type="number" min={1} max={10} required value={data.level} onChange={(e) => setData("level", e.target.value)} className={IC} />
+                        </Field>
+                        <Field label="Category" required>
+                            <select value={data.category} onChange={(e) => setData("category", e.target.value)} className={IC}>
+                                <option value="diplomas">Diplomas</option>
+                                <option value="bachelors">Bachelors</option>
+                                <option value="masters">Masters</option>
+                            </select>
+                        </Field>
+                        <Field label="Status" required>
+                            <select value={data.status} onChange={(e) => setData("status", e.target.value)} className={IC}>
+                                <option value="draft">Draft</option>
+                                <option value="published">Published</option>
+                                <option value="archived">Archived</option>
+                            </select>
+                        </Field>
+                        <Field label="Price text">
+                            <input type="text" value={data.price_text} onChange={(e) => setData("price_text", e.target.value)} className={IC} maxLength={255} placeholder="e.g. NZD 28,000 / year" />
+                        </Field>
+                        <Field label="Duration (months)">
+                            <input type="number" min={0} value={data.duration_months} onChange={(e) => setData("duration_months", e.target.value)} className={IC} />
+                        </Field>
+                        <Field label="Intake months">
+                            <input type="text" value={data.intake_months} onChange={(e) => setData("intake_months", e.target.value)} className={IC} maxLength={255} placeholder="e.g. Feb, Jul" />
+                        </Field>
+                    </div>
+
+                    <Field label="Description">
+                        <textarea value={data.description} onChange={(e) => setData("description", e.target.value)} rows={3} className={`${IC} resize-y`} placeholder="Short overview of the program…" />
+                    </Field>
+
+                    <Field label="Banner image">
+                        <input type="file" accept="image/*" onChange={(e) => setData("image", e.target.files?.[0] || null)} className="text-xs" />
+                    </Field>
+                </form>
+
+                <div className="flex items-center justify-between gap-3 px-5 py-4 border-t border-gray-100 bg-gray-50">
+                    <button type="button" onClick={onClose} disabled={processing} className="px-4 py-2 rounded-lg text-[12px] font-bold uppercase tracking-wider text-gray-700 hover:bg-gray-200 transition-colors disabled:opacity-40">
+                        Cancel
+                    </button>
+                    <button type="button" onClick={submit} disabled={processing} className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-gray-900 text-white text-[12px] font-bold uppercase tracking-wider hover:bg-gray-800 transition-colors disabled:opacity-40">
+                        <Save size={12} /> {processing ? "Saving…" : "Add program"}
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+function Field({ label, required, children }) {
+    return (
+        <div>
+            <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-500 mb-1">
+                {label} {required && <span className="text-red-500">*</span>}
+            </label>
+            {children}
         </div>
     );
 }

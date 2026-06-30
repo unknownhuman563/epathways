@@ -1,10 +1,10 @@
 import React from 'react';
-import { Head, Link } from '@inertiajs/react';
+import { Head, Link, router } from '@inertiajs/react';
 import {
     ArrowLeft, Mail, Phone, Calendar, Globe, FileText, Briefcase, GraduationCap,
     Plane, Languages, Users, ShieldCheck, HeartPulse, Award, MessageSquare,
     Printer, Download, CheckCircle2, ExternalLink, CreditCard, MapPin, BookOpen,
-    UserCircle, Heart, Eye, FileCheck2, XCircle,
+    UserCircle, Heart, Eye, FileCheck2, XCircle, ArrowRightCircle,
 } from 'lucide-react';
 
 // Generic intake-detail page for the Work / Student / Visitor visa
@@ -335,8 +335,39 @@ export default function IntakeDetails({ type, intake, assessment = null, linkedL
         URL.revokeObjectURL(url);
     };
 
+    // Convert-to-case action. Mirrors the Convert button on the Assessments
+    // queue, just exposed here so staff don't have to bounce back to the
+    // queue after reading the intake. Hidden when:
+    //   * a linked case already exists for this applicant's email
+    //   * the intake has no Assessment row yet (Phase-A legacy — would 404
+    //     unless we fall back to the intake id, which the controller does
+    //     anyway, so we still allow it)
+    //   * the assessment is already 'completed' (already converted)
+    const canConvert = ! linkedLead
+        && assessment
+        && (assessment.status || '').toLowerCase() !== 'completed';
+
+    const handleConvert = () => {
+        if (! canConvert) return;
+        if (! window.confirm('Move this assessment to an immigration case? A case-side Lead will be created (or matched on email) and flagged as a case.')) return;
+        // Prefer Assessment.id (canonical post-Phase-B); fall back to the
+        // intake id for legacy resident bookmarks — controller accepts both.
+        const id = assessment?.id ?? intake?.id;
+        router.post(`/portal/immigration/assessments/${id}/convert-to-case`, {}, {
+            preserveScroll: true,
+        });
+    };
+
     const ToolbarButtons = () => (
         <div className="flex items-center gap-2 no-print">
+            {canConvert && (
+                <button
+                    onClick={handleConvert}
+                    className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-gray-900 text-white text-sm font-semibold hover:bg-black transition-colors"
+                >
+                    <ArrowRightCircle size={15} /> Move to Case
+                </button>
+            )}
             <button
                 onClick={handlePrint}
                 className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl border border-gray-200 bg-white text-sm font-semibold text-gray-700 hover:bg-gray-50 hover:text-gray-900 transition-colors"
