@@ -613,7 +613,7 @@ class AiAdsWebhookController extends Controller
             'goal' => 'required|string|max:40',
             'body' => 'required|string|max:2000',
             'headline' => 'nullable|string|max:255',
-            'callToAction' => 'nullable|string|max:40',
+            'callToAction' => 'nullable|in:LEARN_MORE,SHOP_NOW,SIGN_UP,BOOK_TRAVEL,CONTACT_US,DOWNLOAD,GET_OFFER,GET_QUOTE,SUBSCRIBE,WATCH_MORE',
             'linkUrl' => 'nullable|url|max:2000',
             'budgetAmount' => 'required|numeric|min:1',
             'budgetType' => 'required|in:daily,lifetime',

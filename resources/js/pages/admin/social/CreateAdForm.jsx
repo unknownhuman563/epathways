@@ -9,7 +9,9 @@ const inp = 'w-full px-3 py-2 rounded-lg border border-gray-200 text-sm outline-
 const lbl = 'text-xs font-semibold text-gray-600';
 const CREATE_GOALS = [['engagement', 'Engagement'], ['traffic', 'Traffic'], ['awareness', 'Awareness'], ['video_views', 'Video Views']];
 const PLATFORMS = ['facebook', 'instagram', 'tiktok', 'linkedin', 'google'];
-const CTA_OPTIONS = ['LEARN_MORE', 'SIGN_UP', 'CONTACT_US', 'APPLY', 'REGISTER', 'BOOK_TRAVEL', 'GET_QUOTE', 'SUBSCRIBE', 'DOWNLOAD', 'SHOP_NOW'];
+// Meta-accepted call-to-actions, in Zernio's own order (it rejects anything
+// else, e.g. APPLY/REGISTER). SIGN_UP is the registration/enrolment equivalent.
+const CTA_OPTIONS = ['LEARN_MORE', 'SHOP_NOW', 'SIGN_UP', 'BOOK_TRAVEL', 'CONTACT_US', 'DOWNLOAD', 'GET_OFFER', 'GET_QUOTE', 'SUBSCRIBE', 'WATCH_MORE'];
 
 const blankForm = {
     name: '', adAccountId: '', platform: 'facebook', goal: 'traffic',
