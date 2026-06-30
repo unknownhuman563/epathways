@@ -25,7 +25,10 @@ export default function BoostModal({ onClose, onBoosted }) {
     const acct = (adAccounts || []).find((a) => a.id === form.adAccountId) || null;
     const accountId = acct?.accountId || '';
     const post = (posts || []).find((p) => p.id === form.postId) || null;
-    const visiblePosts = posts || [];
+    // Show only the selected account's posts (posts carry their owning
+    // account_id; the ad account carries the same parent accountId). If a post
+    // has no account_id we keep it rather than hide it.
+    const visiblePosts = !accountId ? [] : (posts || []).filter((p) => !p.account_id || p.account_id === accountId);
     const countryMatches = cq.trim()
         ? COUNTRIES.filter(([code, name]) => name.toLowerCase().includes(cq.toLowerCase()) || code.toLowerCase() === cq.toLowerCase()).slice(0, 40)
         : [];
@@ -81,8 +84,10 @@ export default function BoostModal({ onClose, onBoosted }) {
                             <div className="mt-1 space-y-1.5 max-h-[420px] overflow-y-auto pr-1">
                                 {posts === null ? (
                                     [0, 1, 2].map((i) => <Skeleton key={i} className="h-16 w-full rounded-xl" />)
+                                ) : !accountId ? (
+                                    <p className="text-xs text-gray-400 py-6 text-center">Pick an ad account to see its posts.</p>
                                 ) : visiblePosts.length === 0 ? (
-                                    <p className="text-xs text-gray-400 py-6 text-center">No published posts yet.</p>
+                                    <p className="text-xs text-gray-400 py-6 text-center">No published posts for this account.</p>
                                 ) : visiblePosts.map((p) => (
                                     <button key={p.id} type="button" onClick={() => set('postId', p.id)}
                                         className={`w-full flex items-center gap-3 px-3 py-2.5 text-left rounded-xl border transition-colors ${form.postId === p.id ? 'border-blue-500 bg-blue-50/40' : 'border-gray-100 hover:bg-gray-50'}`}>
