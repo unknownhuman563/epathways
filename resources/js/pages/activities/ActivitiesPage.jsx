@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Head } from '@inertiajs/react';
 import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
@@ -20,6 +20,10 @@ const formatEventDate = (dateStr) => {
 };
 
 export default function Activities({ events, pastSessions = [], featuredSession = null }) {
+    // How many event cards are shown before the "See more" button.
+    const [visibleCount, setVisibleCount] = useState(6);
+    const eventList = events || [];
+
     return (
         <div className="min-h-screen bg-white font-urbanist overflow-x-hidden">
             <Head title="Activities - Events, Announcements & Live" />
@@ -69,80 +73,6 @@ export default function Activities({ events, pastSessions = [], featuredSession 
                 </div>
             </div>
 
-            {/* DISCOVER SECTION - Premium Dark Grid */}
-            <section className="bg-[#0a0f0a] py-32 text-center overflow-hidden">
-                <div className="container mx-auto px-6 max-w-7xl">
-                    <span className="text-white text-sm font-bold tracking-[0.2em] mb-4 uppercase inline-block">
-                        Discover
-                    </span>
-                    
-                    <h2 className="text-4xl md:text-5xl font-medium text-white mb-8 tracking-tight">
-                        Three ways to connect with us
-                    </h2>
-                    
-                    <p className="text-gray-500 text-lg max-w-5xl mx-auto mb-20 leading-relaxed font-light">
-                        From live sessions on social media to interactive webinars and local community gatherings, 
-                        we provide multiple platforms for you to learn, grow, and network.
-                    </p>
-
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-12 mb-20">
-                        {/* Facebook Live Card */}
-                        <div className="group cursor-pointer">
-                            <div className="aspect-[16/10] overflow-hidden rounded-sm mb-8 bg-gray-900 border border-white/5 transition-all duration-500 group-hover:border-white/20">
-                                <img 
-                                    src="https://images.unsplash.com/photo-1516280440614-37939bbacd81?q=80&w=2070&auto=format&fit=crop" 
-                                    className="w-full h-full object-cover opacity-60 group-hover:opacity-80 transition-opacity duration-500"
-                                    alt="Facebook Live"
-                                />
-                            </div>
-                            <h3 className="text-2xl font-medium text-white mb-4">Facebook Live</h3>
-                            <p className="text-gray-600 leading-relaxed">
-                                Join our weekly live sessions for real-time updates and direct Q&A with our migration experts.
-                            </p>
-                        </div>
-
-                        {/* Webinars Card */}
-                        <div className="group cursor-pointer">
-                            <div className="aspect-[16/10] overflow-hidden rounded-sm mb-8 bg-gray-900 border border-white/5 transition-all duration-500 group-hover:border-white/20">
-                                <img 
-                                    src="https://images.unsplash.com/photo-1588196749597-9ff075ee6b5b?q=80&w=1974&auto=format&fit=crop" 
-                                    className="w-full h-full object-cover opacity-60 group-hover:opacity-80 transition-opacity duration-500"
-                                    alt="Webinars"
-                                />
-                            </div>
-                            <h3 className="text-2xl font-medium text-white mb-4">Webinars</h3>
-                            <p className="text-gray-600 leading-relaxed">
-                                Dive deep into specific educational paths and visa processes through our structured online seminars.
-                            </p>
-                        </div>
-
-                        {/* Community Card */}
-                        <div className="group cursor-pointer">
-                            <div className="aspect-[16/10] overflow-hidden rounded-sm mb-8 bg-gray-900 border border-white/5 transition-all duration-500 group-hover:border-white/20">
-                                <img 
-                                    src="https://images.unsplash.com/photo-1529156069898-49953e39b3ac?q=80&w=2064&auto=format&fit=crop" 
-                                    className="w-full h-full object-cover opacity-60 group-hover:opacity-80 transition-opacity duration-500"
-                                    alt="Community Events"
-                                />
-                            </div>
-                            <h3 className="text-2xl font-medium text-white mb-4">Community Events</h3>
-                            <p className="text-gray-600 leading-relaxed">
-                                Meet us in person at our local workshops and networking events designed to build lasting connections.
-                            </p>
-                        </div>
-                    </div>
-
-                    <div className="flex items-center justify-center gap-8">
-                        <button className="px-10 py-3 border border-white/10 text-white font-medium hover:bg-white/5 transition-all">
-                            Explore
-                        </button>
-                        <button className="text-white font-medium flex items-center gap-2 hover:gap-3 transition-all">
-                            Learn <span className="text-lg">›</span>
-                        </button>
-                    </div>
-                </div>
-            </section>
-
             {/* UPCOMING EVENTS SECTION - Clean White */}
             <section id="events" className="py-32 bg-white">
                 <div className="container mx-auto px-6 max-w-7xl">
@@ -163,12 +93,13 @@ export default function Activities({ events, pastSessions = [], featuredSession 
                         </button>
                     </div>
 
-                    <div className="flex overflow-x-auto gap-8 pb-12 scrollbar-hide snap-x">
-                        {events && events.length > 0 ? (
-                            events.map((event) => {
+                    {eventList.length > 0 ? (
+                        <>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                            {eventList.slice(0, visibleCount).map((event) => {
                                 const { day, date, monthYear } = formatEventDate(event.date_from || event.date);
                                 return (
-                                    <div key={event.id} className="group cursor-pointer bg-gray-50 rounded-sm overflow-hidden flex flex-col min-w-[350px] md:min-w-[500px] snap-start">
+                                    <div key={event.id} className="group cursor-pointer bg-gray-50 rounded-sm overflow-hidden flex flex-col">
                                         <div className="relative aspect-[16/9] bg-gray-200 overflow-hidden">
                                             <img 
                                                 src={event.banner_image_url || "https://images.unsplash.com/photo-1540575467063-178a50c2df87?q=80&w=2070&auto=format&fit=crop"} 
@@ -204,8 +135,21 @@ export default function Activities({ events, pastSessions = [], featuredSession 
                                         </div>
                                     </div>
                                 );
-                            })
-                        ) : (
+                            })}
+                        </div>
+
+                        {visibleCount < eventList.length && (
+                            <div className="text-center mt-14">
+                                <button
+                                    onClick={() => setVisibleCount((c) => c + 6)}
+                                    className="px-10 py-3.5 border border-gray-300 text-gray-700 font-medium hover:bg-gray-50 hover:border-gray-400 transition-all rounded-sm"
+                                >
+                                    See more events
+                                </button>
+                            </div>
+                        )}
+                        </>
+                    ) : (
                             <div className="w-full py-12 sm:py-16">
                                 <div className="max-w-2xl mx-auto text-center mb-6">
                                     <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#436235] mb-2">
@@ -228,7 +172,6 @@ export default function Activities({ events, pastSessions = [], featuredSession 
                                 </div>
                             </div>
                         )}
-                    </div>
                 </div>
             </section>
 

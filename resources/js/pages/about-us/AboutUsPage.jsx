@@ -317,10 +317,10 @@ export default function AboutUs() {
                                 { 
                                     id: 'nz', name: "New Zealand", city: "Auckland", top: "72%", left: "87%",
                                     address: "Auckland, New Zealand", email: "admin@epathways.co.nz", phone: "+64 21 000 0000",
-                                    head: { name: "Dinah Suarin", image: DinaImg },
+                                    head: { name: "Dinah Jabone", image: DinaImg },
                                     team: [
                                         { name: "Dev Bhageerutty", role: "Licence Immigration Adviser (Provisional)", image: DevImg },
-                                        { name: "Dinah Suarin", role: "Co-Founding Member", image: DinaImg },
+                                        { name: "Dinah Jabone", role: "Co-Founding Member", image: DinaImg },
                                         { name: "Emma Ceballo", role: "People Journey Experience Champion", image: EmmaImg },
                                         { name: "Emily Dela Pena", role: "Finance Admin Champion", image: EmilyImg },
                                         { name: "Hendry Dai", role: "Licence Immigration Adviser", image: DaiImg }
@@ -339,9 +339,9 @@ export default function AboutUs() {
                                 { 
                                     id: 'in', name: "India", city: "New Delhi", top: "37%", left: "63%",
                                     address: "New Delhi, India", email: "india@epathways.co.nz", phone: "+91 000 000 0000",
-                                    head: { name: "Dinah Suarin", image: DinaImg },
+                                    head: { name: "Dinah Jabone", image: DinaImg },
                                     team: [
-                                        { name: "Dinah Suarin", role: "Co-Founding Member", image: DinaImg }
+                                        { name: "Dinah Jabone", role: "Co-Founding Member", image: DinaImg }
                                     ]
                                 },
                                 { 

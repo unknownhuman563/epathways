@@ -496,7 +496,7 @@ export default function EducationJourney({ activePromos = [], reviews = [], stat
                         {[
                             { name: "Fhilip Bryll Añabeza", role: "Education Consultant", credential: "Student Enrolment Specialist", img: bryllImage },
                             { name: "Emma Ceballo", role: "Head of Education Dept", credential: "Enrolment & Student Success", img: emmaImage },
-                            { name: "Dinah Suarin", role: "CEO / Founder", credential: "10+ years guiding journeys", img: dinaImage }
+                            { name: "Dinah Jabone", role: "CEO / Founder", credential: "10+ years guiding journeys", img: dinaImage }
                         ].map((c, i) => (
                             <motion.div
                                 key={i}
