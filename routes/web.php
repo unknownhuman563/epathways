@@ -197,6 +197,12 @@ Route::middleware('throttle:tracker')->group(function () {
 });
 
 // Public Registration & Assessment Routes
+// Public "Quick Registration" — short marketing lead-capture form (a trimmed
+// Free Assessment). Exact /register; the {event_code} variants below are the
+// separate event-registration funnel.
+Route::get('/register', [LeadController::class, 'showRegistration'])->name('register');
+Route::post('/register', [LeadController::class, 'storeRegistration']);
+Route::get('/register/full', [LeadController::class, 'showRegistrationFull'])->name('register.full');
 Route::get('/register/{event_code}', [EventController::class, 'showRegistrationForm']);
 Route::post('/register/{event_code}', [EventController::class, 'registerLead']);
 Route::get('/free-assessment', [LeadController::class, 'showFreeAssessment'])->name('free-assessment');
@@ -664,6 +670,13 @@ Route::middleware(['auth'])->group(function () {
             Route::post('/leads/{id}', [SalesController::class, 'updateLead'])->name('leads.update');
             Route::get('/bookings', [SalesController::class, 'bookings'])->name('bookings');
             Route::post('/bookings/{id}', [SalesController::class, 'updateBooking'])->name('bookings.update');
+
+            // Programs catalogue — sales can add / edit / remove, same shared
+            // ProgramController as education + admin (each action redirects back).
+            Route::get('/programs', [SalesController::class, 'programs'])->name('programs');
+            Route::post('/programs', [ProgramController::class, 'store'])->name('programs.store');
+            Route::post('/programs/{id}', [ProgramController::class, 'update'])->name('programs.update');
+            Route::delete('/programs/{id}', [ProgramController::class, 'destroy'])->name('programs.destroy');
 
             // Sales initiates portal access; admin must approve (see admin routes).
             Route::post('/leads/{id}/portal-invitation/request', [LeadPortalInvitationController::class, 'request'])

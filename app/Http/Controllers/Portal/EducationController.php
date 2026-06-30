@@ -764,6 +764,7 @@ class EducationController extends Controller
                 'duration_months' => $p->duration_months,
                 'intake_months' => $p->intake_months,
                 'price_text' => $p->price_text,
+                'description' => $p->description,
                 'enrolled' => Lead::whereHas('studyPlans', fn ($q) => $q->where('preferred_course', $p->title))->count(),
             ]);
 

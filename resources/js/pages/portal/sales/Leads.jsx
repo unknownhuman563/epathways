@@ -171,6 +171,9 @@ export default function SalesLeads({ leads = [], statuses = [], programs = [], s
     const filtered = useMemo(() => {
         const q = search.toLowerCase().trim();
         const rows = leads.filter((l) => {
+            // The Registration tab shows only leads that came in through the
+            // public /register form.
+            if (view === "registration" && l.source_key !== "registration") return false;
             const hay = `${l.name || ""} ${l.email || ""} ${l.lead_id || ""} ${l.phone || ""} ${l.source || ""}`.toLowerCase();
             const matchSearch  = !q || hay.includes(q);
             const matchStatus  = statusFilter === "All" || l.status === statusFilter;
@@ -189,7 +192,7 @@ export default function SalesLeads({ leads = [], statuses = [], programs = [], s
             if (av > bv) return 1 * dir;
             return 0;
         });
-    }, [leads, search, statusFilter, adv, sortKey, sortDir]);
+    }, [leads, search, statusFilter, adv, sortKey, sortDir, view]);
 
     const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
     const safePage = Math.min(page, totalPages);
@@ -283,6 +286,17 @@ export default function SalesLeads({ leads = [], statuses = [], programs = [], s
                         >
                             Events
                         </button>
+                        <button
+                            type="button"
+                            onClick={() => { setView("registration"); setPage(1); }}
+                            className={`px-3 py-3 text-xs font-bold transition-colors -mb-px ${
+                                view === "registration"
+                                    ? "text-gray-900 border-b-2 border-gray-900"
+                                    : "text-gray-400 border-b-2 border-transparent hover:text-gray-700"
+                            }`}
+                        >
+                            Registration
+                        </button>
                     </div>
                 </div>
 
@@ -357,8 +371,8 @@ export default function SalesLeads({ leads = [], statuses = [], programs = [], s
                 )}
             </div>
 
-            {/* Table */}
-            {view === "table" && (
+            {/* Table — shared by the Open opportunities + Registration tabs */}
+            {(view === "table" || view === "registration") && (
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-visible">
                 <div className="overflow-x-auto overflow-y-visible">
                     <table className="w-full text-left text-xs">

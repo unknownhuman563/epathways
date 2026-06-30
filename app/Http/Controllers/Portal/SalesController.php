@@ -192,6 +192,32 @@ class SalesController extends Controller
         ]);
     }
 
+    /** Programs catalogue for the sales portal — same shared Program model
+     *  + ProgramController CRUD that education uses. */
+    public function programs()
+    {
+        $programs = Program::orderBy('title')->get()->map(fn (Program $p) => [
+            'id'              => $p->id,
+            'title'           => $p->title,
+            'slug'            => $p->slug,
+            'institution'     => $p->institution,
+            'location'        => $p->location,
+            'level'           => $p->level,
+            'category'        => $p->category,
+            'status'          => $p->status,
+            'duration_months' => $p->duration_months,
+            'intake_months'   => $p->intake_months,
+            'price_text'      => $p->price_text,
+            'description'     => $p->description,
+            'enrolled'        => Lead::whereHas('studyPlans', fn ($q) => $q->where('preferred_course', $p->title))->count(),
+        ]);
+
+        return inertia('portal/sales/Programs', [
+            'portal'   => 'sales',
+            'programs' => $programs,
+        ]);
+    }
+
     /** Manually add a lead from the dashboard "Add Lead" form. */
     public function storeLead(Request $request)
     {
