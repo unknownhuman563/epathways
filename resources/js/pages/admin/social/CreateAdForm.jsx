@@ -16,7 +16,7 @@ const CTA_OPTIONS = ['LEARN_MORE', 'SHOP_NOW', 'SIGN_UP', 'BOOK_TRAVEL', 'CONTAC
 const blankForm = {
     name: '', adAccountId: '', platform: 'facebook', goal: 'traffic',
     body: '', headline: '', linkUrl: '', callToAction: 'LEARN_MORE',
-    budgetAmount: '5', budgetType: 'daily', brief: '',
+    budgetAmount: '100', budgetType: 'daily', brief: '',
 };
 const blankTargeting = {
     ageMin: 18, ageMax: 45, gender: 'all', incomeTier: '',
@@ -186,7 +186,7 @@ export default function CreateAdForm() {
                                     <option value="daily">per day</option><option value="lifetime">total</option>
                                 </select>
                             </div>
-                            {acct?.currency && <p className="text-[11px] text-gray-400 leading-snug mt-1">Meta enforces a minimum daily budget in {acct.currency} — raise it if the ad won't deliver.</p>}
+                            {acct?.currency && <p className="text-[11px] text-gray-400 leading-snug mt-1">Amount is in <b>{acct.currency}</b> (your ad account's currency), not USD. Meta enforces a minimum daily budget — raise it if the ad won't deliver.</p>}
                         </div>
 
                         <TargetingFields
