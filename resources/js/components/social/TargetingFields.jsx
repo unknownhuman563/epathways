@@ -2,17 +2,10 @@ import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { Sparkles, Search, Target, Loader2 } from 'lucide-react';
 import { social } from '@/services/social';
+import { COUNTRIES, COUNTRY_NAME } from '@/data/countries';
 
 const inp = 'w-full px-3 py-2 rounded-lg border border-gray-200 text-sm outline-none focus:ring-2 focus:ring-gray-300';
 const lbl = 'text-xs font-semibold text-gray-600';
-
-// Common ePathways source + onshore markets (ISO 3166-1 alpha-2).
-const COMMON_COUNTRIES = [
-    ['NZ', 'New Zealand'], ['IN', 'India'], ['PH', 'Philippines'], ['NP', 'Nepal'],
-    ['LK', 'Sri Lanka'], ['PK', 'Pakistan'], ['BD', 'Bangladesh'], ['VN', 'Vietnam'],
-    ['CN', 'China'], ['ID', 'Indonesia'], ['TH', 'Thailand'], ['MM', 'Myanmar'],
-    ['FJ', 'Fiji'], ['MY', 'Malaysia'], ['AU', 'Australia'], ['US', 'United States'], ['GB', 'United Kingdom'],
-];
 
 /**
  * Shared audience-targeting controls (age / locations / interests / Meta
@@ -31,6 +24,7 @@ export default function TargetingFields({ accountId, platform, value, onChange, 
     const [iResults, setIResults] = useState([]);
     const [iSearching, setISearching] = useState(false);
     const [presets, setPresets] = useState([]);
+    const [cq, setCq] = useState('');
 
     useEffect(() => {
         if (!accountId) { setPresets([]); return; }
@@ -55,7 +49,11 @@ export default function TargetingFields({ accountId, platform, value, onChange, 
         setIq(''); setIResults([]);
     };
     const removeInterest = (id) => patch({ interests: (t.interests || []).filter((i) => i.id !== id) });
-    const toggleCountry = (c) => patch({ countries: (t.countries || []).includes(c) ? t.countries.filter((x) => x !== c) : [...(t.countries || []), c] });
+    const addCountry = (code) => { if (!(t.countries || []).includes(code)) patch({ countries: [...(t.countries || []), code] }); setCq(''); };
+    const removeCountry = (code) => patch({ countries: (t.countries || []).filter((x) => x !== code) });
+    const countryMatches = cq.trim()
+        ? COUNTRIES.filter(([code, name]) => name.toLowerCase().includes(cq.trim().toLowerCase()) || code.toLowerCase() === cq.trim().toLowerCase()).slice(0, 40)
+        : [];
 
     const runAi = async () => {
         if (!accountId) { toast.error('Pick an ad account first.'); return; }
@@ -130,13 +128,31 @@ export default function TargetingFields({ accountId, platform, value, onChange, 
 
             <div>
                 <span className={lbl}>Locations</span>
-                <div className="flex flex-wrap gap-1.5 mt-1">
-                    {COMMON_COUNTRIES.map(([code, name]) => (
-                        <button key={code} type="button" onClick={() => toggleCountry(code)} title={name}
-                            className={`text-xs px-2 py-1 rounded-full border ${(t.countries || []).includes(code) ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'}`}>
-                            {code}
-                        </button>
-                    ))}
+                {(t.countries || []).length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 mt-1 mb-1.5">
+                        {(t.countries || []).map((c) => (
+                            <span key={c} className="text-xs bg-gray-900 text-white rounded-full pl-2.5 pr-1 py-1 flex items-center gap-1">
+                                {COUNTRY_NAME[c] || c}
+                                <button type="button" onClick={() => removeCountry(c)} className="hover:text-gray-300">×</button>
+                            </span>
+                        ))}
+                    </div>
+                )}
+                <div className="relative mt-1">
+                    <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <input className={inp + ' pl-8'} value={cq} onChange={(e) => setCq(e.target.value)} placeholder="Type a country…" />
+                    {cq.trim() && (
+                        <div className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-44 overflow-y-auto">
+                            {countryMatches.length === 0 ? (
+                                <div className="px-3 py-2 text-xs text-gray-400">No match</div>
+                            ) : countryMatches.map(([code, name]) => (
+                                <button key={code} type="button" onClick={() => addCountry(code)} className="w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50 flex items-center justify-between gap-2">
+                                    <span className="truncate">{name}</span>
+                                    {(t.countries || []).includes(code) ? <span className="text-emerald-600">✓</span> : <span className="text-gray-300">{code}</span>}
+                                </button>
+                            ))}
+                        </div>
+                    )}
                 </div>
             </div>
 

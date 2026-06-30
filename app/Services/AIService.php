@@ -133,9 +133,12 @@ class AIService
 
         CRITICAL: Respond with ONLY a single valid JSON object. No markdown, no code fences, no preamble.
         Shape:
-        { "age_min": 18, "age_max": 40, "countries": ["IN", "PH", "NP"], "interests": ["Study abroad", "Student visa"], "rationale": "One short sentence on who and why." }
+        { "age_min": 18, "age_max": 40, "countries": ["IN", "PH", "NP"], "interests": ["Studying abroad", "International student", "Higher education", "Immigration"], "rationale": "One short sentence on who and why." }
 
-        Rules: countries = 2-6 ISO 3166-1 alpha-2 codes; interests = 4-8 short real interest names (no #); keep ages 13-65 and age_min <= age_max.
+        Rules:
+        - countries = 2-6 ISO 3166-1 alpha-2 codes.
+        - interests = 4-8 BROAD, well-known interest names that an ad platform's targeting taxonomy actually contains — single concepts like "Studying abroad", "International student", "Higher education", "Universities", "Immigration", "Travel", "English language". DO NOT use long specific phrases such as "Immigration to New Zealand" or "Study in New Zealand" — those never match. No hashtags.
+        - keep ages 13-65 and age_min <= age_max.
         PROMPT;
 
         $res = $this->chat([

@@ -1,0 +1,37 @@
+// ISO 3166-1 alpha-2 code → country name. Used by the ad-targeting location
+// picker so staff can type a country instead of memorising codes.
+export const COUNTRIES = [
+    ['AF', 'Afghanistan'], ['AL', 'Albania'], ['DZ', 'Algeria'], ['AO', 'Angola'], ['AR', 'Argentina'],
+    ['AM', 'Armenia'], ['AU', 'Australia'], ['AT', 'Austria'], ['AZ', 'Azerbaijan'], ['BH', 'Bahrain'],
+    ['BD', 'Bangladesh'], ['BY', 'Belarus'], ['BE', 'Belgium'], ['BJ', 'Benin'], ['BT', 'Bhutan'],
+    ['BO', 'Bolivia'], ['BA', 'Bosnia and Herzegovina'], ['BW', 'Botswana'], ['BR', 'Brazil'], ['BN', 'Brunei'],
+    ['BG', 'Bulgaria'], ['BF', 'Burkina Faso'], ['BI', 'Burundi'], ['KH', 'Cambodia'], ['CM', 'Cameroon'],
+    ['CA', 'Canada'], ['CL', 'Chile'], ['CN', 'China'], ['CO', 'Colombia'], ['CG', 'Congo'],
+    ['CD', 'Congo (DRC)'], ['CR', 'Costa Rica'], ['HR', 'Croatia'], ['CY', 'Cyprus'], ['CZ', 'Czechia'],
+    ['DK', 'Denmark'], ['DO', 'Dominican Republic'], ['EC', 'Ecuador'], ['EG', 'Egypt'], ['SV', 'El Salvador'],
+    ['EE', 'Estonia'], ['ET', 'Ethiopia'], ['FJ', 'Fiji'], ['FI', 'Finland'], ['FR', 'France'],
+    ['GE', 'Georgia'], ['DE', 'Germany'], ['GH', 'Ghana'], ['GR', 'Greece'], ['GT', 'Guatemala'],
+    ['GN', 'Guinea'], ['GY', 'Guyana'], ['HT', 'Haiti'], ['HN', 'Honduras'], ['HK', 'Hong Kong'],
+    ['HU', 'Hungary'], ['IS', 'Iceland'], ['IN', 'India'], ['ID', 'Indonesia'], ['IR', 'Iran'],
+    ['IQ', 'Iraq'], ['IE', 'Ireland'], ['IL', 'Israel'], ['IT', 'Italy'], ['CI', 'Ivory Coast'],
+    ['JM', 'Jamaica'], ['JP', 'Japan'], ['JO', 'Jordan'], ['KZ', 'Kazakhstan'], ['KE', 'Kenya'],
+    ['KW', 'Kuwait'], ['KG', 'Kyrgyzstan'], ['LA', 'Laos'], ['LV', 'Latvia'], ['LB', 'Lebanon'],
+    ['LY', 'Libya'], ['LT', 'Lithuania'], ['LU', 'Luxembourg'], ['MO', 'Macau'], ['MG', 'Madagascar'],
+    ['MW', 'Malawi'], ['MY', 'Malaysia'], ['MV', 'Maldives'], ['ML', 'Mali'], ['MT', 'Malta'],
+    ['MU', 'Mauritius'], ['MX', 'Mexico'], ['MD', 'Moldova'], ['MN', 'Mongolia'], ['ME', 'Montenegro'],
+    ['MA', 'Morocco'], ['MZ', 'Mozambique'], ['MM', 'Myanmar'], ['NP', 'Nepal'], ['NL', 'Netherlands'],
+    ['NZ', 'New Zealand'], ['NI', 'Nicaragua'], ['NE', 'Niger'], ['NG', 'Nigeria'], ['MK', 'North Macedonia'],
+    ['NO', 'Norway'], ['OM', 'Oman'], ['PK', 'Pakistan'], ['PS', 'Palestine'], ['PA', 'Panama'],
+    ['PG', 'Papua New Guinea'], ['PY', 'Paraguay'], ['PE', 'Peru'], ['PH', 'Philippines'], ['PL', 'Poland'],
+    ['PT', 'Portugal'], ['QA', 'Qatar'], ['RO', 'Romania'], ['RU', 'Russia'], ['RW', 'Rwanda'],
+    ['SA', 'Saudi Arabia'], ['SN', 'Senegal'], ['RS', 'Serbia'], ['SG', 'Singapore'], ['SK', 'Slovakia'],
+    ['SI', 'Slovenia'], ['SB', 'Solomon Islands'], ['SO', 'Somalia'], ['ZA', 'South Africa'], ['KR', 'South Korea'],
+    ['ES', 'Spain'], ['LK', 'Sri Lanka'], ['SD', 'Sudan'], ['SE', 'Sweden'], ['CH', 'Switzerland'],
+    ['SY', 'Syria'], ['TW', 'Taiwan'], ['TJ', 'Tajikistan'], ['TZ', 'Tanzania'], ['TH', 'Thailand'],
+    ['TG', 'Togo'], ['TO', 'Tonga'], ['TT', 'Trinidad and Tobago'], ['TN', 'Tunisia'], ['TR', 'Turkey'],
+    ['TM', 'Turkmenistan'], ['UG', 'Uganda'], ['UA', 'Ukraine'], ['AE', 'United Arab Emirates'], ['GB', 'United Kingdom'],
+    ['US', 'United States'], ['UY', 'Uruguay'], ['UZ', 'Uzbekistan'], ['VU', 'Vanuatu'], ['VE', 'Venezuela'],
+    ['VN', 'Vietnam'], ['YE', 'Yemen'], ['ZM', 'Zambia'], ['ZW', 'Zimbabwe'],
+];
+
+export const COUNTRY_NAME = Object.fromEntries(COUNTRIES.map(([code, name]) => [code, name]));
