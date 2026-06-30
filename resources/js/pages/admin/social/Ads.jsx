@@ -5,7 +5,6 @@ import { Megaphone, RefreshCw, BarChart3, Rocket, Loader2, X, Sparkles, Search, 
 import SocialLayout from '@/pages/admin/social/SocialLayout';
 import { social } from '@/services/social';
 import { Skeleton, PlatformIcon, EmptyState } from '@/components/social/atoms';
-import CreateAdModal from '@/pages/admin/social/CreateAdModal';
 
 const inp = 'w-full px-3 py-2 rounded-lg border border-gray-200 text-sm outline-none focus:ring-2 focus:ring-gray-300';
 const STATUS_CHIP = {
@@ -380,7 +379,6 @@ function BoostModal({ onClose, onBoosted }) {
 export default function AdsPage() {
     const [ads, setAds] = useState(null);
     const [boostOpen, setBoostOpen] = useState(false);
-    const [createOpen, setCreateOpen] = useState(false);
 
     const load = () => {
         setAds(null);
@@ -396,10 +394,7 @@ export default function AdsPage() {
                     <Megaphone size={16} className="text-gray-700" />
                     <h2 className="text-sm font-bold text-gray-900">Ad campaigns</h2>
                     <button onClick={load} className="text-gray-400 hover:text-gray-700 ml-1" title="Refresh"><RefreshCw size={14} /></button>
-                    <button onClick={() => setCreateOpen(true)} className="ml-auto inline-flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 text-xs font-bold uppercase tracking-wider rounded-xl">
-                        <Megaphone size={14} /> Create Ad
-                    </button>
-                    <button onClick={() => setBoostOpen(true)} className="inline-flex items-center gap-2 px-4 py-2 bg-gray-900 hover:bg-black text-white text-xs font-bold uppercase tracking-wider rounded-xl">
+                    <button onClick={() => setBoostOpen(true)} className="ml-auto inline-flex items-center gap-2 px-4 py-2 bg-gray-900 hover:bg-black text-white text-xs font-bold uppercase tracking-wider rounded-xl">
                         <Rocket size={14} /> Boost a post
                     </button>
                 </div>
@@ -416,7 +411,6 @@ export default function AdsPage() {
             </section>
 
             {boostOpen && <BoostModal onClose={() => setBoostOpen(false)} onBoosted={load} />}
-            {createOpen && <CreateAdModal onClose={() => setCreateOpen(false)} onCreated={load} />}
         </SocialLayout>
     );
 }
