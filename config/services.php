@@ -105,6 +105,10 @@ return [
         'api_key' => env('ZERNIO_API_KEY'),
         'base_url' => env('ZERNIO_BASE_URL', 'https://zernio.com/api/v1'),
         'webhook_secret' => env('ZERNIO_WEBHOOK_SECRET'),
+        // Restrict every Zernio call to ONE profile so accounts/posts from
+        // other profiles (e.g. a separate accommodation page) never leak in.
+        // Find the id with `php artisan zernio:profiles`.
+        'profile_id' => env('ZERNIO_PROFILE_ID'),
     ],
 
     // Public contact destinations surfaced in floating widgets, the mobile

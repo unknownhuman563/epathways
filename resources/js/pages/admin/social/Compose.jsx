@@ -8,6 +8,7 @@ import {
 import SocialLayout from '@/pages/admin/social/SocialLayout';
 import CreateCampaignSection from '@/components/social/CreateCampaignSection';
 import VariantReviewSection from '@/components/social/VariantReviewSection';
+import CreateAdForm from '@/pages/admin/social/CreateAdForm';
 import { social } from '@/services/social';
 import { PLATFORMS } from '@/components/social/constants';
 import { Label, Textarea, PlatformIcon } from '@/components/social/atoms';
@@ -346,7 +347,7 @@ export default function Compose() {
                     </button>
                 </div>
 
-                {mode === 'quick' ? <QuickPostComposer /> : <CampaignMode />}
+                {mode === 'quick' ? <QuickPostComposer /> : <CreateAdForm />}
             </div>
         </SocialLayout>
     );

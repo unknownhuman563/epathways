@@ -88,10 +88,12 @@ export const social = {
     replyComment:    (postId, accountId, text)    => request('POST', 'inbox-reply-comment', { body: { postId, accountId, text } }),
 
     // Ads ──────────────────────────────────────────────────────────────────
-    publishedPosts:  ()                           => request('GET',  'published-posts'),
+    publishedPosts:  (params = {})                => request('GET',  'published-posts', { query: params }),
     adsList:         ()                           => request('GET',  'ads-list'),
     adAccounts:      ()                           => request('GET',  'ad-accounts'),
     boostPost:       (payload)                    => request('POST', 'ads-boost',       { body: payload }),
+    createAd:        (formData)                   => request('POST', 'create-ad',       { body: formData }),
+    aiAdCopy:        (payload)                    => request('POST', 'ai-ad-copy',      { body: payload }),
     adAnalytics:     (adId)                       => request('GET',  'ad-analytics',    { query: { adId } }),
     targetingSearch: (params)                     => request('GET',  'ad-targeting-search', { query: params }),
     aiTargeting:     (payload)                    => request('POST', 'ai-targeting',    { body: payload }),

@@ -28,10 +28,67 @@ class ZernioService
             ->timeout(30);
     }
 
-    /** GET /accounts → [{id, platform, handle, status, last_post_at}]. */
+    private ?string $resolvedProfileId = null;
+
+    private bool $profileResolved = false;
+
+    /**
+     * The profile every account/post query is scoped to, so accounts and posts
+     * from OTHER profiles (e.g. a separate accommodation page) never leak in.
+     * Uses ZERNIO_PROFILE_ID; if that's unset and the key sees exactly one
+     * profile, uses it. Null only when several profiles exist and none is set.
+     */
+    private function profileId(): ?string
+    {
+        if ($this->profileResolved) {
+            return $this->resolvedProfileId;
+        }
+        $this->profileResolved = true;
+
+        $configured = config('services.zernio.profile_id');
+        if (! empty($configured)) {
+            return $this->resolvedProfileId = (string) $configured;
+        }
+
+        $profiles = $this->listProfiles()['profiles'];
+        if (count($profiles) === 1) {
+            $this->resolvedProfileId = $profiles[0]['id'];
+        }
+
+        return $this->resolvedProfileId;
+    }
+
+    /** Add the profile scope to a query array (no-op when unscoped). */
+    private function scoped(array $query): array
+    {
+        if (($pid = $this->profileId()) && empty($query['profileId'])) {
+            $query['profileId'] = $pid;
+        }
+
+        return $query;
+    }
+
+    /** GET /profiles → [{id, name}]. */
+    public function listProfiles(): array
+    {
+        try {
+            $res = $this->client()->get('/profiles')->throw();
+            $rows = $res->json('profiles') ?? $res->json('data') ?? [];
+
+            return ['profiles' => array_values(array_map(fn ($p) => [
+                'id' => (string) ($p['_id'] ?? $p['id'] ?? ''),
+                'name' => (string) ($p['name'] ?? '—'),
+            ], is_array($rows) ? $rows : []))];
+        } catch (\Throwable $e) {
+            return ['profiles' => []];
+        }
+    }
+
+    /** GET /accounts → [{id, platform, handle, status, last_post_at}], scoped to the profile. */
     public function listAccounts(): array
     {
-        $res = $this->client()->get('/accounts')->throw();
+        $query = array_filter(['profileId' => $this->profileId()], fn ($v) => $v !== null && $v !== '');
+        $res = $this->client()->get('/accounts', $query)->throw();
         $rows = $res->json('data') ?? $res->json('accounts') ?? $res->json() ?? [];
 
         return ['accounts' => array_values(array_map(fn ($a) => [
@@ -68,9 +125,12 @@ class ZernioService
      * POST /posts — publish now (no schedule) or schedule for a future time.
      * $targets is the [{platform, accountId}] array from platformTargets().
      */
-    public function createPost(string $content, array $targets, ?string $scheduledFor = null, ?string $timezone = null): array
+    public function createPost(string $content, array $targets, ?string $scheduledFor = null, ?string $timezone = null, array $mediaItems = []): array
     {
         $body = ['content' => $content, 'platforms' => $targets];
+        if (! empty($mediaItems)) {
+            $body['mediaItems'] = array_values($mediaItems);
+        }
         if ($scheduledFor) {
             $body['scheduledFor'] = $scheduledFor;
             $body['timezone'] = $timezone ?: (string) config('app.timezone', 'UTC');
@@ -84,10 +144,35 @@ class ZernioService
         return ['ok' => true, 'post_id' => $post['_id'] ?? $post['id'] ?? null];
     }
 
+    /**
+     * POST /media/upload-direct — upload a file to Zernio and return a MediaItem
+     * ({url, type, filename, mimeType, size}) ready to drop into a post's
+     * mediaItems. The returned URL is publicly reachable over HTTPS.
+     */
+    public function uploadMedia(\Illuminate\Http\UploadedFile $file): array
+    {
+        $res = $this->client()
+            ->timeout(120)
+            ->attach('file', file_get_contents($file->getRealPath()), $file->getClientOriginalName())
+            ->post('/media/upload-direct')
+            ->throw();
+
+        $m = $res->json();
+        $mime = (string) ($m['contentType'] ?? $file->getMimeType() ?? '');
+
+        return array_filter([
+            'url' => (string) ($m['url'] ?? ''),
+            'type' => str_starts_with($mime, 'video') ? 'video' : (str_starts_with($mime, 'image') ? 'image' : null),
+            'filename' => $m['filename'] ?? $file->getClientOriginalName(),
+            'mimeType' => $mime ?: null,
+            'size' => $m['size'] ?? null,
+        ], fn ($v) => $v !== null && $v !== '');
+    }
+
     /** GET /posts → [{id, platform, headline, schedule_at, status, campaign_name}]. */
     public function listPosts(array $query = []): array
     {
-        $res = $this->client()->get('/posts', $query)->throw();
+        $res = $this->client()->get('/posts', $this->scoped($query))->throw();
         $rows = $res->json('data') ?? $res->json('posts') ?? $res->json() ?? [];
 
         return array_values(array_map(fn ($p) => [
@@ -106,25 +191,57 @@ class ZernioService
      * the full content (for AI targeting) plus a short preview and the post's
      * platform, so the boost picker can fill the form on selection.
      */
-    public function publishedPosts(): array
+    public function publishedPosts(?string $accountId = null): array
     {
-        $res = $this->client()->get('/posts', ['status' => 'published', 'limit' => 50])->throw();
-        $rows = $res->json('data') ?? $res->json('posts') ?? $res->json() ?? [];
+        // Zernio splits posts into source=zernio (created here) and source=
+        // external (already live on the connected account). /posts defaults to
+        // zernio, so externally-published posts are missed — fetch both sources
+        // and merge. Scoped to the selected account (accountId) so the picker
+        // mirrors Zernio: only that page's posts, not the whole workspace.
+        $byId = [];
 
-        return ['posts' => array_values(array_map(function ($p) {
-            $content = (string) ($p['content'] ?? '');
-            $pf = $p['platforms'][0] ?? [];
+        foreach (['zernio', 'external'] as $source) {
+            try {
+                $query = array_filter([
+                    'status' => 'published', 'source' => $source,
+                    'accountId' => $accountId, 'profileId' => $this->profileId(), 'limit' => 50,
+                ], fn ($v) => $v !== null && $v !== '');
+                $res = $this->client()->get('/posts', $query)->throw();
+                $rows = $res->json('posts') ?? $res->json('data') ?? [];
+                foreach (is_array($rows) ? $rows : [] as $p) {
+                    $mapped = $this->mapBoostablePost($p);
+                    if ($mapped['id'] !== '') {
+                        $byId[$mapped['id']] = $mapped;
+                    }
+                }
+            } catch (\Throwable $e) {
+                // This source isn't available for the plan/account — skip it.
+            }
+        }
 
-            return [
-                'id' => (string) ($p['_id'] ?? $p['id'] ?? ''),
-                'platform' => $pf['platform'] ?? ($p['platform'] ?? null),
-                'account_id' => (string) ($pf['accountId'] ?? $p['accountId'] ?? ''),
-                'account' => (string) ($pf['accountName'] ?? $pf['username'] ?? $pf['handle'] ?? $p['accountName'] ?? ''),
-                'content' => $content,
-                'preview' => Str::limit($content, 60) ?: '(no caption)',
-                'published_at' => $p['publishedAt'] ?? $p['publishedFor'] ?? $p['createdAt'] ?? null,
-            ];
-        }, is_array($rows) ? $rows : []))];
+        return ['posts' => array_values($byId)];
+    }
+
+    /** Shape a Zernio post for the boost/create-ad post picker. */
+    private function mapBoostablePost(array $p): array
+    {
+        $content = (string) ($p['content'] ?? '');
+        $pf = $p['platforms'][0] ?? [];
+        $media = $p['mediaItems'] ?? $p['media'] ?? $p['mediaUrls'] ?? [];
+        $media = is_array($media) ? $media : [];
+        $first = $media[0] ?? null;
+
+        return [
+            'id' => (string) ($p['_id'] ?? $p['id'] ?? ''),
+            'platform' => $pf['platform'] ?? ($p['platform'] ?? null),
+            'account_id' => (string) ($pf['accountId'] ?? $p['accountId'] ?? ''),
+            'account' => (string) ($pf['accountName'] ?? $pf['username'] ?? $pf['handle'] ?? $p['accountName'] ?? ''),
+            'content' => $content,
+            'preview' => Str::limit($content, 60) ?: '(no caption)',
+            'thumbnail' => is_array($first) ? ($first['thumbnailUrl'] ?? $first['url'] ?? null) : (is_string($first) ? $first : null),
+            'media_count' => count($media),
+            'published_at' => $p['publishedAt'] ?? $p['publishedFor'] ?? $p['createdAt'] ?? null,
+        ];
     }
 
     /** PUT /posts/{id} — used to reschedule. */
@@ -164,7 +281,7 @@ class ZernioService
     /** GET /inbox/conversations → [{id, account_id, platform, name, snippet, unread, updated_at}]. */
     public function listConversations(array $query = []): array
     {
-        $res = $this->client()->get('/inbox/conversations', $query)->throw();
+        $res = $this->client()->get('/inbox/conversations', $this->scoped($query))->throw();
         $rows = $res->json('data') ?? $res->json('conversations') ?? $res->json() ?? [];
 
         return ['conversations' => array_values(array_map(function ($c) {
@@ -225,7 +342,7 @@ class ZernioService
      */
     public function listComments(array $query = []): array
     {
-        $res = $this->client()->get('/inbox/comments', $query)->throw();
+        $res = $this->client()->get('/inbox/comments', $this->scoped($query))->throw();
         $rows = $res->json('data') ?? $res->json('comments') ?? $res->json() ?? [];
 
         return ['comments' => array_values(array_map(fn ($c) => [
@@ -257,7 +374,7 @@ class ZernioService
     /** GET /ads → [{id, name, platform, status, objective}]. */
     public function listAds(array $query = []): array
     {
-        $res = $this->client()->get('/ads', $query)->throw();
+        $res = $this->client()->get('/ads', $this->scoped($query))->throw();
         $rows = $res->json('data') ?? $res->json('ads') ?? $res->json() ?? [];
 
         return ['ads' => array_values(array_map(fn ($a) => [
@@ -276,13 +393,15 @@ class ZernioService
         // per connected account), so walk every account and collect its ad
         // accounts, tagging each with the social accountId + platform it hangs
         // off. Page-only connections that can't list ad accounts (422) are skipped.
-        $adAccounts = [];
+        $byId = [];
+        $pagePlatforms = ['facebook', 'instagram'];
 
         foreach ($this->listAccounts()['accounts'] as $acct) {
             $accountId = $acct['id'] ?? null;
             if (! $accountId) {
                 continue;
             }
+            $platform = $acct['platform'] ?? null;
 
             try {
                 $res = $this->client()->get('/ads/accounts', ['accountId' => $accountId])->throw();
@@ -292,26 +411,46 @@ class ZernioService
                     if (! $id) {
                         continue;
                     }
-                    $adAccounts[] = [
-                        'id' => (string) $id,                  // platform ad account id (act_…)
+                    $id = (string) $id;
+                    $entry = [
+                        'id' => $id,                            // platform ad account id (act_…)
                         'name' => $a['name'] ?? $a['adAccountName'] ?? '—',
-                        'platform' => $acct['platform'] ?? null,
+                        'platform' => $platform,
                         'accountId' => (string) $accountId,     // the social account it hangs off
                         'currency' => $a['currency'] ?? null,
                     ];
+                    // The SAME ad account often surfaces under several connected
+                    // accounts (e.g. a Facebook Page + a Meta Ads connection).
+                    // Keep one entry, preferring a page connection — that's the
+                    // account that owns the posts being boosted.
+                    $existing = $byId[$id] ?? null;
+                    if (! $existing || (in_array($platform, $pagePlatforms, true) && ! in_array($existing['platform'], $pagePlatforms, true))) {
+                        $byId[$id] = $entry;
+                    }
                 }
             } catch (\Throwable $e) {
                 // This account can't list ad accounts (page-only / no ads) — skip it.
             }
         }
 
-        return ['adAccounts' => $adAccounts];
+        return ['adAccounts' => array_values($byId)];
     }
 
     /** POST /ads/boost — turn a published post into a paid campaign. */
     public function boostPost(array $payload): array
     {
         $res = $this->client()->post('/ads/boost', $payload)->throw();
+        $ad = $res->json('ad') ?? $res->json() ?? [];
+
+        return ['ok' => true, 'ad_id' => $ad['_id'] ?? $ad['id'] ?? null];
+    }
+
+    /** POST /ads/create — launch a standalone ad with custom creative. */
+    public function createAd(array $payload): array
+    {
+        $res = $this->client()->timeout(60)
+            ->post('/ads/create', array_filter($payload, fn ($v) => $v !== null && $v !== '' && $v !== []))
+            ->throw();
         $ad = $res->json('ad') ?? $res->json() ?? [];
 
         return ['ok' => true, 'ad_id' => $ad['_id'] ?? $ad['id'] ?? null];
@@ -350,7 +489,9 @@ class ZernioService
         ], fn ($v) => $v !== null && $v !== '');
 
         $res = $this->client()->get('/ads/targeting/search', $query)->throw();
-        $rows = $res->json('data') ?? $res->json() ?? [];
+        // Zernio wraps the array in `results` (not `data`). Falling through to the
+        // whole body would mangle every item into empty id/name.
+        $rows = $res->json('results') ?? $res->json('data') ?? [];
 
         return ['results' => array_values(array_map(fn ($r) => [
             'id' => (string) ($r['id'] ?? ''),

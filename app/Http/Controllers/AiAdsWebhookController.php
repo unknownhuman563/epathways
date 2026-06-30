@@ -266,15 +266,23 @@ class AiAdsWebhookController extends Controller
         ]);
 
         if ($z = $this->zernio()) {
-            // Phase 1 sends text-only; media upload (Zernio MediaApi / public
-            // URL) lands in a later phase.
-            return $this->zernioJson(function () use ($z, $data) {
+            return $this->zernioJson(function () use ($z, $data, $request) {
                 $targets = $z->platformTargets($data['platforms']);
                 if (empty($targets)) {
                     abort(422, 'None of the selected platforms have a connected Zernio account.');
                 }
 
-                return $z->createPost($data['text'], $targets, $data['schedule_at'] ?? null);
+                // Upload an attached image/video to Zernio first, then reference
+                // its public URL on the post.
+                $mediaItems = [];
+                if ($request->hasFile('media')) {
+                    $item = $z->uploadMedia($request->file('media'));
+                    if (! empty($item['url'])) {
+                        $mediaItems[] = $item;
+                    }
+                }
+
+                return $z->createPost($data['text'], $targets, $data['schedule_at'] ?? null, null, $mediaItems);
             });
         }
 
@@ -470,7 +478,7 @@ class AiAdsWebhookController extends Controller
     public function publishedPosts(Request $request)
     {
         if ($z = $this->zernio()) {
-            return $this->zernioJson(fn () => $z->publishedPosts());
+            return $this->zernioJson(fn () => $z->publishedPosts($request->query('accountId')));
         }
 
         return response()->json(['posts' => []]);
@@ -513,6 +521,7 @@ class AiAdsWebhookController extends Controller
             'targeting' => 'nullable|array',
             'targeting.ageMin' => 'nullable|integer|min:13|max:65',
             'targeting.ageMax' => 'nullable|integer|min:13|max:65',
+            'targeting.gender' => 'nullable|in:all,male,female',
             'targeting.countries' => 'nullable|array|max:25',
             'targeting.countries.*' => 'string|size:2',
             'targeting.interests' => 'nullable|array|max:30',
@@ -547,6 +556,7 @@ class AiAdsWebhookController extends Controller
         $targeting = array_filter([
             'ageMin' => $t['ageMin'] ?? null,
             'ageMax' => $t['ageMax'] ?? null,
+            'gender' => in_array($t['gender'] ?? 'all', ['male', 'female'], true) ? $t['gender'] : null,
             'countries' => ! empty($t['countries']) ? array_values(array_map('strtoupper', $t['countries'])) : null,
             'interests' => ! empty($t['interests']) ? array_values(array_map(fn ($i) => [
                 'id' => (string) $i['id'], 'name' => (string) $i['name'],
@@ -558,6 +568,122 @@ class AiAdsWebhookController extends Controller
         }
 
         return $targeting;
+    }
+
+    /** Shape the full create-ad targeting payload for Zernio's /ads/create. */
+    private function createAdTargeting(array $t): array
+    {
+        $geo = fn ($arr) => array_values(array_filter(array_map(fn ($g) => array_filter([
+            'key' => $g['key'] ?? null, 'name' => $g['name'] ?? null,
+        ], fn ($v) => $v !== null && $v !== ''), is_array($arr) ? $arr : []), fn ($g) => ! empty($g['key'])));
+
+        $entities = fn ($arr) => array_values(array_filter(array_map(fn ($e) => [
+            'id' => (string) ($e['id'] ?? ''), 'name' => (string) ($e['name'] ?? ''),
+        ], is_array($arr) ? $arr : []), fn ($e) => $e['id'] !== ''));
+
+        $targeting = array_filter([
+            'ageMin' => $t['ageMin'] ?? null,
+            'ageMax' => $t['ageMax'] ?? null,
+            'gender' => in_array($t['gender'] ?? 'all', ['male', 'female'], true) ? $t['gender'] : null,
+            'incomeTier' => in_array($t['incomeTier'] ?? '', ['top_5', 'top_10', 'top_10_25', 'top_25_50'], true) ? $t['incomeTier'] : null,
+            'countries' => ! empty($t['countries']) ? array_values(array_map('strtoupper', $t['countries'])) : null,
+            'regions' => $geo($t['regions'] ?? []),
+            'cities' => $geo($t['cities'] ?? []),
+            'metros' => $geo($t['metros'] ?? []),
+            'zips' => $geo($t['zips'] ?? []),
+            'interests' => $entities($t['interests'] ?? []),
+            'behaviors' => $entities($t['behaviors'] ?? []),
+        ], fn ($v) => $v !== null && $v !== []);
+
+        if (! empty($t['advantageAudience'])) {
+            $targeting['advantage_audience'] = 1;
+        }
+
+        return $targeting;
+    }
+
+    /** POST /webhook/social/create-ad — launch a standalone ad with custom creative. */
+    public function createAd(Request $request)
+    {
+        $data = $request->validate([
+            'accountId' => 'required|string|max:120',
+            'adAccountId' => 'required|string|max:120',
+            'platform' => 'required|string|max:32',
+            'name' => 'required|string|max:255',
+            'goal' => 'required|string|max:40',
+            'body' => 'required|string|max:2000',
+            'headline' => 'nullable|string|max:255',
+            'callToAction' => 'nullable|string|max:40',
+            'linkUrl' => 'nullable|url|max:2000',
+            'budgetAmount' => 'required|numeric|min:1',
+            'budgetType' => 'required|in:daily,lifetime',
+            'media' => 'nullable|file|max:30720',
+            'targeting' => 'nullable|array',
+            'targeting.ageMin' => 'nullable|integer|min:13|max:65',
+            'targeting.ageMax' => 'nullable|integer|min:13|max:65',
+            'targeting.gender' => 'nullable|in:all,male,female',
+            'targeting.incomeTier' => 'nullable|in:top_5,top_10,top_10_25,top_25_50',
+            'targeting.countries' => 'nullable|array|max:25',
+            'targeting.countries.*' => 'string|size:2',
+            'targeting.regions' => 'nullable|array|max:50',
+            'targeting.cities' => 'nullable|array|max:100',
+            'targeting.metros' => 'nullable|array|max:50',
+            'targeting.zips' => 'nullable|array|max:200',
+            'targeting.interests' => 'nullable|array|max:50',
+            'targeting.interests.*.id' => 'required_with:targeting.interests|string|max:120',
+            'targeting.behaviors' => 'nullable|array|max:50',
+            'targeting.behaviors.*.id' => 'required_with:targeting.behaviors|string|max:120',
+            'targeting.advantageAudience' => 'nullable|boolean',
+        ]);
+
+        if ($z = $this->zernio()) {
+            return $this->zernioJson(function () use ($z, $data, $request) {
+                $imageUrl = null;
+                if ($request->hasFile('media')) {
+                    $imageUrl = $z->uploadMedia($request->file('media'))['url'] ?? null;
+                }
+
+                return $z->createAd([
+                    'accountId' => $data['accountId'],
+                    'adAccountId' => $data['adAccountId'],
+                    'platform' => $data['platform'],
+                    'name' => $data['name'],
+                    'goal' => $data['goal'],
+                    'body' => $data['body'],
+                    'headline' => $data['headline'] ?? null,
+                    'callToAction' => $data['callToAction'] ?? null,
+                    'linkUrl' => $data['linkUrl'] ?? null,
+                    'imageUrl' => $imageUrl,
+                    'budgetAmount' => (float) $data['budgetAmount'],
+                    'budgetType' => $data['budgetType'],
+                    'targeting' => $this->createAdTargeting($data['targeting'] ?? []),
+                ]);
+            });
+        }
+
+        return response()->json(['error' => 'Connect Zernio (and a linked ad account) to create ads.'], 422);
+    }
+
+    /** POST /webhook/social/ai-ad-copy — Cerebras writes the primary text + headline. */
+    public function aiAdCopy(Request $request)
+    {
+        $data = $request->validate([
+            'brief' => 'required|string|max:2000',
+            'platform' => 'nullable|string|max:32',
+            'goal' => 'nullable|string|max:40',
+        ]);
+
+        $ai = app(\App\Services\AIService::class);
+        if (! $ai->configured()) {
+            return response()->json(['error' => 'Set OPENROUTER_API_KEY to generate ad copy.'], 422);
+        }
+
+        $copy = $ai->generateAdCreative($data['brief'], $data['platform'] ?? 'facebook');
+        if ($copy['headline'] === '' && $copy['body'] === '') {
+            return response()->json(['error' => 'AI copy generation failed — please try again.'], 502);
+        }
+
+        return response()->json(['headline' => $copy['headline'], 'body' => $copy['body'], 'cta' => '']);
     }
 
     /** GET /webhook/social/ad-targeting-search?q=&dimension=&accountId=&geoType=&countryCode= */
@@ -594,22 +720,16 @@ class AiAdsWebhookController extends Controller
             'platform' => 'nullable|string|max:32',
         ]);
 
-        $cerebras = app(\App\Services\CerebrasService::class);
-        if (! $cerebras->configured()) {
-            return response()->json(['error' => 'Set CEREBRAS_API_KEY to use AI targeting.'], 422);
+        $ai = app(\App\Services\AIService::class);
+        if (! $ai->configured()) {
+            return response()->json(['error' => 'Set OPENROUTER_API_KEY to use AI targeting.'], 422);
         }
 
-        try {
-            $s = $cerebras->suggestAdTargeting([
-                'content' => $data['content'],
-                'goal' => $data['goal'] ?? 'traffic',
-                'platform' => $data['platform'] ?? 'facebook',
-            ]);
-        } catch (\Throwable $e) {
-            Log::error('AI targeting failed', ['error' => $e->getMessage()]);
-
-            return response()->json(['error' => 'AI targeting failed: '.$e->getMessage()], 502);
-        }
+        $s = $ai->suggestAdTargeting([
+            'content' => $data['content'],
+            'goal' => $data['goal'] ?? 'traffic',
+            'platform' => $data['platform'] ?? 'facebook',
+        ]);
 
         // Resolve interest keyword names → Zernio {id, name}. Best-effort.
         $interests = [];

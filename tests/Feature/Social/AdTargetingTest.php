@@ -21,19 +21,15 @@ class AdTargetingTest extends TestCase
         config(['services.zernio.api_key' => 'sk_test', 'services.zernio.base_url' => 'https://zernio.com/api/v1']);
     }
 
-    private function configureCerebras(): void
+    private function configureAi(): void
     {
-        config([
-            'services.cerebras.api_key' => 'sk_cb',
-            'services.cerebras.base_url' => 'https://api.cerebras.ai/v1',
-            'services.cerebras.model' => 'test-model',
-        ]);
+        config(['ai.api_key' => 'sk_or']); // OpenRouter key; base_url + model come from config/ai.php
     }
 
     public function test_targeting_search_proxies_zernio(): void
     {
         $this->configureZernio();
-        Http::fake(['*/ads/targeting/search*' => Http::response(['data' => [
+        Http::fake(['*/ads/targeting/search*' => Http::response(['results' => [
             ['id' => 'i1', 'name' => 'Study abroad', 'type' => 'interest', 'path' => ['Education'], 'audienceSize' => 1000000],
         ]])]);
 
@@ -53,10 +49,10 @@ class AdTargetingTest extends TestCase
             ->assertOk()->assertExactJson(['results' => []]);
     }
 
-    public function test_ai_targeting_requires_cerebras(): void
+    public function test_ai_targeting_requires_ai_key(): void
     {
         $this->configureZernio();
-        config(['services.cerebras.api_key' => '']);
+        config(['ai.api_key' => '']);
 
         $this->actingAs($this->admin())
             ->postJson('/webhook/social/ai-targeting', ['content' => 'Study nursing in NZ', 'accountId' => 'acc_meta'])
@@ -66,14 +62,14 @@ class AdTargetingTest extends TestCase
     public function test_ai_targeting_suggests_and_resolves_interests(): void
     {
         $this->configureZernio();
-        $this->configureCerebras();
+        $this->configureAi();
 
         Http::fake([
             '*/chat/completions' => Http::response(['choices' => [['message' => ['content' => json_encode([
                 'age_min' => 20, 'age_max' => 35, 'countries' => ['IN', 'PH'],
                 'interests' => ['Study abroad'], 'rationale' => 'Young prospective students.',
             ])]]]]),
-            '*/ads/targeting/search*' => Http::response(['data' => [
+            '*/ads/targeting/search*' => Http::response(['results' => [
                 ['id' => 'i_abroad', 'name' => 'Study abroad', 'type' => 'interest'],
             ]]),
         ]);
@@ -152,10 +148,58 @@ class AdTargetingTest extends TestCase
             ->assertStatus(422);
     }
 
+    public function test_create_ad_sends_creative_and_targeting(): void
+    {
+        $this->configureZernio();
+        Http::fake([
+            '*/media/upload-direct' => Http::response(['url' => 'https://cdn.zernio.com/u/ad.jpg', 'contentType' => 'image/jpeg']),
+            '*/ads/create' => Http::response(['ad' => ['id' => 'ad_999']]),
+        ]);
+
+        $this->actingAs($this->admin())
+            ->post('/webhook/social/create-ad', [
+                'accountId' => 'acc_meta', 'adAccountId' => 'act_1', 'platform' => 'facebook',
+                'name' => 'Study NZ Ad', 'goal' => 'traffic', 'body' => 'Study nursing in NZ.',
+                'headline' => 'Your NZ future', 'callToAction' => 'LEARN_MORE',
+                'linkUrl' => 'https://epathways.co.nz', 'budgetAmount' => 100, 'budgetType' => 'daily',
+                'media' => \Illuminate\Http\UploadedFile::fake()->image('ad.jpg'),
+                'targeting' => ['ageMin' => 20, 'ageMax' => 40, 'countries' => ['nz'], 'advantageAudience' => true],
+            ])
+            ->assertOk()->assertJsonPath('ad_id', 'ad_999');
+
+        Http::assertSent(fn ($r) => str_contains($r->url(), '/ads/create') && $r->method() === 'POST'
+            && ($r['body'] ?? null) === 'Study nursing in NZ.'
+            && ($r['headline'] ?? null) === 'Your NZ future'
+            && ($r['linkUrl'] ?? null) === 'https://epathways.co.nz'
+            && ($r['callToAction'] ?? null) === 'LEARN_MORE'
+            && ($r['imageUrl'] ?? null) === 'https://cdn.zernio.com/u/ad.jpg'
+            && ($r['targeting']['advantage_audience'] ?? null) === 1
+            && ($r['targeting']['countries'] ?? []) === ['NZ']);
+    }
+
+    public function test_ai_ad_copy_requires_ai_key_and_generates(): void
+    {
+        config(['ai.api_key' => '']);
+        $this->actingAs($this->admin())
+            ->postJson('/webhook/social/ai-ad-copy', ['brief' => 'Nursing in NZ'])
+            ->assertStatus(422);
+
+        $this->configureAi();
+        Http::fake(['*/chat/completions' => Http::response(['choices' => [['message' => ['content' => json_encode([
+            'headline' => 'Your NZ future', 'body' => 'Study nursing in New Zealand.',
+        ])]]]])]);
+
+        $this->actingAs($this->admin())
+            ->postJson('/webhook/social/ai-ad-copy', ['brief' => 'Nursing in NZ', 'platform' => 'facebook'])
+            ->assertOk()
+            ->assertJsonPath('headline', 'Your NZ future')
+            ->assertJsonPath('body', 'Study nursing in New Zealand.');
+    }
+
     public function test_published_posts_listed_for_picker(): void
     {
         $this->configureZernio();
-        Http::fake(['*/posts*' => Http::response(['data' => [
+        Http::fake(['*/posts*' => Http::response(['posts' => [
             ['id' => 'post1', 'content' => 'Study in NZ — free assessment!', 'platforms' => [['platform' => 'facebook']], 'publishedAt' => '2026-06-20T00:00:00Z'],
         ]])]);
 
