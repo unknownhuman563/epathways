@@ -568,6 +568,38 @@ class AiAdsWebhookController extends Controller
         return $targeting;
     }
 
+    /** Shape the full create-ad targeting payload for Zernio's /ads/create. */
+    private function createAdTargeting(array $t): array
+    {
+        $geo = fn ($arr) => array_values(array_filter(array_map(fn ($g) => array_filter([
+            'key' => $g['key'] ?? null, 'name' => $g['name'] ?? null,
+        ], fn ($v) => $v !== null && $v !== ''), is_array($arr) ? $arr : []), fn ($g) => ! empty($g['key'])));
+
+        $entities = fn ($arr) => array_values(array_filter(array_map(fn ($e) => [
+            'id' => (string) ($e['id'] ?? ''), 'name' => (string) ($e['name'] ?? ''),
+        ], is_array($arr) ? $arr : []), fn ($e) => $e['id'] !== ''));
+
+        $targeting = array_filter([
+            'ageMin' => $t['ageMin'] ?? null,
+            'ageMax' => $t['ageMax'] ?? null,
+            'gender' => in_array($t['gender'] ?? 'all', ['male', 'female'], true) ? $t['gender'] : null,
+            'incomeTier' => in_array($t['incomeTier'] ?? '', ['top_5', 'top_10', 'top_10_25', 'top_25_50'], true) ? $t['incomeTier'] : null,
+            'countries' => ! empty($t['countries']) ? array_values(array_map('strtoupper', $t['countries'])) : null,
+            'regions' => $geo($t['regions'] ?? []),
+            'cities' => $geo($t['cities'] ?? []),
+            'metros' => $geo($t['metros'] ?? []),
+            'zips' => $geo($t['zips'] ?? []),
+            'interests' => $entities($t['interests'] ?? []),
+            'behaviors' => $entities($t['behaviors'] ?? []),
+        ], fn ($v) => $v !== null && $v !== []);
+
+        if (! empty($t['advantageAudience'])) {
+            $targeting['advantage_audience'] = 1;
+        }
+
+        return $targeting;
+    }
+
     /** POST /webhook/social/create-ad — launch a standalone ad with custom creative. */
     public function createAd(Request $request)
     {
@@ -587,11 +619,18 @@ class AiAdsWebhookController extends Controller
             'targeting' => 'nullable|array',
             'targeting.ageMin' => 'nullable|integer|min:13|max:65',
             'targeting.ageMax' => 'nullable|integer|min:13|max:65',
+            'targeting.gender' => 'nullable|in:all,male,female',
+            'targeting.incomeTier' => 'nullable|in:top_5,top_10,top_10_25,top_25_50',
             'targeting.countries' => 'nullable|array|max:25',
             'targeting.countries.*' => 'string|size:2',
-            'targeting.interests' => 'nullable|array|max:30',
+            'targeting.regions' => 'nullable|array|max:50',
+            'targeting.cities' => 'nullable|array|max:100',
+            'targeting.metros' => 'nullable|array|max:50',
+            'targeting.zips' => 'nullable|array|max:200',
+            'targeting.interests' => 'nullable|array|max:50',
             'targeting.interests.*.id' => 'required_with:targeting.interests|string|max:120',
-            'targeting.interests.*.name' => 'required_with:targeting.interests|string|max:160',
+            'targeting.behaviors' => 'nullable|array|max:50',
+            'targeting.behaviors.*.id' => 'required_with:targeting.behaviors|string|max:120',
             'targeting.advantageAudience' => 'nullable|boolean',
         ]);
 
@@ -615,7 +654,7 @@ class AiAdsWebhookController extends Controller
                     'imageUrl' => $imageUrl,
                     'budgetAmount' => (float) $data['budgetAmount'],
                     'budgetType' => $data['budgetType'],
-                    'targeting' => $this->boostTargeting($data['targeting'] ?? []),
+                    'targeting' => $this->createAdTargeting($data['targeting'] ?? []),
                 ]);
             });
         }

@@ -16,7 +16,11 @@ const blankForm = {
     body: '', headline: '', linkUrl: '', callToAction: 'LEARN_MORE',
     budgetAmount: '5', budgetType: 'daily', brief: '',
 };
-const blankTargeting = { ageMin: 18, ageMax: 45, countries: [], interests: [], advantageAudience: false };
+const blankTargeting = {
+    ageMin: 18, ageMax: 45, gender: 'all', incomeTier: '',
+    countries: [], regions: [], cities: [], metros: [], zips: [],
+    interests: [], behaviors: [], advantageAudience: false,
+};
 
 /** Inline "Create Ad" campaign builder (mirrors Zernio's Create Ad), shown as
  *  the AI-ad-campaign mode on the Compose page. Posts to /ads/create. */
@@ -70,14 +74,20 @@ export default function CreateAdForm() {
             fd.append('budgetAmount', form.budgetAmount);
             fd.append('budgetType', form.budgetType);
             if (media) fd.append('media', media);
-            fd.append('targeting[ageMin]', targeting.ageMin);
-            fd.append('targeting[ageMax]', targeting.ageMax);
-            (targeting.countries || []).forEach((c) => fd.append('targeting[countries][]', c));
-            (targeting.interests || []).forEach((i, idx) => {
-                fd.append(`targeting[interests][${idx}][id]`, i.id);
-                fd.append(`targeting[interests][${idx}][name]`, i.name);
-            });
-            if (targeting.advantageAudience) fd.append('targeting[advantageAudience]', '1');
+            const tg = targeting;
+            fd.append('targeting[ageMin]', tg.ageMin);
+            fd.append('targeting[ageMax]', tg.ageMax);
+            if (tg.gender && tg.gender !== 'all') fd.append('targeting[gender]', tg.gender);
+            if (tg.incomeTier) fd.append('targeting[incomeTier]', tg.incomeTier);
+            (tg.countries || []).forEach((c) => fd.append('targeting[countries][]', c));
+            ['regions', 'cities', 'metros', 'zips'].forEach((kind) =>
+                (tg[kind] || []).forEach((g, i) => {
+                    fd.append(`targeting[${kind}][${i}][key]`, g.key);
+                    fd.append(`targeting[${kind}][${i}][name]`, g.name || '');
+                }));
+            (tg.interests || []).forEach((e, i) => { fd.append(`targeting[interests][${i}][id]`, e.id); fd.append(`targeting[interests][${i}][name]`, e.name || ''); });
+            (tg.behaviors || []).forEach((e, i) => { fd.append(`targeting[behaviors][${i}][id]`, e.id); fd.append(`targeting[behaviors][${i}][name]`, e.name || ''); });
+            if (tg.advantageAudience) fd.append('targeting[advantageAudience]', '1');
 
             const r = await social.createAd(fd);
             toast.success('Ad created' + (r?.ad_id ? ` (${r.ad_id})` : ''));
