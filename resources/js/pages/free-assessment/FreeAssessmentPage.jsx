@@ -801,7 +801,7 @@ export default function FreeAssessment({ programs = [] }) {
 
 {/* --- STEP COMPONENTS --- */}
 
-function StepTerms({ data, setData, errors }) {
+export function StepTerms({ data, setData, errors }) {
     return (
         <div className="space-y-12">
             <h2 className="text-3xl font-black text-[#282728] uppercase tracking-tighter mb-8 leading-tight">Privacy & Terms</h2>
@@ -829,7 +829,7 @@ function StepTerms({ data, setData, errors }) {
     );
 }
 
-function StepPersonal({ data, setData, errors }) {
+export function StepPersonal({ data, setData, errors }) {
     return (
         <div className="space-y-12">
             <h2 className="text-3xl font-black text-[#282728] uppercase tracking-tighter mb-10">Personal Profile</h2>
@@ -1019,7 +1019,7 @@ function StepPersonal({ data, setData, errors }) {
     );
 }
 
-function StepStudyPlans({ data, setData, errors, programs = [] }) {
+export function StepStudyPlans({ data, setData, errors, programs = [] }) {
     const levels = ['Diploma (Level 5-6)', 'Bachelor Degree (Level 7)', 'Postgraduate Diploma (Level 8)', 'Master\'s Degree (Level 9)', 'Doctorate (Level 10)'];
     const updateNested = (key, val) => setData('study_plans', { ...data.study_plans, [key]: val });
 
@@ -1110,7 +1110,7 @@ function StepStudyPlans({ data, setData, errors, programs = [] }) {
     );
 }
 
-function StepEducation({ data, setData, errors }) {
+export function StepEducation({ data, setData, errors }) {
     const eduDocs = ['Year 10th Certificate', 'Year 12th Certificate', "Vocational Certificate", "Bachelor's Certificate", "Master's Certificate", "Doctorate Certificate"];
     const transcriptDocs = ['Year 10th Transcript/Marks', 'Year 12th Transcript/Marks', "Vocational Transcript/Marks", "Bachelor's Transcript/Marks", "Master's Transcript/Marks", "Doctorate Transcript/Marks"];
     const gapActivities = ['Working', 'Family business', 'Preparing for exams', 'Looking for work', 'Other'];
@@ -1310,7 +1310,7 @@ function ExpandableEducationCard({ edu, index, updateEduLevel, errors }) {
     );
 }
 
-function StepWork({ data, setData, errors }) {
+export function StepWork({ data, setData, errors }) {
     const selfEmployedDocs = ['Certificate of Employment', 'Work Experience Letter', 'Salary slips', 'Work contract', 'Salary certificate'];
     const businessDocs = ['Business certificate', 'Income tax return', 'DTI certificate', 'Mayors permit'];
 
@@ -1404,7 +1404,7 @@ function StepWork({ data, setData, errors }) {
     );
 }
 
-function StepFinancial({ data, setData, errors }) {
+export function StepFinancial({ data, setData, errors }) {
     const sources = ['Personal Savings', 'Family Support', 'Bank Loan', 'Scholarship', 'Employer Sponsored', 'Property/Investments'];
     const updateFinancial = (key, val) => setData('financial_info', { ...data.financial_info, [key]: val });
     const toggleSource = (src) => {
@@ -1498,7 +1498,7 @@ function StepFinancial({ data, setData, errors }) {
     );
 }
 
-function StepSourceOfFunds({ data, setData, errors }) {
+export function StepSourceOfFunds({ data, setData, errors }) {
     const fundSources = ['Family savings', 'Fixed deposits', 'Education loan', 'Property sale', 'Personal savings'];
     const studentDocs = ['Bank statements (6 months)', 'Fixed deposit certificates', 'Salary slips (3-6 months)', 'Employment letter', 'Business registration/permit'];
     const sponsorRelations = ['Father', 'Mother', 'Both parents', 'Spouse', 'Brother-Sister', 'Uncle-Aunt', 'Grandparents'];
@@ -1997,7 +1997,7 @@ function StepAdditional({ data, setData, errors }) {
     );
 }
 
-function StepDeclaration({ data, setData, errors }) {
+export function StepDeclaration({ data, setData, errors }) {
     return (
         <div className="space-y-12">
             <h2 className="text-3xl font-black text-[#282728] uppercase tracking-tighter mb-8 leading-tight">Declaration</h2>
@@ -2053,7 +2053,7 @@ function Field({ label, error, children }) {
     );
 }
 
-function SuccessMessage({ leadId }) {
+export function SuccessMessage({ leadId }) {
     return (
         <div className="min-h-screen bg-white flex items-center justify-center p-6 font-urbanist">
             <div className="max-w-[480px] w-full bg-white rounded-[3rem] shadow-[0_64px_128px_-24px_rgba(40,39,40,0.08)] p-16 text-center border border-[#282728]/5">

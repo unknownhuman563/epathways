@@ -384,6 +384,27 @@ export default function Registration({ event }) {
         ? new Date(iso).toLocaleDateString('en-NZ', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
         : null;
 
+    // Format a 'HH:MM' or 'HH:MM:SS' string as 12-hour with am/pm.
+    // Returns null if the input can't be parsed.
+    const fmtTime = (raw) => {
+        if (! raw || typeof raw !== 'string') return null;
+        const [hStr, mStr] = raw.split(':');
+        const h = parseInt(hStr, 10);
+        const m = parseInt(mStr ?? '0', 10);
+        if (isNaN(h) || isNaN(m)) return null;
+        const hour12 = ((h % 12) || 12);
+        const ampm = h < 12 ? 'am' : 'pm';
+        return `${hour12}:${String(m).padStart(2, '0')}${ampm}`;
+    };
+
+    const timeChip = (() => {
+        const start = fmtTime(event.time_start);
+        const end = fmtTime(event.time_end);
+        if (start && end) return `${start} – ${end}`;
+        if (start) return start;
+        return null;
+    })();
+
     return (
         <div className="min-h-screen bg-gray-50 text-gray-900">
             <Head title={`Register — ${event.name}`} />
@@ -448,6 +469,9 @@ export default function Registration({ event }) {
                     >
                         {event.date_from && (
                             <MetaChip icon={<Calendar size={13} />}>{fmtDate(event.date_from)}</MetaChip>
+                        )}
+                        {timeChip && (
+                            <MetaChip icon={<Clock size={13} />}>{timeChip}</MetaChip>
                         )}
                         {(event.location || event.mode) && (
                             <MetaChip icon={<MapPin size={13} />}>{event.location || event.mode}</MetaChip>

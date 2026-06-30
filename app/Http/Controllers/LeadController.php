@@ -565,10 +565,12 @@ class LeadController extends Controller
                 $lead = $lead->fresh();
             }
 
-            // 4. Relational Data Mapping: Study Plans
+            // 4. Relational Data Mapping: Study Plans. updateOrCreate keeps a
+            // single canonical plan per lead so re-submissions enrich it
+            // instead of stacking duplicate rows.
             if (! empty($data['study_plans'])) {
                 $plans = $data['study_plans'];
-                $lead->studyPlans()->create([
+                $this->upsertStudyPlan($lead, [
                     'preferred_course' => $plans['preferred_course'] ?? null,
                     'qualification_level' => $plans['qualification_level'] ?? null,
                     'preferred_city' => $plans['preferred_city'] ?? null,
@@ -584,13 +586,14 @@ class LeadController extends Controller
                 ]);
             }
 
-            // 5. Relational Data Mapping: Education Background (only completed entries)
+            // 5. Relational Data Mapping: Education Background (only completed
+            // entries). Deduped by level so a re-submission updates the same row.
             if (! empty($data['education_background'])) {
                 foreach ($data['education_background'] as $edu) {
                     if (empty($edu['completed'])) {
                         continue;
                     }
-                    $lead->educationExps()->create([
+                    $this->upsertEducationExp($lead, [
                         'level' => $edu['level'] ?? null,
                         'field_of_study' => $edu['field_of_study'] ?? null,
                         'institution' => $edu['institution'] ?? null,
@@ -603,7 +606,13 @@ class LeadController extends Controller
 
             DB::commit();
 
-            AnalyzeLeadAssessment::dispatch($lead);
+            // Run the AI analysis after the response so a slow / missing queue
+            // worker can't make the submission hang.
+            try {
+                AnalyzeLeadAssessment::dispatch($lead)->afterResponse();
+            } catch (\Throwable $e) {
+                Log::warning('Assessment AI dispatch failed', ['lead_id' => $lead->lead_id, 'error' => $e->getMessage()]);
+            }
 
             return redirect()->back()->with([
                 'success' => 'Your assessment profile has been securely submitted.',
@@ -612,6 +621,330 @@ class LeadController extends Controller
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error('Free assessment mapping failed', ['error' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
+            $message = app()->environment('production')
+                ? 'Submission failed due to a server error. Our team has been notified.'
+                : 'Submission failed: '.$e->getMessage();
+
+            return redirect()->back()->withErrors(['error' => $message])->withInput();
+        }
+    }
+
+    /**
+     * Upsert the lead's single canonical study plan — a re-submission enriches
+     * the same row instead of stacking a duplicate. Empty values are dropped so
+     * a sparse form can't wipe data captured by an earlier, richer one.
+     */
+    private function upsertStudyPlan(\App\Models\Lead $lead, array $values): void
+    {
+        $values = array_filter($values, fn ($v) => ! is_null($v) && $v !== '');
+        if (empty($values)) {
+            return;
+        }
+        $plan = $lead->studyPlans()->firstOrNew([]);
+        $plan->fill($values)->save();
+    }
+
+    /**
+     * Upsert one education-experience row, deduped by level within the lead so a
+     * re-submission updates rather than duplicates. Empty values are dropped.
+     */
+    private function upsertEducationExp(\App\Models\Lead $lead, array $values): void
+    {
+        $level = $values['level'] ?? null;
+        $values = array_filter($values, fn ($v) => ! is_null($v) && $v !== '');
+        if (empty($values)) {
+            return;
+        }
+        $lead->educationExps()->updateOrCreate(['level' => $level], $values);
+    }
+
+    /**
+     * Show the public "Quick Registration" form — a short marketing-funnel
+     * version of the Free Assessment that keeps the same kept-section fields
+     * but drops Immigration / Character / Family / Additional, plus a CV +
+     * Passport upload step.
+     */
+    public function showRegistration()
+    {
+        $programs = \App\Models\Program::where('status', 'published')
+            ->orderBy('level')
+            ->orderBy('title')
+            ->get(['id', 'title', 'level', 'institution']);
+
+        return inertia('register/QuickRegisterPage');
+    }
+
+    /** The detailed multi-step registration (no Immigration/Character/Family/Additional). */
+    public function showRegistrationFull()
+    {
+        $programs = \App\Models\Program::where('status', 'published')
+            ->orderBy('level')
+            ->orderBy('title')
+            ->get(['id', 'title', 'level', 'institution']);
+
+        return inertia('register/RegistrationPage', [
+            'programs' => $programs,
+        ]);
+    }
+
+    /**
+     * Store a Quick Registration. Mirrors storeFreeAssessment's lead +
+     * study-plan + education creation, but with lenient validation (only the
+     * essentials are required) and source='registration'. Still queues the AI
+     * eligibility analysis so the lead lands scored in the Sales pipeline.
+     */
+    public function storeRegistration(\Illuminate\Http\Request $request)
+    {
+        $validated = $request->validate([
+            'terms_accepted' => 'required|accepted',
+            // Personal — only name + contact required; the rest is optional so
+            // a marketing lead can register quickly.
+            'first_name' => 'required|string|max:255',
+            'last_name' => 'required|string|max:255',
+            'email' => 'required|email|max:255',
+            'phone' => 'required|string|max:25',
+            'gender' => 'nullable|string|max:50',
+            'age' => 'nullable|integer|min:0|max:120',
+            'marital_status' => 'nullable|string|max:50',
+            'dob' => 'nullable|date',
+            'country_of_birth' => 'nullable|string|max:120',
+            'country_of_origin' => 'nullable|string|max:120',
+            'citizenship' => 'nullable|string|max:120',
+            'residence_country' => 'nullable|string|max:120',
+            // Education & interest
+            'bachelor_course' => 'nullable|string|max:255',
+            'occupation' => 'nullable|string|max:255',
+            'pathway_interest' => 'nullable|string|max:120',
+            'pathway_interest_other' => 'nullable|string|max:255',
+            // Partner / spouse (married)
+            'partner_full_name' => 'nullable|string|max:255',
+            'partner_age' => 'nullable|integer|min:0|max:120',
+            'partner_education_level' => 'nullable|string|max:120',
+            'partner_education_level_other' => 'nullable|string|max:255',
+            'partner_work_experience' => 'nullable|string|max:255',
+            'partner_years_experience' => 'nullable|string|max:60',
+            // Children
+            'number_of_children' => 'nullable|integer|min:0|max:30',
+            'children_ages' => 'nullable|string|max:255',
+            'bring_children' => 'nullable|string|max:120',
+            'bring_children_other' => 'nullable|string|max:255',
+            // Additional
+            'advisor_question' => 'nullable|string|max:5000',
+            // Extra document folders
+            'diploma_files' => 'nullable|array|max:10',
+            'diploma_files.*' => 'file|mimes:pdf,doc,docx,xls,csv,jpg,jpeg,png,gif|max:10240',
+            'transcript_files' => 'nullable|array|max:10',
+            'transcript_files.*' => 'file|mimes:pdf,doc,docx,xls,csv,jpg,jpeg,png,gif|max:10240',
+            'has_other_names' => 'nullable|in:Yes,No',
+            'other_names' => 'nullable|string|max:255',
+            'has_passport' => 'nullable|in:Yes,No',
+            'passport_number' => 'nullable|string|max:60',
+            'passport_expiry' => 'nullable|date',
+            'passport_pdf' => 'nullable|file|mimes:pdf|max:10240',
+            // Study plans (sent by the full /register page).
+            'study_plans' => 'nullable|array',
+            'study_plans.preferred_course' => 'nullable|string|max:255',
+            'study_plans.qualification_level' => 'nullable|string|max:120',
+            'study_plans.has_english_test' => 'nullable|in:Yes,No',
+            // Quick-modal fields — experience + highest attainment.
+            'experience' => 'nullable|string|max:255',
+            'highest_attainment' => 'nullable|string|max:120',
+            // Kept-but-optional sections.
+            'education_background' => 'nullable|array',
+            'has_gap' => 'nullable|in:Yes,No',
+            'work_experience' => 'nullable|array',
+            'financial_info' => 'nullable|array',
+            'source_of_funds_info' => 'nullable|array',
+            // The important uploads.
+            'cv_files' => 'nullable|array|max:10',
+            'cv_files.*' => 'file|mimes:pdf,doc,docx,xls,csv,jpg,jpeg,png,gif|max:10240',
+            'passport_files' => 'nullable|array|max:10',
+            'passport_files.*' => 'file|mimes:pdf,doc,docx,xls,csv,jpg,jpeg,png,gif|max:10240',
+            'declaration_accepted' => 'required|accepted',
+        ]);
+
+        try {
+            DB::beginTransaction();
+
+            $data = $request->all();
+
+            $passportPath = $request->hasFile('passport_pdf')
+                ? $request->file('passport_pdf')->store('passports', 'public')
+                : null;
+
+            $intake = app(\App\Services\LeadIntakeService::class);
+            $existing = $intake->ingest('registration', [
+                'first_name' => $validated['first_name'],
+                'last_name' => $validated['last_name'],
+                'email' => $validated['email'],
+                'phone' => $validated['phone'] ?? null,
+                'country' => $data['residence_country'] ?? null,
+            ], $request);
+
+            $existing->update([
+                'lead_id' => str_starts_with((string) $existing->lead_id, 'REG-')
+                    ? $existing->lead_id
+                    : 'REG-'.strtoupper(uniqid()),
+                'first_name' => $validated['first_name'],
+                'last_name' => $validated['last_name'],
+                'email' => $validated['email'],
+                'phone' => $validated['phone'] ?? null,
+                'dob' => $data['dob'] ?? null,
+                'other_names' => $data['other_names'] ?? null,
+                'gender' => $data['gender'] ?? null,
+                'marital_status' => $data['marital_status'] ?? null,
+                'terms_accepted' => $request->boolean('terms_accepted'),
+                // Country of origin (registration) maps to country of birth.
+                'country_of_birth' => $data['country_of_origin'] ?? ($data['country_of_birth'] ?? null),
+                'place_of_birth' => $data['place_of_birth'] ?? null,
+                'citizenship' => $data['citizenship'] ?? null,
+                'residence_city' => $data['residence_city'] ?? null,
+                'residence_state' => $data['residence_state'] ?? null,
+                'residence_country' => $data['residence_country'] ?? null,
+                'has_passport' => $data['has_passport'] ?? 'No',
+                'passport_number' => $data['passport_number'] ?? null,
+                'passport_expiry' => $data['passport_expiry'] ?? null,
+                'passport_path' => $passportPath,
+                // Education & interest
+                'current_position_title' => $data['occupation'] ?? null,
+                'highest_qualification_field' => $data['bachelor_course'] ?? null,
+                // Children
+                'number_of_children' => $data['number_of_children'] ?? null,
+                'has_children' => ! empty($data['number_of_children']),
+                'dependent_children_notes' => $data['children_ages'] ?? null,
+                'intends_to_bring_family' => ($data['bring_children'] ?? null) === 'Yes',
+                'has_dependent_partner' => ($data['marital_status'] ?? null) === 'Married',
+                'financial_info' => $data['financial_info'] ?? null,
+                'work_info' => $data['work_experience'] ?? null,
+                'gap_explanation' => $data['gap_explanation'] ?? null,
+                // Highest attainment maps to the lead's highest qualification;
+                // left untouched when not provided.
+                'highest_qualification' => ! empty($data['highest_attainment'])
+                    ? $data['highest_attainment']
+                    : ($existing->highest_qualification ?? null),
+                // Partner / spouse — no dedicated columns exist, so the details
+                // live in the existing family_info JSON. (Children reuse the
+                // number_of_children / dependent_children_notes columns above.)
+                'family_info' => [
+                    'partner' => [
+                        'full_name' => $data['partner_full_name'] ?? null,
+                        'age' => $data['partner_age'] ?? null,
+                        'education_level' => ($data['partner_education_level'] ?? null) === 'Other'
+                            ? ($data['partner_education_level_other'] ?? 'Other')
+                            : ($data['partner_education_level'] ?? null),
+                        'work_experience' => $data['partner_work_experience'] ?? null,
+                        'years_experience' => $data['partner_years_experience'] ?? null,
+                    ],
+                ],
+                'education_notes' => [
+                    'high_school_completed' => $data['high_school_completed'] ?? 'No',
+                    'high_school_level' => $data['high_school_level'] ?? null,
+                    'high_school_institution' => $data['high_school_institution'] ?? null,
+                    'high_school_start' => $data['high_school_start'] ?? null,
+                    'high_school_end' => $data['high_school_end'] ?? null,
+                    'high_school_marks' => $data['high_school_marks'] ?? null,
+                    'has_gap' => $data['has_gap'] ?? 'No',
+                    'gap_length' => $data['gap_length'] ?? null,
+                    'gap_activities' => $data['gap_activities'] ?? [],
+                    // Free-text experience captured by the quick registration modal.
+                    'experience' => $data['experience'] ?? null,
+                    // Registration-only extras that have no dedicated Lead column.
+                    'age' => $data['age'] ?? null,
+                    'pathway_interest' => ($data['pathway_interest'] ?? null) === 'Other'
+                        ? ($data['pathway_interest_other'] ?? 'Other')
+                        : ($data['pathway_interest'] ?? null),
+                    'bring_children' => ($data['bring_children'] ?? null) === 'Other'
+                        ? ($data['bring_children_other'] ?? 'Other')
+                        : ($data['bring_children'] ?? null),
+                    'advisor_question' => $data['advisor_question'] ?? null,
+                ],
+                'source_of_funds_info' => $data['source_of_funds_info'] ?? null,
+                'declaration_accepted' => $request->boolean('declaration_accepted'),
+                'status' => 'Submitted',
+                'stage' => 'Evaluation',
+                'source' => 'registration',
+            ]);
+            $lead = $existing->fresh();
+
+            // CV / Passport / Diploma / Transcript uploads — same per-lead
+            // folder pattern as the assessment, paths merged into education_notes.
+            $docMap = [
+                'cv_files' => 'cv',
+                'passport_files' => 'passport',
+                'diploma_files' => 'diploma',
+                'transcript_files' => 'transcript',
+            ];
+            $uploaded = [];
+            foreach ($docMap as $field => $folder) {
+                if (! $request->hasFile($field)) {
+                    continue;
+                }
+                foreach ((array) $request->file($field) as $uploadedFile) {
+                    if (! $uploadedFile) {
+                        continue;
+                    }
+                    $uploaded[$folder][] = $uploadedFile->store("enrolment-docs/{$lead->lead_id}/{$folder}", 'public');
+                }
+            }
+            if (! empty($uploaded)) {
+                $notes = $lead->education_notes ?? [];
+                $notes['uploaded_files'] = $uploaded;
+                $lead->update(['education_notes' => $notes]);
+                $lead = $lead->fresh();
+            }
+
+            if (! empty($data['study_plans'])) {
+                $plans = $data['study_plans'];
+                $this->upsertStudyPlan($lead, [
+                    'preferred_course' => $plans['preferred_course'] ?? null,
+                    'qualification_level' => $plans['qualification_level'] ?? null,
+                    'preferred_city' => $plans['preferred_city'] ?? null,
+                    'preferred_intake' => $plans['preferred_intake'] ?? null,
+                    'english_test_taken' => ($plans['has_english_test'] ?? 'No') === 'Yes',
+                    'english_test_type' => $plans['english_test_type'] ?? null,
+                    'score_overall' => $plans['test_score_overall'] ?? null,
+                    'score_reading' => $plans['test_score_reading'] ?? null,
+                    'score_writing' => $plans['test_score_writing'] ?? null,
+                    'score_listening' => $plans['test_score_listening'] ?? null,
+                    'score_speaking' => $plans['test_score_speaking'] ?? null,
+                    'english_test_date' => $plans['test_date'] ?? null,
+                ]);
+            }
+
+            if (! empty($data['education_background'])) {
+                foreach ($data['education_background'] as $edu) {
+                    if (empty($edu['completed'])) {
+                        continue;
+                    }
+                    $this->upsertEducationExp($lead, [
+                        'level' => $edu['level'] ?? null,
+                        'field_of_study' => $edu['field_of_study'] ?? null,
+                        'institution' => $edu['institution'] ?? null,
+                        'start_date' => $edu['start_date'] ?? null,
+                        'end_date' => $edu['end_date'] ?? null,
+                        'average_marks' => $edu['marks_percentage'] ?? null,
+                    ]);
+                }
+            }
+
+            DB::commit();
+
+            // Run the AI analysis AFTER the response is sent so a slow / missing
+            // queue worker can never make the submission hang. Wrapped so a
+            // dispatch hiccup can't surface an error on an already-saved lead.
+            try {
+                AnalyzeLeadAssessment::dispatch($lead)->afterResponse();
+            } catch (\Throwable $e) {
+                Log::warning('Registration AI dispatch failed', ['lead_id' => $lead->lead_id, 'error' => $e->getMessage()]);
+            }
+
+            return redirect()->back()->with([
+                'success' => 'Thanks for registering! Our team will be in touch shortly.',
+                'lead_id' => $lead->lead_id,
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Registration mapping failed', ['error' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
             $message = app()->environment('production')
                 ? 'Submission failed due to a server error. Our team has been notified.'
                 : 'Submission failed: '.$e->getMessage();
@@ -818,58 +1151,59 @@ class LeadController extends Controller
         $eventRegistration = null;
         if ($lead->event) {
             $eventFields = $lead->event->effectiveFields();
-            $eduFirst    = $lead->educationExps->first();
-            $planFirst   = $lead->studyPlans->first();
-            $work        = is_array($lead->work_info)      ? $lead->work_info      : [];
-            $finance     = is_array($lead->financial_info) ? $lead->financial_info : [];
-            $custom      = is_array($lead->event_response) ? $lead->event_response : [];
+            $eduFirst = $lead->educationExps->first();
+            $planFirst = $lead->studyPlans->first();
+            $work = is_array($lead->work_info) ? $lead->work_info : [];
+            $finance = is_array($lead->financial_info) ? $lead->financial_info : [];
+            $custom = is_array($lead->event_response) ? $lead->event_response : [];
 
             $resolveValue = function (array $field) use ($lead, $custom, $work, $finance, $eduFirst, $planFirst) {
                 $key = $field['key'];
                 if (array_key_exists($key, $custom)) {
                     return $custom[$key];
                 }
+
                 return match ($key) {
-                    'first_name'         => $lead->first_name,
-                    'last_name'          => $lead->last_name,
-                    'email'              => $lead->email,
-                    'phone'              => $lead->phone,
-                    'country'            => $lead->country ?: $lead->residence_country,
-                    'city'               => $work['city']               ?? $lead->residence_city,
-                    'employment_status'  => $work['employment_status']  ?? null,
-                    'remarks'            => $work['remarks']            ?? null,
-                    'funding_source'     => $finance['funding_source']  ?? null,
-                    'education_level'    => optional($eduFirst)->level,
-                    'field_of_study'     => optional($eduFirst)->field_of_study,
-                    'interest'           => optional($planFirst)->preferred_course,
-                    'planning_timeline'  => optional($planFirst)->preferred_intake,
-                    default              => null,
+                    'first_name' => $lead->first_name,
+                    'last_name' => $lead->last_name,
+                    'email' => $lead->email,
+                    'phone' => $lead->phone,
+                    'country' => $lead->country ?: $lead->residence_country,
+                    'city' => $work['city'] ?? $lead->residence_city,
+                    'employment_status' => $work['employment_status'] ?? null,
+                    'remarks' => $work['remarks'] ?? null,
+                    'funding_source' => $finance['funding_source'] ?? null,
+                    'education_level' => optional($eduFirst)->level,
+                    'field_of_study' => optional($eduFirst)->field_of_study,
+                    'interest' => optional($planFirst)->preferred_course,
+                    'planning_timeline' => optional($planFirst)->preferred_intake,
+                    default => null,
                 };
             };
 
             $registeredFields = collect($eventFields)
                 ->filter(fn ($f) => ($f['locked'] ?? false) === true || ($f['enabled'] ?? true) !== false)
                 ->map(fn ($f) => [
-                    'key'      => $f['key'],
-                    'label'    => $f['label']   ?? $f['key'],
-                    'type'     => $f['type']    ?? 'text',
-                    'section'  => $f['section'] ?? 'Additional',
-                    'options'  => $f['options'] ?? null,
-                    'value'    => $resolveValue($f),
+                    'key' => $f['key'],
+                    'label' => $f['label'] ?? $f['key'],
+                    'type' => $f['type'] ?? 'text',
+                    'section' => $f['section'] ?? 'Additional',
+                    'options' => $f['options'] ?? null,
+                    'value' => $resolveValue($f),
                 ])
                 ->values()
                 ->all();
 
             $eventRegistration = [
                 'event' => [
-                    'id'         => $lead->event->id,
-                    'name'       => $lead->event->name,
+                    'id' => $lead->event->id,
+                    'name' => $lead->event->name,
                     'event_code' => $lead->event->event_code,
-                    'type'       => $lead->event->type,
-                    'date_from'  => optional($lead->event->date_from)->toIso8601String(),
+                    'type' => $lead->event->type,
+                    'date_from' => optional($lead->event->date_from)->toIso8601String(),
                 ],
                 'registered_at' => optional($lead->created_at)->toIso8601String(),
-                'fields'        => $registeredFields,
+                'fields' => $registeredFields,
             ];
         }
 

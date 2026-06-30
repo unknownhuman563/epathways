@@ -28,10 +28,10 @@ class EventController extends Controller
         });
 
         return inertia('admin/Events', [
-            'events'              => $events,
-            'defaultFormFields'   => Event::DEFAULT_FIELDS,
-            'customFieldTypes'    => Event::CUSTOM_FIELD_TYPES,
-            'lockedFieldKeys'     => Event::LOCKED_KEYS,
+            'events' => $events,
+            'defaultFormFields' => Event::DEFAULT_FIELDS,
+            'customFieldTypes' => Event::CUSTOM_FIELD_TYPES,
+            'lockedFieldKeys' => Event::LOCKED_KEYS,
         ]);
     }
 
@@ -67,6 +67,10 @@ class EventController extends Controller
             'description' => 'nullable|string',
             'date_from' => 'nullable|date',
             'date_to' => 'nullable|date|after_or_equal:date_from',
+            // Event-level start/end times — used when the event has no
+            // sessions. Sessions still own their own time columns.
+            'time_start' => 'nullable|date_format:H:i',
+            'time_end' => 'nullable|date_format:H:i|after_or_equal:time_start',
             'status' => 'required|in:draft,upcoming,ongoing,completed,cancelled',
             'mode' => 'required|in:in-person,online,hybrid',
             'location' => 'nullable|string|max:255',
@@ -74,20 +78,20 @@ class EventController extends Controller
             'notes' => 'nullable|string',
             'banner_image' => 'nullable|image|mimes:jpeg,png,jpg,webp,gif|max:4096',
             // Custom registration-form schema. Null/missing = default fields.
-            'form_fields'                 => 'nullable|array',
-            'form_fields.*.key'           => 'required|string|max:60|regex:/^[a-z][a-z0-9_]*$/',
-            'form_fields.*.label'         => 'required|string|max:120',
-            'form_fields.*.type'          => 'required|string|in:text,email,tel,textarea,select,pills',
-            'form_fields.*.required'      => 'nullable|boolean',
-            'form_fields.*.locked'        => 'nullable|boolean',
-            'form_fields.*.default'       => 'nullable|boolean',
-            'form_fields.*.enabled'       => 'nullable|boolean',
-            'form_fields.*.placeholder'   => 'nullable|string|max:200',
-            'form_fields.*.hint'          => 'nullable|string|max:300',
-            'form_fields.*.section'       => 'nullable|string|max:120',
-            'form_fields.*.order'         => 'nullable|integer|min:0',
-            'form_fields.*.options'       => 'nullable|array',
-            'form_fields.*.options.*'     => 'string|max:120',
+            'form_fields' => 'nullable|array',
+            'form_fields.*.key' => 'required|string|max:60|regex:/^[a-z][a-z0-9_]*$/',
+            'form_fields.*.label' => 'required|string|max:120',
+            'form_fields.*.type' => 'required|string|in:text,email,tel,textarea,select,pills',
+            'form_fields.*.required' => 'nullable|boolean',
+            'form_fields.*.locked' => 'nullable|boolean',
+            'form_fields.*.default' => 'nullable|boolean',
+            'form_fields.*.enabled' => 'nullable|boolean',
+            'form_fields.*.placeholder' => 'nullable|string|max:200',
+            'form_fields.*.hint' => 'nullable|string|max:300',
+            'form_fields.*.section' => 'nullable|string|max:120',
+            'form_fields.*.order' => 'nullable|integer|min:0',
+            'form_fields.*.options' => 'nullable|array',
+            'form_fields.*.options.*' => 'string|max:120',
             // sessions are fully optional
             'sessions' => 'nullable|array',
             'sessions.*.venue_name' => 'nullable|string|max:255',
@@ -161,6 +165,10 @@ class EventController extends Controller
             'description' => 'nullable|string',
             'date_from' => 'nullable|date',
             'date_to' => 'nullable|date|after_or_equal:date_from',
+            // Event-level start/end times — used when the event has no
+            // sessions. Sessions still own their own time columns.
+            'time_start' => 'nullable|date_format:H:i',
+            'time_end' => 'nullable|date_format:H:i|after_or_equal:time_start',
             'status' => 'required|in:draft,upcoming,ongoing,completed,cancelled',
             'mode' => 'required|in:in-person,online,hybrid',
             'location' => 'nullable|string|max:255',
@@ -168,20 +176,20 @@ class EventController extends Controller
             'notes' => 'nullable|string',
             'banner_image' => 'nullable|image|mimes:jpeg,png,jpg,webp,gif|max:4096',
             // Custom registration-form schema. Null/missing = default fields.
-            'form_fields'                 => 'nullable|array',
-            'form_fields.*.key'           => 'required|string|max:60|regex:/^[a-z][a-z0-9_]*$/',
-            'form_fields.*.label'         => 'required|string|max:120',
-            'form_fields.*.type'          => 'required|string|in:text,email,tel,textarea,select,pills',
-            'form_fields.*.required'      => 'nullable|boolean',
-            'form_fields.*.locked'        => 'nullable|boolean',
-            'form_fields.*.default'       => 'nullable|boolean',
-            'form_fields.*.enabled'       => 'nullable|boolean',
-            'form_fields.*.placeholder'   => 'nullable|string|max:200',
-            'form_fields.*.hint'          => 'nullable|string|max:300',
-            'form_fields.*.section'       => 'nullable|string|max:120',
-            'form_fields.*.order'         => 'nullable|integer|min:0',
-            'form_fields.*.options'       => 'nullable|array',
-            'form_fields.*.options.*'     => 'string|max:120',
+            'form_fields' => 'nullable|array',
+            'form_fields.*.key' => 'required|string|max:60|regex:/^[a-z][a-z0-9_]*$/',
+            'form_fields.*.label' => 'required|string|max:120',
+            'form_fields.*.type' => 'required|string|in:text,email,tel,textarea,select,pills',
+            'form_fields.*.required' => 'nullable|boolean',
+            'form_fields.*.locked' => 'nullable|boolean',
+            'form_fields.*.default' => 'nullable|boolean',
+            'form_fields.*.enabled' => 'nullable|boolean',
+            'form_fields.*.placeholder' => 'nullable|string|max:200',
+            'form_fields.*.hint' => 'nullable|string|max:300',
+            'form_fields.*.section' => 'nullable|string|max:120',
+            'form_fields.*.order' => 'nullable|integer|min:0',
+            'form_fields.*.options' => 'nullable|array',
+            'form_fields.*.options.*' => 'string|max:120',
             'sessions' => 'nullable|array',
             'sessions.*.id' => 'nullable|integer',
             'sessions.*.venue_name' => 'nullable|string|max:255',
@@ -322,23 +330,25 @@ class EventController extends Controller
         // always required regardless of admin config so the lead-follow-up
         // flow can never break.
         $fields = $event->effectiveFields();
-        $rules  = ['event_session_id' => 'nullable|exists:event_sessions,id'];
+        $rules = ['event_session_id' => 'nullable|exists:event_sessions,id'];
 
         foreach ($fields as $f) {
-            $enabled  = ($f['enabled'] ?? true) !== false;
-            $locked   = ($f['locked']  ?? false) === true;
-            $required = ($f['required']?? false) === true;
-            if (! $enabled && ! $locked) continue;
+            $enabled = ($f['enabled'] ?? true) !== false;
+            $locked = ($f['locked'] ?? false) === true;
+            $required = ($f['required'] ?? false) === true;
+            if (! $enabled && ! $locked) {
+                continue;
+            }
 
             $rule = ($required || $locked) ? 'required' : 'nullable';
-            $rule .= '|' . match ($f['type'] ?? 'text') {
-                'email'    => 'email|max:255',
-                'tel'      => 'string|max:40',
+            $rule .= '|'.match ($f['type'] ?? 'text') {
+                'email' => 'email|max:255',
+                'tel' => 'string|max:40',
                 'textarea' => 'string|max:5000',
                 'select', 'pills' => isset($f['options']) && count($f['options']) > 0
                     ? 'string|in:'.implode(',', $f['options'])
                     : 'string|max:255',
-                default    => 'string|max:255',
+                default => 'string|max:255',
             };
             $rules[$f['key']] = $rule;
         }
@@ -354,11 +364,11 @@ class EventController extends Controller
             $intake = app(\App\Services\LeadIntakeService::class);
             $lead = $intake->ingest("event:{$event->event_code}", array_filter([
                 'first_name' => $validated['first_name'] ?? null,
-                'last_name'  => $validated['last_name']  ?? null,
-                'email'      => $validated['email']      ?? null,
-                'phone'      => $validated['phone']      ?? null,
-                'country'    => $validated['country']    ?? null,
-                'stage'      => $validated['interest']   ?? null,
+                'last_name' => $validated['last_name'] ?? null,
+                'email' => $validated['email'] ?? null,
+                'phone' => $validated['phone'] ?? null,
+                'country' => $validated['country'] ?? null,
+                'stage' => $validated['interest'] ?? null,
             ], fn ($v) => ! is_null($v) && $v !== ''), $request);
 
             // Split responses into "known" (mapped to dedicated columns
@@ -377,8 +387,8 @@ class EventController extends Controller
             // anything the lead already had.
             $workInfo = array_filter([
                 'employment_status' => $validated['employment_status'] ?? null,
-                'city'              => $validated['city']              ?? null,
-                'remarks'           => $validated['remarks']           ?? null,
+                'city' => $validated['city'] ?? null,
+                'remarks' => $validated['remarks'] ?? null,
             ], fn ($v) => ! is_null($v) && $v !== '');
 
             $financialInfo = array_filter([
@@ -386,33 +396,41 @@ class EventController extends Controller
             ], fn ($v) => ! is_null($v) && $v !== '');
 
             $eventAttrs = array_filter([
-                'branch'           => $lead->branch ?: 'Online Registration',
-                'event_id'         => $event->id,
+                'branch' => $lead->branch ?: 'Online Registration',
+                'event_id' => $event->id,
                 'event_session_id' => $validated['event_session_id'] ?? null,
-                'work_info'        => $lead->work_info      ?: ($workInfo      ?: null),
-                'financial_info'   => $lead->financial_info ?: ($financialInfo ?: null),
-                'event_response'   => $customResponses ?: null,
+                'work_info' => $lead->work_info ?: ($workInfo ?: null),
+                'financial_info' => $lead->financial_info ?: ($financialInfo ?: null),
+                'event_response' => $customResponses ?: null,
             ], fn ($v) => ! is_null($v));
             $lead->update($eventAttrs);
 
-            // 2. Add Education Experience — only when the relevant
-            // default fields were submitted.
+            // 2. Add Education Experience — only when the relevant default
+            // fields were submitted. Deduped by level so a repeat registrant
+            // updates the same row instead of stacking duplicates.
             if (! empty($validated['education_level']) || ! empty($validated['field_of_study'])) {
-                $lead->educationExps()->create([
-                    'level'          => $validated['education_level']  ?? null,
-                    'field_of_study' => $validated['field_of_study']   ?? null,
-                    'institution'    => 'N/A',
-                ]);
+                $lead->educationExps()->updateOrCreate(
+                    ['level' => $validated['education_level'] ?? null],
+                    array_filter([
+                        'field_of_study' => $validated['field_of_study'] ?? null,
+                        'institution' => 'N/A',
+                    ], fn ($v) => ! is_null($v) && $v !== '')
+                );
             }
 
-            // 3. Add Study Plan — same gating.
+            // 3. Add Study Plan — same gating. updateOrCreate keeps a single
+            // canonical plan per lead so re-registrations enrich it instead of
+            // creating duplicate rows.
             if (! empty($validated['interest']) || ! empty($validated['planning_timeline'])) {
-                $lead->studyPlans()->create([
-                    'preferred_course'    => $validated['interest']           ?? null,
-                    'preferred_intake'    => $validated['planning_timeline']  ?? null,
-                    'preferred_city'      => 'New Zealand',
-                    'qualification_level' => $validated['education_level']    ?? null,
-                ]);
+                $planValues = array_filter([
+                    'preferred_course' => $validated['interest'] ?? null,
+                    'preferred_intake' => $validated['planning_timeline'] ?? null,
+                    'preferred_city' => 'New Zealand',
+                    'qualification_level' => $validated['education_level'] ?? null,
+                ], fn ($v) => ! is_null($v) && $v !== '');
+                if (! empty($planValues)) {
+                    $lead->studyPlans()->firstOrNew([])->fill($planValues)->save();
+                }
             }
 
             DB::commit();
