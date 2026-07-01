@@ -1772,7 +1772,9 @@ class LeadController extends Controller
             $label = $lead->lead_id ?: trim("{$lead->first_name} {$lead->last_name}");
             $lead->delete();
 
-            return redirect()->route('admin.leads')->with('success', "Lead {$label} archived.");
+            // back() (not a fixed admin route) so this works from any portal's
+            // Cases/Leads list — an immigration user isn't bounced to /admin.
+            return back()->with('success', "Lead {$label} archived.");
         } catch (\Throwable $e) {
             \Illuminate\Support\Facades\Log::error('Lead archive failed', ['id' => $id, 'error' => $e->getMessage()]);
 

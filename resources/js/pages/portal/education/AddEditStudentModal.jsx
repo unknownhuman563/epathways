@@ -55,7 +55,7 @@ const DRAFT_KEY = "education.newStudent.draft";
 
 const blankForm = () => ({
     first_name: "", middle_name: "", last_name: "", suffix: "",
-    gender: "", email: "", phone: "", referral: "",
+    gender: "", email: "", phone: "", referral: "", location: "",
     // Department picks WHICH stage column we save to ("education_stage",
     // "english_stage", "immigration_stage"); `stage` is the actual value
     // for that department's list. Default department is education.
@@ -122,6 +122,7 @@ export default function AddEditStudentModal({
             email:           student.email                              ?? "",
             phone:           student.phone                              ?? "",
             referral:        student.referral                           ?? "",
+            location:        student.location                           ?? "",
             department:      seedDept,
             stage:           seedStage,
             assignee:        seedAssignee,
@@ -291,6 +292,9 @@ export default function AddEditStudentModal({
                             </Field>
                             <Field label="Referral" hint="Who referred them · optional">
                                 <input type="text" value={form.referral} onChange={set("referral")} className={ICls} maxLength={191} placeholder="e.g. Agent, friend, FB ad" />
+                            </Field>
+                            <Field label="Location" hint="Country only · optional">
+                                <input type="text" value={form.location} onChange={set("location")} className={ICls} maxLength={120} placeholder="e.g. Philippines" />
                             </Field>
                         </div>
                     </Section>

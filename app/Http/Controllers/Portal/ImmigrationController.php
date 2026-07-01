@@ -291,6 +291,14 @@ class ImmigrationController extends Controller
                                             ?? optional($l->studentConverter)->name,
                     'stage_updated_at' => optional($l->stage_updated_at)?->toIso8601String(),
                     'name' => trim("{$l->first_name} {$l->last_name}") ?: 'Unknown',
+                    // Individual name parts + a few more fields so the row
+                    // "Edit case" modal can pre-fill without another fetch.
+                    'first_name' => $l->first_name,
+                    'middle_name' => $l->middle_name,
+                    'last_name' => $l->last_name,
+                    'suffix' => $l->suffix,
+                    'gender' => $l->gender,
+                    'payment' => $l->student_payment,
                     'email' => $l->email,
                     'phone' => $l->phone,
                     'country' => $l->residence_country,
@@ -421,6 +429,55 @@ class ImmigrationController extends Controller
         }
 
         return back()->with('success', "Case {$lead->lead_id} created.");
+    }
+
+    /** POST /portal/immigration/cases/{id} — edit a case's core details
+     *  (same fields as the "New case" modal). */
+    public function updateCase(\Illuminate\Http\Request $request, $id)
+    {
+        $lead = Lead::immigrationCase()->findOrFail($id);
+
+        $data = $request->validate([
+            'first_name'        => 'required|string|max:80',
+            'middle_name'       => 'nullable|string|max:80',
+            'last_name'         => 'required|string|max:80',
+            'suffix'            => 'nullable|string|max:20',
+            'gender'            => 'nullable|string|max:30',
+            'email'             => 'required|email|max:120',
+            'phone'             => 'required|string|max:40',
+            'immigration_stage' => ['nullable', \Illuminate\Validation\Rule::in(Lead::IMMIGRATION_STAGES)],
+            'internal_note'     => 'nullable|string|max:5000',
+            'payment'           => 'nullable|string|max:120',
+            'visa_type_id'      => 'required|integer|exists:visa_types,id',
+        ]);
+
+        $visa = \App\Models\VisaType::find($data['visa_type_id']);
+
+        $lead->update([
+            'first_name'        => $data['first_name'],
+            'middle_name'       => $data['middle_name'] ?? null,
+            'last_name'         => $data['last_name'],
+            'suffix'            => $data['suffix'] ?? null,
+            'gender'            => $data['gender'] ?? null,
+            'email'             => $data['email'],
+            'phone'             => $data['phone'],
+            'immigration_stage' => $data['immigration_stage'] ?? $lead->immigration_stage,
+            'inz_visa_type'     => $visa?->name,
+            'student_payment'   => $data['payment'] ?? null,
+        ]);
+
+        // A note is optional on edit — only append when the staffer typed one.
+        if (! empty($data['internal_note'])) {
+            \App\Models\LeadNote::create([
+                'lead_id'     => $lead->id,
+                'kind'        => 'general',
+                'body'        => $data['internal_note'],
+                'author_name' => auth()->user()?->name ?? 'System',
+                'author_role' => auth()->user()?->role ?? 'immigration',
+            ]);
+        }
+
+        return back()->with('success', "Case {$lead->lead_id} updated.");
     }
 
     /**
