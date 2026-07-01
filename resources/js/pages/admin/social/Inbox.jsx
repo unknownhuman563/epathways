@@ -24,6 +24,21 @@ function ConversationsPane() {
     const threadRef = useRef(null);
     const activeIdRef = useRef(null);
     const activeAccountIdRef = useRef(null);
+    const sentMediaRef = useRef([]); // previews of attachments WE sent this session
+
+    // Zernio doesn't echo back the media URL for attachments we send — they come
+    // back as empty outgoing messages. Re-attach the previews we captured at send
+    // time to the trailing empty outgoing bubbles so the image stays visible.
+    const enrichSent = (msgs) => {
+        const media = sentMediaRef.current;
+        if (!media.length) return msgs;
+        const emptyOut = [];
+        msgs.forEach((m, i) => { if (m.direction === 'out' && !m.text && !(m.attachments || []).length) emptyOut.push(i); });
+        const targets = emptyOut.slice(-media.length);
+        const out = msgs.map((m) => ({ ...m }));
+        targets.forEach((idx, k) => { out[idx] = { ...out[idx], attachments: [media[k]] }; });
+        return out;
+    };
 
     const loadConversations = () => {
         setConversations(null);
@@ -38,13 +53,14 @@ function ConversationsPane() {
         setActiveId(c.id);
         setActiveAccountId(c.account_id);
         setMessages(null);
+        sentMediaRef.current = []; // fresh per conversation
         // Optimistically clear the unread badge, then tell Zernio it's read.
         if (c.unread > 0) {
             setConversations((prev) => (prev || []).map((x) => (x.id === c.id ? { ...x, unread: 0 } : x)));
             social.inboxMarkRead(c.id, c.account_id).catch(() => {});
         }
         social.inboxMessages(c.id, c.account_id).then(
-            (r) => setMessages(r?.messages || []),
+            (r) => setMessages(enrichSent(r?.messages || [])),
             () => { setMessages([]); toast.error('Could not load messages'); },
         );
     };
@@ -56,13 +72,15 @@ function ConversationsPane() {
         setSending(true);
         const text = reply;
         const file = attachFile;
+        const preview = file ? { type: file.type.startsWith('video') ? 'video' : 'image', url: URL.createObjectURL(file) } : null;
         try {
             await social.inboxSend(activeId, activeAccountId, text, file);
             setReply('');
             setAttachFile(null);
+            if (preview) sentMediaRef.current = [...sentMediaRef.current, preview];
             setMessages((prev) => [...(prev || []), {
                 id: `tmp_${Date.now()}`, direction: 'out', text,
-                attachments: file ? [{ type: file.type.startsWith('video') ? 'video' : 'image', url: URL.createObjectURL(file) }] : [],
+                attachments: preview ? [preview] : [],
                 at: new Date().toISOString(),
             }]);
         } catch (err) {
@@ -84,7 +102,7 @@ function ConversationsPane() {
         const id = activeIdRef.current;
         if (!id) return;
         social.inboxMessages(id, activeAccountIdRef.current).then((r) => {
-            const next = r?.messages || [];
+            const next = enrichSent(r?.messages || []);
             // Only swap state when the set actually changed, so the thread
             // doesn't jump to the bottom while reading history.
             setMessages((prev) => (prev && prev.length === next.length && prev[prev.length - 1]?.id === next[next.length - 1]?.id) ? prev : next);
@@ -169,6 +187,9 @@ function ConversationsPane() {
                                             )
                                         ))}
                                         {m.text && <p className="whitespace-pre-wrap">{m.text}</p>}
+                                        {!m.text && !(m.attachments || []).length && (
+                                            <span className={`flex items-center gap-1.5 text-xs italic opacity-70 ${m.direction === 'out' ? 'text-blue-50' : 'text-gray-500'}`}><Paperclip size={12} /> Attachment</span>
+                                        )}
                                         <p className={`text-[10px] mt-1 ${m.direction === 'out' ? 'text-blue-100' : 'text-gray-400'}`}>{fmtTime(m.at)}</p>
                                     </div>
                                 </div>
