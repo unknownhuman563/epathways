@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { Head } from '@inertiajs/react';
 import { toast } from 'sonner';
-import { Send, RefreshCw, MessageSquare, MessagesSquare, Loader2, ArrowLeft } from 'lucide-react';
+import { Send, RefreshCw, MessageSquare, MessagesSquare, Loader2, ArrowLeft, Paperclip, X } from 'lucide-react';
 import SocialLayout from '@/pages/admin/social/SocialLayout';
 import { social } from '@/services/social';
 import { Skeleton, PlatformIcon, EmptyState } from '@/components/social/atoms';
+import { compressImage } from '@/utils/image';
 
 const fmtTime = (iso) => {
     if (!iso) return '';
@@ -18,6 +19,7 @@ function ConversationsPane() {
     const [activeAccountId, setActiveAccountId] = useState(null);
     const [messages, setMessages] = useState(null);
     const [reply, setReply] = useState('');
+    const [attachFile, setAttachFile] = useState(null);
     const [sending, setSending] = useState(false);
     const threadRef = useRef(null);
     const activeIdRef = useRef(null);
@@ -50,13 +52,19 @@ function ConversationsPane() {
     useEffect(() => { threadRef.current?.scrollTo(0, threadRef.current.scrollHeight); }, [messages]);
 
     const send = async () => {
-        if (!reply.trim() || !activeId) return;
+        if ((!reply.trim() && !attachFile) || !activeId) return;
         setSending(true);
         const text = reply;
+        const file = attachFile;
         try {
-            await social.inboxSend(activeId, activeAccountId, text);
+            await social.inboxSend(activeId, activeAccountId, text, file);
             setReply('');
-            setMessages((prev) => [...(prev || []), { id: `tmp_${Date.now()}`, direction: 'out', text, at: new Date().toISOString() }]);
+            setAttachFile(null);
+            setMessages((prev) => [...(prev || []), {
+                id: `tmp_${Date.now()}`, direction: 'out', text,
+                attachments: file ? [{ type: file.type.startsWith('video') ? 'video' : 'image', url: URL.createObjectURL(file) }] : [],
+                at: new Date().toISOString(),
+            }]);
         } catch (err) {
             toast.error(err?.message || 'Could not send');
         } finally {
@@ -151,23 +159,43 @@ function ConversationsPane() {
                             ) : messages.map((m) => (
                                 <div key={m.id} className={`flex ${m.direction === 'out' ? 'justify-end' : 'justify-start'}`}>
                                     <div className={`max-w-[75%] rounded-2xl px-3.5 py-2 text-sm ${m.direction === 'out' ? 'bg-blue-600 text-white' : 'bg-white border border-gray-100 text-gray-800'}`}>
-                                        <p className="whitespace-pre-wrap">{m.text}</p>
+                                        {(m.attachments || []).map((a, i) => (
+                                            (a.type === 'image' || a.type === 'sticker') ? (
+                                                <a key={i} href={a.url} target="_blank" rel="noreferrer"><img src={a.url} alt="attachment" className="rounded-lg max-h-64 max-w-full mb-1" /></a>
+                                            ) : a.type === 'video' ? (
+                                                <video key={i} src={a.url} controls className="rounded-lg max-h-64 max-w-full mb-1" />
+                                            ) : (
+                                                <a key={i} href={a.url} target="_blank" rel="noreferrer" className={`flex items-center gap-1.5 underline mb-1 ${m.direction === 'out' ? 'text-blue-50' : 'text-blue-600'}`}><Paperclip size={12} /> Attachment</a>
+                                            )
+                                        ))}
+                                        {m.text && <p className="whitespace-pre-wrap">{m.text}</p>}
                                         <p className={`text-[10px] mt-1 ${m.direction === 'out' ? 'text-blue-100' : 'text-gray-400'}`}>{fmtTime(m.at)}</p>
                                     </div>
                                 </div>
                             ))}
                         </div>
-                        <div className="p-3 border-t border-gray-100 flex items-center gap-2">
-                            <input
-                                value={reply}
-                                onChange={(e) => setReply(e.target.value)}
-                                onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }}
-                                placeholder="Type a reply…"
-                                className="flex-1 px-3 py-2 rounded-lg border border-gray-200 text-sm outline-none focus:ring-2 focus:ring-gray-300"
-                            />
-                            <button onClick={send} disabled={sending || !reply.trim()} className="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-1.5 text-sm font-semibold">
-                                {sending ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />} Send
-                            </button>
+                        <div className="p-3 border-t border-gray-100">
+                            {attachFile && (
+                                <div className="flex items-center gap-2 mb-2 text-xs text-gray-600 bg-gray-50 rounded-lg px-2.5 py-1.5 w-fit">
+                                    <Paperclip size={12} /> <span className="truncate max-w-[220px]">{attachFile.name}</span>
+                                    <button onClick={() => setAttachFile(null)} className="text-gray-400 hover:text-gray-700"><X size={12} /></button>
+                                </div>
+                            )}
+                            <div className="flex items-center gap-2">
+                                <input type="file" accept="image/*,video/*" id="inbox-attach" className="hidden"
+                                    onChange={async (e) => { const f = e.target.files?.[0]; setAttachFile(f ? await compressImage(f) : null); e.target.value = ''; }} />
+                                <label htmlFor="inbox-attach" className="p-2 text-gray-400 hover:text-gray-700 cursor-pointer" title="Attach image or video"><Paperclip size={18} /></label>
+                                <input
+                                    value={reply}
+                                    onChange={(e) => setReply(e.target.value)}
+                                    onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }}
+                                    placeholder="Type a reply…"
+                                    className="flex-1 px-3 py-2 rounded-lg border border-gray-200 text-sm outline-none focus:ring-2 focus:ring-gray-300"
+                                />
+                                <button onClick={send} disabled={sending || (!reply.trim() && !attachFile)} className="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-1.5 text-sm font-semibold">
+                                    {sending ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />} Send
+                                </button>
+                            </div>
                         </div>
                     </>
                 )}

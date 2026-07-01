@@ -81,7 +81,15 @@ export const social = {
     // Inbox ────────────────────────────────────────────────────────────────
     inboxConversations: ()                        => request('GET',  'inbox-conversations'),
     inboxMessages:   (conversationId, accountId)  => request('GET',  'inbox-messages',  { query: { conversationId, accountId } }),
-    inboxSend:       (conversationId, accountId, text) => request('POST', 'inbox-send',  { body: { conversationId, accountId, text } }),
+    inboxSend:       (conversationId, accountId, text, file) => {
+        if (!file) return request('POST', 'inbox-send', { body: { conversationId, accountId, text } });
+        const fd = new FormData();
+        fd.append('conversationId', conversationId);
+        fd.append('accountId', accountId);
+        if (text) fd.append('text', text);
+        fd.append('attachment', file);
+        return request('POST', 'inbox-send', { body: fd });
+    },
     inboxMarkRead:   (conversationId, accountId)  => request('POST', 'inbox-read',      { body: { conversationId, accountId } }),
     inboxSignal:     ()                           => request('GET',  'inbox-signal'),
     inboxComments:   ()                           => request('GET',  'inbox-comments'),
