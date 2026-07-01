@@ -243,10 +243,14 @@ export default function SalesLeads({ leads = [], statuses = [], programs = [], s
                         Pipeline · {filtered.length} {filtered.length === 1 ? "opportunity" : "opportunities"}
                     </p>
                 </div>
-                <div className="flex items-center gap-2">
-                    <AddLeadButton portalBase={portalBase} statuses={statuses} programs={programs} staffOptions={staffOptions} />
-                    <ImportLeadsButton />
-                </div>
+                {/* Immigration works cases converted from sales — it can't add
+                    or import leads directly, so the add cluster is hidden there. */}
+                {portal !== "immigration" && (
+                    <div className="flex items-center gap-2">
+                        <AddLeadButton portalBase={portalBase} statuses={statuses} programs={programs} staffOptions={staffOptions} />
+                        <ImportLeadsButton />
+                    </div>
+                )}
             </div>
 
             {/* Toolbar */}

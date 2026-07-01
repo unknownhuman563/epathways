@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Head, usePage } from "@inertiajs/react";
 import CaseProfileHeader from "@/components/immigration/case-profile/CaseProfileHeader";
+import PersonalTab from "@/components/immigration/case-profile/tabs/PersonalTab";
 import AssessmentTab from "@/components/immigration/case-profile/tabs/AssessmentTab";
 import DocumentsTab from "@/components/immigration/case-profile/tabs/DocumentsTab";
 import AgreementTab from "@/components/immigration/case-profile/tabs/AgreementTab";
@@ -8,7 +9,7 @@ import CommunicationsTab from "@/components/immigration/case-profile/tabs/Commun
 import AIHealthTab from "@/components/immigration/case-profile/tabs/AIHealthTab";
 import NotesTab from "@/components/immigration/case-profile/tabs/NotesTab";
 import {
-    ClipboardList, FileText, FileSignature, MessageSquare, Sparkles, StickyNote,
+    ClipboardList, FileText, FileSignature, MessageSquare, Sparkles, StickyNote, User,
 } from "lucide-react";
 
 // Build 11.D — Case Profile page. Six-tab workspace for an immigration case.
@@ -16,6 +17,7 @@ import {
 // Visual basis: the IntakeDetails profile (gray + white CRM theme).
 
 const TABS = [
+    { key: "personal",       label: "Personal",        icon: User,            Comp: PersonalTab },
     { key: "assessment",     label: "Assessment",      icon: ClipboardList,   Comp: AssessmentTab },
     { key: "documents",      label: "Documents",       icon: FileText,        Comp: DocumentsTab },
     { key: "agreement",      label: "Agreement",       icon: FileSignature,   Comp: AgreementTab },
