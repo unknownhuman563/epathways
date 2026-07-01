@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 
 const CATEGORY_LABELS = {
+    certificate: 'Certificate',
     diplomas: 'Diplomas',
     bachelors: 'Bachelors',
     masters: 'PG / Masters',
@@ -213,7 +214,7 @@ function getStatusStyle(status) {
     }
 }
 
-function ProgramModal({ open, onClose, editing }) {
+export function ProgramModal({ open, onClose, editing, portalBase = '/admin' }) {
     const [step, setStep] = useState(1);
     const isEdit = !!editing;
 
@@ -342,7 +343,7 @@ function ProgramModal({ open, onClose, editing }) {
     const removeTuitionRow = (idx) => setData('tuition_fees', (data.tuition_fees || []).filter((_, i) => i !== idx));
 
     const submit = () => {
-        const url = isEdit ? '/admin/programs/' + editing.id : '/admin/programs';
+        const url = isEdit ? `${portalBase}/programs/${editing.id}` : `${portalBase}/programs`;
         post(url, {
             forceFormData: true,
             preserveScroll: true,
@@ -403,12 +404,13 @@ function ProgramModal({ open, onClose, editing }) {
                                 <div>
                                     <Label required>Level</Label>
                                     <Select value={data.level} onChange={e => setField('level', parseInt(e.target.value, 10))}>
-                                        {[5, 6, 7, 8, 9].map(n => <option key={n} value={n}>Level {n}</option>)}
+                                        {[4, 5, 6, 7, 8, 9].map(n => <option key={n} value={n}>Level {n}</option>)}
                                     </Select>
                                 </div>
                                 <div>
                                     <Label required>Category</Label>
                                     <Select value={data.category} onChange={e => setField('category', e.target.value)}>
+                                        <option value="certificate">Certificate</option>
                                         <option value="diplomas">Diplomas</option>
                                         <option value="bachelors">Bachelors</option>
                                         <option value="masters">PG / Masters</option>
@@ -887,6 +889,7 @@ export default function Programs({ programs = [] }) {
                         className="w-full sm:w-auto bg-white border border-gray-200 text-gray-700 text-sm rounded-xl block py-2.5 pl-3 pr-8 outline-none hover:bg-gray-50 transition-colors shadow-sm cursor-pointer"
                     >
                         <option value="all">Category: All</option>
+                        <option value="certificate">Certificate</option>
                         <option value="diplomas">Diplomas</option>
                         <option value="bachelors">Bachelors</option>
                         <option value="masters">PG / Masters</option>
@@ -897,7 +900,7 @@ export default function Programs({ programs = [] }) {
                         className="w-full sm:w-auto bg-white border border-gray-200 text-gray-700 text-sm rounded-xl block py-2.5 pl-3 pr-8 outline-none hover:bg-gray-50 transition-colors shadow-sm cursor-pointer"
                     >
                         <option value="all">Level: All</option>
-                        {[5, 6, 7, 8, 9].map(n => <option key={n} value={n}>Level {n}</option>)}
+                        {[4, 5, 6, 7, 8, 9].map(n => <option key={n} value={n}>Level {n}</option>)}
                     </select>
                 </div>
             </div>

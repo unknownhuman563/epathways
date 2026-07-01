@@ -718,6 +718,8 @@ Route::middleware(['auth'])->group(function () {
         Route::middleware('portal:education')->prefix('education')->name('portal.education.')->group(function () {
             Route::get('/dashboard', [EducationController::class, 'dashboard'])->name('dashboard');
             Route::get('/leads', [EducationController::class, 'leads'])->name('leads');
+            // Events tab — registrants for one event (JSON drawer), same as sales.
+            Route::get('/events/{id}/registrations', [EducationController::class, 'eventRegistrations'])->name('events.registrations');
             Route::post('/leads', [EducationController::class, 'storeLead'])->name('leads.store');
             Route::post('/leads/{id}/notes', [\App\Http\Controllers\LeadNoteController::class, 'store'])->name('leads.notes.store');
             Route::post('/leads/{id}', [EducationController::class, 'updateLead'])->name('leads.update');
@@ -792,6 +794,8 @@ Route::middleware(['auth'])->group(function () {
         Route::middleware('portal:immigration')->prefix('immigration')->name('portal.immigration.')->group(function () {
             Route::get('/dashboard', [ImmigrationController::class, 'dashboard'])->name('dashboard');
             Route::get('/leads', [ImmigrationController::class, 'leads'])->name('leads');
+            // Events tab — registrants for one event (JSON drawer), same as sales.
+            Route::get('/events/{id}/registrations', [ImmigrationController::class, 'eventRegistrations'])->name('events.registrations');
             Route::post('/leads/{id}', [ImmigrationController::class, 'updateLead'])->name('leads.update');
             Route::post('/leads/{id}/portal-invitation/request', [LeadPortalInvitationController::class, 'request'])
                 ->name('leads.portal-invitation.request');

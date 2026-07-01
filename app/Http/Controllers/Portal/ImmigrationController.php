@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Portal;
 use App\Http\Controllers\Controller;
 use App\Models\Assessment;
 use App\Models\Booking;
+use App\Models\Event;
 use App\Models\Lead;
 use App\Models\LeadDocument;
 use App\Models\ResidentIntake;
@@ -182,6 +183,7 @@ class ImmigrationController extends Controller
                 'leads' => Lead::inLeadPipeline()
                     ->with(['studyPlans', 'event', 'portalUser:id,lead_id,last_login_at'])
                     ->latest()->get()->map(fn ($l) => $this->leadRow($l)),
+                'events' => $this->eventsSummary(),
             ]);
         } catch (\Throwable $e) {
             Log::error('Immigration leads list failed', ['error' => $e->getMessage()]);
@@ -208,6 +210,50 @@ class ImmigrationController extends Controller
 
             return back()->with('error', 'Could not update that lead. Please try again.');
         }
+    }
+
+    /** Events list for the Leads page "Events" tab — each with a registrant count. */
+    private function eventsSummary()
+    {
+        return Event::withCount('leads')
+            ->orderByDesc('date_from')
+            ->latest()
+            ->get()
+            ->map(fn (Event $e) => [
+                'id'                  => $e->id,
+                'name'                => $e->name,
+                'event_code'          => $e->event_code,
+                'type'                => $e->type,
+                'mode'                => $e->mode,
+                'location'            => $e->location,
+                'date_from'           => optional($e->date_from)->toIso8601String(),
+                'status'              => $e->status,
+                'registrations_count' => $e->leads_count,
+            ]);
+    }
+
+    /** GET /portal/immigration/events/{id}/registrations — registrants drawer. */
+    public function eventRegistrations($id)
+    {
+        $event = Event::findOrFail($id);
+
+        $registrations = $event->leads()
+            ->latest()
+            ->get()
+            ->map(fn (Lead $l) => [
+                'id'         => $l->id,
+                'lead_id'    => $l->lead_id,
+                'name'       => trim("{$l->first_name} {$l->last_name}") ?: 'Unnamed lead',
+                'email'      => $l->email,
+                'phone'      => $l->phone,
+                'status'     => $l->status,
+                'created_at' => optional($l->created_at)->toIso8601String(),
+            ]);
+
+        return response()->json([
+            'event'         => ['id' => $event->id, 'name' => $event->name],
+            'registrations' => $registrations,
+        ]);
     }
 
     /**

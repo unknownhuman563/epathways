@@ -279,17 +279,21 @@ export default function SalesLeads({ leads = [], statuses = [], programs = [], s
                         >
                             Kanban
                         </button>
-                        <button
-                            type="button"
-                            onClick={() => setView("events")}
-                            className={`px-3 py-3 text-xs font-bold transition-colors -mb-px ${
-                                view === "events"
-                                    ? "text-gray-900 border-b-2 border-gray-900"
-                                    : "text-gray-400 border-b-2 border-transparent hover:text-gray-700"
-                            }`}
-                        >
-                            Events
-                        </button>
+                        {/* Events tab — only portals whose controller feeds `events`
+                            + exposes /events/{id}/registrations (sales, immigration, education). */}
+                        {(portal === "sales" || portal === "immigration" || portal === "education") && (
+                            <button
+                                type="button"
+                                onClick={() => setView("events")}
+                                className={`px-3 py-3 text-xs font-bold transition-colors -mb-px ${
+                                    view === "events"
+                                        ? "text-gray-900 border-b-2 border-gray-900"
+                                        : "text-gray-400 border-b-2 border-transparent hover:text-gray-700"
+                                }`}
+                            >
+                                Events
+                            </button>
+                        )}
                         <button
                             type="button"
                             onClick={() => { setView("registration"); setPage(1); }}
@@ -627,7 +631,7 @@ function EventsTab({ events = [], portalBase, statuses = [] }) {
         setActive(ev);
         setRegistrants([]);
         setLoading(true);
-        const { data } = await getJson(`/portal/sales/events/${ev.id}/registrations`);
+        const { data } = await getJson(`${portalBase}/events/${ev.id}/registrations`);
         setRegistrants(data?.registrations ?? []);
         setLoading(false);
     };
