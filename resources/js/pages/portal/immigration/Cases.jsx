@@ -17,6 +17,9 @@ import PortalPageHeader from "@/components/portal/PortalPageHeader";
  */
 const STAGE_COLORS = {
     'Endorsed':                'bg-sky-500',
+    'Agreement Sent':          'bg-purple-500',
+    'Agreement Signed':        'bg-teal-500',
+    'Invoice Paid':            'bg-lime-500',
     'Visa Lodged':             'bg-indigo-500',
     'Request for Information': 'bg-amber-500',
     'Approved in Principle':   'bg-violet-500',
@@ -30,6 +33,9 @@ const STAGE_COLORS = {
 // visual story (sky → amber → indigo → emerald → rose).
 const STAGE_HEX = {
     'Endorsed':                '#0ea5e9',
+    'Agreement Sent':          '#a855f7',
+    'Agreement Signed':        '#14b8a6',
+    'Invoice Paid':            '#84cc16',
     'Visa Lodged':             '#6366f1',
     'Request for Information': '#f59e0b',
     'Approved in Principle':   '#8b5cf6',
@@ -41,6 +47,9 @@ const stageHex = (s) => STAGE_HEX[s] || '#9ca3af';
 
 const STAGE_CHIP = {
     'Endorsed':                'bg-sky-50 text-sky-700 border-sky-200',
+    'Agreement Sent':          'bg-purple-50 text-purple-700 border-purple-200',
+    'Agreement Signed':        'bg-teal-50 text-teal-700 border-teal-200',
+    'Invoice Paid':            'bg-lime-50 text-lime-700 border-lime-200',
     'Visa Lodged':             'bg-indigo-50 text-indigo-700 border-indigo-200',
     'Request for Information': 'bg-amber-50 text-amber-700 border-amber-200',
     'Approved in Principle':   'bg-violet-50 text-violet-700 border-violet-200',

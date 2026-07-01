@@ -70,6 +70,9 @@ class Lead extends Model
     public const IMMIGRATION_STAGES = [
         'For Assessment',
         'Endorsed',
+        'Agreement Sent',
+        'Agreement Signed',
+        'Invoice Paid',
         'Visa Lodged',
         'Request for Information',
         'Approved in Principle',
