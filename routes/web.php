@@ -467,6 +467,8 @@ Route::middleware(['auth'])->group(function () {
     Route::middleware('portal:admin,sales,education,english,immigration,accommodation')->group(function () {
         Route::get('/admin/leads/{id}', [LeadController::class, 'show'])->name('admin.leads.show');
         Route::post('/admin/leads/{id}/stage', [LeadController::class, 'updateStage'])->name('admin.leads.stage');
+        // Archive (soft-delete) a lead / case — used by the Cases + Leads row menus.
+        Route::delete('/admin/leads/{id}', [LeadController::class, 'destroy'])->name('admin.leads.destroy');
         Route::post('/admin/leads/{id}/personal', [LeadController::class, 'updatePersonal'])->name('admin.leads.personal');
         Route::post('/admin/leads/{id}/journey', [LeadController::class, 'updateJourney'])->name('admin.leads.journey');
         Route::post('/admin/leads/{id}/convert-to-student', [LeadController::class, 'convertToStudent'])->name('admin.leads.convert-student');
@@ -818,6 +820,8 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/cases', [ImmigrationController::class, 'cases'])->name('cases');
             // Create new case from the Cases page "Add new case" modal.
             Route::post('/cases', [ImmigrationController::class, 'storeCase'])->name('cases.store');
+            // Edit an existing case (same modal fields as create).
+            Route::post('/cases/{id}', [ImmigrationController::class, 'updateCase'])->name('cases.update');
             // Inline stage update from the Cases table — mirrors the
             // EducationController dashboard-field pattern.
             Route::post('/cases/{id}/stage', [ImmigrationController::class, 'updateCaseStage'])->name('cases.stage');

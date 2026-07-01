@@ -449,6 +449,7 @@ class EducationController extends Controller
                 'email' => $data['email'] ?? null,
                 'phone' => $data['phone'] ?? null,
                 'referral' => $data['referral'] ?? null,
+                'residence_country' => $data['location'] ?? null,
                 // First canonical stage if the staff member didn't pick
                 // one — the row shows up under "Endorsed to School" with
                 // an "Endorsed by [Name]" subtitle in the table, instead
@@ -536,6 +537,7 @@ class EducationController extends Controller
                 'email' => $data['email'] ?? null,
                 'phone' => $data['phone'] ?? null,
                 'referral' => $data['referral'] ?? null,
+                'residence_country' => $data['location'] ?? null,
                 'education_stage' => $data['education_stage'] ?? null,
                 'english_stage' => $data['english_stage'] ?? null,
                 'immigration_stage' => $data['immigration_stage'] ?? null,
@@ -637,6 +639,7 @@ class EducationController extends Controller
             'email' => 'required|email|max:191',
             'phone' => 'required|string|max:60',
             'referral' => 'nullable|string|max:191',
+            'location' => 'nullable|string|max:120',
             'education_stage' => ['nullable', \Illuminate\Validation\Rule::in(Lead::EDUCATION_STAGES)],
             'english_stage' => ['nullable', \Illuminate\Validation\Rule::in(Lead::ENGLISH_STAGES)],
             'immigration_stage' => ['nullable', \Illuminate\Validation\Rule::in(Lead::IMMIGRATION_STAGES)],

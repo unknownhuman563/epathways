@@ -6,7 +6,7 @@ import {
     Globe, ChevronRight, ChevronDown, AlertTriangle, Search,
     FileText, ExternalLink, Users, Calendar, ArrowUpDown,
     ArrowUp, ArrowDown, Plus, X, TrendingUp, Copy, MoreHorizontal,
-    Archive,
+    Archive, Pencil, Mail, Phone,
 } from "lucide-react";
 import PortalPageHeader from "@/components/portal/PortalPageHeader";
 
@@ -59,6 +59,7 @@ export default function ImmigrationCases({ cases = [], distribution = [], stages
     const [openStageMenuId, setOpenStageMenuId] = useState(null);
     const [expandedId, setExpandedId] = useState(null);
     const [creating, setCreating] = useState(false);
+    const [editingCase, setEditingCase] = useState(null); // case row being edited
 
     // Filtered + sorted slice the table actually renders.
     const filtered = useMemo(() => {
@@ -199,6 +200,7 @@ export default function ImmigrationCases({ cases = [], distribution = [], stages
                                     stageMenuOpen={openStageMenuId === c.id}
                                     onStageMenuToggle={() => setOpenStageMenuId(openStageMenuId === c.id ? null : c.id)}
                                     onStageMenuClose={() => setOpenStageMenuId(null)}
+                                    onEdit={() => setEditingCase(c)}
                                 />
                             ))}
                         </tbody>
@@ -206,11 +208,13 @@ export default function ImmigrationCases({ cases = [], distribution = [], stages
                 </div>
             </div>
 
-            {creating && (
+            {(creating || editingCase) && (
                 <CreateCaseModal
+                    key={editingCase?.id || "new"}
+                    editing={editingCase}
                     stages={stages}
                     visaTypes={visaTypes}
-                    onClose={() => setCreating(false)}
+                    onClose={() => { setCreating(false); setEditingCase(null); }}
                 />
             )}
         </div>
@@ -219,47 +223,96 @@ export default function ImmigrationCases({ cases = [], distribution = [], stages
 
 // ─── Create case modal ─────────────────────────────────────────────────
 
-function CreateCaseModal({ stages, visaTypes, onClose }) {
+function CreateCaseModal({ stages, visaTypes, editing = null, onClose }) {
+    const isEdit = !!editing;
     const { data, setData, post, processing, errors, reset, clearErrors } = useForm({
-        first_name: '',
-        middle_name: '',
-        last_name: '',
-        suffix: '',
-        gender: '',
-        email: '',
-        phone: '',
-        immigration_stage: stages[0] || '',
+        first_name: editing?.first_name || '',
+        middle_name: editing?.middle_name || '',
+        last_name: editing?.last_name || '',
+        suffix: editing?.suffix || '',
+        gender: editing?.gender || '',
+        email: editing?.email || '',
+        phone: editing?.phone || '',
+        immigration_stage: editing?.immigration_stage || stages[0] || '',
         internal_note: '',
-        payment: '',
-        visa_type_id: '',
+        payment: editing?.payment || '',
+        // The case row stores the visa *name* (inz_visa_type); map it back to
+        // the matching option id so the dropdown pre-selects on edit.
+        visa_type_id: editing
+            ? (visaTypes.find((v) => v.name === editing.inz_visa_type)?.id ?? '')
+            : '',
     });
 
+    const [tab, setTab] = useState("personal"); // personal | documents (edit only)
+
     const submit = (e) => {
-        e.preventDefault();
+        e?.preventDefault();
         clearErrors();
-        post(`/portal/immigration/cases`, {
+        const url = isEdit ? `/portal/immigration/cases/${editing.id}` : `/portal/immigration/cases`;
+        post(url, {
             preserveScroll: true,
             onSuccess: () => { reset(); onClose(); },
         });
     };
 
+    const fullName = `${data.first_name} ${data.last_name}`.trim() || editing?.name || "New case";
+
     return (
         <div
-            className="fixed inset-0 z-[100] bg-black/40 backdrop-blur-sm flex items-start justify-center p-4 sm:p-8 overflow-y-auto"
+            className="fixed inset-0 z-[100] bg-black/40 backdrop-blur-sm flex items-center justify-center p-4"
             onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
         >
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl my-8">
-                <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden">
+                {/* Title bar */}
+                <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between shrink-0">
                     <div>
-                        <h2 className="text-lg font-bold text-gray-900">New case</h2>
-                        <p className="text-xs text-gray-500 mt-0.5">Adds a new immigration case directly to the queue.</p>
+                        <h2 className="text-lg font-bold text-gray-900">{isEdit ? 'Edit case' : 'New case'}</h2>
+                        <p className="text-xs text-gray-500 mt-0.5">
+                            {isEdit ? "Update this case's details." : 'Adds a new immigration case directly to the queue.'}
+                        </p>
                     </div>
                     <button type="button" onClick={onClose} className="p-1 text-gray-400 hover:text-gray-700">
                         <X size={18} />
                     </button>
                 </div>
 
-                <form onSubmit={submit} className="px-6 py-5 space-y-4">
+                {/* Profile header — name · contacts · status */}
+                <div className="px-6 py-3.5 border-b border-gray-100 bg-gray-50/60 flex items-center justify-between gap-4 flex-wrap shrink-0">
+                    <div className="min-w-0">
+                        <p className="text-sm font-bold text-gray-900 truncate">{fullName}</p>
+                        <p className="text-[11px] text-gray-500 mt-0.5 flex items-center gap-3 flex-wrap">
+                            {data.email && <span className="inline-flex items-center gap-1"><Mail size={11} className="text-gray-400" />{data.email}</span>}
+                            {data.phone && <span className="inline-flex items-center gap-1"><Phone size={11} className="text-gray-400" />{data.phone}</span>}
+                        </p>
+                    </div>
+                    {data.immigration_stage && (
+                        <span className={`inline-flex items-center px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider border ${stageChipClass(data.immigration_stage)}`}>
+                            {data.immigration_stage}
+                        </span>
+                    )}
+                </div>
+
+                {/* Tabs — Documents only exists for a saved case */}
+                {isEdit && (
+                    <div className="px-6 border-b border-gray-100 flex items-center gap-1 shrink-0">
+                        {[
+                            { k: 'personal', label: 'Personal info' },
+                            { k: 'documents', label: 'Documents' },
+                        ].map((t) => (
+                            <button key={t.k} type="button" onClick={() => setTab(t.k)}
+                                className={`px-3 py-3 text-xs font-bold -mb-px border-b-2 transition-colors ${
+                                    tab === t.k ? 'text-gray-900 border-gray-900' : 'text-gray-400 border-transparent hover:text-gray-700'
+                                }`}>
+                                {t.label}
+                            </button>
+                        ))}
+                    </div>
+                )}
+
+                {/* Scrollable content */}
+                <div className="flex-1 overflow-y-auto px-6 py-5">
+                    {(!isEdit || tab === 'personal') && (
+                    <form id="caseModalForm" onSubmit={submit} className="space-y-4">
                     {/* Name row */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <CaseField label="First name" required error={errors.first_name}>
@@ -386,18 +439,58 @@ function CreateCaseModal({ stages, visaTypes, onClose }) {
                         />
                     </CaseField>
 
-                    <div className="pt-3 border-t border-gray-100 flex items-center justify-end gap-3">
-                        <button type="button" onClick={onClose} disabled={processing}
-                            className="px-4 py-2 text-sm font-semibold text-gray-600 hover:text-gray-900 transition-colors">
-                            Cancel
-                        </button>
-                        <button type="submit" disabled={processing}
-                            className="inline-flex items-center gap-2 px-5 py-2 bg-gray-900 text-white text-sm font-bold rounded-xl hover:bg-black transition-colors disabled:opacity-50">
-                            <Plus size={14} strokeWidth={2.5} /> {processing ? 'Creating…' : 'Create case'}
-                        </button>
-                    </div>
-                </form>
+                    </form>
+                    )}
+
+                    {isEdit && tab === 'documents' && (
+                        <div className="space-y-4">
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                                <DocStat label="Total"    value={editing?.docs_total ?? 0} />
+                                <DocStat label="Approved" value={editing?.docs_approved ?? 0} tone="emerald" />
+                                <DocStat label="Pending"  value={editing?.docs_pending ?? 0} tone="amber" />
+                                <DocStat label="Rejected" value={editing?.docs_rejected ?? 0} tone="rose" />
+                            </div>
+                            <Link
+                                href={`/portal/immigration/cases/${editing?.id}/profile?tab=documents`}
+                                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-gray-900 text-white text-xs font-bold hover:bg-black transition-colors"
+                            >
+                                <FileText size={13} /> Manage documents
+                            </Link>
+                            <p className="text-[11px] text-gray-400">
+                                Upload, review and organise this case's documents in the full documents workspace.
+                            </p>
+                        </div>
+                    )}
+                </div>
+
+                {/* Footer */}
+                <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-end gap-3 shrink-0">
+                    <button type="button" onClick={onClose} disabled={processing}
+                        className="px-4 py-2 text-sm font-semibold text-gray-600 hover:text-gray-900 transition-colors">
+                        Cancel
+                    </button>
+                    <button type="button" onClick={submit} disabled={processing}
+                        className="inline-flex items-center gap-2 px-5 py-2 bg-gray-900 text-white text-sm font-bold rounded-xl hover:bg-black transition-colors disabled:opacity-50">
+                        {isEdit ? <Pencil size={14} strokeWidth={2.5} /> : <Plus size={14} strokeWidth={2.5} />}
+                        {processing ? 'Saving…' : (isEdit ? 'Save changes' : 'Create case')}
+                    </button>
+                </div>
             </div>
+        </div>
+    );
+}
+
+function DocStat({ label, value, tone = "gray" }) {
+    const tones = {
+        gray:    "bg-gray-50 text-gray-700 border-gray-100",
+        emerald: "bg-emerald-50 text-emerald-700 border-emerald-100",
+        amber:   "bg-amber-50 text-amber-700 border-amber-100",
+        rose:    "bg-rose-50 text-rose-700 border-rose-100",
+    };
+    return (
+        <div className={`rounded-xl border px-3 py-3 text-center ${tones[tone]}`}>
+            <div className="text-xl font-bold tabular-nums">{value}</div>
+            <div className="text-[10px] font-bold uppercase tracking-wider opacity-70 mt-0.5">{label}</div>
         </div>
     );
 }
@@ -585,7 +678,7 @@ function DistributionGraph({ distribution = [], total = 0, activeStage = null, o
 
 // ─── Table row ──────────────────────────────────────────────────────────
 
-function CaseRow({ c, stages, isExpanded, onExpand, stageMenuOpen, onStageMenuToggle, onStageMenuClose }) {
+function CaseRow({ c, stages, isExpanded, onExpand, stageMenuOpen, onStageMenuToggle, onStageMenuClose, onEdit }) {
     const pct = c.docs_total > 0 ? Math.round((c.docs_approved / c.docs_total) * 100) : 0;
     const hasDocs = c.docs_total > 0;
     const docsDone = hasDocs && c.docs_approved >= c.docs_total;
@@ -703,6 +796,12 @@ function CaseRow({ c, stages, isExpanded, onExpand, stageMenuOpen, onStageMenuTo
                                 label: 'Open case',
                                 icon: ExternalLink,
                                 href: `/portal/immigration/cases/${c.id}/profile`,
+                            },
+                            {
+                                key: 'edit',
+                                label: 'Edit case',
+                                icon: Pencil,
+                                onClick: () => onEdit?.(),
                             },
                             {
                                 key: 'archive',
