@@ -14,6 +14,7 @@ use App\Models\User;
 use App\Models\VisitorIntake;
 use App\Models\WorkIntake;
 use App\Services\Immigration\CaseChecklistService;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
@@ -76,6 +77,36 @@ class CaseProfileController extends Controller
             'notes'                 => $this->loadNotes($lead),
             'activity'              => $this->loadActivity($lead),
         ]);
+    }
+
+    /** POST /portal/immigration/cases/{lead}/personal — edit the applicant's
+     *  personal details from the Case Profile "Personal" tab. */
+    public function updatePersonal(Request $request, Lead $lead)
+    {
+        $user = auth()->user();
+        abort_unless($user instanceof User, 403);
+        $this->ensureCanViewCases($user);
+        abort_unless($lead->is_immigration_case, 404);
+
+        $validated = $request->validate([
+            'first_name'        => 'required|string|max:120',
+            'middle_name'       => 'nullable|string|max:120',
+            'last_name'         => 'nullable|string|max:120',
+            'suffix'            => 'nullable|string|max:20',
+            'gender'            => 'nullable|string|max:40',
+            'marital_status'    => 'nullable|string|max:40',
+            'dob'               => 'nullable|date',
+            'email'             => 'required|email|max:255',
+            'phone'             => 'nullable|string|max:40',
+            'citizenship'       => 'nullable|string|max:120',
+            'residence_country' => 'nullable|string|max:120',
+            'passport_number'   => 'nullable|string|max:60',
+            'passport_expiry'   => 'nullable|date',
+        ]);
+
+        $lead->update($validated);
+
+        return back()->with('success', 'Personal details updated.');
     }
 
     /** Same policy as Build 10's case-analysis gate. */
@@ -175,10 +206,18 @@ class CaseProfileController extends Controller
             'id'                            => $lead->id,
             'lead_id'                       => $lead->lead_id,
             'first_name'                    => $lead->first_name,
+            'middle_name'                   => $lead->middle_name,
             'last_name'                     => $lead->last_name,
+            'suffix'                        => $lead->suffix,
+            'gender'                        => $lead->gender,
+            'marital_status'                => $lead->marital_status,
             'email'                         => $lead->email,
             'phone'                         => $lead->phone,
-            'dob'                           => $lead->dob,
+            'dob'                           => optional($lead->dob)->format('Y-m-d'),
+            'citizenship'                   => $lead->citizenship,
+            'residence_country'             => $lead->residence_country,
+            'passport_number'               => $lead->passport_number,
+            'passport_expiry'               => optional($lead->passport_expiry)->format('Y-m-d'),
             'tracking_code'                 => $lead->tracking_code,
             'status'                        => $lead->status,
             'stage'                         => $lead->stage,

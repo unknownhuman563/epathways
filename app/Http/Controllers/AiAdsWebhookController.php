@@ -389,10 +389,16 @@ class AiAdsWebhookController extends Controller
         $data = $request->validate([
             'conversationId' => 'required|string|max:120',
             'accountId' => 'required|string|max:120',
-            'text' => 'required|string|max:2000',
+            'text' => 'nullable|string|max:2000',
+            'attachment' => 'nullable|file|max:25600|mimes:jpg,jpeg,png,gif,webp,mp4,mov',
         ]);
+        if (empty($data['text']) && ! $request->hasFile('attachment')) {
+            return response()->json(['error' => 'Type a message or attach a file.'], 422);
+        }
         if ($z = $this->zernio()) {
-            return $this->zernioJson(fn () => $z->sendMessage($data['conversationId'], $data['accountId'], $data['text']));
+            return $this->zernioJson(fn () => $z->sendMessage(
+                $data['conversationId'], $data['accountId'], $data['text'] ?? '', $request->file('attachment'),
+            ));
         }
 
         return response()->json(['error' => 'Connect Zernio to send messages.'], 422);

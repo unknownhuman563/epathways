@@ -353,18 +353,26 @@ class ZernioService
             'id' => $m['id'] ?? $m['_id'] ?? null,
             'direction' => (($m['direction'] ?? '') === 'outgoing') ? 'out' : 'in',
             'text' => $m['message'] ?? $m['text'] ?? $m['content'] ?? '',
+            'attachments' => array_values(array_filter(array_map(fn ($a) => array_filter([
+                'type' => $a['type'] ?? 'file',
+                'url' => $a['url'] ?? ($a['payload']['url'] ?? null),
+            ]), is_array($m['attachments'] ?? null) ? $m['attachments'] : []), fn ($a) => ! empty($a['url']))),
             'at' => $m['createdAt'] ?? $m['sentAt'] ?? null,
         ], is_array($rows) ? $rows : []))];
     }
 
-    /** POST /inbox/conversations/{id}/messages — send a reply (accountId required). */
-    public function sendMessage(string $conversationId, string $accountId, string $text): array
+    /** POST /inbox/conversations/{id}/messages — send a reply (accountId required).
+     *  Sends multipart with an `attachment` file when one is given, else JSON. */
+    public function sendMessage(string $conversationId, string $accountId, string $text, ?\Illuminate\Http\UploadedFile $attachment = null): array
     {
-        $this->client()
-            ->post('/inbox/conversations/'.$conversationId.'/messages?accountId='.urlencode($accountId), [
-                'accountId' => $accountId,
-                'message' => $text,
-            ])->throw();
+        $url = '/inbox/conversations/'.$conversationId.'/messages?accountId='.urlencode($accountId);
+        $fields = array_filter(['accountId' => $accountId, 'message' => $text], fn ($v) => $v !== null && $v !== '');
+
+        $req = $this->client();
+        if ($attachment) {
+            $req = $req->timeout(120)->attach('attachment', file_get_contents($attachment->getRealPath()), $attachment->getClientOriginalName());
+        }
+        $req->post($url, $fields)->throw();
 
         return ['ok' => true];
     }

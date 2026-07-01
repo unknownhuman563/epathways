@@ -24,6 +24,7 @@ const DEPARTMENT_LABEL = {
     education: "Education",
     immigration: "Immigration",
     accommodation: "Accommodation",
+    finance: "Finance",
     admin: "Admin",
 };
 
@@ -54,6 +55,14 @@ const CATEGORIES_BY_DEPT = {
         "Reporting consolidation", "Branding updates",
         "Email provider management", "Vendor management",
         "Compliance audits", "Other",
+    ],
+    // Finance categorises by which department's work the task relates to,
+    // plus its own billing/accounting buckets. Mirrors CATEGORIES_BY_DEPT
+    // in TaskBoardPage — keep the two in sync.
+    finance: [
+        "Education", "English", "Immigration", "Accommodation", "Sales",
+        "Invoicing", "Receivables", "Payments", "Reconciliation",
+        "Reporting", "Department meeting prep", "Other",
     ],
 };
 
