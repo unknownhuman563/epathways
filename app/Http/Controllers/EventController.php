@@ -435,6 +435,25 @@ class EventController extends Controller
 
             DB::commit();
 
+            // Branded confirmation email. Queued + wrapped so a mail/queue
+            // hiccup never turns a successful registration into an error.
+            if (! empty($lead->email)) {
+                try {
+                    $session = ! empty($validated['event_session_id'])
+                        ? $event->sessions()->find($validated['event_session_id'])
+                        : null;
+
+                    \Illuminate\Support\Facades\Mail::to($lead->email)
+                        ->send(new \App\Mail\EventRegistrationConfirmation($lead, $event, $session));
+                } catch (\Throwable $e) {
+                    Log::error('Event confirmation email failed', [
+                        'lead_id' => $lead->id,
+                        'event_id' => $event->id,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            }
+
             if ($request->header('X-Inertia') || ! $request->wantsJson()) {
                 return redirect()->back()->with('success', 'Registration successful! We will contact you soon.');
             }

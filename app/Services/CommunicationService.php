@@ -76,7 +76,11 @@ class CommunicationService
         if (in_array('email', $channels, true) && ! empty($lead->email)) {
             $subject = $this->substitute((string) $template->email_subject, $context, false);
             $body = $this->substitute((string) $template->email_body, $context, true);
-            $result['email'] = $this->sendEmail($lead, $subject, $body, $template->key, $attachments);
+            $result['email'] = $this->sendEmail(
+                $lead, $subject, $body, $template->key, $attachments, null,
+                $template->banner_image,
+                $template->footer_image,
+            );
         }
 
         if (in_array('sms', $channels, true) && ! empty($lead->phone)) {
@@ -200,10 +204,10 @@ class CommunicationService
         return $log->status !== MessageLog::STATUS_FAILED;
     }
 
-    private function sendEmail(Lead $lead, string $subject, string $body, ?string $key, array $attachments = [], ?int $campaignId = null): MessageLog
+    private function sendEmail(Lead $lead, string $subject, string $body, ?string $key, array $attachments = [], ?int $campaignId = null, ?string $bannerImage = null, ?string $footerImage = null): MessageLog
     {
         try {
-            Mail::to($lead->email)->queue(new TemplatedMessage($subject, $body, $attachments));
+            Mail::to($lead->email)->queue(new TemplatedMessage($subject, $body, $attachments, $bannerImage, $footerImage));
 
             return $this->log([
                 'template_key' => $key, 'campaign_id' => $campaignId, 'channel' => MessageLog::CHANNEL_EMAIL,

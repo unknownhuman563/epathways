@@ -7,6 +7,7 @@ use App\Models\MessageTemplate;
 use App\Models\User;
 use App\Services\CommunicationService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 
 /**
@@ -71,6 +72,11 @@ class MessageTemplateController extends Controller
         $template = MessageTemplate::findOrFail($id);
         $this->authorizeTemplate($ctx['department'], $template);
 
+        // Expose public URLs for the optional branding images so the editor
+        // can preview whatever is already saved.
+        $template->banner_image_url = $template->banner_image ? Storage::disk('public')->url($template->banner_image) : null;
+        $template->footer_image_url = $template->footer_image ? Storage::disk('public')->url($template->footer_image) : null;
+
         return inertia($ctx['editorComponent'], [
             'template' => $template,
             'standardVariables' => self::STANDARD_VARIABLES,
@@ -91,8 +97,10 @@ class MessageTemplateController extends Controller
                 Rule::unique('message_templates', 'key')->where(fn ($q) => $q->where('department', $department)),
             ],
             ...$this->bodyRules(),
+            ...$this->imageRules(),
         ], ['key.regex' => 'Key must be lowercase letters, numbers and underscores only.']);
 
+        $this->applyImages($request, $data, null);
         $data['department'] = $department;
         $data['created_by'] = $request->user()->id;
         $template = MessageTemplate::create($data);
@@ -107,7 +115,8 @@ class MessageTemplateController extends Controller
         $this->authorizeTemplate($ctx['department'], $template);
 
         // Key and department are immutable after creation — code references them.
-        $data = $request->validate($this->bodyRules());
+        $data = $request->validate([...$this->bodyRules(), ...$this->imageRules()]);
+        $this->applyImages($request, $data, $template);
         $template->update($data);
 
         return back()->with('success', 'Template saved.');
@@ -250,5 +259,47 @@ class MessageTemplateController extends Controller
             'sms_body' => ['nullable', 'string', 'max:1600'],
             'is_active' => ['boolean'],
         ];
+    }
+
+    /** Optional email-shell branding images (banner header + footer CTA). */
+    private function imageRules(): array
+    {
+        return [
+            'banner_image' => ['nullable', 'image', 'mimes:jpeg,png,jpg,webp,gif', 'max:4096'],
+            'footer_image' => ['nullable', 'image', 'mimes:jpeg,png,jpg,webp,gif', 'max:4096'],
+            'remove_banner' => ['nullable', 'boolean'],
+            'remove_footer' => ['nullable', 'boolean'],
+        ];
+    }
+
+    /**
+     * Resolve the two optional branding images into stored paths on $data.
+     * A new upload replaces (and deletes) the old file; a `remove_*` flag
+     * clears it; otherwise the column is left untouched. The transient
+     * validation keys never reach the model.
+     */
+    private function applyImages(Request $request, array &$data, ?MessageTemplate $existing): void
+    {
+        $map = ['banner_image' => 'templates/banners', 'footer_image' => 'templates/footers'];
+
+        foreach ($map as $field => $dir) {
+            $removeFlag = 'remove_'.str_replace('_image', '', $field);
+
+            if ($request->hasFile($field)) {
+                if ($existing?->{$field}) {
+                    Storage::disk('public')->delete($existing->{$field});
+                }
+                $data[$field] = $request->file($field)->store($dir, 'public');
+            } elseif ($request->boolean($removeFlag)) {
+                if ($existing?->{$field}) {
+                    Storage::disk('public')->delete($existing->{$field});
+                }
+                $data[$field] = null;
+            } else {
+                unset($data[$field]);
+            }
+
+            unset($data[$removeFlag]);
+        }
     }
 }
