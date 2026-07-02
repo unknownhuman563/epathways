@@ -75,6 +75,7 @@ class CaseChecklistService
                 return ['source' => 'visa_type', 'visa' => $hit->name];
             }
         }
+
         return ['source' => 'none', 'visa' => $lead->inz_visa_type];
     }
 
@@ -96,19 +97,20 @@ class CaseChecklistService
 
         return collect($items)->map(function (array $item) use ($docsByKey) {
             $doc = $docsByKey->get($item['key']) ?? null;
+
             return [
-                'key'         => $item['key'],
-                'label'       => $item['label'],
-                'hint'        => $item['hint'] ?? null,
-                'required'    => (bool) ($item['required'] ?? false),
+                'key' => $item['key'],
+                'label' => $item['label'],
+                'hint' => $item['hint'] ?? null,
+                'required' => (bool) ($item['required'] ?? false),
                 // Default category — Phase 1's documented JSON shape doesn't
                 // include `category`. Seed labels embed it as "Category · Name"
                 // so the frontend can parse it for grouping; backend just
                 // surfaces whatever the JSON says.
-                'category'    => $item['category'] ?? null,
-                'status'      => $doc?->status ?? 'not_submitted',
+                'category' => $item['category'] ?? null,
+                'status' => $doc?->status ?? 'not_submitted',
                 'uploaded_at' => $doc?->created_at?->toIso8601String(),
-                'note'        => $doc?->note,
+                'note' => $doc?->note,
                 'document_id' => $doc?->id,
             ];
         })->toArray();
@@ -154,12 +156,12 @@ class CaseChecklistService
             ->get()
             ->filter(fn (LeadDocument $d) => empty($d->checklist_key) || ! isset($known[$d->checklist_key]))
             ->map(fn (LeadDocument $d) => [
-                'document_id'   => $d->id,
+                'document_id' => $d->id,
                 'original_name' => $d->original_name,
-                'status'        => $d->status,
-                'uploaded_at'   => $d->created_at?->toIso8601String(),
+                'status' => $d->status,
+                'uploaded_at' => $d->created_at?->toIso8601String(),
                 'checklist_key' => $d->checklist_key, // null = truly unstructured
-                'note'          => $d->note,
+                'note' => $d->note,
             ])
             ->values()
             ->toArray();
@@ -178,11 +180,68 @@ class CaseChecklistService
         $required = array_values(array_filter($items, fn ($i) => ! empty($i['required'])));
 
         return [
-            'required_total'    => count($required),
+            'required_total' => count($required),
             'required_approved' => count(array_filter($required, fn ($i) => $i['status'] === LeadDocument::STATUS_APPROVED)),
-            'total'             => count($items),
-            'approved'          => count(array_filter($items, fn ($i) => $i['status'] === LeadDocument::STATUS_APPROVED)),
+            'total' => count($items),
+            'approved' => count(array_filter($items, fn ($i) => $i['status'] === LeadDocument::STATUS_APPROVED)),
         ];
+    }
+
+    /**
+     * Build the tidy upload filename for a checklist item, or null when the
+     * item carries no `file_code` (in which case callers keep the original
+     * filename). Format: "NN - CODE - FirstnameLASTNAME<suffix>.<ext>" where
+     * NN is the item's 1-based position in the resolved checklist.
+     */
+    public function uploadFileNameFor(Lead $lead, string $key, string $originalName): ?string
+    {
+        $items = $this->forCase($lead);
+        if (empty($items)) {
+            return null;
+        }
+
+        $index = null;
+        $match = null;
+        foreach (array_values($items) as $i => $item) {
+            if (($item['key'] ?? null) === $key) {
+                $index = $i;
+                $match = $item;
+                break;
+            }
+        }
+
+        if ($match === null || empty($match['file_code'])) {
+            return null;
+        }
+
+        $position = str_pad((string) ($index + 1), 2, '0', STR_PAD_LEFT);
+        $code = $match['file_code'];
+        $suffix = $match['file_suffix'] ?? '';
+        $name = $this->applicantFileName($lead);
+
+        $base = "{$position} - {$code} - {$name}{$suffix}";
+
+        // Strip characters that are illegal in filenames (e.g. a "/" in a
+        // suffix like "_Name of Family Member/Friend") so storeAs() can't be
+        // tricked into a nested path.
+        $base = trim(preg_replace('#[\\\\/:*?"<>|]+#', '-', $base));
+
+        $ext = pathinfo($originalName, PATHINFO_EXTENSION);
+
+        return $ext !== '' ? "{$base}.{$ext}" : $base;
+    }
+
+    /**
+     * Applicant name formatted as FirstnameLASTNAME (first name as stored,
+     * last name upper-cased, spaces stripped). Falls back to "Applicant".
+     */
+    private function applicantFileName(Lead $lead): string
+    {
+        $first = preg_replace('/\s+/', '', (string) $lead->first_name);
+        $last = strtoupper(preg_replace('/\s+/', '', (string) $lead->last_name));
+        $name = trim($first.$last);
+
+        return $name !== '' ? $name : 'Applicant';
     }
 
     /**

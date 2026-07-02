@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { Fragment, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { router } from "@inertiajs/react";
 import { toast } from "sonner";
@@ -97,6 +97,20 @@ export default function DocumentsTab({
         return { total, approved };
     }, [allRows]);
 
+    // Group rows by category into ordered sections (Applicant → Financial →
+    // Sponsor → Other), preserving the checklist order. First appearance of a
+    // category fixes its position, so the seeded order drives the layout.
+    const groupedRows = [];
+    const groupIndex = new Map();
+    for (const row of allRows) {
+        const category = row.category || "Other";
+        if (! groupIndex.has(category)) {
+            groupIndex.set(category, groupedRows.length);
+            groupedRows.push([category, []]);
+        }
+        groupedRows[groupIndex.get(category)][1].push(row);
+    }
+
     if (allRows.length === 0) {
         return (
             <div className="text-center py-12 border border-dashed border-gray-200 rounded-xl bg-gray-50/50">
@@ -161,9 +175,26 @@ export default function DocumentsTab({
                             </tr>
                         </thead>
                         <tbody>
-                            {allRows.map((row) => (
-                                <Row key={row.key} row={row} leadId={lead.id} />
-                            ))}
+                            {groupedRows.map(([category, groupRows]) => {
+                                const approved = groupRows.filter((r) => r.document?.status === "Approved").length;
+                                return (
+                                    <Fragment key={category}>
+                                        <tr className="bg-gray-200 border-y border-gray-300">
+                                            <td colSpan={4} className="px-4 py-2">
+                                                <span className="text-[11px] font-bold uppercase tracking-wider text-gray-700">
+                                                    {category}
+                                                </span>
+                                                <span className="ml-2 text-[10.5px] font-semibold text-gray-500">
+                                                    {approved}/{groupRows.length}
+                                                </span>
+                                            </td>
+                                        </tr>
+                                        {groupRows.map((row) => (
+                                            <Row key={row.key} row={row} leadId={lead.id} />
+                                        ))}
+                                    </Fragment>
+                                );
+                            })}
                         </tbody>
                     </table>
                 </div>
@@ -249,10 +280,11 @@ function Row({ row, leadId }) {
                             {row.label}
                             {row.required && <span className="ml-1 text-red-500">*</span>}
                         </p>
-                        <p className="text-[10.5px] text-gray-400 mt-0.5">
-                            {row.category}
-                            {doc && <> · uploaded {formatDate(doc.created_at)}</>}
-                        </p>
+                        {doc && (
+                            <p className="text-[10.5px] text-gray-400 mt-0.5">
+                                uploaded {formatDate(doc.created_at)}
+                            </p>
+                        )}
                     </div>
                 </div>
             </td>

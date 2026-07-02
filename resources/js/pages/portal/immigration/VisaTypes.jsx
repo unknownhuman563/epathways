@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Head, useForm, usePage } from '@inertiajs/react';
 import { router } from '@inertiajs/react';
 import {
@@ -10,6 +10,13 @@ import { toast } from 'sonner';
 
 const ICONS = { GraduationCap, Briefcase, Plane, Heart, Home, HelpCircle, Globe };
 const ICON_OPTIONS = Object.keys(ICONS);
+
+// "Visa Type" classification dropdown. Add more options here as needed.
+const VISA_TYPE_OPTIONS = ['Fee Paying'];
+
+// Strips the native number-input spinner arrows so they don't overlap the
+// "$"/"NZD"/"minutes" adornments positioned inside the field.
+const NO_SPIN = '[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none';
 
 const fmt = (n) => n === null || n === undefined
     ? '—'
@@ -38,14 +45,14 @@ export default function VisaTypes({ visaTypes = [], permissions = {} }) {
 
     return (
         <>
-            <Head title="Visa Types" />
+            <Head title="Visas" />
             <div className="max-w-5xl mx-auto p-6">
                 <header className="mb-8 flex items-start justify-between gap-4">
                     <div>
-                        <h1 className="text-2xl font-bold text-gray-900">Visa types</h1>
+                        <h1 className="text-2xl font-bold text-gray-900">Visas</h1>
                         <p className="text-sm text-gray-500 max-w-xl">
                             Edit the consultation fee, duration, and description shown to applicants on the visa chooser.
-                            Price changes require a reason and are audited.
+                            Price changes are audited automatically.
                         </p>
                     </div>
                     {perms.canCreate && (
@@ -54,7 +61,7 @@ export default function VisaTypes({ visaTypes = [], permissions = {} }) {
                             onClick={() => setCreating(true)}
                             className="px-4 py-2 bg-gray-900 text-white text-sm font-semibold rounded-xl hover:bg-black transition-colors flex items-center gap-2"
                         >
-                            <Plus size={14} strokeWidth={2.5} /> Add new visa type
+                            <Plus size={14} strokeWidth={2.5} /> Add new visa
                         </button>
                     )}
                 </header>
@@ -62,7 +69,7 @@ export default function VisaTypes({ visaTypes = [], permissions = {} }) {
                 <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
                     {rows.length === 0 ? (
                         <div className="p-12 text-center">
-                            <p className="text-sm font-semibold text-gray-700">No visa types yet</p>
+                            <p className="text-sm font-semibold text-gray-700">No visas yet</p>
                             <p className="text-xs text-gray-500 mt-1">Seed VisaTypeSeeder to populate the default set.</p>
                         </div>
                     ) : (
@@ -142,7 +149,10 @@ function CreateModal({ onClose }) {
         name: '',
         short_description: '',
         category: 'work',
+        visa_type: VISA_TYPE_OPTIONS[0],
         consultation_price_nzd: 250,
+        professional_fees: '',
+        inz_application_fee: '',
         consultation_duration_minutes: 60,
         estimated_minutes: 15,
         inz_form_refs: '',
@@ -167,7 +177,7 @@ function CreateModal({ onClose }) {
         >
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl my-8">
                 <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
-                    <h2 className="text-lg font-bold text-gray-900">New visa type</h2>
+                    <h2 className="text-lg font-bold text-gray-900">New visa</h2>
                     <button type="button" onClick={onClose} className="p-1 text-gray-400 hover:text-gray-700">
                         <X size={18} />
                     </button>
@@ -228,6 +238,18 @@ function CreateModal({ onClose }) {
                         </select>
                     </Field>
 
+                    <Field label="Visa Type" error={errors.visa_type}>
+                        <select
+                            value={data.visa_type}
+                            onChange={(e) => setData('visa_type', e.target.value)}
+                            className={inputClass(errors.visa_type)}
+                        >
+                            {VISA_TYPE_OPTIONS.map((opt) => (
+                                <option key={opt} value={opt}>{opt}</option>
+                            ))}
+                        </select>
+                    </Field>
+
                     <Divider>Pricing</Divider>
 
                     <Field label="Consultation price (NZD)" error={errors.consultation_price_nzd}>
@@ -240,11 +262,45 @@ function CreateModal({ onClose }) {
                                 max="5000"
                                 value={data.consultation_price_nzd}
                                 onChange={(e) => setData('consultation_price_nzd', e.target.value)}
-                                className={inputClass(errors.consultation_price_nzd, 'pl-7 pr-14')}
+                                className={inputClass(errors.consultation_price_nzd, `!pl-9 !pr-14 ${NO_SPIN}`)}
                             />
                             <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400 font-semibold">NZD</span>
                         </div>
                     </Field>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <Field label="Our Professional Fees (NZD)" error={errors.professional_fees}>
+                            <div className="relative">
+                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gray-400">$</span>
+                                <input
+                                    type="number"
+                                    step="0.01"
+                                    min="0"
+                                    value={data.professional_fees}
+                                    onChange={(e) => setData('professional_fees', e.target.value)}
+                                    placeholder="0.00"
+                                    className={inputClass(errors.professional_fees, `!pl-9 !pr-14 ${NO_SPIN}`)}
+                                />
+                                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400 font-semibold">NZD</span>
+                            </div>
+                        </Field>
+
+                        <Field label="INZ Application Fee (NZD)" error={errors.inz_application_fee}>
+                            <div className="relative">
+                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gray-400">$</span>
+                                <input
+                                    type="number"
+                                    step="0.01"
+                                    min="0"
+                                    value={data.inz_application_fee}
+                                    onChange={(e) => setData('inz_application_fee', e.target.value)}
+                                    placeholder="0.00"
+                                    className={inputClass(errors.inz_application_fee, `!pl-9 !pr-14 ${NO_SPIN}`)}
+                                />
+                                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400 font-semibold">NZD</span>
+                            </div>
+                        </Field>
+                    </div>
 
                     <Field label="Consultation duration" error={errors.consultation_duration_minutes}>
                         <div className="relative">
@@ -255,7 +311,7 @@ function CreateModal({ onClose }) {
                                 step="15"
                                 value={data.consultation_duration_minutes}
                                 onChange={(e) => setData('consultation_duration_minutes', e.target.value)}
-                                className={inputClass(errors.consultation_duration_minutes, 'pr-20')}
+                                className={inputClass(errors.consultation_duration_minutes, `!pr-20 ${NO_SPIN}`)}
                             />
                             <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400 font-semibold">minutes</span>
                         </div>
@@ -271,7 +327,7 @@ function CreateModal({ onClose }) {
                                 max="60"
                                 value={data.estimated_minutes}
                                 onChange={(e) => setData('estimated_minutes', e.target.value)}
-                                className={inputClass(errors.estimated_minutes, 'pr-20')}
+                                className={inputClass(errors.estimated_minutes, `!pr-20 ${NO_SPIN}`)}
                             />
                             <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400 font-semibold">minutes</span>
                         </div>
@@ -398,8 +454,12 @@ function DeleteModal({ visaType, onClose }) {
 function EditModal({ visaType, onClose, canViewHistory }) {
     const { data, setData, post, processing, errors, reset, clearErrors } = useForm({
         name: visaType.name,
+        code: visaType.code || '',
         short_description: visaType.short_description || '',
+        visa_type: visaType.visa_type || VISA_TYPE_OPTIONS[0],
         consultation_price_nzd: visaType.consultation_price_nzd,
+        professional_fees: visaType.professional_fees ?? '',
+        inz_application_fee: visaType.inz_application_fee ?? '',
         consultation_duration_minutes: visaType.consultation_duration_minutes,
         estimated_minutes: visaType.estimated_minutes,
         inz_form_refs: visaType.inz_form_refs || '',
@@ -410,16 +470,10 @@ function EditModal({ visaType, onClose, canViewHistory }) {
         checklist_items: Array.isArray(visaType.checklist_items)
             ? visaType.checklist_items
             : [],
-        reason: '',
         updated_at: visaType.updated_at || '',
     });
 
     const [historyOpen, setHistoryOpen] = useState(false);
-
-    const priceChanged = useMemo(
-        () => Number(data.consultation_price_nzd) !== Number(visaType.consultation_price_nzd),
-        [data.consultation_price_nzd, visaType.consultation_price_nzd]
-    );
 
     const submit = (e) => {
         e.preventDefault();
@@ -437,7 +491,7 @@ function EditModal({ visaType, onClose, canViewHistory }) {
         >
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl my-8">
                 <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
-                    <h2 className="text-lg font-bold text-gray-900">Edit Visa Type: {visaType.name}</h2>
+                    <h2 className="text-lg font-bold text-gray-900">Edit Visa: {visaType.name}</h2>
                     <button type="button" onClick={onClose} className="p-1 text-gray-400 hover:text-gray-700">
                         <X size={18} />
                     </button>
@@ -470,13 +524,26 @@ function EditModal({ visaType, onClose, canViewHistory }) {
                         />
                     </Field>
 
-                    <Field label="Code" hint="System identifier, cannot be changed">
+                    <Field label="Code" hint="Uppercase letters / numbers / dashes only — must stay unique" error={errors.code}>
                         <input
                             type="text"
-                            value={visaType.code}
-                            disabled
-                            className="w-full rounded-xl border border-gray-100 bg-gray-50 px-3 py-2 text-sm text-gray-500"
+                            value={data.code}
+                            onChange={(e) => setData('code', e.target.value.toUpperCase())}
+                            maxLength={32}
+                            className={inputClass(errors.code) + ' font-mono uppercase'}
                         />
+                    </Field>
+
+                    <Field label="Visa Type" error={errors.visa_type}>
+                        <select
+                            value={data.visa_type}
+                            onChange={(e) => setData('visa_type', e.target.value)}
+                            className={inputClass(errors.visa_type)}
+                        >
+                            {VISA_TYPE_OPTIONS.map((opt) => (
+                                <option key={opt} value={opt}>{opt}</option>
+                            ))}
+                        </select>
                     </Field>
 
                     <Divider>Pricing</Divider>
@@ -487,15 +554,49 @@ function EditModal({ visaType, onClose, canViewHistory }) {
                             <input
                                 type="number"
                                 step="0.01"
-                                min="50"
-                                max="1000"
+                                min="0"
+                                max="5000"
                                 value={data.consultation_price_nzd}
                                 onChange={(e) => setData('consultation_price_nzd', e.target.value)}
-                                className={inputClass(errors.consultation_price_nzd, 'pl-7 pr-14')}
+                                className={inputClass(errors.consultation_price_nzd, `!pl-9 !pr-14 ${NO_SPIN}`)}
                             />
                             <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400 font-semibold">NZD</span>
                         </div>
                     </Field>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <Field label="Our Professional Fees (NZD)" error={errors.professional_fees}>
+                            <div className="relative">
+                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gray-400">$</span>
+                                <input
+                                    type="number"
+                                    step="0.01"
+                                    min="0"
+                                    value={data.professional_fees}
+                                    onChange={(e) => setData('professional_fees', e.target.value)}
+                                    placeholder="0.00"
+                                    className={inputClass(errors.professional_fees, `!pl-9 !pr-14 ${NO_SPIN}`)}
+                                />
+                                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400 font-semibold">NZD</span>
+                            </div>
+                        </Field>
+
+                        <Field label="INZ Application Fee (NZD)" error={errors.inz_application_fee}>
+                            <div className="relative">
+                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gray-400">$</span>
+                                <input
+                                    type="number"
+                                    step="0.01"
+                                    min="0"
+                                    value={data.inz_application_fee}
+                                    onChange={(e) => setData('inz_application_fee', e.target.value)}
+                                    placeholder="0.00"
+                                    className={inputClass(errors.inz_application_fee, `!pl-9 !pr-14 ${NO_SPIN}`)}
+                                />
+                                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400 font-semibold">NZD</span>
+                            </div>
+                        </Field>
+                    </div>
 
                     <Field label="Consultation duration" error={errors.consultation_duration_minutes}>
                         <div className="relative">
@@ -506,29 +607,11 @@ function EditModal({ visaType, onClose, canViewHistory }) {
                                 step="15"
                                 value={data.consultation_duration_minutes}
                                 onChange={(e) => setData('consultation_duration_minutes', e.target.value)}
-                                className={inputClass(errors.consultation_duration_minutes, 'pr-20')}
+                                className={inputClass(errors.consultation_duration_minutes, `!pr-20 ${NO_SPIN}`)}
                             />
                             <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400 font-semibold">minutes</span>
                         </div>
                     </Field>
-
-                    {priceChanged && (
-                        <Field
-                            label="Reason for price change"
-                            required
-                            hint="Required when changing the price (min 10 chars)"
-                            error={errors.reason}
-                        >
-                            <textarea
-                                value={data.reason}
-                                onChange={(e) => setData('reason', e.target.value)}
-                                maxLength={500}
-                                rows={3}
-                                placeholder="Example: Annual price review, INZ fee increase, competitive adjustment..."
-                                className={inputClass(errors.reason)}
-                            />
-                        </Field>
-                    )}
 
                     <Divider>Additional details</Divider>
 
@@ -540,7 +623,7 @@ function EditModal({ visaType, onClose, canViewHistory }) {
                                 max="60"
                                 value={data.estimated_minutes}
                                 onChange={(e) => setData('estimated_minutes', e.target.value)}
-                                className={inputClass(errors.estimated_minutes, 'pr-20')}
+                                className={inputClass(errors.estimated_minutes, `!pr-20 ${NO_SPIN}`)}
                             />
                             <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400 font-semibold">minutes</span>
                         </div>
@@ -708,14 +791,62 @@ function ChecklistEditor({ items = [], onChange, errors = {} }) {
 
     const errAt = (i, field) => errors[`checklist_items.${i}.${field}`];
 
+    // ── Loadable templates ──────────────────────────────────────────────
+    // Fetched lazily the first time the picker is focused. Applying one
+    // replaces the current checklist (after a confirm when non-empty), so a
+    // hand-made visa can adopt a ready checklist without touching the seeder.
+    const [templates, setTemplates] = useState([]);
+    const [loadingTemplates, setLoadingTemplates] = useState(false);
+    const [templatesLoaded, setTemplatesLoaded] = useState(false);
+
+    const loadTemplates = () => {
+        if (templatesLoaded || loadingTemplates) return;
+        setLoadingTemplates(true);
+        fetch('/portal/immigration/visa-types/templates', { headers: { Accept: 'application/json' } })
+            .then((r) => (r.ok ? r.json() : { templates: [] }))
+            .then((d) => { setTemplates(d.templates || []); setTemplatesLoaded(true); })
+            .catch(() => setTemplates([]))
+            .finally(() => setLoadingTemplates(false));
+    };
+
+    const applyTemplate = (key) => {
+        const tpl = templates.find((t) => t.key === key);
+        if (! tpl) return;
+        if (items.length > 0 && ! window.confirm(
+            `Replace the current ${items.length} checklist item(s) with the "${tpl.label}" template (${tpl.count} items)?`
+        )) return;
+        onChange((tpl.items || []).map((it) => ({
+            key:         it.key || '',
+            label:       it.label || '',
+            hint:        it.hint || '',
+            required:    it.required !== false,
+            file_code:   it.file_code || '',
+            file_suffix: it.file_suffix || '',
+        })));
+    };
+
     return (
         <div className="space-y-2">
-            <p className="text-[11px] text-gray-500">
-                Documents the lead needs to submit for this visa. Each
-                row's <span className="font-mono text-[10px]">key</span> is
-                used to match uploads (lowercase letters, numbers, and
-                underscores only).
-            </p>
+            <div className="flex items-start justify-between gap-3 flex-wrap">
+                <p className="text-[11px] text-gray-500 flex-1 min-w-[220px]">
+                    Documents the lead needs to submit for this visa. Each
+                    row's <span className="font-mono text-[10px]">key</span> is
+                    used to match uploads (lowercase letters, numbers, and
+                    underscores only).
+                </p>
+                <select
+                    value=""
+                    onMouseDown={loadTemplates}
+                    onFocus={loadTemplates}
+                    onChange={(e) => { applyTemplate(e.target.value); e.target.value = ''; }}
+                    className="text-[11px] border border-gray-200 rounded-lg px-2 py-1.5 bg-white text-gray-700 hover:border-gray-300 cursor-pointer"
+                >
+                    <option value="">{loadingTemplates ? 'Loading templates…' : 'Load a checklist template…'}</option>
+                    {templates.map((t) => (
+                        <option key={t.key} value={t.key}>{t.label} ({t.count})</option>
+                    ))}
+                </select>
+            </div>
 
             {items.length === 0 && (
                 <div className="border-2 border-dashed border-gray-200 rounded-xl px-4 py-6 text-center">
@@ -810,6 +941,38 @@ function ChecklistEditor({ items = [], onChange, errors = {} }) {
                             />
                             Required
                         </label>
+                    </div>
+
+                    {/* File-naming — uploads for this item are renamed to
+                        "NN - CODE - FirstnameLASTNAME<suffix>" (NN = row number). */}
+                    <div className="ml-7 grid grid-cols-1 sm:grid-cols-2 gap-2 items-start">
+                        <div>
+                            <label className="block text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1">
+                                File code
+                            </label>
+                            <input
+                                type="text"
+                                value={it.file_code || ''}
+                                onChange={(e) => set(i, { file_code: e.target.value })}
+                                placeholder="e.g. CV, PPT, BC"
+                                className={inputClass(errAt(i, 'file_code')) + ' font-mono text-xs uppercase'}
+                            />
+                            <p className="text-[10px] text-gray-400 mt-0.5">
+                                Uploads renamed to <span className="font-mono">{String(i + 1).padStart(2, '0')} - {(it.file_code || 'CODE')} - FirstnameLASTNAME{it.file_suffix || ''}</span>. Leave blank to keep the original name.
+                            </p>
+                        </div>
+                        <div>
+                            <label className="block text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1">
+                                Name suffix
+                            </label>
+                            <input
+                                type="text"
+                                value={it.file_suffix || ''}
+                                onChange={(e) => set(i, { file_suffix: e.target.value })}
+                                placeholder="e.g. _Sponsor or (of sponsor)"
+                                className={inputClass(errAt(i, 'file_suffix')) + ' text-xs'}
+                            />
+                        </div>
                     </div>
                 </div>
             ))}

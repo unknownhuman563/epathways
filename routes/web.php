@@ -856,6 +856,7 @@ Route::middleware(['auth'])->group(function () {
             // the same logic (policy, audit, notifications) applies to both
             // admin staff and immigration managers/advisers.
             Route::get('/visa-types', [VisaTypeController::class, 'index'])->name('visa-types');
+            Route::get('/visa-types/templates', [VisaTypeController::class, 'checklistTemplates'])->name('visa-types.templates');
             Route::post('/visa-types', [VisaTypeController::class, 'store'])->name('visa-types.store');
             Route::post('/visa-types/{visa_type}', [VisaTypeController::class, 'update'])->name('visa-types.update');
             Route::delete('/visa-types/{visa_type}', [VisaTypeController::class, 'destroy'])->name('visa-types.destroy');

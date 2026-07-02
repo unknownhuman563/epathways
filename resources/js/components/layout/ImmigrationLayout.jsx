@@ -22,7 +22,7 @@ export default function ImmigrationLayout({ children }) {
         { name: "Appointments", href: "/portal/immigration/appointments", icon: <Calendar size={20} /> },
 
         { name: "Setup", section: true },
-        { name: "Visa Types",          href: "/portal/immigration/visa-types",          icon: <FileBadge size={20} /> },
+        { name: "Visas",               href: "/portal/immigration/visa-types",          icon: <FileBadge size={20} /> },
         { name: "Intakes",             href: "/portal/immigration/intakes",             icon: <CalendarDays size={20} /> },
         { name: "INZ Forms",           href: "/portal/immigration/inz-forms",           icon: <FileText size={20} /> },
         { name: "Checklist Templates", href: "/portal/immigration/checklist-templates", icon: <ListChecks size={20} /> },
