@@ -133,7 +133,12 @@ class Event extends Model
             return array_merge($f, [
                 'enabled'  => array_key_exists('enabled',  $f) ? filter_var($f['enabled'],  FILTER_VALIDATE_BOOLEAN) : true,
                 'required' => array_key_exists('required', $f) ? filter_var($f['required'], FILTER_VALIDATE_BOOLEAN) : false,
-                'locked'   => array_key_exists('locked',   $f) ? filter_var($f['locked'],   FILTER_VALIDATE_BOOLEAN) : false,
+                // `locked` is a system concept — ONLY the follow-up fields in
+                // LOCKED_KEYS are ever locked. Derive it authoritatively from
+                // the key so a stale/incorrect stored value (e.g. a custom
+                // field saved with locked=1) can never keep a disabled field
+                // visible on the public form.
+                'locked'   => in_array($f['key'] ?? '', self::LOCKED_KEYS, true),
                 'default'  => array_key_exists('default',  $f) ? filter_var($f['default'],  FILTER_VALIDATE_BOOLEAN) : false,
             ]);
         })->all();

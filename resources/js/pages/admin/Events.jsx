@@ -198,6 +198,12 @@ const blankDraft = (section = 'Additional') => ({
     section, placeholder: '',
 });
 
+// `enabled` round-trips through the form_fields JSON as a real boolean OR as
+// 1/0 / "1"/"0" (FormData stringifies booleans). Treat all the "off" shapes
+// the same so a disabled field stays disabled across edit → save cycles.
+// Missing/undefined defaults to enabled (new fields are on by default).
+const fieldEnabled = (v) => ! (v === false || v === 0 || v === '0' || v === 'false');
+
 function FormFieldsStep({ value, onChange, customFieldTypes, lockedFieldKeys, defaultFieldKeys }) {
     const fields = Array.isArray(value) ? value : [];
 
@@ -341,7 +347,7 @@ function FormFieldsStep({ value, onChange, customFieldTypes, lockedFieldKeys, de
                 // toggle at all (nothing to flip).
                 const toggleable = sectionFields.filter(({ f }) => ! (lockedSet.has(f.key) || f.locked === true));
                 const hasToggleable = toggleable.length > 0;
-                const sectionEnabled = toggleable.some(({ f }) => f.enabled !== false);
+                const sectionEnabled = toggleable.some(({ f }) => fieldEnabled(f.enabled));
 
                 return (
                     <div
@@ -451,7 +457,7 @@ function FormFieldsStep({ value, onChange, customFieldTypes, lockedFieldKeys, de
 }
 
 function FieldRow({ field, isLocked, isDefault, onUpdate, onRemove }) {
-    const enabled = isLocked ? true : (field.enabled !== false);
+    const enabled = isLocked ? true : fieldEnabled(field.enabled);
     return (
         <div
             className={`border rounded-lg p-3 transition-colors ${
@@ -684,9 +690,12 @@ function EventFormModal({ open, onClose, editingEvent, defaultFormFields = [], c
             ? data.form_fields.map((f) => ({
                 ...f,
                 required: f.required ? 1 : 0,
-                locked:   f.locked   ? 1 : 0,
+                // `locked` is system-owned — only the follow-up keys can be
+                // locked. Derive it from lockedFieldKeys so a stale/incorrect
+                // stored value can't wrongly keep a hidden field visible.
+                locked:   (lockedFieldKeys || []).includes(f.key) ? 1 : 0,
                 default:  f.default  ? 1 : 0,
-                enabled:  f.enabled === false ? 0 : 1,
+                enabled:  fieldEnabled(f.enabled) ? 1 : 0,
             }))
             : data.form_fields,
     }));
