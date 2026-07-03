@@ -5,6 +5,8 @@ import {
     Mail, Phone, Clock, FileText, Users, ArrowRight,
 } from 'lucide-react';
 import { motion } from 'framer-motion';
+import assessImg from "@assets/Services/education.png";
+import consultImg from "@assets/Services/agents.png";
 
 // Public event registration page — served at /register/{event_code}.
 // Monochrome dark-gray/white treatment: a solid dark hero block, a
@@ -597,23 +599,64 @@ export default function Registration({ event }) {
                     {/* ── SIDEBAR ────────────────────────────────────── */}
                     <aside className="space-y-4">
 
-                        {/* Free Assessment — white card */}
-                        <SidebarCard>
-                            <div className="px-6 py-5 border-b border-gray-100">
-                                <div className="w-10 h-10 bg-gray-900 text-white flex items-center justify-center mb-4">
-                                    <FileText size={16} />
+                        {/* Contact — dark, friendly card with tappable links */}
+                        <div className="relative bg-[#1a1a1a] text-white overflow-hidden">
+                            {/* subtle decorative glow so it isn't a flat block */}
+                            <div className="pointer-events-none absolute -top-16 -right-16 w-48 h-48 rounded-full bg-white/[0.06] blur-3xl" />
+                            <div className="relative px-6 py-6">
+                                <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-white/50 mb-1.5">Get in touch</p>
+                                <h3 className="text-lg font-bold tracking-tight">Have a question?</h3>
+                                <p className="mt-1 text-[12.5px] text-gray-400 leading-relaxed">Our team is happy to help — reach out anytime.</p>
+
+                                <div className="mt-5 space-y-2.5">
+                                    <a
+                                        href="tel:+63822975000"
+                                        className="group flex items-center gap-3 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 px-3.5 py-3 transition-colors"
+                                    >
+                                        <span className="w-9 h-9 rounded-md bg-white/10 text-white flex items-center justify-center shrink-0">
+                                            <Phone size={15} />
+                                        </span>
+                                        <div className="min-w-0">
+                                            <p className="text-[9.5px] font-bold uppercase tracking-[0.2em] text-white/45">Phone</p>
+                                            <p className="text-[13.5px] font-semibold leading-snug truncate">+63 (82) 297-5000</p>
+                                        </div>
+                                        <ChevronRight size={15} className="ml-auto text-white/40 group-hover:text-white group-hover:translate-x-0.5 transition-all" />
+                                    </a>
+                                    <a
+                                        href="mailto:hello@epathways.com.ph"
+                                        className="group flex items-center gap-3 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 px-3.5 py-3 transition-colors"
+                                    >
+                                        <span className="w-9 h-9 rounded-md bg-white/10 text-white flex items-center justify-center shrink-0">
+                                            <Mail size={15} />
+                                        </span>
+                                        <div className="min-w-0">
+                                            <p className="text-[9.5px] font-bold uppercase tracking-[0.2em] text-white/45">Email</p>
+                                            <p className="text-[13.5px] font-semibold leading-snug truncate">hello@epathways.com.ph</p>
+                                        </div>
+                                        <ChevronRight size={15} className="ml-auto text-white/40 group-hover:text-white group-hover:translate-x-0.5 transition-all" />
+                                    </a>
                                 </div>
-                                <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-gray-400 mb-1">
-                                    Complimentary
-                                </p>
-                                <h3 className="text-base font-bold text-gray-900 tracking-tight">
-                                    Free assessment
-                                </h3>
-                                <p className="mt-1.5 text-[12.5px] text-gray-500 leading-relaxed">
-                                    A personalised eligibility read on your NZ pathway.
-                                </p>
                             </div>
-                            <ul className="px-6 py-4 space-y-2.5">
+                        </div>
+                    </aside>
+                </div>
+
+                {/* ── Explore more — Free Assessment + Book Consultation, side by
+                    side with imagery so the page doesn't feel flat. ──────── */}
+                <div className="mt-14 grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Free Assessment */}
+                    <div className="bg-white border border-gray-200 overflow-hidden flex flex-col">
+                        <div className="relative h-44 overflow-hidden">
+                            <img src={assessImg} alt="" className="w-full h-full object-cover" />
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/25 to-transparent" />
+                            <div className="absolute bottom-4 left-5 right-5 text-white">
+                                <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-white/70 mb-1">Complimentary</p>
+                                <h3 className="text-xl font-bold tracking-tight">Free assessment</h3>
+                            </div>
+                        </div>
+                        <div className="p-6 flex-1 flex flex-col">
+                            <p className="text-[13px] text-gray-500 leading-relaxed">A personalised eligibility read on your NZ pathway.</p>
+                            <ul className="mt-4 space-y-2.5 flex-1">
                                 {['Visa eligibility mapping', 'Qualification recognition check', 'Step-by-step action plan'].map((txt) => (
                                     <li key={txt} className="flex items-start gap-2.5 text-[12.5px] text-gray-700">
                                         <CheckCircle size={13} className="text-gray-900 shrink-0 mt-0.5" />
@@ -621,34 +664,29 @@ export default function Registration({ event }) {
                                     </li>
                                 ))}
                             </ul>
-                            <div className="px-6 pb-5">
-                                <a
-                                    href="/free-assessment"
-                                    className="inline-flex items-center justify-between w-full px-4 py-3 border border-gray-900 text-gray-900 text-[13px] font-semibold hover:bg-gray-900 hover:text-white transition-colors"
-                                >
-                                    Start assessment
-                                    <ChevronRight size={14} />
-                                </a>
-                            </div>
-                        </SidebarCard>
+                            <a
+                                href="/free-assessment"
+                                className="mt-5 inline-flex items-center justify-between w-full px-4 py-3 border border-gray-900 text-gray-900 text-[13px] font-semibold hover:bg-gray-900 hover:text-white transition-colors"
+                            >
+                                Start assessment
+                                <ChevronRight size={14} />
+                            </a>
+                        </div>
+                    </div>
 
-                        {/* Free Consultation — dark card */}
-                        <SidebarCard dark>
-                            <div className="px-6 py-5 border-b border-white/10">
-                                <div className="w-10 h-10 bg-white/10 backdrop-blur flex items-center justify-center mb-4">
-                                    <Calendar size={16} />
-                                </div>
-                                <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-gray-400 mb-1">
-                                    No cost
-                                </p>
-                                <h3 className="text-base font-bold tracking-tight">
-                                    Book a consultation
-                                </h3>
-                                <p className="mt-1.5 text-[12.5px] text-gray-300 leading-relaxed">
-                                    A 30-minute private session with a certified ePathways adviser.
-                                </p>
+                    {/* Book a Consultation — dark */}
+                    <div className="bg-[#1a1a1a] text-white overflow-hidden flex flex-col">
+                        <div className="relative h-44 overflow-hidden">
+                            <img src={consultImg} alt="" className="w-full h-full object-cover opacity-90" />
+                            <div className="absolute inset-0 bg-gradient-to-t from-[#1a1a1a] via-[#1a1a1a]/50 to-transparent" />
+                            <div className="absolute bottom-4 left-5 right-5">
+                                <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-white/60 mb-1">No cost</p>
+                                <h3 className="text-xl font-bold tracking-tight">Book a consultation</h3>
                             </div>
-                            <ul className="px-6 py-4 space-y-2.5">
+                        </div>
+                        <div className="p-6 flex-1 flex flex-col">
+                            <p className="text-[13px] text-gray-300 leading-relaxed">A 30-minute private session with a certified ePathways adviser.</p>
+                            <ul className="mt-4 space-y-2.5 flex-1">
                                 {['30-min private session', 'Discuss your specific situation', 'No sales pressure'].map((txt) => (
                                     <li key={txt} className="flex items-start gap-2.5 text-[12.5px] text-gray-200">
                                         <CheckCircle size={13} className="text-white shrink-0 mt-0.5" />
@@ -656,58 +694,15 @@ export default function Registration({ event }) {
                                     </li>
                                 ))}
                             </ul>
-                            <div className="px-6 pb-5">
-                                <a
-                                    href="/booking"
-                                    className="inline-flex items-center justify-between w-full px-4 py-3 bg-white text-gray-900 text-[13px] font-semibold hover:bg-gray-100 transition-colors"
-                                >
-                                    View schedule
-                                    <ChevronRight size={14} />
-                                </a>
-                            </div>
-                        </SidebarCard>
-
-                        {/* Contact — white card */}
-                        <SidebarCard>
-                            <div className="px-6 py-5">
-                                <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-gray-400 mb-4">
-                                    Get in touch
-                                </p>
-                                <ul className="space-y-3.5">
-                                    <li className="flex items-start gap-3">
-                                        <span className="w-8 h-8 bg-gray-100 text-gray-700 flex items-center justify-center shrink-0">
-                                            <MapPin size={14} />
-                                        </span>
-                                        <div>
-                                            <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-gray-400">Location</p>
-                                            <p className="text-[13px] text-gray-800 leading-snug mt-0.5">
-                                                2F Landco Center<br />
-                                                Davao City, PH
-                                            </p>
-                                        </div>
-                                    </li>
-                                    <li className="flex items-start gap-3">
-                                        <span className="w-8 h-8 bg-gray-100 text-gray-700 flex items-center justify-center shrink-0">
-                                            <Phone size={14} />
-                                        </span>
-                                        <div>
-                                            <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-gray-400">Phone</p>
-                                            <p className="text-[13px] text-gray-800 leading-snug mt-0.5">+63 (82) 297-5000</p>
-                                        </div>
-                                    </li>
-                                    <li className="flex items-start gap-3">
-                                        <span className="w-8 h-8 bg-gray-100 text-gray-700 flex items-center justify-center shrink-0">
-                                            <Mail size={14} />
-                                        </span>
-                                        <div>
-                                            <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-gray-400">Email</p>
-                                            <p className="text-[13px] text-gray-800 leading-snug mt-0.5">hello@epathways.com.ph</p>
-                                        </div>
-                                    </li>
-                                </ul>
-                            </div>
-                        </SidebarCard>
-                    </aside>
+                            <a
+                                href="/booking"
+                                className="mt-5 inline-flex items-center justify-between w-full px-4 py-3 bg-white text-gray-900 text-[13px] font-semibold hover:bg-gray-100 transition-colors"
+                            >
+                                View schedule
+                                <ChevronRight size={14} />
+                            </a>
+                        </div>
+                    </div>
                 </div>
             </div>
 
