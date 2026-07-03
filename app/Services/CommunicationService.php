@@ -92,13 +92,15 @@ class CommunicationService
     }
 
     /**
-     * Send an ad-hoc message (no template) to a lead on one channel.
+     * Send an ad-hoc message (no template lookup) to a lead on one channel.
+     * Optional banner/footer image paths brand the email shell — pass a
+     * template's images to match its look on a custom compose.
      */
-    public function sendRaw(string $channel, Lead $lead, ?string $subject, string $body): MessageLog
+    public function sendRaw(string $channel, Lead $lead, ?string $subject, string $body, ?string $bannerImage = null, ?string $footerImage = null): MessageLog
     {
         return $channel === MessageLog::CHANNEL_SMS
             ? $this->sendSms($lead, $body, null)
-            : $this->sendEmail($lead, $subject ?? '(no subject)', $body, null);
+            : $this->sendEmail($lead, $subject ?? '(no subject)', $body, null, [], null, $bannerImage, $footerImage);
     }
 
     /**
@@ -206,24 +208,29 @@ class CommunicationService
 
     private function sendEmail(Lead $lead, string $subject, string $body, ?string $key, array $attachments = [], ?int $campaignId = null, ?string $bannerImage = null, ?string $footerImage = null): MessageLog
     {
-        try {
-            Mail::to($lead->email)->queue(new TemplatedMessage($subject, $body, $attachments, $bannerImage, $footerImage));
+        // Log first (status 'queued'), then queue the mail carrying this log's
+        // id. The MessageSent listener flips it to 'sent' once the worker
+        // actually delivers it to the mail server.
+        $log = $this->log([
+            'template_key' => $key, 'campaign_id' => $campaignId, 'channel' => MessageLog::CHANNEL_EMAIL,
+            'recipient_id' => $lead->id, 'recipient_address' => (string) $lead->email,
+            'subject' => $subject, 'body' => $body, 'status' => MessageLog::STATUS_QUEUED,
+        ]);
 
-            return $this->log([
-                'template_key' => $key, 'campaign_id' => $campaignId, 'channel' => MessageLog::CHANNEL_EMAIL,
-                'recipient_id' => $lead->id, 'recipient_address' => $lead->email,
-                'subject' => $subject, 'body' => $body, 'status' => MessageLog::STATUS_QUEUED,
-            ]);
+        try {
+            Mail::to($lead->email)->queue(
+                new TemplatedMessage($subject, $body, $attachments, $bannerImage, $footerImage, $log->id)
+            );
         } catch (\Throwable $e) {
             Log::error('CommunicationService email failed', ['lead_id' => $lead->id, 'error' => $e->getMessage()]);
-
-            return $this->log([
-                'template_key' => $key, 'campaign_id' => $campaignId, 'channel' => MessageLog::CHANNEL_EMAIL,
-                'recipient_id' => $lead->id, 'recipient_address' => (string) $lead->email,
-                'subject' => $subject, 'body' => $body,
-                'status' => MessageLog::STATUS_FAILED, 'error_message' => $e->getMessage(), 'failed_at' => now(),
+            $log->update([
+                'status' => MessageLog::STATUS_FAILED,
+                'error_message' => $e->getMessage(),
+                'failed_at' => now(),
             ]);
         }
+
+        return $log;
     }
 
     private function sendSms(Lead $lead, string $body, ?string $key): MessageLog

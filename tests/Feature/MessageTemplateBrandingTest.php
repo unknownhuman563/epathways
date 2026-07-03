@@ -45,6 +45,26 @@ class MessageTemplateBrandingTest extends TestCase
         Storage::disk('public')->assertExists($template->footer_image);
     }
 
+    public function test_rich_html_body_is_stored_and_script_is_stripped(): void
+    {
+        $this->actingAs($this->admin())
+            ->from('/admin/message-templates')
+            ->post('/admin/message-templates', [
+                'key' => 'rich_body',
+                'name' => 'Rich body',
+                'department' => '',
+                'channels' => ['email'],
+                'email_subject' => 'Hi',
+                'email_body' => '<p style="text-align:center">Hello <strong>there</strong></p><script>alert(1)</script>',
+                'is_active' => true,
+            ])->assertRedirect();
+
+        $body = MessageTemplate::where('key', 'rich_body')->value('email_body');
+        $this->assertStringContainsString('<strong>there</strong>', $body);
+        $this->assertStringContainsString('text-align:center', $body);
+        $this->assertStringNotContainsString('<script', $body);
+    }
+
     public function test_images_are_optional(): void
     {
         Storage::fake('public');
@@ -94,8 +114,8 @@ class MessageTemplateBrandingTest extends TestCase
 
         // Images are embedded inline (data-URI on render / CID on send), not
         // linked by URL, so they load in every mail client regardless of host.
+        // (The CTA buttons are baked into the footer image, not HTML text.)
         $this->assertMatchesRegularExpression('/src="(data:image|cid:)/', $html);
-        $this->assertStringContainsString('BOOK NOW', $html);
         $this->assertStringContainsString('Hello', $html);
         $this->assertStringContainsString('Location', $html);
     }

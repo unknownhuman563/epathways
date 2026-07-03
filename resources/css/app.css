@@ -83,3 +83,21 @@ body {
         --angle: 360deg;
     }
 }
+/* TipTap email-body editor content styling (Tailwind resets defaults, so
+   restore headings/lists/links inside the editor surface). */
+.tiptap-body :is(h1) { font-size: 1.5rem; font-weight: 700; margin: 0.4em 0; }
+.tiptap-body :is(h2) { font-size: 1.25rem; font-weight: 700; margin: 0.4em 0; }
+.tiptap-body :is(h3) { font-size: 1.1rem; font-weight: 700; margin: 0.4em 0; }
+.tiptap-body p { margin: 0.5em 0; }
+.tiptap-body ul { list-style: disc; padding-left: 1.4em; margin: 0.5em 0; }
+.tiptap-body ol { list-style: decimal; padding-left: 1.4em; margin: 0.5em 0; }
+.tiptap-body a { color: #2e7d32; text-decoration: underline; }
+.tiptap-body strong { font-weight: 700; }
+.tiptap-body:focus { outline: none; }
+.tiptap-body p.is-editor-empty:first-child::before {
+    content: "Write your email body…";
+    color: #9ca3af;
+    float: left;
+    height: 0;
+    pointer-events: none;
+}

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Head, Link, router, useForm } from "@inertiajs/react";
 import { ArrowLeft, Save, Trash2, Send, Mail, Smartphone, ImagePlus, X } from "lucide-react";
+import RichTextEditor from "@/components/templates/RichTextEditor";
 
 const inp = "w-full px-3 py-2 rounded-lg border border-gray-200 text-sm outline-none focus:ring-2 focus:ring-gray-300 focus:border-gray-300";
 
@@ -168,8 +169,9 @@ export default function TemplateEditorView({
                                 <input value={data.email_subject} onChange={(e) => setData("email_subject", e.target.value)} className={inp} />
                             </label>
                             <label className="block">
-                                <span className="block text-xs font-semibold text-gray-600 mb-1">Body (Markdown)</span>
-                                <textarea value={data.email_body} onChange={(e) => setData("email_body", e.target.value)} rows={10} className={`${inp} font-mono text-xs`} />
+                                <span className="block text-xs font-semibold text-gray-600 mb-1">Body</span>
+                                <RichTextEditor value={data.email_body} onChange={(html) => setData("email_body", html)} />
+                                <span className="block text-[11px] text-gray-400 mt-1">Format with the toolbar. Insert variables like <code>{"{{first_name}}"}</code> as plain text.</span>
                             </label>
 
                             {/* Optional branding — banner header + footer CTA image.

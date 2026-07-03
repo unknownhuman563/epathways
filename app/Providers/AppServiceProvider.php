@@ -6,7 +6,9 @@ use Illuminate\Auth\Middleware\RedirectIfAuthenticated;
 use Illuminate\Auth\Notifications\ResetPassword;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
+use Illuminate\Mail\Events\MessageSent;
 use Illuminate\Notifications\Messages\MailMessage;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
@@ -43,6 +45,10 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        // Flip a MessageLog from 'queued' to 'sent' once the email actually
+        // reaches the mail server (fires on the queue worker).
+        Event::listen(MessageSent::class, \App\Listeners\MarkMessageLogSent::class);
+
         // Already-logged-in users hitting a 'guest' route (e.g. /login) land on
         // their own home — admins on /admin/dashboard, portal staff on their portal.
         RedirectIfAuthenticated::redirectUsing(

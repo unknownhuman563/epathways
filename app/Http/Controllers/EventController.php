@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Event;
 use App\Models\FacebookLiveSession;
+use App\Services\CommunicationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -50,10 +51,101 @@ class EventController extends Controller
         // Fetch leads that registered for this specific event
         $leads = $event->leads()->with(['studyPlans', 'educationExps', 'eventSession'])->latest()->get();
 
+        // Active email templates staff can start from in the Email tab.
+        $emailTemplates = \App\Models\MessageTemplate::active()
+            ->whereIn('department', ['', $event->organizer_id])
+            ->orderBy('name')
+            ->get()
+            ->filter(fn ($t) => $t->hasChannel('email'))
+            ->map(fn ($t) => [
+                'id' => $t->id,
+                'name' => $t->name,
+                'email_subject' => $t->email_subject,
+                'email_body' => $t->email_body,
+            ])
+            ->values();
+
+        // Recent emails sent to this event's registrants (Email tab history).
+        $sentEmails = \App\Models\MessageLog::whereIn('recipient_id', $leads->pluck('id'))
+            ->where('channel', 'email')
+            ->latest()
+            ->take(50)
+            ->get(['id', 'subject', 'recipient_address', 'status', 'error_message', 'created_at'])
+            ->map(fn ($l) => [
+                'id' => $l->id,
+                'subject' => $l->subject,
+                'recipient' => $l->recipient_address,
+                'status' => $l->status,
+                'error' => $l->error_message,
+                'sent_at' => optional($l->created_at)->toIso8601String(),
+            ]);
+
         return inertia('admin/EventDetails', [
             'event' => $event,
             'leads' => $leads,
+            'emailTemplates' => $emailTemplates,
+            'sentEmails' => $sentEmails,
         ]);
+    }
+
+    /**
+     * Send a composed (or template-based) email to selected registrants of an
+     * event. Body is rich HTML rendered through the branded shell; variables
+     * like {{first_name}} and the event's {{event_*}} are substituted per lead.
+     */
+    public function sendRegistrantEmail(Request $request, $id, CommunicationService $comms)
+    {
+        $event = Event::findOrFail($id);
+
+        $validated = $request->validate([
+            'subject' => 'required|string|max:255',
+            'body' => 'required|string|max:65000',
+            'recipient_ids' => 'required|array|min:1',
+            'recipient_ids.*' => 'integer',
+            'template_id' => 'nullable|integer|exists:message_templates,id',
+        ]);
+
+        // When composed from a template, brand the email with that template's
+        // banner/footer so the Email tab matches the template exactly.
+        $template = ! empty($validated['template_id'])
+            ? \App\Models\MessageTemplate::find($validated['template_id'])
+            : null;
+        $banner = $template?->banner_image;
+        $footer = $template?->footer_image;
+
+        // Only leads that actually belong to this event and have an email.
+        $recipients = $event->leads()
+            ->whereIn('leads.id', $validated['recipient_ids'])
+            ->whereNotNull('email')
+            ->where('email', '!=', '')
+            ->get();
+
+        if ($recipients->isEmpty()) {
+            return back()->with('error', 'No valid recipients with an email address were selected.');
+        }
+
+        $eventCtx = $this->eventEmailContext($event, null);
+        $sent = 0;
+        $failed = 0;
+
+        foreach ($recipients as $lead) {
+            try {
+                $subject = $comms->render($lead, $validated['subject'], $eventCtx, false);
+                $body = $comms->render($lead, $validated['body'], $eventCtx, true);
+                $log = $comms->sendRaw('email', $lead, $subject, $body, $banner, $footer);
+                $log->status === \App\Models\MessageLog::STATUS_FAILED ? $failed++ : $sent++;
+            } catch (\Throwable $e) {
+                $failed++;
+                Log::error('Event registrant email failed', ['lead_id' => $lead->id, 'error' => $e->getMessage()]);
+            }
+        }
+
+        $msg = "Email queued to {$sent} registrant".($sent === 1 ? '' : 's').'.';
+        if ($failed > 0) {
+            $msg .= " {$failed} failed.";
+        }
+
+        return back()->with('success', $msg);
     }
 
     /**
@@ -435,16 +527,26 @@ class EventController extends Controller
 
             DB::commit();
 
-            // Branded confirmation email. Queued + wrapped so a mail/queue
-            // hiccup never turns a successful registration into an error.
+            // Confirmation email. Prefer the staff-editable 'event_registration'
+            // message template (with event variables); fall back to the built-in
+            // branded mailable if that template isn't configured. Wrapped so a
+            // mail/queue hiccup never turns a successful registration into error.
             if (! empty($lead->email)) {
                 try {
                     $session = ! empty($validated['event_session_id'])
                         ? $event->sessions()->find($validated['event_session_id'])
                         : null;
 
-                    \Illuminate\Support\Facades\Mail::to($lead->email)
-                        ->send(new \App\Mail\EventRegistrationConfirmation($lead, $event, $session));
+                    $sent = app(\App\Services\CommunicationService::class)->sendTemplated(
+                        'event_registration',
+                        $lead,
+                        $this->eventEmailContext($event, $session),
+                    );
+
+                    if (! $sent['email']) {
+                        \Illuminate\Support\Facades\Mail::to($lead->email)
+                            ->send(new \App\Mail\EventRegistrationConfirmation($lead, $event, $session));
+                    }
                 } catch (\Throwable $e) {
                     Log::error('Event confirmation email failed', [
                         'lead_id' => $lead->id,
@@ -476,6 +578,61 @@ class EventController extends Controller
                 'message' => 'Registration failed. Please try again later.',
             ], 500);
         }
+    }
+
+    /**
+     * Variables handed to the 'event_registration' message template — the
+     * event's name plus human-friendly date/time/location (preferring the
+     * session the lead picked). Falls back to "To be confirmed" so the email
+     * never shows a blank field.
+     */
+    private function eventEmailContext(Event $event, ?\App\Models\EventSession $session): array
+    {
+        $parse = function ($v) {
+            if (! $v) {
+                return null;
+            }
+            try {
+                return \Illuminate\Support\Carbon::parse($v);
+            } catch (\Throwable) {
+                return null;
+            }
+        };
+
+        $dateFrom = $parse($session?->date ?? $event->date_from);
+        // date_to only applies to an event-level range, not a single session.
+        $dateTo = $session ? null : $parse($event->date_to);
+        $start = $parse($session?->time_start ?? $event->time_start);
+        $end = $parse($session?->time_end ?? $event->time_end);
+
+        if ($dateFrom && $dateTo && ! $dateFrom->isSameDay($dateTo)) {
+            $date = $dateFrom->isSameMonth($dateTo)
+                ? $dateFrom->format('j').' – '.$dateTo->format('j F Y')
+                : $dateFrom->format('j F').' – '.$dateTo->format('j F Y');
+        } else {
+            $date = $dateFrom?->translatedFormat('l, j F Y');
+        }
+
+        $time = $start
+            ? ($end ? $start->format('g:i A').' – '.$end->format('g:i A') : $start->format('g:i A'))
+            : null;
+
+        $location = null;
+        if ($session) {
+            $location = trim(implode(', ', array_filter([$session->venue_name, $session->city]))) ?: null;
+        }
+        $location = $location ?? $event->location ?? match ($event->mode) {
+            'online' => 'Online',
+            'hybrid' => 'Hybrid (online & in-person)',
+            default => null,
+        };
+
+        return [
+            'event_name' => $event->name,
+            'event_date' => $date ?: 'To be confirmed',
+            'event_time' => $time ?: 'To be confirmed',
+            'event_location' => $location ?: 'To be confirmed',
+        ];
     }
 
     /**

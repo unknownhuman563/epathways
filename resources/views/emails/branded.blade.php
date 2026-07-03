@@ -23,18 +23,11 @@
         $footerPath = $footerRel ? Storage::disk('public')->path($footerRel) : public_path('images/coffee-cta.png');
 
         $siteUrl = rtrim(config('app.url'), '/');
-        // Footer is a BACKGROUND image — it must load from a real URL (a CID
-        // background can't render and would just orphan as an attachment). The
-        // banner + icons stay embedded (they're <img> tags → inline, no attach).
-        $footerUrl = $footerRel ? $siteUrl.Storage::disk('public')->url($footerRel) : $siteUrl.'/images/coffee-cta.png';
 
-        // Height auto-matches the image's own aspect ratio (at 600px wide) so
-        // ANY footer picture shows whole — no crop, no empty gap.
-        $footerDims = @getimagesize($footerPath);
-        $footerH = ($footerDims && ! empty($footerDims[0]))
-            ? (int) round(600 * $footerDims[1] / $footerDims[0])
-            : 400;
-
+        // Banner is embedded inline <img> (Gmail renders those reliably). The
+        // footer has the CTA buttons baked into the pixels — Gmail allows no
+        // HTML overlay, so this is the only way to show buttons "on" the image
+        // (exactly how the original template did it). Any aspect ratio is fine.
         $banner = is_file($bannerPath) ? $message->embed($bannerPath) : null;
         $siteHost = preg_replace('#^https?://#', '', $siteUrl);
         $phone = config('services.contact.phone');
@@ -42,6 +35,10 @@
         $facebook = config('services.contact.facebook');
         $messenger = config('services.contact.messenger');
         $contactEmail = config('services.contact.email');
+
+        $footerBytes = is_file($footerPath)
+            ? app(\App\Services\EmailFooterComposer::class)->composeBytes($footerPath, 'BOOK NOW', $phone ? 'CALL '.$phone : null)
+            : null;
     @endphp
 
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#eef0f4;">
@@ -65,52 +62,18 @@
                         </td>
                     </tr>
 
-                    {{-- Footer CTA — full-width consultation image (shown whole,
-                         not cropped) with the two pill buttons overlaid, centered.
-                         The image is a cell background (public URL) with a VML
-                         fill for Outlook. Cell is square to match the 1:1 art so
-                         `cover` fills it exactly with no cropping. --}}
+                    {{-- Footer CTA — full-width consultation image with the two
+                         CTA buttons baked into it (see $footerBytes above). The
+                         whole image links to the booking page. --}}
+                    @if ($footerBytes)
                     <tr>
                         <td style="padding:24px 0 0 0;">
-                            <!--[if gte mso 9]>
-                            <v:rect xmlns:v="urn:schemas-microsoft-com:vml" fill="true" stroke="false" style="width:600px; height:{{ $footerH }}px;">
-                                <v:fill type="frame" src="{{ $footerUrl }}" color="#ffffff" />
-                                <v:textbox inset="0,0,0,0"><div>
-                            <![endif]-->
-                            <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
-                                   background="{{ $footerUrl }}"
-                                   style="background:#ffffff url('{{ $footerUrl }}') center center / cover no-repeat;">
-                                <tr>
-                                    <td align="center" valign="middle" height="{{ $footerH }}" style="height:{{ $footerH }}px;">
-                                        <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%; max-width:320px;">
-                                            <tr>
-                                                <td style="padding:0 0 12px 0;">
-                                                    <a href="{{ $siteUrl }}/booking" target="_blank"
-                                                       style="display:block; background-color:#2e7d32; color:#ffffff; text-align:center; text-decoration:none; font-size:14px; font-weight:700; letter-spacing:0.5px; padding:14px 20px; border-radius:30px;">
-                                                        BOOK NOW
-                                                    </a>
-                                                </td>
-                                            </tr>
-                                            @if ($phone)
-                                            <tr>
-                                                <td>
-                                                    <a href="tel:{{ preg_replace('/[^0-9+]/', '', $phone) }}" target="_blank"
-                                                       style="display:block; background-color:#1b5e20; color:#ffffff; text-align:center; text-decoration:none; font-size:14px; font-weight:700; letter-spacing:0.5px; padding:14px 20px; border-radius:30px;">
-                                                        CALL {{ $phone }}
-                                                    </a>
-                                                </td>
-                                            </tr>
-                                            @endif
-                                        </table>
-                                    </td>
-                                </tr>
-                            </table>
-                            <!--[if gte mso 9]>
-                                </div></v:textbox>
-                            </v:rect>
-                            <![endif]-->
+                            <a href="{{ $siteUrl }}/booking" target="_blank">
+                                <img src="{{ $message->embedData($footerBytes, 'footer.jpg', 'image/jpeg') }}" alt="Book your free consultation with ePathways" width="600" style="display:block; width:100%; max-width:600px; height:auto; border:0;">
+                            </a>
                         </td>
                     </tr>
+                    @endif
 
                     {{-- Social icons --}}
                     <tr>

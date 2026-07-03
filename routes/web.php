@@ -322,6 +322,7 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/admin/events', [EventController::class, 'index'])->name('admin.events');
         Route::post('/admin/events', [EventController::class, 'store']);
         Route::get('/admin/events/{id}', [EventController::class, 'show'])->name('admin.events.show');
+        Route::post('/admin/events/{id}/email', [EventController::class, 'sendRegistrantEmail'])->name('admin.events.email');
         Route::post('/admin/events/{id}', [EventController::class, 'update']);
         Route::delete('/admin/events/{id}', [EventController::class, 'destroy']);
 

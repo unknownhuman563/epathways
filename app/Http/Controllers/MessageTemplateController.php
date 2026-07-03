@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Services\CommunicationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
 /**
@@ -31,6 +32,10 @@ class MessageTemplateController extends Controller
         ['name' => 'assigned_staff_name', 'description' => 'Assigned staff member, or "the ePathways team"'],
         ['name' => 'status', 'description' => 'Application status (passed when staff send an update)'],
         ['name' => 'status_detail', 'description' => 'Optional note describing the status change'],
+        ['name' => 'event_name', 'description' => 'Event title (event_registration template)'],
+        ['name' => 'event_date', 'description' => 'Event date (event_registration template)'],
+        ['name' => 'event_time', 'description' => 'Event time (event_registration template)'],
+        ['name' => 'event_location', 'description' => 'Event location (event_registration template)'],
     ];
 
     public function index(Request $request)
@@ -77,6 +82,13 @@ class MessageTemplateController extends Controller
         $template->banner_image_url = $template->banner_image ? Storage::disk('public')->url($template->banner_image) : null;
         $template->footer_image_url = $template->footer_image ? Storage::disk('public')->url($template->footer_image) : null;
 
+        // The body is now rich HTML. Legacy templates were authored in Markdown
+        // — convert them so they load formatted in the editor (and re-save as
+        // HTML going forward).
+        if ($template->email_body && ! preg_match('/<[a-z][\s\S]*>/i', $template->email_body)) {
+            $template->email_body = Str::markdown($template->email_body);
+        }
+
         return inertia($ctx['editorComponent'], [
             'template' => $template,
             'standardVariables' => self::STANDARD_VARIABLES,
@@ -101,6 +113,7 @@ class MessageTemplateController extends Controller
         ], ['key.regex' => 'Key must be lowercase letters, numbers and underscores only.']);
 
         $this->applyImages($request, $data, null);
+        $data['email_body'] = $this->sanitizeBody($data['email_body'] ?? null);
         $data['department'] = $department;
         $data['created_by'] = $request->user()->id;
         $template = MessageTemplate::create($data);
@@ -117,6 +130,7 @@ class MessageTemplateController extends Controller
         // Key and department are immutable after creation — code references them.
         $data = $request->validate([...$this->bodyRules(), ...$this->imageRules()]);
         $this->applyImages($request, $data, $template);
+        $data['email_body'] = $this->sanitizeBody($data['email_body'] ?? null);
         $template->update($data);
 
         return back()->with('success', 'Template saved.');
@@ -255,10 +269,30 @@ class MessageTemplateController extends Controller
             'channels' => ['array'],
             'channels.*' => [Rule::in(MessageTemplate::CHANNELS)],
             'email_subject' => ['nullable', 'string', 'max:255'],
-            'email_body' => ['nullable', 'string', 'max:20000'],
+            // Rich HTML from the editor is more verbose than the old Markdown.
+            'email_body' => ['nullable', 'string', 'max:65000'],
             'sms_body' => ['nullable', 'string', 'max:1600'],
             'is_active' => ['boolean'],
         ];
+    }
+
+    /**
+     * Strip dangerous elements/attributes from the rich-text body. The editor
+     * only emits safe HTML and authors are trusted staff, but this is a cheap
+     * defense-in-depth pass before the HTML is stored and later emailed.
+     */
+    private function sanitizeBody(?string $html): ?string
+    {
+        if ($html === null || $html === '') {
+            return $html;
+        }
+
+        $html = preg_replace('#<(script|style|iframe|object|embed)\b[^>]*>.*?</\1>#is', '', $html);
+        $html = preg_replace('#<(script|style|iframe|object|embed)\b[^>]*/?>#i', '', $html);
+        $html = preg_replace('#\son\w+\s*=\s*("[^"]*"|\'[^\']*\'|[^\s>]+)#i', '', $html);
+        $html = preg_replace('#(href|src)\s*=\s*(["\'])\s*javascript:[^"\']*\2#i', '$1="#"', $html);
+
+        return $html;
     }
 
     /** Optional email-shell branding images (banner header + footer CTA). */

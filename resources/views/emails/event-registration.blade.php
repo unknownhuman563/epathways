@@ -74,14 +74,19 @@
                     <tr>
                         <td style="padding:20px 40px 0 40px;">
                             <p style="margin:0 0 14px 0; font-size:14px; line-height:1.6; color:#333333;">
+                                Thank you for your interest in exploring opportunities to study and work in New Zealand
+                                with ePathways.
+                            </p>
+                            <p style="margin:0 0 14px 0; font-size:14px; line-height:1.6; color:#333333;">
                                 We are an <strong>education consultancy</strong> that helps students and professionals
                                 choose the right study pathway, understand requirements, and complete their application
                                 process step by step. Our goal is to make your journey clear, guided, and achievable —
                                 from selecting the right program to preparing your requirements.
                             </p>
                             <p style="margin:0 0 14px 0; font-size:14px; line-height:1.6; color:#333333;">
-                                To better assist you, a member of the ePathways team will personally reach out within the
-                                <strong>next 24 hours</strong> to discuss your background and possible options based on your profile.
+                                To better assist you, I, <strong>Bryll</strong> of ePathways Philippines, will personally
+                                reach out within the <strong>next 24 hours</strong> to discuss your background and possible
+                                options based on your profile.
                             </p>
                             <p style="margin:0 0 14px 0; font-size:14px; line-height:1.6; color:#333333;">
                                 This will be a quick <strong>10–15 minute session</strong>, where we can assess your profile
@@ -93,49 +98,22 @@
                         </td>
                     </tr>
 
-                    {{-- Footer CTA — full-width consultation image (shown whole,
-                         not cropped) with the two pill buttons overlaid. --}}
+                    {{-- Footer CTA — consultation image with the CTA buttons
+                         baked into it (Gmail can't overlay HTML on an image);
+                         the whole image links to the booking page. --}}
+                    @php
+                        $footerBytes = app(\App\Services\EmailFooterComposer::class)
+                            ->composeBytes(public_path('images/coffee-cta.png'), 'BOOK NOW', $phone ? 'CALL '.$phone : null);
+                    @endphp
+                    @if ($footerBytes)
                     <tr>
                         <td style="padding:26px 0 0 0;">
-                            <!--[if gte mso 9]>
-                            <v:rect xmlns:v="urn:schemas-microsoft-com:vml" fill="true" stroke="false" style="width:600px; height:600px;">
-                                <v:fill type="frame" src="{{ $siteUrl }}/images/coffee-cta.png" color="#ffffff" />
-                                <v:textbox inset="0,0,0,0"><div>
-                            <![endif]-->
-                            <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
-                                   background="{{ $siteUrl }}/images/coffee-cta.png"
-                                   style="background:#ffffff url('{{ $siteUrl }}/images/coffee-cta.png') center center / cover no-repeat;">
-                                <tr>
-                                    <td align="center" valign="middle" height="600" style="height:600px;">
-                                        <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%; max-width:320px;">
-                                            <tr>
-                                                <td style="padding:0 0 12px 0;">
-                                                    <a href="{{ $bookUrl }}" target="_blank"
-                                                       style="display:block; background-color:#2e7d32; color:#ffffff; text-align:center; text-decoration:none; font-size:14px; font-weight:700; letter-spacing:0.5px; padding:14px 20px; border-radius:30px;">
-                                                        BOOK NOW
-                                                    </a>
-                                                </td>
-                                            </tr>
-                                            @if ($phone)
-                                            <tr>
-                                                <td>
-                                                    <a href="tel:{{ preg_replace('/[^0-9+]/', '', $phone) }}" target="_blank"
-                                                       style="display:block; background-color:#1b5e20; color:#ffffff; text-align:center; text-decoration:none; font-size:14px; font-weight:700; letter-spacing:0.5px; padding:14px 20px; border-radius:30px;">
-                                                        CALL {{ $phone }}
-                                                    </a>
-                                                </td>
-                                            </tr>
-                                            @endif
-                                        </table>
-                                    </td>
-                                </tr>
-                            </table>
-                            <!--[if gte mso 9]>
-                                </div></v:textbox>
-                            </v:rect>
-                            <![endif]-->
+                            <a href="{{ $bookUrl }}" target="_blank">
+                                <img src="{{ $message->embedData($footerBytes, 'footer.jpg', 'image/jpeg') }}" alt="Book your free consultation with ePathways" width="600" style="display:block; width:100%; max-width:600px; height:auto; border:0;">
+                            </a>
                         </td>
                     </tr>
+                    @endif
 
                     {{-- Social icons --}}
                     <tr>

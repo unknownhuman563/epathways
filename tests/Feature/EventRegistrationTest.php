@@ -79,7 +79,9 @@ class EventRegistrationTest extends TestCase
 
         $this->assertStringContainsString('Mabuhay, Neil', $html);
         $this->assertStringContainsString($event->name, $html);
-        $this->assertStringContainsString('BOOK NOW', $html);
+        // CTA buttons are baked into the footer image, so assert the embedded
+        // footer image is present rather than HTML button text.
+        $this->assertMatchesRegularExpression('/src="(data:image|cid:)/', $html);
         $this->assertStringContainsString('registering', $html);
     }
 

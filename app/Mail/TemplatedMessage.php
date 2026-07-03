@@ -8,6 +8,7 @@ use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Attachment;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
+use Illuminate\Mail\Mailables\Headers;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Str;
 
@@ -36,11 +37,24 @@ class TemplatedMessage extends Mailable implements ShouldQueue
         public array $attachmentFiles = [],
         public ?string $bannerImage = null,
         public ?string $footerImage = null,
+        public ?int $logId = null,
     ) {}
 
     public function envelope(): Envelope
     {
         return new Envelope(subject: $this->subjectLine);
+    }
+
+    /**
+     * Carry the MessageLog id as a header so the MessageSent listener can flip
+     * that log from 'queued' to 'sent' once delivery to the mail server
+     * actually happens (on the queue worker).
+     */
+    public function headers(): Headers
+    {
+        return new Headers(
+            text: $this->logId ? ['X-Log-Id' => (string) $this->logId] : [],
+        );
     }
 
     public function content(): Content
@@ -49,11 +63,23 @@ class TemplatedMessage extends Mailable implements ShouldQueue
             view: 'emails.branded',
             with: [
                 'subjectLine' => $this->subjectLine,
-                'bodyHtml'    => Str::markdown($this->markdownBody),
+                'bodyHtml'    => $this->bodyHtml(),
                 'bannerImage' => $this->bannerImage,
                 'footerImage' => $this->footerImage,
             ],
         );
+    }
+
+    /**
+     * Body content is HTML from the rich-text editor. Legacy templates were
+     * authored in Markdown (no HTML tags) — render those through the Markdown
+     * parser so old templates keep working.
+     */
+    private function bodyHtml(): string
+    {
+        return preg_match('/<[a-z][\s\S]*>/i', $this->markdownBody)
+            ? $this->markdownBody
+            : Str::markdown($this->markdownBody);
     }
 
     public function attachments(): array
