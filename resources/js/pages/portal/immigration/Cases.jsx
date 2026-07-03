@@ -243,6 +243,7 @@ function CreateCaseModal({ stages, visaTypes, editing = null, onClose }) {
         email: editing?.email || '',
         phone: editing?.phone || '',
         immigration_stage: editing?.immigration_stage || stages[0] || '',
+        immigration_priority: editing?.immigration_priority || '',
         internal_note: '',
         payment: editing?.payment || '',
         // The case row stores the visa *name* (inz_visa_type); map it back to
@@ -379,7 +380,7 @@ function CreateCaseModal({ stages, visaTypes, editing = null, onClose }) {
 
                     {/* Contact row */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <CaseField label="Email" required error={errors.email}>
+                        <CaseField label="Email" error={errors.email}>
                             <input
                                 type="email"
                                 value={data.email}
@@ -388,7 +389,7 @@ function CreateCaseModal({ stages, visaTypes, editing = null, onClose }) {
                                 className={caseInput(errors.email)}
                             />
                         </CaseField>
-                        <CaseField label="Contact number" required error={errors.phone}>
+                        <CaseField label="Contact number" error={errors.phone}>
                             <input
                                 type="tel"
                                 value={data.phone}
@@ -412,7 +413,7 @@ function CreateCaseModal({ stages, visaTypes, editing = null, onClose }) {
                                 ))}
                             </select>
                         </CaseField>
-                        <CaseField label="Visa type" required error={errors.visa_type_id}>
+                        <CaseField label="Visa type" error={errors.visa_type_id}>
                             <select
                                 value={data.visa_type_id}
                                 onChange={(e) => setData('visa_type_id', e.target.value)}
@@ -426,16 +427,31 @@ function CreateCaseModal({ stages, visaTypes, editing = null, onClose }) {
                         </CaseField>
                     </div>
 
-                    <CaseField label="Payment" hint="Optional — free-form (e.g. amount, reference, status)" error={errors.payment}>
-                        <input
-                            type="text"
-                            value={data.payment}
-                            onChange={(e) => setData('payment', e.target.value)}
-                            maxLength={120}
-                            placeholder="e.g. $500 deposit · ref 12345"
-                            className={caseInput(errors.payment)}
-                        />
-                    </CaseField>
+                    {/* Priority + payment */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <CaseField label="Priority" hint="Sets the colour of the case avatar" error={errors.immigration_priority}>
+                            <select
+                                value={data.immigration_priority}
+                                onChange={(e) => setData('immigration_priority', e.target.value)}
+                                className={caseInput(errors.immigration_priority)}
+                            >
+                                <option value="">— none —</option>
+                                <option value="urgent">🔴 Urgent</option>
+                                <option value="medium">🟠 Medium</option>
+                                <option value="low">🟢 Low</option>
+                            </select>
+                        </CaseField>
+                        <CaseField label="Payment" hint="Optional — free-form (e.g. amount, reference, status)" error={errors.payment}>
+                            <input
+                                type="text"
+                                value={data.payment}
+                                onChange={(e) => setData('payment', e.target.value)}
+                                maxLength={120}
+                                placeholder="e.g. $500 deposit · ref 12345"
+                                className={caseInput(errors.payment)}
+                            />
+                        </CaseField>
+                    </div>
 
                     <CaseField label="Internal note" hint="Optional — only staff see this" error={errors.internal_note}>
                         <textarea
@@ -714,7 +730,10 @@ function CaseRow({ c, stages, isExpanded, onExpand, stageMenuOpen, onStageMenuTo
                         href={`/portal/immigration/cases/${c.id}/profile`}
                         className="flex items-center gap-2.5 min-w-[200px] group/case"
                     >
-                        <div className={`w-7 h-7 rounded-full flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0 ${avatarColor(c.id)}`}>
+                        <div
+                            className={`w-7 h-7 rounded-full flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0 ${priorityColor(c.immigration_priority) || avatarColor(c.id)}`}
+                            title={c.immigration_priority ? `Priority: ${c.immigration_priority}` : undefined}
+                        >
                             {initials(c.name)}
                         </div>
                         <div className="min-w-0">
@@ -1032,6 +1051,18 @@ function avatarColor(id) {
         'bg-fuchsia-500', 'bg-teal-500',
     ];
     return palette[Math.abs((id || 0) * 31) % palette.length];
+}
+
+// Priority → avatar colour: urgent (red), medium (orange), low (green).
+// Empty string when no priority is set so the caller falls back to the
+// per-id palette colour.
+function priorityColor(priority) {
+    switch (priority) {
+        case 'urgent': return 'bg-red-500';
+        case 'medium': return 'bg-orange-500';
+        case 'low':    return 'bg-emerald-500';
+        default:       return '';
+    }
 }
 
 function fmtDate(d) {

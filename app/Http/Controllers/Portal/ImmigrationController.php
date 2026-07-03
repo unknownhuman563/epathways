@@ -220,14 +220,14 @@ class ImmigrationController extends Controller
             ->latest()
             ->get()
             ->map(fn (Event $e) => [
-                'id'                  => $e->id,
-                'name'                => $e->name,
-                'event_code'          => $e->event_code,
-                'type'                => $e->type,
-                'mode'                => $e->mode,
-                'location'            => $e->location,
-                'date_from'           => optional($e->date_from)->toIso8601String(),
-                'status'              => $e->status,
+                'id' => $e->id,
+                'name' => $e->name,
+                'event_code' => $e->event_code,
+                'type' => $e->type,
+                'mode' => $e->mode,
+                'location' => $e->location,
+                'date_from' => optional($e->date_from)->toIso8601String(),
+                'status' => $e->status,
                 'registrations_count' => $e->leads_count,
             ]);
     }
@@ -241,17 +241,17 @@ class ImmigrationController extends Controller
             ->latest()
             ->get()
             ->map(fn (Lead $l) => [
-                'id'         => $l->id,
-                'lead_id'    => $l->lead_id,
-                'name'       => trim("{$l->first_name} {$l->last_name}") ?: 'Unnamed lead',
-                'email'      => $l->email,
-                'phone'      => $l->phone,
-                'status'     => $l->status,
+                'id' => $l->id,
+                'lead_id' => $l->lead_id,
+                'name' => trim("{$l->first_name} {$l->last_name}") ?: 'Unnamed lead',
+                'email' => $l->email,
+                'phone' => $l->phone,
+                'status' => $l->status,
                 'created_at' => optional($l->created_at)->toIso8601String(),
             ]);
 
         return response()->json([
-            'event'         => ['id' => $event->id, 'name' => $event->name],
+            'event' => ['id' => $event->id, 'name' => $event->name],
             'registrations' => $registrations,
         ]);
     }
@@ -312,6 +312,7 @@ class ImmigrationController extends Controller
                     // up top. Pre-existing leads still on `inz_status`
                     // fall back to "Unassigned".
                     'immigration_stage' => $l->immigration_stage,
+                    'immigration_priority' => $l->immigration_priority,
                     'docs_total' => $l->documents->count(),
                     'docs_approved' => $l->documents->where('status', 'Approved')->count(),
                     'docs_pending' => $l->documents->whereIn('status', ['Submitted', 'UnderReview'])->count(),
@@ -376,15 +377,16 @@ class ImmigrationController extends Controller
             'last_name' => 'required|string|max:80',
             'suffix' => 'nullable|string|max:20',
             'gender' => 'nullable|string|max:30',
-            'email' => 'required|email|max:120',
-            'phone' => 'required|string|max:40',
+            'email' => 'nullable|email|max:120',
+            'phone' => 'nullable|string|max:40',
             // Stage is now optional — if the staff member doesn't pick
             // one we default to the first canonical value ("Endorsed")
             // below so the new case lands cleanly on the journey rail.
             'immigration_stage' => ['nullable', \Illuminate\Validation\Rule::in(Lead::IMMIGRATION_STAGES)],
+            'immigration_priority' => ['nullable', \Illuminate\Validation\Rule::in(Lead::IMMIGRATION_PRIORITIES)],
             'internal_note' => 'nullable|string|max:5000',
             'payment' => 'nullable|string|max:120',
-            'visa_type_id' => 'required|integer|exists:visa_types,id',
+            'visa_type_id' => 'nullable|integer|exists:visa_types,id',
         ]);
 
         $visa = \App\Models\VisaType::find($data['visa_type_id']);
@@ -396,9 +398,10 @@ class ImmigrationController extends Controller
             'last_name' => $data['last_name'],
             'suffix' => $data['suffix'] ?? null,
             'gender' => $data['gender'] ?? null,
-            'email' => $data['email'],
-            'phone' => $data['phone'],
+            'email' => $data['email'] ?? null,
+            'phone' => $data['phone'] ?? null,
             'immigration_stage' => $data['immigration_stage'] ?? Lead::IMMIGRATION_STAGES[0],
+            'immigration_priority' => $data['immigration_priority'] ?? null,
             'inz_visa_type' => $visa?->name,
             'student_payment' => $data['payment'] ?? null,
             // Mark immediately as an immigration case so scopeImmigrationCase
@@ -438,40 +441,42 @@ class ImmigrationController extends Controller
         $lead = Lead::immigrationCase()->findOrFail($id);
 
         $data = $request->validate([
-            'first_name'        => 'required|string|max:80',
-            'middle_name'       => 'nullable|string|max:80',
-            'last_name'         => 'required|string|max:80',
-            'suffix'            => 'nullable|string|max:20',
-            'gender'            => 'nullable|string|max:30',
-            'email'             => 'required|email|max:120',
-            'phone'             => 'required|string|max:40',
+            'first_name' => 'required|string|max:80',
+            'middle_name' => 'nullable|string|max:80',
+            'last_name' => 'required|string|max:80',
+            'suffix' => 'nullable|string|max:20',
+            'gender' => 'nullable|string|max:30',
+            'email' => 'nullable|email|max:120',
+            'phone' => 'nullable|string|max:40',
             'immigration_stage' => ['nullable', \Illuminate\Validation\Rule::in(Lead::IMMIGRATION_STAGES)],
-            'internal_note'     => 'nullable|string|max:5000',
-            'payment'           => 'nullable|string|max:120',
-            'visa_type_id'      => 'required|integer|exists:visa_types,id',
+            'immigration_priority' => ['nullable', \Illuminate\Validation\Rule::in(Lead::IMMIGRATION_PRIORITIES)],
+            'internal_note' => 'nullable|string|max:5000',
+            'payment' => 'nullable|string|max:120',
+            'visa_type_id' => 'nullable|integer|exists:visa_types,id',
         ]);
 
         $visa = \App\Models\VisaType::find($data['visa_type_id']);
 
         $lead->update([
-            'first_name'        => $data['first_name'],
-            'middle_name'       => $data['middle_name'] ?? null,
-            'last_name'         => $data['last_name'],
-            'suffix'            => $data['suffix'] ?? null,
-            'gender'            => $data['gender'] ?? null,
-            'email'             => $data['email'],
-            'phone'             => $data['phone'],
+            'first_name' => $data['first_name'],
+            'middle_name' => $data['middle_name'] ?? null,
+            'last_name' => $data['last_name'],
+            'suffix' => $data['suffix'] ?? null,
+            'gender' => $data['gender'] ?? null,
+            'email' => $data['email'] ?? null,
+            'phone' => $data['phone'] ?? null,
             'immigration_stage' => $data['immigration_stage'] ?? $lead->immigration_stage,
-            'inz_visa_type'     => $visa?->name,
-            'student_payment'   => $data['payment'] ?? null,
+            'immigration_priority' => $data['immigration_priority'] ?? null,
+            'inz_visa_type' => $visa?->name,
+            'student_payment' => $data['payment'] ?? null,
         ]);
 
         // A note is optional on edit — only append when the staffer typed one.
         if (! empty($data['internal_note'])) {
             \App\Models\LeadNote::create([
-                'lead_id'     => $lead->id,
-                'kind'        => 'general',
-                'body'        => $data['internal_note'],
+                'lead_id' => $lead->id,
+                'kind' => 'general',
+                'body' => $data['internal_note'],
                 'author_name' => auth()->user()?->name ?? 'System',
                 'author_role' => auth()->user()?->role ?? 'immigration',
             ]);
