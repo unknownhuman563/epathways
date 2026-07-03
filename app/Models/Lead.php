@@ -81,6 +81,12 @@ class Lead extends Model
     ];
 
     /**
+     * Case priority levels, surfaced on the Cases board as a coloured
+     * avatar — urgent (red), medium (orange), low (green).
+     */
+    public const IMMIGRATION_PRIORITIES = ['urgent', 'medium', 'low'];
+
+    /**
      * Named people who can be assigned to a lead while it sits at a given
      * sub-stage. Free-text labels (not user FKs) — "DIY" is a handling mode,
      * not a person — surfaced as a dropdown beside the stage in the Students
@@ -239,7 +245,7 @@ class Lead extends Model
         // English / Immigration sub-stage tracks (see ENGLISH_STAGES,
         // IMMIGRATION_STAGES). Each carries an optional named assignee.
         'english_stage', 'english_assignee',
-        'immigration_stage', 'immigration_assignee',
+        'immigration_stage', 'immigration_priority', 'immigration_assignee',
         // Full dated timeline of every department status change — drives the
         // Pipeline "when did this status happen" view. See recordStageChange().
         'stage_history',
