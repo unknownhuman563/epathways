@@ -362,6 +362,15 @@ Route::middleware(['auth'])->group(function () {
         Route::delete('/admin/message-templates/{id}', [\App\Http\Controllers\MessageTemplateController::class, 'destroy'])->name('admin.message-templates.destroy');
         Route::post('/admin/message-templates/{id}/test', [\App\Http\Controllers\MessageTemplateController::class, 'sendTest'])->name('admin.message-templates.test');
 
+        // Email replies — where replies to our emails land (Reply-To inbox).
+        Route::get('/admin/email/replies', function () {
+            return inertia('admin/email/Replies', [
+                'replyTo' => config('services.contact.reply_to'),
+                'eventFrom' => config('services.contact.event_from_email'),
+                'defaultFrom' => config('mail.from.address'),
+            ]);
+        })->name('admin.email.replies');
+
         // System request tickets — admin + super-admin triage board.
         Route::get('/admin/system-tickets', [\App\Http\Controllers\SystemTicketController::class, 'adminIndex'])->name('admin.system-tickets');
         Route::post('/admin/system-tickets/{id}', [\App\Http\Controllers\SystemTicketController::class, 'adminUpdate'])->name('admin.system-tickets.update');
