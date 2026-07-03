@@ -37,14 +37,19 @@ const SUBMITTED_STATUSES = new Set(["Submitted", "submitted"]);
 const COMPLETED_STATUSES = new Set(["Completed", "Engaged", "Converted", "Approved", "completed", "engaged", "converted"]);
 
 const isCompleted = (i) => COMPLETED_STATUSES.has(i.status);
-const isSubmitted = (i) => SUBMITTED_STATUSES.has(i.status);
-const isDraft     = (i) => ! isSubmitted(i) && ! isCompleted(i); // default → draft
+// A row counts as "submitted" once the applicant actually submitted the
+// form. `journey.submitted` is the authoritative signal (the string status
+// can still be a legacy "New" default even though the form was submitted),
+// so the collapsed status pill matches the expanded journey's Submitted step.
+const hasSubmitted = (i) => !! (i.journey?.submitted) || SUBMITTED_STATUSES.has(i.status);
+const isSubmitted = (i) => ! isCompleted(i) && hasSubmitted(i);
+const isDraft     = (i) => ! isCompleted(i) && ! hasSubmitted(i);
 
 // Returns { stage: 'draft' | 'submitted' | 'completed', pct: 33|66|100 }
 const progressOf = (i) => {
     if (isCompleted(i)) return { stage: "completed", pct: 100 };
-    if (isDraft(i))     return { stage: "draft",     pct: 33  };
-    return                     { stage: "submitted", pct: 66  };
+    if (isSubmitted(i)) return { stage: "submitted", pct: 66  };
+    return                     { stage: "draft",     pct: 33  };
 };
 
 const STAGE_STYLES = {

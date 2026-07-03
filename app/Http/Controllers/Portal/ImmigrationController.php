@@ -335,6 +335,16 @@ class ImmigrationController extends Controller
                 ])
                 ->values();
 
+            // Priority breakdown for the small counter next to the stage
+            // graph — urgent / medium / low + a "none" bucket for cases with
+            // no priority set.
+            $priorities = [
+                'urgent' => $cases->where('immigration_priority', 'urgent')->count(),
+                'medium' => $cases->where('immigration_priority', 'medium')->count(),
+                'low' => $cases->where('immigration_priority', 'low')->count(),
+            ];
+            $priorities['none'] = max(0, $cases->count() - array_sum($priorities));
+
             // Visa-type catalogue for the "Add new case" form. Active
             // entries only so inactive types don't pollute the dropdown,
             // ordered by category → name to match VisaType admin tooling.
@@ -347,6 +357,7 @@ class ImmigrationController extends Controller
             return inertia('portal/immigration/Cases', [
                 'cases' => $cases,
                 'distribution' => $distribution,
+                'priorities' => $priorities,
                 'stages' => Lead::IMMIGRATION_STAGES,
                 'visaTypes' => $visaTypes,
             ]);
@@ -356,6 +367,7 @@ class ImmigrationController extends Controller
             return inertia('portal/immigration/Cases', [
                 'cases' => [],
                 'distribution' => [],
+                'priorities' => ['urgent' => 0, 'medium' => 0, 'low' => 0, 'none' => 0],
                 'stages' => Lead::IMMIGRATION_STAGES,
                 'visaTypes' => [],
             ]);
@@ -519,6 +531,28 @@ class ImmigrationController extends Controller
         if ($stageMoved || $lead->isDirty('immigration_assignee')) {
             $lead->save();
         }
+
+        return back();
+    }
+
+    /**
+     * Inline visa-type update from the Cases table. Stamps the matching
+     * VisaType name onto `inz_visa_type` (or clears it when null is posted).
+     */
+    public function updateCaseVisa(\Illuminate\Http\Request $request, $id)
+    {
+        $lead = Lead::immigrationCase()->findOrFail($id);
+
+        $data = $request->validate([
+            'visa_type_id' => 'nullable|integer|exists:visa_types,id',
+        ]);
+
+        $visa = ! empty($data['visa_type_id'])
+            ? \App\Models\VisaType::find($data['visa_type_id'])
+            : null;
+
+        $lead->inz_visa_type = $visa?->name;
+        $lead->save();
 
         return back();
     }
@@ -759,7 +793,11 @@ class ImmigrationController extends Controller
                     // intake isn't already Engaged, (3) no existing
                     // Lead with matching email is already an
                     // immigration case.
-                    'can_convert' => $hasAssessment
+                    // Resident intakes can convert even without a paired
+                    // Assessment — the controller falls back to the
+                    // intake-only path (convertResidentIntakeWithoutAssessment)
+                    // so the action isn't a dead end for pre-Assessment rows.
+                    'can_convert' => ($hasAssessment || $visaType === 'resident')
                         && $intake->status !== 'Engaged'
                         && ! $isConverted,
                     'detail_url' => $visaType === 'resident'

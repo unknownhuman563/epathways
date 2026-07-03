@@ -825,6 +825,8 @@ Route::middleware(['auth'])->group(function () {
             // Inline stage update from the Cases table — mirrors the
             // EducationController dashboard-field pattern.
             Route::post('/cases/{id}/stage', [ImmigrationController::class, 'updateCaseStage'])->name('cases.stage');
+            // Inline visa-type update from the Cases table.
+            Route::post('/cases/{id}/visa', [ImmigrationController::class, 'updateCaseVisa'])->name('cases.visa');
 
             // Build 11.D — purpose-built Case Profile page. The {lead} binding
             // is the Lead model; controller hard-404s when is_immigration_case

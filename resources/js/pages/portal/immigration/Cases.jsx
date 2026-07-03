@@ -60,7 +60,7 @@ const STAGE_CHIP = {
 const stageChipClass = (stage) =>
     STAGE_CHIP[stage] || 'bg-gray-100 text-gray-500 border-gray-200 border-dashed';
 
-export default function ImmigrationCases({ cases = [], distribution = [], stages = [], visaTypes = [] }) {
+export default function ImmigrationCases({ cases = [], distribution = [], priorities = {}, stages = [], visaTypes = [] }) {
     const [search, setSearch] = useState("");
     const [stageFilter, setStageFilter] = useState(null); // click a bar/legend → filter
     const [sortKey, setSortKey] = useState("updated_at");
@@ -133,7 +133,10 @@ export default function ImmigrationCases({ cases = [], distribution = [], stages
                 </button>
             </div>
 
-            {/* Distribution graph — replaces the previous summary card row */}
+            {/* Priority summary cards (row of 4) */}
+            <PriorityBreakdown priorities={priorities} />
+
+            {/* Immigration stage bar graph (full-width card below) */}
             <DistributionGraph
                 distribution={distribution}
                 total={total}
@@ -204,6 +207,7 @@ export default function ImmigrationCases({ cases = [], distribution = [], stages
                                     key={c.id}
                                     c={c}
                                     stages={stages}
+                                    visaTypes={visaTypes}
                                     isExpanded={expandedId === c.id}
                                     onExpand={() => setExpandedId(expandedId === c.id ? null : c.id)}
                                     stageMenuOpen={openStageMenuId === c.id}
@@ -541,6 +545,48 @@ function caseInput(error) {
     }`;
 }
 
+// ─── Priority breakdown ─────────────────────────────────────────────────
+// Compact counter beside the stage graph — number of cases per priority
+// level (urgent / medium / low) plus a "no priority" bucket. Colours match
+// the case avatar (red / orange / green / gray).
+function PriorityBreakdown({ priorities = {} }) {
+    const rows = [
+        { key: 'urgent', label: 'Urgent',      solid: 'bg-rose-500',    soft: 'bg-rose-50',    ring: 'ring-rose-100',    text: 'text-rose-600' },
+        { key: 'medium', label: 'Medium',      solid: 'bg-amber-500',   soft: 'bg-amber-50',   ring: 'ring-amber-100',   text: 'text-amber-600' },
+        { key: 'low',    label: 'Low',         solid: 'bg-emerald-500', soft: 'bg-emerald-50', ring: 'ring-emerald-100', text: 'text-emerald-600' },
+        { key: 'none',   label: 'No priority', solid: 'bg-gray-300',    soft: 'bg-gray-50',    ring: 'ring-gray-100',    text: 'text-gray-500' },
+    ];
+    const total = rows.reduce((sum, r) => sum + (priorities[r.key] || 0), 0);
+
+    return (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            {rows.map((r) => {
+                const count = priorities[r.key] || 0;
+                const pct = total > 0 ? Math.round((count / total) * 100) : 0;
+                return (
+                    <div key={r.key} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex flex-col">
+                        <div className="flex items-center justify-between">
+                            <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-gray-400">
+                                {r.label}
+                            </span>
+                            <span className={`w-6 h-6 rounded-lg ${r.soft} ring-1 ${r.ring} flex items-center justify-center flex-shrink-0`}>
+                                <span className={`w-2 h-2 rounded-full ${r.solid}`} />
+                            </span>
+                        </div>
+                        <p className="text-[26px] leading-none font-bold text-gray-900 tabular-nums mt-3">{count}</p>
+                        <div className="flex items-center gap-2 mt-3">
+                            <div className="flex-1 h-1 rounded-full bg-gray-100 overflow-hidden">
+                                <div className={`h-full rounded-full ${r.solid}`} style={{ width: `${pct}%` }} />
+                            </div>
+                            <span className={`text-[10px] font-semibold ${r.text} tabular-nums`}>{pct}%</span>
+                        </div>
+                    </div>
+                );
+            })}
+        </div>
+    );
+}
+
 // ─── Distribution graph ─────────────────────────────────────────────────
 
 /**
@@ -579,24 +625,23 @@ function DistributionGraph({ distribution = [], total = 0, activeStage = null, o
     const xFor = (i) => padX + (i / Math.max(1, stages.length - 1)) * chartW;
     const yFor = (n) => padTop + (1 - n / peak) * chartH;
 
-    const linePoints = data.map((n, i) => `${xFor(i)},${yFor(n)}`).join(' ');
-    const areaPath = `M${xFor(0)},${baselineY} L` +
-        data.map((n, i) => `${xFor(i)},${yFor(n)}`).join(' L') +
-        ` L${xFor(data.length - 1)},${baselineY} Z`;
+    const barW = Math.min(26, (chartW / Math.max(1, stages.length)) * 0.55);
 
     return (
         <section className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-            <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between gap-3 flex-wrap">
-                <div className="flex items-center gap-2">
-                    <div className="w-7 h-7 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center">
-                        <TrendingUp size={13} />
+            <div className="px-5 pt-4 pb-3 flex items-center justify-between gap-3 flex-wrap">
+                <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-emerald-50 to-teal-50 text-emerald-600 flex items-center justify-center ring-1 ring-emerald-100/70">
+                        <TrendingUp size={14} />
                     </div>
                     <div>
-                        <h2 className="text-[12px] font-bold uppercase tracking-wider text-gray-800">
+                        <h2 className="text-[12px] font-bold uppercase tracking-[0.14em] text-gray-700">
                             Immigration stage distribution
                         </h2>
-                        <p className="text-[10.5px] text-gray-500 mt-0.5">
-                            {placed} placed · {unstaged} unstaged · {total} total
+                        <p className="text-[10.5px] text-gray-400 mt-0.5">
+                            <span className="font-semibold text-gray-600 tabular-nums">{placed}</span> placed ·{' '}
+                            <span className="font-semibold text-gray-600 tabular-nums">{unstaged}</span> unstaged ·{' '}
+                            <span className="font-semibold text-gray-600 tabular-nums">{total}</span> total
                             {activeStage && (
                                 <span className="ml-2">
                                     · filtered by <span className="font-semibold text-gray-700">{activeStage}</span>
@@ -605,8 +650,8 @@ function DistributionGraph({ distribution = [], total = 0, activeStage = null, o
                         </p>
                     </div>
                 </div>
-                <span className="text-[10.5px] text-gray-400 inline-flex items-center gap-1.5">
-                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+                <span className="text-[10.5px] text-gray-400 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gray-50 ring-1 ring-gray-100">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500" />
                     Cases at stage
                 </span>
             </div>
@@ -617,7 +662,7 @@ function DistributionGraph({ distribution = [], total = 0, activeStage = null, o
                     className="w-full"
                     style={{ maxHeight: 160 }}
                     role="img"
-                    aria-label="Line graph of case count per Immigration stage"
+                    aria-label="Bar graph of case count per Immigration stage"
                 >
                     {/* Soft horizontal gridlines */}
                     {[0, 0.25, 0.5, 0.75, 1].map((t, i) => (
@@ -627,50 +672,36 @@ function DistributionGraph({ distribution = [], total = 0, activeStage = null, o
                             x2={W - padX}
                             y1={padTop + (1 - t) * chartH}
                             y2={padTop + (1 - t) * chartH}
-                            stroke="#f3f4f6"
+                            stroke="#f1f5f9"
                             strokeWidth="1"
                         />
                     ))}
 
-                    {/* Area fill */}
-                    <defs>
-                        <linearGradient id="cases-area" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="0%"   stopColor="#10b981" stopOpacity="0.28" />
-                            <stop offset="100%" stopColor="#10b981" stopOpacity="0" />
-                        </linearGradient>
-                    </defs>
-                    <path d={areaPath} fill="url(#cases-area)" />
-
-                    {/* Connecting line */}
-                    <polyline
-                        points={linePoints}
-                        stroke="#10b981"
-                        strokeWidth="2"
-                        fill="none"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                    />
-
-                    {/* Per-stage dots, count labels, rotated x-axis labels.
+                    {/* Per-stage bars, count labels, rotated x-axis labels.
                         Whole stage column is clickable to filter the
                         table below. */}
                     {data.map((n, i) => {
                         const tone = stageHex(stages[i]);
                         const isActive = activeStage === stages[i];
+                        const barH = baselineY - yFor(n);
+                        const w = isActive ? barW + 4 : barW;
                         return (
                             <g
                                 key={stages[i]}
                                 onClick={() => onPick?.(stages[i])}
                                 style={{ cursor: 'pointer' }}
                             >
-                                <circle
-                                    cx={xFor(i)}
-                                    cy={yFor(n)}
-                                    r={isActive ? 6 : 4}
-                                    fill={isActive ? tone : 'white'}
-                                    stroke={tone}
-                                    strokeWidth="2.5"
-                                />
+                                {n > 0 && (
+                                    <rect
+                                        x={xFor(i) - w / 2}
+                                        y={yFor(n)}
+                                        width={w}
+                                        height={barH}
+                                        rx="4"
+                                        fill={tone}
+                                        fillOpacity={isActive ? 1 : 0.85}
+                                    />
+                                )}
                                 <text
                                     x={xFor(i)}
                                     y={yFor(n) - 9}
@@ -685,10 +716,10 @@ function DistributionGraph({ distribution = [], total = 0, activeStage = null, o
                                     x={xFor(i)}
                                     y={baselineY + 14}
                                     textAnchor="end"
-                                    fontSize="10"
-                                    fontWeight={isActive ? '700' : '400'}
-                                    fill={isActive ? '#111827' : '#6b7280'}
-                                    transform={`rotate(-30 ${xFor(i)} ${baselineY + 14})`}
+                                    fontSize="9.5"
+                                    fontWeight={isActive ? '700' : '500'}
+                                    fill={isActive ? '#111827' : '#94a3b8'}
+                                    transform={`rotate(-28 ${xFor(i)} ${baselineY + 14})`}
                                 >
                                     {stages[i]}
                                 </text>
@@ -703,7 +734,7 @@ function DistributionGraph({ distribution = [], total = 0, activeStage = null, o
 
 // ─── Table row ──────────────────────────────────────────────────────────
 
-function CaseRow({ c, stages, isExpanded, onExpand, stageMenuOpen, onStageMenuToggle, onStageMenuClose, onEdit }) {
+function CaseRow({ c, stages, visaTypes = [], isExpanded, onExpand, stageMenuOpen, onStageMenuToggle, onStageMenuClose, onEdit }) {
     const pct = c.docs_total > 0 ? Math.round((c.docs_approved / c.docs_total) * 100) : 0;
     const hasDocs = c.docs_total > 0;
     const docsDone = hasDocs && c.docs_approved >= c.docs_total;
@@ -731,8 +762,8 @@ function CaseRow({ c, stages, isExpanded, onExpand, stageMenuOpen, onStageMenuTo
                         className="flex items-center gap-2.5 min-w-[200px] group/case"
                     >
                         <div
-                            className={`w-7 h-7 rounded-full flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0 ${priorityColor(c.immigration_priority) || avatarColor(c.id)}`}
-                            title={c.immigration_priority ? `Priority: ${c.immigration_priority}` : undefined}
+                            className={`w-7 h-7 rounded-full flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0 ${priorityColor(c.immigration_priority)}`}
+                            title={c.immigration_priority ? `Priority: ${c.immigration_priority}` : 'No priority set'}
                         >
                             {initials(c.name)}
                         </div>
@@ -765,11 +796,9 @@ function CaseRow({ c, stages, isExpanded, onExpand, stageMenuOpen, onStageMenuTo
                     />
                 </td>
 
-                {/* Visa */}
+                {/* Visa picker (inline inz_visa_type edit) */}
                 <td className="px-3 py-2.5">
-                    {c.inz_visa_type
-                        ? <span className="text-gray-700">{c.inz_visa_type}</span>
-                        : <span className="text-gray-300">—</span>}
+                    <VisaPicker caseId={c.id} visaTypes={visaTypes} value={c.inz_visa_type || ''} />
                 </td>
 
                 {/* Country */}
@@ -1016,6 +1045,130 @@ function StagePicker({ caseId, stages, value, fallback, open, onToggle, onClose 
     );
 }
 
+// ─── Visa picker (inline inz_visa_type edit) ────────────────────────────
+// Mirrors StagePicker but self-manages its open state. Posts the chosen
+// visa_type_id; the controller stamps the matching VisaType name onto
+// inz_visa_type (or clears it when "None" is chosen).
+function VisaPicker({ caseId, visaTypes = [], value }) {
+    const [open, setOpen] = useState(false);
+    const [saving, setSaving] = useState(false);
+    const [coords, setCoords] = useState({ top: 0, left: 0, openUp: false });
+    const triggerRef = useRef(null);
+    const menuRef = useRef(null);
+    const MENU_W = 260;
+    const MENU_MAX_H = 360;
+
+    useEffect(() => {
+        if (! open || ! triggerRef.current) return;
+        const place = () => {
+            const r = triggerRef.current.getBoundingClientRect();
+            const spaceBelow = window.innerHeight - r.bottom;
+            const openUp = spaceBelow < Math.min(MENU_MAX_H, 240) && r.top > spaceBelow;
+            const left = Math.min(r.left, window.innerWidth - MENU_W - 8);
+            setCoords({ top: openUp ? r.top - 6 : r.bottom + 6, left: Math.max(8, left), openUp });
+        };
+        place();
+        window.addEventListener('scroll', place, true);
+        window.addEventListener('resize', place);
+        return () => {
+            window.removeEventListener('scroll', place, true);
+            window.removeEventListener('resize', place);
+        };
+    }, [open]);
+
+    useEffect(() => {
+        if (! open) return;
+        const onDocClick = (e) => {
+            if (menuRef.current?.contains(e.target) || triggerRef.current?.contains(e.target)) return;
+            setOpen(false);
+        };
+        const onKey = (e) => { if (e.key === 'Escape') setOpen(false); };
+        document.addEventListener('mousedown', onDocClick);
+        document.addEventListener('keydown', onKey);
+        return () => {
+            document.removeEventListener('mousedown', onDocClick);
+            document.removeEventListener('keydown', onKey);
+        };
+    }, [open]);
+
+    const select = (visaTypeId) => {
+        setSaving(true);
+        setOpen(false);
+        router.post(
+            `/portal/immigration/cases/${caseId}/visa`,
+            { visa_type_id: visaTypeId },
+            { preserveScroll: true, preserveState: true, onFinish: () => setSaving(false) },
+        );
+    };
+
+    const hasValue = !! value;
+
+    return (
+        <>
+            <button
+                ref={triggerRef}
+                type="button"
+                disabled={saving}
+                onClick={(e) => { e.stopPropagation(); setOpen((o) => ! o); }}
+                className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[11px] font-medium border whitespace-nowrap hover:shadow-sm transition-all disabled:opacity-60 ${
+                    hasValue ? 'bg-white text-gray-700 border-gray-200' : 'bg-gray-100 text-gray-400 border-gray-200 border-dashed'
+                }`}
+            >
+                <span className="truncate max-w-[190px]">{value || 'Set visa'}</span>
+                <ChevronDown size={10} strokeWidth={2.5} className="opacity-60 flex-shrink-0" />
+            </button>
+
+            {open && typeof document !== 'undefined' && createPortal(
+                <div
+                    ref={menuRef}
+                    role="listbox"
+                    style={{
+                        position: 'fixed',
+                        top:    coords.openUp ? 'auto' : coords.top,
+                        bottom: coords.openUp ? (window.innerHeight - coords.top) : 'auto',
+                        left:   coords.left,
+                        width:  MENU_W,
+                        maxHeight: MENU_MAX_H,
+                    }}
+                    className="z-[60] bg-white rounded-xl shadow-2xl border border-gray-100 py-1.5 overflow-y-auto"
+                >
+                    <p className="px-3 pt-2 pb-1.5 text-[9px] font-bold text-gray-400 uppercase tracking-[0.2em]">
+                        Set visa type
+                    </p>
+                    {visaTypes.length === 0 && (
+                        <p className="px-3 py-2 text-[11px] text-gray-400">No visa types available.</p>
+                    )}
+                    {visaTypes.map((v) => (
+                        <button
+                            key={v.id}
+                            type="button"
+                            onClick={() => select(v.id)}
+                            className={`w-full text-left flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-gray-50 ${
+                                value === v.name ? 'bg-gray-50 font-semibold text-gray-900' : 'text-gray-700'
+                            }`}
+                        >
+                            {v.name}
+                        </button>
+                    ))}
+                    {hasValue && (
+                        <>
+                            <div className="border-t border-gray-100 my-1" />
+                            <button
+                                type="button"
+                                onClick={() => select(null)}
+                                className="w-full text-left px-3 py-1.5 text-xs text-gray-500 hover:bg-gray-50"
+                            >
+                                Clear visa
+                            </button>
+                        </>
+                    )}
+                </div>,
+                document.body,
+            )}
+        </>
+    );
+}
+
 // ─── Helpers ─────────────────────────────────────────────────────────────
 
 function SortableTh({ label, sortKey, current, dir, onSort }) {
@@ -1054,14 +1207,13 @@ function avatarColor(id) {
 }
 
 // Priority → avatar colour: urgent (red), medium (orange), low (green).
-// Empty string when no priority is set so the caller falls back to the
-// per-id palette colour.
+// Cases with no priority set show a neutral gray circle.
 function priorityColor(priority) {
     switch (priority) {
         case 'urgent': return 'bg-red-500';
         case 'medium': return 'bg-orange-500';
         case 'low':    return 'bg-emerald-500';
-        default:       return '';
+        default:       return 'bg-gray-400';
     }
 }
 
@@ -1082,9 +1234,10 @@ function fmtDate(d) {
  */
 function RowMenu({ items = [] }) {
     const [open, setOpen] = useState(false);
-    const [coords, setCoords] = useState({ top: 0, left: 0 });
+    const [coords, setCoords] = useState({ top: 0, left: 0, openUp: false });
     const triggerRef = useRef(null);
     const menuRef = useRef(null);
+    const MENU_W = 220;
 
     useEffect(() => {
         if (!open || !triggerRef.current) return;
@@ -1092,7 +1245,16 @@ function RowMenu({ items = [] }) {
             const r = triggerRef.current.getBoundingClientRect();
             // Anchor the menu's right edge to the trigger so it opens
             // leftward (the actions column lives at the right of the row).
-            setCoords({ top: r.bottom + 6, left: r.right - 220 });
+            // Flip upward when there isn't room below (row near the viewport
+            // bottom) so the menu never gets clipped by the window edge.
+            const menuH = Math.min(360, items.length * 38 + 16);
+            const spaceBelow = window.innerHeight - r.bottom;
+            const openUp = spaceBelow < menuH + 12 && r.top > spaceBelow;
+            setCoords({
+                top:  openUp ? r.top - 6 : r.bottom + 6,
+                left: Math.min(r.right - MENU_W, window.innerWidth - MENU_W - 8),
+                openUp,
+            });
         };
         place();
         const onScroll = () => place();
@@ -1142,9 +1304,12 @@ function RowMenu({ items = [] }) {
                     role="menu"
                     style={{
                         position: 'fixed',
-                        top: coords.top,
-                        left: Math.max(8, coords.left),
-                        width: 220,
+                        top:    coords.openUp ? 'auto' : coords.top,
+                        bottom: coords.openUp ? (window.innerHeight - coords.top) : 'auto',
+                        left:   Math.max(8, coords.left),
+                        width:  MENU_W,
+                        maxHeight: 360,
+                        overflowY: 'auto',
                     }}
                     className="z-[60] bg-white rounded-xl shadow-2xl border border-gray-100 py-1.5"
                 >
