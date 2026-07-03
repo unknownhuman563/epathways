@@ -35,9 +35,11 @@ class EventRegistrationConfirmation extends Mailable implements ShouldQueue
     public function envelope(): Envelope
     {
         $from = config('services.contact.event_from_email');
+        $replyTo = config('services.contact.reply_to');
 
         return new Envelope(
             from: $from ? new Address($from, config('services.contact.event_from_name') ?: null) : null,
+            replyTo: $replyTo ? [new Address($replyTo)] : [],
             subject: 'You\'re registered — '.$this->event->name,
         );
     }

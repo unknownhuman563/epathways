@@ -46,9 +46,13 @@ class TemplatedMessage extends Mailable implements ShouldQueue
     public function envelope(): Envelope
     {
         // Optional per-template sender (e.g. the event template sends from
-        // hello@epathways.ph); falls back to the app default MAIL_FROM.
+        // hello@epathways.ph); falls back to the app default MAIL_FROM. A
+        // central Reply-To (config) routes replies to a monitored inbox.
+        $replyTo = config('services.contact.reply_to');
+
         return new Envelope(
             from: $this->fromEmail ? new Address($this->fromEmail, $this->fromName ?: null) : null,
+            replyTo: $replyTo ? [new Address($replyTo)] : [],
             subject: $this->subjectLine,
         );
     }
