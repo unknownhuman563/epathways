@@ -17,10 +17,10 @@
             <td align="center" style="padding:24px 12px;">
                 <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="width:600px; max-width:600px; background-color:#ffffff; border-radius:6px; overflow:hidden; font-family:'Segoe UI', Arial, Helvetica, sans-serif;">
 
-                    {{-- Header banner (embedded inline so it always renders) --}}
+                    {{-- Header banner (hosted URL — no attachment) --}}
                     <tr>
                         <td style="padding:0; background-color:#0f2f1c;">
-                            <img src="{{ $message->embed(public_path('images/email/team-header.png')) }}" alt="ePathways" width="600" style="display:block; width:100%; max-width:600px; height:auto; border:0;">
+                            <img src="{{ $siteUrl }}/images/email/team-header.png" alt="ePathways" width="600" style="display:block; width:100%; max-width:600px; height:auto; border:0;">
                         </td>
                     </tr>
 
@@ -102,14 +102,14 @@
                          baked into it (Gmail can't overlay HTML on an image);
                          the whole image links to the booking page. --}}
                     @php
-                        $footerBytes = app(\App\Services\EmailFooterComposer::class)
-                            ->composeBytes(public_path('images/coffee-cta.png'), 'BOOK NOW', $phone ? 'CALL '.$phone : null);
+                        $footerUrl = app(\App\Services\EmailFooterComposer::class)
+                            ->composeUrl(public_path('images/coffee-cta.png'), 'BOOK NOW', $phone ? 'CALL '.$phone : null);
                     @endphp
-                    @if ($footerBytes)
+                    @if ($footerUrl)
                     <tr>
                         <td style="padding:26px 0 0 0;">
                             <a href="{{ $bookUrl }}" target="_blank">
-                                <img src="{{ $message->embedData($footerBytes, 'footer.jpg', 'image/jpeg') }}" alt="Book your free consultation with ePathways" width="600" style="display:block; width:100%; max-width:600px; height:auto; border:0;">
+                                <img src="{{ $footerUrl }}" alt="Book your free consultation with ePathways" width="600" style="display:block; width:100%; max-width:600px; height:auto; border:0;">
                             </a>
                         </td>
                     </tr>
@@ -122,16 +122,16 @@
                                 <tr>
                                     @if ($facebook)
                                     <td style="padding:0 5px;">
-                                        <a href="{{ $facebook }}" target="_blank"><img src="{{ $message->embed(public_path('images/email/social/facebook.png')) }}" alt="Facebook" width="30" height="30" style="display:block; border:0;"></a>
+                                        <a href="{{ $facebook }}" target="_blank"><img src="{{ $siteUrl }}/images/email/social/facebook.png" alt="Facebook" width="30" height="30" style="display:block; border:0;"></a>
                                     </td>
                                     @endif
                                     @if ($messenger)
                                     <td style="padding:0 5px;">
-                                        <a href="{{ $messenger }}" target="_blank"><img src="{{ $message->embed(public_path('images/email/social/messenger.png')) }}" alt="Messenger" width="30" height="30" style="display:block; border:0;"></a>
+                                        <a href="{{ $messenger }}" target="_blank"><img src="{{ $siteUrl }}/images/email/social/messenger.png" alt="Messenger" width="30" height="30" style="display:block; border:0;"></a>
                                     </td>
                                     @endif
                                     <td style="padding:0 5px;">
-                                        <a href="{{ $siteUrl }}" target="_blank"><img src="{{ $message->embed(public_path('images/email/social/website.png')) }}" alt="Website" width="30" height="30" style="display:block; border:0;"></a>
+                                        <a href="{{ $siteUrl }}" target="_blank"><img src="{{ $siteUrl }}/images/email/social/website.png" alt="Website" width="30" height="30" style="display:block; border:0;"></a>
                                     </td>
                                 </tr>
                             </table>

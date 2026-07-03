@@ -112,6 +112,8 @@ class EventController extends Controller
             : null;
         $banner = $template?->banner_image;
         $footer = $template?->footer_image;
+        $fromEmail = $template?->from_email;
+        $fromName = $template?->from_name;
 
         // Only leads that actually belong to this event and have an email.
         $recipients = $event->leads()
@@ -132,7 +134,7 @@ class EventController extends Controller
             try {
                 $subject = $comms->render($lead, $validated['subject'], $eventCtx, false);
                 $body = $comms->render($lead, $validated['body'], $eventCtx, true);
-                $log = $comms->sendRaw('email', $lead, $subject, $body, $banner, $footer);
+                $log = $comms->sendRaw('email', $lead, $subject, $body, $banner, $footer, $fromEmail, $fromName);
                 $log->status === \App\Models\MessageLog::STATUS_FAILED ? $failed++ : $sent++;
             } catch (\Throwable $e) {
                 $failed++;

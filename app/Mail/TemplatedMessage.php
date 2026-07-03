@@ -6,6 +6,7 @@ use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Attachment;
+use Illuminate\Mail\Mailables\Address;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Mail\Mailables\Headers;
@@ -38,11 +39,18 @@ class TemplatedMessage extends Mailable implements ShouldQueue
         public ?string $bannerImage = null,
         public ?string $footerImage = null,
         public ?int $logId = null,
+        public ?string $fromEmail = null,
+        public ?string $fromName = null,
     ) {}
 
     public function envelope(): Envelope
     {
-        return new Envelope(subject: $this->subjectLine);
+        // Optional per-template sender (e.g. the event template sends from
+        // hello@epathways.ph); falls back to the app default MAIL_FROM.
+        return new Envelope(
+            from: $this->fromEmail ? new Address($this->fromEmail, $this->fromName ?: null) : null,
+            subject: $this->subjectLine,
+        );
     }
 
     /**

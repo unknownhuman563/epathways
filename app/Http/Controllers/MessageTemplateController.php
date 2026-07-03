@@ -269,6 +269,10 @@ class MessageTemplateController extends Controller
             'channels' => ['array'],
             'channels.*' => [Rule::in(MessageTemplate::CHANNELS)],
             'email_subject' => ['nullable', 'string', 'max:255'],
+            // Optional per-template sender (must be a verified address in the
+            // mail provider). Null = the app default MAIL_FROM.
+            'from_email' => ['nullable', 'email', 'max:255'],
+            'from_name' => ['nullable', 'string', 'max:120'],
             // Rich HTML from the editor is more verbose than the old Markdown.
             'email_body' => ['nullable', 'string', 'max:65000'],
             'sms_body' => ['nullable', 'string', 'max:1600'],

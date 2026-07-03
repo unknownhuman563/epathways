@@ -3,17 +3,55 @@
 namespace App\Services;
 
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 /**
  * Bakes the two CTA pill buttons (BOOK NOW / CALL …) directly onto a footer
- * image and returns the composited PNG bytes. Gmail allows no true HTML
- * overlay on an image, so the only way to show buttons "on" the footer is to
- * render them into the pixels — which is exactly what the original template
- * did. Falls back to the untouched image bytes if compositing can't run.
+ * image. Gmail allows no true HTML overlay on an image, so the only way to
+ * show buttons "on" the footer is to render them into the pixels — which is
+ * exactly what the original template did.
+ *
+ * composeUrl() persists the result to public storage and returns a public URL
+ * so the email can reference it with a plain <img src> (no CID embed → no
+ * "attachment" in Gmail). composeBytes() returns the raw bytes for callers
+ * that need them.
  */
 class EmailFooterComposer
 {
     private const FONT = 'DejaVuSans-Bold.ttf';
+
+    /**
+     * Composite the footer (cached by source + labels) and return a public URL
+     * to the result, or null if it can't be produced.
+     */
+    public function composeUrl(string $imagePath, string $bookLabel, ?string $callLabel): ?string
+    {
+        if (! is_file($imagePath)) {
+            return null;
+        }
+
+        $key = md5($imagePath.'|'.(@filemtime($imagePath) ?: 0).'|'.$bookLabel.'|'.$callLabel);
+        $rel = 'email-footers/'.$key.'.jpg';
+        $disk = Storage::disk('public');
+
+        if (! $disk->exists($rel)) {
+            $bytes = $this->composeBytes($imagePath, $bookLabel, $callLabel);
+            if (! $bytes) {
+                return null;
+            }
+            $disk->put($rel, $bytes);
+        }
+
+        return $this->toAbsolute($disk->url($rel));
+    }
+
+    private function toAbsolute(string $url): string
+    {
+        return Str::startsWith($url, ['http://', 'https://'])
+            ? $url
+            : rtrim((string) config('app.url'), '/').'/'.ltrim($url, '/');
+    }
 
     /**
      * @return string|null Composited (or original) PNG/JPEG bytes, or null if
@@ -48,21 +86,24 @@ class EmailFooterComposer
             $w = imagesx($img);
             $h = imagesy($img);
 
-            // Geometry scales with the image so it looks right at any size.
-            $btnW = (int) round($w * 0.52);
-            $btnH = max(40, (int) round($btnW * 0.135));
-            $gap = (int) round($btnH * 0.35);
-            $x = (int) round(($w - $btnW) / 2);
-
             $labels = array_values(array_filter([$bookLabel, $callLabel], fn ($l) => $l !== null && $l !== ''));
             $count = count($labels);
             if ($count === 0) {
                 return $raw;
             }
 
-            $blockH = $count * $btnH + ($count - 1) * $gap;
-            // Sit the buttons in the lower-middle of the image.
-            $y = (int) round($h * 0.71 - $blockH / 2);
+            // Buttons sit in a single centered ROW (side by side): BOOK NOW on
+            // the left, CALL on the right. Geometry scales with image width.
+            $btnH = max(40, (int) round($w * 0.062));
+            $gap = (int) round($w * 0.03);
+            $btnW = $count > 1
+                ? (int) round(($w * 0.88 - ($count - 1) * $gap) / $count)
+                : (int) round($w * 0.5);
+
+            $rowW = $count * $btnW + ($count - 1) * $gap;
+            $x0 = (int) round(($w - $rowW) / 2);
+            // Vertical position — lower-middle of the image.
+            $y = (int) round($h * 0.68 - $btnH / 2);
             $y = max($y, (int) round($h * 0.06));
 
             $green = imagecolorallocate($img, 46, 125, 50);    // #2e7d32
@@ -70,9 +111,9 @@ class EmailFooterComposer
             $white = imagecolorallocate($img, 255, 255, 255);
 
             foreach ($labels as $i => $label) {
-                $by = $y + $i * ($btnH + $gap);
-                $this->pill($img, $x, $by, $btnW, $btnH, $i === 0 ? $green : $darkGreen);
-                $this->centeredText($img, $x, $by, $btnW, $btnH, $font, $white, $label);
+                $bx = $x0 + $i * ($btnW + $gap);
+                $this->pill($img, $bx, $y, $btnW, $btnH, $i === 0 ? $green : $darkGreen);
+                $this->centeredText($img, $bx, $y, $btnW, $btnH, $font, $white, $label);
             }
 
             // Flatten onto white and emit JPEG — a PNG of a photo is ~1MB and

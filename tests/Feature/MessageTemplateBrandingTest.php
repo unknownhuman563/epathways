@@ -112,10 +112,11 @@ class MessageTemplateBrandingTest extends TestCase
     {
         $html = (new TemplatedMessage('Subject', '# Hello **world**', []))->render();
 
-        // Images are embedded inline (data-URI on render / CID on send), not
-        // linked by URL, so they load in every mail client regardless of host.
+        // Images are hosted URLs (no CID/data embeds → no Gmail "attachments").
         // (The CTA buttons are baked into the footer image, not HTML text.)
-        $this->assertMatchesRegularExpression('/src="(data:image|cid:)/', $html);
+        $this->assertStringContainsString('<img src="http', $html);
+        $this->assertStringNotContainsString('src="cid:', $html);
+        $this->assertStringNotContainsString('src="data:', $html);
         $this->assertStringContainsString('Hello', $html);
         $this->assertStringContainsString('Location', $html);
     }

@@ -25,6 +25,8 @@ class MessageTemplate extends Model
         'channels',
         'email_subject',
         'email_body',
+        'from_email',
+        'from_name',
         'banner_image',
         'footer_image',
         'sms_body',

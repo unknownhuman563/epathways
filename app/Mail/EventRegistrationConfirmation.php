@@ -8,6 +8,7 @@ use App\Models\Lead;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Mail\Mailable;
+use Illuminate\Mail\Mailables\Address;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
@@ -33,7 +34,10 @@ class EventRegistrationConfirmation extends Mailable implements ShouldQueue
 
     public function envelope(): Envelope
     {
+        $from = config('services.contact.event_from_email');
+
         return new Envelope(
+            from: $from ? new Address($from, config('services.contact.event_from_name') ?: null) : null,
             subject: 'You\'re registered — '.$this->event->name,
         );
     }
@@ -49,7 +53,7 @@ class EventRegistrationConfirmation extends Mailable implements ShouldQueue
                 'dateLine'     => $this->dateLine(),
                 'timeLine'     => $this->timeLine(),
                 'locationLine' => $this->locationLine(),
-                'bookUrl'      => rtrim(config('app.url'), '/').'/booking',
+                'bookUrl'      => config('services.contact.booking_url') ?: rtrim(config('app.url'), '/').'/booking',
                 'siteUrl'      => rtrim(config('app.url'), '/'),
                 'phone'        => config('services.contact.phone'),
                 'facebook'     => config('services.contact.facebook'),

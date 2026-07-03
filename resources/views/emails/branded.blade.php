@@ -10,34 +10,29 @@
     @php
         use Illuminate\Support\Facades\Storage;
 
-        // Optional per-template overrides fall back to the default ePathways
-        // banner / footer artwork so every email is branded either way. Each
-        // image is resolved to BOTH a local filesystem path (embedded inline
-        // via $message->embed — renders without an external fetch) and a public
-        // URL (used for the footer's background-image overlay, which some
-        // clients only honour from a real URL).
+        // Every image is referenced by a PUBLIC URL (plain <img src>), never
+        // embedded — CID/inline embeds show up as "attachments" in Gmail
+        // (especially mobile). URLs render inline with no attachment. On a
+        // public domain (staging/prod) Gmail loads them fine.
+        $siteUrl = rtrim(config('app.url'), '/');
+        $abs = fn ($u) => \Illuminate\Support\Str::startsWith($u, ['http://', 'https://']) ? $u : $siteUrl.'/'.ltrim($u, '/');
+
         $bannerRel = ($bannerImage ?? null) && Storage::disk('public')->exists($bannerImage) ? $bannerImage : null;
         $footerRel = ($footerImage ?? null) && Storage::disk('public')->exists($footerImage) ? $footerImage : null;
-
-        $bannerPath = $bannerRel ? Storage::disk('public')->path($bannerRel) : public_path('images/email/team-header.png');
         $footerPath = $footerRel ? Storage::disk('public')->path($footerRel) : public_path('images/coffee-cta.png');
 
-        $siteUrl = rtrim(config('app.url'), '/');
-
-        // Banner is embedded inline <img> (Gmail renders those reliably). The
-        // footer has the CTA buttons baked into the pixels — Gmail allows no
-        // HTML overlay, so this is the only way to show buttons "on" the image
-        // (exactly how the original template did it). Any aspect ratio is fine.
-        $banner = is_file($bannerPath) ? $message->embed($bannerPath) : null;
         $siteHost = preg_replace('#^https?://#', '', $siteUrl);
         $phone = config('services.contact.phone');
         $whatsapp = config('services.contact.whatsapp');
         $facebook = config('services.contact.facebook');
         $messenger = config('services.contact.messenger');
         $contactEmail = config('services.contact.email');
+        $bookingUrl = config('services.contact.booking_url') ?: $siteUrl.'/booking';
 
-        $footerBytes = is_file($footerPath)
-            ? app(\App\Services\EmailFooterComposer::class)->composeBytes($footerPath, 'BOOK NOW', $phone ? 'CALL '.$phone : null)
+        $banner = $bannerRel ? $abs(Storage::disk('public')->url($bannerRel)) : $siteUrl.'/images/email/team-header.png';
+        // Footer buttons are baked in, then the composite is served from a URL.
+        $footer = is_file($footerPath)
+            ? app(\App\Services\EmailFooterComposer::class)->composeUrl($footerPath, 'BOOK NOW', $phone ? 'CALL '.$phone : null)
             : null;
     @endphp
 
@@ -62,41 +57,41 @@
                         </td>
                     </tr>
 
-                    {{-- Footer CTA — full-width consultation image with the two
-                         CTA buttons baked into it (see $footerBytes above). The
-                         whole image links to the booking page. --}}
-                    @if ($footerBytes)
+                    {{-- Footer CTA — consultation image with the CTA buttons
+                         baked in; served from a URL (no embed → no attachment).
+                         The whole image links to the booking page. --}}
+                    @if ($footer)
                     <tr>
                         <td style="padding:24px 0 0 0;">
-                            <a href="{{ $siteUrl }}/booking" target="_blank">
-                                <img src="{{ $message->embedData($footerBytes, 'footer.jpg', 'image/jpeg') }}" alt="Book your free consultation with ePathways" width="600" style="display:block; width:100%; max-width:600px; height:auto; border:0;">
+                            <a href="{{ $bookingUrl }}" target="_blank">
+                                <img src="{{ $footer }}" alt="Book your free consultation with ePathways" width="600" style="display:block; width:100%; max-width:600px; height:auto; border:0;">
                             </a>
                         </td>
                     </tr>
                     @endif
 
-                    {{-- Social icons --}}
+                    {{-- Social icons (hosted URLs — no attachment) --}}
                     <tr>
                         <td style="padding:22px 40px 6px 40px;" align="center">
                             <table role="presentation" cellpadding="0" cellspacing="0">
                                 <tr>
                                     @if ($facebook)
                                     <td style="padding:0 5px;">
-                                        <a href="{{ $facebook }}" target="_blank"><img src="{{ $message->embed(public_path('images/email/social/facebook.png')) }}" alt="Facebook" width="30" height="30" style="display:block; border:0;"></a>
+                                        <a href="{{ $facebook }}" target="_blank"><img src="{{ $siteUrl }}/images/email/social/facebook.png" alt="Facebook" width="30" height="30" style="display:block; border:0;"></a>
                                     </td>
                                     @endif
                                     @if ($messenger)
                                     <td style="padding:0 5px;">
-                                        <a href="{{ $messenger }}" target="_blank"><img src="{{ $message->embed(public_path('images/email/social/messenger.png')) }}" alt="Messenger" width="30" height="30" style="display:block; border:0;"></a>
+                                        <a href="{{ $messenger }}" target="_blank"><img src="{{ $siteUrl }}/images/email/social/messenger.png" alt="Messenger" width="30" height="30" style="display:block; border:0;"></a>
                                     </td>
                                     @endif
                                     @if ($whatsapp)
                                     <td style="padding:0 5px;">
-                                        <a href="https://wa.me/{{ preg_replace('/[^0-9]/', '', $whatsapp) }}" target="_blank"><img src="{{ $message->embed(public_path('images/email/social/whatsapp.png')) }}" alt="WhatsApp" width="30" height="30" style="display:block; border:0;"></a>
+                                        <a href="https://wa.me/{{ preg_replace('/[^0-9]/', '', $whatsapp) }}" target="_blank"><img src="{{ $siteUrl }}/images/email/social/whatsapp.png" alt="WhatsApp" width="30" height="30" style="display:block; border:0;"></a>
                                     </td>
                                     @endif
                                     <td style="padding:0 5px;">
-                                        <a href="{{ $siteUrl }}" target="_blank"><img src="{{ $message->embed(public_path('images/email/social/website.png')) }}" alt="Website" width="30" height="30" style="display:block; border:0;"></a>
+                                        <a href="{{ $siteUrl }}" target="_blank"><img src="{{ $siteUrl }}/images/email/social/website.png" alt="Website" width="30" height="30" style="display:block; border:0;"></a>
                                     </td>
                                 </tr>
                             </table>

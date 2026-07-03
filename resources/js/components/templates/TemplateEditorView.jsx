@@ -29,6 +29,8 @@ export default function TemplateEditorView({
         description: template?.description ?? "",
         channels: template?.channels ?? ["email"],
         email_subject: template?.email_subject ?? "",
+        from_email: template?.from_email ?? "",
+        from_name: template?.from_name ?? "",
         email_body: template?.email_body ?? "",
         sms_body: template?.sms_body ?? "",
         banner_image: null,
@@ -168,6 +170,18 @@ export default function TemplateEditorView({
                                 <span className="block text-xs font-semibold text-gray-600 mb-1">Subject</span>
                                 <input value={data.email_subject} onChange={(e) => setData("email_subject", e.target.value)} className={inp} />
                             </label>
+                            <div className="grid grid-cols-2 gap-4">
+                                <label className="block">
+                                    <span className="block text-xs font-semibold text-gray-600 mb-1">From address <span className="text-gray-400 font-normal">(optional)</span></span>
+                                    <input value={data.from_email} onChange={(e) => setData("from_email", e.target.value)} placeholder="hello@epathways.ph" className={inp} />
+                                    {errors.from_email && <span className="text-xs text-rose-600">{errors.from_email}</span>}
+                                </label>
+                                <label className="block">
+                                    <span className="block text-xs font-semibold text-gray-600 mb-1">From name <span className="text-gray-400 font-normal">(optional)</span></span>
+                                    <input value={data.from_name} onChange={(e) => setData("from_name", e.target.value)} placeholder="ePathways Philippines" className={inp} />
+                                </label>
+                                <p className="col-span-2 text-[11px] text-gray-400 -mt-2">Blank = default sender. The address must be verified in your mail provider (Brevo).</p>
+                            </div>
                             <label className="block">
                                 <span className="block text-xs font-semibold text-gray-600 mb-1">Body</span>
                                 <RichTextEditor value={data.email_body} onChange={(html) => setData("email_body", html)} />

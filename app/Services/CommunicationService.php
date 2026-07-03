@@ -80,6 +80,8 @@ class CommunicationService
                 $lead, $subject, $body, $template->key, $attachments, null,
                 $template->banner_image,
                 $template->footer_image,
+                $template->from_email,
+                $template->from_name,
             );
         }
 
@@ -96,11 +98,11 @@ class CommunicationService
      * Optional banner/footer image paths brand the email shell — pass a
      * template's images to match its look on a custom compose.
      */
-    public function sendRaw(string $channel, Lead $lead, ?string $subject, string $body, ?string $bannerImage = null, ?string $footerImage = null): MessageLog
+    public function sendRaw(string $channel, Lead $lead, ?string $subject, string $body, ?string $bannerImage = null, ?string $footerImage = null, ?string $fromEmail = null, ?string $fromName = null): MessageLog
     {
         return $channel === MessageLog::CHANNEL_SMS
             ? $this->sendSms($lead, $body, null)
-            : $this->sendEmail($lead, $subject ?? '(no subject)', $body, null, [], null, $bannerImage, $footerImage);
+            : $this->sendEmail($lead, $subject ?? '(no subject)', $body, null, [], null, $bannerImage, $footerImage, $fromEmail, $fromName);
     }
 
     /**
@@ -206,7 +208,7 @@ class CommunicationService
         return $log->status !== MessageLog::STATUS_FAILED;
     }
 
-    private function sendEmail(Lead $lead, string $subject, string $body, ?string $key, array $attachments = [], ?int $campaignId = null, ?string $bannerImage = null, ?string $footerImage = null): MessageLog
+    private function sendEmail(Lead $lead, string $subject, string $body, ?string $key, array $attachments = [], ?int $campaignId = null, ?string $bannerImage = null, ?string $footerImage = null, ?string $fromEmail = null, ?string $fromName = null): MessageLog
     {
         // Log first (status 'queued'), then queue the mail carrying this log's
         // id. The MessageSent listener flips it to 'sent' once the worker
@@ -219,7 +221,7 @@ class CommunicationService
 
         try {
             Mail::to($lead->email)->queue(
-                new TemplatedMessage($subject, $body, $attachments, $bannerImage, $footerImage, $log->id)
+                new TemplatedMessage($subject, $body, $attachments, $bannerImage, $footerImage, $log->id, $fromEmail, $fromName)
             );
         } catch (\Throwable $e) {
             Log::error('CommunicationService email failed', ['lead_id' => $lead->id, 'error' => $e->getMessage()]);
