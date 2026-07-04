@@ -94,8 +94,9 @@ class CaseChecklistService
         }
 
         $docsByKey = $this->latestDocumentsByKey($lead);
+        $hidden = is_array($lead->hidden_track_documents) ? $lead->hidden_track_documents : [];
 
-        return collect($items)->map(function (array $item) use ($docsByKey) {
+        return collect($items)->map(function (array $item) use ($docsByKey, $hidden) {
             $doc = $docsByKey->get($item['key']) ?? null;
 
             return [
@@ -112,6 +113,9 @@ class CaseChecklistService
                 'uploaded_at' => $doc?->created_at?->toIso8601String(),
                 'note' => $doc?->note,
                 'document_id' => $doc?->id,
+                // True when staff have hidden this item from the applicant's
+                // public tracking link.
+                'hidden' => in_array($item['key'], $hidden, true),
             ];
         })->toArray();
     }

@@ -184,13 +184,14 @@ export default function ImmigrationCases({ cases = [], distribution = [], priori
                                 <SortableTh label="Country"     sortKey="country"   current={sortKey} dir={sortDir} onSort={toggleSort} />
                                 <SortableTh label="Lodged"      sortKey="lodged_at" current={sortKey} dir={sortDir} onSort={toggleSort} />
                                 <th className="px-3 py-3">Docs</th>
+                                <SortableTh label="Updated" sortKey="updated_at" current={sortKey} dir={sortDir} onSort={toggleSort} />
                                 <th className="px-3 py-3 text-right pr-4">Actions</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
                             {sorted.length === 0 ? (
                                 <tr>
-                                    <td colSpan={8} className="px-6 py-20 text-center">
+                                    <td colSpan={9} className="px-6 py-20 text-center">
                                         <div className="flex flex-col items-center gap-2 text-gray-400">
                                             <Globe size={22} />
                                             <p className="text-sm font-medium">
@@ -735,10 +736,14 @@ function DistributionGraph({ distribution = [], total = 0, activeStage = null, o
 // ─── Table row ──────────────────────────────────────────────────────────
 
 function CaseRow({ c, stages, visaTypes = [], isExpanded, onExpand, stageMenuOpen, onStageMenuToggle, onStageMenuClose, onEdit }) {
-    const pct = c.docs_total > 0 ? Math.round((c.docs_approved / c.docs_total) * 100) : 0;
-    const hasDocs = c.docs_total > 0;
-    const docsDone = hasDocs && c.docs_approved >= c.docs_total;
-    const barColor = docsDone ? 'bg-emerald-500' : pct >= 50 ? 'bg-amber-500' : 'bg-gray-400';
+    // DOCS progress reflects the visa checklist: how many required items
+    // the case has submitted, out of the total required.
+    const chkTotal = c.checklist_total || 0;
+    const chkDone = c.checklist_submitted || 0;
+    const pct = chkTotal > 0 ? Math.round((chkDone / chkTotal) * 100) : 0;
+    const hasDocs = chkTotal > 0;
+    // Immigration theme colour (emerald) for the fill.
+    const barColor = 'bg-emerald-500';
     const needsAttention = c.docs_pending > 0 || c.docs_rejected > 0;
 
     return (
@@ -822,9 +827,28 @@ function CaseRow({ c, stages, visaTypes = [], isExpanded, onExpand, stageMenuOpe
                             <div className="h-1.5 flex-1 rounded-full bg-gray-100 overflow-hidden">
                                 <div className={`h-full rounded-full ${barColor}`} style={{ width: `${pct}%` }} />
                             </div>
-                            <span className="text-[10px] text-gray-500 tabular-nums whitespace-nowrap">
-                                {c.docs_approved}/{c.docs_total}
+                            <span className="text-[10px] font-semibold tabular-nums whitespace-nowrap text-emerald-600"
+                                title={`${chkDone} of ${chkTotal} checklist items submitted`}>
+                                {pct}%
                             </span>
+                        </div>
+                    ) : (
+                        <span className="text-gray-300">—</span>
+                    )}
+                </td>
+
+                {/* Updated — datetime + staff who last moved the case */}
+                <td className="px-3 py-2.5 whitespace-nowrap">
+                    {(c.stage_updated_at || c.updated_at) ? (
+                        <div className="flex flex-col">
+                            <span className="text-[11px] text-gray-700 tabular-nums">
+                                {fmtDateTime(c.stage_updated_at || c.updated_at)}
+                            </span>
+                            {c.updated_by && (
+                                <span className="text-[10px] text-gray-400 truncate max-w-[140px]">
+                                    by {c.updated_by}
+                                </span>
+                            )}
                         </div>
                     ) : (
                         <span className="text-gray-300">—</span>
@@ -874,7 +898,7 @@ function CaseRow({ c, stages, visaTypes = [], isExpanded, onExpand, stageMenuOpe
 
             {isExpanded && (
                 <tr className="bg-amber-50/20 border-t border-amber-100/60">
-                    <td colSpan={8} className="px-6 py-4">
+                    <td colSpan={9} className="px-6 py-4">
                         <CaseDetail c={c} />
                     </td>
                 </tr>
@@ -886,6 +910,7 @@ function CaseRow({ c, stages, visaTypes = [], isExpanded, onExpand, stageMenuOpe
 function CaseDetail({ c }) {
     return (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            <PriorityField c={c} />
             <DetailField label="Email"        value={c.email} />
             <DetailField label="Phone"        value={c.phone} />
             <DetailField label="INZ Status"   value={c.inz_status} />
@@ -900,6 +925,46 @@ function CaseDetail({ c }) {
                 expander rather than the column itself so the row stays
                 compact. */}
             <DetailField label="Endorsed by" value={c.endorsed_by} />
+        </div>
+    );
+}
+
+// Inline priority selector shown in the expanded row — posts immediately
+// on change. Coloured dot mirrors the case avatar (red / orange / green /
+// gray) so the level reads at a glance.
+function PriorityField({ c }) {
+    const [saving, setSaving] = useState(false);
+    const value = c.immigration_priority || '';
+
+    const change = (e) => {
+        const v = e.target.value;
+        setSaving(true);
+        router.post(
+            `/portal/immigration/cases/${c.id}/priority`,
+            { immigration_priority: v || null },
+            { preserveScroll: true, preserveState: true, onFinish: () => setSaving(false) },
+        );
+    };
+
+    return (
+        <div className="bg-white rounded-lg border border-gray-200 px-3 py-2">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-gray-500 mb-1">
+                Priority
+            </p>
+            <div className="flex items-center gap-1.5">
+                <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${priorityColor(value)}`} />
+                <select
+                    value={value}
+                    onChange={change}
+                    disabled={saving}
+                    className="flex-1 text-xs font-semibold text-gray-900 bg-transparent outline-none cursor-pointer disabled:opacity-60"
+                >
+                    <option value="">No priority</option>
+                    <option value="urgent">Urgent</option>
+                    <option value="medium">Medium</option>
+                    <option value="low">Low</option>
+                </select>
+            </div>
         </div>
     );
 }
@@ -1222,6 +1287,19 @@ function fmtDate(d) {
     try {
         const dt = new Date(d);
         return dt.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+    } catch {
+        return d;
+    }
+}
+
+function fmtDateTime(d) {
+    if (!d) return '—';
+    try {
+        const dt = new Date(d);
+        return dt.toLocaleString(undefined, {
+            day: 'numeric', month: 'short', year: 'numeric',
+            hour: 'numeric', minute: '2-digit',
+        });
     } catch {
         return d;
     }
