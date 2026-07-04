@@ -183,10 +183,11 @@ class CommunicationService
 
     /**
      * Substitute and send a raw subject/body to a lead as part of a bulk
-     * campaign, logging the row against that campaign. Returns true on a
-     * successful queue so the job can tally sent/failed counts.
+     * campaign, logging the row against that campaign. Optional banner/footer/
+     * from carry the campaign template's branding so bulk emails match the
+     * template exactly. Returns true on a successful queue.
      */
-    public function sendCampaignEmail(Lead $lead, string $subject, string $body, int $campaignId, array $extraContext = []): bool
+    public function sendCampaignEmail(Lead $lead, string $subject, string $body, int $campaignId, array $extraContext = [], ?string $bannerImage = null, ?string $footerImage = null, ?string $fromEmail = null, ?string $fromName = null): bool
     {
         if (empty($lead->email)) {
             $this->log([
@@ -203,7 +204,7 @@ class CommunicationService
         $sub = $this->substitute($subject, $context, false);
         $bod = $this->substitute($body, $context, true);
 
-        $log = $this->sendEmail($lead, $sub, $bod, null, [], $campaignId);
+        $log = $this->sendEmail($lead, $sub, $bod, null, [], $campaignId, $bannerImage, $footerImage, $fromEmail, $fromName);
 
         return $log->status !== MessageLog::STATUS_FAILED;
     }
@@ -385,7 +386,7 @@ class CommunicationService
         if (class_exists(\libphonenumber\PhoneNumberUtil::class)) {
             try {
                 $util = \libphonenumber\PhoneNumberUtil::getInstance();
-                
+
                 // First try NZ (default region)
                 $parsed = $util->parse($phone, 'NZ');
                 if ($util->isValidNumber($parsed)) {

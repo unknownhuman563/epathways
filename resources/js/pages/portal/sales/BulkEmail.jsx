@@ -260,7 +260,11 @@ function Compose({ templates, recipients, basePath, isSms = false, events = [] }
                                     )}
                                     <div>
                                         <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">{isSms ? "Message" : "Body"}</span>
-                                        <pre className="whitespace-pre-wrap font-sans text-sm text-gray-700 mt-1 leading-relaxed">{fillPreview(template.body, previewLead, selectedEvent)}</pre>
+                                        {isSms ? (
+                                            <pre className="whitespace-pre-wrap font-sans text-sm text-gray-700 mt-1 leading-relaxed">{fillPreview(template.body, previewLead, selectedEvent)}</pre>
+                                        ) : (
+                                            <div className="text-sm text-gray-700 mt-1 leading-relaxed [&_a]:text-blue-600 [&_a]:underline" dangerouslySetInnerHTML={{ __html: fillPreview(template.body, previewLead, selectedEvent) }} />
+                                        )}
                                     </div>
                                     {isSms && (() => {
                                         const len = fillPreview(template.body, previewLead, selectedEvent).length;
