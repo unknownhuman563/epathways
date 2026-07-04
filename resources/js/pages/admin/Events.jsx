@@ -1104,6 +1104,20 @@ export default function Events({ events: backendEvents, defaultFormFields = [], 
     const events = backendEvents && backendEvents.length > 0 ? backendEvents : MOCK_EVENTS;
     const [selectedEvents, setSelectedEvents] = useState([]);
     const [activeDropdown, setActiveDropdown] = useState(null);
+    // Actions menu is positioned with fixed coords (measured from its button)
+    // so it isn't clipped by the table's horizontal-scroll container. Close it
+    // on scroll/resize so it can't drift away from its button.
+    const [menuPos, setMenuPos] = useState({ top: 0, right: 0 });
+    useEffect(() => {
+        if (activeDropdown === null) return;
+        const close = () => setActiveDropdown(null);
+        window.addEventListener('scroll', close, true);
+        window.addEventListener('resize', close);
+        return () => {
+            window.removeEventListener('scroll', close, true);
+            window.removeEventListener('resize', close);
+        };
+    }, [activeDropdown]);
     const [activeStatusFilter, setActiveStatusFilter] = useState('All');
     const [modalOpen, setModalOpen] = useState(false);
     const [editingEvent, setEditingEvent] = useState(null);
@@ -1213,7 +1227,7 @@ export default function Events({ events: backendEvents, defaultFormFields = [], 
 
             {/* Events Table */}
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-                <div className="overflow-x-auto min-h-[400px]">
+                <div className="overflow-x-auto">
                     <table className="w-full text-left border-collapse whitespace-nowrap">
                         <thead>
                             <tr className="bg-gray-50/50 border-b border-gray-100">
@@ -1307,15 +1321,20 @@ export default function Events({ events: backendEvents, defaultFormFields = [], 
                                     <td className="px-6 py-4">
                                         <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-bold border capitalize ${getStatusStyle(event.status)}`}>{event.status}</span>
                                     </td>
-                                    <td className="px-6 py-4 text-right pr-6 relative">
-                                        <button onClick={() => setActiveDropdown(activeDropdown === event.id ? null : event.id)}
+                                    <td className="px-6 py-4 text-right pr-6">
+                                        <button onClick={(e) => {
+                                            if (activeDropdown === event.id) { setActiveDropdown(null); return; }
+                                            const r = e.currentTarget.getBoundingClientRect();
+                                            setMenuPos({ top: r.bottom + 6, right: Math.max(8, window.innerWidth - r.right) });
+                                            setActiveDropdown(event.id);
+                                        }}
                                             className="inline-flex items-center gap-2 px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
                                             Actions <ChevronDown size={14} className="text-gray-500" />
                                         </button>
                                         {activeDropdown === event.id && (
                                             <>
                                                 <div className="fixed inset-0 z-40" onClick={() => setActiveDropdown(null)} />
-                                                <div className="absolute right-6 top-14 w-52 bg-white rounded-xl shadow-xl border border-gray-100 z-50 py-2 divide-y divide-gray-50 animate-fade-in-up origin-top-right">
+                                                <div style={{ top: menuPos.top, right: menuPos.right }} className="fixed w-52 bg-white rounded-xl shadow-xl border border-gray-100 z-50 py-2 divide-y divide-gray-50 animate-fade-in-up origin-top-right">
                                                     <div className="px-1 py-1">
                                                         <button 
                                                             onClick={() => {

@@ -29,7 +29,7 @@ class EmailReplyController extends Controller
         // Group every message into a per-lead conversation thread.
         $threads = $messages
             ->groupBy('lead_id')
-            ->map(function ($msgs) {
+            ->map(function ($msgs) use ($sanitizer) {
                 $lead = $msgs->first()->lead;
                 $last = $msgs->last();
 
