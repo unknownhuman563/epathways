@@ -20,14 +20,18 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        // SMS transport: Twilio when configured, otherwise a no-op provider
-        // so the system runs without SMS creds in dev.
+        // SMS transport: Brevo when configured, else Twilio, else a no-op
+        // provider so the system runs without SMS creds in dev.
         $this->app->bind(\App\Contracts\SmsProvider::class, function () {
-            $sid = config('services.twilio.sid');
+            if ($key = config('services.brevo.sms_key')) {
+                return new \App\Services\Sms\BrevoSmsProvider($key, config('services.brevo.sms_sender'));
+            }
 
-            return $sid
-                ? new \App\Services\Sms\TwilioSmsProvider($sid, config('services.twilio.token'), config('services.twilio.from'))
-                : new \App\Services\Sms\NullSmsProvider();
+            if ($sid = config('services.twilio.sid')) {
+                return new \App\Services\Sms\TwilioSmsProvider($sid, config('services.twilio.token'), config('services.twilio.from'));
+            }
+
+            return new \App\Services\Sms\NullSmsProvider();
         });
 
         // Build 11.D Phase 3 — E-signature provider. StubSignatureProvider

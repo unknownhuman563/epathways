@@ -22,3 +22,15 @@ Schedule::command('campaigns:dispatch-due')
     ->everyMinute()
     ->name('dispatch-due-campaigns')
     ->withoutOverlapping();
+
+// Fire any scheduled event email whose time has arrived.
+Schedule::command('events:dispatch-due-emails')
+    ->everyMinute()
+    ->name('dispatch-due-event-emails')
+    ->withoutOverlapping();
+
+// Pull inbound email replies from the monitored mailbox into the system.
+Schedule::command('email:sync-replies')
+    ->everyFiveMinutes()
+    ->name('sync-email-replies')
+    ->withoutOverlapping();

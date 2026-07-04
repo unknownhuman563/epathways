@@ -7,10 +7,10 @@ use App\Services\CommunicationService;
 use Illuminate\Console\Command;
 
 /**
- * Fire a one-off SMS to confirm the Twilio integration works in any
- * environment. Logs a MessageLog row like any other send.
+ * Fire a one-off SMS to confirm the configured provider (Brevo, else Twilio)
+ * works in any environment. Logs a MessageLog row like any other send.
  *
- *   php artisan ep:test-sms "+64211234567" "Hello from ePathways"
+ *   php artisan ep:test-sms "+63917xxxxxxx" "Hello from ePathways"
  */
 class TestSms extends Command
 {

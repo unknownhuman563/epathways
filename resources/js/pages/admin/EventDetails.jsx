@@ -1,12 +1,13 @@
 import React, { useMemo, useState } from 'react';
-import { Head, Link, useForm } from '@inertiajs/react';
+import { Head, Link, useForm, router } from '@inertiajs/react';
 import {
     ArrowLeft, Calendar, MapPin, Users, Globe,
     Download, Edit, Search, Tag, Mail, Send, CheckCircle2, XCircle, Clock,
+    CalendarClock, Ban,
 } from 'lucide-react';
 import RichTextEditor from '@/components/templates/RichTextEditor';
 
-export default function EventDetails({ event, leads, emailTemplates = [], sentEmails = [] }) {
+export default function EventDetails({ event, leads, emailTemplates = [], sentEmails = [], scheduledEmails = [] }) {
     const [tab, setTab] = useState('registrants');
     const [searchTerm, setSearchTerm] = useState('');
 
@@ -32,6 +33,13 @@ export default function EventDetails({ event, leads, emailTemplates = [], sentEm
         if (!dateStr) return '—';
         try {
             return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+        } catch (e) { return dateStr; }
+    };
+
+    const formatDateTime = (dateStr) => {
+        if (!dateStr) return '—';
+        try {
+            return new Date(dateStr).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });
         } catch (e) { return dateStr; }
     };
 
@@ -131,7 +139,10 @@ export default function EventDetails({ event, leads, emailTemplates = [], sentEm
                 {[
                     { key: 'registrants', label: 'Registrants', icon: Users },
                     { key: 'email', label: 'Email', icon: Mail },
-                ].map(({ key, label, icon: Icon }) => (
+                    { key: 'scheduled', label: 'Scheduling', icon: CalendarClock },
+                ].map(({ key, label, icon: Icon }) => {
+                    const pendingCount = scheduledEmails.filter(s => s.status === 'pending').length;
+                    return (
                     <button
                         key={key}
                         onClick={() => setTab(key)}
@@ -143,19 +154,25 @@ export default function EventDetails({ event, leads, emailTemplates = [], sentEm
                     >
                         <Icon size={16} /> {label}
                         {key === 'registrants' && <span className="ml-0.5 text-xs bg-gray-100 text-gray-600 rounded-full px-2 py-0.5">{leads.length}</span>}
+                        {key === 'scheduled' && pendingCount > 0 && <span className="ml-0.5 text-xs bg-amber-100 text-amber-700 rounded-full px-2 py-0.5">{pendingCount}</span>}
                     </button>
-                ))}
+                    );
+                })}
             </div>
 
-            {tab === 'registrants' ? (
+            {tab === 'registrants' && (
                 <RegistrantsTable
                     filteredLeads={filteredLeads}
                     searchTerm={searchTerm}
                     setSearchTerm={setSearchTerm}
                     formatDate={formatDate}
                 />
-            ) : (
-                <EmailTab event={event} leads={leads} emailTemplates={emailTemplates} sentEmails={sentEmails} formatDate={formatDate} />
+            )}
+            {tab === 'email' && (
+                <EmailTab mode="send" event={event} leads={leads} emailTemplates={emailTemplates} sentEmails={sentEmails} scheduledEmails={scheduledEmails} formatDate={formatDate} formatDateTime={formatDateTime} />
+            )}
+            {tab === 'scheduled' && (
+                <EmailTab mode="schedule" event={event} leads={leads} emailTemplates={emailTemplates} sentEmails={sentEmails} scheduledEmails={scheduledEmails} formatDate={formatDate} formatDateTime={formatDateTime} />
             )}
         </div>
     );
@@ -246,14 +263,16 @@ function RegistrantsTable({ filteredLeads, searchTerm, setSearchTerm, formatDate
     );
 }
 
-// ── Email tab ───────────────────────────────────────────────────────────
-function EmailTab({ event, leads, emailTemplates, sentEmails, formatDate }) {
+// ── Email tab (send now) + Scheduling tab (send later) ───────────────────
+function EmailTab({ mode = 'send', event, leads, emailTemplates, sentEmails, scheduledEmails, formatDate, formatDateTime }) {
+    const isSchedule = mode === 'schedule';
     const emailable = useMemo(() => leads.filter(l => l.email), [leads]);
     const form = useForm({
         subject: '',
         body: '',
         recipient_ids: emailable.map(l => l.id),
         template_id: '',
+        scheduled_at: '',
     });
     const { data, setData, post, processing, errors, reset } = form;
     const templateId = data.template_id;
@@ -279,11 +298,26 @@ function EmailTab({ event, leads, emailTemplates, sentEmails, formatDate }) {
 
     const submit = (e) => {
         e.preventDefault();
-        post(`/admin/events/${event.id}/email`, {
+        const url = isSchedule ? `/admin/events/${event.id}/schedule-email` : `/admin/events/${event.id}/email`;
+        // The datetime-local value is the user's local wall-clock time. Convert
+        // it to a UTC instant so it's stored/compared correctly and displays
+        // back in the viewer's own timezone.
+        form.transform((d) => ({
+            ...d,
+            scheduled_at: d.scheduled_at ? new Date(d.scheduled_at).toISOString() : d.scheduled_at,
+        }));
+        post(url, {
             preserveScroll: true,
-            onSuccess: () => reset('subject', 'body', 'template_id'),
+            onSuccess: () => reset('subject', 'body', 'template_id', 'scheduled_at'),
         });
     };
+
+    const cancelScheduled = (row) => {
+        if (!window.confirm(`Cancel the scheduled email "${row.subject || '(no subject)'}"? It won't be sent.`)) return;
+        router.post(`/admin/events/${event.id}/scheduled-emails/${row.id}/cancel`, {}, { preserveScroll: true });
+    };
+
+    const canSubmit = data.recipient_ids.length > 0 && data.subject.trim() && (!isSchedule || data.scheduled_at);
 
     const statusPill = (status) => {
         const s = (status || '').toLowerCase();
@@ -292,12 +326,21 @@ function EmailTab({ event, leads, emailTemplates, sentEmails, formatDate }) {
         return <span className="inline-flex items-center gap-1 text-xs font-semibold text-amber-600"><Clock size={12} /> Queued</span>;
     };
 
+    const scheduledPill = (status) => {
+        const s = (status || '').toLowerCase();
+        if (s === 'sent') return <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-600"><CheckCircle2 size={12} /> Sent</span>;
+        if (s === 'failed') return <span className="inline-flex items-center gap-1 text-xs font-semibold text-red-600"><XCircle size={12} /> Failed</span>;
+        if (s === 'canceled') return <span className="inline-flex items-center gap-1 text-xs font-semibold text-gray-400"><Ban size={12} /> Canceled</span>;
+        if (s === 'sending') return <span className="inline-flex items-center gap-1 text-xs font-semibold text-blue-600"><Clock size={12} /> Sending</span>;
+        return <span className="inline-flex items-center gap-1 text-xs font-semibold text-amber-600"><CalendarClock size={12} /> Pending</span>;
+    };
+
     return (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Composer */}
             <form onSubmit={submit} className="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-gray-100 p-6 space-y-4">
                 <div className="flex items-center justify-between">
-                    <h2 className="text-lg font-bold text-gray-900">Compose email</h2>
+                    <h2 className="text-lg font-bold text-gray-900">{isSchedule ? 'Schedule email' : 'Compose email'}</h2>
                     {emailTemplates.length > 0 && (
                         <select
                             value={templateId}
@@ -330,16 +373,31 @@ function EmailTab({ event, leads, emailTemplates, sentEmails, formatDate }) {
                     </span>
                 </label>
 
+                {isSchedule && (
+                    <label className="block">
+                        <span className="block text-xs font-semibold text-gray-600 mb-1">Send date &amp; time</span>
+                        <input
+                            type="datetime-local"
+                            value={data.scheduled_at}
+                            onChange={e => setData('scheduled_at', e.target.value)}
+                            className="w-full sm:w-72 px-3 py-2 rounded-lg border border-gray-200 text-sm outline-none focus:ring-2 focus:ring-gray-300"
+                        />
+                        {errors.scheduled_at && <span className="block text-xs text-rose-600 mt-1">{errors.scheduled_at}</span>}
+                        <span className="block text-[11px] text-gray-400 mt-1">The email will be sent automatically at this time (server timezone).</span>
+                    </label>
+                )}
+
                 <div className="flex items-center justify-between pt-2 border-t border-gray-100">
                     <p className="text-xs text-gray-500">
-                        Sending to <span className="font-semibold text-gray-800">{data.recipient_ids.length}</span> of {emailable.length} registrant{emailable.length === 1 ? '' : 's'}.
+                        {isSchedule ? 'Scheduling for ' : 'Sending to '}<span className="font-semibold text-gray-800">{data.recipient_ids.length}</span> of {emailable.length} registrant{emailable.length === 1 ? '' : 's'}.
                     </p>
                     <button
                         type="submit"
-                        disabled={processing || data.recipient_ids.length === 0}
+                        disabled={processing || !canSubmit}
                         className="inline-flex items-center gap-2 px-5 py-2.5 bg-gray-900 text-white text-sm font-semibold rounded-xl hover:bg-black disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                        <Send size={15} /> {processing ? 'Sending…' : 'Send email'}
+                        {isSchedule ? <CalendarClock size={15} /> : <Send size={15} />}
+                        {processing ? (isSchedule ? 'Scheduling…' : 'Sending…') : (isSchedule ? 'Schedule email' : 'Send email')}
                     </button>
                 </div>
             </form>
@@ -376,39 +434,87 @@ function EmailTab({ event, leads, emailTemplates, sentEmails, formatDate }) {
                 )}
             </div>
 
-            {/* Sent history */}
-            <div className="lg:col-span-3 bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-                <div className="p-5 border-b border-gray-100">
-                    <h3 className="text-sm font-bold text-gray-900">Sent emails</h3>
-                    <p className="text-xs text-gray-500 mt-0.5">Recent emails sent to this event's registrants.</p>
-                </div>
-                {sentEmails.length === 0 ? (
-                    <p className="text-sm text-gray-500 py-10 text-center">No emails sent yet.</p>
-                ) : (
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-left border-collapse">
-                            <thead>
-                                <tr className="bg-gray-50/50 border-b border-gray-100">
-                                    <th className="px-6 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider">Subject</th>
-                                    <th className="px-6 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider">Recipient</th>
-                                    <th className="px-6 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider">Status</th>
-                                    <th className="px-6 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider text-right">Sent</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-50">
-                                {sentEmails.map(row => (
-                                    <tr key={row.id} className="hover:bg-gray-50/40">
-                                        <td className="px-6 py-3 text-sm text-gray-800 font-medium">{row.subject || '—'}</td>
-                                        <td className="px-6 py-3 text-sm text-gray-600">{row.recipient}</td>
-                                        <td className="px-6 py-3">{statusPill(row.status)}</td>
-                                        <td className="px-6 py-3 text-right text-sm text-gray-500">{formatDate(row.sent_at)}</td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
+            {/* History */}
+            {isSchedule ? (
+                <div className="lg:col-span-3 bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                    <div className="p-5 border-b border-gray-100">
+                        <h3 className="text-sm font-bold text-gray-900">Scheduled emails</h3>
+                        <p className="text-xs text-gray-500 mt-0.5">Upcoming and past scheduled sends for this event.</p>
                     </div>
-                )}
-            </div>
+                    {scheduledEmails.length === 0 ? (
+                        <p className="text-sm text-gray-500 py-10 text-center">Nothing scheduled yet.</p>
+                    ) : (
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left border-collapse">
+                                <thead>
+                                    <tr className="bg-gray-50/50 border-b border-gray-100">
+                                        <th className="px-6 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider">Subject</th>
+                                        <th className="px-6 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider">Recipients</th>
+                                        <th className="px-6 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider">Send time</th>
+                                        <th className="px-6 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider">Status</th>
+                                        <th className="px-6 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider text-right">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-50">
+                                    {scheduledEmails.map(row => (
+                                        <tr key={row.id} className="hover:bg-gray-50/40">
+                                            <td className="px-6 py-3 text-sm text-gray-800 font-medium">{row.subject || '—'}</td>
+                                            <td className="px-6 py-3 text-sm text-gray-600">
+                                                {row.status === 'sent' || row.status === 'failed'
+                                                    ? <span className="inline-flex items-center gap-1"><CheckCircle2 size={12} className="text-emerald-500" /> {row.sent}{row.failed > 0 && <span className="text-rose-600"> · {row.failed} failed</span>} <span className="text-gray-400">/ {row.recipient_count}</span></span>
+                                                    : `${row.recipient_count} registrant${row.recipient_count === 1 ? '' : 's'}`}
+                                            </td>
+                                            <td className="px-6 py-3 text-sm text-gray-600">
+                                                {formatDateTime(row.scheduled_at)}
+                                                {row.sent_at && <span className="block text-[11px] text-gray-400">sent {formatDateTime(row.sent_at)}</span>}
+                                            </td>
+                                            <td className="px-6 py-3">{scheduledPill(row.status)}</td>
+                                            <td className="px-6 py-3 text-right">
+                                                {row.cancelable ? (
+                                                    <button onClick={() => cancelScheduled(row)} className="inline-flex items-center gap-1 text-xs text-rose-600 hover:bg-rose-50 px-2 py-1 rounded-md font-medium"><Ban size={13} /> Cancel</button>
+                                                ) : <span className="text-xs text-gray-400">—</span>}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+                </div>
+            ) : (
+                <div className="lg:col-span-3 bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                    <div className="p-5 border-b border-gray-100">
+                        <h3 className="text-sm font-bold text-gray-900">Sent emails</h3>
+                        <p className="text-xs text-gray-500 mt-0.5">Recent emails sent to this event's registrants.</p>
+                    </div>
+                    {sentEmails.length === 0 ? (
+                        <p className="text-sm text-gray-500 py-10 text-center">No emails sent yet.</p>
+                    ) : (
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left border-collapse">
+                                <thead>
+                                    <tr className="bg-gray-50/50 border-b border-gray-100">
+                                        <th className="px-6 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider">Subject</th>
+                                        <th className="px-6 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider">Recipient</th>
+                                        <th className="px-6 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider">Status</th>
+                                        <th className="px-6 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider text-right">Sent</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-50">
+                                    {sentEmails.map(row => (
+                                        <tr key={row.id} className="hover:bg-gray-50/40">
+                                            <td className="px-6 py-3 text-sm text-gray-800 font-medium">{row.subject || '—'}</td>
+                                            <td className="px-6 py-3 text-sm text-gray-600">{row.recipient}</td>
+                                            <td className="px-6 py-3">{statusPill(row.status)}</td>
+                                            <td className="px-6 py-3 text-right text-sm text-gray-500">{formatDate(row.sent_at)}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+                </div>
+            )}
         </div>
     );
 }

@@ -129,14 +129,14 @@ class CommunicationService
         foreach ($leads as $lead) {
             try {
                 $sent = $this->sendTemplated($template->key, $lead, $extra);
-                $log  = $sent['email'] ?? $sent['sms'];
+                $log = $sent['email'] ?? $sent['sms'];
                 $failed = $log && $log->status === MessageLog::STATUS_FAILED;
 
                 $results[] = [
                     'lead_id' => $lead->id,
-                    'status'  => ($log && ! $failed) ? 'sent' : 'failed',
-                    'log_id'  => $log?->id,
-                    'error'   => $log?->error_message
+                    'status' => ($log && ! $failed) ? 'sent' : 'failed',
+                    'log_id' => $log?->id,
+                    'error' => $log?->error_message
                         ?? ($log ? null : 'No deliverable channel (missing email/phone or template has none).'),
                 ];
             } catch (\Throwable $e) {
@@ -206,6 +206,41 @@ class CommunicationService
         $log = $this->sendEmail($lead, $sub, $bod, null, [], $campaignId);
 
         return $log->status !== MessageLog::STATUS_FAILED;
+    }
+
+    /**
+     * SMS counterpart of sendCampaignEmail: substitute and text a lead as part
+     * of a bulk SMS campaign, logging the row against that campaign. Returns
+     * true when the provider accepted the message.
+     */
+    public function sendCampaignSms(Lead $lead, string $body, int $campaignId, array $extraContext = []): bool
+    {
+        $to = $this->normalizePhone((string) $lead->phone);
+
+        if (! $to) {
+            $this->log([
+                'campaign_id' => $campaignId, 'channel' => MessageLog::CHANNEL_SMS,
+                'recipient_id' => $lead->id, 'recipient_address' => (string) $lead->phone,
+                'body' => $body, 'status' => MessageLog::STATUS_FAILED,
+                'error_message' => 'Lead has no valid phone number.', 'failed_at' => now(),
+            ]);
+
+            return false;
+        }
+
+        $text = $this->substitute($body, $this->buildContext($lead, $extraContext), false);
+        $res = $this->sms->send($to, $text);
+
+        $this->log([
+            'campaign_id' => $campaignId, 'channel' => MessageLog::CHANNEL_SMS,
+            'recipient_id' => $lead->id, 'recipient_address' => $to, 'body' => $text,
+            'status' => $res['ok'] ? MessageLog::STATUS_QUEUED : MessageLog::STATUS_FAILED,
+            'provider_message_id' => $res['message_id'] ?? null,
+            'error_message' => $res['ok'] ? null : ($res['error'] ?? 'SMS send failed.'),
+            'failed_at' => $res['ok'] ? null : now(),
+        ]);
+
+        return $res['ok'];
     }
 
     private function sendEmail(Lead $lead, string $subject, string $body, ?string $key, array $attachments = [], ?int $campaignId = null, ?string $bannerImage = null, ?string $footerImage = null, ?string $fromEmail = null, ?string $fromName = null): MessageLog
@@ -289,11 +324,11 @@ class CommunicationService
         $base = rtrim((string) config('app.url'), '/');
 
         if ($lead->portalUser()->exists()) {
-            return $base . '/portal/lead/dashboard';
+            return $base.'/portal/lead/dashboard';
         }
 
         if (! empty($lead->tracking_code)) {
-            return $base . '/track/' . $lead->tracking_code;
+            return $base.'/track/'.$lead->tracking_code;
         }
 
         return '';
