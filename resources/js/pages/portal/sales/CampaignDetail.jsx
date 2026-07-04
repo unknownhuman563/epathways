@@ -57,7 +57,11 @@ export default function CampaignDetail({ campaign, recipients = [], basePath = "
                     </>
                 )}
                 <span className={`text-[10px] font-bold uppercase tracking-wider text-gray-400 block ${isSms ? "" : "pt-2"}`}>{isSms ? "Message" : "Body"}</span>
-                <pre className="whitespace-pre-wrap font-sans text-sm text-gray-700 leading-relaxed">{campaign.body}</pre>
+                {isSms ? (
+                    <pre className="whitespace-pre-wrap font-sans text-sm text-gray-700 leading-relaxed">{campaign.body}</pre>
+                ) : (
+                    <div className="text-sm text-gray-700 leading-relaxed [&_a]:text-blue-600 [&_a]:underline" dangerouslySetInnerHTML={{ __html: campaign.body }} />
+                )}
             </div>
 
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
