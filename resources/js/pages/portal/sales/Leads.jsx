@@ -279,17 +279,21 @@ export default function SalesLeads({ leads = [], statuses = [], programs = [], s
                         >
                             Kanban
                         </button>
-                        <button
-                            type="button"
-                            onClick={() => setView("events")}
-                            className={`px-3 py-3 text-xs font-bold transition-colors -mb-px ${
-                                view === "events"
-                                    ? "text-gray-900 border-b-2 border-gray-900"
-                                    : "text-gray-400 border-b-2 border-transparent hover:text-gray-700"
-                            }`}
-                        >
-                            Events
-                        </button>
+                        {/* Events tab — only portals whose controller feeds `events`
+                            + exposes /events/{id}/registrations (sales, immigration, education). */}
+                        {(portal === "sales" || portal === "immigration" || portal === "education") && (
+                            <button
+                                type="button"
+                                onClick={() => setView("events")}
+                                className={`px-3 py-3 text-xs font-bold transition-colors -mb-px ${
+                                    view === "events"
+                                        ? "text-gray-900 border-b-2 border-gray-900"
+                                        : "text-gray-400 border-b-2 border-transparent hover:text-gray-700"
+                                }`}
+                            >
+                                Events
+                            </button>
+                        )}
                         <button
                             type="button"
                             onClick={() => { setView("registration"); setPage(1); }}
@@ -618,32 +622,10 @@ const fmtEventDate = (iso) =>
     iso ? new Date(iso).toLocaleDateString("en-NZ", { day: "numeric", month: "short", year: "numeric" }) : "—";
 
 function EventsTab({ events = [], portalBase, statuses = [] }) {
-    const [active, setActive] = useState(null);        // event whose registrants are open
-    const [registrants, setRegistrants] = useState([]);
-    const [loading, setLoading] = useState(false);
-    const [savingId, setSavingId] = useState(null);    // registrant whose stage is saving
-
-    const openRegistrants = async (ev) => {
-        setActive(ev);
-        setRegistrants([]);
-        setLoading(true);
-        const { data } = await getJson(`/portal/sales/events/${ev.id}/registrations`);
-        setRegistrants(data?.registrations ?? []);
-        setLoading(false);
-    };
-
-    // Update a registrant's pipeline stage — works regardless of which
-    // department the lead now sits in (the sales updateLead endpoint just
-    // sets the status on any lead).
-    const changeRegistrantStage = (reg, stage) => {
-        setSavingId(reg.id);
-        router.post(`${portalBase}/leads/${reg.id}`, { status: stage }, {
-            preserveScroll: true,
-            preserveState: true,
-            onSuccess: () => setRegistrants((prev) => prev.map((r) => (r.id === reg.id ? { ...r, status: stage } : r))),
-            onFinish: () => setSavingId(null),
-        });
-    };
+    // The old modal is gone — clicking "View registrants" now Inertia-
+    // navigates to a full page at ${portalBase}/events/{id}/registrants.
+    // Statuses is still passed in so per-row stage editing continues
+    // to work (the new page reads it directly from server props).
 
     return (
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
@@ -686,13 +668,12 @@ function EventsTab({ events = [], portalBase, statuses = [] }) {
                                         </span>
                                     </td>
                                     <td className="px-3 py-3 text-right pr-4">
-                                        <button
-                                            type="button"
-                                            onClick={() => openRegistrants(ev)}
+                                        <Link
+                                            href={`${portalBase}/events/${ev.id}/registrants`}
                                             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-900 text-white text-[11px] font-semibold hover:bg-black"
                                         >
                                             View registrants
-                                        </button>
+                                        </Link>
                                     </td>
                                 </tr>
                             ))}
@@ -701,25 +682,13 @@ function EventsTab({ events = [], portalBase, statuses = [] }) {
                 </div>
             )}
 
-            {active && (
-                <RegistrantsModal
-                    event={active}
-                    registrants={registrants}
-                    loading={loading}
-                    portalBase={portalBase}
-                    statuses={statuses}
-                    savingId={savingId}
-                    onStageChange={changeRegistrantStage}
-                    onClose={() => setActive(null)}
-                />
-            )}
         </div>
     );
 }
 
-// Centered (large, not full-screen) modal showing one event's registrants in
-// the opportunities table style, with an editable pipeline-stage dropdown.
-function RegistrantsModal({ event, registrants = [], loading, portalBase, statuses = [], savingId, onStageChange, onClose }) {
+// Legacy — kept only so any historic import doesn't break during rollout.
+// Safe to delete once no callers reference RegistrantsModal.
+function _RegistrantsModal_LEGACY({ event, registrants = [], loading, portalBase, statuses = [], savingId, onStageChange, onClose }) {
     const [openStageId, setOpenStageId] = useState(null);
 
     return (

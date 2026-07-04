@@ -34,39 +34,84 @@ class VisaChecklistSeeder extends Seeder
             if (! $visaType) {
                 Log::warning("VisaChecklistSeeder: visa_type with code '{$code}' not found, skipping");
                 $this->command->warn("Skipped: visa_type code '{$code}' not found");
+
                 continue;
             }
 
             $visaType->checklist_items = $items;
             $visaType->save();
 
-            $this->command->info("Seeded: {$visaType->name} ({$code}) — " . count($items) . ' items');
+            $this->command->info("Seeded: {$visaType->name} ({$code}) — ".count($items).' items');
         }
     }
 
-    private function item(string $key, string $section, string $label, string $hint, bool $required = true): array
+    private function item(string $key, string $section, string $label, string $hint, bool $required = true, ?string $fileCode = null, string $fileSuffix = ''): array
     {
-        return [
+        $entry = [
             'key' => $key,
-            'label' => $section . ' · ' . $label,
+            'label' => $section.' · '.$label,
             'hint' => $hint,
             'required' => $required,
         ];
+
+        // Optional file-naming metadata. When `file_code` is set, uploads
+        // against this item are renamed to "NN - CODE - FirstnameLASTNAME<suffix>"
+        // (NN = the item's position). Left off entirely when not provided so
+        // the other visa checklists stay unchanged.
+        if ($fileCode !== null) {
+            $entry['file_code'] = $fileCode;
+        }
+        if ($fileSuffix !== '') {
+            $entry['file_suffix'] = $fileSuffix;
+        }
+
+        return $entry;
     }
 
+    /**
+     * Which template each seeded visa `code` maps to. The seeder still
+     * targets these codes, but the templates themselves are also exposed
+     * via templates() so the Visas edit screen can load any of them onto a
+     * visa the user created by hand (any code) — no seeding required.
+     */
     private function checklists(): array
     {
+        $t = $this->templates();
+
         return [
-            'WORK_AEWV' => $this->aewv(),
-            'STUDENT' => $this->studentVisa(),
-            'POST_STUDY_WORK' => $this->postStudyWorkVisa(),
-            'PARTNER_WORK' => $this->partnershipVisa(),
-            'PARTNER_RES' => $this->partnershipOfResident(),
-            'STRV' => $this->straightToResident(),
-            'WTRV' => $this->workToResident(),
-            'PRV' => $this->permanentResidentVisa(),
-            'DCRV' => $this->dependentChildResidentVisa(),
-            'SVDC' => $this->studentVisaDependentChild(),
+            'WORK_AEWV' => $t['aewv']['items'],
+            'STUDENT' => $t['student']['items'],
+            'POST_STUDY_WORK' => $t['post_study_work']['items'],
+            'PARTNER_WORK' => $t['partner_work']['items'],
+            'PARTNER_RES' => $t['partner_res']['items'],
+            'STRV' => $t['straight_to_resident']['items'],
+            'WTRV' => $t['work_to_resident']['items'],
+            'PRV' => $t['prv']['items'],
+            'DCRV' => $t['dcrv']['items'],
+            'SVDC' => $t['svdc']['items'],
+        ];
+    }
+
+    /**
+     * Loadable checklist templates keyed by a stable slug, each with a
+     * human label + its items. Reused by the seeder and surfaced to the
+     * Visas edit screen's "Load a checklist template" picker.
+     *
+     * @return array<string, array{label: string, items: array}>
+     */
+    public function templates(): array
+    {
+        return [
+            'student' => ['label' => 'Student Visa', 'items' => $this->studentVisa()],
+            'partner_work' => ['label' => 'Partner of NZ — Work (Partnership)', 'items' => $this->partnershipVisa()],
+            'partner_res' => ['label' => 'Partner of NZ — Resident', 'items' => $this->partnershipOfResident()],
+            'aewv' => ['label' => 'Accredited Employer Work Visa (AEWV)', 'items' => $this->aewv()],
+            'post_study_work' => ['label' => 'Post-Study Work Visa', 'items' => $this->postStudyWorkVisa()],
+            'straight_to_resident' => ['label' => 'Straight to Residence', 'items' => $this->straightToResident()],
+            'work_to_resident' => ['label' => 'Work to Residence', 'items' => $this->workToResident()],
+            'prv' => ['label' => 'Permanent Resident Visa', 'items' => $this->permanentResidentVisa()],
+            'dcrv' => ['label' => 'Dependent Child Resident Visa', 'items' => $this->dependentChildResidentVisa()],
+            'svdc' => ['label' => 'Student Visa — Dependent Child', 'items' => $this->studentVisaDependentChild()],
         ];
     }
 
@@ -115,76 +160,80 @@ class VisaChecklistSeeder extends Seeder
 
     private function studentVisa(): array
     {
+        $applicant = 'Applicant Documents';
+        $financial = 'Financial Documents (Applicant)';
+        $sponsor = 'Sponsor Documents (if sponsored)';
+
         return [
-            $this->item('passport_pdf', 'Identity', 'Passport (PDF)',
-                'Clear colour scan of your current, valid passport in PDF format.'),
-            $this->item('passport_bio_page', 'Identity', 'Passport biographical page',
-                'The photo/details page showing name, date of birth, passport number and expiry date.'),
-            $this->item('face_image_jpg', 'Identity', 'Face image (JPG)',
-                'Portrait JPG photo: 900×1200 to 2250×3000 pixels, file size 500 KB–3 MB, plain background, full face.'),
+            // ── 01–17 · Applicant Documents ──────────────────────────────
+            $this->item('cv', $applicant, 'Curriculum Vitae',
+                'Your current CV summarising education and work history.', true, 'CV'),
+            $this->item('passport', $applicant, 'Passport (PDF format)',
+                'Clear colour scan of your current, valid passport in PDF format.', true, 'PPT', '_EXPDDMMYYY'),
+            $this->item('face_image', $applicant, 'Face image',
+                'Recent passport-style photo — plain background, full face.', true, 'FI'),
+            $this->item('birth_certificate', $applicant, 'Birth Certificate',
+                'Your full birth certificate.', true, 'BC'),
+            $this->item('marriage_certificate', $applicant, 'Marriage Certificate',
+                'Official marriage certificate, if you are married. If applicable.', false, 'MC'),
+            $this->item('graduate_certificate', $applicant, 'Graduate Certificate',
+                'Your completed qualification certificate (diploma / degree).', true, 'CDPMA'),
+            $this->item('transcript', $applicant, 'Transcript of Record',
+                'Official academic transcript from your previous school.', true, 'TOR'),
+            $this->item('pte_ielts_result', $applicant, 'PTE / IELTS Result',
+                'Your English test result (PTE Academic, IELTS, or accepted equivalent).', true, 'PTE'),
+            $this->item('certificate_of_employment', $applicant, 'Certificate of Employment',
+                'Certificate confirming your employment history, role and dates.', true, 'COE'),
+            $this->item('offer_of_place', $applicant, 'Offer of Place',
+                'Offer of Place from your NZ institution.', true, 'OOP'),
+            $this->item('tuition_payment_evidence', $applicant, 'Evidence of Payment for Tuition Fee',
+                'Official receipt from the school confirming tuition fees paid.', true, 'EOP'),
+            $this->item('statement_of_purpose', $applicant, 'Statement of Purpose',
+                'Personal statement about your study plan in NZ and your plans after study.', true, 'SOP'),
+            $this->item('nbi_police_clearance', $applicant, 'NBI / Police Clearance Certificate',
+                "Police clearance certificate (NBI for the Philippines, or your country's equivalent).", true, 'NBI'),
+            $this->item('medical_certificate', $applicant, 'Medical Certificate (General and X-Ray)',
+                'General medical and chest X-ray certificate from an INZ-approved panel clinic.', true, 'eMED'),
+            $this->item('travel_records', $applicant, 'Visas / travel records (other countries)',
+                'Copies of visas or travel records if you have been to other countries. If applicable.', false, 'TRAVEL'),
+            $this->item('nz_visa', $applicant, 'NZ Visa (if onshore)',
+                'Copy of your current NZ visa, if you are already in New Zealand. If applicable.', false, 'NZVISA'),
+            $this->item('inz_1226', $applicant, 'Signed INZ1226 – Student Declaration Form',
+                'Student Declaration Form, completed and signed.', true, 'INZ1226'),
 
-            $this->item('offer_of_place', 'Admission', 'Offer of Place',
-                'Offer of Place from your NZ institution.'),
-            $this->item('transcript', 'Admission', 'Transcript of record (TOR)',
-                'Official academic transcript from your previous school.'),
-            $this->item('graduate_certificate', 'Admission', 'Graduate certificate',
-                'Your completed qualification certificate.'),
-            $this->item('pte_result', 'Admission', 'PTE result',
-                "Your PTE Academic English test result (or accepted equivalent) meeting the programme's requirement."),
-            $this->item('tuition_payment_evidence', 'Admission', 'Evidence of tuition fee payment',
-                'Official receipt from the school confirming tuition fees paid.'),
+            // ── 18–22 · Financial Documents (Applicant) ──────────────────
+            $this->item('bank_statement', $financial, 'Bank Statement (at least 6 months)',
+                'Your bank statements covering at least the last 6 months.', true, 'BNKS'),
+            $this->item('payslips', $financial, 'Payslips (at least 6 months)',
+                'Your payslips covering at least the last 6 months, if employed.', true, 'PYSLPS'),
+            $this->item('business_permit', $financial, 'Business Permit',
+                'Your business permit, if self-employed / a business owner. If applicable.', false, 'BUS'),
+            $this->item('property_ownership', $financial, 'Property Ownership',
+                'Evidence of any property you own (ties to home country). If applicable.', false, 'PROP'),
+            $this->item('additional_funds', $financial, 'Additional source of funds',
+                'Proof of any additional funds you wish to include to support the above savings. If applicable.', false, 'SOF'),
 
-            $this->item('bank_statements', 'Financial', 'Savings + 6-month bank statements',
-                'Bank statements (last 6 months) showing funds to cover your study – e.g. NZ$30,000 for 18 months of study. Verified June 2026: NZD $20,000/year tertiary, NZD $17,000/year school years 1–13, on top of tuition and return airfare.'),
-            $this->item('additional_funds', 'Financial', 'Additional source of funds',
-                'Proof of any additional funds you wish to include to support the savings above. If applicable.', false),
-
-            $this->item('travel_records', 'Background', 'Visas / travel records',
-                'Copies of visas or travel records if you have been to other countries. If applicable.', false),
-            $this->item('birth_certificate', 'Background', 'Birth certificate',
-                'Your full birth certificate.'),
-            $this->item('marriage_certificate', 'Background', 'Marriage certificate',
-                'Official marriage certificate, if you are married. If applicable.', false),
-            $this->item('last_employment_reference', 'Background', 'Last employment work reference',
-                'Reference letter from your most recent employer. If you have been employed.', false),
-            $this->item('certificate_of_employment', 'Background', 'Certificate of Employment',
-                'Certificate confirming your employment history, role and dates. If you have been employed.', false),
-            $this->item('cv', 'Background', 'CV',
-                'Current CV summarising your education and work history.'),
-            $this->item('payslips', 'Background', 'Last 3 payslips',
-                'Your three most recent payslips, if you have been employed. If applicable.', false),
-            $this->item('property_ownership', 'Background', 'Property ownership',
-                'Evidence of any property you own (ties to home country). If applicable.', false),
-            $this->item('personal_statement', 'Background', 'Personal statement',
-                'A statement explaining your study plan in NZ and your plans after study.'),
-
-            $this->item('inz_1014', 'Forms', 'Signed INZ 1014 (financial undertaking)',
-                'Financial Undertaking for a Student (Sponsorship) form, completed and signed. Required only if sponsored.', false),
-            $this->item('inz_1226', 'Forms', 'Signed INZ 1226 (student declaration)',
-                'Student Declaration Form, completed and signed.'),
-            $this->item('medical_certificate', 'Forms', 'Medical certificate (general & X-ray)',
-                'General medical and chest X-ray certificate from an Immigration NZ-approved panel clinic.'),
-            $this->item('police_clearance', 'Forms', 'NBI / police clearance',
-                "Police clearance certificate (NBI for the Philippines, or your country's equivalent)."),
-
-            $this->item('sponsor_bank_statement', 'Sponsor (if applicable)', "Sponsor's bank statement",
-                'Recent bank statements for the sponsor showing sufficient funds. Required if sponsored.', false),
-            $this->item('sponsor_letter_support', 'Sponsor (if applicable)', 'Letter of support',
-                'Signed letter from the sponsor confirming they will support your study and living costs. Required if sponsored.', false),
-            $this->item('sponsor_photos', 'Sponsor (if applicable)', 'Photos with sponsor',
-                'Photos of you together with the sponsor, evidencing the relationship. Required if sponsored.', false),
-            $this->item('sponsor_passport', 'Sponsor (if applicable)', "Sponsor's passport",
-                "Copy of the sponsor's passport or photo ID. Required if sponsored.", false),
-            $this->item('sponsor_birth_certificate', 'Sponsor (if applicable)', "Sponsor's birth certificate",
-                "Sponsor's birth certificate, to help establish the relationship. Required if sponsored.", false),
-            $this->item('sponsor_business_permit', 'Sponsor (if applicable)', 'Business permit',
-                "Sponsor's business permit, if they are self-employed/own a business. If applicable.", false),
-            $this->item('sponsor_payslips', 'Sponsor (if applicable)', "Sponsor's payslips",
-                "Sponsor's recent payslips, if employed. If applicable.", false),
-            $this->item('sponsor_coe', 'Sponsor (if applicable)', "Sponsor's Certificate of Employment",
-                "Certificate confirming the sponsor's employment, role and income. If applicable.", false),
-            $this->item('sponsor_relationship_docs', 'Sponsor (if applicable)', 'Relationship / citizenship certificates',
-                'Government-issued documents linking you to the sponsor. Required if sponsored.', false),
+            // ── 23–32 · Sponsor Documents (if sponsored) ─────────────────
+            $this->item('inz_1014', $sponsor, 'Signed INZ1014 – Financial Undertaking (Sponsorship)',
+                'Financial Undertaking for a Student (Sponsorship) form, completed and signed.', false, 'INZ1014'),
+            $this->item('sponsor_bank_statement', $sponsor, 'Bank Statement of Sponsor',
+                'Recent bank statements for the sponsor showing sufficient funds.', false, 'BNKS', '_Sponsor'),
+            $this->item('sponsor_letter_support', $sponsor, 'Letter of Support from family and friends',
+                'Signed letter from the sponsor confirming they will support your study and living costs.', false, 'LOS', '_Sponsor'),
+            $this->item('sponsor_photos', $sponsor, 'Photos with Sponsor',
+                'Photos of you together with the sponsor, evidencing the relationship.', false, 'PHTS', '_Sponsor'),
+            $this->item('sponsor_passport', $sponsor, 'Passport of Sponsor',
+                "Copy of the sponsor's passport or photo ID.", false, 'PPT', '(of sponsor)'),
+            $this->item('sponsor_birth_certificate', $sponsor, 'Birth Certificate – Sponsor',
+                "Sponsor's birth certificate, to help establish the relationship.", false, 'BC', '(of sponsor)'),
+            $this->item('sponsor_business_permit', $sponsor, 'Business permit',
+                "Sponsor's business permit, if self-employed / a business owner. If applicable.", false, 'BUS', '(of sponsor)'),
+            $this->item('sponsor_payslip', $sponsor, 'Payslip of Sponsor',
+                "Sponsor's recent payslips, if employed. If applicable.", false, 'PYSLP', '(of sponsor)'),
+            $this->item('sponsor_coe', $sponsor, 'Certificate of Employment of Sponsor',
+                "Certificate confirming the sponsor's employment, role and income. If applicable.", false, 'COE', '(of sponsor)'),
+            $this->item('sponsor_relationship_docs', $sponsor, 'Government-issued relationship / citizenship / marriage certificates',
+                'Government-issued documents linking you to the sponsor.', false, 'ID', '(of sponsor)'),
         ];
     }
 
@@ -215,7 +264,7 @@ class VisaChecklistSeeder extends Seeder
             $this->item('medical_certificate', 'Health & Character', 'Medical certificate (general & X-ray)',
                 'General medical and chest X-ray certificate from an Immigration NZ-approved panel clinic.'),
             $this->item('police_clearance', 'Health & Character', 'NBI / PCC clearance',
-                "Police clearance certificate. Required if you are 17 or older and have been in NZ for 24 months or longer."),
+                'Police clearance certificate. Required if you are 17 or older and have been in NZ for 24 months or longer.'),
 
             $this->item('birth_certificate', 'Supporting Documents', 'Birth certificate',
                 'Your full birth certificate.'),
@@ -233,56 +282,57 @@ class VisaChecklistSeeder extends Seeder
 
     private function partnershipVisa(): array
     {
+        $main = 'Applicant & Sponsorship Documents';
+        $evidence = 'Genuine & Stable Partnership Evidence';
+
         return [
-            $this->item('passport_pdf', 'Identity', 'Passport (PDF)',
-                'Clear colour scan of your current, valid passport in PDF format.'),
-            $this->item('passport_bio_page', 'Identity', 'Passport biographical page',
-                'The photo/details page showing name, date of birth, passport number and expiry date.'),
-            $this->item('face_image_jpg', 'Identity', 'Face image (JPG)',
-                'Recent passport-style photo – plain light background, full face – saved as a JPG file.'),
+            // ── 01–09 · Applicant & Sponsorship Documents ────────────────
+            $this->item('visa_information_form', $main, 'Visa Information Form',
+                'The completed and signed Immigration NZ family/partner information form.', true, 'VIF'),
+            $this->item('passport_bio_page', $main, 'Passport biographical page',
+                'The photo/details page showing name, date of birth, passport number and expiry date.', true, 'PPT', '_EXPDDMMYYY'),
+            $this->item('face_image', $main, 'Passport-style face image (JPG format)',
+                'Recent passport-style photo — plain background, full face — saved as a JPG file.', true, 'FI'),
+            $this->item('birth_certificate', $main, 'Birth Certificate',
+                'Your full birth certificate.', true, 'BC'),
+            $this->item('police_nbi_clearance', $main, 'Police / NBI Clearance (recent)',
+                'A recent police/character certificate (NBI clearance for the Philippines).', true, 'NBI', '_ISSUEDDMMYYY'),
+            $this->item('sponsor_nz_visa', $main, 'Copy of the most recent NZ visa of the Sponsor',
+                "Copy of the supporting partner's current NZ visa, residence or citizenship status.", true, 'VISA', '_ISSUEDDMMYYY'),
+            $this->item('medical_certificate', $main, 'E-medicals (X-ray and General Medical)',
+                'From an INZ-approved clinic. Required if your previous medical has expired (over 3 years old) or was never provided.', false, 'eMED', '_ISSUEDDMMYYY'),
+            $this->item('inz_1241', $main, 'INZ1241 Declaration Form for partner',
+                'Partnership declaration form completed and signed by the applicant partner.', true, 'INZ1241'),
+            $this->item('inz_1146', $main, 'INZ1146 Partner Supporting Form',
+                'Supporting partnership form completed and signed by the supporting/sponsoring partner.', true, 'INZ1146'),
 
-            $this->item('medical_certificate', 'Health & Character', 'E-medicals (X-ray & general medical)',
-                'Completed at an Immigration NZ-approved panel clinic. Required if your previous medical has expired (over 3 years old) or was never provided.'),
-            $this->item('police_clearance', 'Health & Character', 'Police / NBI clearance',
-                "A recent police/character certificate (NBI clearance for the Philippines)."),
-
-            $this->item('inz_1241', 'Forms & Sponsorship', 'Signed INZ 1241 declaration form',
-                'Partnership declaration form completed and signed by the applicant partner.'),
-            $this->item('inz_1146', 'Forms & Sponsorship', 'Signed INZ 1146 partner supporting form',
-                'Supporting partnership form completed and signed by the supporting/sponsoring partner.'),
-            $this->item('family_visa_info_form', 'Forms & Sponsorship', 'Family Visa Information Form',
-                'The completed and signed Immigration NZ family/partner information form.'),
-            $this->item('sponsor_visa', 'Forms & Sponsorship', "Sponsor's most recent NZ visa",
-                "Copy of the supporting partner's current NZ visa, residence or citizenship status."),
-
-            $this->item('marriage_certificate', 'Partnership Evidence', 'Marriage certificate',
-                'Official marriage or civil union certificate, if you are married. If applicable.', false),
-            $this->item('children_birth_certificate', 'Partnership Evidence', "Children's birth certificate",
-                'Birth certificate of any child you share, naming both partners as parents. If applicable.', false),
-            $this->item('relationship_timeline', 'Partnership Evidence', 'Relationship timeline / love story',
-                'A written account of how the relationship began and developed, with key dates.'),
-            $this->item('supporting_letters', 'Partnership Evidence', 'Supporting letters from parents & friends',
-                "Signed letters confirming the relationship, each with the writer's name and contact details."),
-            $this->item('financial_interdependence', 'Partnership Evidence', 'Financial interdependence',
-                'Bank statements showing money transfers between the two of you, shared accounts or shared expenses.'),
-            $this->item('call_logs', 'Partnership Evidence', 'Call logs',
-                'Records of phone calls between the couple, especially during any time apart. If applicable.', false),
-            $this->item('communication_records', 'Partnership Evidence', 'Communication records',
-                'Message history across platforms (WhatsApp, Skype, Viber, email, etc.) showing ongoing contact.'),
-            $this->item('couple_photos', 'Partnership Evidence', 'Couple photos (6–8)',
-                'A selection of photos together with family, friends, classmates and colleagues over time.'),
-            $this->item('joint_assets_docs', 'Partnership Evidence', 'Joint assets documents',
-                'Documents for any assets you own together. If applicable.', false),
-            $this->item('joint_assets_names', 'Partnership Evidence', 'Assets in joint names',
-                'Evidence of shared assets – vehicle, house, financial investments or insurance in both names. If applicable.', false),
-            $this->item('travel_together', 'Partnership Evidence', 'Evidence of travelling together',
-                'Shared room bookings, flight/transport tickets or itineraries. If applicable.', false),
-            $this->item('gifts_cards', 'Partnership Evidence', 'Photos of gifts & cards',
-                'Photos of gifts, birthday or anniversary cards exchanged between you. If applicable.', false),
-            $this->item('shared_address_bills', 'Partnership Evidence', 'Bills & mail to the same address',
-                'Utility bills, bank statements or dated online purchases addressed to each of you at the shared address.'),
-            $this->item('house_tenancy', 'Partnership Evidence', 'House ownership or tenancy agreement',
-                'Proof of your shared home – ownership/title document or a current tenancy agreement.'),
+            // ── 10–21 · Genuine & Stable Partnership — supporting evidence.
+            // Provide as much as you can (ideally the last 3 months); you
+            // don't have to prepare every item — all optional.
+            $this->item('marriage_certificate', $evidence, 'Marriage Certificate (if applicable)',
+                'Official marriage or civil union certificate, if you are married.', false, 'MC'),
+            $this->item('children_birth_certificate', $evidence, 'Birth Certificate of Children (if applicable)',
+                'Birth certificate of any child you share, naming both partners as parents.', false, 'BC', ' of child'),
+            $this->item('relationship_timeline', $evidence, 'Love story / relationship timeline between the couple',
+                'A written account of how the relationship began and developed, with key dates.', false, 'LOVE'),
+            $this->item('letter_of_support', $evidence, 'Letter of Support from both parents and friends',
+                "Signed letters confirming the relationship, each with the writer's name and contact details.", false, 'LoF', '_Name of Family Member or Friend'),
+            $this->item('financial_interdependence', $evidence, 'Financial interdependence between the couple',
+                'Bank statements showing money transfers between the two of you, shared accounts or shared expenses.', false, 'FIN'),
+            $this->item('communication_records', $evidence, 'Communication Records (WhatsApp, Viber, email)',
+                'Message history across platforms showing ongoing contact.', false, 'COMREC'),
+            $this->item('couple_photos', $evidence, 'Photos as a couple with family, friends & colleagues (6–8)',
+                'A selection of photos together over time.', false, 'PHOTOS'),
+            $this->item('joint_assets', $evidence, 'Joint Assets held under joint names',
+                'Vehicle, house, financial investment or insurance in both names.', false, 'JA'),
+            $this->item('travel_together', $evidence, 'Evidence of travelling together',
+                'Shared room bookings, flight/transport tickets or itineraries.', false, 'TRAVEL'),
+            $this->item('gifts_cards', $evidence, 'Photos of gifts and birthday cards sent to each other',
+                'Photos of gifts and cards exchanged between you.', false, 'GIFTS'),
+            $this->item('shared_address_bills', $evidence, 'Bills and mail sent to the same living address',
+                'Utility bills, bank statements or dated online purchases addressed to each of you at the shared address.', false, 'BILLS'),
+            $this->item('house_tenancy', $evidence, 'House ownership documents or tenancy agreement',
+                'Proof of your shared home — ownership/title document or a current tenancy agreement.', false, 'HOUSE'),
         ];
     }
 
@@ -375,7 +425,7 @@ class VisaChecklistSeeder extends Seeder
             $this->item('medical_certificate', 'English & Health', 'Updated medical (X-ray & general)',
                 'General medical and chest X-ray. For residence it must be issued less than 3 months before lodging.'),
             $this->item('police_clearance', 'English & Health', 'NBI certificate / PCC',
-                "Police clearance certificate. From 8 December 2025 complete certificate required, not receipts."),
+                'Police clearance certificate. From 8 December 2025 complete certificate required, not receipts.'),
 
             $this->item('inz_1242', 'Forms', 'Signed INZ 1242',
                 'Immigration NZ residence declaration form, completed and signed.'),
@@ -421,7 +471,7 @@ class VisaChecklistSeeder extends Seeder
             $this->item('medical_certificate', 'English & Health', 'Updated medical (X-ray & general)',
                 'General medical and chest X-ray. For residence it must be issued less than 3 months before lodging.'),
             $this->item('police_clearance', 'English & Health', 'PCC / NBI certificate',
-                "Police clearance certificate. From 8 December 2025 complete certificate required."),
+                'Police clearance certificate. From 8 December 2025 complete certificate required.'),
 
             $this->item('inz_1242', 'Forms', 'Signed INZ 1242',
                 'Immigration NZ residence declaration form, completed and signed.'),

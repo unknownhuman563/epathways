@@ -70,12 +70,21 @@ class Lead extends Model
     public const IMMIGRATION_STAGES = [
         'For Assessment',
         'Endorsed',
+        'Agreement Sent',
+        'Agreement Signed',
+        'Invoice Paid',
         'Visa Lodged',
         'Request for Information',
         'Approved in Principle',
         'Approved Visa',
         'Decline Visa',
     ];
+
+    /**
+     * Case priority levels, surfaced on the Cases board as a coloured
+     * avatar — urgent (red), medium (orange), low (green).
+     */
+    public const IMMIGRATION_PRIORITIES = ['urgent', 'medium', 'low'];
 
     /**
      * Named people who can be assigned to a lead while it sits at a given
@@ -186,6 +195,7 @@ class Lead extends Model
         'has_passport', 'passport_number', 'passport_expiry', 'passport_path',
         'terms_accepted', 'work_info', 'financial_info', 'gap_explanation',
         'education_notes', 'event_id', 'event_session_id', 'event_response',
+        'event_notes', 'event_notes_updated_at', 'event_notes_updated_by',
         'immigration_info', 'character_info', 'health_info', 'family_info',
         'nz_contacts_info', 'military_info', 'source_of_funds_info',
         'home_ties_info', 'declaration_accepted',
@@ -205,6 +215,7 @@ class Lead extends Model
         // Sales-dashboard mirror columns
         'calendar_date', 'client_info_link', 'call_update_form_link',
         'document_checklist',
+        'hidden_track_documents',
         'section_verifications',
         // Student conversion flag
         'is_student', 'student_converted_at', 'student_converted_by',
@@ -236,7 +247,7 @@ class Lead extends Model
         // English / Immigration sub-stage tracks (see ENGLISH_STAGES,
         // IMMIGRATION_STAGES). Each carries an optional named assignee.
         'english_stage', 'english_assignee',
-        'immigration_stage', 'immigration_assignee',
+        'immigration_stage', 'immigration_priority', 'immigration_assignee',
         // Full dated timeline of every department status change — drives the
         // Pipeline "when did this status happen" view. See recordStageChange().
         'stage_history',
@@ -294,6 +305,7 @@ class Lead extends Model
     protected $casts = [
         'work_info' => 'array',
         'event_response' => 'array',
+        'event_notes_updated_at' => 'datetime',
         'financial_info' => 'array',
         'education_notes' => 'array',
         'immigration_info' => 'array',
@@ -314,6 +326,7 @@ class Lead extends Model
         'date_of_engagement' => 'date',
         'calendar_date' => 'date',
         'document_checklist' => 'array',
+        'hidden_track_documents' => 'array',
         'section_verifications' => 'array',
         'agreements_acknowledged_at' => 'datetime',
         'stage_updated_at' => 'datetime',
@@ -568,6 +581,12 @@ class Lead extends Model
     public function event()
     {
         return $this->belongsTo(Event::class);
+    }
+
+    /** Staff member who last touched the event_notes field. */
+    public function eventNotesEditor()
+    {
+        return $this->belongsTo(User::class, 'event_notes_updated_by');
     }
 
     public function school()

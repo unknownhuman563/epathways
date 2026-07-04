@@ -6,7 +6,7 @@ import {
     Globe, ChevronRight, ChevronDown, AlertTriangle, Search,
     FileText, ExternalLink, Users, Calendar, ArrowUpDown,
     ArrowUp, ArrowDown, Plus, X, TrendingUp, Copy, MoreHorizontal,
-    Archive,
+    Archive, Pencil, Mail, Phone,
 } from "lucide-react";
 import PortalPageHeader from "@/components/portal/PortalPageHeader";
 
@@ -17,6 +17,9 @@ import PortalPageHeader from "@/components/portal/PortalPageHeader";
  */
 const STAGE_COLORS = {
     'Endorsed':                'bg-sky-500',
+    'Agreement Sent':          'bg-purple-500',
+    'Agreement Signed':        'bg-teal-500',
+    'Invoice Paid':            'bg-lime-500',
     'Visa Lodged':             'bg-indigo-500',
     'Request for Information': 'bg-amber-500',
     'Approved in Principle':   'bg-violet-500',
@@ -30,6 +33,9 @@ const STAGE_COLORS = {
 // visual story (sky → amber → indigo → emerald → rose).
 const STAGE_HEX = {
     'Endorsed':                '#0ea5e9',
+    'Agreement Sent':          '#a855f7',
+    'Agreement Signed':        '#14b8a6',
+    'Invoice Paid':            '#84cc16',
     'Visa Lodged':             '#6366f1',
     'Request for Information': '#f59e0b',
     'Approved in Principle':   '#8b5cf6',
@@ -41,6 +47,9 @@ const stageHex = (s) => STAGE_HEX[s] || '#9ca3af';
 
 const STAGE_CHIP = {
     'Endorsed':                'bg-sky-50 text-sky-700 border-sky-200',
+    'Agreement Sent':          'bg-purple-50 text-purple-700 border-purple-200',
+    'Agreement Signed':        'bg-teal-50 text-teal-700 border-teal-200',
+    'Invoice Paid':            'bg-lime-50 text-lime-700 border-lime-200',
     'Visa Lodged':             'bg-indigo-50 text-indigo-700 border-indigo-200',
     'Request for Information': 'bg-amber-50 text-amber-700 border-amber-200',
     'Approved in Principle':   'bg-violet-50 text-violet-700 border-violet-200',
@@ -51,7 +60,7 @@ const STAGE_CHIP = {
 const stageChipClass = (stage) =>
     STAGE_CHIP[stage] || 'bg-gray-100 text-gray-500 border-gray-200 border-dashed';
 
-export default function ImmigrationCases({ cases = [], distribution = [], stages = [], visaTypes = [] }) {
+export default function ImmigrationCases({ cases = [], distribution = [], priorities = {}, stages = [], visaTypes = [] }) {
     const [search, setSearch] = useState("");
     const [stageFilter, setStageFilter] = useState(null); // click a bar/legend → filter
     const [sortKey, setSortKey] = useState("updated_at");
@@ -59,6 +68,7 @@ export default function ImmigrationCases({ cases = [], distribution = [], stages
     const [openStageMenuId, setOpenStageMenuId] = useState(null);
     const [expandedId, setExpandedId] = useState(null);
     const [creating, setCreating] = useState(false);
+    const [editingCase, setEditingCase] = useState(null); // case row being edited
 
     // Filtered + sorted slice the table actually renders.
     const filtered = useMemo(() => {
@@ -78,6 +88,11 @@ export default function ImmigrationCases({ cases = [], distribution = [], stages
     const sorted = useMemo(() => {
         const arr = [...filtered];
         arr.sort((a, b) => {
+            // Priority always leads: urgent → medium → low → no-priority,
+            // regardless of the active column sort.
+            const pr = priorityRank(a.immigration_priority) - priorityRank(b.immigration_priority);
+            if (pr !== 0) return pr;
+
             const pull = (row) => {
                 if (sortKey === 'name') return (row.name || '').toLowerCase();
                 if (sortKey === 'stage') return row.immigration_stage || 'zzzz';
@@ -123,7 +138,10 @@ export default function ImmigrationCases({ cases = [], distribution = [], stages
                 </button>
             </div>
 
-            {/* Distribution graph — replaces the previous summary card row */}
+            {/* Priority summary cards (row of 4) */}
+            <PriorityBreakdown priorities={priorities} />
+
+            {/* Immigration stage bar graph (full-width card below) */}
             <DistributionGraph
                 distribution={distribution}
                 total={total}
@@ -163,14 +181,14 @@ export default function ImmigrationCases({ cases = [], distribution = [], stages
                 <div className="overflow-x-auto overflow-y-visible">
                     <table className="w-full text-left text-xs">
                         <thead>
-                            <tr className="bg-gray-50/60 border-b border-gray-200 text-[10px] font-bold text-gray-500 uppercase tracking-wider">
+                            <tr className="bg-gray-50/60 border-b border-gray-200 text-[11px] font-bold text-gray-500 uppercase tracking-wider">
                                 <th className="pl-4 pr-2 py-3 w-6" />
                                 <SortableTh label="Case"        sortKey="name"      current={sortKey} dir={sortDir} onSort={toggleSort} />
                                 <SortableTh label="Stage"       sortKey="stage"     current={sortKey} dir={sortDir} onSort={toggleSort} />
                                 <SortableTh label="Visa"        sortKey="visa"      current={sortKey} dir={sortDir} onSort={toggleSort} />
                                 <SortableTh label="Country"     sortKey="country"   current={sortKey} dir={sortDir} onSort={toggleSort} />
-                                <SortableTh label="Lodged"      sortKey="lodged_at" current={sortKey} dir={sortDir} onSort={toggleSort} />
                                 <th className="px-3 py-3">Docs</th>
+                                <SortableTh label="Updated" sortKey="updated_at" current={sortKey} dir={sortDir} onSort={toggleSort} />
                                 <th className="px-3 py-3 text-right pr-4">Actions</th>
                             </tr>
                         </thead>
@@ -194,11 +212,13 @@ export default function ImmigrationCases({ cases = [], distribution = [], stages
                                     key={c.id}
                                     c={c}
                                     stages={stages}
+                                    visaTypes={visaTypes}
                                     isExpanded={expandedId === c.id}
                                     onExpand={() => setExpandedId(expandedId === c.id ? null : c.id)}
                                     stageMenuOpen={openStageMenuId === c.id}
                                     onStageMenuToggle={() => setOpenStageMenuId(openStageMenuId === c.id ? null : c.id)}
                                     onStageMenuClose={() => setOpenStageMenuId(null)}
+                                    onEdit={() => setEditingCase(c)}
                                 />
                             ))}
                         </tbody>
@@ -206,11 +226,13 @@ export default function ImmigrationCases({ cases = [], distribution = [], stages
                 </div>
             </div>
 
-            {creating && (
+            {(creating || editingCase) && (
                 <CreateCaseModal
+                    key={editingCase?.id || "new"}
+                    editing={editingCase}
                     stages={stages}
                     visaTypes={visaTypes}
-                    onClose={() => setCreating(false)}
+                    onClose={() => { setCreating(false); setEditingCase(null); }}
                 />
             )}
         </div>
@@ -219,47 +241,97 @@ export default function ImmigrationCases({ cases = [], distribution = [], stages
 
 // ─── Create case modal ─────────────────────────────────────────────────
 
-function CreateCaseModal({ stages, visaTypes, onClose }) {
+function CreateCaseModal({ stages, visaTypes, editing = null, onClose }) {
+    const isEdit = !!editing;
     const { data, setData, post, processing, errors, reset, clearErrors } = useForm({
-        first_name: '',
-        middle_name: '',
-        last_name: '',
-        suffix: '',
-        gender: '',
-        email: '',
-        phone: '',
-        immigration_stage: stages[0] || '',
+        first_name: editing?.first_name || '',
+        middle_name: editing?.middle_name || '',
+        last_name: editing?.last_name || '',
+        suffix: editing?.suffix || '',
+        gender: editing?.gender || '',
+        email: editing?.email || '',
+        phone: editing?.phone || '',
+        immigration_stage: editing?.immigration_stage || stages[0] || '',
+        immigration_priority: editing?.immigration_priority || '',
         internal_note: '',
-        payment: '',
-        visa_type_id: '',
+        payment: editing?.payment || '',
+        // The case row stores the visa *name* (inz_visa_type); map it back to
+        // the matching option id so the dropdown pre-selects on edit.
+        visa_type_id: editing
+            ? (visaTypes.find((v) => v.name === editing.inz_visa_type)?.id ?? '')
+            : '',
     });
 
+    const [tab, setTab] = useState("personal"); // personal | documents (edit only)
+
     const submit = (e) => {
-        e.preventDefault();
+        e?.preventDefault();
         clearErrors();
-        post(`/portal/immigration/cases`, {
+        const url = isEdit ? `/portal/immigration/cases/${editing.id}` : `/portal/immigration/cases`;
+        post(url, {
             preserveScroll: true,
             onSuccess: () => { reset(); onClose(); },
         });
     };
 
+    const fullName = `${data.first_name} ${data.last_name}`.trim() || editing?.name || "New case";
+
     return (
         <div
-            className="fixed inset-0 z-[100] bg-black/40 backdrop-blur-sm flex items-start justify-center p-4 sm:p-8 overflow-y-auto"
+            className="fixed inset-0 z-[100] bg-black/40 backdrop-blur-sm flex items-center justify-center p-4"
             onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
         >
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl my-8">
-                <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden">
+                {/* Title bar */}
+                <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between shrink-0">
                     <div>
-                        <h2 className="text-lg font-bold text-gray-900">New case</h2>
-                        <p className="text-xs text-gray-500 mt-0.5">Adds a new immigration case directly to the queue.</p>
+                        <h2 className="text-lg font-bold text-gray-900">{isEdit ? 'Edit case' : 'New case'}</h2>
+                        <p className="text-xs text-gray-500 mt-0.5">
+                            {isEdit ? "Update this case's details." : 'Adds a new immigration case directly to the queue.'}
+                        </p>
                     </div>
                     <button type="button" onClick={onClose} className="p-1 text-gray-400 hover:text-gray-700">
                         <X size={18} />
                     </button>
                 </div>
 
-                <form onSubmit={submit} className="px-6 py-5 space-y-4">
+                {/* Profile header — name · contacts · status */}
+                <div className="px-6 py-3.5 border-b border-gray-100 bg-gray-50/60 flex items-center justify-between gap-4 flex-wrap shrink-0">
+                    <div className="min-w-0">
+                        <p className="text-sm font-bold text-gray-900 truncate">{fullName}</p>
+                        <p className="text-[11px] text-gray-500 mt-0.5 flex items-center gap-3 flex-wrap">
+                            {data.email && <span className="inline-flex items-center gap-1"><Mail size={11} className="text-gray-400" />{data.email}</span>}
+                            {data.phone && <span className="inline-flex items-center gap-1"><Phone size={11} className="text-gray-400" />{data.phone}</span>}
+                        </p>
+                    </div>
+                    {data.immigration_stage && (
+                        <span className={`inline-flex items-center px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider border ${stageChipClass(data.immigration_stage)}`}>
+                            {data.immigration_stage}
+                        </span>
+                    )}
+                </div>
+
+                {/* Tabs — Documents only exists for a saved case */}
+                {isEdit && (
+                    <div className="px-6 border-b border-gray-100 flex items-center gap-1 shrink-0">
+                        {[
+                            { k: 'personal', label: 'Personal info' },
+                            { k: 'documents', label: 'Documents' },
+                        ].map((t) => (
+                            <button key={t.k} type="button" onClick={() => setTab(t.k)}
+                                className={`px-3 py-3 text-xs font-bold -mb-px border-b-2 transition-colors ${
+                                    tab === t.k ? 'text-gray-900 border-gray-900' : 'text-gray-400 border-transparent hover:text-gray-700'
+                                }`}>
+                                {t.label}
+                            </button>
+                        ))}
+                    </div>
+                )}
+
+                {/* Scrollable content */}
+                <div className="flex-1 overflow-y-auto px-6 py-5">
+                    {(!isEdit || tab === 'personal') && (
+                    <form id="caseModalForm" onSubmit={submit} className="space-y-4">
                     {/* Name row */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <CaseField label="First name" required error={errors.first_name}>
@@ -317,7 +389,7 @@ function CreateCaseModal({ stages, visaTypes, onClose }) {
 
                     {/* Contact row */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <CaseField label="Email" required error={errors.email}>
+                        <CaseField label="Email" error={errors.email}>
                             <input
                                 type="email"
                                 value={data.email}
@@ -326,7 +398,7 @@ function CreateCaseModal({ stages, visaTypes, onClose }) {
                                 className={caseInput(errors.email)}
                             />
                         </CaseField>
-                        <CaseField label="Contact number" required error={errors.phone}>
+                        <CaseField label="Contact number" error={errors.phone}>
                             <input
                                 type="tel"
                                 value={data.phone}
@@ -350,7 +422,7 @@ function CreateCaseModal({ stages, visaTypes, onClose }) {
                                 ))}
                             </select>
                         </CaseField>
-                        <CaseField label="Visa type" required error={errors.visa_type_id}>
+                        <CaseField label="Visa type" error={errors.visa_type_id}>
                             <select
                                 value={data.visa_type_id}
                                 onChange={(e) => setData('visa_type_id', e.target.value)}
@@ -364,16 +436,31 @@ function CreateCaseModal({ stages, visaTypes, onClose }) {
                         </CaseField>
                     </div>
 
-                    <CaseField label="Payment" hint="Optional — free-form (e.g. amount, reference, status)" error={errors.payment}>
-                        <input
-                            type="text"
-                            value={data.payment}
-                            onChange={(e) => setData('payment', e.target.value)}
-                            maxLength={120}
-                            placeholder="e.g. $500 deposit · ref 12345"
-                            className={caseInput(errors.payment)}
-                        />
-                    </CaseField>
+                    {/* Priority + payment */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <CaseField label="Priority" hint="Sets the colour of the case avatar" error={errors.immigration_priority}>
+                            <select
+                                value={data.immigration_priority}
+                                onChange={(e) => setData('immigration_priority', e.target.value)}
+                                className={caseInput(errors.immigration_priority)}
+                            >
+                                <option value="">— none —</option>
+                                <option value="urgent">🔴 Urgent</option>
+                                <option value="medium">🟠 Medium</option>
+                                <option value="low">🟢 Low</option>
+                            </select>
+                        </CaseField>
+                        <CaseField label="Payment" hint="Optional — free-form (e.g. amount, reference, status)" error={errors.payment}>
+                            <input
+                                type="text"
+                                value={data.payment}
+                                onChange={(e) => setData('payment', e.target.value)}
+                                maxLength={120}
+                                placeholder="e.g. $500 deposit · ref 12345"
+                                className={caseInput(errors.payment)}
+                            />
+                        </CaseField>
+                    </div>
 
                     <CaseField label="Internal note" hint="Optional — only staff see this" error={errors.internal_note}>
                         <textarea
@@ -386,18 +473,58 @@ function CreateCaseModal({ stages, visaTypes, onClose }) {
                         />
                     </CaseField>
 
-                    <div className="pt-3 border-t border-gray-100 flex items-center justify-end gap-3">
-                        <button type="button" onClick={onClose} disabled={processing}
-                            className="px-4 py-2 text-sm font-semibold text-gray-600 hover:text-gray-900 transition-colors">
-                            Cancel
-                        </button>
-                        <button type="submit" disabled={processing}
-                            className="inline-flex items-center gap-2 px-5 py-2 bg-gray-900 text-white text-sm font-bold rounded-xl hover:bg-black transition-colors disabled:opacity-50">
-                            <Plus size={14} strokeWidth={2.5} /> {processing ? 'Creating…' : 'Create case'}
-                        </button>
-                    </div>
-                </form>
+                    </form>
+                    )}
+
+                    {isEdit && tab === 'documents' && (
+                        <div className="space-y-4">
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                                <DocStat label="Total"    value={editing?.docs_total ?? 0} />
+                                <DocStat label="Approved" value={editing?.docs_approved ?? 0} tone="emerald" />
+                                <DocStat label="Pending"  value={editing?.docs_pending ?? 0} tone="amber" />
+                                <DocStat label="Rejected" value={editing?.docs_rejected ?? 0} tone="rose" />
+                            </div>
+                            <Link
+                                href={`/portal/immigration/cases/${editing?.id}/profile?tab=documents`}
+                                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-gray-900 text-white text-xs font-bold hover:bg-black transition-colors"
+                            >
+                                <FileText size={13} /> Manage documents
+                            </Link>
+                            <p className="text-[11px] text-gray-400">
+                                Upload, review and organise this case's documents in the full documents workspace.
+                            </p>
+                        </div>
+                    )}
+                </div>
+
+                {/* Footer */}
+                <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-end gap-3 shrink-0">
+                    <button type="button" onClick={onClose} disabled={processing}
+                        className="px-4 py-2 text-sm font-semibold text-gray-600 hover:text-gray-900 transition-colors">
+                        Cancel
+                    </button>
+                    <button type="button" onClick={submit} disabled={processing}
+                        className="inline-flex items-center gap-2 px-5 py-2 bg-gray-900 text-white text-sm font-bold rounded-xl hover:bg-black transition-colors disabled:opacity-50">
+                        {isEdit ? <Pencil size={14} strokeWidth={2.5} /> : <Plus size={14} strokeWidth={2.5} />}
+                        {processing ? 'Saving…' : (isEdit ? 'Save changes' : 'Create case')}
+                    </button>
+                </div>
             </div>
+        </div>
+    );
+}
+
+function DocStat({ label, value, tone = "gray" }) {
+    const tones = {
+        gray:    "bg-gray-50 text-gray-700 border-gray-100",
+        emerald: "bg-emerald-50 text-emerald-700 border-emerald-100",
+        amber:   "bg-amber-50 text-amber-700 border-amber-100",
+        rose:    "bg-rose-50 text-rose-700 border-rose-100",
+    };
+    return (
+        <div className={`rounded-xl border px-3 py-3 text-center ${tones[tone]}`}>
+            <div className="text-xl font-bold tabular-nums">{value}</div>
+            <div className="text-[10px] font-bold uppercase tracking-wider opacity-70 mt-0.5">{label}</div>
         </div>
     );
 }
@@ -421,6 +548,48 @@ function caseInput(error) {
     return `w-full rounded-xl border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900/10 transition-colors ${
         error ? 'border-rose-300 bg-rose-50/40' : 'border-gray-200 bg-white'
     }`;
+}
+
+// ─── Priority breakdown ─────────────────────────────────────────────────
+// Compact counter beside the stage graph — number of cases per priority
+// level (urgent / medium / low) plus a "no priority" bucket. Colours match
+// the case avatar (red / orange / green / gray).
+function PriorityBreakdown({ priorities = {} }) {
+    const rows = [
+        { key: 'urgent', label: 'Urgent',      solid: 'bg-rose-500',    soft: 'bg-rose-50',    ring: 'ring-rose-100',    text: 'text-rose-600' },
+        { key: 'medium', label: 'Medium',      solid: 'bg-amber-500',   soft: 'bg-amber-50',   ring: 'ring-amber-100',   text: 'text-amber-600' },
+        { key: 'low',    label: 'Low',         solid: 'bg-emerald-500', soft: 'bg-emerald-50', ring: 'ring-emerald-100', text: 'text-emerald-600' },
+        { key: 'none',   label: 'No priority', solid: 'bg-gray-300',    soft: 'bg-gray-50',    ring: 'ring-gray-100',    text: 'text-gray-500' },
+    ];
+    const total = rows.reduce((sum, r) => sum + (priorities[r.key] || 0), 0);
+
+    return (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            {rows.map((r) => {
+                const count = priorities[r.key] || 0;
+                const pct = total > 0 ? Math.round((count / total) * 100) : 0;
+                return (
+                    <div key={r.key} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex flex-col">
+                        <div className="flex items-center justify-between">
+                            <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-gray-400">
+                                {r.label}
+                            </span>
+                            <span className={`w-6 h-6 rounded-lg ${r.soft} ring-1 ${r.ring} flex items-center justify-center flex-shrink-0`}>
+                                <span className={`w-2 h-2 rounded-full ${r.solid}`} />
+                            </span>
+                        </div>
+                        <p className="text-[26px] leading-none font-bold text-gray-900 tabular-nums mt-3">{count}</p>
+                        <div className="flex items-center gap-2 mt-3">
+                            <div className="flex-1 h-1 rounded-full bg-gray-100 overflow-hidden">
+                                <div className={`h-full rounded-full ${r.solid}`} style={{ width: `${pct}%` }} />
+                            </div>
+                            <span className={`text-[10px] font-semibold ${r.text} tabular-nums`}>{pct}%</span>
+                        </div>
+                    </div>
+                );
+            })}
+        </div>
+    );
 }
 
 // ─── Distribution graph ─────────────────────────────────────────────────
@@ -461,24 +630,23 @@ function DistributionGraph({ distribution = [], total = 0, activeStage = null, o
     const xFor = (i) => padX + (i / Math.max(1, stages.length - 1)) * chartW;
     const yFor = (n) => padTop + (1 - n / peak) * chartH;
 
-    const linePoints = data.map((n, i) => `${xFor(i)},${yFor(n)}`).join(' ');
-    const areaPath = `M${xFor(0)},${baselineY} L` +
-        data.map((n, i) => `${xFor(i)},${yFor(n)}`).join(' L') +
-        ` L${xFor(data.length - 1)},${baselineY} Z`;
+    const barW = Math.min(26, (chartW / Math.max(1, stages.length)) * 0.55);
 
     return (
         <section className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-            <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between gap-3 flex-wrap">
-                <div className="flex items-center gap-2">
-                    <div className="w-7 h-7 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center">
-                        <TrendingUp size={13} />
+            <div className="px-5 pt-4 pb-3 flex items-center justify-between gap-3 flex-wrap">
+                <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-emerald-50 to-teal-50 text-emerald-600 flex items-center justify-center ring-1 ring-emerald-100/70">
+                        <TrendingUp size={14} />
                     </div>
                     <div>
-                        <h2 className="text-[12px] font-bold uppercase tracking-wider text-gray-800">
+                        <h2 className="text-[12px] font-bold uppercase tracking-[0.14em] text-gray-700">
                             Immigration stage distribution
                         </h2>
-                        <p className="text-[10.5px] text-gray-500 mt-0.5">
-                            {placed} placed · {unstaged} unstaged · {total} total
+                        <p className="text-[10.5px] text-gray-400 mt-0.5">
+                            <span className="font-semibold text-gray-600 tabular-nums">{placed}</span> placed ·{' '}
+                            <span className="font-semibold text-gray-600 tabular-nums">{unstaged}</span> unstaged ·{' '}
+                            <span className="font-semibold text-gray-600 tabular-nums">{total}</span> total
                             {activeStage && (
                                 <span className="ml-2">
                                     · filtered by <span className="font-semibold text-gray-700">{activeStage}</span>
@@ -487,8 +655,8 @@ function DistributionGraph({ distribution = [], total = 0, activeStage = null, o
                         </p>
                     </div>
                 </div>
-                <span className="text-[10.5px] text-gray-400 inline-flex items-center gap-1.5">
-                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+                <span className="text-[10.5px] text-gray-400 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gray-50 ring-1 ring-gray-100">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500" />
                     Cases at stage
                 </span>
             </div>
@@ -499,7 +667,7 @@ function DistributionGraph({ distribution = [], total = 0, activeStage = null, o
                     className="w-full"
                     style={{ maxHeight: 160 }}
                     role="img"
-                    aria-label="Line graph of case count per Immigration stage"
+                    aria-label="Bar graph of case count per Immigration stage"
                 >
                     {/* Soft horizontal gridlines */}
                     {[0, 0.25, 0.5, 0.75, 1].map((t, i) => (
@@ -509,50 +677,36 @@ function DistributionGraph({ distribution = [], total = 0, activeStage = null, o
                             x2={W - padX}
                             y1={padTop + (1 - t) * chartH}
                             y2={padTop + (1 - t) * chartH}
-                            stroke="#f3f4f6"
+                            stroke="#f1f5f9"
                             strokeWidth="1"
                         />
                     ))}
 
-                    {/* Area fill */}
-                    <defs>
-                        <linearGradient id="cases-area" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="0%"   stopColor="#10b981" stopOpacity="0.28" />
-                            <stop offset="100%" stopColor="#10b981" stopOpacity="0" />
-                        </linearGradient>
-                    </defs>
-                    <path d={areaPath} fill="url(#cases-area)" />
-
-                    {/* Connecting line */}
-                    <polyline
-                        points={linePoints}
-                        stroke="#10b981"
-                        strokeWidth="2"
-                        fill="none"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                    />
-
-                    {/* Per-stage dots, count labels, rotated x-axis labels.
+                    {/* Per-stage bars, count labels, rotated x-axis labels.
                         Whole stage column is clickable to filter the
                         table below. */}
                     {data.map((n, i) => {
                         const tone = stageHex(stages[i]);
                         const isActive = activeStage === stages[i];
+                        const barH = baselineY - yFor(n);
+                        const w = isActive ? barW + 4 : barW;
                         return (
                             <g
                                 key={stages[i]}
                                 onClick={() => onPick?.(stages[i])}
                                 style={{ cursor: 'pointer' }}
                             >
-                                <circle
-                                    cx={xFor(i)}
-                                    cy={yFor(n)}
-                                    r={isActive ? 6 : 4}
-                                    fill={isActive ? tone : 'white'}
-                                    stroke={tone}
-                                    strokeWidth="2.5"
-                                />
+                                {n > 0 && (
+                                    <rect
+                                        x={xFor(i) - w / 2}
+                                        y={yFor(n)}
+                                        width={w}
+                                        height={barH}
+                                        rx="4"
+                                        fill={tone}
+                                        fillOpacity={isActive ? 1 : 0.85}
+                                    />
+                                )}
                                 <text
                                     x={xFor(i)}
                                     y={yFor(n) - 9}
@@ -567,10 +721,10 @@ function DistributionGraph({ distribution = [], total = 0, activeStage = null, o
                                     x={xFor(i)}
                                     y={baselineY + 14}
                                     textAnchor="end"
-                                    fontSize="10"
-                                    fontWeight={isActive ? '700' : '400'}
-                                    fill={isActive ? '#111827' : '#6b7280'}
-                                    transform={`rotate(-30 ${xFor(i)} ${baselineY + 14})`}
+                                    fontSize="9.5"
+                                    fontWeight={isActive ? '700' : '500'}
+                                    fill={isActive ? '#111827' : '#94a3b8'}
+                                    transform={`rotate(-28 ${xFor(i)} ${baselineY + 14})`}
                                 >
                                     {stages[i]}
                                 </text>
@@ -585,11 +739,15 @@ function DistributionGraph({ distribution = [], total = 0, activeStage = null, o
 
 // ─── Table row ──────────────────────────────────────────────────────────
 
-function CaseRow({ c, stages, isExpanded, onExpand, stageMenuOpen, onStageMenuToggle, onStageMenuClose }) {
-    const pct = c.docs_total > 0 ? Math.round((c.docs_approved / c.docs_total) * 100) : 0;
-    const hasDocs = c.docs_total > 0;
-    const docsDone = hasDocs && c.docs_approved >= c.docs_total;
-    const barColor = docsDone ? 'bg-emerald-500' : pct >= 50 ? 'bg-amber-500' : 'bg-gray-400';
+function CaseRow({ c, stages, visaTypes = [], isExpanded, onExpand, stageMenuOpen, onStageMenuToggle, onStageMenuClose, onEdit }) {
+    // DOCS progress reflects the visa checklist: how many required items
+    // the case has submitted, out of the total required.
+    const chkTotal = c.checklist_total || 0;
+    const chkDone = c.checklist_submitted || 0;
+    const pct = chkTotal > 0 ? Math.round((chkDone / chkTotal) * 100) : 0;
+    const hasDocs = chkTotal > 0;
+    // Immigration theme colour (emerald) for the fill.
+    const barColor = 'bg-emerald-500';
     const needsAttention = c.docs_pending > 0 || c.docs_rejected > 0;
 
     return (
@@ -612,15 +770,18 @@ function CaseRow({ c, stages, isExpanded, onExpand, stageMenuOpen, onStageMenuTo
                         href={`/portal/immigration/cases/${c.id}/profile`}
                         className="flex items-center gap-2.5 min-w-[200px] group/case"
                     >
-                        <div className={`w-7 h-7 rounded-full flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0 ${avatarColor(c.id)}`}>
+                        <div
+                            className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-[11px] font-bold flex-shrink-0 ${priorityColor(c.immigration_priority)}`}
+                            title={c.immigration_priority ? `Priority: ${c.immigration_priority}` : 'No priority set'}
+                        >
                             {initials(c.name)}
                         </div>
                         <div className="min-w-0">
-                            <div className="font-semibold text-gray-900 text-xs truncate group-hover/case:text-amber-700 transition-colors">
+                            <div className="font-semibold text-gray-900 text-sm truncate group-hover/case:text-amber-700 transition-colors">
                                 {c.name}
                             </div>
                             {c.lead_id && (
-                                <div className="text-[10px] text-gray-400 font-mono truncate">{c.lead_id}</div>
+                                <div className="text-[11px] text-gray-400 font-mono truncate">{c.lead_id}</div>
                             )}
                         </div>
                         {needsAttention && (
@@ -644,24 +805,15 @@ function CaseRow({ c, stages, isExpanded, onExpand, stageMenuOpen, onStageMenuTo
                     />
                 </td>
 
-                {/* Visa */}
+                {/* Visa picker (inline inz_visa_type edit) */}
                 <td className="px-3 py-2.5">
-                    {c.inz_visa_type
-                        ? <span className="text-gray-700">{c.inz_visa_type}</span>
-                        : <span className="text-gray-300">—</span>}
+                    <VisaPicker caseId={c.id} visaTypes={visaTypes} value={c.inz_visa_type || ''} />
                 </td>
 
                 {/* Country */}
                 <td className="px-3 py-2.5">
                     {c.country
-                        ? <span className="text-gray-700">{c.country}</span>
-                        : <span className="text-gray-300">—</span>}
-                </td>
-
-                {/* Lodged */}
-                <td className="px-3 py-2.5 whitespace-nowrap">
-                    {c.inz_lodged_at
-                        ? <span className="text-gray-600">{fmtDate(c.inz_lodged_at)}</span>
+                        ? <span className="text-sm text-gray-700">{c.country}</span>
                         : <span className="text-gray-300">—</span>}
                 </td>
 
@@ -672,9 +824,28 @@ function CaseRow({ c, stages, isExpanded, onExpand, stageMenuOpen, onStageMenuTo
                             <div className="h-1.5 flex-1 rounded-full bg-gray-100 overflow-hidden">
                                 <div className={`h-full rounded-full ${barColor}`} style={{ width: `${pct}%` }} />
                             </div>
-                            <span className="text-[10px] text-gray-500 tabular-nums whitespace-nowrap">
-                                {c.docs_approved}/{c.docs_total}
+                            <span className="text-xs font-semibold tabular-nums whitespace-nowrap text-emerald-600"
+                                title={`${chkDone} of ${chkTotal} checklist items submitted`}>
+                                {pct}%
                             </span>
+                        </div>
+                    ) : (
+                        <span className="text-gray-300">—</span>
+                    )}
+                </td>
+
+                {/* Updated — datetime + staff who last moved the case */}
+                <td className="px-3 py-2.5 whitespace-nowrap">
+                    {(c.stage_updated_at || c.updated_at) ? (
+                        <div className="flex flex-col">
+                            <span className="text-xs text-gray-700 tabular-nums">
+                                {fmtDateTime(c.stage_updated_at || c.updated_at)}
+                            </span>
+                            {c.updated_by && (
+                                <span className="text-[11px] text-gray-400 truncate max-w-[180px]">
+                                    by {c.updated_by}
+                                </span>
+                            )}
                         </div>
                     ) : (
                         <span className="text-gray-300">—</span>
@@ -705,6 +876,12 @@ function CaseRow({ c, stages, isExpanded, onExpand, stageMenuOpen, onStageMenuTo
                                 href: `/portal/immigration/cases/${c.id}/profile`,
                             },
                             {
+                                key: 'edit',
+                                label: 'Edit case',
+                                icon: Pencil,
+                                onClick: () => onEdit?.(),
+                            },
+                            {
                                 key: 'archive',
                                 label: 'Archive case',
                                 icon: Archive,
@@ -730,6 +907,7 @@ function CaseRow({ c, stages, isExpanded, onExpand, stageMenuOpen, onStageMenuTo
 function CaseDetail({ c }) {
     return (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            <PriorityField c={c} />
             <DetailField label="Email"        value={c.email} />
             <DetailField label="Phone"        value={c.phone} />
             <DetailField label="INZ Status"   value={c.inz_status} />
@@ -744,6 +922,46 @@ function CaseDetail({ c }) {
                 expander rather than the column itself so the row stays
                 compact. */}
             <DetailField label="Endorsed by" value={c.endorsed_by} />
+        </div>
+    );
+}
+
+// Inline priority selector shown in the expanded row — posts immediately
+// on change. Coloured dot mirrors the case avatar (red / orange / green /
+// gray) so the level reads at a glance.
+function PriorityField({ c }) {
+    const [saving, setSaving] = useState(false);
+    const value = c.immigration_priority || '';
+
+    const change = (e) => {
+        const v = e.target.value;
+        setSaving(true);
+        router.post(
+            `/portal/immigration/cases/${c.id}/priority`,
+            { immigration_priority: v || null },
+            { preserveScroll: true, preserveState: true, onFinish: () => setSaving(false) },
+        );
+    };
+
+    return (
+        <div className="bg-white rounded-lg border border-gray-200 px-3 py-2">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-gray-500 mb-1">
+                Priority
+            </p>
+            <div className="flex items-center gap-1.5">
+                <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${priorityColor(value)}`} />
+                <select
+                    value={value}
+                    onChange={change}
+                    disabled={saving}
+                    className="flex-1 text-xs font-semibold text-gray-900 bg-transparent outline-none cursor-pointer disabled:opacity-60"
+                >
+                    <option value="">No priority</option>
+                    <option value="urgent">Urgent</option>
+                    <option value="medium">Medium</option>
+                    <option value="low">Low</option>
+                </select>
+            </div>
         </div>
     );
 }
@@ -834,7 +1052,7 @@ function StagePicker({ caseId, stages, value, fallback, open, onToggle, onClose 
                 type="button"
                 disabled={saving}
                 onClick={onToggle}
-                className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-bold border whitespace-nowrap uppercase hover:shadow-sm transition-all disabled:opacity-60 ${chipClass}`}
+                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold border whitespace-nowrap uppercase hover:shadow-sm transition-all disabled:opacity-60 ${chipClass}`}
             >
                 <span className="truncate max-w-[180px]">{label}</span>
                 <ChevronDown size={10} strokeWidth={2.5} className="opacity-60 flex-shrink-0" />
@@ -889,6 +1107,130 @@ function StagePicker({ caseId, stages, value, fallback, open, onToggle, onClose 
     );
 }
 
+// ─── Visa picker (inline inz_visa_type edit) ────────────────────────────
+// Mirrors StagePicker but self-manages its open state. Posts the chosen
+// visa_type_id; the controller stamps the matching VisaType name onto
+// inz_visa_type (or clears it when "None" is chosen).
+function VisaPicker({ caseId, visaTypes = [], value }) {
+    const [open, setOpen] = useState(false);
+    const [saving, setSaving] = useState(false);
+    const [coords, setCoords] = useState({ top: 0, left: 0, openUp: false });
+    const triggerRef = useRef(null);
+    const menuRef = useRef(null);
+    const MENU_W = 260;
+    const MENU_MAX_H = 360;
+
+    useEffect(() => {
+        if (! open || ! triggerRef.current) return;
+        const place = () => {
+            const r = triggerRef.current.getBoundingClientRect();
+            const spaceBelow = window.innerHeight - r.bottom;
+            const openUp = spaceBelow < Math.min(MENU_MAX_H, 240) && r.top > spaceBelow;
+            const left = Math.min(r.left, window.innerWidth - MENU_W - 8);
+            setCoords({ top: openUp ? r.top - 6 : r.bottom + 6, left: Math.max(8, left), openUp });
+        };
+        place();
+        window.addEventListener('scroll', place, true);
+        window.addEventListener('resize', place);
+        return () => {
+            window.removeEventListener('scroll', place, true);
+            window.removeEventListener('resize', place);
+        };
+    }, [open]);
+
+    useEffect(() => {
+        if (! open) return;
+        const onDocClick = (e) => {
+            if (menuRef.current?.contains(e.target) || triggerRef.current?.contains(e.target)) return;
+            setOpen(false);
+        };
+        const onKey = (e) => { if (e.key === 'Escape') setOpen(false); };
+        document.addEventListener('mousedown', onDocClick);
+        document.addEventListener('keydown', onKey);
+        return () => {
+            document.removeEventListener('mousedown', onDocClick);
+            document.removeEventListener('keydown', onKey);
+        };
+    }, [open]);
+
+    const select = (visaTypeId) => {
+        setSaving(true);
+        setOpen(false);
+        router.post(
+            `/portal/immigration/cases/${caseId}/visa`,
+            { visa_type_id: visaTypeId },
+            { preserveScroll: true, preserveState: true, onFinish: () => setSaving(false) },
+        );
+    };
+
+    const hasValue = !! value;
+
+    return (
+        <>
+            <button
+                ref={triggerRef}
+                type="button"
+                disabled={saving}
+                onClick={(e) => { e.stopPropagation(); setOpen((o) => ! o); }}
+                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium border whitespace-nowrap hover:shadow-sm transition-all disabled:opacity-60 ${
+                    hasValue ? 'bg-white text-gray-700 border-gray-200' : 'bg-gray-100 text-gray-400 border-gray-200 border-dashed'
+                }`}
+            >
+                <span className="truncate max-w-[190px]">{value || 'Set visa'}</span>
+                <ChevronDown size={10} strokeWidth={2.5} className="opacity-60 flex-shrink-0" />
+            </button>
+
+            {open && typeof document !== 'undefined' && createPortal(
+                <div
+                    ref={menuRef}
+                    role="listbox"
+                    style={{
+                        position: 'fixed',
+                        top:    coords.openUp ? 'auto' : coords.top,
+                        bottom: coords.openUp ? (window.innerHeight - coords.top) : 'auto',
+                        left:   coords.left,
+                        width:  MENU_W,
+                        maxHeight: MENU_MAX_H,
+                    }}
+                    className="z-[60] bg-white rounded-xl shadow-2xl border border-gray-100 py-1.5 overflow-y-auto"
+                >
+                    <p className="px-3 pt-2 pb-1.5 text-[9px] font-bold text-gray-400 uppercase tracking-[0.2em]">
+                        Set visa type
+                    </p>
+                    {visaTypes.length === 0 && (
+                        <p className="px-3 py-2 text-[11px] text-gray-400">No visa types available.</p>
+                    )}
+                    {visaTypes.map((v) => (
+                        <button
+                            key={v.id}
+                            type="button"
+                            onClick={() => select(v.id)}
+                            className={`w-full text-left flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-gray-50 ${
+                                value === v.name ? 'bg-gray-50 font-semibold text-gray-900' : 'text-gray-700'
+                            }`}
+                        >
+                            {v.name}
+                        </button>
+                    ))}
+                    {hasValue && (
+                        <>
+                            <div className="border-t border-gray-100 my-1" />
+                            <button
+                                type="button"
+                                onClick={() => select(null)}
+                                className="w-full text-left px-3 py-1.5 text-xs text-gray-500 hover:bg-gray-50"
+                            >
+                                Clear visa
+                            </button>
+                        </>
+                    )}
+                </div>,
+                document.body,
+            )}
+        </>
+    );
+}
+
 // ─── Helpers ─────────────────────────────────────────────────────────────
 
 function SortableTh({ label, sortKey, current, dir, onSort }) {
@@ -926,11 +1268,46 @@ function avatarColor(id) {
     return palette[Math.abs((id || 0) * 31) % palette.length];
 }
 
+// Priority → avatar colour: urgent (red), medium (orange), low (green).
+// Cases with no priority set show a neutral gray circle.
+function priorityColor(priority) {
+    switch (priority) {
+        case 'urgent': return 'bg-red-500';
+        case 'medium': return 'bg-orange-500';
+        case 'low':    return 'bg-emerald-500';
+        default:       return 'bg-gray-400';
+    }
+}
+
+// Sort weight so urgent floats to the top, then medium, then low, then
+// cases with no priority set.
+function priorityRank(priority) {
+    switch (priority) {
+        case 'urgent': return 0;
+        case 'medium': return 1;
+        case 'low':    return 2;
+        default:       return 3;
+    }
+}
+
 function fmtDate(d) {
     if (!d) return '—';
     try {
         const dt = new Date(d);
         return dt.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+    } catch {
+        return d;
+    }
+}
+
+function fmtDateTime(d) {
+    if (!d) return '—';
+    try {
+        const dt = new Date(d);
+        return dt.toLocaleString(undefined, {
+            day: 'numeric', month: 'short', year: 'numeric',
+            hour: 'numeric', minute: '2-digit',
+        });
     } catch {
         return d;
     }
@@ -943,9 +1320,10 @@ function fmtDate(d) {
  */
 function RowMenu({ items = [] }) {
     const [open, setOpen] = useState(false);
-    const [coords, setCoords] = useState({ top: 0, left: 0 });
+    const [coords, setCoords] = useState({ top: 0, left: 0, openUp: false });
     const triggerRef = useRef(null);
     const menuRef = useRef(null);
+    const MENU_W = 220;
 
     useEffect(() => {
         if (!open || !triggerRef.current) return;
@@ -953,7 +1331,16 @@ function RowMenu({ items = [] }) {
             const r = triggerRef.current.getBoundingClientRect();
             // Anchor the menu's right edge to the trigger so it opens
             // leftward (the actions column lives at the right of the row).
-            setCoords({ top: r.bottom + 6, left: r.right - 220 });
+            // Flip upward when there isn't room below (row near the viewport
+            // bottom) so the menu never gets clipped by the window edge.
+            const menuH = Math.min(360, items.length * 38 + 16);
+            const spaceBelow = window.innerHeight - r.bottom;
+            const openUp = spaceBelow < menuH + 12 && r.top > spaceBelow;
+            setCoords({
+                top:  openUp ? r.top - 6 : r.bottom + 6,
+                left: Math.min(r.right - MENU_W, window.innerWidth - MENU_W - 8),
+                openUp,
+            });
         };
         place();
         const onScroll = () => place();
@@ -1003,9 +1390,12 @@ function RowMenu({ items = [] }) {
                     role="menu"
                     style={{
                         position: 'fixed',
-                        top: coords.top,
-                        left: Math.max(8, coords.left),
-                        width: 220,
+                        top:    coords.openUp ? 'auto' : coords.top,
+                        bottom: coords.openUp ? (window.innerHeight - coords.top) : 'auto',
+                        left:   Math.max(8, coords.left),
+                        width:  MENU_W,
+                        maxHeight: 360,
+                        overflowY: 'auto',
                     }}
                     className="z-[60] bg-white rounded-xl shadow-2xl border border-gray-100 py-1.5"
                 >

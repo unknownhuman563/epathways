@@ -25,9 +25,23 @@ export const SECTION_STATUSES = {
     revisions_needed: { label: "Revisions needed",  chip: "bg-rose-100 text-rose-700 border-rose-200" },
 };
 
+// ── Department scoping ────────────────────────────────────────────────────
+// Each section has a `scope` used by the (upcoming) 3-tab Documents browser
+// (Sales · Education · Immigration):
+//   'common'      → shows in ALL three department tabs (shared requirements
+//                   like passport, birth certificate, TOR, police clearance)
+//   'sales'       → only the Sales (leads) tab
+//   'education'   → only the Education (students) tab
+//   'immigration' → only the Immigration (cases) tab
+//
+// TO FINALISE THE COMMON SET: change any section's `scope` to 'common', and/or
+// add new shared documents as items inside any `scope: 'common'` section
+// (e.g. Personal Documents). Departments always see: common + their own scope.
+// The existing per-lead Documents tab ignores `scope` and still shows all.
 export const CHECKLIST = [
     {
         key: "agreements",
+        scope: "sales",
         section: "Agreements",
         items: [
             { id: "agree.consultancy", name: "Consultancy Agreement", filename: "CA-{FN}{LN}", system: true },
@@ -36,6 +50,7 @@ export const CHECKLIST = [
     },
     {
         key: "information_form",
+        scope: "sales",
         section: "Information Form",
         items: [
             { id: "info.svf", name: "SVF — Student Visa Form", filename: "SVF-{FN}{LN}" },
@@ -43,6 +58,7 @@ export const CHECKLIST = [
     },
     {
         key: "personal",
+        scope: "common",
         section: "Personal Documents",
         items: [
             {
@@ -73,6 +89,7 @@ export const CHECKLIST = [
     },
     {
         key: "immigration_forms",
+        scope: "immigration",
         section: "Immigration Forms",
         items: [
             { id: "imm.inz1012", name: "Student Visa Application Form — INZ1012", filename: "INZ1012-{FN}{SN}" },
@@ -82,6 +99,7 @@ export const CHECKLIST = [
     },
     {
         key: "academic",
+        scope: "education",
         section: "Offer and Academic Documents",
         items: [
             { id: "acad.cv", name: "Curriculum Vitae", filename: "CV-{FN}{SN}" },
@@ -95,6 +113,7 @@ export const CHECKLIST = [
     },
     {
         key: "employment_applicant",
+        scope: "common",
         section: "Employment and Financial Documents (Applicant)",
         items: [
             { id: "appfin.coe", name: "Certificate of Employment / Work Reference", description: "From last employer — position, dates, duties.", filename: "COE-{FN}{SN}" },
@@ -107,6 +126,7 @@ export const CHECKLIST = [
     },
     {
         key: "employment_sponsor",
+        scope: "common",
         section: "Employment and Financial Documents (Sponsor)",
         items: [
             { id: "spfin.bank_statements", name: "Sponsor's Bank Statements", description: "Last 6 months — sufficient funds for tuition + living costs.", filename: "SpBNKS-{FN}{SN}" },
@@ -121,6 +141,7 @@ export const CHECKLIST = [
     },
     {
         key: "partner",
+        scope: "common",
         section: "Documents of Partner / Spouse",
         items: [
             { id: "part.passport",        name: "Passport of Partner",                            filename: "PartPPT-{FN}{SN}" },
@@ -131,6 +152,7 @@ export const CHECKLIST = [
     },
     {
         key: "partnership_proofs",
+        scope: "common",
         section: "Proofs of Partnership",
         items: [
             { id: "prtn.timeline",        name: "Relationship Timeline", description: "Chronological summary of your relationship milestones.", filename: "RelTmln-{FN}{SN}" },
@@ -154,6 +176,7 @@ export const CHECKLIST = [
     },
     {
         key: "additional",
+        scope: "common",
         section: "Additional Documents",
         items: [
             { id: "add.previous_visas", name: "Previous Visa Copies", description: "If applicable." },

@@ -6,12 +6,14 @@ use App\Models\Lead;
 use App\Models\LeadDocument;
 use App\Models\LeadDocumentRequest;
 use App\Services\AgreementGenerator;
+use App\Services\Immigration\CaseChecklistService;
 use App\Support\UploadValidation;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
 /**
@@ -36,6 +38,52 @@ class LeadDocumentController extends Controller
 {
     private const DISK = 'local'; // private; downloads streamed via controller
 
+    /**
+     * Store an uploaded checklist file, renaming it to the visa checklist's
+     * "NN - CODE - FirstnameLASTNAME<suffix>" convention when the matched
+     * checklist item defines a file_code. Falls back to the original filename
+     * for items (or visa types) without a naming convention.
+     *
+     * @return array{0: string, 1: string} [storedPath, displayName]
+     */
+    private function storeChecklistFile($file, Lead $lead, string $key): array
+    {
+        $dir = "lead-documents/{$lead->id}";
+        $desired = app(CaseChecklistService::class)
+            ->uploadFileNameFor($lead, $key, $file->getClientOriginalName());
+
+        if (! $desired) {
+            return [$file->store($dir, self::DISK), $file->getClientOriginalName()];
+        }
+
+        $filename = $this->uniqueFilename($dir, $desired);
+
+        return [$file->storeAs($dir, $filename, self::DISK), $filename];
+    }
+
+    /**
+     * Ensure a filename doesn't clobber an existing file in the same folder,
+     * appending " (2)", " (3)", … before the extension until it's unique.
+     */
+    private function uniqueFilename(string $dir, string $filename): string
+    {
+        $disk = Storage::disk(self::DISK);
+        if (! $disk->exists("{$dir}/{$filename}")) {
+            return $filename;
+        }
+
+        $ext = pathinfo($filename, PATHINFO_EXTENSION);
+        $base = $ext !== '' ? substr($filename, 0, -(strlen($ext) + 1)) : $filename;
+
+        $i = 2;
+        do {
+            $candidate = $ext !== '' ? "{$base} ({$i}).{$ext}" : "{$base} ({$i})";
+            $i++;
+        } while ($disk->exists("{$dir}/{$candidate}"));
+
+        return $candidate;
+    }
+
     // ── STAFF (admin / sales) ───────────────────────────────────────────────
 
     public function staffIndex(Request $request, $leadId)
@@ -47,10 +95,10 @@ class LeadDocumentController extends Controller
             ->orderByDesc('created_at')
             ->get()
             ->map(fn (LeadDocumentRequest $r) => [
-                'id'           => $r->id,
-                'label'        => $r->label,
-                'description'  => $r->description,
-                'required'     => $r->required,
+                'id' => $r->id,
+                'label' => $r->label,
+                'description' => $r->description,
+                'required' => $r->required,
                 'requested_by' => optional($r->requester)->name,
                 'requested_at' => $r->requested_at,
                 'latest_document' => $r->latestDocument ? $this->docSerialize($r->latestDocument) : null,
@@ -65,17 +113,17 @@ class LeadDocumentController extends Controller
 
         return inertia('admin/LeadDocuments', [
             'lead' => [
-                'id'         => $lead->id,
-                'lead_id'    => $lead->lead_id,
-                'name'       => trim("{$lead->first_name} {$lead->last_name}"),
-                'email'      => $lead->email,
-                'status'     => $lead->status,
-                'stage'      => $lead->stage,
-                'source'     => $lead->source,
+                'id' => $lead->id,
+                'lead_id' => $lead->lead_id,
+                'name' => trim("{$lead->first_name} {$lead->last_name}"),
+                'email' => $lead->email,
+                'status' => $lead->status,
+                'stage' => $lead->stage,
+                'source' => $lead->source,
                 'portal_invitation_status' => $lead->portal_invitation_status,
             ],
             'requests' => $requests,
-            'orphans'  => $orphans,
+            'orphans' => $orphans,
             'templates' => $this->requestTemplates(),
         ]);
     }
@@ -85,19 +133,19 @@ class LeadDocumentController extends Controller
         $lead = Lead::findOrFail($leadId);
 
         $data = $request->validate([
-            'items'                 => 'required|array|min:1|max:20',
-            'items.*.label'         => 'required|string|max:120',
-            'items.*.description'   => 'nullable|string|max:500',
-            'items.*.required'      => 'sometimes|boolean',
+            'items' => 'required|array|min:1|max:20',
+            'items.*.label' => 'required|string|max:120',
+            'items.*.description' => 'nullable|string|max:500',
+            'items.*.required' => 'sometimes|boolean',
         ]);
 
         try {
             foreach ($data['items'] as $item) {
                 $docRequest = LeadDocumentRequest::create([
-                    'lead_id'      => $lead->id,
-                    'label'        => $item['label'],
-                    'description'  => $item['description'] ?? null,
-                    'required'     => $item['required'] ?? true,
+                    'lead_id' => $lead->id,
+                    'label' => $item['label'],
+                    'description' => $item['description'] ?? null,
+                    'required' => $item['required'] ?? true,
                     'requested_by' => Auth::id(),
                     'requested_at' => now(),
                 ]);
@@ -116,9 +164,11 @@ class LeadDocumentController extends Controller
                     }
                 }
             }
-            return back()->with('success', count($data['items']) . ' document request(s) added.');
+
+            return back()->with('success', count($data['items']).' document request(s) added.');
         } catch (\Throwable $e) {
             Log::error('Document request create failed', ['lead_id' => $leadId, 'error' => $e->getMessage()]);
+
             return back()->withErrors(['error' => 'Could not save requests.']);
         }
     }
@@ -143,12 +193,12 @@ class LeadDocumentController extends Controller
                 LeadDocument::STATUS_APPROVED,
                 LeadDocument::STATUS_REJECTED,
             ])],
-            'note'   => 'nullable|string|max:500',
+            'note' => 'nullable|string|max:500',
         ]);
 
         $doc->update([
-            'status'      => $validated['status'],
-            'note'        => $validated['note'] ?? $doc->note,
+            'status' => $validated['status'],
+            'note' => $validated['note'] ?? $doc->note,
             'reviewed_by' => Auth::id(),
             'reviewed_at' => now(),
         ]);
@@ -162,7 +212,7 @@ class LeadDocumentController extends Controller
                 $key = $validated['status'] === LeadDocument::STATUS_APPROVED ? 'doc_approved' : 'doc_rejected';
                 $res = app(\App\Services\CommunicationService::class)->sendTemplated($key, $lead, [
                     'document_name' => $doc->original_name,
-                    'reason'        => $validated['note'] ?? '',
+                    'reason' => $validated['note'] ?? '',
                 ]);
                 if (! $res['email']) {
                     Mail::to($lead->email)->send(new \App\Mail\DocumentStatusChanged($lead, $doc->fresh(), $validated['note'] ?? null));
@@ -179,22 +229,22 @@ class LeadDocumentController extends Controller
     {
         $lead = Lead::findOrFail($leadId);
         $request->validate([
-            'file' => 'required|' . UploadValidation::document(),
+            'file' => 'required|'.UploadValidation::document(),
             'note' => 'nullable|string|max:500',
         ]);
 
         $path = $request->file('file')->store("lead-documents/{$lead->id}", self::DISK);
 
         LeadDocument::create([
-            'lead_id'       => $lead->id,
-            'request_id'    => null,
+            'lead_id' => $lead->id,
+            'request_id' => null,
             'original_name' => $request->file('file')->getClientOriginalName(),
-            'file_path'     => $path,
-            'mime'          => $request->file('file')->getMimeType(),
-            'size'          => $request->file('file')->getSize(),
-            'status'        => LeadDocument::STATUS_STAFF_SHARED,
-            'note'          => $request->input('note'),
-            'uploaded_by'   => Auth::id(),
+            'file_path' => $path,
+            'mime' => $request->file('file')->getMimeType(),
+            'size' => $request->file('file')->getSize(),
+            'status' => LeadDocument::STATUS_STAFF_SHARED,
+            'note' => $request->input('note'),
+            'uploaded_by' => Auth::id(),
         ]);
 
         return back()->with('success', 'File shared with the lead.');
@@ -210,31 +260,33 @@ class LeadDocumentController extends Controller
         $lead = Lead::findOrFail($leadId);
 
         $request->validate([
-            'files'   => 'required|array|min:1|max:10',
+            'files' => 'required|array|min:1|max:10',
             'files.*' => UploadValidation::document(),
         ]);
 
         try {
             foreach ($request->file('files') as $file) {
-                $path = $file->store("lead-documents/{$lead->id}", self::DISK);
+                [$path, $displayName] = $this->storeChecklistFile($file, $lead, $key);
 
                 LeadDocument::create([
-                    'lead_id'       => $lead->id,
-                    'request_id'    => null,
+                    'lead_id' => $lead->id,
+                    'request_id' => null,
                     'checklist_key' => $key,
-                    'original_name' => $file->getClientOriginalName(),
-                    'file_path'     => $path,
-                    'mime'          => $file->getMimeType(),
-                    'size'          => $file->getSize(),
-                    'status'        => LeadDocument::STATUS_SUBMITTED,
-                    'uploaded_by'   => Auth::id(),
+                    'original_name' => $displayName,
+                    'file_path' => $path,
+                    'mime' => $file->getMimeType(),
+                    'size' => $file->getSize(),
+                    'status' => LeadDocument::STATUS_SUBMITTED,
+                    'uploaded_by' => Auth::id(),
                 ]);
             }
 
             $n = count($request->file('files'));
-            return back()->with('success', "{$n} " . ($n === 1 ? 'file' : 'files') . " uploaded.");
+
+            return back()->with('success', "{$n} ".($n === 1 ? 'file' : 'files').' uploaded.');
         } catch (\Throwable $e) {
             Log::error('Staff checklist upload failed', ['lead_id' => $leadId, 'key' => $key, 'error' => $e->getMessage()]);
+
             return back()->withErrors(['error' => 'Could not upload that file.']);
         }
     }
@@ -259,11 +311,13 @@ class LeadDocumentController extends Controller
             if ($key === 'agree.consultancy') {
                 $variant = $data['variant'] ?? 'single';
                 $generator->consultancy($lead, $variant);
+
                 return back()->with('success', "Consultancy Agreement generated ({$variant}).");
             }
 
             if ($key === 'agree.engagement_english') {
                 $generator->englishEngagement($lead);
+
                 return back()->with('success', 'English Engagement Agreement generated.');
             }
 
@@ -271,11 +325,12 @@ class LeadDocumentController extends Controller
         } catch (\Throwable $e) {
             Log::error('Agreement generation failed', [
                 'lead_id' => $leadId,
-                'key'     => $key,
+                'key' => $key,
                 'variant' => $data['variant'] ?? null,
-                'error'   => $e->getMessage(),
+                'error' => $e->getMessage(),
             ]);
-            return back()->withErrors(['error' => 'Could not generate the agreement: ' . $e->getMessage()]);
+
+            return back()->withErrors(['error' => 'Could not generate the agreement: '.$e->getMessage()]);
         }
     }
 
@@ -291,9 +346,11 @@ class LeadDocumentController extends Controller
                 ? Storage::disk(self::DISK)->delete($doc->file_path)
                 : null;
             $doc->delete();
+
             return back()->with('success', 'File removed.');
         } catch (\Throwable $e) {
             Log::error('Document delete failed', ['doc_id' => $docId, 'error' => $e->getMessage()]);
+
             return back()->withErrors(['error' => 'Could not delete that file.']);
         }
     }
@@ -335,10 +392,10 @@ class LeadDocumentController extends Controller
             ->orderByDesc('created_at')
             ->get()
             ->map(fn (LeadDocumentRequest $r) => [
-                'id'           => $r->id,
-                'label'        => $r->label,
-                'description'  => $r->description,
-                'required'     => $r->required,
+                'id' => $r->id,
+                'label' => $r->label,
+                'description' => $r->description,
+                'required' => $r->required,
                 'requested_at' => $r->requested_at,
                 'latest_document' => $r->latestDocument ? $this->docSerialize($r->latestDocument) : null,
             ]);
@@ -357,28 +414,28 @@ class LeadDocumentController extends Controller
             ->get()
             ->groupBy('checklist_key')
             ->map(fn ($files) => $files->map(fn ($f) => [
-                'id'             => $f->id,
-                'original_name'  => $f->original_name,
-                'mime'           => $f->mime,
-                'size'           => $f->size,
-                'status'         => $f->status,
-                'source'         => $f->source,
+                'id' => $f->id,
+                'original_name' => $f->original_name,
+                'mime' => $f->mime,
+                'size' => $f->size,
+                'status' => $f->status,
+                'source' => $f->source,
                 'source_variant' => $f->source_variant,
-                'created_at'     => $f->created_at,
+                'created_at' => $f->created_at,
             ])->values());
 
         return inertia('portal/lead/Documents', [
-            'lead'                  => [
-                'id'         => $lead->id,
-                'lead_id'    => $lead->lead_id,
+            'lead' => [
+                'id' => $lead->id,
+                'lead_id' => $lead->lead_id,
                 'first_name' => $lead->first_name,
-                'last_name'  => $lead->last_name,
+                'last_name' => $lead->last_name,
                 'agreements_acknowledged_at' => $lead->agreements_acknowledged_at,
             ],
-            'requests'              => $requests,
-            'shared_by_staff'       => $sharedByStaff,
-            'checklistFiles'        => $checklistFiles,
-            'sectionVerifications'  => $lead->section_verifications ?? [],
+            'requests' => $requests,
+            'shared_by_staff' => $sharedByStaff,
+            'checklistFiles' => $checklistFiles,
+            'sectionVerifications' => $lead->section_verifications ?? [],
         ]);
     }
 
@@ -393,25 +450,25 @@ class LeadDocumentController extends Controller
         abort_unless($lead, 403);
 
         $request->validate([
-            'files'   => 'required|array|min:1|max:10',
+            'files' => 'required|array|min:1|max:10',
             'files.*' => UploadValidation::document(),
         ]);
 
         try {
             $lastDoc = null;
             foreach ($request->file('files') as $file) {
-                $path = $file->store("lead-documents/{$lead->id}", self::DISK);
+                [$path, $displayName] = $this->storeChecklistFile($file, $lead, $key);
 
                 $lastDoc = LeadDocument::create([
-                    'lead_id'       => $lead->id,
-                    'request_id'    => null,
+                    'lead_id' => $lead->id,
+                    'request_id' => null,
                     'checklist_key' => $key,
-                    'original_name' => $file->getClientOriginalName(),
-                    'file_path'     => $path,
-                    'mime'          => $file->getMimeType(),
-                    'size'          => $file->getSize(),
-                    'status'        => LeadDocument::STATUS_SUBMITTED,
-                    'uploaded_by'   => $user->id,
+                    'original_name' => $displayName,
+                    'file_path' => $path,
+                    'mime' => $file->getMimeType(),
+                    'size' => $file->getSize(),
+                    'status' => LeadDocument::STATUS_SUBMITTED,
+                    'uploaded_by' => $user->id,
                 ]);
             }
 
@@ -423,6 +480,7 @@ class LeadDocumentController extends Controller
             return back()->with('success', 'Document uploaded. Our team will review it shortly.');
         } catch (\Throwable $e) {
             Log::error('Lead checklist upload failed', ['lead_id' => $lead->id, 'key' => $key, 'error' => $e->getMessage()]);
+
             return back()->withErrors(['error' => 'Upload failed. Please try again.']);
         }
     }
@@ -440,7 +498,7 @@ class LeadDocumentController extends Controller
         try {
             $sections = is_array($lead->section_verifications) ? $lead->section_verifications : [];
             $sections[$sectionKey] = [
-                'status'       => 'in_review',
+                'status' => 'in_review',
                 'submitted_at' => now()->toIso8601String(),
             ];
             $lead->section_verifications = $sections;
@@ -449,6 +507,7 @@ class LeadDocumentController extends Controller
             return back()->with('success', 'Section submitted for review.');
         } catch (\Throwable $e) {
             Log::error('Lead section submit failed', ['lead_id' => $lead->id, 'section' => $sectionKey, 'error' => $e->getMessage()]);
+
             return back()->withErrors(['error' => 'Could not submit section.']);
         }
     }
@@ -463,6 +522,13 @@ class LeadDocumentController extends Controller
             $recipients = $lead->assignee
                 ? collect([$lead->assignee])
                 : \App\Models\User::whereIn('role', [\App\Models\User::ROLE_ADMIN, \App\Models\User::ROLE_SUPER_ADMIN])->get();
+
+            // Immigration cases always loop in the immigration team so the
+            // department hears about document activity on their own cases.
+            if ($lead->is_immigration_case) {
+                $immigration = \App\Models\User::whereIn('role', array_merge(['immigration'], \App\Models\User::IMMIGRATION_ROLES))->get();
+                $recipients = $recipients->merge($immigration)->unique('id')->values();
+            }
 
             if ($recipients->isNotEmpty()) {
                 \Illuminate\Support\Facades\Notification::send(
@@ -482,7 +548,7 @@ class LeadDocumentController extends Controller
         abort_unless($lead, 403);
 
         $request->validate([
-            'file'       => 'required|' . UploadValidation::document(),
+            'file' => 'required|'.UploadValidation::document(),
             'request_id' => 'nullable|integer|exists:lead_document_requests,id',
         ]);
 
@@ -497,14 +563,14 @@ class LeadDocumentController extends Controller
         $path = $request->file('file')->store("lead-documents/{$lead->id}", self::DISK);
 
         $document = LeadDocument::create([
-            'lead_id'       => $lead->id,
-            'request_id'    => $request->input('request_id'),
+            'lead_id' => $lead->id,
+            'request_id' => $request->input('request_id'),
             'original_name' => $request->file('file')->getClientOriginalName(),
-            'file_path'     => $path,
-            'mime'          => $request->file('file')->getMimeType(),
-            'size'          => $request->file('file')->getSize(),
-            'status'        => LeadDocument::STATUS_SUBMITTED,
-            'uploaded_by'   => $user->id,
+            'file_path' => $path,
+            'mime' => $request->file('file')->getMimeType(),
+            'size' => $request->file('file')->getSize(),
+            'status' => LeadDocument::STATUS_SUBMITTED,
+            'uploaded_by' => $user->id,
         ]);
 
         $this->notifyDocumentSubmitted($lead, $document);
@@ -539,12 +605,134 @@ class LeadDocumentController extends Controller
         // "View" button on the agreements panel.
         if ($request->boolean('inline')) {
             return response()->file(Storage::disk($disk)->path($doc->file_path), [
-                'Content-Type'        => $doc->mime ?: 'application/pdf',
-                'Content-Disposition' => 'inline; filename="' . $doc->original_name . '"',
+                'Content-Type' => $doc->mime ?: 'application/pdf',
+                'Content-Disposition' => 'inline; filename="'.$doc->original_name.'"',
             ]);
         }
 
         return Storage::disk($disk)->download($doc->file_path, $doc->original_name);
+    }
+
+    /**
+     * Bundle every document on a lead into a single ZIP and stream it.
+     * Staff-only (this route lives in the staff group); a lead may only
+     * pull their own. Files live on either the private ('local') or
+     * 'public' disk, so each is resolved the same way download() does.
+     */
+    public function downloadAll(Request $request, $leadId)
+    {
+        $lead = Lead::findOrFail($leadId);
+        $user = Auth::user();
+
+        if ($user->isLead()) {
+            abort_unless($user->lead_id === $lead->id, 403);
+        }
+
+        if (! class_exists(\ZipArchive::class)) {
+            return back()->withErrors(['error' => 'ZIP support is not available on the server.']);
+        }
+
+        $docs = $lead->documents()->orderBy('created_at')->get();
+        if ($docs->isEmpty()) {
+            return back()->withErrors(['error' => 'This case has no documents to download.']);
+        }
+
+        $tmp = tempnam(sys_get_temp_dir(), 'leaddocs_');
+        $zip = new \ZipArchive;
+        if ($zip->open($tmp, \ZipArchive::CREATE | \ZipArchive::OVERWRITE) !== true) {
+            @unlink($tmp);
+
+            return back()->withErrors(['error' => 'Could not create the ZIP archive.']);
+        }
+
+        $used = [];
+        $added = 0;
+        foreach ($docs as $doc) {
+            $disk = Storage::disk(self::DISK)->exists($doc->file_path)
+                ? self::DISK
+                : (Storage::disk('public')->exists($doc->file_path) ? 'public' : null);
+            if (! $disk) {
+                continue;
+            }
+
+            $name = $this->uniqueZipEntry($used, $doc->original_name ?: basename($doc->file_path));
+            $used[strtolower($name)] = true;
+
+            $zip->addFile(Storage::disk($disk)->path($doc->file_path), $name);
+            $added++;
+        }
+        $zip->close();
+
+        if ($added === 0) {
+            @unlink($tmp);
+
+            return back()->withErrors(['error' => 'No downloadable files were found for this case.']);
+        }
+
+        $slug = Str::slug(trim("{$lead->first_name} {$lead->last_name}")) ?: ('case-'.$lead->id);
+
+        return response()->download($tmp, "{$slug}-documents.zip", [
+            'Content-Type' => 'application/zip',
+        ])->deleteFileAfterSend(true);
+    }
+
+    /**
+     * Toggle whether a checklist item is hidden from the applicant's public
+     * tracking link. Staff-only; stored per-case on
+     * leads.hidden_track_documents.
+     */
+    public function toggleTrackVisibility(Request $request, $leadId)
+    {
+        $lead = Lead::findOrFail($leadId);
+
+        // Accepts one or many keys so a single row checkbox and a
+        // section-level "select all" both hit the same endpoint.
+        $data = $request->validate([
+            'checklist_keys' => 'required|array|min:1',
+            'checklist_keys.*' => 'string|max:80',
+            'hidden' => 'required|boolean',
+        ]);
+
+        $hidden = array_values(array_unique(array_filter(
+            is_array($lead->hidden_track_documents) ? $lead->hidden_track_documents : []
+        )));
+
+        foreach ($data['checklist_keys'] as $key) {
+            if ($data['hidden']) {
+                if (! in_array($key, $hidden, true)) {
+                    $hidden[] = $key;
+                }
+            } else {
+                $hidden = array_filter($hidden, fn ($k) => $k !== $key);
+            }
+        }
+
+        $lead->hidden_track_documents = array_values($hidden);
+        $lead->save();
+
+        return back()->with('success', $data['hidden'] ? 'Hidden from the tracker.' : 'Shown on the tracker.');
+    }
+
+    /**
+     * Return a ZIP entry name that doesn't collide with one already added,
+     * appending " (2)", " (3)", … before the extension when needed.
+     */
+    private function uniqueZipEntry(array $used, string $name): string
+    {
+        if (! isset($used[strtolower($name)])) {
+            return $name;
+        }
+
+        $ext = pathinfo($name, PATHINFO_EXTENSION);
+        $base = $ext !== '' ? substr($name, 0, -(strlen($ext) + 1)) : $name;
+
+        $i = 2;
+        do {
+            $candidate = $ext !== '' ? "{$base} ({$i}).{$ext}" : "{$base} ({$i})";
+            $i++;
+        } while (isset($used[strtolower($candidate)]));
+
+        return $candidate;
     }
 
     // ── Helpers ─────────────────────────────────────────────────────────────
@@ -552,17 +740,17 @@ class LeadDocumentController extends Controller
     private function docSerialize(LeadDocument $d): array
     {
         return [
-            'id'             => $d->id,
-            'request_id'     => $d->request_id,
-            'original_name'  => $d->original_name,
-            'mime'           => $d->mime,
-            'size'           => $d->size,
-            'status'         => $d->status,
-            'source'         => $d->source,
+            'id' => $d->id,
+            'request_id' => $d->request_id,
+            'original_name' => $d->original_name,
+            'mime' => $d->mime,
+            'size' => $d->size,
+            'status' => $d->status,
+            'source' => $d->source,
             'source_variant' => $d->source_variant,
-            'note'           => $d->note,
-            'reviewed_at'    => $d->reviewed_at,
-            'created_at'     => $d->created_at,
+            'note' => $d->note,
+            'reviewed_at' => $d->reviewed_at,
+            'created_at' => $d->created_at,
         ];
     }
 
@@ -576,12 +764,12 @@ class LeadDocumentController extends Controller
             ['label' => 'Passport bio page',          'description' => 'Clear scan or photo of the photo page'],
             ['label' => 'Birth certificate',          'description' => 'Original or certified copy'],
             ['label' => 'Academic transcripts',       'description' => 'From your most recent institution'],
-            ['label' => 'Diploma / degree certificate','description' => 'Highest qualification completed'],
+            ['label' => 'Diploma / degree certificate', 'description' => 'Highest qualification completed'],
             ['label' => 'IELTS / English test result', 'description' => 'Within last 2 years'],
             ['label' => 'Curriculum vitae (CV)',      'description' => 'PDF or DOCX, max 4 pages'],
             ['label' => 'Employment letter',          'description' => 'On company letterhead'],
             ['label' => 'Bank statement',             'description' => 'Last 3-6 months'],
-            ['label' => 'Police clearance certificate','description' => 'For immigration applications'],
+            ['label' => 'Police clearance certificate', 'description' => 'For immigration applications'],
             ['label' => 'Medical certificate',        'description' => 'INZ-approved panel doctor'],
         ];
     }

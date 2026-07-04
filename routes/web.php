@@ -489,8 +489,20 @@ Route::middleware(['auth'])->group(function () {
     // department portal) can view a lead and advance its pipeline stage.
     // Every change is audited via the LogsActivity trait on the Lead model.
     Route::middleware('portal:admin,sales,education,english,immigration,accommodation')->group(function () {
+        // Per-registrant view: renders JUST the form the lead filled at
+        // registration, plus an editable notes area. Any department that
+        // owns leads may open it (sales sees registrants on the Leads
+        // page's Events tab; other departments may drill in from their
+        // own event dashboards).
+        Route::get('/admin/events/{eventId}/registrants/{leadId}', [EventController::class, 'showRegistrant'])
+            ->name('admin.events.registrant.show');
+        Route::post('/admin/events/{eventId}/registrants/{leadId}/notes', [EventController::class, 'updateRegistrantNotes'])
+            ->name('admin.events.registrant.notes');
+
         Route::get('/admin/leads/{id}', [LeadController::class, 'show'])->name('admin.leads.show');
         Route::post('/admin/leads/{id}/stage', [LeadController::class, 'updateStage'])->name('admin.leads.stage');
+        // Archive (soft-delete) a lead / case — used by the Cases + Leads row menus.
+        Route::delete('/admin/leads/{id}', [LeadController::class, 'destroy'])->name('admin.leads.destroy');
         Route::post('/admin/leads/{id}/personal', [LeadController::class, 'updatePersonal'])->name('admin.leads.personal');
         Route::post('/admin/leads/{id}/journey', [LeadController::class, 'updateJourney'])->name('admin.leads.journey');
         Route::post('/admin/leads/{id}/convert-to-student', [LeadController::class, 'convertToStudent'])->name('admin.leads.convert-student');
@@ -587,6 +599,12 @@ Route::middleware(['auth'])->group(function () {
         // Staff download — same controller, role-gated inside.
         Route::get('/admin/documents/{docId}/download', [LeadDocumentController::class, 'download'])
             ->name('admin.documents.download');
+        // Bundle all of a lead's documents into a single ZIP.
+        Route::get('/admin/leads/{leadId}/documents/download-all', [LeadDocumentController::class, 'downloadAll'])
+            ->name('admin.leads.documents.download-all');
+        // Toggle a checklist item's visibility on the public tracking link.
+        Route::post('/admin/leads/{leadId}/documents/track-visibility', [LeadDocumentController::class, 'toggleTrackVisibility'])
+            ->name('admin.leads.documents.track-visibility');
 
         // Task Board — cross-portal Task API for the New Task modal.
         // Lives in routes/web.php (not routes/api.php) so it inherits the
@@ -681,8 +699,11 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/dashboard', [SalesController::class, 'dashboard'])->name('dashboard');
             Route::get('/leads', [SalesController::class, 'leads'])->name('leads');
 
-            // Events tab — registrants for one event (JSON drawer).
+            // Events tab — registrants for one event.
+            //   /registrations → JSON (legacy; still used elsewhere)
+            //   /registrants   → full-page Inertia render (Leads.jsx links here)
             Route::get('/events/{id}/registrations', [SalesController::class, 'eventRegistrations'])->name('events.registrations');
+            Route::get('/events/{id}/registrants', [SalesController::class, 'eventRegistrantsPage'])->name('events.registrants');
 
             // Bulk email (Build 11.A) — preview + send to the selected leads.
             // Declared before /leads/{id} so the two static segments win.
@@ -742,6 +763,8 @@ Route::middleware(['auth'])->group(function () {
         Route::middleware('portal:education')->prefix('education')->name('portal.education.')->group(function () {
             Route::get('/dashboard', [EducationController::class, 'dashboard'])->name('dashboard');
             Route::get('/leads', [EducationController::class, 'leads'])->name('leads');
+            // Events tab — registrants for one event (JSON drawer), same as sales.
+            Route::get('/events/{id}/registrations', [EducationController::class, 'eventRegistrations'])->name('events.registrations');
             Route::post('/leads', [EducationController::class, 'storeLead'])->name('leads.store');
             Route::post('/leads/{id}/notes', [\App\Http\Controllers\LeadNoteController::class, 'store'])->name('leads.notes.store');
             Route::post('/leads/{id}', [EducationController::class, 'updateLead'])->name('leads.update');
@@ -816,6 +839,8 @@ Route::middleware(['auth'])->group(function () {
         Route::middleware('portal:immigration')->prefix('immigration')->name('portal.immigration.')->group(function () {
             Route::get('/dashboard', [ImmigrationController::class, 'dashboard'])->name('dashboard');
             Route::get('/leads', [ImmigrationController::class, 'leads'])->name('leads');
+            // Events tab — registrants for one event (JSON drawer), same as sales.
+            Route::get('/events/{id}/registrations', [ImmigrationController::class, 'eventRegistrations'])->name('events.registrations');
             Route::post('/leads/{id}', [ImmigrationController::class, 'updateLead'])->name('leads.update');
             Route::post('/leads/{id}/portal-invitation/request', [LeadPortalInvitationController::class, 'request'])
                 ->name('leads.portal-invitation.request');
@@ -838,9 +863,15 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/cases', [ImmigrationController::class, 'cases'])->name('cases');
             // Create new case from the Cases page "Add new case" modal.
             Route::post('/cases', [ImmigrationController::class, 'storeCase'])->name('cases.store');
+            // Edit an existing case (same modal fields as create).
+            Route::post('/cases/{id}', [ImmigrationController::class, 'updateCase'])->name('cases.update');
             // Inline stage update from the Cases table — mirrors the
             // EducationController dashboard-field pattern.
             Route::post('/cases/{id}/stage', [ImmigrationController::class, 'updateCaseStage'])->name('cases.stage');
+            // Inline visa-type update from the Cases table.
+            Route::post('/cases/{id}/visa', [ImmigrationController::class, 'updateCaseVisa'])->name('cases.visa');
+            // Inline priority update from the Cases table's expanded row.
+            Route::post('/cases/{id}/priority', [ImmigrationController::class, 'updateCasePriority'])->name('cases.priority');
 
             // Build 11.D — purpose-built Case Profile page. The {lead} binding
             // is the Lead model; controller hard-404s when is_immigration_case
@@ -872,6 +903,7 @@ Route::middleware(['auth'])->group(function () {
             // the same logic (policy, audit, notifications) applies to both
             // admin staff and immigration managers/advisers.
             Route::get('/visa-types', [VisaTypeController::class, 'index'])->name('visa-types');
+            Route::get('/visa-types/templates', [VisaTypeController::class, 'checklistTemplates'])->name('visa-types.templates');
             Route::post('/visa-types', [VisaTypeController::class, 'store'])->name('visa-types.store');
             Route::post('/visa-types/{visa_type}', [VisaTypeController::class, 'update'])->name('visa-types.update');
             Route::delete('/visa-types/{visa_type}', [VisaTypeController::class, 'destroy'])->name('visa-types.destroy');
