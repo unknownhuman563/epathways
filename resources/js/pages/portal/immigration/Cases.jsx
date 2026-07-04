@@ -187,7 +187,6 @@ export default function ImmigrationCases({ cases = [], distribution = [], priori
                                 <SortableTh label="Stage"       sortKey="stage"     current={sortKey} dir={sortDir} onSort={toggleSort} />
                                 <SortableTh label="Visa"        sortKey="visa"      current={sortKey} dir={sortDir} onSort={toggleSort} />
                                 <SortableTh label="Country"     sortKey="country"   current={sortKey} dir={sortDir} onSort={toggleSort} />
-                                <SortableTh label="Lodged"      sortKey="lodged_at" current={sortKey} dir={sortDir} onSort={toggleSort} />
                                 <th className="px-3 py-3">Docs</th>
                                 <SortableTh label="Updated" sortKey="updated_at" current={sortKey} dir={sortDir} onSort={toggleSort} />
                                 <th className="px-3 py-3 text-right pr-4">Actions</th>
@@ -196,7 +195,7 @@ export default function ImmigrationCases({ cases = [], distribution = [], priori
                         <tbody className="divide-y divide-gray-100">
                             {sorted.length === 0 ? (
                                 <tr>
-                                    <td colSpan={9} className="px-6 py-20 text-center">
+                                    <td colSpan={8} className="px-6 py-20 text-center">
                                         <div className="flex flex-col items-center gap-2 text-gray-400">
                                             <Globe size={22} />
                                             <p className="text-sm font-medium">
@@ -818,13 +817,6 @@ function CaseRow({ c, stages, visaTypes = [], isExpanded, onExpand, stageMenuOpe
                         : <span className="text-gray-300">—</span>}
                 </td>
 
-                {/* Lodged */}
-                <td className="px-3 py-2.5 whitespace-nowrap">
-                    {c.inz_lodged_at
-                        ? <span className="text-sm text-gray-600">{fmtDate(c.inz_lodged_at)}</span>
-                        : <span className="text-gray-300">—</span>}
-                </td>
-
                 {/* Docs */}
                 <td className="px-3 py-2.5">
                     {hasDocs ? (
@@ -903,7 +895,7 @@ function CaseRow({ c, stages, visaTypes = [], isExpanded, onExpand, stageMenuOpe
 
             {isExpanded && (
                 <tr className="bg-amber-50/20 border-t border-amber-100/60">
-                    <td colSpan={9} className="px-6 py-4">
+                    <td colSpan={8} className="px-6 py-4">
                         <CaseDetail c={c} />
                     </td>
                 </tr>
