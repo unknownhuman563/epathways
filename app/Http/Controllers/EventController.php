@@ -47,13 +47,129 @@ class EventController extends Controller
             $event->banner_image_url = Storage::disk('public')->url($event->banner_image);
         }
 
-        // Fetch leads that registered for this specific event
-        $leads = $event->leads()->with(['studyPlans', 'educationExps', 'eventSession'])->latest()->get();
+        // Fetch leads that registered for this specific event. Notes
+        // editor is eager-loaded so the table can render "updated by X"
+        // without an N+1.
+        $leads = $event->leads()->with(['studyPlans', 'educationExps', 'eventSession', 'eventNotesEditor'])->latest()->get();
 
         return inertia('admin/EventDetails', [
             'event' => $event,
             'leads' => $leads,
         ]);
+    }
+
+    /**
+     * Per-registrant view — renders JUST the form the lead submitted at
+     * registration (plus an editable notes area on the same page). Meant
+     * for event-desk staff who don't want the full lead-profile screen.
+     */
+    public function showRegistrant($eventId, $leadId)
+    {
+        $event = Event::findOrFail($eventId);
+        $lead  = \App\Models\Lead::with(['studyPlans', 'educationExps', 'eventNotesEditor'])->findOrFail($leadId);
+
+        // Guard: the lead must actually belong to this event. Prevents
+        // a URL-guessed cross-event peek.
+        if ((int) $lead->event_id !== (int) $event->id) {
+            abort(404);
+        }
+
+        // Rebuild the form-as-filled snapshot. Same resolver as
+        // LeadController::show — keeps the two views consistent when we
+        // later add more default-mapped fields.
+        $fieldsSchema = $event->effectiveFields();
+        $eduFirst     = $lead->educationExps->first();
+        $planFirst    = $lead->studyPlans->first();
+        $work         = is_array($lead->work_info)      ? $lead->work_info      : [];
+        $finance      = is_array($lead->financial_info) ? $lead->financial_info : [];
+        $custom       = is_array($lead->event_response) ? $lead->event_response : [];
+
+        $resolveValue = function (array $field) use ($lead, $custom, $work, $finance, $eduFirst, $planFirst) {
+            $key = $field['key'];
+            if (array_key_exists($key, $custom)) return $custom[$key];
+            return match ($key) {
+                'first_name'         => $lead->first_name,
+                'last_name'          => $lead->last_name,
+                'email'              => $lead->email,
+                'phone'              => $lead->phone,
+                'country'            => $lead->country ?: $lead->residence_country,
+                'city'               => $work['city']               ?? $lead->residence_city,
+                'employment_status'  => $work['employment_status']  ?? null,
+                'remarks'            => $work['remarks']            ?? null,
+                'funding_source'     => $finance['funding_source']  ?? null,
+                'education_level'    => optional($eduFirst)->level,
+                'field_of_study'     => optional($eduFirst)->field_of_study,
+                'interest'           => optional($planFirst)->preferred_course,
+                'planning_timeline'  => optional($planFirst)->preferred_intake,
+                default              => null,
+            };
+        };
+
+        $registrationFields = collect($fieldsSchema)
+            ->filter(fn ($f) => ($f['locked'] ?? false) === true || ($f['enabled'] ?? true) !== false)
+            ->map(fn ($f) => [
+                'key'      => $f['key'],
+                'label'    => $f['label']   ?? $f['key'],
+                'type'     => $f['type']    ?? 'text',
+                'section'  => $f['section'] ?? 'Additional',
+                'options'  => $f['options'] ?? null,
+                'value'    => $resolveValue($f),
+            ])
+            ->values()
+            ->all();
+
+        return inertia('admin/EventRegistrantView', [
+            'event' => [
+                'id'         => $event->id,
+                'name'       => $event->name,
+                'event_code' => $event->event_code,
+                'type'       => $event->type,
+                'date_from'  => optional($event->date_from)->toIso8601String(),
+            ],
+            'lead' => [
+                'id'         => $lead->id,
+                'lead_id'    => $lead->lead_id,
+                'first_name' => $lead->first_name,
+                'last_name'  => $lead->last_name,
+                'email'      => $lead->email,
+                'phone'      => $lead->phone,
+                'stage'      => $lead->stage,
+                'status'     => $lead->status,
+                'created_at' => optional($lead->created_at)->toIso8601String(),
+            ],
+            'registrationFields' => $registrationFields,
+            'notes' => [
+                'body'         => $lead->event_notes,
+                'updated_at'   => optional($lead->event_notes_updated_at)->toIso8601String(),
+                'updated_by'   => $lead->eventNotesEditor
+                    ? ['id' => $lead->eventNotesEditor->id, 'name' => $lead->eventNotesEditor->name]
+                    : null,
+            ],
+        ]);
+    }
+
+    /**
+     * Save an event-registrant's notes. Timestamps the write and
+     * captures the acting staff member so the table can show a
+     * "Last updated by X, 2 min ago" line.
+     */
+    public function updateRegistrantNotes(Request $request, $eventId, $leadId)
+    {
+        $lead = \App\Models\Lead::findOrFail($leadId);
+        if ((int) $lead->event_id !== (int) $eventId) {
+            abort(404);
+        }
+
+        $validated = $request->validate([
+            'event_notes' => 'nullable|string|max:5000',
+        ]);
+
+        $lead->event_notes            = $validated['event_notes'] ?? null;
+        $lead->event_notes_updated_at = now();
+        $lead->event_notes_updated_by = auth()->id();
+        $lead->save();
+
+        return redirect()->back()->with('success', 'Notes updated.');
     }
 
     /**

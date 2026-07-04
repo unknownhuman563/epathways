@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { router } from "@inertiajs/react";
 import { toast } from "sonner";
@@ -77,6 +77,7 @@ export default function DocumentsTab({
             label:    hasCategoryPrefix ? split.slice(1).join(" · ") : rawLabel,
             category: item.category || (hasCategoryPrefix ? split[0] : categoryFromKey(item.key)) || "Other",
             required: !! item.required,
+            hidden:   !! item.hidden,
             document: docsByKey.get(item.key) || null,
         };
     });
@@ -149,9 +150,20 @@ export default function DocumentsTab({
                         )}
                     </p>
                 </div>
-                <p className="text-[10.5px] text-gray-400">
-                    Source: <span className="font-semibold">{checklist.source || "none"}</span>
-                </p>
+                <div className="flex items-center gap-3">
+                    {documents.length > 0 && (
+                        <a
+                            href={`/admin/leads/${lead.id}/documents/download-all`}
+                            title="Download every uploaded document as a single ZIP"
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold uppercase tracking-wider bg-gray-900 text-white hover:bg-black transition-colors"
+                        >
+                            <Download size={12} /> Download all (ZIP)
+                        </a>
+                    )}
+                    <p className="text-[10.5px] text-gray-400">
+                        Source: <span className="font-semibold">{checklist.source || "none"}</span>
+                    </p>
+                </div>
             </div>
 
             {reqTotal > 0 && (
@@ -177,16 +189,22 @@ export default function DocumentsTab({
                         <tbody>
                             {groupedRows.map(([category, groupRows]) => {
                                 const approved = groupRows.filter((r) => r.document?.status === "Approved").length;
+                                const checklistRows = groupRows.filter((r) => r.kind === "checklist");
                                 return (
                                     <Fragment key={category}>
                                         <tr className="bg-gray-200 border-y border-gray-300">
                                             <td colSpan={4} className="px-4 py-2">
-                                                <span className="text-[11px] font-bold uppercase tracking-wider text-gray-700">
-                                                    {category}
-                                                </span>
-                                                <span className="ml-2 text-[10.5px] font-semibold text-gray-500">
-                                                    {approved}/{groupRows.length}
-                                                </span>
+                                                <div className="flex items-center gap-2">
+                                                    {checklistRows.length > 0 && (
+                                                        <SectionSelectAll leadId={lead.id} rows={checklistRows} />
+                                                    )}
+                                                    <span className="text-[11px] font-bold uppercase tracking-wider text-gray-700">
+                                                        {category}
+                                                    </span>
+                                                    <span className="text-[10.5px] font-semibold text-gray-500">
+                                                        {approved}/{groupRows.length}
+                                                    </span>
+                                                </div>
                                             </td>
                                         </tr>
                                         {groupRows.map((row) => (
@@ -271,10 +289,21 @@ function Row({ row, leadId }) {
 
     return (
         <tr className="border-b border-gray-50 last:border-b-0 align-top">
-            {/* Document slot (label + category + required marker) */}
+            {/* Document slot. For checklist rows the leading icon is a
+                tracker-visibility checkbox (checked = shown on the applicant's
+                tracking link, unchecked = hidden). Orphan rows keep the file
+                icon since they aren't part of the checklist. */}
             <td className="px-4 py-3">
                 <div className="flex items-start gap-2">
-                    <FileText size={14} className="text-gray-300 flex-shrink-0 mt-0.5" />
+                    {row.kind === "checklist" ? (
+                        <TrackVisibilityCheckbox
+                            leadId={leadId}
+                            checklistKey={row.key}
+                            hidden={row.hidden}
+                        />
+                    ) : (
+                        <FileText size={14} className="text-gray-300 flex-shrink-0 mt-0.5" />
+                    )}
                     <div className="min-w-0">
                         <p className="text-sm font-medium text-gray-900 leading-tight">
                             {row.label}
@@ -396,6 +425,92 @@ function Row({ row, leadId }) {
                 />
             )}
         </tr>
+    );
+}
+
+/**
+ * Per-item toggle controlling whether this checklist item shows on the
+ * applicant's public tracking link. Posts to the staff endpoint and
+ * partial-reloads the checklist so the flag reflects the saved state.
+ */
+function TrackVisibilityCheckbox({ leadId, checklistKey, hidden }) {
+    // Optimistic local state so the box flips instantly; falls back to the
+    // server value once the partial reload lands (or reverts on error).
+    const [optimistic, setOptimistic] = useState(null);
+    const shown = optimistic ?? ! hidden;
+
+    const onChange = (e) => {
+        const nextShown = e.target.checked;
+        setOptimistic(nextShown);
+        router.post(
+            `/admin/leads/${leadId}/documents/track-visibility`,
+            { checklist_keys: [checklistKey], hidden: ! nextShown },
+            {
+                preserveScroll: true,
+                preserveState: true,
+                only: ["checklist"],
+                onSuccess: () => toast.success(nextShown ? "Shown on tracker" : "Hidden from tracker"),
+                onError: () => { setOptimistic(null); toast.error("Could not update visibility"); },
+                onFinish: () => setOptimistic(null),
+            },
+        );
+    };
+
+    return (
+        <input
+            type="checkbox"
+            checked={shown}
+            onChange={onChange}
+            title={shown
+                ? "Shown on the applicant's tracker — uncheck to hide"
+                : "Hidden from the applicant's tracker — check to show"}
+            className="mt-0.5 rounded border-gray-300 text-emerald-600 focus:ring-0 w-3.5 h-3.5 flex-shrink-0 cursor-pointer"
+        />
+    );
+}
+
+/**
+ * Section-level "select all" — shows/hides every checklist item in a
+ * category at once. Checked = all shown; indeterminate when only some are.
+ */
+function SectionSelectAll({ leadId, rows }) {
+    const ref = useRef(null);
+    // Optimistic override for instant feedback (true = all shown).
+    const [optimistic, setOptimistic] = useState(null);
+    const shownCount = rows.filter((r) => ! r.hidden).length;
+    const allShown = optimistic ?? (rows.length > 0 && shownCount === rows.length);
+    const someShown = optimistic == null && shownCount > 0 && shownCount < rows.length;
+
+    useEffect(() => {
+        if (ref.current) ref.current.indeterminate = someShown;
+    }, [someShown]);
+
+    const onChange = (e) => {
+        const nextShown = e.target.checked;
+        setOptimistic(nextShown);
+        router.post(
+            `/admin/leads/${leadId}/documents/track-visibility`,
+            { checklist_keys: rows.map((r) => r.key), hidden: ! nextShown },
+            {
+                preserveScroll: true,
+                preserveState: true,
+                only: ["checklist"],
+                onSuccess: () => toast.success(nextShown ? "Section shown on tracker" : "Section hidden from tracker"),
+                onError: () => { setOptimistic(null); toast.error("Could not update visibility"); },
+                onFinish: () => setOptimistic(null),
+            },
+        );
+    };
+
+    return (
+        <input
+            ref={ref}
+            type="checkbox"
+            checked={allShown}
+            onChange={onChange}
+            title="Show/hide every item in this section on the applicant's tracker"
+            className="rounded border-gray-400 text-emerald-600 focus:ring-0 w-3.5 h-3.5 flex-shrink-0 cursor-pointer"
+        />
     );
 }
 

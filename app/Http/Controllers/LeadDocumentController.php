@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
 /**
@@ -603,6 +604,128 @@ class LeadDocumentController extends Controller
         }
 
         return Storage::disk($disk)->download($doc->file_path, $doc->original_name);
+    }
+
+    /**
+     * Bundle every document on a lead into a single ZIP and stream it.
+     * Staff-only (this route lives in the staff group); a lead may only
+     * pull their own. Files live on either the private ('local') or
+     * 'public' disk, so each is resolved the same way download() does.
+     */
+    public function downloadAll(Request $request, $leadId)
+    {
+        $lead = Lead::findOrFail($leadId);
+        $user = Auth::user();
+
+        if ($user->isLead()) {
+            abort_unless($user->lead_id === $lead->id, 403);
+        }
+
+        if (! class_exists(\ZipArchive::class)) {
+            return back()->withErrors(['error' => 'ZIP support is not available on the server.']);
+        }
+
+        $docs = $lead->documents()->orderBy('created_at')->get();
+        if ($docs->isEmpty()) {
+            return back()->withErrors(['error' => 'This case has no documents to download.']);
+        }
+
+        $tmp = tempnam(sys_get_temp_dir(), 'leaddocs_');
+        $zip = new \ZipArchive;
+        if ($zip->open($tmp, \ZipArchive::CREATE | \ZipArchive::OVERWRITE) !== true) {
+            @unlink($tmp);
+
+            return back()->withErrors(['error' => 'Could not create the ZIP archive.']);
+        }
+
+        $used = [];
+        $added = 0;
+        foreach ($docs as $doc) {
+            $disk = Storage::disk(self::DISK)->exists($doc->file_path)
+                ? self::DISK
+                : (Storage::disk('public')->exists($doc->file_path) ? 'public' : null);
+            if (! $disk) {
+                continue;
+            }
+
+            $name = $this->uniqueZipEntry($used, $doc->original_name ?: basename($doc->file_path));
+            $used[strtolower($name)] = true;
+
+            $zip->addFile(Storage::disk($disk)->path($doc->file_path), $name);
+            $added++;
+        }
+        $zip->close();
+
+        if ($added === 0) {
+            @unlink($tmp);
+
+            return back()->withErrors(['error' => 'No downloadable files were found for this case.']);
+        }
+
+        $slug = Str::slug(trim("{$lead->first_name} {$lead->last_name}")) ?: ('case-'.$lead->id);
+
+        return response()->download($tmp, "{$slug}-documents.zip", [
+            'Content-Type' => 'application/zip',
+        ])->deleteFileAfterSend(true);
+    }
+
+    /**
+     * Toggle whether a checklist item is hidden from the applicant's public
+     * tracking link. Staff-only; stored per-case on
+     * leads.hidden_track_documents.
+     */
+    public function toggleTrackVisibility(Request $request, $leadId)
+    {
+        $lead = Lead::findOrFail($leadId);
+
+        // Accepts one or many keys so a single row checkbox and a
+        // section-level "select all" both hit the same endpoint.
+        $data = $request->validate([
+            'checklist_keys' => 'required|array|min:1',
+            'checklist_keys.*' => 'string|max:80',
+            'hidden' => 'required|boolean',
+        ]);
+
+        $hidden = array_values(array_unique(array_filter(
+            is_array($lead->hidden_track_documents) ? $lead->hidden_track_documents : []
+        )));
+
+        foreach ($data['checklist_keys'] as $key) {
+            if ($data['hidden']) {
+                if (! in_array($key, $hidden, true)) {
+                    $hidden[] = $key;
+                }
+            } else {
+                $hidden = array_filter($hidden, fn ($k) => $k !== $key);
+            }
+        }
+
+        $lead->hidden_track_documents = array_values($hidden);
+        $lead->save();
+
+        return back()->with('success', $data['hidden'] ? 'Hidden from the tracker.' : 'Shown on the tracker.');
+    }
+
+    /**
+     * Return a ZIP entry name that doesn't collide with one already added,
+     * appending " (2)", " (3)", … before the extension when needed.
+     */
+    private function uniqueZipEntry(array $used, string $name): string
+    {
+        if (! isset($used[strtolower($name)])) {
+            return $name;
+        }
+
+        $ext = pathinfo($name, PATHINFO_EXTENSION);
+        $base = $ext !== '' ? substr($name, 0, -(strlen($ext) + 1)) : $name;
+
+        $i = 2;
+        do {
+            $candidate = $ext !== '' ? "{$base} ({$i}).{$ext}" : "{$base} ({$i})";
+            $i++;
+        } while (isset($used[strtolower($candidate)]));
+
+        return $candidate;
     }
 
     // ── Helpers ─────────────────────────────────────────────────────────────

@@ -192,6 +192,54 @@ class SalesController extends Controller
         ]);
     }
 
+    /**
+     * GET /portal/sales/events/{id}/registrants — full-page equivalent of
+     * the JSON drawer above. Same data plus per-registrant notes and the
+     * pipeline stage picker, rendered as its own screen so staff can
+     * bookmark / share the URL rather than losing state on a modal
+     * close.
+     */
+    public function eventRegistrantsPage($id)
+    {
+        $event = Event::findOrFail($id);
+
+        $registrations = $event->leads()
+            ->with('eventNotesEditor:id,name')
+            ->latest()
+            ->get()
+            ->map(fn (Lead $l) => [
+                'id'                      => $l->id,
+                'lead_id'                 => $l->lead_id,
+                'first_name'              => $l->first_name,
+                'last_name'               => $l->last_name,
+                'name'                    => trim("{$l->first_name} {$l->last_name}") ?: 'Unnamed lead',
+                'email'                   => $l->email,
+                'phone'                   => $l->phone,
+                'stage'                   => $l->stage,
+                'status'                  => $l->status,
+                'created_at'              => optional($l->created_at)->toIso8601String(),
+                'event_notes'             => $l->event_notes,
+                'event_notes_updated_at'  => optional($l->event_notes_updated_at)->toIso8601String(),
+                'event_notes_editor'      => $l->eventNotesEditor
+                    ? ['id' => $l->eventNotesEditor->id, 'name' => $l->eventNotesEditor->name]
+                    : null,
+            ]);
+
+        return inertia('portal/sales/EventRegistrants', [
+            'event' => [
+                'id'         => $event->id,
+                'name'       => $event->name,
+                'event_code' => $event->event_code,
+                'type'       => $event->type,
+                'date_from'  => optional($event->date_from)->toIso8601String(),
+                'location'   => $event->location,
+                'mode'       => $event->mode,
+            ],
+            'registrations' => $registrations,
+            'statuses'      => \App\Models\Lead::STAGES,
+        ]);
+    }
+
     /** Programs catalogue for the sales portal — same shared Program model
      *  + ProgramController CRUD that education uses. */
     public function programs()

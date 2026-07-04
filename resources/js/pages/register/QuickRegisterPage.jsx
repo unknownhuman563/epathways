@@ -54,6 +54,20 @@ export default function QuickRegisterPage() {
             alert('Please attach your CV — it is required so we can prepare your proposal.');
             return;
         }
+        // Guard against oversized uploads so the visitor gets a clear message
+        // instead of a raw "413 Content Too Large" from the server.
+        const allFiles = [...(data.cv_files || []), ...(data.passport_files || []), ...(data.diploma_files || []), ...(data.transcript_files || [])];
+        const MB = 1024 * 1024;
+        const tooBig = allFiles.find((f) => f.size > 10 * MB);
+        if (tooBig) {
+            alert(`"${tooBig.name}" is larger than 10MB. Please upload a smaller file (max 10MB each).`);
+            return;
+        }
+        const total = allFiles.reduce((sum, f) => sum + (f.size || 0), 0);
+        if (total > 200 * MB) {
+            alert('Your documents total more than 200MB. Please remove some files or upload smaller versions, then try again.');
+            return;
+        }
         post('/register', { forceFormData: true });
     };
 

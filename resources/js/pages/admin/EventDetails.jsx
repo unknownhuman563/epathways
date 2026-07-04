@@ -1,9 +1,44 @@
 import React, { useState } from 'react';
 import { Head, Link } from '@inertiajs/react';
-import { 
-    ArrowLeft, Calendar, MapPin, Users, Globe, 
-    FileText, Download, Edit, Search, CheckCircle2, XCircle, Tag, Clock
+import {
+    ArrowLeft, Calendar, MapPin, Users, Globe,
+    FileText, Download, Edit, Search, CheckCircle2, XCircle, Tag, Clock,
+    StickyNote, Eye,
 } from 'lucide-react';
+
+// Small "Last edited by X, N ago" line for the Notes column. Falls back
+// to a gentle "No notes" placeholder so empty rows still read as a
+// deliberate state rather than a broken table cell.
+function NotesCell({ lead }) {
+    const body = lead.event_notes;
+    const updatedAt = lead.event_notes_updated_at;
+    const editor = lead.event_notes_editor;
+
+    if (! body) {
+        return <span className="text-xs text-gray-400 italic">No notes yet</span>;
+    }
+
+    const fmt = (iso) => {
+        if (! iso) return null;
+        const d = new Date(iso);
+        return d.toLocaleDateString('en-NZ', { day: '2-digit', month: 'short', year: 'numeric' })
+            + ' · ' + d.toLocaleTimeString('en-NZ', { hour: '2-digit', minute: '2-digit' });
+    };
+
+    return (
+        <div className="min-w-0">
+            <p className="text-xs text-gray-800 line-clamp-2 leading-relaxed" title={body}>
+                {body}
+            </p>
+            {updatedAt && (
+                <p className="text-[10px] text-gray-400 mt-1">
+                    Updated {fmt(updatedAt)}
+                    {editor?.name && <span className="text-gray-500"> by {editor.name}</span>}
+                </p>
+            )}
+        </div>
+    );
+}
 
 export default function EventDetails({ event, leads }) {
     const [searchTerm, setSearchTerm] = useState('');
@@ -158,6 +193,7 @@ export default function EventDetails({ event, leads }) {
                                 <th className="px-6 py-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">Name & Contact</th>
                                 <th className="px-6 py-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">Interest / Study Plan</th>
                                 <th className="px-6 py-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">Status</th>
+                                <th className="px-6 py-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">Notes</th>
                                 <th className="px-6 py-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">Date Registered</th>
                                 <th className="px-6 py-4 text-xs font-semibold text-gray-600 uppercase tracking-wider text-right">Actions</th>
                             </tr>
@@ -165,7 +201,7 @@ export default function EventDetails({ event, leads }) {
                         <tbody className="divide-y divide-gray-50">
                             {filteredLeads.length === 0 ? (
                                 <tr>
-                                    <td colSpan={5} className="px-6 py-12 text-center text-gray-500">
+                                    <td colSpan={6} className="px-6 py-12 text-center text-gray-500">
                                         <Users className="w-10 h-10 mx-auto mb-3 text-gray-200" />
                                         <p className="font-semibold text-gray-600 mb-1">No registrants found</p>
                                         <p className="text-sm">No one has registered for this event yet.</p>
@@ -197,13 +233,28 @@ export default function EventDetails({ event, leads }) {
                                                 {lead.status || 'New'}
                                             </span>
                                         </td>
+                                        <td className="px-6 py-4 max-w-[260px]">
+                                            <NotesCell lead={lead} />
+                                        </td>
                                         <td className="px-6 py-4">
                                             <span className="text-sm text-gray-700">{formatDate(lead.created_at)}</span>
                                         </td>
                                         <td className="px-6 py-4 text-right">
-                                            <Link href={`/admin/leads/${lead.id}`} className="text-sm font-semibold text-indigo-600 hover:text-indigo-800 hover:underline">
-                                                View Lead
-                                            </Link>
+                                            <div className="flex items-center justify-end gap-3">
+                                                <Link
+                                                    href={`/admin/events/${event.id}/registrants/${lead.id}`}
+                                                    className="inline-flex items-center gap-1 text-sm font-semibold text-gray-700 hover:text-gray-900 hover:underline"
+                                                    title="Open the registration form the lead filled + notes"
+                                                >
+                                                    <Eye size={13} /> View Registration
+                                                </Link>
+                                                <Link
+                                                    href={`/admin/leads/${lead.id}`}
+                                                    className="text-sm font-semibold text-indigo-600 hover:text-indigo-800 hover:underline"
+                                                >
+                                                    View Lead
+                                                </Link>
+                                            </div>
                                         </td>
                                     </tr>
                                 ))
