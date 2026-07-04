@@ -88,6 +88,11 @@ export default function ImmigrationCases({ cases = [], distribution = [], priori
     const sorted = useMemo(() => {
         const arr = [...filtered];
         arr.sort((a, b) => {
+            // Priority always leads: urgent → medium → low → no-priority,
+            // regardless of the active column sort.
+            const pr = priorityRank(a.immigration_priority) - priorityRank(b.immigration_priority);
+            if (pr !== 0) return pr;
+
             const pull = (row) => {
                 if (sortKey === 'name') return (row.name || '').toLowerCase();
                 if (sortKey === 'stage') return row.immigration_stage || 'zzzz';
@@ -176,7 +181,7 @@ export default function ImmigrationCases({ cases = [], distribution = [], priori
                 <div className="overflow-x-auto overflow-y-visible">
                     <table className="w-full text-left text-xs">
                         <thead>
-                            <tr className="bg-gray-50/60 border-b border-gray-200 text-[10px] font-bold text-gray-500 uppercase tracking-wider">
+                            <tr className="bg-gray-50/60 border-b border-gray-200 text-[11px] font-bold text-gray-500 uppercase tracking-wider">
                                 <th className="pl-4 pr-2 py-3 w-6" />
                                 <SortableTh label="Case"        sortKey="name"      current={sortKey} dir={sortDir} onSort={toggleSort} />
                                 <SortableTh label="Stage"       sortKey="stage"     current={sortKey} dir={sortDir} onSort={toggleSort} />
@@ -767,17 +772,17 @@ function CaseRow({ c, stages, visaTypes = [], isExpanded, onExpand, stageMenuOpe
                         className="flex items-center gap-2.5 min-w-[200px] group/case"
                     >
                         <div
-                            className={`w-7 h-7 rounded-full flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0 ${priorityColor(c.immigration_priority)}`}
+                            className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-[11px] font-bold flex-shrink-0 ${priorityColor(c.immigration_priority)}`}
                             title={c.immigration_priority ? `Priority: ${c.immigration_priority}` : 'No priority set'}
                         >
                             {initials(c.name)}
                         </div>
                         <div className="min-w-0">
-                            <div className="font-semibold text-gray-900 text-xs truncate group-hover/case:text-amber-700 transition-colors">
+                            <div className="font-semibold text-gray-900 text-sm truncate group-hover/case:text-amber-700 transition-colors">
                                 {c.name}
                             </div>
                             {c.lead_id && (
-                                <div className="text-[10px] text-gray-400 font-mono truncate">{c.lead_id}</div>
+                                <div className="text-[11px] text-gray-400 font-mono truncate">{c.lead_id}</div>
                             )}
                         </div>
                         {needsAttention && (
@@ -809,14 +814,14 @@ function CaseRow({ c, stages, visaTypes = [], isExpanded, onExpand, stageMenuOpe
                 {/* Country */}
                 <td className="px-3 py-2.5">
                     {c.country
-                        ? <span className="text-gray-700">{c.country}</span>
+                        ? <span className="text-sm text-gray-700">{c.country}</span>
                         : <span className="text-gray-300">—</span>}
                 </td>
 
                 {/* Lodged */}
                 <td className="px-3 py-2.5 whitespace-nowrap">
                     {c.inz_lodged_at
-                        ? <span className="text-gray-600">{fmtDate(c.inz_lodged_at)}</span>
+                        ? <span className="text-sm text-gray-600">{fmtDate(c.inz_lodged_at)}</span>
                         : <span className="text-gray-300">—</span>}
                 </td>
 
@@ -827,7 +832,7 @@ function CaseRow({ c, stages, visaTypes = [], isExpanded, onExpand, stageMenuOpe
                             <div className="h-1.5 flex-1 rounded-full bg-gray-100 overflow-hidden">
                                 <div className={`h-full rounded-full ${barColor}`} style={{ width: `${pct}%` }} />
                             </div>
-                            <span className="text-[10px] font-semibold tabular-nums whitespace-nowrap text-emerald-600"
+                            <span className="text-xs font-semibold tabular-nums whitespace-nowrap text-emerald-600"
                                 title={`${chkDone} of ${chkTotal} checklist items submitted`}>
                                 {pct}%
                             </span>
@@ -841,11 +846,11 @@ function CaseRow({ c, stages, visaTypes = [], isExpanded, onExpand, stageMenuOpe
                 <td className="px-3 py-2.5 whitespace-nowrap">
                     {(c.stage_updated_at || c.updated_at) ? (
                         <div className="flex flex-col">
-                            <span className="text-[11px] text-gray-700 tabular-nums">
+                            <span className="text-xs text-gray-700 tabular-nums">
                                 {fmtDateTime(c.stage_updated_at || c.updated_at)}
                             </span>
                             {c.updated_by && (
-                                <span className="text-[10px] text-gray-400 truncate max-w-[140px]">
+                                <span className="text-[11px] text-gray-400 truncate max-w-[180px]">
                                     by {c.updated_by}
                                 </span>
                             )}
@@ -1055,7 +1060,7 @@ function StagePicker({ caseId, stages, value, fallback, open, onToggle, onClose 
                 type="button"
                 disabled={saving}
                 onClick={onToggle}
-                className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-bold border whitespace-nowrap uppercase hover:shadow-sm transition-all disabled:opacity-60 ${chipClass}`}
+                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold border whitespace-nowrap uppercase hover:shadow-sm transition-all disabled:opacity-60 ${chipClass}`}
             >
                 <span className="truncate max-w-[180px]">{label}</span>
                 <ChevronDown size={10} strokeWidth={2.5} className="opacity-60 flex-shrink-0" />
@@ -1175,7 +1180,7 @@ function VisaPicker({ caseId, visaTypes = [], value }) {
                 type="button"
                 disabled={saving}
                 onClick={(e) => { e.stopPropagation(); setOpen((o) => ! o); }}
-                className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[11px] font-medium border whitespace-nowrap hover:shadow-sm transition-all disabled:opacity-60 ${
+                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium border whitespace-nowrap hover:shadow-sm transition-all disabled:opacity-60 ${
                     hasValue ? 'bg-white text-gray-700 border-gray-200' : 'bg-gray-100 text-gray-400 border-gray-200 border-dashed'
                 }`}
             >
@@ -1279,6 +1284,17 @@ function priorityColor(priority) {
         case 'medium': return 'bg-orange-500';
         case 'low':    return 'bg-emerald-500';
         default:       return 'bg-gray-400';
+    }
+}
+
+// Sort weight so urgent floats to the top, then medium, then low, then
+// cases with no priority set.
+function priorityRank(priority) {
+    switch (priority) {
+        case 'urgent': return 0;
+        case 'medium': return 1;
+        case 'low':    return 2;
+        default:       return 3;
     }
 }
 

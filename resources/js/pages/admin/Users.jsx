@@ -3,7 +3,8 @@ import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
 import {
     Search, Plus, Edit2, Trash2, ChevronDown, ChevronLeft, ChevronRight,
     Users as UsersIcon, ShieldCheck, Briefcase, X, AlertCircle, AlertTriangle, Mail,
-    Building2, UserPlus, GraduationCap, FileSignature, ArrowRight,
+    Building2, UserPlus, GraduationCap, FileSignature, ArrowRight, Camera,
+    Lock, Eye, EyeOff,
 } from 'lucide-react';
 
 const ROLE_STYLES = {
@@ -43,10 +44,19 @@ function Input(props) {
     );
 }
 
-const blankUser = () => ({ name: '', email: '', role: '', password: '' });
+const blankUser = () => ({ name: '', email: '', role: '', password: '', avatar: null });
 
 function UserModal({ open, onClose, editing, roles }) {
     const isEdit = !!editing;
+    const [preview, setPreview] = useState(null);
+    const [showPassword, setShowPassword] = useState(false);
+
+    // Only a super admin may assign the Super Admin role. Admins don't see it —
+    // unless they're editing someone who already has it (so it isn't silently
+    // stripped). Enforced again server-side.
+    const currentUser = usePage().props?.auth?.user;
+    const canAssignSuper = currentUser?.role === 'super_admin';
+    const roleOptions = roles.filter(r => r !== 'super_admin' || canAssignSuper || editing?.role === 'super_admin');
 
     const buildInitial = () => {
         if (!editing) return { ...blankUser(), role: roles[0] || '' };
@@ -55,6 +65,7 @@ function UserModal({ open, onClose, editing, roles }) {
             email: editing.email ?? '',
             role: editing.role ?? (roles[0] || ''),
             password: '',
+            avatar: null,
         };
     };
 
@@ -64,18 +75,29 @@ function UserModal({ open, onClose, editing, roles }) {
         if (open) {
             setData(buildInitial());
             clearErrors();
+            setPreview(null);
+            setShowPassword(false);
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [open, editing?.id]);
 
     const setField = (key, val) => setData(key, val);
 
+    const onPickAvatar = (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        setData('avatar', file);
+        setPreview(URL.createObjectURL(file));
+    };
+
     const submit = () => {
         const url = isEdit ? '/admin/users/' + editing.id : '/admin/users';
         post(url, {
+            forceFormData: true,
             preserveScroll: true,
             onSuccess: () => {
                 reset();
+                setPreview(null);
                 onClose();
             },
         });
@@ -106,6 +128,29 @@ function UserModal({ open, onClose, editing, roles }) {
                 <div className="flex-1 overflow-y-auto px-6 py-5">
                     <div className="space-y-4">
                         <div>
+                            <Label>Profile picture</Label>
+                            <div className="flex items-center gap-4">
+                                <div className="w-16 h-16 rounded-full overflow-hidden bg-gray-100 border border-gray-200 flex items-center justify-center text-gray-400 flex-shrink-0">
+                                    {(preview || editing?.avatar_url) ? (
+                                        <img src={preview || editing.avatar_url} alt="" className="w-full h-full object-cover" />
+                                    ) : (
+                                        <span className="text-lg font-bold">{(data.name || '?').trim().charAt(0).toUpperCase()}</span>
+                                    )}
+                                </div>
+                                <div>
+                                    <input id="user-avatar-input" type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={onPickAvatar} />
+                                    <label
+                                        htmlFor="user-avatar-input"
+                                        className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-gray-200 text-xs font-semibold text-gray-700 hover:bg-gray-50 cursor-pointer transition-colors"
+                                    >
+                                        <Camera size={14} /> {(preview || editing?.avatar_url) ? 'Change photo' : 'Upload photo'}
+                                    </label>
+                                    <p className="text-[11px] text-gray-400 mt-1.5">JPG, PNG or WEBP.</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div>
                             <Label required>Name</Label>
                             <Input value={data.name} onChange={e => setField('name', e.target.value)} placeholder="Jane Doe" />
                         </div>
@@ -122,7 +167,7 @@ function UserModal({ open, onClose, editing, roles }) {
                                 onChange={e => setField('role', e.target.value)}
                                 className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-gray-900 transition-all"
                             >
-                                {roles.map(r => (
+                                {roleOptions.map(r => (
                                     <option key={r} value={r}>{roleLabel(r)}{r === 'super_admin' ? ' — full access + super dashboard' : r === 'admin' ? ' — full admin access' : ' portal'}</option>
                                 ))}
                             </select>
@@ -133,13 +178,26 @@ function UserModal({ open, onClose, editing, roles }) {
 
                         <div>
                             <Label required={!isEdit}>Password</Label>
-                            <Input
-                                type="password"
-                                value={data.password}
-                                onChange={e => setField('password', e.target.value)}
-                                placeholder={isEdit ? 'Leave blank to keep current' : 'At least 8 characters'}
-                                autoComplete="new-password"
-                            />
+                            <div className="relative">
+                                <Lock size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                                <input
+                                    type={showPassword ? 'text' : 'password'}
+                                    value={data.password}
+                                    onChange={e => setField('password', e.target.value)}
+                                    placeholder={isEdit ? 'Leave blank to keep current' : 'At least 8 characters'}
+                                    autoComplete="new-password"
+                                    className="w-full pl-9 pr-10 py-2.5 border border-gray-200 rounded-xl text-sm bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-gray-900 transition-all placeholder-gray-400"
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => setShowPassword(v => !v)}
+                                    className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-700 rounded-md"
+                                    tabIndex={-1}
+                                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                                >
+                                    {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
