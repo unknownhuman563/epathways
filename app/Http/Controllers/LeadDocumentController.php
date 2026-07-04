@@ -523,6 +523,13 @@ class LeadDocumentController extends Controller
                 ? collect([$lead->assignee])
                 : \App\Models\User::whereIn('role', [\App\Models\User::ROLE_ADMIN, \App\Models\User::ROLE_SUPER_ADMIN])->get();
 
+            // Immigration cases always loop in the immigration team so the
+            // department hears about document activity on their own cases.
+            if ($lead->is_immigration_case) {
+                $immigration = \App\Models\User::whereIn('role', array_merge(['immigration'], \App\Models\User::IMMIGRATION_ROLES))->get();
+                $recipients = $recipients->merge($immigration)->unique('id')->values();
+            }
+
             if ($recipients->isNotEmpty()) {
                 \Illuminate\Support\Facades\Notification::send(
                     $recipients,

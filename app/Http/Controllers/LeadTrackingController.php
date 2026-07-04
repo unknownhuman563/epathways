@@ -378,9 +378,19 @@ class LeadTrackingController extends Controller
      */
     private function staffRecipients(Lead $lead): \Illuminate\Support\Collection
     {
-        return $lead->assignee
+        $recipients = $lead->assignee
             ? collect([$lead->assignee])
             : User::whereIn('role', [User::ROLE_ADMIN, User::ROLE_SUPER_ADMIN])->get();
+
+        // Immigration cases always loop in the immigration team — even for
+        // public tracker uploads — so the department hears about activity on
+        // their own cases regardless of who (if anyone) is assigned.
+        if ($lead->is_immigration_case) {
+            $immigration = User::whereIn('role', array_merge(['immigration'], User::IMMIGRATION_ROLES))->get();
+            $recipients = $recipients->merge($immigration)->unique('id')->values();
+        }
+
+        return $recipients;
     }
 
     private function resolveLead(string $code): ?Lead

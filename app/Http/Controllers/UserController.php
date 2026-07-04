@@ -25,7 +25,7 @@ class UserController extends Controller
         // staff directory.
         $users = User::whereNotIn('role', ['lead', 'revoked_lead'])
             ->orderBy('name')
-            ->get(['id', 'name', 'email', 'role', 'created_at']);
+            ->get(['id', 'name', 'email', 'role', 'avatar_path', 'created_at']);
 
         // Cross-link rolls for the User Management tabs. Each list is a
         // thin name + email + stage projection that the frontend renders
@@ -50,11 +50,11 @@ class UserController extends Controller
             ->get(array_merge($leadCols, ['immigration_stage', 'inz_visa_type', 'immigration_converted_at']));
 
         return inertia('admin/Users', [
-            'users'    => $users,
-            'roles'    => $this->roleValues(),
-            'leads'    => $leads,
+            'users' => $users,
+            'roles' => $this->roleValues(),
+            'leads' => $leads,
             'students' => $students,
-            'cases'    => $cases,
+            'cases' => $cases,
         ]);
     }
 
@@ -65,10 +65,20 @@ class UserController extends Controller
             'email' => 'required|email|max:255|unique:users,email',
             'role' => ['required', Rule::in($this->roleValues())],
             'password' => ['required', \Illuminate\Validation\Rules\Password::defaults()],
+            'avatar' => ['nullable', UploadValidation::image()],
         ]);
 
+        // Only a super admin may create another super admin.
+        if ($validated['role'] === User::ROLE_SUPER_ADMIN && optional($request->user())->role !== User::ROLE_SUPER_ADMIN) {
+            return back()->withErrors(['role' => 'Only a super admin can assign the Super Admin role.']);
+        }
+
         // The 'password' => 'hashed' cast on the model hashes this on save.
-        $user = User::create($validated);
+        $user = User::create(collect($validated)->except('avatar')->all());
+
+        if ($request->hasFile('avatar')) {
+            $this->saveAvatar($user, $request->file('avatar'));
+        }
 
         ActivityLog::record('user.created', [
             'description' => "Created user {$user->name} ({$user->email}) — {$user->role}",
@@ -87,12 +97,21 @@ class UserController extends Controller
             'email' => ['required', 'email', 'max:255', Rule::unique('users', 'email')->ignore($user->id)],
             'role' => ['required', Rule::in($this->roleValues())],
             'password' => ['nullable', \Illuminate\Validation\Rules\Password::defaults()],
+            'avatar' => ['nullable', UploadValidation::image()],
         ]);
 
         // Don't let anyone change their own role — avoids locking yourself out
         // (e.g. a super-admin demoting themselves and losing the super surface).
         if ($user->is($request->user()) && $validated['role'] !== $user->role) {
             return back()->withErrors(['role' => 'You cannot change your own role.']);
+        }
+
+        // Only a super admin may grant the Super Admin role (unless the target
+        // already has it, so admins can still edit their other fields).
+        if ($validated['role'] === User::ROLE_SUPER_ADMIN
+            && $user->role !== User::ROLE_SUPER_ADMIN
+            && optional($request->user())->role !== User::ROLE_SUPER_ADMIN) {
+            return back()->withErrors(['role' => 'Only a super admin can assign the Super Admin role.']);
         }
 
         $user->name = $validated['name'];
@@ -104,6 +123,10 @@ class UserController extends Controller
         }
         $changed = array_keys($user->getDirty());
         $user->save();
+
+        if ($request->hasFile('avatar')) {
+            $this->saveAvatar($user, $request->file('avatar'));
+        }
 
         ActivityLog::record('user.updated', [
             'description' => "Updated user {$user->name} ({$user->email})".($passwordChanged ? ' — password reset' : ''),
@@ -136,17 +159,40 @@ class UserController extends Controller
     // ─── Profile avatar ───────────────────────────────────────────────────
 
     /**
+     * Store an uploaded avatar for the given user — downscaled to 256×256 and
+     * saved on the public disk at avatars/{id}.{ext}; replaces any previous
+     * file. Shared by the admin create/edit-user flow and self-service upload.
+     */
+    private function saveAvatar(User $user, $file): void
+    {
+        $ext = match (strtolower((string) ($file->extension() ?: 'jpg'))) {
+            'png' => 'png',
+            'webp' => 'webp',
+            default => 'jpg',
+        };
+        $path = "avatars/{$user->id}.{$ext}";
+
+        Storage::disk('public')->put($path, $this->downscaleAvatar($file, $ext));
+
+        if ($user->avatar_path && $user->avatar_path !== $path) {
+            Storage::disk('public')->delete($user->avatar_path);
+        }
+
+        $user->forceFill(['avatar_path' => $path])->save();
+    }
+
+    /**
      * Upload (or replace) the current user's avatar. Image is downscaled to
      * fit 256×256 and stored on the public disk at avatars/{id}.{ext}.
      */
     public function uploadAvatar(Request $request)
     {
-        $request->validate(['avatar' => 'required|' . UploadValidation::image()]);
+        $request->validate(['avatar' => 'required|'.UploadValidation::image()]);
 
         $user = $request->user();
         $file = $request->file('avatar');
         $ext = match (strtolower((string) ($file->extension() ?: 'jpg'))) {
-            'png'  => 'png',
+            'png' => 'png',
             'webp' => 'webp',
             default => 'jpg',
         };
@@ -197,9 +243,9 @@ class UserController extends Controller
 
         $mime = $info['mime'] ?? '';
         $image = match (true) {
-            str_contains($mime, 'png')  => @imagecreatefrompng($src),
+            str_contains($mime, 'png') => @imagecreatefrompng($src),
             str_contains($mime, 'webp') => @imagecreatefromwebp($src),
-            default                     => @imagecreatefromjpeg($src),
+            default => @imagecreatefromjpeg($src),
         };
         if (! $image) {
             return (string) file_get_contents($src);
@@ -214,7 +260,7 @@ class UserController extends Controller
 
         ob_start();
         match ($ext) {
-            'png'  => imagepng($canvas),
+            'png' => imagepng($canvas),
             'webp' => imagewebp($canvas),
             default => imagejpeg($canvas, null, 85),
         };
