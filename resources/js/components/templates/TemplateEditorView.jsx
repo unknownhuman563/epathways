@@ -20,14 +20,16 @@ export default function TemplateEditorView({
     basePath = "/admin/message-templates",
     departmentOptions = null,
     fixedDepartment = null,
+    defaultChannel = null,
 }) {
     const editing = !!template;
+    const initialChannels = template?.channels ?? (defaultChannel ? [defaultChannel] : ["email"]);
     const form = useForm({
         key: template?.key ?? "",
         department: template?.department ?? fixedDepartment ?? "",
         name: template?.name ?? "",
         description: template?.description ?? "",
-        channels: template?.channels ?? ["email"],
+        channels: initialChannels,
         email_subject: template?.email_subject ?? "",
         from_email: template?.from_email ?? "",
         from_name: template?.from_name ?? "",
@@ -119,7 +121,7 @@ export default function TemplateEditorView({
 
     return (
         <div className="space-y-6 max-w-4xl mx-auto">
-            <Head title={editing ? `Edit ${template.name}` : "New template"} />
+            <Head title={editing ? `Edit ${template.name}` : (defaultChannel === "sms" ? "New SMS Template" : "New Template")} />
 
             <Link href={basePath} className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800">
                 <ArrowLeft size={15} /> Back to templates

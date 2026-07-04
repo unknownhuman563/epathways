@@ -245,6 +245,15 @@ class CommunicationService
 
     private function sendEmail(Lead $lead, string $subject, string $body, ?string $key, array $attachments = [], ?int $campaignId = null, ?string $bannerImage = null, ?string $footerImage = null, ?string $fromEmail = null, ?string $fromName = null): MessageLog
     {
+        if (empty($lead->email)) {
+            return $this->log([
+                'template_key' => $key, 'campaign_id' => $campaignId, 'channel' => MessageLog::CHANNEL_EMAIL,
+                'recipient_id' => $lead->id, 'recipient_address' => '',
+                'subject' => $subject, 'body' => $body, 'status' => MessageLog::STATUS_FAILED,
+                'error_message' => 'Lead has no email address.', 'failed_at' => now(),
+            ]);
+        }
+
         // Log first (status 'queued'), then queue the mail carrying this log's
         // id. The MessageSent listener flips it to 'sent' once the worker
         // actually delivers it to the mail server.
@@ -302,6 +311,15 @@ class CommunicationService
     {
         $staff = $lead->assignee;
 
+        $eventCtx = [];
+        if (! empty($lead->event_id)) {
+            $event = \App\Models\Event::find($lead->event_id);
+            if ($event) {
+                $session = $lead->event_session_id ? \App\Models\EventSession::find($lead->event_session_id) : null;
+                $eventCtx = app(\App\Services\EventEmailSender::class)->context($event, $session);
+            }
+        }
+
         return array_merge([
             'first_name' => $lead->first_name ?? '',
             'last_name' => $lead->last_name ?? '',
@@ -312,7 +330,7 @@ class CommunicationService
             'tracker_url' => rtrim((string) config('app.url'), '/').'/track/'.$lead->tracking_code,
             'client_portal_url' => $this->clientPortalUrl($lead),
             'assigned_staff_name' => $staff?->name ?? 'the ePathways team',
-        ], $extra);
+        ], $eventCtx, $extra);
     }
 
     /**
@@ -354,25 +372,33 @@ class CommunicationService
         }, $template) ?? $template;
     }
 
-    /** Normalize a freeform phone to E.164 (default region NZ), or null. */
-    private function normalizePhone(string $phone): ?string
+    /** Normalize a freeform phone to E.164 (default region NZ/PH fallback), or null. */
+    public function normalizePhone(string $phone): ?string
     {
         $phone = trim($phone);
         if ($phone === '') {
             return null;
         }
 
-        // Prefer libphonenumber when available; fall back to a basic NZ/E.164
+        // Prefer libphonenumber when available; fall back to a basic NZ/PH/E.164
         // normalizer so the service works even without the library.
         if (class_exists(\libphonenumber\PhoneNumberUtil::class)) {
             try {
                 $util = \libphonenumber\PhoneNumberUtil::getInstance();
+                
+                // First try NZ (default region)
                 $parsed = $util->parse($phone, 'NZ');
-                if (! $util->isValidNumber($parsed)) {
-                    return null;
+                if ($util->isValidNumber($parsed)) {
+                    return $util->format($parsed, \libphonenumber\PhoneNumberFormat::E164);
                 }
 
-                return $util->format($parsed, \libphonenumber\PhoneNumberFormat::E164);
+                // Fallback to PH (Philippines)
+                $parsed = $util->parse($phone, 'PH');
+                if ($util->isValidNumber($parsed)) {
+                    return $util->format($parsed, \libphonenumber\PhoneNumberFormat::E164);
+                }
+
+                return null;
             } catch (\Throwable $e) {
                 return null;
             }
@@ -384,8 +410,21 @@ class CommunicationService
     private function basicNormalize(string $phone): ?string
     {
         $digits = preg_replace('/[^\d+]/', '', $phone);
+        // Convert international 00 prefix to +
+        if (str_starts_with($digits, '00')) {
+            $digits = '+'.substr($digits, 2);
+        }
+
         if (str_starts_with($digits, '+') && strlen($digits) >= 8) {
             return $digits;
+        }
+        // Philippines mobile numbers without leading 0 (e.g. 9206922477) are 10 digits long starting with 9
+        if (str_starts_with($digits, '9') && strlen($digits) === 10) {
+            return '+63'.$digits;
+        }
+        // Philippines mobile numbers start with 09 and are 11 digits long
+        if (str_starts_with($digits, '09') && strlen($digits) === 11) {
+            return '+63'.ltrim($digits, '0');
         }
         if (str_starts_with($digits, '0')) {           // NZ national → +64
             return '+64'.ltrim($digits, '0');

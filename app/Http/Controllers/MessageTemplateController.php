@@ -68,6 +68,7 @@ class MessageTemplateController extends Controller
             'basePath' => $ctx['basePath'],
             'departmentOptions' => $ctx['departmentOptions'],
             'fixedDepartment' => $ctx['department'],
+            'defaultChannel' => $request->query('channel'),
         ]);
     }
 
@@ -95,6 +96,7 @@ class MessageTemplateController extends Controller
             'basePath' => $ctx['basePath'],
             'departmentOptions' => $ctx['departmentOptions'],
             'fixedDepartment' => $ctx['department'],
+            'defaultChannel' => null,
         ]);
     }
 

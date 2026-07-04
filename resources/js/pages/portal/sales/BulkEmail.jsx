@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { Head, router } from "@inertiajs/react";
 import { toast } from "sonner";
 import {
@@ -19,7 +19,7 @@ const STATUS_CHIP = {
 };
 
 // Mirror of the server-side {{var}} substitution, for the live preview only.
-function fillPreview(text, lead) {
+function fillPreview(text, lead, selectedEvent) {
     if (!text) return "";
     const name = lead?.name || "Alex Taylor";
     const [first, ...rest] = name.split(" ");
@@ -34,11 +34,17 @@ function fillPreview(text, lead) {
         status_detail: "",
         tracker_url: `${window.location.origin}/track/SAMPLE`,
         assigned_staff_name: "the ePathways team",
+        event_name: selectedEvent?.event_name || "Seminar: Studying in New Zealand",
+        event_date: selectedEvent?.event_date || "Friday, 10 July 2026",
+        event_time: selectedEvent?.event_time || "2:00 PM – 3:00 PM",
+        event_location: selectedEvent?.event_location || "Online (Zoom)",
+        document_name: "Passport",
+        reason: "The image was blurry and text was not readable.",
     };
     return text.replace(/\{\{\s*([a-z0-9_]+)\s*\}\}/gi, (_, k) => ctx[k.toLowerCase()] ?? "");
 }
 
-export default function SalesBulkEmail({ templates = [], recipients = [], campaigns = [], basePath = "/portal/sales/bulk-email", channel = "email" }) {
+export default function SalesBulkEmail({ templates = [], recipients = [], campaigns = [], basePath = "/portal/sales/bulk-email", channel = "email", events = [] }) {
     const [tab, setTab] = useState("compose");
     const isSms = channel === "sms";
 
@@ -57,8 +63,8 @@ export default function SalesBulkEmail({ templates = [], recipients = [], campai
                 </h1>
                 <p className="text-sm text-gray-500 mt-1">
                     {isSms
-                        ? "Send a personalised text to many leads — now or scheduled."
-                        : "Send a personalised email to many leads — now or scheduled."}
+                         ? "Send a personalised text to many leads — now or scheduled."
+                         : "Send a personalised email to many leads — now or scheduled."}
                 </p>
             </header>
 
@@ -78,22 +84,34 @@ export default function SalesBulkEmail({ templates = [], recipients = [], campai
                 ))}
             </div>
 
-            {tab === "compose" && <Compose templates={templates} recipients={recipients} basePath={basePath} isSms={isSms} />}
+            {tab === "compose" && <Compose templates={templates} recipients={recipients} basePath={basePath} isSms={isSms} events={events} />}
             {tab === "scheduled" && <CampaignTable rows={scheduled} empty="No scheduled campaigns." showCancel basePath={basePath} />}
             {tab === "history" && <CampaignTable rows={history} empty="No campaigns sent yet." basePath={basePath} />}
         </div>
     );
 }
 
-function Compose({ templates, recipients, basePath, isSms = false }) {
+function Compose({ templates, recipients, basePath, isSms = false, events = [] }) {
     const [name, setName] = useState("");
     const [templateId, setTemplateId] = useState(templates[0]?.id ? String(templates[0].id) : "");
     const [selected, setSelected] = useState(() => new Set());
     const [search, setSearch] = useState("");
     const [stage, setStage] = useState("");
+    const [eventId, setEventId] = useState("");
     const [action, setAction] = useState("send_now");
     const [scheduledAt, setScheduledAt] = useState("");
     const [sending, setSending] = useState(false);
+
+    useEffect(() => {
+        if (templates.length > 0) {
+            const exists = templates.some((t) => String(t.id) === String(templateId));
+            if (!exists) {
+                setTemplateId(String(templates[0].id));
+            }
+        } else {
+            setTemplateId("");
+        }
+    }, [templates, templateId]);
 
     const template = templates.find((t) => String(t.id) === String(templateId));
 
@@ -107,11 +125,12 @@ function Compose({ templates, recipients, basePath, isSms = false }) {
     const filtered = useMemo(() => {
         const q = search.trim().toLowerCase();
         return recipients.filter((r) => {
+            if (eventId && String(r.event_id) !== String(eventId)) return false;
             if (stage && (r.stage || r.status) !== stage) return false;
             if (q && !(`${r.name} ${contactOf(r)}`.toLowerCase().includes(q))) return false;
             return true;
         });
-    }, [recipients, search, stage, isSms]);
+    }, [recipients, search, stage, eventId, isSms]);
 
     const previewLead = recipients.find((r) => selected.has(r.id)) || filtered[0] || null;
 
@@ -184,14 +203,18 @@ function Compose({ templates, recipients, basePath, isSms = false }) {
                         <h3 className="text-sm font-bold text-gray-700 flex items-center gap-1.5"><Users size={15} /> Recipients</h3>
                         <span className="text-xs text-gray-500">{selected.size} selected · {filtered.length} shown</span>
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex flex-col gap-2 sm:flex-row">
                         <div className="relative flex-1">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
                             <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={isSms ? "Search name or phone" : "Search name or email"} className={`${inp} pl-8`} />
                         </div>
-                        <select value={stage} onChange={(e) => setStage(e.target.value)} className={`${inp} w-40`}>
+                        <select value={stage} onChange={(e) => setStage(e.target.value)} className={`${inp} sm:w-36`}>
                             <option value="">All stages</option>
                             {stages.map((s) => <option key={s} value={s}>{s}</option>)}
+                        </select>
+                        <select value={eventId} onChange={(e) => setEventId(e.target.value)} className={`${inp} sm:w-44`}>
+                            <option value="">All events</option>
+                            {events.map((ev) => <option key={ev.id} value={ev.id}>{ev.name}</option>)}
                         </select>
                     </div>
                     <div className="flex gap-2 text-xs">
@@ -218,35 +241,40 @@ function Compose({ templates, recipients, basePath, isSms = false }) {
             </div>
 
             {/* Right: live preview */}
-            <div className="space-y-3">
-                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden sticky top-4">
-                    <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
-                        <span className="text-xs font-bold uppercase tracking-wider text-gray-500">Live preview</span>
-                        <span className="text-[11px] text-gray-400">{previewLead ? `as ${previewLead.name}` : "sample lead"}</span>
-                    </div>
-                    {template ? (
-                        <div className="p-5 space-y-3">
-                            {!isSms && (
-                                <div>
-                                    <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Subject</span>
-                                    <p className="text-sm font-semibold text-gray-900">{fillPreview(template.subject, previewLead)}</p>
-                                </div>
-                            )}
-                            <div>
-                                <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">{isSms ? "Message" : "Body"}</span>
-                                <pre className="whitespace-pre-wrap font-sans text-sm text-gray-700 mt-1 leading-relaxed">{fillPreview(template.body, previewLead)}</pre>
+            {(() => {
+                const selectedEvent = events.find((e) => String(e.id) === String(eventId)) || null;
+                return (
+                    <div className="space-y-3">
+                        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden sticky top-4">
+                            <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
+                                <span className="text-xs font-bold uppercase tracking-wider text-gray-500">Live preview</span>
+                                <span className="text-[11px] text-gray-400">{previewLead ? `as ${previewLead.name}` : "sample lead"}</span>
                             </div>
-                            {isSms && (() => {
-                                const len = fillPreview(template.body, previewLead).length;
-                                const seg = Math.ceil(len / 160) || 0;
-                                return <p className={`text-xs ${seg > 1 ? "text-amber-600" : "text-gray-400"}`}>{len} chars · {seg} segment{seg === 1 ? "" : "s"} per recipient{seg > 1 ? " (multi-segment costs more)" : ""}</p>;
-                            })()}
+                            {template ? (
+                                <div className="p-5 space-y-3">
+                                    {!isSms && (
+                                        <div>
+                                            <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Subject</span>
+                                            <p className="text-sm font-semibold text-gray-900">{fillPreview(template.subject, previewLead, selectedEvent)}</p>
+                                        </div>
+                                    )}
+                                    <div>
+                                        <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">{isSms ? "Message" : "Body"}</span>
+                                        <pre className="whitespace-pre-wrap font-sans text-sm text-gray-700 mt-1 leading-relaxed">{fillPreview(template.body, previewLead, selectedEvent)}</pre>
+                                    </div>
+                                    {isSms && (() => {
+                                        const len = fillPreview(template.body, previewLead, selectedEvent).length;
+                                        const seg = Math.ceil(len / 160) || 0;
+                                        return <p className={`text-xs ${seg > 1 ? "text-amber-600" : "text-gray-400"}`}>{len} chars · {seg} segment{seg === 1 ? "" : "s"} per recipient{seg > 1 ? " (multi-segment costs more)" : ""}</p>;
+                                    })()}
+                                </div>
+                            ) : (
+                                <div className="p-8 text-center text-sm text-gray-400">Pick a template to preview.</div>
+                            )}
                         </div>
-                    ) : (
-                        <div className="p-8 text-center text-sm text-gray-400">Pick a template to preview.</div>
-                    )}
-                </div>
-            </div>
+                    </div>
+                );
+            })()}
         </div>
     );
 }

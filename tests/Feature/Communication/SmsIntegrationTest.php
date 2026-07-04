@@ -13,6 +13,16 @@ class SmsIntegrationTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+        config([
+            'services.twilio.sid' => null,
+            'services.brevo.sms_key' => null,
+        ]);
+        $this->app->forgetInstance(SmsProvider::class);
+    }
+
     /** A duck-typed Twilio client whose messages->create() returns a stub. */
     private function fakeTwilioClient(string $sid = 'SM_TEST', string $status = 'queued', bool $throw = false): object
     {

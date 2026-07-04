@@ -24,12 +24,20 @@ class BulkEmailController extends Controller
     {
         $department = $this->department($request);
         $channel = $this->channel($request);
+        $eventSender = app(\App\Services\EventEmailSender::class);
 
         return inertia($this->page($request, 'index'), [
             'basePath' => $this->basePath($request),
             'channel' => $channel,
             'templates' => $this->availableTemplates($department, $channel),
             'recipients' => $this->recipientPool($channel),
+            'events' => \App\Models\Event::orderBy('name')
+                ->get()
+                ->map(fn (\App\Models\Event $e) => array_merge(
+                    ['id' => $e->id, 'name' => $e->name],
+                    $eventSender->context($e, null)
+                ))
+                ->values(),
             'campaigns' => EmailCampaign::forDepartmentList($department)
                 ->where('channel', $channel)
                 ->with('creator:id,name')
@@ -58,18 +66,26 @@ class BulkEmailController extends Controller
         }
 
         // Keep only recipients reachable on this channel (snapshot for history).
-        $recipientIds = Lead::whereIn('id', $data['recipient_lead_ids'])
-            ->when(
-                $channel === EmailCampaign::CHANNEL_SMS,
-                fn ($q) => $q->whereNotNull('phone')->where('phone', '!=', ''),
-                fn ($q) => $q->whereNotNull('email')->where('email', '!=', ''),
-            )
-            ->pluck('id')->all();
+        $leads = Lead::whereIn('id', $data['recipient_lead_ids'])->get();
+        $comms = app(\App\Services\CommunicationService::class);
+        $recipientIds = [];
+
+        foreach ($leads as $lead) {
+            if ($channel === EmailCampaign::CHANNEL_SMS) {
+                if ($lead->phone && $comms->normalizePhone($lead->phone)) {
+                    $recipientIds[] = $lead->id;
+                }
+            } else {
+                if ($lead->email && filter_var($lead->email, FILTER_VALIDATE_EMAIL)) {
+                    $recipientIds[] = $lead->id;
+                }
+            }
+        }
 
         if (empty($recipientIds)) {
             return back()->with('error', $channel === EmailCampaign::CHANNEL_SMS
-                ? 'None of the selected leads have a phone number.'
-                : 'None of the selected leads have an email address.');
+                ? 'None of the selected leads have a valid phone number.'
+                : 'None of the selected leads have a valid email address.');
         }
 
         $scheduling = $data['action'] === 'schedule';
@@ -225,8 +241,17 @@ class BulkEmailController extends Controller
             $query->whereNotNull('email')->where('email', '!=', '');
         }
 
+        $comms = app(\App\Services\CommunicationService::class);
+
         return $query->orderBy('first_name')
-            ->get(['id', 'first_name', 'last_name', 'email', 'phone', 'stage', 'status'])
+            ->get(['id', 'first_name', 'last_name', 'email', 'phone', 'stage', 'status', 'event_id'])
+            ->filter(function (Lead $l) use ($channel, $comms) {
+                if ($channel === EmailCampaign::CHANNEL_SMS) {
+                    return $l->phone && $comms->normalizePhone($l->phone);
+                } else {
+                    return $l->email && filter_var($l->email, FILTER_VALIDATE_EMAIL);
+                }
+            })
             ->map(fn (Lead $l) => [
                 'id' => $l->id,
                 'name' => trim("{$l->first_name} {$l->last_name}") ?: '—',
@@ -234,7 +259,8 @@ class BulkEmailController extends Controller
                 'phone' => $l->phone,
                 'stage' => $l->stage,
                 'status' => $l->status,
-            ]);
+                'event_id' => $l->event_id,
+            ])->values();
     }
 
     private function campaignRow(EmailCampaign $c): array
