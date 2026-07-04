@@ -18,8 +18,13 @@ const STATUS_CHIP = {
     draft: "bg-gray-100 text-gray-500",
 };
 
+const escapeHtml = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
 // Mirror of the server-side {{var}} substitution, for the live preview only.
-function fillPreview(text, lead, selectedEvent) {
+// When the result is rendered as HTML (email body), escapeValues must be true
+// so a lead's own name/email can't inject markup — the template text itself
+// (admin-authored) is never escaped, only the substituted variable values.
+function fillPreview(text, lead, selectedEvent, escapeValues = false) {
     if (!text) return "";
     const name = lead?.name || "Alex Taylor";
     const [first, ...rest] = name.split(" ");
@@ -41,7 +46,10 @@ function fillPreview(text, lead, selectedEvent) {
         document_name: "Passport",
         reason: "The image was blurry and text was not readable.",
     };
-    return text.replace(/\{\{\s*([a-z0-9_]+)\s*\}\}/gi, (_, k) => ctx[k.toLowerCase()] ?? "");
+    return text.replace(/\{\{\s*([a-z0-9_]+)\s*\}\}/gi, (_, k) => {
+        const v = ctx[k.toLowerCase()] ?? "";
+        return escapeValues ? escapeHtml(v) : v;
+    });
 }
 
 export default function SalesBulkEmail({ templates = [], recipients = [], campaigns = [], basePath = "/portal/sales/bulk-email", channel = "email", events = [] }) {
@@ -263,7 +271,7 @@ function Compose({ templates, recipients, basePath, isSms = false, events = [] }
                                         {isSms ? (
                                             <pre className="whitespace-pre-wrap font-sans text-sm text-gray-700 mt-1 leading-relaxed">{fillPreview(template.body, previewLead, selectedEvent)}</pre>
                                         ) : (
-                                            <div className="text-sm text-gray-700 mt-1 leading-relaxed [&_a]:text-blue-600 [&_a]:underline" dangerouslySetInnerHTML={{ __html: fillPreview(template.body, previewLead, selectedEvent) }} />
+                                            <div className="text-sm text-gray-700 mt-1 leading-relaxed [&_a]:text-blue-600 [&_a]:underline" dangerouslySetInnerHTML={{ __html: fillPreview(template.body, previewLead, selectedEvent, true) }} />
                                         )}
                                     </div>
                                     {isSms && (() => {
