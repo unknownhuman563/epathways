@@ -37,11 +37,14 @@ class SendCampaign implements ShouldQueue
 
         $sent = 0;
         $failed = 0;
+        $isSms = $campaign->channel === EmailCampaign::CHANNEL_SMS;
 
         foreach (array_chunk($campaign->recipient_lead_ids ?? [], 200) as $chunk) {
             $leads = Lead::whereIn('id', $chunk)->get();
             foreach ($leads as $lead) {
-                $ok = $comms->sendCampaignEmail($lead, $campaign->subject, $campaign->body, $campaign->id);
+                $ok = $isSms
+                    ? $comms->sendCampaignSms($lead, $campaign->body, $campaign->id)
+                    : $comms->sendCampaignEmail($lead, $campaign->subject, $campaign->body, $campaign->id);
                 $ok ? $sent++ : $failed++;
             }
         }

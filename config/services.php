@@ -18,6 +18,14 @@ return [
         'token' => env('POSTMARK_TOKEN'),
     ],
 
+    // Brevo Transactional SMS. api_key is a Brevo v3 API key (xkeysib-…, from
+    // Brevo → SMTP & API → API Keys — NOT the SMTP password). sender is a name
+    // (max 11 alphanumeric chars) or a purchased number.
+    'brevo' => [
+        'sms_key' => env('BREVO_API_KEY'),
+        'sms_sender' => env('BREVO_SMS_SENDER', 'ePathways'),
+    ],
+
     'resend' => [
         'key' => env('RESEND_KEY'),
     ],
@@ -129,6 +137,18 @@ return [
         // Central "Reply-To" — when set, replies to any of our emails route
         // to this monitored inbox. Null = replies go to each email's From.
         'reply_to' => env('REPLY_TO_EMAIL'),
+    ],
+
+    // IMAP mailbox we poll for inbound email replies (the Reply-To inbox,
+    // e.g. hello@epathways.ph on Google Workspace). Password is a Google
+    // App Password, not the account password.
+    'imap' => [
+        'host' => env('IMAP_HOST', 'imap.gmail.com'),
+        'port' => (int) env('IMAP_PORT', 993),
+        'encryption' => env('IMAP_ENCRYPTION', 'ssl'),
+        'username' => env('IMAP_USERNAME'),
+        'password' => env('IMAP_PASSWORD'),
+        'folder' => env('IMAP_FOLDER', 'INBOX'),
     ],
 
 ];

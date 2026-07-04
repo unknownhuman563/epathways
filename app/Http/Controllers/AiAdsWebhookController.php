@@ -561,8 +561,8 @@ class AiAdsWebhookController extends Controller
     private function boostTargeting(array $t): array
     {
         $targeting = array_filter([
-            'ageMin' => $t['ageMin'] ?? null,
-            'ageMax' => $t['ageMax'] ?? null,
+            'ageMin' => isset($t['ageMin']) && $t['ageMin'] !== '' ? (int) $t['ageMin'] : null,
+            'ageMax' => isset($t['ageMax']) && $t['ageMax'] !== '' ? (int) $t['ageMax'] : null,
             'gender' => in_array($t['gender'] ?? 'all', ['male', 'female'], true) ? $t['gender'] : null,
             'countries' => ! empty($t['countries']) ? array_values(array_map('strtoupper', $t['countries'])) : null,
             'interests' => ! empty($t['interests']) ? array_values(array_map(fn ($i) => [
@@ -589,8 +589,8 @@ class AiAdsWebhookController extends Controller
         ], is_array($arr) ? $arr : []), fn ($e) => $e['id'] !== ''));
 
         $targeting = array_filter([
-            'ageMin' => $t['ageMin'] ?? null,
-            'ageMax' => $t['ageMax'] ?? null,
+            'ageMin' => isset($t['ageMin']) && $t['ageMin'] !== '' ? (int) $t['ageMin'] : null,
+            'ageMax' => isset($t['ageMax']) && $t['ageMax'] !== '' ? (int) $t['ageMax'] : null,
             'gender' => in_array($t['gender'] ?? 'all', ['male', 'female'], true) ? $t['gender'] : null,
             'incomeTier' => in_array($t['incomeTier'] ?? '', ['top_5', 'top_10', 'top_10_25', 'top_25_50'], true) ? $t['incomeTier'] : null,
             'countries' => ! empty($t['countries']) ? array_values(array_map('strtoupper', $t['countries'])) : null,
@@ -790,7 +790,12 @@ class AiAdsWebhookController extends Controller
         ]);
 
         if ($z = $this->zernio()) {
-            return $this->zernioJson(fn () => $z->createSavedAudience($data['accountId'], $data['name'], $data['spec']));
+            // Normalize the raw editor spec to the shape Zernio's saved-audience
+            // endpoint accepts (int ages, no gender:'all'/empty incomeTier/empty
+            // arrays) — same transform used when launching an ad.
+            $spec = $this->createAdTargeting($data['spec']);
+
+            return $this->zernioJson(fn () => $z->createSavedAudience($data['accountId'], $data['name'], $spec));
         }
 
         return response()->json(['error' => 'Connect Zernio to save audiences.'], 422);

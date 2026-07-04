@@ -500,6 +500,15 @@ class ZernioService
     /** POST /ads/create — launch a standalone ad with custom creative. */
     public function createAd(array $payload): array
     {
+        // Meta caps entity names at 255 BYTES (not chars). Emoji/accents are
+        // multi-byte, so a "valid" 255-char name can overflow — mb_strcut keeps
+        // it byte-safe. Zernio also derives Meta names from these fields.
+        foreach (['name', 'headline'] as $k) {
+            if (! empty($payload[$k])) {
+                $payload[$k] = mb_strcut((string) $payload[$k], 0, 255);
+            }
+        }
+
         $res = $this->client()->timeout(60)
             ->post('/ads/create', array_filter($payload, fn ($v) => $v !== null && $v !== '' && $v !== []))
             ->throw();
