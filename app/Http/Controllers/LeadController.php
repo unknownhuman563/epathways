@@ -4,30 +4,96 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\StoreLeadRequest;
 use App\Jobs\AnalyzeLeadAssessment;
+use App\Models\Event;
 use App\Models\Lead;
+use App\Models\Program;
+use App\Traits\BuildsLeadRow;
+use App\Traits\CreatesDashboardLead;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 class LeadController extends Controller
 {
+    use BuildsLeadRow, CreatesDashboardLead;
+
+    /**
+     * Pipeline stages, kept in sync with SalesController::LEAD_STATUSES so the
+     * admin Leads screen (which reuses the sales Leads component) shows the
+     * same stage set.
+     */
+    private const LEAD_STATUSES = [
+        'New Leads',
+        'Contact Attempted',
+        'Contacted for Booking',
+        'Booking Confirmation with Bryll',
+        'Missed the Meeting',
+        'Qualified but Not Ready',
+        'Qualified but No Funds',
+        'Qualified',
+        'Booked Consultation',
+        'Did Not Book Consultation',
+        'No Show',
+        'Consultation Done',
+        'Proposal Sent',
+        'Consultancy Agreement',
+        'English Pro',
+        'School Enrollment',
+        'Visa Process',
+        'Not Qualified',
+        'Work Pathway / Other',
+    ];
+
     /**
      * Display a listing of the leads.
      */
     public function index()
     {
-        // A lead drops out of this view the moment it's adopted by any
-        // department (student / English / immigration / accommodation).
-        // Each department has its own queue surface; keeping them in the
-        // sales-pipeline table would mean each row appears in two places.
+        // The admin Leads screen reuses the sales Leads component, so it needs
+        // the same prop shape. A lead drops out of this view the moment it's
+        // adopted by any department (student / English / immigration /
+        // accommodation) — each department has its own queue surface.
+        // portal='sales' points the reused component's actions at the sales
+        // routes, which admins may access; results still flash back here.
         $leads = Lead::inLeadPipeline()
-            ->with(['studyPlans', 'event'])
-            ->latest()
-            ->get();
+            ->with([
+                'studyPlans',
+                'event',
+                'portalUser:id,lead_id,last_login_at',
+                'notes' => fn ($q) => $q->latest(),
+            ])
+            ->withCount(['notes', 'documents'])
+            ->withCount(['tasks as tasks_open_count' => fn ($q) => $q->where('completed', false)])
+            ->latest()->get();
 
         return inertia('admin/Leads', [
-            'leads' => $leads,
+            'portal' => 'sales',
+            'statuses' => self::LEAD_STATUSES,
+            'programs' => Program::orderBy('title')->pluck('title')->filter()->values(),
+            'staffOptions' => $this->dashboardStaff(),
+            'leads' => $leads->map(fn ($l) => $this->leadRow($l)),
+            'events' => $this->leadEventsSummary(),
         ]);
+    }
+
+    /** Events list for the Leads page "Events" tab — each with a registrant count. */
+    private function leadEventsSummary()
+    {
+        return Event::withCount('leads')
+            ->orderByDesc('date_from')
+            ->latest()
+            ->get()
+            ->map(fn (Event $e) => [
+                'id' => $e->id,
+                'name' => $e->name,
+                'event_code' => $e->event_code,
+                'type' => $e->type,
+                'mode' => $e->mode,
+                'location' => $e->location,
+                'date_from' => optional($e->date_from)->toIso8601String(),
+                'status' => $e->status,
+                'registrations_count' => $e->leads_count,
+            ]);
     }
 
     /**

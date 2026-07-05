@@ -46,9 +46,51 @@ use Illuminate\Support\Facades\Route;
 Route::get('/', [HomeController::class, 'index']);
 
 Route::get('/booking', function () {
-    return inertia('booking/BookingPage');
+    // Aggregate the immigration advisers' saved weekly availability into a
+    // per-weekday time window (earliest start → latest end across all who set
+    // it) so the public scheduler only offers times an adviser can meet.
+    $adviserIds = \App\Models\User::whereIn('role', ['immigration', 'immigration_manager', 'immigration_adviser'])->pluck('id');
+    $schedules = \App\Models\StaffAvailability::whereIn('user_id', $adviserIds)->pluck('schedule');
+    $availability = [];
+    foreach (\App\Models\StaffAvailability::DAYS as $day) {
+        $starts = [];
+        $ends = [];
+        foreach ($schedules as $sched) {
+            $d = $sched[$day] ?? null;
+            if ($d && ($d['enabled'] ?? false) && ! empty($d['start']) && ! empty($d['end'])) {
+                $starts[] = $d['start'];
+                $ends[] = $d['end'];
+            }
+        }
+        if ($starts) {
+            $availability[$day] = ['start' => min($starts), 'end' => max($ends)];
+        }
+    }
+
+    return inertia('booking/BookingPage', [
+        'visaTypes' => \App\Models\VisaType::where('active', true)
+            ->orderBy('name')
+            ->get(['id', 'code', 'name', 'short_description', 'consultation_price_nzd', 'consultation_duration_minutes'])
+            ->map(fn ($v) => [
+                'id' => $v->id,
+                'code' => $v->code,
+                'name' => $v->name,
+                'description' => $v->short_description,
+                'price' => (float) $v->consultation_price_nzd,
+                'duration' => $v->consultation_duration_minutes,
+            ]),
+        'availability' => (object) $availability,
+        'bookingTimezone' => config('services.booking.timezone', 'Pacific/Auckland'),
+    ]);
 });
 Route::post('/bookings', [BookingController::class, 'store']);
+
+// Stripe Checkout for consultation bookings (booking is saved first, then the
+// optional payment step). Webhook is CSRF-exempt (see bootstrap/app.php).
+Route::post('/bookings/{booking}/checkout', [\App\Http\Controllers\PaymentController::class, 'checkout']);
+Route::get('/booking/payment/success', [\App\Http\Controllers\PaymentController::class, 'success'])->name('booking.payment.success');
+Route::get('/booking/payment/cancel/{booking}', [\App\Http\Controllers\PaymentController::class, 'cancel'])->name('booking.payment.cancel');
+Route::post('/stripe/webhook', [\App\Http\Controllers\PaymentController::class, 'webhook'])->name('stripe.webhook');
 
 Route::get('/education-journey', function () {
     return inertia('education-journey/EducationJourneyPage', array_merge(
@@ -898,6 +940,8 @@ Route::middleware(['auth'])->group(function () {
             });
             Route::get('/documents', [ImmigrationController::class, 'documents'])->name('documents');
             Route::get('/appointments', [ImmigrationController::class, 'appointments'])->name('appointments');
+            Route::post('/appointments/{id}/resend-invoice', [ImmigrationController::class, 'resendInvoice'])->name('appointments.resend-invoice');
+            Route::post('/availability', [ImmigrationController::class, 'saveAvailability'])->name('availability.save');
 
             // SETUP — visa types are managed through VisaTypeController so
             // the same logic (policy, audit, notifications) applies to both
