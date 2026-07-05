@@ -50,10 +50,6 @@ export default function QuickRegisterPage() {
 
     const submit = (e) => {
         e.preventDefault();
-        if (!(data.cv_files || []).length) {
-            alert('Please attach your CV — it is required so we can prepare your proposal.');
-            return;
-        }
         // Guard against oversized uploads so the visitor gets a clear message
         // instead of a raw "413 Content Too Large" from the server.
         const allFiles = [...(data.cv_files || []), ...(data.passport_files || []), ...(data.diploma_files || []), ...(data.transcript_files || [])];
@@ -214,28 +210,32 @@ export default function QuickRegisterPage() {
                                 </Section>
                             )}
 
-                            {/* Children */}
-                            <Section title="Children">
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                    <Field label="Number of children (if any)">
-                                        <input type="number" min={0} max={30} value={data.number_of_children} onChange={e => setData('number_of_children', e.target.value)} className={IC} />
-                                    </Field>
-                                    <Field label="Child age(s)" hint="Separate by commas, e.g. 5, 8, 12">
-                                        <input type="text" value={data.children_ages} onChange={e => setData('children_ages', e.target.value)} className={IC} placeholder="5, 8, 12" />
-                                    </Field>
-                                    <Field label="Will you bring your children?">
-                                        <select value={data.bring_children} onChange={e => setData('bring_children', e.target.value)} className={IC}>
-                                            <option value="">Select</option>
-                                            {BRING_CHILDREN.map(o => <option key={o}>{o}</option>)}
-                                        </select>
-                                    </Field>
-                                    {data.bring_children === 'Other' && (
-                                        <Field label="Other — will you bring your children?">
-                                            <input type="text" value={data.bring_children_other} onChange={e => setData('bring_children_other', e.target.value)} className={IC} />
+                            {/* Children — only meaningful for married registrants
+                                (or civil statuses that imply a partnership).
+                                Single registrants skip the section entirely. */}
+                            {isMarried && (
+                                <Section title="Children">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                        <Field label="Number of children (if any)">
+                                            <input type="number" min={0} max={30} value={data.number_of_children} onChange={e => setData('number_of_children', e.target.value)} className={IC} />
                                         </Field>
-                                    )}
-                                </div>
-                            </Section>
+                                        <Field label="Child age(s)" hint="Separate by commas, e.g. 5, 8, 12">
+                                            <input type="text" value={data.children_ages} onChange={e => setData('children_ages', e.target.value)} className={IC} placeholder="5, 8, 12" />
+                                        </Field>
+                                        <Field label="Will you bring your children?">
+                                            <select value={data.bring_children} onChange={e => setData('bring_children', e.target.value)} className={IC}>
+                                                <option value="">Select</option>
+                                                {BRING_CHILDREN.map(o => <option key={o}>{o}</option>)}
+                                            </select>
+                                        </Field>
+                                        {data.bring_children === 'Other' && (
+                                            <Field label="Other — will you bring your children?">
+                                                <input type="text" value={data.bring_children_other} onChange={e => setData('bring_children_other', e.target.value)} className={IC} />
+                                            </Field>
+                                        )}
+                                    </div>
+                                </Section>
+                            )}
 
                             {/* Additional */}
                             <Section title="Additional Information (Optional)">
@@ -244,10 +244,12 @@ export default function QuickRegisterPage() {
                                 </Field>
                             </Section>
 
-                            {/* Documents */}
-                            <Section title="Documents" subtitle="Please upload the documents below so we can assess your qualifications before the meeting. Submit your CV first (required) — the rest can follow later.">
+                            {/* Documents — all optional. Attaching any of these
+                                helps the adviser prepare, but the meeting can
+                                still be booked without them. */}
+                            <Section title="Documents (Optional)" subtitle="Upload any of these to help us assess your qualifications before the meeting. You can also send them later.">
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                    <FilePick label="Attach CV *" files={data.cv_files} onChange={f => setData('cv_files', f)} />
+                                    <FilePick label="Attach CV" files={data.cv_files} onChange={f => setData('cv_files', f)} />
                                     <FilePick label="Passport" files={data.passport_files} onChange={f => setData('passport_files', f)} />
                                     <FilePick label="Diploma" files={data.diploma_files} onChange={f => setData('diploma_files', f)} />
                                     <FilePick label="Transcript of Record" files={data.transcript_files} onChange={f => setData('transcript_files', f)} />
