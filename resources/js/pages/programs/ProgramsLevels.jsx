@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Search, ArrowRight } from 'react-feather';
 import { Link } from '@inertiajs/react';
@@ -7,6 +7,7 @@ import Footer from "@/components/layout/Footer";
 import ScrollToTop from "@/components/ui/ScrollToTop";
 import PromoBanner from "@/components/ui/PromoBanner";
 import PromoModal from "@/components/ui/PromoModal";
+import { INDUSTRY_CATEGORIES } from "@/data/industryCategories";
 
 // Assets
 import heroBg from "@assets/Services/education.png";
@@ -15,17 +16,57 @@ import placeholderImg from "@assets/Services/education.png";
 
 export default function ProgramsLevels({ programs = [], activePromos = [] }) {
     const [searchQuery, setSearchQuery] = useState('');
+    // activeFilter values:
+    //   'all' | 'diplomas' | 'bachelors' | 'masters' — existing level filters
+    //   `industry:${id}` — filter by industry programme list (Industry tab)
     const [activeFilter, setActiveFilter] = useState('all');
     const [visibleCount, setVisibleCount] = useState(8); // Start with 8 visible cards
+    const [industryOpen, setIndustryOpen] = useState(false); // hover dropdown
+    const gridRef = useRef(null);
+
+    // Match a program to an industry by checking if its title contains any of
+    // the industry's curated programme names (or vice versa). Substring +
+    // case-insensitive so "Bachelor of Nursing (Adult)" still hits "Bachelor
+    // of Nursing" from the industry list.
+    const programMatchesIndustry = (program, industry) => {
+        const t = (program.title || '').toLowerCase();
+        if (! t) return false;
+        return industry.programs.some((p) => {
+            const q = p.toLowerCase();
+            return t.includes(q) || q.includes(t);
+        });
+    };
 
     const filteredPrograms = programs
         .filter(program => {
             const matchesSearch = (program.title || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
                 (program.institution || '').toLowerCase().includes(searchQuery.toLowerCase());
-            const matchesFilter = activeFilter === 'all' || program.category === activeFilter;
+            let matchesFilter = true;
+            if (activeFilter.startsWith('industry:')) {
+                const id = Number(activeFilter.split(':')[1]);
+                const ind = INDUSTRY_CATEGORIES.find((i) => i.id === id);
+                matchesFilter = ind ? programMatchesIndustry(program, ind) : true;
+            } else if (activeFilter !== 'all') {
+                matchesFilter = program.category === activeFilter;
+            }
             return matchesSearch && matchesFilter;
         })
         .sort((a, b) => (Number(b.level) || 0) - (Number(a.level) || 0)); // highest level (9) first
+
+    // Human-readable label for the Industry tab when an industry is active,
+    // so the user sees which industry is filtering rather than the raw slug.
+    const activeIndustry = activeFilter.startsWith('industry:')
+        ? INDUSTRY_CATEGORIES.find((i) => i.id === Number(activeFilter.split(':')[1]))
+        : null;
+
+    const pickIndustry = (id) => {
+        setActiveFilter(`industry:${id}`);
+        setIndustryOpen(false);
+        setVisibleCount(12);
+        requestAnimationFrame(() => {
+            gridRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
+    };
 
     const visiblePrograms = filteredPrograms.slice(0, visibleCount);
 
@@ -122,7 +163,7 @@ export default function ProgramsLevels({ programs = [], activePromos = [] }) {
             </section>
 
             {/* Search Section */}
-            <section className="py-20 bg-white">
+            <section ref={gridRef} className="py-20 bg-white scroll-mt-24">
                 <div className="container mx-auto px-4 max-w-7xl">
                     {/* Search Bar */}
                     <div className="mb-20 mt-32">
@@ -147,7 +188,7 @@ export default function ProgramsLevels({ programs = [], activePromos = [] }) {
                             <h3 className="text-xl font-normal text-gray-600 uppercase tracking-widest pl-1">Top Courses</h3>
                         </div>
 
-                        <div className="flex gap-8 pb-2">
+                        <div className="flex flex-wrap items-end gap-x-8 gap-y-3 pb-2">
                             <button
                                 onClick={() => setActiveFilter('all')}
                                 className={`text-sm font-bold uppercase tracking-widest pb-2 transition-all border-b-2 ${activeFilter === 'all'
@@ -184,8 +225,107 @@ export default function ProgramsLevels({ programs = [], activePromos = [] }) {
                             >
                                 PG / Masters
                             </button>
+
+                            {/* INDUSTRY — hover-triggered dropdown. Clicking an
+                                item sets activeFilter to 'industry:{id}' and
+                                the grid re-filters. The tab shows the picked
+                                industry's short label when active so users see
+                                what's currently narrowing the results. */}
+                            <div
+                                className="relative"
+                                onMouseEnter={() => setIndustryOpen(true)}
+                                onMouseLeave={() => setIndustryOpen(false)}
+                            >
+                                <button
+                                    type="button"
+                                    onClick={() => setIndustryOpen((v) => !v)}
+                                    className={`inline-flex items-center gap-1.5 text-sm font-bold uppercase tracking-widest pb-2 transition-all border-b-2 ${activeIndustry
+                                        ? 'text-[#436235] border-[#436235]'
+                                        : 'text-gray-600 border-transparent hover:text-gray-900'
+                                        }`}
+                                    aria-haspopup="true"
+                                    aria-expanded={industryOpen}
+                                >
+                                    Industry
+                                    <svg
+                                        className={`w-3 h-3 transition-transform duration-200 ${industryOpen ? 'rotate-180' : ''}`}
+                                        viewBox="0 0 12 12"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        strokeWidth="2"
+                                    >
+                                        <path d="M2 4l4 4 4-4" strokeLinecap="round" strokeLinejoin="round" />
+                                    </svg>
+                                </button>
+
+                                {/* Dropdown panel */}
+                                {industryOpen && (
+                                    <div
+                                        role="menu"
+                                        className="absolute right-0 md:right-0 top-full mt-1 z-30 w-[320px] max-w-[92vw] bg-white border border-gray-200 shadow-2xl rounded-md py-2"
+                                    >
+                                        {INDUSTRY_CATEGORIES.map((ind) => {
+                                            const selected = activeFilter === `industry:${ind.id}`;
+                                            return (
+                                                <button
+                                                    key={ind.id}
+                                                    type="button"
+                                                    onClick={() => pickIndustry(ind.id)}
+                                                    className={`w-full text-left px-4 py-2.5 transition-colors ${selected
+                                                        ? 'bg-[#436235]/10 text-[#436235]'
+                                                        : 'text-gray-700 hover:bg-gray-50 hover:text-[#282728]'
+                                                        }`}
+                                                    role="menuitem"
+                                                >
+                                                    <p className="text-[13px] font-semibold leading-snug">
+                                                        {ind.title}
+                                                    </p>
+                                                    <p className="text-[10.5px] text-gray-400 mt-0.5 tracking-wide">
+                                                        {ind.programs.length} programmes
+                                                    </p>
+                                                </button>
+                                            );
+                                        })}
+
+                                        {activeIndustry && (
+                                            <>
+                                                <div className="my-1 border-t border-gray-100" />
+                                                <button
+                                                    type="button"
+                                                    onClick={() => { setActiveFilter('all'); setIndustryOpen(false); }}
+                                                    className="w-full text-left px-4 py-2 text-[11px] font-bold uppercase tracking-widest text-gray-500 hover:text-gray-900"
+                                                >
+                                                    Clear industry filter
+                                                </button>
+                                            </>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     </div>
+
+                    {/* Active-industry chip — subtle strip under the tabs so
+                        the user sees what's currently narrowing the grid even
+                        after they've scrolled the dropdown away. */}
+                    {activeIndustry && (
+                        <div className="mb-8 flex items-center gap-3 flex-wrap">
+                            <span className="text-[10px] font-bold uppercase tracking-[0.22em] text-gray-500">
+                                Showing:
+                            </span>
+                            <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#436235]/10 text-[#436235] text-[11px] font-semibold">
+                                {activeIndustry.title}
+                                <button
+                                    type="button"
+                                    onClick={() => setActiveFilter('all')}
+                                    className="hover:text-[#282728] font-bold"
+                                    aria-label="Clear industry filter"
+                                >
+                                    ×
+                                </button>
+                            </span>
+                        </div>
+                    )}
 
                     {/* Program Cards Grid */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
