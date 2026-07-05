@@ -255,7 +255,7 @@ class EnglishController extends Controller
         return User::query()
             ->whereIn('role', ['english', 'admin', 'super_admin'])
             ->orderBy('name')
-            ->get(['id', 'name', 'role']);
+            ->get(['id', 'name', 'role', 'avatar_path']);
     }
 
     /** English learners available to enroll / record assessments against. */

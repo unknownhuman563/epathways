@@ -9,6 +9,7 @@ import {
 import CommentsPopover from "./CommentsPopover";
 import TaskDetailModal from "./TaskDetailModal";
 import AttachmentsModal from "./AttachmentsModal";
+import Avatar from "@/components/ui/Avatar";
 
 // Pure presentational task card. Shared between the kanban (where it's
 // wrapped by useDraggable) and the list view (where it sits in a grid).
@@ -328,12 +329,13 @@ const TaskCard = function TaskCard({
                 {task.assignee || (Array.isArray(task.additional_assignee_ids) && task.additional_assignee_ids.length > 0) ? (
                     <div className="flex -space-x-1.5">
                         {task.assignee && (
-                            <span
-                                title={task.assignee.name}
-                                className={`inline-flex items-center justify-center w-5 h-5 rounded-full text-white text-[8.5px] font-bold ring-2 ring-white ${avatarColor(task.assignee.id || task.assignee.name)}`}
-                            >
-                                {initials(task.assignee.name)}
-                            </span>
+                            <Avatar
+                                name={task.assignee.name}
+                                src={task.assignee.avatar_url}
+                                colorKey={task.assignee.id || task.assignee.name}
+                                size={20}
+                                ring
+                            />
                         )}
                         {(task.additional_assignee_ids || []).slice(0, 2).map((id) => (
                             <span

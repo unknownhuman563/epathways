@@ -14,7 +14,7 @@ import {
     Filter, ArrowUpDown, ArrowUp, ArrowDown, ChevronLeft, ChevronRight,
     MoreHorizontal, ChevronDown, ChevronRight as ChevronRightIcon, ExternalLink, UserCheck,
     Upload, Loader, Plus, X, CalendarClock, Link2, FileText as FileTextIcon,
-    Pencil, StickyNote, Calendar, MapPin, Users,
+    Pencil, StickyNote, Calendar, MapPin, Users, Eye,
 } from "lucide-react";
 
 // ── Stage colour map ───────────────────────────────────────────────────────
@@ -524,6 +524,17 @@ export default function SalesLeads({ leads = [], statuses = [], programs = [], s
 
                                         <td className="px-3 py-2.5 pr-4 text-right">
                                             <div className="inline-flex items-center gap-1">
+                                                {/* Registration snapshot — only for leads that came in via
+                                                    /register. Reads the form-as-filled from lead + JSON. */}
+                                                {view === "registration" && (
+                                                    <Link
+                                                        href={`${portalBase}/leads/${l.id}/registration`}
+                                                        title="View registration form"
+                                                        className="inline-flex items-center justify-center w-7 h-7 rounded-md text-gray-500 hover:text-gray-900 hover:bg-gray-100 transition-colors"
+                                                    >
+                                                        <Eye size={12} />
+                                                    </Link>
+                                                )}
                                                 <a
                                                     href={`${portalBase}/leads/${l.id}/documents`}
                                                     title="Open documents"

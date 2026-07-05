@@ -1,8 +1,31 @@
-import { Head, Link } from "@inertiajs/react";
+import { useEffect, useState } from "react";
+import { Head, Link, router } from "@inertiajs/react";
 import {
     Globe, ClipboardCheck, Calendar, FolderOpen, FileBadge, AlertTriangle,
     CheckCircle2, Clock, TrendingUp, Star, ShieldCheck, FileCheck2, User,
+    Bell, DollarSign, UserPlus, UserPen, FileText, ArrowRightLeft, CheckSquare, Ticket, FileSignature,
 } from "lucide-react";
+
+const NOTIF_ICONS = { Bell, DollarSign, UserPlus, UserPen, FileText, ArrowRightLeft, CheckSquare, Ticket, AlertTriangle, FileSignature };
+const NOTIF_COLORS = {
+    amber: "bg-amber-50 text-amber-600",
+    blue: "bg-blue-50 text-blue-600",
+    emerald: "bg-emerald-50 text-emerald-600",
+    red: "bg-red-50 text-red-600",
+    gray: "bg-gray-100 text-gray-500",
+};
+
+const timeAgo = (iso) => {
+    if (!iso) return "";
+    const secs = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
+    if (secs < 60) return "now";
+    const mins = Math.floor(secs / 60);
+    if (mins < 60) return `${mins}m`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return `${hrs}h`;
+    const days = Math.floor(hrs / 24);
+    return days === 1 ? "yesterday" : days < 7 ? `${days}d` : new Date(iso).toLocaleDateString("en-US", { day: "2-digit", month: "short" });
+};
 
 const fmtDate = (iso) => iso ? new Date(iso).toLocaleDateString("en-NZ", { day: "numeric", month: "short", year: "numeric" }) : "—";
 
@@ -72,6 +95,11 @@ export default function ImmigrationDashboard({
                     <UrgentTile label="Agreements pending"    value={urgent.agreements_pending ?? 0}  href="/portal/immigration/cases"        tone="violet" />
                 </div>
             </section>
+
+            {/* Case & document activity — the current user's recent
+                notifications (document submissions, replacements, info
+                updates on their immigration cases). */}
+            <NotificationsPanel />
 
             {/* Two-column: this week's appointments + IAA compliance stub */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -176,6 +204,83 @@ function TopTile({ label, value, tone, icon, hint, muted = false, href = null })
     return href && !muted
         ? <Link href={href} className={`block ${cls}`}>{inner}</Link>
         : <div className={cls}>{inner}</div>;
+}
+
+/**
+ * Recent case/document notifications for the logged-in immigration user,
+ * fetched from the same feed the bell uses. Surfaces document submissions,
+ * replacements, and info updates on their immigration cases directly on the
+ * dashboard so they aren't missed.
+ */
+function NotificationsPanel() {
+    const [items, setItems] = useState([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        let alive = true;
+        fetch("/api/notifications/recent", {
+            headers: { Accept: "application/json", "X-Requested-With": "XMLHttpRequest" },
+            credentials: "same-origin",
+        })
+            .then((r) => (r.ok ? r.json() : { notifications: [] }))
+            .then((d) => { if (alive) setItems(d.notifications ?? []); })
+            .catch(() => { if (alive) setItems([]); })
+            .finally(() => { if (alive) setLoading(false); });
+        return () => { alive = false; };
+    }, []);
+
+    const open = (n) => {
+        const go = () => n.url && router.visit(n.url);
+        if (n.is_read) return go();
+        router.post(`/notifications/${n.id}/read`, {}, { preserveScroll: true, preserveState: true, onFinish: go });
+    };
+
+    return (
+        <section className="bg-white rounded-2xl border border-gray-100 p-5">
+            <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                    <Bell size={14} className="text-emerald-600" />
+                    <h2 className="text-sm font-bold uppercase tracking-[0.18em] text-gray-800">Case &amp; document activity</h2>
+                </div>
+                <Link href="/portal/immigration/notifications" className="text-[10px] font-bold uppercase tracking-widest text-emerald-600 hover:underline">
+                    View all
+                </Link>
+            </div>
+
+            {loading ? (
+                <p className="text-sm text-gray-400 italic text-center py-6">Loading…</p>
+            ) : items.length === 0 ? (
+                <p className="text-sm text-gray-400 italic text-center py-6">No recent activity on your cases.</p>
+            ) : (
+                <ul className="divide-y divide-gray-50">
+                    {items.slice(0, 8).map((n) => {
+                        const Icon = NOTIF_ICONS[n.icon] || Bell;
+                        return (
+                            <li key={n.id}>
+                                <button
+                                    type="button"
+                                    onClick={() => open(n)}
+                                    className={`w-full flex items-start gap-3 py-3 text-left hover:bg-gray-50/60 rounded-lg px-2 -mx-2 transition-colors ${n.is_read ? "" : "bg-emerald-50/30"}`}
+                                >
+                                    <span className="mt-0.5 shrink-0 relative">
+                                        {!n.is_read && <span className="absolute -left-1.5 top-1.5 w-1.5 h-1.5 bg-emerald-500 rounded-full" />}
+                                        <span className={`flex items-center justify-center w-8 h-8 rounded-full ${NOTIF_COLORS[n.color] || NOTIF_COLORS.gray}`}>
+                                            <Icon size={15} />
+                                        </span>
+                                    </span>
+                                    <span className="min-w-0 flex-1">
+                                        <span className="block text-sm font-semibold text-gray-900 truncate">{n.title}</span>
+                                        <span className="block text-xs text-gray-500 line-clamp-2">{n.body}</span>
+                                    </span>
+                                    <span className="text-[10px] text-gray-400 shrink-0 tabular-nums mt-0.5">{timeAgo(n.created_at)}</span>
+                                </button>
+                            </li>
+                        );
+                    })}
+                </ul>
+            )}
+        </section>
+    );
 }
 
 function UrgentTile({ label, value, href, tone }) {

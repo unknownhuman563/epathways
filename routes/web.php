@@ -705,6 +705,10 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/events/{id}/registrations', [SalesController::class, 'eventRegistrations'])->name('events.registrations');
             Route::get('/events/{id}/registrants', [SalesController::class, 'eventRegistrantsPage'])->name('events.registrants');
 
+            // Registration tab — read-only view of a lead's /register submission.
+            // Declared before /leads/{id} so the /registration suffix wins.
+            Route::get('/leads/{id}/registration', [SalesController::class, 'showLeadRegistration'])->name('leads.registration');
+
             // Bulk email (Build 11.A) — preview + send to the selected leads.
             // Declared before /leads/{id} so the two static segments win.
             Route::post('/leads/bulk-email/preview', [\App\Http\Controllers\Sales\BulkEmailController::class, 'preview'])->name('leads.bulk-email.preview');

@@ -46,7 +46,8 @@ export default function QuickRegisterPage() {
     });
 
     const isMarried = data.marital_status === 'Married';
-    const isBachelor = data.highest_attainment === "Bachelor's Degree";
+    const showCourseField = data.highest_attainment === "Bachelor's Degree"
+        || data.highest_attainment === "Master's Degree";
 
     const submit = (e) => {
         e.preventDefault();
@@ -157,9 +158,9 @@ export default function QuickRegisterPage() {
                                         </select>
                                         {err('highest_attainment')}
                                     </Field>
-                                    {isBachelor && (
-                                        <Field label="If Bachelor's Degree, what course / program?">
-                                            <input type="text" value={data.bachelor_course} onChange={e => setData('bachelor_course', e.target.value)} className={IC} placeholder="e.g. BS Nursing" />
+                                    {showCourseField && (
+                                        <Field label="What course / program?">
+                                            <input type="text" value={data.bachelor_course} onChange={e => setData('bachelor_course', e.target.value)} className={IC} placeholder="e.g. BS Nursing, MBA" />
                                         </Field>
                                     )}
                                     <Field label="Current job / occupation">

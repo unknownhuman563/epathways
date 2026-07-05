@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import AssigneeMultiPicker from "./AssigneeMultiPicker";
 import LeadMultiPicker from "./LeadMultiPicker";
+import Avatar from "@/components/ui/Avatar";
 
 // Editable task detail modal — the same look as the New Task modal so the
 // create + edit flows feel identical. Pre-populated from the task on open;
@@ -738,8 +739,6 @@ function CommentsTab({ taskId, comments, setComments, loadingComments, currentUs
         }
     };
 
-    const meInitials = (currentUser?.name || "?")
-        .split(/\s+/).slice(0, 2).map((w) => w[0] || "").join("").toUpperCase();
 
     return (
         <div className="space-y-3">
@@ -758,9 +757,13 @@ function CommentsTab({ taskId, comments, setComments, loadingComments, currentUs
 
             {/* Composer */}
             <form onSubmit={submit} className="flex items-start gap-2 pt-1">
-                <div className="w-7 h-7 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 text-white flex items-center justify-center text-[10px] font-bold flex-shrink-0">
-                    {meInitials}
-                </div>
+                <Avatar
+                    name={currentUser?.name || ""}
+                    src={currentUser?.avatar_url}
+                    colorKey={currentUser?.id || currentUser?.name}
+                    size={28}
+                    className="flex-shrink-0"
+                />
                 <div className="flex-1 flex items-end gap-2 rounded-xl border border-gray-200 bg-white px-2.5 py-1.5 focus-within:border-gray-400 transition-colors">
                     <textarea
                         value={body}
@@ -788,16 +791,18 @@ function CommentsTab({ taskId, comments, setComments, loadingComments, currentUs
 // body. Kept compact so a few comments fit in the modal without
 // dwarfing the property panel above.
 function CommentRow({ comment: c }) {
-    const initials = (c.author?.name || "?")
-        .split(/\s+/).slice(0, 2).map((w) => w[0] || "").join("").toUpperCase();
     const when = c.created_at
         ? new Date(c.created_at).toLocaleString("en-NZ", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })
         : "";
     return (
         <div className="flex items-start gap-2">
-            <span className="w-7 h-7 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 text-white text-[9px] font-bold flex items-center justify-center flex-shrink-0">
-                {initials}
-            </span>
+            <Avatar
+                name={c.author?.name || ""}
+                src={c.author?.avatar_url}
+                colorKey={c.author?.id || c.author?.name}
+                size={28}
+                className="flex-shrink-0"
+            />
             <div className="flex-1 min-w-0">
                 <div className="flex items-baseline gap-2">
                     <span className="text-[12px] font-semibold text-gray-900">{c.author?.name || "Unknown"}</span>
@@ -826,10 +831,10 @@ function ActivityTab({ task }) {
             )}
 
             {task.creator && (
-                <ActivityEntry name={task.creator.name} text="created this task" />
+                <ActivityEntry name={task.creator.name} src={task.creator.avatar_url} colorKey={task.creator.id} text="created this task" />
             )}
             {task.assignee && (
-                <ActivityEntry name={task.assignee.name} text="is the primary assignee" />
+                <ActivityEntry name={task.assignee.name} src={task.assignee.avatar_url} colorKey={task.assignee.id} text="is the primary assignee" />
             )}
 
             {! task.creator && ! task.assignee && ! task.completion_notes && (
@@ -842,14 +847,10 @@ function ActivityTab({ task }) {
 // One line in the right-column Activity rail — small avatar bubble + a
 // "<name> <verb-phrase>" sentence. Kept dead simple; richer activity
 // items can be added later as the audit-log endpoint surfaces them.
-function ActivityEntry({ name, text }) {
-    const initials = (name || "?")
-        .split(/\s+/).slice(0, 2).map((w) => w[0] || "").join("").toUpperCase();
+function ActivityEntry({ name, text, src, colorKey }) {
     return (
         <div className="flex items-start gap-2 text-[12px] text-gray-600">
-            <div className="w-6 h-6 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 text-white flex items-center justify-center text-[9px] font-bold flex-shrink-0">
-                {initials}
-            </div>
+            <Avatar name={name || ""} src={src} colorKey={colorKey || name} size={24} className="flex-shrink-0" />
             <div className="flex-1 leading-snug pt-0.5">
                 <span className="font-semibold text-gray-900">{name}</span> {text}
             </div>

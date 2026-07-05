@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { usePage } from "@inertiajs/react";
 import { toast } from "sonner";
 import { MessageCircle, Send, X } from "lucide-react";
+import Avatar from "@/components/ui/Avatar";
 
 // Centered modal that lists a task's comments oldest-first and lets the
 // viewer add a new one. Backed by:
@@ -128,9 +129,13 @@ export default function CommentsPopover({ open, onClose, taskId, taskTitle, onCo
                     )}
                     {comments.map((c) => (
                         <div key={c.id} className="flex items-start gap-2">
-                            <span className="w-7 h-7 rounded-full bg-gray-200 text-gray-700 text-[9px] font-bold flex items-center justify-center flex-shrink-0">
-                                {initialsOf(c.author?.name || "")}
-                            </span>
+                            <Avatar
+                                name={c.author?.name || ""}
+                                src={c.author?.avatar_url}
+                                colorKey={c.author?.id || c.author?.name}
+                                size={28}
+                                className="flex-shrink-0"
+                            />
                             <div className="flex-1 min-w-0">
                                 <div className="flex items-baseline gap-2">
                                     <span className="text-[12px] font-semibold text-gray-900">{c.author?.name || "Unknown"}</span>

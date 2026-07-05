@@ -137,7 +137,7 @@ class SuperAdminDashboardController extends Controller
             });
 
         // Recent completions — feeds a "shipped this week" rail.
-        $recentDone = LeadTask::with(['assignee:id,name', 'lead:id,first_name,last_name,lead_id'])
+        $recentDone = LeadTask::with(['assignee:id,name,avatar_path', 'lead:id,first_name,last_name,lead_id'])
             ->where('completed', true)
             ->whereNotNull('completed_at')
             ->orderByDesc('completed_at')
