@@ -108,7 +108,9 @@ class LeadIntakeService
                 'email'             => $payload['email']             ?? null,
                 'phone'             => $payload['phone']             ?? null,
                 'residence_country' => $payload['country']           ?? null,
-                'source'            => $formType,
+                // Defensive cap — long event slugs (source = event:{code}) must
+                // never overflow the column and break registration.
+                'source'            => mb_substr((string) $formType, 0, 191),
                 'status'            => 'New Leads',
                 'stage'             => $payload['stage']             ?? null,
             ],
