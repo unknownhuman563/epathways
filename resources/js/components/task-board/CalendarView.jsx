@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import TaskDetailModal from "./TaskDetailModal";
+import Avatar from "@/components/ui/Avatar";
 
 // Month-grid calendar for the Task Board. Lays tasks onto the calendar by
 // their `due_at` date. Tasks without a due date don't render. Honours the
@@ -438,12 +439,13 @@ function CalendarChip({ task, onClick, compact = false }) {
                         {(task.assignee || extraAssignees.length > 0) && (
                             <div className="flex -space-x-1.5">
                                 {task.assignee && (
-                                    <span
-                                        title={task.assignee.name}
-                                        className={`inline-flex items-center justify-center w-5 h-5 rounded-full text-white text-[8.5px] font-bold ring-2 ring-white ${avatarColour(task.assignee.name || String(task.assignee.id))}`}
-                                    >
-                                        {initialsOf(task.assignee.name)}
-                                    </span>
+                                    <Avatar
+                                        name={task.assignee.name}
+                                        src={task.assignee.avatar_url}
+                                        colorKey={task.assignee.name || String(task.assignee.id)}
+                                        size={20}
+                                        ring
+                                    />
                                 )}
                                 {extraAssignees.slice(0, 2).map((id) => (
                                     <span

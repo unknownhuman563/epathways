@@ -6,6 +6,7 @@ import {
     AlertCircle,
 } from "lucide-react";
 import TaskDetailModal from "./TaskDetailModal";
+import Avatar from "@/components/ui/Avatar";
 
 // Grouped list view of the task board. Tasks are grouped by status
 // (To Do / In Progress / In Review / Done) into collapsible sections,
@@ -246,13 +247,14 @@ function TaskRow({ task: t, onOpen }) {
                     ) : (
                         <>
                             {assignees.map((a, i) => (
-                                <span
+                                <Avatar
                                     key={`${a.id}-${i}`}
-                                    title={a.name}
-                                    className={`w-6 h-6 rounded-full ${avatarColour(a.name)} text-white text-[9px] font-bold flex items-center justify-center ring-2 ring-white`}
-                                >
-                                    {initials(a.name)}
-                                </span>
+                                    name={a.name}
+                                    src={a.avatar_url}
+                                    colorKey={a.name}
+                                    size={24}
+                                    ring
+                                />
                             ))}
                             {extra > 0 && (
                                 <span className="w-6 h-6 rounded-full bg-gray-200 text-gray-700 text-[9px] font-bold flex items-center justify-center ring-2 ring-white">

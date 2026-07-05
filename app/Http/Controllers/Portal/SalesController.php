@@ -240,6 +240,120 @@ class SalesController extends Controller
         ]);
     }
 
+    /**
+     * GET /portal/sales/leads/{id}/registration — read-only snapshot of
+     * what a lead submitted via the public /register form.
+     *
+     * Registration data is scattered across several places on the lead
+     * (dedicated columns, work_info / financial_info / family_info /
+     * education_notes JSON, plus LeadDocument rows for uploaded files).
+     * This method reconstructs the form-as-filled by pulling each field
+     * from wherever storeRegistration put it, so sales staff see one
+     * clean "here's what they said" page rather than having to unpack
+     * five JSON blobs on the lead profile.
+     */
+    public function showLeadRegistration($id)
+    {
+        $lead = Lead::with(['documents:id,lead_id,checklist_key,original_name,file_path,size,mime,status,created_at'])
+            ->findOrFail($id);
+
+        $work   = is_array($lead->work_info)       ? $lead->work_info       : [];
+        $edu    = is_array($lead->education_notes) ? $lead->education_notes : [];
+        $family = is_array($lead->family_info)     ? $lead->family_info     : [];
+        $partner = is_array($family['partner'] ?? null) ? $family['partner'] : [];
+
+        // Group uploaded LeadDocument rows by the checklist bucket the
+        // registration flow puts them in (cv / passport / diploma /
+        // transcript). Anything without one of these keys is dropped —
+        // this view is registration-only, not a general docs viewer.
+        $docBucketMap = ['cv' => 'CV', 'passport' => 'Passport', 'diploma' => 'Diploma', 'transcript' => 'Transcript of Record'];
+        $documents = collect($docBucketMap)->map(function ($label, $key) use ($lead) {
+            $files = $lead->documents
+                ->where('checklist_key', $key)
+                ->values()
+                ->map(fn ($d) => [
+                    'id'            => $d->id,
+                    'original_name' => $d->original_name,
+                    'size'          => $d->size,
+                    'mime'          => $d->mime,
+                    'url'           => $d->file_path ? \Illuminate\Support\Facades\Storage::disk('public')->url($d->file_path) : null,
+                    'created_at'    => optional($d->created_at)->toIso8601String(),
+                ])
+                ->all();
+            return ['key' => $key, 'label' => $label, 'files' => $files];
+        })->values()->all();
+
+        return inertia('portal/sales/LeadRegistration', [
+            'lead' => [
+                'id'          => $lead->id,
+                'lead_id'     => $lead->lead_id,
+                'first_name'  => $lead->first_name,
+                'last_name'   => $lead->last_name,
+                'name'        => trim("{$lead->first_name} {$lead->last_name}") ?: 'Unnamed lead',
+                'email'       => $lead->email,
+                'phone'       => $lead->phone,
+                'stage'       => $lead->stage,
+                'status'      => $lead->status,
+                'source'      => $lead->source,
+                'created_at'  => optional($lead->created_at)->toIso8601String(),
+            ],
+            // Reconstructed form sections, matching the /register page's
+            // section order + labels so staff read exactly what the lead
+            // was shown.
+            'sections' => [
+                [
+                    'title' => 'Personal',
+                    'fields' => [
+                        ['label' => 'First name',        'value' => $lead->first_name],
+                        ['label' => 'Last name',         'value' => $lead->last_name],
+                        ['label' => 'Email',             'value' => $lead->email],
+                        ['label' => 'Phone',             'value' => $lead->phone],
+                        ['label' => 'Age',               'value' => $edu['age'] ?? null],
+                        ['label' => 'Gender',            'value' => $lead->gender],
+                        ['label' => 'Civil status',      'value' => $lead->marital_status],
+                        ['label' => 'Country of origin', 'value' => $lead->country_of_birth],
+                    ],
+                ],
+                [
+                    'title' => 'Education & Interest',
+                    'fields' => [
+                        ['label' => 'Current education attainment',   'value' => $lead->highest_qualification],
+                        ['label' => "Bachelor's course / program",    'value' => $lead->highest_qualification_field],
+                        ['label' => 'Current job / occupation',       'value' => $lead->current_position_title],
+                        ['label' => 'Pathway of interest',            'value' => $edu['pathway_interest'] ?? null],
+                    ],
+                ],
+                [
+                    'title'  => 'Partner / Spouse',
+                    'visible' => ($lead->marital_status === 'Married') || array_filter($partner, fn ($v) => $v !== null && $v !== ''),
+                    'fields' => [
+                        ['label' => 'Full name',                        'value' => $partner['full_name']        ?? null],
+                        ['label' => 'Age',                              'value' => $partner['age']              ?? null],
+                        ['label' => 'Current education level',          'value' => $partner['education_level']  ?? null],
+                        ['label' => 'Current work experience',          'value' => $partner['work_experience']  ?? null],
+                        ['label' => 'Years of experience',              'value' => $partner['years_experience'] ?? null],
+                    ],
+                ],
+                [
+                    'title' => 'Children',
+                    'visible' => ! is_null($lead->number_of_children) && (int) $lead->number_of_children > 0,
+                    'fields' => [
+                        ['label' => 'Number of children',       'value' => $lead->number_of_children],
+                        ['label' => 'Child age(s)',             'value' => $lead->dependent_children_notes],
+                        ['label' => 'Will you bring your children?', 'value' => $edu['bring_children'] ?? null],
+                    ],
+                ],
+                [
+                    'title' => 'Additional information',
+                    'fields' => [
+                        ['label' => 'Question for our advisor', 'value' => $edu['advisor_question'] ?? null, 'multiline' => true],
+                    ],
+                ],
+            ],
+            'documents' => $documents,
+        ]);
+    }
+
     /** Programs catalogue for the sales portal — same shared Program model
      *  + ProgramController CRUD that education uses. */
     public function programs()
@@ -319,7 +433,7 @@ class SalesController extends Controller
             $todayEnd = $now->copy()->endOfDay();
             $weekEnd = $now->copy()->endOfWeek();
 
-            $base = \App\Models\LeadTask::with(['lead:id,lead_id,first_name,last_name,email,status', 'assignee:id,name', 'creator:id,name', 'attachments'])
+            $base = \App\Models\LeadTask::with(['lead:id,lead_id,first_name,last_name,email,status', 'assignee:id,name,avatar_path', 'creator:id,name,avatar_path', 'attachments'])
                 ->withCount('comments')
                 ->when($scope === 'mine', fn ($q) => $q->where('assignee_id', $userId))
                 ->when($scope === 'department', fn ($q) => $q->where('department', 'sales'));
@@ -350,10 +464,10 @@ class SalesController extends Controller
                     'mime_type' => $a->mime_type,
                     'size' => $a->size,
                 ])->values(),
-                'assignee' => $t->assignee ? ['id' => $t->assignee->id, 'name' => $t->assignee->name] : null,
+                'assignee' => $t->assignee ? ['id' => $t->assignee->id, 'name' => $t->assignee->name, 'avatar_url' => $t->assignee->avatar_url] : null,
                 'additional_assignee_ids' => $t->additional_assignee_ids ?? [],
                 'additional_lead_ids' => $t->additional_lead_ids ?? [],
-                'creator' => $t->creator ? ['id' => $t->creator->id, 'name' => $t->creator->name] : null,
+                'creator' => $t->creator ? ['id' => $t->creator->id, 'name' => $t->creator->name, 'avatar_url' => $t->creator->avatar_url] : null,
                 'lead' => $t->lead ? [
                     'id' => $t->lead->id,
                     'lead_id' => $t->lead->lead_id,
@@ -379,7 +493,7 @@ class SalesController extends Controller
                 'this_week' => $thisWeek,
                 'undated' => $undated,
                 'recently_done' => $recentlyDone,
-                'staffOptions' => \App\Models\User::whereNotIn('role', ['lead', 'revoked_lead'])->orderBy('name')->get(['id', 'name', 'role']),
+                'staffOptions' => \App\Models\User::whereNotIn('role', ['lead', 'revoked_lead'])->orderBy('name')->get(['id', 'name', 'role', 'avatar_path']),
                 'recent_activity' => \App\Models\ActivityLog::where('action', 'like', 'lead_task.%')
                     ->latest()->limit(30)
                     ->get(['id', 'action', 'description', 'actor_name', 'actor_role', 'properties', 'created_at']),

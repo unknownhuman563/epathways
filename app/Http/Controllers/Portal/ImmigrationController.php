@@ -1124,7 +1124,7 @@ class ImmigrationController extends Controller
             $todayEnd = $now->copy()->endOfDay();
             $weekEnd = $now->copy()->endOfWeek();
 
-            $base = \App\Models\LeadTask::with(['lead:id,lead_id,first_name,last_name,email,status', 'assignee:id,name', 'creator:id,name', 'attachments'])
+            $base = \App\Models\LeadTask::with(['lead:id,lead_id,first_name,last_name,email,status', 'assignee:id,name,avatar_path', 'creator:id,name,avatar_path', 'attachments'])
                 ->withCount('comments')
                 ->when($scope === 'mine', fn ($q) => $q->where('assignee_id', $userId))
                 ->when($scope === 'department', fn ($q) => $q->where('department', 'immigration'));
@@ -1155,10 +1155,10 @@ class ImmigrationController extends Controller
                     'mime_type' => $a->mime_type,
                     'size' => $a->size,
                 ])->values(),
-                'assignee' => $t->assignee ? ['id' => $t->assignee->id, 'name' => $t->assignee->name] : null,
+                'assignee' => $t->assignee ? ['id' => $t->assignee->id, 'name' => $t->assignee->name, 'avatar_url' => $t->assignee->avatar_url] : null,
                 'additional_assignee_ids' => $t->additional_assignee_ids ?? [],
                 'additional_lead_ids' => $t->additional_lead_ids ?? [],
-                'creator' => $t->creator ? ['id' => $t->creator->id,  'name' => $t->creator->name] : null,
+                'creator' => $t->creator ? ['id' => $t->creator->id,  'name' => $t->creator->name, 'avatar_url' => $t->creator->avatar_url] : null,
                 'lead' => $t->lead ? [
                     'id' => $t->lead->id,
                     'lead_id' => $t->lead->lead_id,
@@ -1184,7 +1184,7 @@ class ImmigrationController extends Controller
                 'this_week' => $thisWeek,
                 'undated' => $undated,
                 'recently_done' => $recentlyDone,
-                'staffOptions' => \App\Models\User::whereNotIn('role', ['lead', 'revoked_lead'])->orderBy('name')->get(['id', 'name', 'role']),
+                'staffOptions' => \App\Models\User::whereNotIn('role', ['lead', 'revoked_lead'])->orderBy('name')->get(['id', 'name', 'role', 'avatar_path']),
                 'recent_activity' => \App\Models\ActivityLog::where('action', 'like', 'lead_task.%')
                     ->latest()->limit(30)
                     ->get(['id', 'action', 'description', 'actor_name', 'actor_role', 'properties', 'created_at']),

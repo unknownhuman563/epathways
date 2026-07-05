@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { X } from "lucide-react";
+import Avatar from "@/components/ui/Avatar";
 
 // Shared multi-select staff picker. Used by NewTaskModal and TaskDetailModal
 // so the create + edit flows feel identical. Selected staff render as
@@ -87,10 +88,11 @@ export default function AssigneeMultiPicker({
                     return (
                         <span
                             key={s.id}
-                            className={`inline-flex items-center gap-1 pl-2 pr-1 py-0.5 rounded-full text-[11px] font-semibold ${
+                            className={`inline-flex items-center gap-1 pl-1 pr-1 py-0.5 rounded-full text-[11px] font-semibold ${
                                 isMe ? "bg-emerald-100 text-emerald-800" : "bg-gray-100 text-gray-800"
                             }`}
                         >
+                            <Avatar name={s.name} src={s.avatar_url} colorKey={s.id || s.name} size={16} />
                             {isMe ? "Me" : s.name}
                             {! isMe && s.role && (
                                 <span className="opacity-60 font-normal">· {DEPARTMENT_LABEL[s.role] || s.role}</span>
@@ -155,6 +157,7 @@ export default function AssigneeMultiPicker({
                                         readOnly
                                         className="rounded"
                                     />
+                                    <Avatar name={s.name} src={s.avatar_url} colorKey={s.id || s.name} size={22} />
                                     <span className="font-medium text-gray-900 truncate">
                                         {isMe ? `${s.name} (me)` : s.name}
                                     </span>

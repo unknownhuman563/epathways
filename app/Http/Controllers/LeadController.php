@@ -1067,7 +1067,7 @@ class LeadController extends Controller
         // task was created from. Attachments are eager-loaded so the panel
         // can render a paperclip + file list inline.
         $tasks = \App\Models\LeadTask::with([
-            'assignee:id,name', 'creator:id,name',
+            'assignee:id,name,avatar_path', 'creator:id,name,avatar_path',
             'attachments', 'attachments.uploader:id,name',
         ])
             ->where(function ($q) use ($lead) {
@@ -1091,11 +1091,11 @@ class LeadController extends Controller
                 'completed' => $t->completed,
                 'completed_at' => $t->completed_at,
                 'overdue' => ! $t->completed && $t->due_at && $t->due_at->isPast(),
-                'assignee' => $t->assignee ? ['id' => $t->assignee->id, 'name' => $t->assignee->name] : null,
+                'assignee' => $t->assignee ? ['id' => $t->assignee->id, 'name' => $t->assignee->name, 'avatar_url' => $t->assignee->avatar_url] : null,
                 'additional_assignee_ids' => $t->additional_assignee_ids ?? [],
                 'additional_lead_ids' => $t->additional_lead_ids ?? [],
                 'created_by' => $t->created_by,
-                'creator' => $t->creator ? ['id' => $t->creator->id, 'name' => $t->creator->name] : null,
+                'creator' => $t->creator ? ['id' => $t->creator->id, 'name' => $t->creator->name, 'avatar_url' => $t->creator->avatar_url] : null,
                 'attachments' => $t->attachments->map(fn ($a) => [
                     'id' => $a->id,
                     'url' => $a->url,
@@ -1111,7 +1111,7 @@ class LeadController extends Controller
         // be filtered by role).
         $staffOptions = \App\Models\User::whereNotIn('role', ['lead', 'revoked_lead'])
             ->orderBy('name')
-            ->get(['id', 'name', 'role']);
+            ->get(['id', 'name', 'role', 'avatar_path']);
 
         // Unified Activity log — every source touchpoint AND every field/
         // stage update merged into one chronological feed. Replaces the

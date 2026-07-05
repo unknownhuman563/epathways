@@ -52,7 +52,7 @@ trait CreatesDashboardLead
     {
         return \App\Models\User::whereIn('role', ['sales', 'education', 'admin'])
             ->orderBy('name')
-            ->get(['id', 'name', 'role']);
+            ->get(['id', 'name', 'role', 'avatar_path']);
     }
 
     /**

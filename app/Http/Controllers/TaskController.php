@@ -284,14 +284,14 @@ class TaskController extends Controller
             $task = LeadTask::findOrFail($id);
 
             $rows = $task->comments()
-                ->with('author:id,name')
+                ->with('author:id,name,avatar_path')
                 ->orderBy('created_at')
                 ->get()
                 ->map(fn ($c) => [
                     'id'         => $c->id,
                     'body'       => $c->body,
                     'created_at' => $c->created_at,
-                    'author'     => $c->author ? ['id' => $c->author->id, 'name' => $c->author->name] : null,
+                    'author'     => $c->author ? ['id' => $c->author->id, 'name' => $c->author->name, 'avatar_url' => $c->author->avatar_url] : null,
                 ]);
 
             return response()->json(['comments' => $rows]);
@@ -319,14 +319,14 @@ class TaskController extends Controller
                 'user_id'      => $request->user()->id,
                 'body'         => $validated['body'],
             ]);
-            $comment->load('author:id,name');
+            $comment->load('author:id,name,avatar_path');
 
             return response()->json([
                 'comment' => [
                     'id'         => $comment->id,
                     'body'       => $comment->body,
                     'created_at' => $comment->created_at,
-                    'author'     => $comment->author ? ['id' => $comment->author->id, 'name' => $comment->author->name] : null,
+                    'author'     => $comment->author ? ['id' => $comment->author->id, 'name' => $comment->author->name, 'avatar_url' => $comment->author->avatar_url] : null,
                 ],
             ], 201);
         } catch (\Throwable $e) {

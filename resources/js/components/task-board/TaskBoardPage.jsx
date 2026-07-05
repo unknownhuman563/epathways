@@ -5,6 +5,7 @@ import NewTaskModal from "./NewTaskModal";
 import KanbanBoard from "./KanbanBoard";
 import CalendarView from "./CalendarView";
 import ListView from "./ListView";
+import Avatar from "@/components/ui/Avatar";
 
 // Single Task Board UI shared across every staff portal. The `department`
 // prop scopes labels, default filters, and category lists. Data still comes
@@ -561,13 +562,15 @@ function AvatarStack({ users = [], max = 4 }) {
     return (
         <div className="flex items-center -space-x-2">
             {visible.map((u) => (
-                <span
+                <Avatar
                     key={u.id}
-                    title={u.name}
-                    className={`w-8 h-8 rounded-full text-white text-[10px] font-bold inline-flex items-center justify-center ring-2 ring-white shadow-sm ${avatarColor(u.id || u.name)}`}
-                >
-                    {initialsOf(u.name)}
-                </span>
+                    name={u.name}
+                    src={u.avatar_url}
+                    colorKey={u.id || u.name}
+                    size={32}
+                    ring
+                    className="shadow-sm"
+                />
             ))}
             {overflow > 0 && (
                 <span
