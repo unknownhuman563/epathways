@@ -322,6 +322,9 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/admin/events', [EventController::class, 'index'])->name('admin.events');
         Route::post('/admin/events', [EventController::class, 'store']);
         Route::get('/admin/events/{id}', [EventController::class, 'show'])->name('admin.events.show');
+        Route::post('/admin/events/{id}/email', [EventController::class, 'sendRegistrantEmail'])->name('admin.events.email');
+        Route::post('/admin/events/{id}/schedule-email', [EventController::class, 'scheduleRegistrantEmail'])->name('admin.events.schedule-email');
+        Route::post('/admin/events/{id}/scheduled-emails/{scheduledId}/cancel', [EventController::class, 'cancelScheduledEmail'])->name('admin.events.scheduled-email.cancel');
         Route::post('/admin/events/{id}', [EventController::class, 'update']);
         Route::delete('/admin/events/{id}', [EventController::class, 'destroy']);
 
@@ -360,6 +363,27 @@ Route::middleware(['auth'])->group(function () {
         Route::put('/admin/message-templates/{id}', [\App\Http\Controllers\MessageTemplateController::class, 'update'])->name('admin.message-templates.update');
         Route::delete('/admin/message-templates/{id}', [\App\Http\Controllers\MessageTemplateController::class, 'destroy'])->name('admin.message-templates.destroy');
         Route::post('/admin/message-templates/{id}/test', [\App\Http\Controllers\MessageTemplateController::class, 'sendTest'])->name('admin.message-templates.test');
+
+        // Email replies inbox — inbound replies pulled from the monitored
+        // mailbox (IMAP), matched to leads. Staff read + reply here.
+        // Bulk email — the same campaigns feature as the Sales portal
+        // (compose / schedule / history), under the admin layout.
+        Route::get('/admin/email/bulk', [\App\Http\Controllers\BulkEmailController::class, 'index'])->name('admin.email.bulk');
+        Route::post('/admin/email/bulk', [\App\Http\Controllers\BulkEmailController::class, 'store'])->name('admin.email.bulk.store');
+        Route::get('/admin/email/bulk/{id}', [\App\Http\Controllers\BulkEmailController::class, 'show'])->name('admin.email.bulk.show');
+        Route::post('/admin/email/bulk/{id}/cancel', [\App\Http\Controllers\BulkEmailController::class, 'cancel'])->name('admin.email.bulk.cancel');
+
+        // Bulk SMS — the same campaigns feature as bulk email, on the SMS
+        // channel (template's SMS body, recipients with a phone). Admin-only.
+        Route::get('/admin/email/sms', [\App\Http\Controllers\BulkEmailController::class, 'index'])->name('admin.email.sms');
+        Route::post('/admin/email/sms', [\App\Http\Controllers\BulkEmailController::class, 'store'])->name('admin.email.sms.store');
+        Route::get('/admin/email/sms/{id}', [\App\Http\Controllers\BulkEmailController::class, 'show'])->name('admin.email.sms.show');
+        Route::post('/admin/email/sms/{id}/cancel', [\App\Http\Controllers\BulkEmailController::class, 'cancel'])->name('admin.email.sms.cancel');
+
+        Route::get('/admin/email/replies', [\App\Http\Controllers\EmailReplyController::class, 'index'])->name('admin.email.replies');
+        Route::post('/admin/email/replies/sync', [\App\Http\Controllers\EmailReplyController::class, 'syncNow'])->name('admin.email.replies.sync');
+        Route::post('/admin/email/replies/{leadId}/read', [\App\Http\Controllers\EmailReplyController::class, 'markThreadRead'])->name('admin.email.replies.read');
+        Route::post('/admin/email/replies/{leadId}/reply', [\App\Http\Controllers\EmailReplyController::class, 'reply'])->name('admin.email.replies.reply');
 
         // System request tickets — admin + super-admin triage board.
         Route::get('/admin/system-tickets', [\App\Http\Controllers\SystemTicketController::class, 'adminIndex'])->name('admin.system-tickets');

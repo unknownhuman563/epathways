@@ -10,22 +10,36 @@ use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
 /**
- * Bulk-email campaigns for the sales portal (admins reach it by browsing the
- * portal). Compose from a department/shared template, pick recipients from the
- * leads list, send now or schedule. History + per-recipient status come from
- * message_logs keyed by campaign_id. Scoped to the acting department.
+ * Bulk campaigns — one feature, two channels (email + SMS). Compose from a
+ * department/shared template, pick recipients from the leads list, send now or
+ * schedule. History + per-recipient status come from message_logs keyed by
+ * campaign_id. The channel is inferred from the route (…email.sms* → SMS).
+ *
+ * Email runs in the sales portal (admins reach it by browsing the portal) and
+ * under /admin; SMS is admin-only. Everything else is shared.
  */
 class BulkEmailController extends Controller
 {
     public function index(Request $request)
     {
         $department = $this->department($request);
+        $channel = $this->channel($request);
+        $eventSender = app(\App\Services\EventEmailSender::class);
 
-        return inertia('portal/sales/BulkEmail', [
-            'portal' => 'sales',
-            'templates' => $this->availableTemplates($department),
-            'recipients' => $this->recipientPool(),
+        return inertia($this->page($request, 'index'), [
+            'basePath' => $this->basePath($request),
+            'channel' => $channel,
+            'templates' => $this->availableTemplates($department, $channel),
+            'recipients' => $this->recipientPool($channel),
+            'events' => \App\Models\Event::orderBy('name')
+                ->get()
+                ->map(fn (\App\Models\Event $e) => array_merge(
+                    ['id' => $e->id, 'name' => $e->name],
+                    $eventSender->context($e, null)
+                ))
+                ->values(),
             'campaigns' => EmailCampaign::forDepartmentList($department)
+                ->where('channel', $channel)
                 ->with('creator:id,name')
                 ->latest()->get()->map(fn (EmailCampaign $c) => $this->campaignRow($c)),
         ]);
@@ -34,6 +48,7 @@ class BulkEmailController extends Controller
     public function store(Request $request)
     {
         $department = $this->department($request);
+        $channel = $this->channel($request);
 
         $data = $request->validate([
             'name' => ['required', 'string', 'max:160'],
@@ -46,43 +61,61 @@ class BulkEmailController extends Controller
 
         $template = MessageTemplate::findOrFail($data['template_id']);
         $this->authorizeTemplate($department, $template);
-        if (! $template->is_active || ! $template->hasChannel('email')) {
-            return back()->with('error', 'Pick an active email template.');
+        if (! $template->is_active || ! $template->hasChannel($channel)) {
+            return back()->with('error', "Pick an active {$channel} template.");
         }
 
-        // Keep only real, emailable recipients (snapshot for history fidelity).
-        $recipientIds = Lead::whereIn('id', $data['recipient_lead_ids'])
-            ->whereNotNull('email')->where('email', '!=', '')
-            ->pluck('id')->all();
+        // Keep only recipients reachable on this channel (snapshot for history).
+        $leads = Lead::whereIn('id', $data['recipient_lead_ids'])->get();
+        $comms = app(\App\Services\CommunicationService::class);
+        $recipientIds = [];
+
+        foreach ($leads as $lead) {
+            if ($channel === EmailCampaign::CHANNEL_SMS) {
+                if ($lead->phone && $comms->normalizePhone($lead->phone)) {
+                    $recipientIds[] = $lead->id;
+                }
+            } else {
+                if ($lead->email && filter_var($lead->email, FILTER_VALIDATE_EMAIL)) {
+                    $recipientIds[] = $lead->id;
+                }
+            }
+        }
 
         if (empty($recipientIds)) {
-            return back()->with('error', 'None of the selected leads have an email address.');
+            return back()->with('error', $channel === EmailCampaign::CHANNEL_SMS
+                ? 'None of the selected leads have a valid phone number.'
+                : 'None of the selected leads have a valid email address.');
         }
 
         $scheduling = $data['action'] === 'schedule';
+        $isSms = $channel === EmailCampaign::CHANNEL_SMS;
 
         $campaign = EmailCampaign::create([
             'name' => $data['name'],
             'department' => $department ?? '',
             'created_by' => $request->user()->id,
             'template_id' => $template->id,
-            'subject' => (string) $template->email_subject,
-            'body' => (string) $template->email_body,
+            'channel' => $channel,
+            'subject' => $isSms ? '' : (string) $template->email_subject,
+            'body' => $isSms ? (string) $template->sms_body : (string) $template->email_body,
             'status' => $scheduling ? EmailCampaign::STATUS_SCHEDULED : EmailCampaign::STATUS_SENDING,
             'scheduled_at' => $scheduling ? $data['scheduled_at'] : null,
             'total_recipients' => count($recipientIds),
             'recipient_lead_ids' => $recipientIds,
         ]);
 
+        $noun = $isSms ? 'SMS campaign' : 'Campaign';
+
         if (! $scheduling) {
             SendCampaign::dispatch($campaign->id);
 
-            return redirect()->to($this->base($request))
-                ->with('success', "Campaign '{$campaign->name}' is sending to ".count($recipientIds).' recipients.');
+            return redirect()->to($this->basePath($request))
+                ->with('success', "{$noun} '{$campaign->name}' is sending to ".count($recipientIds).' recipients.');
         }
 
-        return redirect()->to($this->base($request))
-            ->with('success', "Campaign '{$campaign->name}' scheduled for ".$campaign->scheduled_at->format('M j, Y g:i A').'.');
+        return redirect()->to($this->basePath($request))
+            ->with('success', "{$noun} '{$campaign->name}' scheduled for ".$campaign->scheduled_at->format('M j, Y g:i A').'.');
     }
 
     public function show(Request $request, $id)
@@ -91,13 +124,14 @@ class BulkEmailController extends Controller
         $campaign = EmailCampaign::with('creator:id,name')->findOrFail($id);
         $this->authorizeCampaign($department, $campaign);
 
-        return inertia('portal/sales/CampaignDetail', [
-            'portal' => 'sales',
+        return inertia($this->page($request, 'show'), [
+            'basePath' => $this->basePath($request),
+            'channel' => $campaign->channel,
             'campaign' => array_merge($this->campaignRow($campaign), [
                 'subject' => $campaign->subject,
                 'body' => $campaign->body,
             ]),
-            'recipients' => $campaign->logs()->with('lead:id,first_name,last_name,email')
+            'recipients' => $campaign->logs()->with('lead:id,first_name,last_name,email,phone')
                 ->latest()->get()->map(fn ($log) => [
                     'id' => $log->id,
                     'name' => trim(($log->lead->first_name ?? '').' '.($log->lead->last_name ?? '')) ?: '—',
@@ -125,6 +159,14 @@ class BulkEmailController extends Controller
 
     // ─── Helpers ──────────────────────────────────────────────────────────
 
+    /** Channel for this request — SMS routes carry '.sms' in their name. */
+    private function channel(Request $request): string
+    {
+        return str_contains((string) $request->route()?->getName(), '.sms')
+            ? EmailCampaign::CHANNEL_SMS
+            : EmailCampaign::CHANNEL_EMAIL;
+    }
+
     /** Acting department from the portal route (e.g. 'sales'); null = admin scope. */
     private function department(Request $request): ?string
     {
@@ -139,39 +181,86 @@ class BulkEmailController extends Controller
         return null;
     }
 
-    private function base(Request $request): string
+    /** True when reached via an /admin route (vs a portal route). */
+    private function isAdmin(Request $request): bool
     {
+        return str_starts_with((string) $request->route()?->getName(), 'admin.');
+    }
+
+    /** Page component to render for this channel/scope. */
+    private function page(Request $request, string $which): string
+    {
+        if ($this->channel($request) === EmailCampaign::CHANNEL_SMS) {
+            return $which === 'show' ? 'admin/email/CampaignDetail' : 'admin/email/Sms';
+        }
+        if ($this->isAdmin($request)) {
+            return $which === 'show' ? 'admin/email/CampaignDetail' : 'admin/email/BulkMail';
+        }
+
+        return $which === 'show' ? 'portal/sales/CampaignDetail' : 'portal/sales/BulkEmail';
+    }
+
+    /** Base URL for links/redirects/posts — SMS, admin email, or the portal. */
+    private function basePath(Request $request): string
+    {
+        if ($this->channel($request) === EmailCampaign::CHANNEL_SMS) {
+            return '/admin/email/sms';
+        }
+        if ($this->isAdmin($request)) {
+            return '/admin/email/bulk';
+        }
+
         $dept = $this->department($request) ?? 'sales';
 
         return "/portal/{$dept}/bulk-email";
     }
 
-    /** Active, email-capable templates this department may use (own + shared). */
-    private function availableTemplates(?string $department): \Illuminate\Support\Collection
+    /** Active templates this department may use on the channel (own + shared). */
+    private function availableTemplates(?string $department, string $channel): \Illuminate\Support\Collection
     {
+        $isSms = $channel === EmailCampaign::CHANNEL_SMS;
+
         return MessageTemplate::active()
             ->when($department !== null, fn ($q) => $q->whereIn('department', [$department, '']))
             ->orderBy('name')->get()
-            ->filter(fn (MessageTemplate $t) => $t->hasChannel('email'))
+            ->filter(fn (MessageTemplate $t) => $t->hasChannel($channel))
             ->map(fn (MessageTemplate $t) => [
                 'id' => $t->id, 'name' => $t->name,
-                'subject' => $t->email_subject, 'body' => $t->email_body,
+                'subject' => $isSms ? null : $t->email_subject,
+                'body' => $isSms ? $t->sms_body : $t->email_body,
             ])->values();
     }
 
-    /** Selectable recipients: every lead with an email, for client-side filtering. */
-    private function recipientPool(): \Illuminate\Support\Collection
+    /** Selectable recipients: every lead reachable on the channel. */
+    private function recipientPool(string $channel): \Illuminate\Support\Collection
     {
-        return Lead::whereNotNull('email')->where('email', '!=', '')
-            ->orderBy('first_name')
-            ->get(['id', 'first_name', 'last_name', 'email', 'stage', 'status'])
+        $query = Lead::query();
+        if ($channel === EmailCampaign::CHANNEL_SMS) {
+            $query->whereNotNull('phone')->where('phone', '!=', '');
+        } else {
+            $query->whereNotNull('email')->where('email', '!=', '');
+        }
+
+        $comms = app(\App\Services\CommunicationService::class);
+
+        return $query->orderBy('first_name')
+            ->get(['id', 'first_name', 'last_name', 'email', 'phone', 'stage', 'status', 'event_id'])
+            ->filter(function (Lead $l) use ($channel, $comms) {
+                if ($channel === EmailCampaign::CHANNEL_SMS) {
+                    return $l->phone && $comms->normalizePhone($l->phone);
+                } else {
+                    return $l->email && filter_var($l->email, FILTER_VALIDATE_EMAIL);
+                }
+            })
             ->map(fn (Lead $l) => [
                 'id' => $l->id,
                 'name' => trim("{$l->first_name} {$l->last_name}") ?: '—',
                 'email' => $l->email,
+                'phone' => $l->phone,
                 'stage' => $l->stage,
                 'status' => $l->status,
-            ]);
+                'event_id' => $l->event_id,
+            ])->values();
     }
 
     private function campaignRow(EmailCampaign $c): array

@@ -37,11 +37,22 @@ class SendCampaign implements ShouldQueue
 
         $sent = 0;
         $failed = 0;
+        $isSms = $campaign->channel === EmailCampaign::CHANNEL_SMS;
+
+        // Carry the source template's branding (banner/footer/sender) so bulk
+        // emails match the template exactly, not the default shell.
+        $template = $campaign->template;
+        $banner = $template?->banner_image;
+        $footer = $template?->footer_image;
+        $fromEmail = $template?->from_email;
+        $fromName = $template?->from_name;
 
         foreach (array_chunk($campaign->recipient_lead_ids ?? [], 200) as $chunk) {
             $leads = Lead::whereIn('id', $chunk)->get();
             foreach ($leads as $lead) {
-                $ok = $comms->sendCampaignEmail($lead, $campaign->subject, $campaign->body, $campaign->id);
+                $ok = $isSms
+                    ? $comms->sendCampaignSms($lead, $campaign->body, $campaign->id)
+                    : $comms->sendCampaignEmail($lead, $campaign->subject, $campaign->body, $campaign->id, [], $banner, $footer, $fromEmail, $fromName);
                 $ok ? $sent++ : $failed++;
             }
         }

@@ -79,6 +79,27 @@ class CommunicationServiceTest extends TestCase
         $this->assertStringStartsWith('+64', $res['sms']->recipient_address); // normalized to E.164
     }
 
+    public function test_ph_phone_normalization(): void
+    {
+        $this->fakeSmsOk();
+        $this->template(['channels' => ['sms']]);
+
+        // 1. PH mobile number starting with 09
+        $res1 = $this->service()->sendTemplated('tmpl', $this->lead(['phone' => '09206922477']));
+        $this->assertNotNull($res1['sms']);
+        $this->assertSame('+639206922477', $res1['sms']->recipient_address);
+
+        // 2. PH mobile number starting with 9 (no leading 0)
+        $res2 = $this->service()->sendTemplated('tmpl', $this->lead(['phone' => '9206922477']));
+        $this->assertNotNull($res2['sms']);
+        $this->assertSame('+639206922477', $res2['sms']->recipient_address);
+
+        // 3. PH mobile number pre-formatted with +63
+        $res3 = $this->service()->sendTemplated('tmpl', $this->lead(['phone' => '+639206922477']));
+        $this->assertNotNull($res3['sms']);
+        $this->assertSame('+639206922477', $res3['sms']->recipient_address);
+    }
+
     public function test_logs_a_message_log_per_channel(): void
     {
         $this->fakeSmsOk();
@@ -96,6 +117,30 @@ class CommunicationServiceTest extends TestCase
 
         $this->assertStringContainsString('Hello Zaniyah', $res['email']->body);
         $this->assertSame('Hi Zaniyah', $res['email']->subject);
+    }
+
+    public function test_resolves_linked_event_variables(): void
+    {
+        $event = \App\Models\Event::create([
+            'name' => 'NZ Dream Workshop',
+            'event_code' => 'nz-dream',
+            'type' => 'Workshop',
+            'date_from' => '2026-07-10',
+            'time_start' => '14:00:00',
+            'mode' => 'online',
+        ]);
+
+        $lead = $this->lead(['event_id' => $event->id]);
+        $this->template([
+            'channels' => ['email'],
+            'email_body' => 'Event: {{event_name}}, Date: {{event_date}}, Location: {{event_location}}'
+        ]);
+
+        $res = $this->service()->sendTemplated('tmpl', $lead);
+
+        $this->assertStringContainsString('Event: NZ Dream Workshop', $res['email']->body);
+        $this->assertStringContainsString('Date: Friday, 10 July 2026', $res['email']->body);
+        $this->assertStringContainsString('Location: Online', $res['email']->body);
     }
 
     public function test_unknown_variables_left_empty(): void

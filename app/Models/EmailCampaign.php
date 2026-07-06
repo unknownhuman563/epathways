@@ -21,11 +21,16 @@ class EmailCampaign extends Model
 
     public const STATUS_CANCELED = 'canceled';
 
+    public const CHANNEL_EMAIL = 'email';
+
+    public const CHANNEL_SMS = 'sms';
+
     protected $fillable = [
         'name',
         'department',
         'created_by',
         'template_id',
+        'channel',
         'subject',
         'body',
         'status',

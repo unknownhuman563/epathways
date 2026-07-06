@@ -2,13 +2,11 @@
 
 namespace App\Services;
 
-use App\Mail\TrackerWelcome;
 use App\Models\ActivityLog;
 use App\Models\Lead;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Mail;
 
 /**
  * Unified entry point for every public form that creates/updates a Lead.
@@ -34,14 +32,13 @@ class LeadIntakeService
     /**
      * Idempotent intake — finds-or-creates a Lead from a form payload.
      *
-     * @param  string   $formType  short slug for the source form, e.g.
-     *                             'free-assessment', 'quick-lead:hero',
-     *                             'booking', 'event:PH-TOUR-2026'.
-     * @param  array    $payload   normalised lead fields: first_name,
-     *                             last_name, email, phone, country, …
-     * @param  Request|null $request  optional HTTP request — used to
-     *                                capture UTM params from the URL.
-     * @return Lead
+     * @param  string  $formType  short slug for the source form, e.g.
+     *                            'free-assessment', 'quick-lead:hero',
+     *                            'booking', 'event:PH-TOUR-2026'.
+     * @param  array  $payload  normalised lead fields: first_name,
+     *                          last_name, email, phone, country, …
+     * @param  Request|null  $request  optional HTTP request — used to
+     *                                 capture UTM params from the URL.
      *
      * @throws \Throwable on DB / model failures (caller decides response)
      */
@@ -68,29 +65,29 @@ class LeadIntakeService
             // Only backfill fields that are currently empty — never overwrite
             // values the lead has already provided in an earlier (richer) form.
             $backfill = array_filter([
-                'first_name'        => empty($lead->first_name)        ? ($payload['first_name'] ?? null)        : null,
-                'last_name'         => empty($lead->last_name)         ? ($payload['last_name']  ?? null)        : null,
-                'phone'             => empty($lead->phone)             ? ($payload['phone']      ?? null)        : null,
-                'residence_country' => empty($lead->residence_country) ? ($payload['country']    ?? null)        : null,
+                'first_name' => empty($lead->first_name) ? ($payload['first_name'] ?? null) : null,
+                'last_name' => empty($lead->last_name) ? ($payload['last_name'] ?? null) : null,
+                'phone' => empty($lead->phone) ? ($payload['phone'] ?? null) : null,
+                'residence_country' => empty($lead->residence_country) ? ($payload['country'] ?? null) : null,
             ], fn ($v) => ! is_null($v) && $v !== '');
 
             empty($backfill) ?: $lead->update($backfill);
 
             ActivityLog::record('lead.resubmitted', [
                 'description' => "Re-submitted via {$formType}",
-                'properties'  => [
-                    'subject_type'  => 'Lead',
-                    'subject_id'    => $lead->id,
+                'properties' => [
+                    'subject_type' => 'Lead',
+                    'subject_id' => $lead->id,
                     'subject_label' => trim("{$lead->first_name} {$lead->last_name}") ?: ($lead->email ?? 'Lead'),
-                    'form_type'     => $formType,
-                    'backfilled'    => array_keys($backfill),
+                    'form_type' => $formType,
+                    'backfilled' => array_keys($backfill),
                 ],
             ]);
         } catch (\Throwable $e) {
             // Auditing must never break the actual intake flow.
             Log::error('LeadIntakeService::attachToExisting log failed', [
                 'lead_id' => $lead->id,
-                'error'   => $e->getMessage(),
+                'error' => $e->getMessage(),
             ]);
         }
 
@@ -102,32 +99,25 @@ class LeadIntakeService
     {
         $lead = Lead::create(array_merge(
             [
-                'lead_id'           => $payload['lead_id'] ?? 'LP-' . rand(10000, 99999),
-                'first_name'        => $payload['first_name']        ?? '',
-                'last_name'         => $payload['last_name']         ?? '',
-                'email'             => $payload['email']             ?? null,
-                'phone'             => $payload['phone']             ?? null,
-                'residence_country' => $payload['country']           ?? null,
-                'source'            => $formType,
-                'status'            => 'New Leads',
-                'stage'             => $payload['stage']             ?? null,
+                'lead_id' => $payload['lead_id'] ?? 'LP-'.rand(10000, 99999),
+                'first_name' => $payload['first_name'] ?? '',
+                'last_name' => $payload['last_name'] ?? '',
+                'email' => $payload['email'] ?? null,
+                'phone' => $payload['phone'] ?? null,
+                'residence_country' => $payload['country'] ?? null,
+                // Defensive cap — long event slugs (source = event:{code}) must
+                // never overflow the column and break registration.
+                'source' => mb_substr((string) $formType, 0, 191),
+                'status' => 'New Leads',
+                'stage' => $payload['stage'] ?? null,
             ],
             $this->captureUtm($request)
         ));
 
-        // First-touch: give the lead their /track/{code} home. Prefer the
-        // 'tracker_welcome' template; fall back to the legacy Mailable if it
-        // isn't configured, so the email always sends.
-        if (! empty($lead->email)) {
-            try {
-                $res = app(CommunicationService::class)->sendTemplated('tracker_welcome', $lead);
-                if (! $res['email']) {
-                    Mail::to($lead->email)->send(new TrackerWelcome($lead));
-                }
-            } catch (\Throwable $e) {
-                Log::error('TrackerWelcome dispatch failed', ['lead_id' => $lead->id, 'error' => $e->getMessage()]);
-            }
-        }
+        // The "Track your ePathways application" (tracker_welcome) email is NOT
+        // auto-sent on lead creation — it goes out only when staff explicitly
+        // send the tracking link (LeadController::sendTrackerLink), so public
+        // form submitters get just that form's own confirmation.
 
         return $lead;
     }
@@ -141,10 +131,10 @@ class LeadIntakeService
     {
         return $request
             ? [
-                'utm_source'   => $request->query('utm_source'),
-                'utm_medium'   => $request->query('utm_medium'),
+                'utm_source' => $request->query('utm_source'),
+                'utm_medium' => $request->query('utm_medium'),
                 'utm_campaign' => $request->query('utm_campaign'),
-                'utm_content'  => $request->query('utm_content'),
+                'utm_content' => $request->query('utm_content'),
             ]
             : [];
     }

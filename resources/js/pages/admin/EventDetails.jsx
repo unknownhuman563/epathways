@@ -1,58 +1,26 @@
-import React, { useState } from 'react';
-import { Head, Link } from '@inertiajs/react';
+import React, { useMemo, useState } from 'react';
+import { Head, Link, useForm, router } from '@inertiajs/react';
 import {
     ArrowLeft, Calendar, MapPin, Users, Globe,
-    FileText, Download, Edit, Search, CheckCircle2, XCircle, Tag, Clock,
-    StickyNote, Eye,
+    Download, Edit, Search, Tag, Mail, Send, CheckCircle2, XCircle, Clock,
+    CalendarClock, Ban,
 } from 'lucide-react';
+import RichTextEditor from '@/components/templates/RichTextEditor';
 
-// Small "Last edited by X, N ago" line for the Notes column. Falls back
-// to a gentle "No notes" placeholder so empty rows still read as a
-// deliberate state rather than a broken table cell.
-function NotesCell({ lead }) {
-    const body = lead.event_notes;
-    const updatedAt = lead.event_notes_updated_at;
-    const editor = lead.event_notes_editor;
-
-    if (! body) {
-        return <span className="text-xs text-gray-400 italic">No notes yet</span>;
-    }
-
-    const fmt = (iso) => {
-        if (! iso) return null;
-        const d = new Date(iso);
-        return d.toLocaleDateString('en-NZ', { day: '2-digit', month: 'short', year: 'numeric' })
-            + ' · ' + d.toLocaleTimeString('en-NZ', { hour: '2-digit', minute: '2-digit' });
-    };
-
-    return (
-        <div className="min-w-0">
-            <p className="text-xs text-gray-800 line-clamp-2 leading-relaxed" title={body}>
-                {body}
-            </p>
-            {updatedAt && (
-                <p className="text-[10px] text-gray-400 mt-1">
-                    Updated {fmt(updatedAt)}
-                    {editor?.name && <span className="text-gray-500"> by {editor.name}</span>}
-                </p>
-            )}
-        </div>
-    );
-}
-
-export default function EventDetails({ event, leads }) {
+export default function EventDetails({ event, leads, emailTemplates = [], sentEmails = [], scheduledEmails = [] }) {
+    const [tab, setTab] = useState('registrants');
     const [searchTerm, setSearchTerm] = useState('');
 
     const filteredLeads = leads.filter(lead => {
         const full = `${lead.first_name} ${lead.last_name}`.toLowerCase();
-        const email = lead.email.toLowerCase();
+        const email = (lead.email || '').toLowerCase();
         const s = searchTerm.toLowerCase();
         return full.includes(s) || email.includes(s);
     });
 
     const getStatusStyle = (status) => {
         const s = (status || '').toLowerCase();
-        switch(s) {
+        switch (s) {
             case 'upcoming':  return 'bg-blue-100 text-blue-700 border-blue-200';
             case 'ongoing':   return 'bg-emerald-100 text-emerald-700 border-emerald-200';
             case 'completed': return 'bg-gray-100 text-gray-600 border-gray-200';
@@ -65,7 +33,14 @@ export default function EventDetails({ event, leads }) {
         if (!dateStr) return '—';
         try {
             return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-        } catch(e) { return dateStr; }
+        } catch (e) { return dateStr; }
+    };
+
+    const formatDateTime = (dateStr) => {
+        if (!dateStr) return '—';
+        try {
+            return new Date(dateStr).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });
+        } catch (e) { return dateStr; }
     };
 
     return (
@@ -79,9 +54,7 @@ export default function EventDetails({ event, leads }) {
                         <ArrowLeft size={16} /> Back to Events
                     </Link>
                     <div className="flex flex-wrap items-center gap-3">
-                        <h1 className="text-2xl font-bold text-gray-900 tracking-tight">
-                            {event.name}
-                        </h1>
+                        <h1 className="text-2xl font-bold text-gray-900 tracking-tight">{event.name}</h1>
                         <span className={`px-2.5 py-1 rounded-full text-xs font-bold border capitalize ${getStatusStyle(event.status)}`}>
                             {event.status}
                         </span>
@@ -105,18 +78,14 @@ export default function EventDetails({ event, leads }) {
             {/* Overview Cards */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
-                        <Users size={20} />
-                    </div>
+                    <div className="w-12 h-12 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center shrink-0"><Users size={20} /></div>
                     <div>
                         <p className="text-sm text-gray-600 font-medium">Registrants</p>
                         <p className="text-2xl font-bold text-gray-900">{leads.length}</p>
                     </div>
                 </div>
                 <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
-                        <Calendar size={20} />
-                    </div>
+                    <div className="w-12 h-12 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0"><Calendar size={20} /></div>
                     <div>
                         <p className="text-sm text-gray-600 font-medium">Date Range</p>
                         <p className="text-sm font-bold text-gray-900 leading-tight mt-1">
@@ -125,9 +94,7 @@ export default function EventDetails({ event, leads }) {
                     </div>
                 </div>
                 <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
-                        <Tag size={20} />
-                    </div>
+                    <div className="w-12 h-12 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0"><Tag size={20} /></div>
                     <div>
                         <p className="text-sm text-gray-600 font-medium">Event Type</p>
                         <p className="text-sm font-bold text-gray-900 mt-1">{event.type}</p>
@@ -139,7 +106,7 @@ export default function EventDetails({ event, leads }) {
                     </div>
                     <div>
                         <p className="text-sm text-gray-600 font-medium">Location</p>
-                        <p className="text-sm font-bold text-gray-900 line-clamp-2 mt-1">{String(event.mode).toLowerCase() === 'online' ? 'Online / Webinar' : 'Multiple / Venue'}</p>
+                        <p className="text-sm font-bold text-gray-900 line-clamp-2 mt-1">{event.location || (String(event.mode).toLowerCase() === 'online' ? 'Online / Webinar' : 'Multiple / Venue')}</p>
                     </div>
                 </div>
             </div>
@@ -167,102 +134,387 @@ export default function EventDetails({ event, leads }) {
                 </div>
             )}
 
-            {/* Registrants Table Section */}
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden flex flex-col">
-                <div className="p-5 border-b border-gray-100 flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
-                    <div>
-                        <h2 className="text-lg font-bold text-gray-900">Registrants</h2>
-                        <p className="text-xs text-gray-600 mt-1">People who have signed up directly for this event.</p>
-                    </div>
-                    <div className="w-full sm:w-72 relative">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 w-4 h-4" />
-                        <input 
-                            type="text" 
-                            placeholder="Search name or email..." 
-                            value={searchTerm}
-                            onChange={e => setSearchTerm(e.target.value)}
-                            className="w-full pl-9 pr-4 py-2 text-sm border border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
-                        />
-                    </div>
-                </div>
+            {/* Tabs */}
+            <div className="flex items-center gap-1 border-b border-gray-200">
+                {[
+                    { key: 'registrants', label: 'Registrants', icon: Users },
+                    { key: 'email', label: 'Email', icon: Mail },
+                    { key: 'scheduled', label: 'Scheduling', icon: CalendarClock },
+                ].map(({ key, label, icon: Icon }) => {
+                    const pendingCount = scheduledEmails.filter(s => s.status === 'pending').length;
+                    return (
+                    <button
+                        key={key}
+                        onClick={() => setTab(key)}
+                        className={`inline-flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 -mb-px transition-colors ${
+                            tab === key
+                                ? 'border-gray-900 text-gray-900'
+                                : 'border-transparent text-gray-500 hover:text-gray-800'
+                        }`}
+                    >
+                        <Icon size={16} /> {label}
+                        {key === 'registrants' && <span className="ml-0.5 text-xs bg-gray-100 text-gray-600 rounded-full px-2 py-0.5">{leads.length}</span>}
+                        {key === 'scheduled' && pendingCount > 0 && <span className="ml-0.5 text-xs bg-amber-100 text-amber-700 rounded-full px-2 py-0.5">{pendingCount}</span>}
+                    </button>
+                    );
+                })}
+            </div>
 
-                <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse">
-                        <thead>
-                            <tr className="bg-gray-50/50 border-b border-gray-100">
-                                <th className="px-6 py-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">Name & Contact</th>
-                                <th className="px-6 py-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">Interest / Study Plan</th>
-                                <th className="px-6 py-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">Status</th>
-                                <th className="px-6 py-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">Notes</th>
-                                <th className="px-6 py-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">Date Registered</th>
-                                <th className="px-6 py-4 text-xs font-semibold text-gray-600 uppercase tracking-wider text-right">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-50">
-                            {filteredLeads.length === 0 ? (
-                                <tr>
-                                    <td colSpan={6} className="px-6 py-12 text-center text-gray-500">
-                                        <Users className="w-10 h-10 mx-auto mb-3 text-gray-200" />
-                                        <p className="font-semibold text-gray-600 mb-1">No registrants found</p>
-                                        <p className="text-sm">No one has registered for this event yet.</p>
-                                    </td>
-                                </tr>
-                            ) : (
-                                filteredLeads.map(lead => (
-                                    <tr key={lead.id} className="hover:bg-blue-50/30 transition-colors">
-                                        <td className="px-6 py-4">
-                                            <div className="flex items-center gap-3">
-                                                <div className="w-9 h-9 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-sm shrink-0">
-                                                    {lead.first_name?.charAt(0)}{lead.last_name?.charAt(0)}
-                                                </div>
-                                                <div>
-                                                    <p className="font-bold text-gray-900 text-sm">{lead.first_name} {lead.last_name}</p>
-                                                    <p className="text-xs text-gray-600">{lead.email}</p>
-                                                    <p className="text-xs text-gray-500 mt-0.5">{lead.phone}</p>
-                                                </div>
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            <div className="flex flex-col gap-1">
-                                                <span className="text-sm font-semibold text-gray-800">{lead.stage || 'N/A'}</span>
-                                                <span className="text-xs text-gray-600">{lead.study_plans?.[0]?.qualification_level || lead.education_exps?.[0]?.level || 'N/A'}</span>
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            <span className="inline-flex items-center px-2 py-1 rounded text-xs font-bold bg-blue-50 text-blue-700 border border-blue-100">
-                                                {lead.status || 'New'}
-                                            </span>
-                                        </td>
-                                        <td className="px-6 py-4 max-w-[260px]">
-                                            <NotesCell lead={lead} />
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            <span className="text-sm text-gray-700">{formatDate(lead.created_at)}</span>
-                                        </td>
-                                        <td className="px-6 py-4 text-right">
-                                            <div className="flex items-center justify-end gap-3">
-                                                <Link
-                                                    href={`/admin/events/${event.id}/registrants/${lead.id}`}
-                                                    className="inline-flex items-center gap-1 text-sm font-semibold text-gray-700 hover:text-gray-900 hover:underline"
-                                                    title="Open the registration form the lead filled + notes"
-                                                >
-                                                    <Eye size={13} /> View Registration
-                                                </Link>
-                                                <Link
-                                                    href={`/admin/leads/${lead.id}`}
-                                                    className="text-sm font-semibold text-indigo-600 hover:text-indigo-800 hover:underline"
-                                                >
-                                                    View Lead
-                                                </Link>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ))
-                            )}
-                        </tbody>
-                    </table>
+            {tab === 'registrants' && (
+                <RegistrantsTable
+                    filteredLeads={filteredLeads}
+                    searchTerm={searchTerm}
+                    setSearchTerm={setSearchTerm}
+                    formatDate={formatDate}
+                />
+            )}
+            {tab === 'email' && (
+                <EmailTab mode="send" event={event} leads={leads} emailTemplates={emailTemplates} sentEmails={sentEmails} scheduledEmails={scheduledEmails} formatDate={formatDate} formatDateTime={formatDateTime} />
+            )}
+            {tab === 'scheduled' && (
+                <EmailTab mode="schedule" event={event} leads={leads} emailTemplates={emailTemplates} sentEmails={sentEmails} scheduledEmails={scheduledEmails} formatDate={formatDate} formatDateTime={formatDateTime} />
+            )}
+        </div>
+    );
+}
+
+// ── Registrants tab ─────────────────────────────────────────────────────
+function RegistrantsTable({ filteredLeads, searchTerm, setSearchTerm, formatDate }) {
+    return (
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden flex flex-col">
+            <div className="p-5 border-b border-gray-100 flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
+                <div>
+                    <h2 className="text-lg font-bold text-gray-900">Registrants</h2>
+                    <p className="text-xs text-gray-600 mt-1">People who have signed up directly for this event.</p>
+                </div>
+                <div className="w-full sm:w-72 relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 w-4 h-4" />
+                    <input
+                        type="text"
+                        placeholder="Search name or email..."
+                        value={searchTerm}
+                        onChange={e => setSearchTerm(e.target.value)}
+                        className="w-full pl-9 pr-4 py-2 text-sm border border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+                    />
                 </div>
             </div>
+
+            <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                    <thead>
+                        <tr className="bg-gray-50/50 border-b border-gray-100">
+                            <th className="px-6 py-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">Name & Contact</th>
+                            <th className="px-6 py-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">Interest / Study Plan</th>
+                            <th className="px-6 py-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">Status</th>
+                            <th className="px-6 py-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">Date Registered</th>
+                            <th className="px-6 py-4 text-xs font-semibold text-gray-600 uppercase tracking-wider text-right">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-50">
+                        {filteredLeads.length === 0 ? (
+                            <tr>
+                                <td colSpan={5} className="px-6 py-12 text-center text-gray-500">
+                                    <Users className="w-10 h-10 mx-auto mb-3 text-gray-200" />
+                                    <p className="font-semibold text-gray-600 mb-1">No registrants found</p>
+                                    <p className="text-sm">No one has registered for this event yet.</p>
+                                </td>
+                            </tr>
+                        ) : (
+                            filteredLeads.map(lead => (
+                                <tr key={lead.id} className="hover:bg-blue-50/30 transition-colors">
+                                    <td className="px-6 py-4">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-9 h-9 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-sm shrink-0">
+                                                {lead.first_name?.charAt(0)}{lead.last_name?.charAt(0)}
+                                            </div>
+                                            <div>
+                                                <p className="font-bold text-gray-900 text-sm">{lead.first_name} {lead.last_name}</p>
+                                                <p className="text-xs text-gray-600">{lead.email}</p>
+                                                <p className="text-xs text-gray-500 mt-0.5">{lead.phone}</p>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td className="px-6 py-4">
+                                        <div className="flex flex-col gap-1">
+                                            <span className="text-sm font-semibold text-gray-800">{lead.stage || 'N/A'}</span>
+                                            <span className="text-xs text-gray-600">{lead.study_plans?.[0]?.qualification_level || lead.education_exps?.[0]?.level || 'N/A'}</span>
+                                        </div>
+                                    </td>
+                                    <td className="px-6 py-4">
+                                        <span className="inline-flex items-center px-2 py-1 rounded text-xs font-bold bg-blue-50 text-blue-700 border border-blue-100">
+                                            {lead.status || 'New'}
+                                        </span>
+                                    </td>
+                                    <td className="px-6 py-4">
+                                        <span className="text-sm text-gray-700">{formatDate(lead.created_at)}</span>
+                                    </td>
+                                    <td className="px-6 py-4 text-right">
+                                        <Link href={`/admin/leads/${lead.id}`} className="text-sm font-semibold text-indigo-600 hover:text-indigo-800 hover:underline">
+                                            View Lead
+                                        </Link>
+                                    </td>
+                                </tr>
+                            ))
+                        )}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    );
+}
+
+// ── Email tab (send now) + Scheduling tab (send later) ───────────────────
+function EmailTab({ mode = 'send', event, leads, emailTemplates, sentEmails, scheduledEmails, formatDate, formatDateTime }) {
+    const isSchedule = mode === 'schedule';
+    const emailable = useMemo(() => leads.filter(l => l.email), [leads]);
+    const form = useForm({
+        subject: '',
+        body: '',
+        recipient_ids: emailable.map(l => l.id),
+        template_id: '',
+        scheduled_at: '',
+    });
+    const { data, setData, post, processing, errors, reset } = form;
+    const templateId = data.template_id;
+
+    const allSelected = data.recipient_ids.length === emailable.length && emailable.length > 0;
+
+    const toggleAll = () =>
+        setData('recipient_ids', allSelected ? [] : emailable.map(l => l.id));
+
+    const toggleOne = (id) =>
+        setData('recipient_ids', data.recipient_ids.includes(id)
+            ? data.recipient_ids.filter(x => x !== id)
+            : [...data.recipient_ids, id]);
+
+    const loadTemplate = (id) => {
+        setData('template_id', id);
+        const t = emailTemplates.find(t => String(t.id) === String(id));
+        if (t) {
+            setData('subject', t.email_subject || '');
+            setData('body', t.email_body || '');
+        }
+    };
+
+    const submit = (e) => {
+        e.preventDefault();
+        const url = isSchedule ? `/admin/events/${event.id}/schedule-email` : `/admin/events/${event.id}/email`;
+        // The datetime-local value is the user's local wall-clock time. Convert
+        // it to a UTC instant so it's stored/compared correctly and displays
+        // back in the viewer's own timezone.
+        form.transform((d) => ({
+            ...d,
+            scheduled_at: d.scheduled_at ? new Date(d.scheduled_at).toISOString() : d.scheduled_at,
+        }));
+        post(url, {
+            preserveScroll: true,
+            onSuccess: () => reset('subject', 'body', 'template_id', 'scheduled_at'),
+        });
+    };
+
+    const cancelScheduled = (row) => {
+        if (!window.confirm(`Cancel the scheduled email "${row.subject || '(no subject)'}"? It won't be sent.`)) return;
+        router.post(`/admin/events/${event.id}/scheduled-emails/${row.id}/cancel`, {}, { preserveScroll: true });
+    };
+
+    const canSubmit = data.recipient_ids.length > 0 && data.subject.trim() && (!isSchedule || data.scheduled_at);
+
+    const statusPill = (status) => {
+        const s = (status || '').toLowerCase();
+        if (s === 'failed') return <span className="inline-flex items-center gap-1 text-xs font-semibold text-red-600"><XCircle size={12} /> Failed</span>;
+        if (s === 'sent' || s === 'delivered') return <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-600"><CheckCircle2 size={12} /> Sent</span>;
+        return <span className="inline-flex items-center gap-1 text-xs font-semibold text-amber-600"><Clock size={12} /> Queued</span>;
+    };
+
+    const scheduledPill = (status) => {
+        const s = (status || '').toLowerCase();
+        if (s === 'sent') return <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-600"><CheckCircle2 size={12} /> Sent</span>;
+        if (s === 'failed') return <span className="inline-flex items-center gap-1 text-xs font-semibold text-red-600"><XCircle size={12} /> Failed</span>;
+        if (s === 'canceled') return <span className="inline-flex items-center gap-1 text-xs font-semibold text-gray-400"><Ban size={12} /> Canceled</span>;
+        if (s === 'sending') return <span className="inline-flex items-center gap-1 text-xs font-semibold text-blue-600"><Clock size={12} /> Sending</span>;
+        return <span className="inline-flex items-center gap-1 text-xs font-semibold text-amber-600"><CalendarClock size={12} /> Pending</span>;
+    };
+
+    return (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Composer */}
+            <form onSubmit={submit} className="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-gray-100 p-6 space-y-4">
+                <div className="flex items-center justify-between">
+                    <h2 className="text-lg font-bold text-gray-900">{isSchedule ? 'Schedule email' : 'Compose email'}</h2>
+                    {emailTemplates.length > 0 && (
+                        <select
+                            value={templateId}
+                            onChange={(e) => loadTemplate(e.target.value)}
+                            className="text-sm border border-gray-200 rounded-lg px-2.5 py-1.5 bg-white text-gray-600 outline-none focus:ring-2 focus:ring-gray-200"
+                        >
+                            <option value="">Start from template…</option>
+                            {emailTemplates.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                        </select>
+                    )}
+                </div>
+
+                <label className="block">
+                    <span className="block text-xs font-semibold text-gray-600 mb-1">Subject</span>
+                    <input
+                        value={data.subject}
+                        onChange={e => setData('subject', e.target.value)}
+                        placeholder="e.g. See you at {{event_name}}!"
+                        className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm outline-none focus:ring-2 focus:ring-gray-300"
+                    />
+                    {errors.subject && <span className="text-xs text-rose-600">{errors.subject}</span>}
+                </label>
+
+                <label className="block">
+                    <span className="block text-xs font-semibold text-gray-600 mb-1">Message</span>
+                    <RichTextEditor value={data.body} onChange={(html) => setData('body', html)} />
+                    {errors.body && <span className="text-xs text-rose-600">{errors.body}</span>}
+                    <span className="block text-[11px] text-gray-400 mt-1">
+                        Variables: <code>{'{{first_name}}'}</code> <code>{'{{event_name}}'}</code> <code>{'{{event_date}}'}</code> <code>{'{{event_time}}'}</code> <code>{'{{event_location}}'}</code>. Sent using the branded ePathways email design.
+                    </span>
+                </label>
+
+                {isSchedule && (
+                    <label className="block">
+                        <span className="block text-xs font-semibold text-gray-600 mb-1">Send date &amp; time</span>
+                        <input
+                            type="datetime-local"
+                            value={data.scheduled_at}
+                            onChange={e => setData('scheduled_at', e.target.value)}
+                            className="w-full sm:w-72 px-3 py-2 rounded-lg border border-gray-200 text-sm outline-none focus:ring-2 focus:ring-gray-300"
+                        />
+                        {errors.scheduled_at && <span className="block text-xs text-rose-600 mt-1">{errors.scheduled_at}</span>}
+                        <span className="block text-[11px] text-gray-400 mt-1">The email will be sent automatically at this time (server timezone).</span>
+                    </label>
+                )}
+
+                <div className="flex items-center justify-between pt-2 border-t border-gray-100">
+                    <p className="text-xs text-gray-500">
+                        {isSchedule ? 'Scheduling for ' : 'Sending to '}<span className="font-semibold text-gray-800">{data.recipient_ids.length}</span> of {emailable.length} registrant{emailable.length === 1 ? '' : 's'}.
+                    </p>
+                    <button
+                        type="submit"
+                        disabled={processing || !canSubmit}
+                        className="inline-flex items-center gap-2 px-5 py-2.5 bg-gray-900 text-white text-sm font-semibold rounded-xl hover:bg-black disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        {isSchedule ? <CalendarClock size={15} /> : <Send size={15} />}
+                        {processing ? (isSchedule ? 'Scheduling…' : 'Sending…') : (isSchedule ? 'Schedule email' : 'Send email')}
+                    </button>
+                </div>
+            </form>
+
+            {/* Recipients */}
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 flex flex-col">
+                <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-sm font-bold text-gray-900">Recipients</h3>
+                    <button type="button" onClick={toggleAll} className="text-xs font-semibold text-indigo-600 hover:underline">
+                        {allSelected ? 'Deselect all' : 'Select all'}
+                    </button>
+                </div>
+                {emailable.length === 0 ? (
+                    <p className="text-sm text-gray-500 py-6 text-center">No registrants with an email address.</p>
+                ) : (
+                    <ul className="space-y-1 max-h-[360px] overflow-y-auto -mx-1 px-1">
+                        {emailable.map(lead => (
+                            <li key={lead.id}>
+                                <label className="flex items-center gap-2.5 p-2 rounded-lg hover:bg-gray-50 cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        checked={data.recipient_ids.includes(lead.id)}
+                                        onChange={() => toggleOne(lead.id)}
+                                        className="rounded border-gray-300"
+                                    />
+                                    <div className="min-w-0">
+                                        <p className="text-sm font-semibold text-gray-800 truncate">{lead.first_name} {lead.last_name}</p>
+                                        <p className="text-xs text-gray-500 truncate">{lead.email}</p>
+                                    </div>
+                                </label>
+                            </li>
+                        ))}
+                    </ul>
+                )}
+            </div>
+
+            {/* History */}
+            {isSchedule ? (
+                <div className="lg:col-span-3 bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                    <div className="p-5 border-b border-gray-100">
+                        <h3 className="text-sm font-bold text-gray-900">Scheduled emails</h3>
+                        <p className="text-xs text-gray-500 mt-0.5">Upcoming and past scheduled sends for this event.</p>
+                    </div>
+                    {scheduledEmails.length === 0 ? (
+                        <p className="text-sm text-gray-500 py-10 text-center">Nothing scheduled yet.</p>
+                    ) : (
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left border-collapse">
+                                <thead>
+                                    <tr className="bg-gray-50/50 border-b border-gray-100">
+                                        <th className="px-6 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider">Subject</th>
+                                        <th className="px-6 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider">Recipients</th>
+                                        <th className="px-6 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider">Send time</th>
+                                        <th className="px-6 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider">Status</th>
+                                        <th className="px-6 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider text-right">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-50">
+                                    {scheduledEmails.map(row => (
+                                        <tr key={row.id} className="hover:bg-gray-50/40">
+                                            <td className="px-6 py-3 text-sm text-gray-800 font-medium">{row.subject || '—'}</td>
+                                            <td className="px-6 py-3 text-sm text-gray-600">
+                                                {row.status === 'sent' || row.status === 'failed'
+                                                    ? <span className="inline-flex items-center gap-1"><CheckCircle2 size={12} className="text-emerald-500" /> {row.sent}{row.failed > 0 && <span className="text-rose-600"> · {row.failed} failed</span>} <span className="text-gray-400">/ {row.recipient_count}</span></span>
+                                                    : `${row.recipient_count} registrant${row.recipient_count === 1 ? '' : 's'}`}
+                                            </td>
+                                            <td className="px-6 py-3 text-sm text-gray-600">
+                                                {formatDateTime(row.scheduled_at)}
+                                                {row.sent_at && <span className="block text-[11px] text-gray-400">sent {formatDateTime(row.sent_at)}</span>}
+                                            </td>
+                                            <td className="px-6 py-3">{scheduledPill(row.status)}</td>
+                                            <td className="px-6 py-3 text-right">
+                                                {row.cancelable ? (
+                                                    <button onClick={() => cancelScheduled(row)} className="inline-flex items-center gap-1 text-xs text-rose-600 hover:bg-rose-50 px-2 py-1 rounded-md font-medium"><Ban size={13} /> Cancel</button>
+                                                ) : <span className="text-xs text-gray-400">—</span>}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+                </div>
+            ) : (
+                <div className="lg:col-span-3 bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                    <div className="p-5 border-b border-gray-100">
+                        <h3 className="text-sm font-bold text-gray-900">Sent emails</h3>
+                        <p className="text-xs text-gray-500 mt-0.5">Recent emails sent to this event's registrants.</p>
+                    </div>
+                    {sentEmails.length === 0 ? (
+                        <p className="text-sm text-gray-500 py-10 text-center">No emails sent yet.</p>
+                    ) : (
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left border-collapse">
+                                <thead>
+                                    <tr className="bg-gray-50/50 border-b border-gray-100">
+                                        <th className="px-6 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider">Subject</th>
+                                        <th className="px-6 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider">Recipient</th>
+                                        <th className="px-6 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider">Status</th>
+                                        <th className="px-6 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider text-right">Sent</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-50">
+                                    {sentEmails.map(row => (
+                                        <tr key={row.id} className="hover:bg-gray-50/40">
+                                            <td className="px-6 py-3 text-sm text-gray-800 font-medium">{row.subject || '—'}</td>
+                                            <td className="px-6 py-3 text-sm text-gray-600">{row.recipient}</td>
+                                            <td className="px-6 py-3">{statusPill(row.status)}</td>
+                                            <td className="px-6 py-3 text-right text-sm text-gray-500">{formatDate(row.sent_at)}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+                </div>
+            )}
         </div>
     );
 }

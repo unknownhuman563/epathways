@@ -1,5 +1,5 @@
 import { Head, Link } from "@inertiajs/react";
-import { ArrowLeft, CheckCircle2, XCircle, Clock, Mail } from "lucide-react";
+import { ArrowLeft, CheckCircle2, XCircle, Clock, Mail, Smartphone } from "lucide-react";
 
 const fmt = (iso) => (iso ? new Date(iso).toLocaleString("en-US", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "—");
 
@@ -18,18 +18,19 @@ const ROW_ICON = {
     failed: <XCircle size={14} className="text-rose-500" />,
 };
 
-export default function CampaignDetail({ campaign, recipients = [] }) {
+export default function CampaignDetail({ campaign, recipients = [], basePath = "/portal/sales/bulk-email", channel = "email" }) {
+    const isSms = channel === "sms";
     return (
         <div className="space-y-6 max-w-4xl mx-auto pb-12">
             <Head title={`${campaign.name} — Campaign`} />
 
-            <Link href="/portal/sales/bulk-email" className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800">
-                <ArrowLeft size={15} /> Back to Bulk Email
+            <Link href={basePath} className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800">
+                <ArrowLeft size={15} /> Back to {isSms ? "Bulk SMS" : "Bulk Email"}
             </Link>
 
             <header className="flex items-start justify-between gap-4 flex-wrap">
                 <div>
-                    <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2"><Mail className="w-6 h-6 text-gray-700" /> {campaign.name}</h1>
+                    <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">{isSms ? <Smartphone className="w-6 h-6 text-gray-700" /> : <Mail className="w-6 h-6 text-gray-700" />} {campaign.name}</h1>
                     <p className="text-sm text-gray-500 mt-1">by {campaign.created_by || "—"} · {fmt(campaign.created_at)}</p>
                 </div>
                 <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold capitalize ${STATUS_CHIP[campaign.status] || "bg-gray-100 text-gray-500"}`}>{campaign.status}</span>
@@ -49,10 +50,18 @@ export default function CampaignDetail({ campaign, recipients = [] }) {
             </div>
 
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 space-y-2">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Subject</span>
-                <p className="text-sm font-semibold text-gray-900">{campaign.subject}</p>
-                <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 block pt-2">Body</span>
-                <pre className="whitespace-pre-wrap font-sans text-sm text-gray-700 leading-relaxed">{campaign.body}</pre>
+                {!isSms && (
+                    <>
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Subject</span>
+                        <p className="text-sm font-semibold text-gray-900">{campaign.subject}</p>
+                    </>
+                )}
+                <span className={`text-[10px] font-bold uppercase tracking-wider text-gray-400 block ${isSms ? "" : "pt-2"}`}>{isSms ? "Message" : "Body"}</span>
+                {isSms ? (
+                    <pre className="whitespace-pre-wrap font-sans text-sm text-gray-700 leading-relaxed">{campaign.body}</pre>
+                ) : (
+                    <div className="text-sm text-gray-700 leading-relaxed [&_a]:text-blue-600 [&_a]:underline" dangerouslySetInnerHTML={{ __html: campaign.body }} />
+                )}
             </div>
 
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
@@ -62,7 +71,7 @@ export default function CampaignDetail({ campaign, recipients = [] }) {
                         <thead>
                             <tr className="bg-gray-50/50 border-b border-gray-100 text-xs font-semibold text-gray-500 uppercase tracking-wider">
                                 <th className="px-5 py-2.5">Lead</th>
-                                <th className="px-5 py-2.5">Email</th>
+                                <th className="px-5 py-2.5">{isSms ? "Phone" : "Email"}</th>
                                 <th className="px-5 py-2.5">Status</th>
                             </tr>
                         </thead>

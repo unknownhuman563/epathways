@@ -2,7 +2,7 @@ import React, { useState, useRef } from 'react';
 import { Head, useForm } from '@inertiajs/react';
 import {
     CheckCircle, AlertCircle, ChevronRight, Lock, Calendar, MapPin,
-    Mail, Phone, Clock, FileText, Users, ArrowRight,
+    Mail, Phone, Clock, FileText, Users, ArrowRight, X,
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import assessImg from "@assets/Services/education.png";
@@ -249,11 +249,11 @@ function SuccessScreen({ eventName }) {
                         Registered
                     </p>
                     <h2 className="text-2xl font-bold text-gray-900 tracking-tight">
-                        You're confirmed
+                        Thank you for registering
                     </h2>
                     <p className="mt-3 text-[13px] text-gray-600 leading-relaxed">
                         Your seat for <span className="font-semibold text-gray-900">{eventName}</span> is reserved.
-                        We'll be in touch with the details shortly.
+                        We've sent a confirmation to your email — a member of our team will reach out within 24 hours.
                     </p>
                 </div>
                 <div className="px-10 py-8">

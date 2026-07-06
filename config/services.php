@@ -18,6 +18,14 @@ return [
         'token' => env('POSTMARK_TOKEN'),
     ],
 
+    // Brevo Transactional SMS. api_key is a Brevo v3 API key (xkeysib-…, from
+    // Brevo → SMTP & API → API Keys — NOT the SMTP password). sender is a name
+    // (max 11 alphanumeric chars) or a purchased number.
+    'brevo' => [
+        'sms_key' => env('BREVO_API_KEY'),
+        'sms_sender' => env('BREVO_SMS_SENDER', 'ePathways'),
+    ],
+
     'resend' => [
         'key' => env('RESEND_KEY'),
     ],
@@ -119,7 +127,28 @@ return [
         'whatsapp' => env('CONTACT_WHATSAPP'),       // e.g. "63XXXXXXXXXX" — no +, no spaces
         'messenger' => env('CONTACT_MESSENGER', 'https://m.me/epathwaysnz'),
         'facebook' => env('CONTACT_FACEBOOK', 'https://www.facebook.com/epathwaysnz'),
-        'email' => env('CONTACT_EMAIL', 'info@epathways.co.nz'),
+        'email' => env('CONTACT_EMAIL', 'hello@epathways.ph'),
+        // Where the email "Book now" CTA points. Overridable per environment.
+        'booking_url' => env('BOOKING_URL', 'https://staging.epathways.co.nz/booking'),
+        // Sender for event-registration emails (must be verified in Brevo).
+        // Used by the built-in fallback; the template carries its own from_email.
+        'event_from_email' => env('EVENT_FROM_EMAIL', 'hello@epathways.ph'),
+        'event_from_name' => env('EVENT_FROM_NAME', 'Fhilip Bryll - ePathways Philippines'),
+        // Central "Reply-To" — when set, replies to any of our emails route
+        // to this monitored inbox. Null = replies go to each email's From.
+        'reply_to' => env('REPLY_TO_EMAIL'),
+    ],
+
+    // IMAP mailbox we poll for inbound email replies (the Reply-To inbox,
+    // e.g. hello@epathways.ph on Google Workspace). Password is a Google
+    // App Password, not the account password.
+    'imap' => [
+        'host' => env('IMAP_HOST', 'imap.gmail.com'),
+        'port' => (int) env('IMAP_PORT', 993),
+        'encryption' => env('IMAP_ENCRYPTION', 'ssl'),
+        'username' => env('IMAP_USERNAME'),
+        'password' => env('IMAP_PASSWORD'),
+        'folder' => env('IMAP_FOLDER', 'INBOX'),
     ],
 
 ];

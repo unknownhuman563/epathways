@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Head, Link, router, useForm } from "@inertiajs/react";
-import { ArrowLeft, Save, Trash2, Send, Mail, Smartphone } from "lucide-react";
+import { ArrowLeft, Save, Trash2, Send, Mail, Smartphone, ImagePlus, X } from "lucide-react";
+import RichTextEditor from "@/components/templates/RichTextEditor";
 
 const inp = "w-full px-3 py-2 rounded-lg border border-gray-200 text-sm outline-none focus:ring-2 focus:ring-gray-300 focus:border-gray-300";
 
@@ -19,22 +20,58 @@ export default function TemplateEditorView({
     basePath = "/admin/message-templates",
     departmentOptions = null,
     fixedDepartment = null,
+    defaultChannel = null,
 }) {
     const editing = !!template;
+    const initialChannels = template?.channels ?? (defaultChannel ? [defaultChannel] : ["email"]);
     const form = useForm({
         key: template?.key ?? "",
         department: template?.department ?? fixedDepartment ?? "",
         name: template?.name ?? "",
         description: template?.description ?? "",
-        channels: template?.channels ?? ["email"],
+        channels: initialChannels,
         email_subject: template?.email_subject ?? "",
+        from_email: template?.from_email ?? "",
+        from_name: template?.from_name ?? "",
         email_body: template?.email_body ?? "",
         sms_body: template?.sms_body ?? "",
+        banner_image: null,
+        footer_image: null,
+        remove_banner: false,
+        remove_footer: false,
         is_active: template?.is_active ?? true,
     });
     const { data, setData, errors, processing } = form;
 
     const [testEmail, setTestEmail] = useState("");
+    // Object-URL previews for freshly-picked (not-yet-saved) images.
+    const [previews, setPreviews] = useState({ banner_image: null, footer_image: null });
+
+    // Pick a new branding image → stage the File + a local preview, and
+    // clear any pending "remove" flag for that slot.
+    const pickImage = (field) => (e) => {
+        const file = e.target.files?.[0] || null;
+        setData(field, file);
+        setData(field === "banner_image" ? "remove_banner" : "remove_footer", false);
+        setPreviews((p) => ({ ...p, [field]: file ? URL.createObjectURL(file) : null }));
+    };
+
+    // Clear a branding image: drop any staged File + preview, and mark the
+    // saved one for removal so the server deletes it on save.
+    const clearImage = (field) => () => {
+        setData(field, null);
+        setData(field === "banner_image" ? "remove_banner" : "remove_footer", true);
+        setPreviews((p) => ({ ...p, [field]: null }));
+    };
+
+    // What to show in a slot: the new preview, else the saved image (unless
+    // it's been marked for removal).
+    const shownImage = (field) => {
+        if (previews[field]) return previews[field];
+        const removed = field === "banner_image" ? data.remove_banner : data.remove_footer;
+        if (removed) return null;
+        return field === "banner_image" ? template?.banner_image_url : template?.footer_image_url;
+    };
     const showDeptSelector = !!departmentOptions && !editing;
 
     const toggleChannel = (ch) =>
@@ -42,8 +79,32 @@ export default function TemplateEditorView({
 
     const submit = (e) => {
         e.preventDefault();
-        if (editing) form.put(`${basePath}/${template.id}`, { preserveScroll: true });
-        else form.post(basePath);
+        // Only send multipart when an image is actually staged — a plain JSON
+        // request keeps booleans/arrays native (FormData stringifies `true`,
+        // which fails Laravel's boolean rule). When multipart IS needed, PUT is
+        // method-spoofed (PHP won't parse a real multipart PUT body) and the
+        // booleans are coerced to 1/0 so validation still passes.
+        // NOTE: form.transform() returns undefined in the React adapter, so it
+        // must be called as its own statement — never chained before post/put.
+        const hasFile = data.banner_image instanceof File || data.footer_image instanceof File;
+
+        if (hasFile) {
+            form.transform((d) => ({
+                ...d,
+                is_active: d.is_active ? 1 : 0,
+                remove_banner: d.remove_banner ? 1 : 0,
+                remove_footer: d.remove_footer ? 1 : 0,
+                ...(editing ? { _method: "put" } : {}),
+            }));
+            form.post(editing ? `${basePath}/${template.id}` : basePath, {
+                preserveScroll: true,
+                forceFormData: true,
+            });
+        } else {
+            form.transform((d) => d); // reset any prior transform
+            if (editing) form.put(`${basePath}/${template.id}`, { preserveScroll: true });
+            else form.post(basePath, { preserveScroll: true });
+        }
     };
 
     const remove = () => {
@@ -60,7 +121,7 @@ export default function TemplateEditorView({
 
     return (
         <div className="space-y-6 max-w-4xl mx-auto">
-            <Head title={editing ? `Edit ${template.name}` : "New template"} />
+            <Head title={editing ? `Edit ${template.name}` : (defaultChannel === "sms" ? "New SMS Template" : "New Template")} />
 
             <Link href={basePath} className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800">
                 <ArrowLeft size={15} /> Back to templates
@@ -111,10 +172,63 @@ export default function TemplateEditorView({
                                 <span className="block text-xs font-semibold text-gray-600 mb-1">Subject</span>
                                 <input value={data.email_subject} onChange={(e) => setData("email_subject", e.target.value)} className={inp} />
                             </label>
+                            <div className="grid grid-cols-2 gap-4">
+                                <label className="block">
+                                    <span className="block text-xs font-semibold text-gray-600 mb-1">From address <span className="text-gray-400 font-normal">(optional)</span></span>
+                                    <input value={data.from_email} onChange={(e) => setData("from_email", e.target.value)} placeholder="hello@epathways.ph" className={inp} />
+                                    {errors.from_email && <span className="text-xs text-rose-600">{errors.from_email}</span>}
+                                </label>
+                                <label className="block">
+                                    <span className="block text-xs font-semibold text-gray-600 mb-1">From name <span className="text-gray-400 font-normal">(optional)</span></span>
+                                    <input value={data.from_name} onChange={(e) => setData("from_name", e.target.value)} placeholder="ePathways Philippines" className={inp} />
+                                </label>
+                                <p className="col-span-2 text-[11px] text-gray-400 -mt-2">Blank = default sender. The address must be verified in your mail provider (Brevo).</p>
+                            </div>
                             <label className="block">
-                                <span className="block text-xs font-semibold text-gray-600 mb-1">Body (Markdown)</span>
-                                <textarea value={data.email_body} onChange={(e) => setData("email_body", e.target.value)} rows={10} className={`${inp} font-mono text-xs`} />
+                                <span className="block text-xs font-semibold text-gray-600 mb-1">Body</span>
+                                <RichTextEditor value={data.email_body} onChange={(html) => setData("email_body", html)} />
+                                <span className="block text-[11px] text-gray-400 mt-1">Format with the toolbar. Insert variables like <code>{"{{first_name}}"}</code> as plain text.</span>
                             </label>
+
+                            {/* Optional branding — banner header + footer CTA image.
+                                Left blank, the email uses the default ePathways
+                                banner and consultation footer. */}
+                            <div className="pt-3 border-t border-gray-100">
+                                <p className="text-xs font-semibold text-gray-600 mb-1">Branding images <span className="text-gray-400 font-normal">(optional)</span></p>
+                                <p className="text-[11px] text-gray-400 mb-3">Blank = the default ePathways banner &amp; footer are used. The body sits between them.</p>
+                                <div className="grid grid-cols-2 gap-4">
+                                    {[
+                                        { field: "banner_image", label: "Banner (top)", hint: "Wide header, ~600px" },
+                                        { field: "footer_image", label: "Footer image", hint: "Above the contact block" },
+                                    ].map(({ field, label, hint }) => {
+                                        const src = shownImage(field);
+                                        const err = errors[field];
+                                        return (
+                                            <div key={field}>
+                                                <span className="block text-[11px] font-semibold text-gray-500 mb-1">{label}</span>
+                                                {src ? (
+                                                    <div className="relative border border-gray-200 rounded-lg overflow-hidden bg-gray-50">
+                                                        <img src={src} alt={label} className="w-full h-24 object-cover" />
+                                                        <button type="button" onClick={clearImage(field)}
+                                                            className="absolute top-1 right-1 bg-white/90 hover:bg-white text-rose-600 rounded-full p-1 shadow-sm"
+                                                            aria-label={`Remove ${label}`}>
+                                                            <X size={13} />
+                                                        </button>
+                                                    </div>
+                                                ) : (
+                                                    <label className="flex flex-col items-center justify-center gap-1 h-24 border border-dashed border-gray-300 rounded-lg cursor-pointer text-gray-400 hover:border-gray-400 hover:text-gray-500 transition-colors">
+                                                        <ImagePlus size={18} />
+                                                        <span className="text-[11px]">Upload image</span>
+                                                        <input type="file" accept="image/*" onChange={pickImage(field)} className="hidden" />
+                                                    </label>
+                                                )}
+                                                <p className="text-[10px] text-gray-400 mt-1">{hint}</p>
+                                                {err && <span className="text-[11px] text-rose-600">{err}</span>}
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
                         </div>
                     )}
 

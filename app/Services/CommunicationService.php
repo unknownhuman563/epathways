@@ -76,7 +76,13 @@ class CommunicationService
         if (in_array('email', $channels, true) && ! empty($lead->email)) {
             $subject = $this->substitute((string) $template->email_subject, $context, false);
             $body = $this->substitute((string) $template->email_body, $context, true);
-            $result['email'] = $this->sendEmail($lead, $subject, $body, $template->key, $attachments);
+            $result['email'] = $this->sendEmail(
+                $lead, $subject, $body, $template->key, $attachments, null,
+                $template->banner_image,
+                $template->footer_image,
+                $template->from_email,
+                $template->from_name,
+            );
         }
 
         if (in_array('sms', $channels, true) && ! empty($lead->phone)) {
@@ -88,13 +94,15 @@ class CommunicationService
     }
 
     /**
-     * Send an ad-hoc message (no template) to a lead on one channel.
+     * Send an ad-hoc message (no template lookup) to a lead on one channel.
+     * Optional banner/footer image paths brand the email shell — pass a
+     * template's images to match its look on a custom compose.
      */
-    public function sendRaw(string $channel, Lead $lead, ?string $subject, string $body): MessageLog
+    public function sendRaw(string $channel, Lead $lead, ?string $subject, string $body, ?string $bannerImage = null, ?string $footerImage = null, ?string $fromEmail = null, ?string $fromName = null): MessageLog
     {
         return $channel === MessageLog::CHANNEL_SMS
             ? $this->sendSms($lead, $body, null)
-            : $this->sendEmail($lead, $subject ?? '(no subject)', $body, null);
+            : $this->sendEmail($lead, $subject ?? '(no subject)', $body, null, [], null, $bannerImage, $footerImage, $fromEmail, $fromName);
     }
 
     /**
@@ -121,14 +129,14 @@ class CommunicationService
         foreach ($leads as $lead) {
             try {
                 $sent = $this->sendTemplated($template->key, $lead, $extra);
-                $log  = $sent['email'] ?? $sent['sms'];
+                $log = $sent['email'] ?? $sent['sms'];
                 $failed = $log && $log->status === MessageLog::STATUS_FAILED;
 
                 $results[] = [
                     'lead_id' => $lead->id,
-                    'status'  => ($log && ! $failed) ? 'sent' : 'failed',
-                    'log_id'  => $log?->id,
-                    'error'   => $log?->error_message
+                    'status' => ($log && ! $failed) ? 'sent' : 'failed',
+                    'log_id' => $log?->id,
+                    'error' => $log?->error_message
                         ?? ($log ? null : 'No deliverable channel (missing email/phone or template has none).'),
                 ];
             } catch (\Throwable $e) {
@@ -175,10 +183,11 @@ class CommunicationService
 
     /**
      * Substitute and send a raw subject/body to a lead as part of a bulk
-     * campaign, logging the row against that campaign. Returns true on a
-     * successful queue so the job can tally sent/failed counts.
+     * campaign, logging the row against that campaign. Optional banner/footer/
+     * from carry the campaign template's branding so bulk emails match the
+     * template exactly. Returns true on a successful queue.
      */
-    public function sendCampaignEmail(Lead $lead, string $subject, string $body, int $campaignId, array $extraContext = []): bool
+    public function sendCampaignEmail(Lead $lead, string $subject, string $body, int $campaignId, array $extraContext = [], ?string $bannerImage = null, ?string $footerImage = null, ?string $fromEmail = null, ?string $fromName = null): bool
     {
         if (empty($lead->email)) {
             $this->log([
@@ -195,31 +204,80 @@ class CommunicationService
         $sub = $this->substitute($subject, $context, false);
         $bod = $this->substitute($body, $context, true);
 
-        $log = $this->sendEmail($lead, $sub, $bod, null, [], $campaignId);
+        $log = $this->sendEmail($lead, $sub, $bod, null, [], $campaignId, $bannerImage, $footerImage, $fromEmail, $fromName);
 
         return $log->status !== MessageLog::STATUS_FAILED;
     }
 
-    private function sendEmail(Lead $lead, string $subject, string $body, ?string $key, array $attachments = [], ?int $campaignId = null): MessageLog
+    /**
+     * SMS counterpart of sendCampaignEmail: substitute and text a lead as part
+     * of a bulk SMS campaign, logging the row against that campaign. Returns
+     * true when the provider accepted the message.
+     */
+    public function sendCampaignSms(Lead $lead, string $body, int $campaignId, array $extraContext = []): bool
     {
-        try {
-            Mail::to($lead->email)->queue(new TemplatedMessage($subject, $body, $attachments));
+        $to = $this->normalizePhone((string) $lead->phone);
 
-            return $this->log([
-                'template_key' => $key, 'campaign_id' => $campaignId, 'channel' => MessageLog::CHANNEL_EMAIL,
-                'recipient_id' => $lead->id, 'recipient_address' => $lead->email,
-                'subject' => $subject, 'body' => $body, 'status' => MessageLog::STATUS_QUEUED,
+        if (! $to) {
+            $this->log([
+                'campaign_id' => $campaignId, 'channel' => MessageLog::CHANNEL_SMS,
+                'recipient_id' => $lead->id, 'recipient_address' => (string) $lead->phone,
+                'body' => $body, 'status' => MessageLog::STATUS_FAILED,
+                'error_message' => 'Lead has no valid phone number.', 'failed_at' => now(),
             ]);
-        } catch (\Throwable $e) {
-            Log::error('CommunicationService email failed', ['lead_id' => $lead->id, 'error' => $e->getMessage()]);
 
+            return false;
+        }
+
+        $text = $this->substitute($body, $this->buildContext($lead, $extraContext), false);
+        $res = $this->sms->send($to, $text);
+
+        $this->log([
+            'campaign_id' => $campaignId, 'channel' => MessageLog::CHANNEL_SMS,
+            'recipient_id' => $lead->id, 'recipient_address' => $to, 'body' => $text,
+            'status' => $res['ok'] ? MessageLog::STATUS_QUEUED : MessageLog::STATUS_FAILED,
+            'provider_message_id' => $res['message_id'] ?? null,
+            'error_message' => $res['ok'] ? null : ($res['error'] ?? 'SMS send failed.'),
+            'failed_at' => $res['ok'] ? null : now(),
+        ]);
+
+        return $res['ok'];
+    }
+
+    private function sendEmail(Lead $lead, string $subject, string $body, ?string $key, array $attachments = [], ?int $campaignId = null, ?string $bannerImage = null, ?string $footerImage = null, ?string $fromEmail = null, ?string $fromName = null): MessageLog
+    {
+        if (empty($lead->email)) {
             return $this->log([
                 'template_key' => $key, 'campaign_id' => $campaignId, 'channel' => MessageLog::CHANNEL_EMAIL,
-                'recipient_id' => $lead->id, 'recipient_address' => (string) $lead->email,
-                'subject' => $subject, 'body' => $body,
-                'status' => MessageLog::STATUS_FAILED, 'error_message' => $e->getMessage(), 'failed_at' => now(),
+                'recipient_id' => $lead->id, 'recipient_address' => '',
+                'subject' => $subject, 'body' => $body, 'status' => MessageLog::STATUS_FAILED,
+                'error_message' => 'Lead has no email address.', 'failed_at' => now(),
             ]);
         }
+
+        // Log first (status 'queued'), then queue the mail carrying this log's
+        // id. The MessageSent listener flips it to 'sent' once the worker
+        // actually delivers it to the mail server.
+        $log = $this->log([
+            'template_key' => $key, 'campaign_id' => $campaignId, 'channel' => MessageLog::CHANNEL_EMAIL,
+            'recipient_id' => $lead->id, 'recipient_address' => (string) $lead->email,
+            'subject' => $subject, 'body' => $body, 'status' => MessageLog::STATUS_QUEUED,
+        ]);
+
+        try {
+            Mail::to($lead->email)->queue(
+                new TemplatedMessage($subject, $body, $attachments, $bannerImage, $footerImage, $log->id, $fromEmail, $fromName)
+            );
+        } catch (\Throwable $e) {
+            Log::error('CommunicationService email failed', ['lead_id' => $lead->id, 'error' => $e->getMessage()]);
+            $log->update([
+                'status' => MessageLog::STATUS_FAILED,
+                'error_message' => $e->getMessage(),
+                'failed_at' => now(),
+            ]);
+        }
+
+        return $log;
     }
 
     private function sendSms(Lead $lead, string $body, ?string $key): MessageLog
@@ -254,6 +312,15 @@ class CommunicationService
     {
         $staff = $lead->assignee;
 
+        $eventCtx = [];
+        if (! empty($lead->event_id)) {
+            $event = \App\Models\Event::find($lead->event_id);
+            if ($event) {
+                $session = $lead->event_session_id ? \App\Models\EventSession::find($lead->event_session_id) : null;
+                $eventCtx = app(\App\Services\EventEmailSender::class)->context($event, $session);
+            }
+        }
+
         return array_merge([
             'first_name' => $lead->first_name ?? '',
             'last_name' => $lead->last_name ?? '',
@@ -264,7 +331,7 @@ class CommunicationService
             'tracker_url' => rtrim((string) config('app.url'), '/').'/track/'.$lead->tracking_code,
             'client_portal_url' => $this->clientPortalUrl($lead),
             'assigned_staff_name' => $staff?->name ?? 'the ePathways team',
-        ], $extra);
+        ], $eventCtx, $extra);
     }
 
     /**
@@ -276,11 +343,11 @@ class CommunicationService
         $base = rtrim((string) config('app.url'), '/');
 
         if ($lead->portalUser()->exists()) {
-            return $base . '/portal/lead/dashboard';
+            return $base.'/portal/lead/dashboard';
         }
 
         if (! empty($lead->tracking_code)) {
-            return $base . '/track/' . $lead->tracking_code;
+            return $base.'/track/'.$lead->tracking_code;
         }
 
         return '';
@@ -306,25 +373,33 @@ class CommunicationService
         }, $template) ?? $template;
     }
 
-    /** Normalize a freeform phone to E.164 (default region NZ), or null. */
-    private function normalizePhone(string $phone): ?string
+    /** Normalize a freeform phone to E.164 (default region NZ/PH fallback), or null. */
+    public function normalizePhone(string $phone): ?string
     {
         $phone = trim($phone);
         if ($phone === '') {
             return null;
         }
 
-        // Prefer libphonenumber when available; fall back to a basic NZ/E.164
+        // Prefer libphonenumber when available; fall back to a basic NZ/PH/E.164
         // normalizer so the service works even without the library.
         if (class_exists(\libphonenumber\PhoneNumberUtil::class)) {
             try {
                 $util = \libphonenumber\PhoneNumberUtil::getInstance();
+
+                // First try NZ (default region)
                 $parsed = $util->parse($phone, 'NZ');
-                if (! $util->isValidNumber($parsed)) {
-                    return null;
+                if ($util->isValidNumber($parsed)) {
+                    return $util->format($parsed, \libphonenumber\PhoneNumberFormat::E164);
                 }
 
-                return $util->format($parsed, \libphonenumber\PhoneNumberFormat::E164);
+                // Fallback to PH (Philippines)
+                $parsed = $util->parse($phone, 'PH');
+                if ($util->isValidNumber($parsed)) {
+                    return $util->format($parsed, \libphonenumber\PhoneNumberFormat::E164);
+                }
+
+                return null;
             } catch (\Throwable $e) {
                 return null;
             }
@@ -336,8 +411,21 @@ class CommunicationService
     private function basicNormalize(string $phone): ?string
     {
         $digits = preg_replace('/[^\d+]/', '', $phone);
+        // Convert international 00 prefix to +
+        if (str_starts_with($digits, '00')) {
+            $digits = '+'.substr($digits, 2);
+        }
+
         if (str_starts_with($digits, '+') && strlen($digits) >= 8) {
             return $digits;
+        }
+        // Philippines mobile numbers without leading 0 (e.g. 9206922477) are 10 digits long starting with 9
+        if (str_starts_with($digits, '9') && strlen($digits) === 10) {
+            return '+63'.$digits;
+        }
+        // Philippines mobile numbers start with 09 and are 11 digits long
+        if (str_starts_with($digits, '09') && strlen($digits) === 11) {
+            return '+63'.ltrim($digits, '0');
         }
         if (str_starts_with($digits, '0')) {           // NZ national → +64
             return '+64'.ltrim($digits, '0');

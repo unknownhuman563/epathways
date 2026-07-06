@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Head, Link, router } from "@inertiajs/react";
 import { MessageSquare, Plus, Mail, Smartphone } from "lucide-react";
 
@@ -11,24 +12,52 @@ const titleCase = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : "");
  */
 export default function TemplateListView({ templates = [], basePath = "/admin/message-templates", scopeLabel = "" }) {
     const isAdmin = basePath.startsWith("/admin");
+    const [activeTab, setActiveTab] = useState("all");
+
+    const filteredTemplates = templates.filter((t) => {
+        if (activeTab === "email") return t.channels.includes("email");
+        if (activeTab === "sms") return t.channels.includes("sms");
+        return true;
+    });
 
     return (
         <div className="space-y-6 max-w-5xl mx-auto">
-            <Head title="Email Templates" />
+            <Head title="Message Templates" />
 
             <header className="flex items-end justify-between gap-4 flex-wrap">
                 <div>
                     <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-                        <MessageSquare className="w-6 h-6 text-gray-700" /> Email Templates
+                        <MessageSquare className="w-6 h-6 text-gray-700" /> Message Templates
                     </h1>
                     <p className="text-sm text-gray-500 mt-1">
                         Reusable email &amp; SMS templates sent to leads{scopeLabel ? ` · ${scopeLabel}` : ""}.
                     </p>
                 </div>
-                <Link href={`${basePath}/create`} className="px-4 py-2 bg-gray-900 text-white text-sm font-semibold rounded-xl hover:bg-black flex items-center gap-2">
+                <Link 
+                    href={activeTab === "all" ? `${basePath}/create` : `${basePath}/create?channel=${activeTab}`} 
+                    className="px-4 py-2 bg-gray-900 text-white text-sm font-semibold rounded-xl hover:bg-black flex items-center gap-2"
+                >
                     <Plus size={15} /> New template
                 </Link>
             </header>
+
+            {/* Filter Tabs */}
+            <div className="flex items-center gap-1 border-b border-gray-100">
+                {[
+                    { key: "all", label: "All Templates" },
+                    { key: "email", label: "Email Templates" },
+                    { key: "sms", label: "SMS Templates" },
+                ].map((tab) => (
+                    <button
+                        key={tab.key}
+                        type="button"
+                        onClick={() => setActiveTab(tab.key)}
+                        className={`px-4 py-2.5 text-sm font-semibold border-b-2 -mb-px transition-colors ${activeTab === tab.key ? "border-gray-900 text-gray-900" : "border-transparent text-gray-400 hover:text-gray-700"}`}
+                    >
+                        {tab.label}
+                    </button>
+                ))}
+            </div>
 
             <div className="bg-white rounded-3xl border border-gray-50 shadow-sm overflow-hidden">
                 <div className="overflow-x-auto">
@@ -44,10 +73,10 @@ export default function TemplateListView({ templates = [], basePath = "/admin/me
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-50">
-                            {templates.length === 0 ? (
+                            {filteredTemplates.length === 0 ? (
                                 <tr><td colSpan={isAdmin ? 6 : 5} className="px-6 py-16 text-center text-sm text-gray-400">No templates yet.</td></tr>
                             ) : (
-                                templates.map((t) => (
+                                filteredTemplates.map((t) => (
                                     <tr key={t.id} className="hover:bg-gray-50/40 cursor-pointer" onClick={() => router.visit(`${basePath}/${t.id}`)}>
                                         <td className="px-6 py-3 font-semibold text-gray-900 text-sm">{t.name}</td>
                                         <td className="px-6 py-3"><code className="text-xs bg-gray-100 rounded px-1.5 py-0.5 text-gray-600">{t.key}</code></td>

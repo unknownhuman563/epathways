@@ -50,129 +50,159 @@ class EventController extends Controller
             $event->banner_image_url = Storage::disk('public')->url($event->banner_image);
         }
 
-        // Fetch leads that registered for this specific event. Notes
-        // editor is eager-loaded so the table can render "updated by X"
-        // without an N+1.
-        $leads = $event->leads()->with(['studyPlans', 'educationExps', 'eventSession', 'eventNotesEditor'])->latest()->get();
+        // Fetch leads that registered for this specific event
+        $leads = $event->leads()->with(['studyPlans', 'educationExps', 'eventSession'])->latest()->get();
+
+        // Active email templates staff can start from in the Email tab.
+        $emailTemplates = \App\Models\MessageTemplate::active()
+            ->whereIn('department', ['', $event->organizer_id])
+            ->orderBy('name')
+            ->get()
+            ->filter(fn ($t) => $t->hasChannel('email'))
+            ->map(fn ($t) => [
+                'id' => $t->id,
+                'name' => $t->name,
+                'email_subject' => $t->email_subject,
+                'email_body' => $t->email_body,
+            ])
+            ->values();
+
+        // Recent emails sent to this event's registrants (Email tab history).
+        $sentEmails = \App\Models\MessageLog::whereIn('recipient_id', $leads->pluck('id'))
+            ->where('channel', 'email')
+            ->latest()
+            ->take(50)
+            ->get(['id', 'subject', 'recipient_address', 'status', 'error_message', 'created_at'])
+            ->map(fn ($l) => [
+                'id' => $l->id,
+                'subject' => $l->subject,
+                'recipient' => $l->recipient_address,
+                'status' => $l->status,
+                'error' => $l->error_message,
+                'sent_at' => optional($l->created_at)->toIso8601String(),
+            ]);
+
+        // Scheduled (future) + recently-fired scheduled emails for this event.
+        $scheduledEmails = \App\Models\ScheduledEventEmail::where('event_id', $event->id)
+            ->with('creator:id,name')
+            ->orderByDesc('scheduled_at')
+            ->take(50)
+            ->get()
+            ->map(fn ($s) => [
+                'id' => $s->id,
+                'subject' => $s->subject,
+                'recipient_count' => is_array($s->recipient_ids) ? count($s->recipient_ids) : 0,
+                'scheduled_at' => optional($s->scheduled_at)->toIso8601String(),
+                'status' => $s->status,
+                'sent' => $s->sent_count,
+                'failed' => $s->failed_count,
+                'sent_at' => optional($s->sent_at)->toIso8601String(),
+                'created_by' => $s->creator?->name,
+                'cancelable' => $s->isCancelable(),
+            ]);
 
         return inertia('admin/EventDetails', [
             'event' => $event,
             'leads' => $leads,
+            'emailTemplates' => $emailTemplates,
+            'sentEmails' => $sentEmails,
+            'scheduledEmails' => $scheduledEmails,
         ]);
     }
 
     /**
-     * Per-registrant view — renders JUST the form the lead submitted at
-     * registration (plus an editable notes area on the same page). Meant
-     * for event-desk staff who don't want the full lead-profile screen.
+     * Send a composed (or template-based) email to selected registrants of an
+     * event. Body is rich HTML rendered through the branded shell; variables
+     * like {{first_name}} and the event's {{event_*}} are substituted per lead.
      */
-    public function showRegistrant($eventId, $leadId)
+    public function sendRegistrantEmail(Request $request, $id, \App\Services\EventEmailSender $sender)
     {
-        $event = Event::findOrFail($eventId);
-        $lead  = \App\Models\Lead::with(['studyPlans', 'educationExps', 'eventNotesEditor'])->findOrFail($leadId);
-
-        // Guard: the lead must actually belong to this event. Prevents
-        // a URL-guessed cross-event peek.
-        if ((int) $lead->event_id !== (int) $event->id) {
-            abort(404);
-        }
-
-        // Rebuild the form-as-filled snapshot. Same resolver as
-        // LeadController::show — keeps the two views consistent when we
-        // later add more default-mapped fields.
-        $fieldsSchema = $event->effectiveFields();
-        $eduFirst     = $lead->educationExps->first();
-        $planFirst    = $lead->studyPlans->first();
-        $work         = is_array($lead->work_info)      ? $lead->work_info      : [];
-        $finance      = is_array($lead->financial_info) ? $lead->financial_info : [];
-        $custom       = is_array($lead->event_response) ? $lead->event_response : [];
-
-        $resolveValue = function (array $field) use ($lead, $custom, $work, $finance, $eduFirst, $planFirst) {
-            $key = $field['key'];
-            if (array_key_exists($key, $custom)) return $custom[$key];
-            return match ($key) {
-                'first_name'         => $lead->first_name,
-                'last_name'          => $lead->last_name,
-                'email'              => $lead->email,
-                'phone'              => $lead->phone,
-                'country'            => $lead->country ?: $lead->residence_country,
-                'city'               => $work['city']               ?? $lead->residence_city,
-                'employment_status'  => $work['employment_status']  ?? null,
-                'remarks'            => $work['remarks']            ?? null,
-                'funding_source'     => $finance['funding_source']  ?? null,
-                'education_level'    => optional($eduFirst)->level,
-                'field_of_study'     => optional($eduFirst)->field_of_study,
-                'interest'           => optional($planFirst)->preferred_course,
-                'planning_timeline'  => optional($planFirst)->preferred_intake,
-                default              => null,
-            };
-        };
-
-        $registrationFields = collect($fieldsSchema)
-            ->filter(fn ($f) => ($f['locked'] ?? false) === true || ($f['enabled'] ?? true) !== false)
-            ->map(fn ($f) => [
-                'key'      => $f['key'],
-                'label'    => $f['label']   ?? $f['key'],
-                'type'     => $f['type']    ?? 'text',
-                'section'  => $f['section'] ?? 'Additional',
-                'options'  => $f['options'] ?? null,
-                'value'    => $resolveValue($f),
-            ])
-            ->values()
-            ->all();
-
-        return inertia('admin/EventRegistrantView', [
-            'event' => [
-                'id'         => $event->id,
-                'name'       => $event->name,
-                'event_code' => $event->event_code,
-                'type'       => $event->type,
-                'date_from'  => optional($event->date_from)->toIso8601String(),
-            ],
-            'lead' => [
-                'id'         => $lead->id,
-                'lead_id'    => $lead->lead_id,
-                'first_name' => $lead->first_name,
-                'last_name'  => $lead->last_name,
-                'email'      => $lead->email,
-                'phone'      => $lead->phone,
-                'stage'      => $lead->stage,
-                'status'     => $lead->status,
-                'created_at' => optional($lead->created_at)->toIso8601String(),
-            ],
-            'registrationFields' => $registrationFields,
-            'notes' => [
-                'body'         => $lead->event_notes,
-                'updated_at'   => optional($lead->event_notes_updated_at)->toIso8601String(),
-                'updated_by'   => $lead->eventNotesEditor
-                    ? ['id' => $lead->eventNotesEditor->id, 'name' => $lead->eventNotesEditor->name]
-                    : null,
-            ],
-        ]);
-    }
-
-    /**
-     * Save an event-registrant's notes. Timestamps the write and
-     * captures the acting staff member so the table can show a
-     * "Last updated by X, 2 min ago" line.
-     */
-    public function updateRegistrantNotes(Request $request, $eventId, $leadId)
-    {
-        $lead = \App\Models\Lead::findOrFail($leadId);
-        if ((int) $lead->event_id !== (int) $eventId) {
-            abort(404);
-        }
+        $event = Event::findOrFail($id);
 
         $validated = $request->validate([
-            'event_notes' => 'nullable|string|max:5000',
+            'subject' => 'required|string|max:255',
+            'body' => 'required|string|max:65000',
+            'recipient_ids' => 'required|array|min:1',
+            'recipient_ids.*' => 'integer',
+            'template_id' => 'nullable|integer|exists:message_templates,id',
         ]);
 
-        $lead->event_notes            = $validated['event_notes'] ?? null;
-        $lead->event_notes_updated_at = now();
-        $lead->event_notes_updated_by = auth()->id();
-        $lead->save();
+        // When composed from a template, the send brands the email with that
+        // template's banner/footer so the Email tab matches it exactly.
+        $template = ! empty($validated['template_id'])
+            ? \App\Models\MessageTemplate::find($validated['template_id'])
+            : null;
 
-        return redirect()->back()->with('success', 'Notes updated.');
+        $result = $sender->send($event, $validated['recipient_ids'], $validated['subject'], $validated['body'], $template);
+
+        if ($result['sent'] === 0 && $result['failed'] === 0) {
+            return back()->with('error', 'No valid recipients with an email address were selected.');
+        }
+
+        $msg = "Email queued to {$result['sent']} registrant".($result['sent'] === 1 ? '' : 's').'.';
+        if ($result['failed'] > 0) {
+            $msg .= " {$result['failed']} failed.";
+        }
+
+        return back()->with('success', $msg);
+    }
+
+    /**
+     * Queue a composed email to send to selected registrants at a future
+     * date/time. A per-minute scheduler (events:dispatch-due-emails) fires it
+     * through the same branded send path when due.
+     */
+    public function scheduleRegistrantEmail(Request $request, $id)
+    {
+        $event = Event::findOrFail($id);
+
+        $validated = $request->validate([
+            'subject' => 'required|string|max:255',
+            'body' => 'required|string|max:65000',
+            'recipient_ids' => 'required|array|min:1',
+            'recipient_ids.*' => 'integer',
+            'template_id' => 'nullable|integer|exists:message_templates,id',
+            'scheduled_at' => 'required|date|after:now',
+        ]);
+
+        // Snapshot only registrants of this event that have an email.
+        $recipientIds = $event->leads()
+            ->whereIn('leads.id', $validated['recipient_ids'])
+            ->whereNotNull('email')->where('email', '!=', '')
+            ->pluck('leads.id')->all();
+
+        if (empty($recipientIds)) {
+            return back()->with('error', 'No valid recipients with an email address were selected.');
+        }
+
+        $scheduled = \App\Models\ScheduledEventEmail::create([
+            'event_id' => $event->id,
+            'created_by' => $request->user()->id,
+            'template_id' => $validated['template_id'] ?? null,
+            'subject' => $validated['subject'],
+            'body' => $validated['body'],
+            'recipient_ids' => $recipientIds,
+            'scheduled_at' => $validated['scheduled_at'],
+            'status' => \App\Models\ScheduledEventEmail::STATUS_PENDING,
+        ]);
+
+        return back()->with('success', 'Email scheduled for '.$scheduled->scheduled_at->format('M j, Y g:i A').' to '.count($recipientIds).' registrant'.(count($recipientIds) === 1 ? '' : 's').'.');
+    }
+
+    /**
+     * Cancel a still-pending scheduled event email before it fires.
+     */
+    public function cancelScheduledEmail($id, $scheduledId)
+    {
+        $scheduled = \App\Models\ScheduledEventEmail::where('event_id', $id)->findOrFail($scheduledId);
+
+        if (! $scheduled->isCancelable()) {
+            return back()->with('error', 'Only pending scheduled emails can be canceled.');
+        }
+
+        $scheduled->update(['status' => \App\Models\ScheduledEventEmail::STATUS_CANCELED]);
+
+        return back()->with('success', 'Scheduled email canceled.');
     }
 
     /**
@@ -554,11 +584,33 @@ class EventController extends Controller
 
             DB::commit();
 
-            // Notify the sales team (+ admins) of genuinely new registrations
-            // so the bell + Events tab badge light up. Resubmissions by an
-            // existing lead are skipped to avoid noise.
-            if ($lead->wasRecentlyCreated) {
-                $this->notifyNewRegistration($lead, 'event', $event);
+            // Confirmation email. Prefer the staff-editable 'event_registration'
+            // message template (with event variables); fall back to the built-in
+            // branded mailable if that template isn't configured. Wrapped so a
+            // mail/queue hiccup never turns a successful registration into error.
+            if (! empty($lead->email)) {
+                try {
+                    $session = ! empty($validated['event_session_id'])
+                        ? $event->sessions()->find($validated['event_session_id'])
+                        : null;
+
+                    $sent = app(\App\Services\CommunicationService::class)->sendTemplated(
+                        'event_registration',
+                        $lead,
+                        app(\App\Services\EventEmailSender::class)->context($event, $session),
+                    );
+
+                    if (! $sent['email']) {
+                        \Illuminate\Support\Facades\Mail::to($lead->email)
+                            ->send(new \App\Mail\EventRegistrationConfirmation($lead, $event, $session));
+                    }
+                } catch (\Throwable $e) {
+                    Log::error('Event confirmation email failed', [
+                        'lead_id' => $lead->id,
+                        'event_id' => $event->id,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
             }
 
             if ($request->header('X-Inertia') || ! $request->wantsJson()) {

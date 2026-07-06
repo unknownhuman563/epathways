@@ -6,7 +6,9 @@ use Illuminate\Auth\Middleware\RedirectIfAuthenticated;
 use Illuminate\Auth\Notifications\ResetPassword;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
+use Illuminate\Mail\Events\MessageSent;
 use Illuminate\Notifications\Messages\MailMessage;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
@@ -18,14 +20,18 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        // SMS transport: Twilio when configured, otherwise a no-op provider
-        // so the system runs without SMS creds in dev.
+        // SMS transport: Brevo when configured, else Twilio, else a no-op
+        // provider so the system runs without SMS creds in dev.
         $this->app->bind(\App\Contracts\SmsProvider::class, function () {
-            $sid = config('services.twilio.sid');
+            if ($key = config('services.brevo.sms_key')) {
+                return new \App\Services\Sms\BrevoSmsProvider($key, config('services.brevo.sms_sender'));
+            }
 
-            return $sid
-                ? new \App\Services\Sms\TwilioSmsProvider($sid, config('services.twilio.token'), config('services.twilio.from'))
-                : new \App\Services\Sms\NullSmsProvider();
+            if ($sid = config('services.twilio.sid')) {
+                return new \App\Services\Sms\TwilioSmsProvider($sid, config('services.twilio.token'), config('services.twilio.from'));
+            }
+
+            return new \App\Services\Sms\NullSmsProvider();
         });
 
         // Build 11.D Phase 3 — E-signature provider. StubSignatureProvider
@@ -43,6 +49,10 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        // Flip a MessageLog from 'queued' to 'sent' once the email actually
+        // reaches the mail server (fires on the queue worker).
+        Event::listen(MessageSent::class, \App\Listeners\MarkMessageLogSent::class);
+
         // Already-logged-in users hitting a 'guest' route (e.g. /login) land on
         // their own home — admins on /admin/dashboard, portal staff on their portal.
         RedirectIfAuthenticated::redirectUsing(
