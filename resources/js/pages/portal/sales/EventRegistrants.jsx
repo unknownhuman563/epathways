@@ -8,7 +8,7 @@ import {
 // reads identically (colour-coded stage picker, priority-tinted avatar,
 // expandable dashboard panel, same helpers).
 import {
-    StagePicker, LeadDashboardPanel, initials, priorityMeta, fmtDateShort, fmtTime,
+    StagePicker, LeadDashboardPanel, initials, priorityMeta, priorityRank, fmtDateShort, fmtTime,
 } from '@/pages/portal/sales/Leads';
 
 const priorityLabel = (p) => (p ? `Priority: ${p[0].toUpperCase()}${p.slice(1)}` : 'No priority set');
@@ -19,7 +19,7 @@ const priorityLabel = (p) => (p ? `Priority: ${p[0].toUpperCase()}${p.slice(1)}`
 // colour-coded stage picker, merged contact, location, note, registered.
 // The single row action is "View Registration" (the form the lead filled).
 //
-export default function EventRegistrants({ event, registrations = [], statuses = [] }) {
+export default function EventRegistrants({ event, registrations = [], statuses = [], portalBase = '/portal/sales' }) {
     const [searchTerm, setSearchTerm] = useState('');
     const [openStageId, setOpenStageId] = useState(null);
     const [savingId, setSavingId] = useState(null);
@@ -29,7 +29,7 @@ export default function EventRegistrants({ event, registrations = [], statuses =
 
     const changeStage = (reg, stage) => {
         setSavingId(reg.id);
-        router.post(`/portal/sales/leads/${reg.id}`, { status: stage }, {
+        router.post(`${portalBase}/leads/${reg.id}`, { status: stage }, {
             preserveScroll: true,
             preserveState: true,
             onSuccess: () => setRows((prev) => prev.map((r) => (r.id === reg.id ? { ...r, status: stage } : r))),
@@ -40,12 +40,13 @@ export default function EventRegistrants({ event, registrations = [], statuses =
 
     const filtered = useMemo(() => {
         const q = searchTerm.trim().toLowerCase();
-        if (! q) return rows;
-        return rows.filter((r) => {
+        const matched = ! q ? rows : rows.filter((r) => {
             const name = (r.name || '').toLowerCase();
             const email = (r.email || '').toLowerCase();
             return name.includes(q) || email.includes(q);
         });
+        // Priority always leads: urgent → medium → low → none.
+        return [...matched].sort((a, b) => priorityRank(a.priority) - priorityRank(b.priority));
     }, [rows, searchTerm]);
 
     const fmtDate = (iso) =>
@@ -58,7 +59,7 @@ export default function EventRegistrants({ event, registrations = [], statuses =
             {/* Header */}
             <div className="flex flex-col gap-3">
                 <Link
-                    href="/portal/sales/leads?tab=events"
+                    href={`${portalBase}/leads?tab=events`}
                     className="inline-flex items-center gap-1.5 text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors w-max"
                 >
                     <ArrowLeft size={16} /> Back to Leads
@@ -263,7 +264,7 @@ export default function EventRegistrants({ event, registrations = [], statuses =
                                 {isExpanded && (
                                     <tr className="bg-blue-50/20 border-t border-blue-100/60">
                                         <td colSpan={8} className="px-6 py-4">
-                                            <LeadDashboardPanel lead={r} portalBase="/portal/sales" />
+                                            <LeadDashboardPanel lead={r} portalBase={portalBase} />
                                         </td>
                                     </tr>
                                 )}

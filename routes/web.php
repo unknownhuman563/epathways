@@ -498,6 +498,16 @@ Route::middleware(['auth'])->group(function () {
             ->name('admin.events.registrant.show');
         Route::post('/admin/events/{eventId}/registrants/{leadId}/notes', [EventController::class, 'updateRegistrantNotes'])
             ->name('admin.events.registrant.notes');
+        // Leads-page "Events" tab → full registrants table (reuses the sales
+        // page under AdminLayout; SalesController picks the admin/ view by path).
+        Route::get('/admin/events/{id}/registrants', [SalesController::class, 'eventRegistrantsPage'])
+            ->name('admin.events.registrants');
+
+        // Manual "Add Lead" from the pipeline toolbar (dashboard add flow).
+        Route::post('/admin/leads', [LeadController::class, 'storeDashboardLead'])->name('admin.leads.store');
+        // Leads-page "Registration" tab → read-only snapshot of the /register form.
+        Route::get('/admin/leads/{id}/registration', [SalesController::class, 'showLeadRegistration'])
+            ->name('admin.leads.registration');
 
         Route::get('/admin/leads/{id}', [LeadController::class, 'show'])->name('admin.leads.show');
         Route::post('/admin/leads/{id}/stage', [LeadController::class, 'updateStage'])->name('admin.leads.stage');
@@ -505,6 +515,8 @@ Route::middleware(['auth'])->group(function () {
         Route::delete('/admin/leads/{id}', [LeadController::class, 'destroy'])->name('admin.leads.destroy');
         // General lead priority — shared by every portal's Leads table.
         Route::post('/admin/leads/{id}/priority', [LeadController::class, 'updatePriority'])->name('admin.leads.priority');
+        // JSON payload for the Leads-table "Edit lead" modal.
+        Route::get('/admin/leads/{id}/edit-data', [LeadController::class, 'editData'])->name('admin.leads.edit-data');
         Route::post('/admin/leads/{id}/personal', [LeadController::class, 'updatePersonal'])->name('admin.leads.personal');
         Route::post('/admin/leads/{id}/journey', [LeadController::class, 'updateJourney'])->name('admin.leads.journey');
         Route::post('/admin/leads/{id}/convert-to-student', [LeadController::class, 'convertToStudent'])->name('admin.leads.convert-student');
@@ -531,6 +543,9 @@ Route::middleware(['auth'])->group(function () {
 
         // Bulk CSV import — duplicates detected by email or name+phone.
         Route::post('/admin/leads/import', [LeadController::class, 'importLeads'])->name('admin.leads.import');
+        // Inline pipeline-stage change from the leads table / kanban. Declared
+        // AFTER /admin/leads/import so the literal segment isn't caught as {id}.
+        Route::post('/admin/leads/{id}', [LeadController::class, 'updateLeadStatus'])->name('admin.leads.status');
         Route::post('/admin/leads/{id}/documents/checklist', [LeadController::class, 'updateDocumentChecklist'])->name('admin.leads.documents.checklist');
         Route::post('/admin/leads/{id}/documents/section-verification', [LeadController::class, 'updateSectionVerification'])->name('admin.leads.documents.section-verification');
 
@@ -706,6 +721,10 @@ Route::middleware(['auth'])->group(function () {
             //   /registrants   → full-page Inertia render (Leads.jsx links here)
             Route::get('/events/{id}/registrations', [SalesController::class, 'eventRegistrations'])->name('events.registrations');
             Route::get('/events/{id}/registrants', [SalesController::class, 'eventRegistrantsPage'])->name('events.registrants');
+            // Agents tab — full-page list of leads a recruiting agent has added,
+            // styled like Open opportunities. Reached from the Agents tab
+            // "View leads" action on portal/sales/Leads.
+            Route::get('/agents/{id}/leads', [SalesController::class, 'agentLeadsPage'])->name('agents.leads');
 
             // Registration tab — read-only view of a lead's /register submission.
             // Declared before /leads/{id} so the /registration suffix wins.
@@ -715,9 +734,15 @@ Route::middleware(['auth'])->group(function () {
             // Declared before /leads/{id} so the two static segments win.
             Route::post('/leads/bulk-email/preview', [\App\Http\Controllers\Sales\BulkEmailController::class, 'preview'])->name('leads.bulk-email.preview');
             Route::post('/leads/bulk-email/send', [\App\Http\Controllers\Sales\BulkEmailController::class, 'send'])->name('leads.bulk-email.send');
+            // Bulk assign-agent + bulk delete — drive the checkbox-selection
+            // toolbar above the Open-opportunities table. Declared before
+            // /leads/{id} so the static segments win.
+            Route::post('/leads/bulk-agent', [SalesController::class, 'bulkAssignAgent'])->name('leads.bulk-agent');
+            Route::post('/leads/bulk-delete', [SalesController::class, 'bulkDelete'])->name('leads.bulk-delete');
 
             Route::post('/leads', [SalesController::class, 'storeLead'])->name('leads.store');
             Route::post('/leads/{id}/notes', [\App\Http\Controllers\LeadNoteController::class, 'store'])->name('leads.notes.store');
+            Route::post('/leads/{id}/agent', [SalesController::class, 'updateLeadAgent'])->name('leads.agent');
             Route::post('/leads/{id}', [SalesController::class, 'updateLead'])->name('leads.update');
             Route::get('/bookings', [SalesController::class, 'bookings'])->name('bookings');
             Route::post('/bookings/{id}', [SalesController::class, 'updateBooking'])->name('bookings.update');
@@ -771,7 +796,6 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/leads', [\App\Http\Controllers\Portal\AgentController::class, 'leads'])->name('leads');
             Route::post('/leads', [\App\Http\Controllers\Portal\AgentController::class, 'storeLead'])->name('leads.store');
             Route::post('/leads/{id}/info', [\App\Http\Controllers\Portal\AgentController::class, 'updateLeadInfo'])->name('leads.info');
-            Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications');
         });
 
         // Other portals — each has its own controller + dedicated dashboard

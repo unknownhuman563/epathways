@@ -15,7 +15,7 @@ import {
     Filter, ArrowUpDown, ArrowUp, ArrowDown, ChevronLeft, ChevronRight,
     MoreHorizontal, ChevronDown, ChevronRight as ChevronRightIcon, ExternalLink, UserCheck,
     Upload, Loader, Plus, X, CalendarClock, Link2, FileText as FileTextIcon,
-    Pencil, StickyNote, Calendar, MapPin, Users, Eye,
+    Pencil, StickyNote, Calendar, MapPin, Users, Eye, Trash2,
 } from "lucide-react";
 
 // ── Stage colour map ───────────────────────────────────────────────────────
@@ -144,7 +144,7 @@ export const priorityMeta = (p) => PRIORITY_OPTIONS.find((o) => o.value === p) |
 export const priorityDot = (p) => priorityMeta(p)?.dot || "bg-gray-300";
 // Sort weight so urgent floats to the top, then medium, low, then leads
 // with no priority set.
-const priorityRank = (p) => ({ urgent: 0, medium: 1, low: 2 }[p] ?? 3);
+export const priorityRank = (p) => ({ urgent: 0, medium: 1, low: 2 }[p] ?? 3);
 
 const PAGE_SIZE = 20;
 
@@ -153,13 +153,17 @@ const PAGE_SIZE = 20;
 // Each portal hits its own /portal/{role}/leads endpoints (status update,
 // portal-invitation request). Default to sales for backwards compat when the
 // prop is missing.
-const PORTAL_LABEL = { sales: "Sales", education: "Education", immigration: "Immigration" };
+const PORTAL_LABEL = { sales: "Sales", education: "Education", immigration: "Immigration", admin: "Admin" };
 
-export default function SalesLeads({ leads = [], statuses = [], programs = [], staffOptions = [], events = [], allTagNames = [], tabCounts = {}, agents = [], portal = "sales" }) {
-    const portalBase = `/portal/${portal}`;
+export default function SalesLeads({ leads = [], statuses = [], programs = [], staffOptions = [], events = [], allTagNames = [], tabCounts = {}, agents = [], portal = "sales", portalBase: portalBaseProp }) {
+    // Department portals live at /portal/{role}; the admin screen reuses this
+    // exact component but is served from /admin, so it passes its own base.
+    const portalBase = portalBaseProp || `/portal/${portal}`;
     const portalLabel = PORTAL_LABEL[portal] || "Sales";
     // Sales, Education, and Immigration can all request portal invitations
-    // for a lead; admin still approves before the invite email is sent.
+    // for a lead; admin still approves before the invite email is sent (and
+    // manages them from the dedicated Portal Invitations screen), so admin
+    // does not surface the per-row "request access" action here.
     const canRequestInvite = ["sales", "education", "immigration"].includes(portal);
 
     const [search, setSearch] = useState("");
@@ -184,11 +188,46 @@ export default function SalesLeads({ leads = [], statuses = [], programs = [], s
     const [savingId, setSavingId] = useState(null);
     const [selectedIds, setSelectedIds] = useState(new Set());
     const [bulkOpen, setBulkOpen] = useState(false);
+    // Assign-agent + delete are also bulk actions — same selection set,
+    // different destinations. Confirm dialog for delete since it's terminal.
+    const [bulkAgentOpen, setBulkAgentOpen] = useState(false);
+    const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false);
+    const [bulkBusy, setBulkBusy] = useState(false);
+
+    const runBulkAssignAgent = (agentId) => {
+        setBulkBusy(true);
+        router.post(`${portalBase}/leads/bulk-agent`, {
+            lead_ids: [...selectedIds],
+            agent_id: agentId || null,
+        }, {
+            preserveScroll: true,
+            onFinish: () => {
+                setBulkBusy(false);
+                setBulkAgentOpen(false);
+                setSelectedIds(new Set());
+            },
+        });
+    };
+
+    const runBulkDelete = () => {
+        setBulkBusy(true);
+        router.post(`${portalBase}/leads/bulk-delete`, {
+            lead_ids: [...selectedIds],
+        }, {
+            preserveScroll: true,
+            onFinish: () => {
+                setBulkBusy(false);
+                setBulkDeleteConfirm(false);
+                setSelectedIds(new Set());
+            },
+        });
+    };
     const [sortKey, setSortKey] = useState("created_at");
     const [sortDir, setSortDir] = useState("desc");
     const [page, setPage] = useState(1);
     const [openStageMenuId, setOpenStageMenuId] = useState(null);
     const [openRowMenuId, setOpenRowMenuId] = useState(null);
+    const [editingLead, setEditingLead] = useState(null);
     const [expandedId, setExpandedId] = useState(null);
     const [showFilters, setShowFilters] = useState(false);
     const EMPTY_ADV = { goal_status: "", pre_screened_by: "", program: "", portal: "", tag: "" };
@@ -296,7 +335,7 @@ export default function SalesLeads({ leads = [], statuses = [], programs = [], s
                     or import leads directly, so the add cluster is hidden there. */}
                 {portal !== "immigration" && (
                     <div className="flex items-center gap-2">
-                        <AddLeadButton portalBase={portalBase} statuses={statuses} programs={programs} staffOptions={staffOptions} />
+                        <AddLeadButton portalBase={portalBase} statuses={statuses} programs={programs} staffOptions={staffOptions} agents={agents} />
                         <ImportLeadsButton />
                     </div>
                 )}
@@ -330,7 +369,7 @@ export default function SalesLeads({ leads = [], statuses = [], programs = [], s
                         </button>
                         {/* Events tab — only portals whose controller feeds `events`
                             + exposes /events/{id}/registrations (sales, immigration, education). */}
-                        {(portal === "sales" || portal === "immigration" || portal === "education") && (
+                        {(portal === "sales" || portal === "immigration" || portal === "education" || portal === "admin") && (
                             <button
                                 type="button"
                                 onClick={() => setView("events")}
@@ -357,8 +396,8 @@ export default function SalesLeads({ leads = [], statuses = [], programs = [], s
                             <TabBadge count={tabCounts.registration} />
                         </button>
                         {/* Agents tab — recruiting-agent roster + their leads.
-                            Sales (and admins on the sales screen) only. */}
-                        {portal === "sales" && (
+                            Sales portal + the admin leads screen. */}
+                        {(portal === "sales" || portal === "admin") && (
                             <button
                                 type="button"
                                 onClick={() => { setView("agents"); setPage(1); }}
@@ -446,6 +485,19 @@ export default function SalesLeads({ leads = [], statuses = [], programs = [], s
                 </div>
                 )}
             </div>
+
+            {/* Bulk actions bar — shown above the table only when at least
+                one lead is checked. Actions apply to whatever's currently in
+                `selectedIds`, so they respect the current filter/page state. */}
+            {(view === "table" || view === "registration") && selectedIds.size > 0 && (
+                <BulkActionsBar
+                    count={selectedIds.size}
+                    onClear={() => setSelectedIds(new Set())}
+                    onEmail={() => setBulkOpen(true)}
+                    onAssignAgent={() => setBulkAgentOpen(true)}
+                    onDelete={() => setBulkDeleteConfirm(true)}
+                />
+            )}
 
             {/* Table — shared by the Open opportunities + Registration tabs */}
             {(view === "table" || view === "registration") && (
@@ -668,6 +720,7 @@ export default function SalesLeads({ leads = [], statuses = [], programs = [], s
                                                     open={openRowMenuId === l.id}
                                                     onToggle={() => setOpenRowMenuId(openRowMenuId === l.id ? null : l.id)}
                                                     onClose={() => setOpenRowMenuId(null)}
+                                                    onEdit={() => { setOpenRowMenuId(null); setEditingLead(l); }}
                                                     onRequestPortal={() => { setOpenRowMenuId(null); requestPortal(l); }}
                                                     isSaving={isSaving}
                                                     portalBase={portalBase}
@@ -743,28 +796,196 @@ export default function SalesLeads({ leads = [], statuses = [], programs = [], s
             )}
 
             {view === "agents" && (
-                <AgentsTab agents={agents} leads={leads} />
+                <AgentsTab agents={agents} portalBase={portalBase} />
             )}
 
             <BulkEmailModal open={bulkOpen} onClose={() => setBulkOpen(false)} leadIds={[...selectedIds]} />
+
+            <BulkAgentModal
+                open={bulkAgentOpen}
+                onClose={() => setBulkAgentOpen(false)}
+                agents={agents}
+                count={selectedIds.size}
+                busy={bulkBusy}
+                onApply={runBulkAssignAgent}
+            />
+
+            <BulkDeleteConfirm
+                open={bulkDeleteConfirm}
+                onClose={() => setBulkDeleteConfirm(false)}
+                count={selectedIds.size}
+                busy={bulkBusy}
+                onConfirm={runBulkDelete}
+            />
+
+            {editingLead && (
+                <EditLeadModal
+                    lead={editingLead}
+                    portalBase={portalBase}
+                    statuses={statuses}
+                    staffOptions={staffOptions}
+                    agents={agents}
+                    onClose={() => setEditingLead(null)}
+                />
+            )}
         </div>
     );
 }
 
-// ── Agents tab — recruiting-agent roster (left) + the selected agent's own
-//    recruited leads (right). Read-only: sales views who brought each lead
-//    in. The per-agent lead list is derived from the leads collection, which
-//    carries each lead's `agent`. ─────────────────────────────────────────────
+// ── Agents tab — recruiting-agent roster as a flat table. Each row shows
+//    the agent, their contact + location, the number of leads they've added,
+//    and a "View leads" action that opens the agent's leads on its own page
+//    (styled like Open opportunities). Mirrors the Events tab layout so the
+//    two roster tabs read the same. ────────────────────────────────────────
 
-function AgentsTab({ agents = [], leads = [] }) {
-    const [selectedId, setSelectedId] = useState(agents[0]?.id ?? null);
-    const selected = agents.find((a) => a.id === selectedId) || null;
-
-    const agentLeads = useMemo(
-        () => leads.filter((l) => l.agent && l.agent.id === selectedId),
-        [leads, selectedId]
+// ── Bulk actions bar — appears above the leads table whenever at least
+//    one lead checkbox is selected. Delegates the actual work to callbacks
+//    on the parent (open modals, fire router.post, etc.). ─────────────────
+function BulkActionsBar({ count, onClear, onEmail, onAssignAgent, onDelete }) {
+    return (
+        <div className="flex items-center justify-between gap-3 px-4 py-2.5 bg-gray-900 text-white rounded-2xl shadow-sm">
+            <div className="flex items-center gap-3">
+                <span className="text-xs font-semibold">
+                    {count} lead{count === 1 ? '' : 's'} selected
+                </span>
+                <button
+                    type="button"
+                    onClick={onClear}
+                    className="text-[11px] text-gray-300 hover:text-white underline underline-offset-2"
+                >
+                    Clear
+                </button>
+            </div>
+            <div className="flex items-center gap-2">
+                <button
+                    type="button"
+                    onClick={onEmail}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-xs font-semibold transition-colors"
+                    title="Send email to selected leads"
+                >
+                    <Mail size={13} /> Email
+                </button>
+                <button
+                    type="button"
+                    onClick={onAssignAgent}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-xs font-semibold transition-colors"
+                    title="Set or edit the recruiting agent on selected leads"
+                >
+                    <UserCheck size={13} /> Set / edit agent
+                </button>
+                <button
+                    type="button"
+                    onClick={onDelete}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/90 hover:bg-red-500 text-xs font-semibold transition-colors"
+                    title="Delete selected leads"
+                >
+                    <Trash2 size={13} /> Delete
+                </button>
+            </div>
+        </div>
     );
+}
 
+// ── Bulk agent picker — assigns (or clears) a recruiting agent for every
+//    lead in the current selection. Only sales-role users manage this. ──
+function BulkAgentModal({ open, onClose, agents = [], count, busy, onApply }) {
+    const [agentId, setAgentId] = useState('');
+    useEffect(() => { if (open) setAgentId(''); }, [open]);
+
+    if (! open) return null;
+    return (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl">
+                <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+                    <div>
+                        <h3 className="text-base font-bold text-gray-900">Set recruiting agent</h3>
+                        <p className="text-xs text-gray-500 mt-0.5">Applies to {count} lead{count === 1 ? '' : 's'}.</p>
+                    </div>
+                    <button onClick={onClose} className="w-8 h-8 rounded-full hover:bg-gray-100 flex items-center justify-center">
+                        <X size={16} />
+                    </button>
+                </div>
+                <div className="p-5 space-y-3">
+                    <label className="block text-[11px] font-bold uppercase tracking-widest text-gray-500">Agent</label>
+                    <select
+                        value={agentId}
+                        onChange={(e) => setAgentId(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-gray-900"
+                    >
+                        <option value="">— No agent (clear) —</option>
+                        {agents.map((a) => (
+                            <option key={a.id} value={a.id}>{a.name}</option>
+                        ))}
+                    </select>
+                    <p className="text-[11px] text-gray-500">Leaving "No agent" applies to all selected — it clears any existing agent assignment.</p>
+                </div>
+                <div className="px-5 py-4 border-t border-gray-100 flex items-center justify-end gap-2">
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        className="px-4 py-2 text-sm font-semibold text-gray-600 hover:text-gray-900"
+                    >
+                        Cancel
+                    </button>
+                    <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => onApply(agentId)}
+                        className="inline-flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-xl text-sm font-bold hover:bg-black disabled:opacity-60"
+                    >
+                        {busy ? <Loader size={14} className="animate-spin" /> : <Check size={14} />}
+                        Apply
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+// ── Delete confirm — soft-deletes the selected leads. Confirm because it's
+//    a terminal action even though rows are recoverable in the admin trash.
+function BulkDeleteConfirm({ open, onClose, count, busy, onConfirm }) {
+    if (! open) return null;
+    return (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl">
+                <div className="p-6">
+                    <div className="flex items-start gap-3">
+                        <div className="w-10 h-10 rounded-full bg-red-100 text-red-600 flex items-center justify-center flex-shrink-0">
+                            <Trash2 size={18} />
+                        </div>
+                        <div className="min-w-0">
+                            <h3 className="text-base font-bold text-gray-900">Delete {count} lead{count === 1 ? '' : 's'}?</h3>
+                            <p className="text-xs text-gray-600 mt-1.5">
+                                The selected lead{count === 1 ? '' : 's'} will be moved to trash. Admins can restore them later.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-end gap-2 bg-gray-50/50 rounded-b-2xl">
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        className="px-4 py-2 text-sm font-semibold text-gray-600 hover:text-gray-900"
+                    >
+                        Cancel
+                    </button>
+                    <button
+                        type="button"
+                        disabled={busy}
+                        onClick={onConfirm}
+                        className="inline-flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-xl text-sm font-bold hover:bg-red-700 disabled:opacity-60"
+                    >
+                        {busy ? <Loader size={14} className="animate-spin" /> : <Trash2 size={14} />}
+                        Delete
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+function AgentsTab({ agents = [], portalBase = '/portal/sales' }) {
     if (agents.length === 0) {
         return (
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-14 text-center">
@@ -776,106 +997,76 @@ function AgentsTab({ agents = [], leads = [] }) {
     }
 
     return (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            {/* Roster */}
-            <div className="lg:col-span-1 bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden self-start">
-                <div className="px-4 py-3 border-b border-gray-100 text-[11px] font-bold text-gray-500 uppercase tracking-wider">
-                    Agents · {agents.length}
-                </div>
-                <ul className="divide-y divide-gray-50 max-h-[560px] overflow-y-auto">
-                    {agents.map((a) => {
-                        const active = a.id === selectedId;
-                        return (
-                            <li key={a.id}>
-                                <button
-                                    type="button"
-                                    onClick={() => setSelectedId(a.id)}
-                                    className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors ${active ? "bg-teal-50/70" : "hover:bg-gray-50"}`}
-                                >
-                                    <Avatar name={a.name} src={a.avatar_url} colorKey={a.id} size={36} />
-                                    <div className="min-w-0 flex-1">
-                                        <div className="font-semibold text-gray-900 text-sm truncate">{a.name}</div>
-                                        {a.location && (
-                                            <div className="text-[11px] text-gray-400 truncate inline-flex items-center gap-1">
-                                                <MapPin size={10} />{a.location}
-                                            </div>
-                                        )}
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+            <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                    <thead>
+                        <tr className="bg-gray-50/60 border-b border-gray-200 text-[10px] font-bold text-gray-500 uppercase tracking-wider">
+                            <th className="px-4 py-3">Agent</th>
+                            <th className="px-3 py-3">Contact</th>
+                            <th className="px-3 py-3">Location</th>
+                            <th className="px-3 py-3 text-center">Leads added</th>
+                            <th className="px-3 py-3 text-right pr-4">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                        {agents.map((a) => (
+                            <tr key={a.id} className="hover:bg-gray-50/60 transition-colors">
+                                <td className="px-4 py-3">
+                                    <div className="flex items-center gap-2.5">
+                                        <Avatar name={a.name} src={a.avatar_url} colorKey={a.id} size={32} />
+                                        <div className="min-w-0">
+                                            <div className="font-semibold text-gray-900 truncate">{a.name}</div>
+                                            {a.email && (
+                                                <div className="text-[10px] text-gray-400 truncate">{a.email}</div>
+                                            )}
+                                        </div>
                                     </div>
-                                    <span className={`text-[11px] font-bold tabular-nums px-2 py-0.5 rounded-full ${active ? "bg-teal-600 text-white" : "bg-gray-100 text-gray-600"}`}>
-                                        {a.leads_count ?? 0}
-                                    </span>
-                                </button>
-                            </li>
-                        );
-                    })}
-                </ul>
-            </div>
-
-            {/* Selected agent's leads */}
-            <div className="lg:col-span-2 bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-                {selected && (
-                    <div className="px-5 py-4 border-b border-gray-100 flex flex-wrap items-center gap-x-5 gap-y-1.5">
-                        <div className="flex items-center gap-3">
-                            <Avatar name={selected.name} src={selected.avatar_url} colorKey={selected.id} size={40} />
-                            <div>
-                                <div className="font-bold text-gray-900">{selected.name}</div>
-                                <div className="text-[12px] text-gray-500">{(selected.leads_count ?? 0)} lead{(selected.leads_count ?? 0) === 1 ? "" : "s"} recruited</div>
-                            </div>
-                        </div>
-                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px] text-gray-600 ml-auto">
-                            {selected.email && <span className="inline-flex items-center gap-1.5"><Mail size={12} className="text-gray-400" />{selected.email}</span>}
-                            {selected.phone && <span className="inline-flex items-center gap-1.5"><Phone size={12} className="text-gray-400" />{selected.phone}</span>}
-                            {selected.location && <span className="inline-flex items-center gap-1.5"><MapPin size={12} className="text-gray-400" />{selected.location}</span>}
-                        </div>
-                    </div>
-                )}
-
-                <div className="overflow-x-auto">
-                    <table className="w-full text-left text-xs">
-                        <thead>
-                            <tr className="bg-gray-50/60 border-b border-gray-200 text-[10px] font-bold text-gray-500 uppercase tracking-wider">
-                                <th className="px-4 py-3">Lead</th>
-                                <th className="px-3 py-3">Contact</th>
-                                <th className="px-3 py-3">Stage</th>
-                                <th className="px-3 py-3">Added</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-100">
-                            {agentLeads.length === 0 ? (
-                                <tr>
-                                    <td colSpan={4} className="px-6 py-16 text-center text-gray-400">
-                                        <p className="text-sm font-medium">No leads recruited by this agent yet.</p>
-                                    </td>
-                                </tr>
-                            ) : agentLeads.map((l) => (
-                                <tr key={l.id} className="hover:bg-gray-50/50 transition-colors">
-                                    <td className="px-4 py-2.5">
-                                        <div className="flex items-center gap-2.5">
-                                            <Avatar name={l.name} colorKey={l.id} size={28} />
-                                            <div>
-                                                <div className="font-semibold text-gray-900">{l.name}</div>
-                                                <div className="text-[10px] text-gray-400">{l.lead_id}</div>
-                                            </div>
-                                        </div>
-                                    </td>
-                                    <td className="px-3 py-2.5 text-gray-600">
-                                        <div className="space-y-0.5">
-                                            {l.email && <div className="inline-flex items-center gap-1"><Mail size={10} className="text-gray-300" />{l.email}</div>}
-                                            {l.phone && <div className="inline-flex items-center gap-1"><Phone size={10} className="text-gray-300" />{l.phone}</div>}
-                                            {!l.email && !l.phone && <span className="text-gray-300">—</span>}
-                                        </div>
-                                    </td>
-                                    <td className="px-3 py-2.5">
-                                        <span className={`inline-block px-2 py-0.5 rounded-md text-[10px] font-bold border ${STAGE_STYLES[l.stage] || "bg-gray-100 text-gray-600 border-gray-200"}`}>
-                                            {l.stage || l.status || "—"}
+                                </td>
+                                <td className="px-3 py-3 text-gray-600">
+                                    <div className="flex flex-col gap-0.5">
+                                        {a.email && (
+                                            <span className="inline-flex items-center gap-1.5">
+                                                <Mail size={11} className="text-gray-300 flex-shrink-0" />
+                                                <span className="truncate max-w-[200px]">{a.email}</span>
+                                            </span>
+                                        )}
+                                        {a.phone && (
+                                            <span className="inline-flex items-center gap-1.5">
+                                                <Phone size={11} className="text-gray-300 flex-shrink-0" />
+                                                <span>{a.phone}</span>
+                                            </span>
+                                        )}
+                                        {! a.email && ! a.phone && <span className="text-gray-300">—</span>}
+                                    </div>
+                                </td>
+                                <td className="px-3 py-3 text-gray-600">
+                                    {a.location ? (
+                                        <span className="inline-flex items-center gap-1.5">
+                                            <MapPin size={12} className="text-gray-400" />
+                                            <span className="max-w-[200px] truncate">{a.location}</span>
                                         </span>
-                                    </td>
-                                    <td className="px-3 py-2.5 text-gray-500 whitespace-nowrap">{fmtDateShort(l.created_at)}</td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
+                                    ) : (
+                                        <span className="text-gray-300">—</span>
+                                    )}
+                                </td>
+                                <td className="px-3 py-3 text-center">
+                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-gray-100 text-gray-700 font-bold tabular-nums">
+                                        <Users size={11} /> {a.leads_count ?? 0}
+                                    </span>
+                                </td>
+                                <td className="px-3 py-3 text-right pr-4">
+                                    <Link
+                                        href={`${portalBase}/agents/${a.id}/leads`}
+                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-900 text-white text-[11px] font-semibold hover:bg-black"
+                                    >
+                                        View leads
+                                    </Link>
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
             </div>
         </div>
     );
@@ -909,6 +1100,7 @@ function EventsTab({ events = [], portalBase, statuses = [] }) {
                                 <th className="px-3 py-3">Date</th>
                                 <th className="px-3 py-3">Where</th>
                                 <th className="px-3 py-3">Type</th>
+                                <th className="px-3 py-3">Agent</th>
                                 <th className="px-3 py-3 text-center">Registered</th>
                                 <th className="px-3 py-3 text-right pr-4">Actions</th>
                             </tr>
@@ -928,6 +1120,16 @@ function EventsTab({ events = [], portalBase, statuses = [] }) {
                                         </span>
                                     </td>
                                     <td className="px-3 py-3 text-gray-600">{ev.type || "—"}</td>
+                                    <td className="px-3 py-3">
+                                        {ev.agent ? (
+                                            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase border bg-violet-50 text-violet-700 border-violet-200">
+                                                <UserCheck size={11} className="text-violet-400" />
+                                                {ev.agent}
+                                            </span>
+                                        ) : (
+                                            <span className="text-gray-300">—</span>
+                                        )}
+                                    </td>
                                     <td className="px-3 py-3 text-center">
                                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-gray-100 text-gray-700 font-bold tabular-nums">
                                             <Users size={11} /> {ev.registrations_count}
@@ -1038,17 +1240,20 @@ const GOAL_STATUS_OPTIONS = ["Consultation Done", "For Proposal", "Proposal Sent
 
 const NAME_SUFFIXES = ["Jr.", "Sr.", "II", "III", "IV", "V"];
 
-function AddLeadButton({ portalBase, statuses = [], programs = [], staffOptions = [] }) {
+function AddLeadButton({ portalBase, statuses = [], programs = [], staffOptions = [], agents = [] }) {
     const [open, setOpen] = useState(false);
     const [saving, setSaving] = useState(false);
     const blank = {
         first_name: "", last_name: "", suffix: "", email: "", phone: "", status: statuses[0] || "New Leads", assessment_date: "",
-        pre_screened_by: "", pre_screening_notes: "", program_offered: "",
+        pre_screened_by: "", pre_screening_notes: "", program_offered: "", agent_id: "",
         goal_setting_by: "", goal_setting_status: "", goal_setting_notes: "",
         calendar_date: "", client_info_link: "", call_update_form_link: "",
+        // Document uploads — mirror the public registration form.
+        cv_files: [], passport_files: [], diploma_files: [], transcript_files: [],
     };
     const [form, setForm] = useState(blank);
     const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
+    const setFiles = (k, files) => setForm((f) => ({ ...f, [k]: files }));
 
     // Lock background scroll + close on Escape while the modal is open.
     useEffect(() => {
@@ -1068,6 +1273,7 @@ function AddLeadButton({ portalBase, statuses = [], programs = [], staffOptions 
         setSaving(true);
         router.post(`${portalBase}/leads`, form, {
             preserveScroll: true,
+            forceFormData: true,
             onSuccess: () => { setForm(blank); setOpen(false); },
             onFinish: () => setSaving(false),
         });
@@ -1129,6 +1335,14 @@ function AddLeadButton({ portalBase, statuses = [], programs = [], staffOptions 
                                         {programs.map((p) => <option key={p} value={p}>{p}</option>)}
                                     </select>
                                 </Field>
+                                {agents.length > 0 && (
+                                    <Field label="Agent">
+                                        <select value={form.agent_id} onChange={set("agent_id")} className={inputCls}>
+                                            <option value="">— No agent —</option>
+                                            {agents.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+                                        </select>
+                                    </Field>
+                                )}
                                 <Field label="Assessment date">
                                     <input type="date" value={form.assessment_date} onChange={set("assessment_date")} className={inputCls} />
                                 </Field>
@@ -1205,6 +1419,17 @@ function AddLeadButton({ portalBase, statuses = [], programs = [], staffOptions 
                                     <input type="url" value={form.call_update_form_link} onChange={set("call_update_form_link")} placeholder="https://…" className={inputCls} />
                                 </Field>
                             </div>
+
+                            {/* Documents — same four as the public registration form. */}
+                            <div className="pt-3 border-t border-gray-100">
+                                <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-gray-500 mb-3">Documents</p>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    <DocPick label="Attach CV" files={form.cv_files} onChange={(f) => setFiles("cv_files", f)} />
+                                    <DocPick label="Passport" files={form.passport_files} onChange={(f) => setFiles("passport_files", f)} />
+                                    <DocPick label="Diploma" files={form.diploma_files} onChange={(f) => setFiles("diploma_files", f)} />
+                                    <DocPick label="Transcript of Record" files={form.transcript_files} onChange={(f) => setFiles("transcript_files", f)} />
+                                </div>
+                            </div>
                         </form>
 
                         {/* Footer — pinned so the actions are always visible. */}
@@ -1222,6 +1447,42 @@ function AddLeadButton({ portalBase, statuses = [], programs = [], staffOptions 
                 document.body
             )}
         </>
+    );
+}
+
+// Multi-file picker used by the Add-Lead Documents section. Accepts the same
+// file types as the public registration form; shows chosen files with a
+// remove control. `files` is an array of File objects held in the form state.
+function DocPick({ label, files = [], onChange }) {
+    const inputId = `doc-${label.replace(/\s+/g, "-").toLowerCase()}`;
+    const add = (list) => onChange([...(files || []), ...Array.from(list)]);
+    const removeAt = (i) => onChange(files.filter((_, idx) => idx !== i));
+    return (
+        <div>
+            <p className="text-[11px] font-semibold text-gray-600 mb-1.5">{label}</p>
+            <label htmlFor={inputId} className="flex items-center justify-center gap-2 px-3 py-2 rounded-lg border border-dashed border-gray-300 text-xs font-semibold text-gray-600 hover:border-gray-500 hover:bg-gray-50 cursor-pointer transition-colors">
+                <Upload size={13} /> {files.length ? "Add more…" : "Choose file(s)"}
+            </label>
+            <input
+                id={inputId}
+                type="file"
+                multiple
+                accept=".pdf,.doc,.docx,.xls,.csv,.jpg,.jpeg,.png,.gif"
+                className="hidden"
+                onChange={(e) => { if (e.target.files?.length) add(e.target.files); e.target.value = ""; }}
+            />
+            {files.length > 0 && (
+                <ul className="mt-1.5 space-y-1">
+                    {files.map((f, i) => (
+                        <li key={i} className="flex items-center gap-1.5 text-[11px] text-gray-600 bg-gray-50 border border-gray-100 rounded px-2 py-1">
+                            <FileText size={11} className="text-gray-400 flex-shrink-0" />
+                            <span className="truncate flex-1">{f.name}</span>
+                            <button type="button" onClick={() => removeAt(i)} className="text-gray-400 hover:text-red-600"><X size={12} /></button>
+                        </li>
+                    ))}
+                </ul>
+            )}
+        </div>
     );
 }
 
@@ -1358,7 +1619,7 @@ function ImportLeadsButton() {
 
 // ── Row "More" menu — portal invitation actions live here ────────────────
 
-function RowMenu({ lead, open, onToggle, onClose, onRequestPortal, isSaving, portalBase = "/portal/sales", canRequestInvite = true }) {
+function RowMenu({ lead, open, onToggle, onClose, onEdit, onRequestPortal, isSaving, portalBase = "/portal/sales", canRequestInvite = true }) {
     const menuRef = useRef(null);
     const triggerRef = useRef(null);
     const [menuStyle, setMenuStyle] = useState(null);
@@ -1439,6 +1700,15 @@ function RowMenu({ lead, open, onToggle, onClose, onRequestPortal, isSaving, por
                         <ExternalLink size={12} className="text-gray-400" />
                         View lead details
                     </Link>
+                    <button
+                        type="button"
+                        role="menuitem"
+                        onClick={() => { onClose?.(); onEdit?.(); }}
+                        className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 text-left"
+                    >
+                        <Pencil size={12} className="text-gray-400" />
+                        Edit lead
+                    </button>
                     <a
                         href={`${portalBase}/leads/${lead.id}/documents`}
                         className="flex items-center gap-2.5 px-3 py-2 text-xs text-gray-700 hover:bg-gray-50"
@@ -1738,7 +2008,7 @@ const NOTE_KINDS = [
     { k: "pre_screen",   label: "Pre-screening" },
     { k: "goal_setting", label: "Goal-setting" },
 ];
-function AddNoteInline({ leadId, portalBase, staffOptions = [] }) {
+function AddNoteInline({ leadId, portalBase, staffOptions = [], onSaved }) {
     const [open, setOpen] = useState(false);
     const [kind, setKind] = useState("general");
     const [body, setBody] = useState("");
@@ -1760,7 +2030,7 @@ function AddNoteInline({ leadId, portalBase, staffOptions = [] }) {
             goal_setting_by:     kind === "goal_setting" ? (goalBy || null) : null,
         }, {
             preserveScroll: true,
-            onSuccess: () => { reset(); setOpen(false); },
+            onSuccess: () => { reset(); setOpen(false); onSaved?.(); },
             onFinish: () => setSaving(false),
         });
     };
@@ -1966,6 +2236,362 @@ function FiltersPopover({ open, onToggle, onClose, activeCount, adv, setAdvFilte
     );
 }
 
+// ── Edit-lead modal — large (not full-screen) profile-style dialog with a
+//    vertical tab rail, mirroring the Cases board. Header carries the avatar,
+//    name, ID, stage picker + agent; tabs edit personal info / show documents,
+//    notes-and-tags, and the journey. ─────────────────────────────────────────
+
+const EDIT_TABS = [
+    { key: "personal",  label: "Personal info",  icon: UserCheck },
+    { key: "documents", label: "Documents",      icon: FileText },
+    { key: "notes",     label: "Notes / Tags",   icon: StickyNote },
+    { key: "journey",   label: "Journey",        icon: CalendarClock },
+];
+
+const DOC_STATUS_STYLE = {
+    Approved:    "bg-emerald-50 text-emerald-700 border-emerald-200",
+    Submitted:   "bg-blue-50 text-blue-700 border-blue-200",
+    UnderReview: "bg-amber-50 text-amber-700 border-amber-200",
+    Rejected:    "bg-red-50 text-red-700 border-red-200",
+};
+
+function EditLeadModal({ lead, portalBase, statuses = [], staffOptions = [], agents = [], onClose }) {
+    const [loading, setLoading] = useState(true);
+    const [data, setData] = useState(null);
+    const [tab, setTab] = useState("personal");
+    const [form, setForm] = useState({});
+    const [saving, setSaving] = useState(false);
+    const [openStage, setOpenStage] = useState(false);
+    const [stageSaving, setStageSaving] = useState(false);
+    const [openAgent, setOpenAgent] = useState(false);
+    const [agentSaving, setAgentSaving] = useState(false);
+    // Agent assignment is a sales-only surface (the recruiting-agent roster
+    // lives on the sales screen); other portals keep the read-only badge.
+    const canPickAgent = portalBase === "/portal/sales" && agents.length > 0;
+
+    const changeAgent = (agentId) => {
+        setAgentSaving(true);
+        router.post(`${portalBase}/leads/${lead.id}/agent`, { agent_id: agentId || null }, {
+            preserveScroll: true,
+            preserveState: true,
+            onSuccess: () => {
+                const picked = agents.find((a) => String(a.id) === String(agentId)) || null;
+                setData((d) => ({ ...d, agent: picked ? { id: picked.id, name: picked.name } : null }));
+                toast.success(agentId ? "Agent assigned." : "Agent removed.");
+            },
+            onError: (errs) => toast.error(Object.values(errs || {})[0] || "Could not update the agent."),
+            onFinish: () => setAgentSaving(false),
+        });
+    };
+
+    // getJson returns { ok, status, data } — the lead payload lives on .data.
+    const refetch = () => getJson(`/admin/leads/${lead.id}/edit-data`)
+        .then((res) => { if (res.ok && res.data) { setData(res.data); setForm(res.data.personal || {}); } })
+        .catch(() => toast.error("Could not load this lead."))
+        .finally(() => setLoading(false));
+
+    useEffect(() => {
+        let alive = true;
+        setLoading(true);
+        getJson(`/admin/leads/${lead.id}/edit-data`)
+            .then((res) => {
+                if (!alive) return;
+                if (res.ok && res.data) { setData(res.data); setForm(res.data.personal || {}); }
+                else toast.error("Could not load this lead.");
+            })
+            .catch(() => alive && toast.error("Could not load this lead."))
+            .finally(() => alive && setLoading(false));
+        const onKey = (e) => { if (e.key === "Escape") onClose(); };
+        document.addEventListener("keydown", onKey);
+        return () => { alive = false; document.removeEventListener("keydown", onKey); };
+    }, [lead.id]);
+
+    const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
+
+    const savePersonal = () => {
+        setSaving(true);
+        router.post(`/admin/leads/${lead.id}/personal`, form, {
+            preserveScroll: true,
+            preserveState: true,
+            onSuccess: () => toast.success("Personal information updated."),
+            onError: (errs) => toast.error(Object.values(errs || {})[0] || "Could not save."),
+            onFinish: () => setSaving(false),
+        });
+    };
+
+    const changeStage = (stage) => {
+        setOpenStage(false);
+        setStageSaving(true);
+        router.post(`${portalBase}/leads/${lead.id}`, { status: stage }, {
+            preserveScroll: true,
+            preserveState: true,
+            onSuccess: () => setData((d) => ({ ...d, status: stage, stage })),
+            onFinish: () => setStageSaving(false),
+        });
+    };
+
+    const meta = priorityMeta(data?.priority);
+    const name = data?.name || lead.name;
+
+    return createPortal(
+        <div className="fixed inset-0 z-[120] bg-black/40 flex items-center justify-center p-4" onMouseDown={onClose}>
+            <div
+                className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden"
+                onMouseDown={(e) => e.stopPropagation()}
+            >
+                {/* Header — profile identity + contact, then stage & agent controls */}
+                <div className="relative px-6 pt-5 pb-4 border-b border-gray-100 bg-gradient-to-b from-gray-50/80 to-white">
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        className="absolute top-4 right-4 inline-flex items-center justify-center w-8 h-8 rounded-lg text-gray-400 hover:text-gray-900 hover:bg-gray-100 transition-colors"
+                    >
+                        <X size={16} />
+                    </button>
+
+                    <div className="flex items-center gap-4">
+                        <div className={`w-14 h-14 rounded-full flex items-center justify-center text-base font-bold flex-shrink-0 ring-4 ring-white shadow-sm ${
+                            meta ? `${meta.dot} text-white` : "bg-gradient-to-br from-gray-100 to-gray-200 text-gray-500"
+                        }`}>
+                            {initials(name)}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                            <h2 className="text-lg font-bold text-gray-900 tracking-tight truncate">{name}</h2>
+                            <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-0.5">
+                                {data?.lead_id && (
+                                    <span className="text-[11px] text-gray-400 font-mono">{data.lead_id}</span>
+                                )}
+                                {form.email && (
+                                    <span className="inline-flex items-center gap-1 text-[12px] text-gray-500">
+                                        <Mail size={12} className="text-gray-300" /> {form.email}
+                                    </span>
+                                )}
+                                {form.phone && (
+                                    <span className="inline-flex items-center gap-1 text-[12px] text-gray-500">
+                                        <Phone size={12} className="text-gray-300" /> {form.phone}
+                                    </span>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Stage (status colour) + agent */}
+                    <div className="flex flex-wrap items-center gap-2.5 mt-4">
+                        <div className="flex items-center gap-1.5">
+                            <span className="text-[11px] font-medium text-gray-500">Stage</span>
+                            <StagePicker
+                                lead={{ status: data?.status, id: lead.id }}
+                                stages={statuses}
+                                open={openStage}
+                                onToggle={() => setOpenStage((v) => !v)}
+                                onClose={() => setOpenStage(false)}
+                                onSelect={changeStage}
+                                isSaving={stageSaving}
+                            />
+                        </div>
+                        <div className="flex items-center gap-1.5 ml-auto">
+                            <span className="text-[11px] font-medium text-gray-500">Agent</span>
+                            {canPickAgent ? (
+                                <AgentPicker
+                                    agent={data?.agent}
+                                    agents={agents}
+                                    open={openAgent}
+                                    onToggle={() => setOpenAgent((v) => !v)}
+                                    onClose={() => setOpenAgent(false)}
+                                    onSelect={(id) => { setOpenAgent(false); changeAgent(id); }}
+                                    isSaving={agentSaving}
+                                />
+                            ) : (
+                                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase border bg-violet-50 text-violet-700 border-violet-200">
+                                    <UserCheck size={11} className="text-violet-400" />
+                                    {data?.agent?.name || "Unassigned"}
+                                </span>
+                            )}
+                        </div>
+                    </div>
+                </div>
+
+                {/* Body — vertical tab rail + content */}
+                <div className="flex-1 flex min-h-0">
+                    <nav className="w-44 flex-shrink-0 border-r border-gray-100 p-2 space-y-0.5 overflow-y-auto">
+                        {EDIT_TABS.map((t) => {
+                            const Icon = t.icon;
+                            const active = tab === t.key;
+                            return (
+                                <button
+                                    key={t.key}
+                                    type="button"
+                                    onClick={() => setTab(t.key)}
+                                    className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold text-left transition-colors ${
+                                        active ? "bg-gray-900 text-white" : "text-gray-600 hover:bg-gray-100"
+                                    }`}
+                                >
+                                    <Icon size={13} className={active ? "text-white" : "text-gray-400"} />
+                                    {t.label}
+                                </button>
+                            );
+                        })}
+                    </nav>
+
+                    <div className="flex-1 min-w-0 overflow-y-auto p-5">
+                        {loading ? (
+                            <div className="flex items-center justify-center py-20 text-gray-400">
+                                <Loader size={18} className="animate-spin" />
+                            </div>
+                        ) : tab === "personal" ? (
+                            <div className="space-y-6">
+                                <EditSection title="Identity">
+                                    <EditField label="First name" value={form.first_name} onChange={set("first_name")} />
+                                    <EditField label="Last name" value={form.last_name} onChange={set("last_name")} />
+                                    <EditField label="Middle name" value={form.middle_name} onChange={set("middle_name")} />
+                                    <EditSelect label="Gender" value={form.gender} onChange={set("gender")}
+                                        options={["", "Male", "Female", "Other"]} />
+                                    <EditSelect label="Marital status" value={form.marital_status} onChange={set("marital_status")}
+                                        options={["", "Single", "Married", "De Facto", "Civil Union", "Divorced", "Widowed", "Separated"]} />
+                                    <EditField label="Date of birth" type="date" value={form.dob} onChange={set("dob")} />
+                                </EditSection>
+
+                                <EditSection title="Contact">
+                                    <EditField label="Email address" type="email" value={form.email} onChange={set("email")} />
+                                    <EditField label="Phone number" value={form.phone} onChange={set("phone")} />
+                                </EditSection>
+
+                                <EditSection title="Origin & residence">
+                                    <EditField label="Country of birth" value={form.country_of_birth} onChange={set("country_of_birth")} />
+                                    <EditField label="Citizenship" value={form.citizenship} onChange={set("citizenship")} />
+                                    <EditField label="Residence city" value={form.residence_city} onChange={set("residence_city")} />
+                                    <EditField label="Residence country" value={form.residence_country} onChange={set("residence_country")} />
+                                </EditSection>
+
+                                <EditSection title="Passport">
+                                    <EditField label="Passport number" value={form.passport_number} onChange={set("passport_number")} />
+                                    <EditField label="Passport expiry" type="date" value={form.passport_expiry} onChange={set("passport_expiry")} />
+                                </EditSection>
+                            </div>
+                        ) : tab === "documents" ? (
+                            <div className="space-y-3">
+                                {(data?.documents || []).length === 0 ? (
+                                    <p className="text-xs text-gray-400 italic">No documents uploaded yet.</p>
+                                ) : (
+                                    <div className="divide-y divide-gray-100 border border-gray-100 rounded-xl overflow-hidden">
+                                        {data.documents.map((d) => (
+                                            <div key={d.id} className="flex items-center gap-3 px-3 py-2.5">
+                                                <FileText size={14} className="text-gray-300 flex-shrink-0" />
+                                                <span className="flex-1 text-xs text-gray-700 truncate">{d.name}</span>
+                                                {d.status && (
+                                                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${DOC_STATUS_STYLE[d.status] || "bg-gray-50 text-gray-600 border-gray-200"}`}>
+                                                        {d.status}
+                                                    </span>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                                <a
+                                    href={`${portalBase}/leads/${lead.id}/documents`}
+                                    className="inline-flex items-center gap-1.5 text-xs font-semibold text-blue-600 hover:text-blue-800"
+                                >
+                                    <ExternalLink size={12} /> Manage documents
+                                </a>
+                            </div>
+                        ) : tab === "notes" ? (
+                            <div className="space-y-4">
+                                <div>
+                                    <p className="text-[13px] font-semibold text-gray-900 mb-2">Tags</p>
+                                    {(data?.tags || []).length ? (
+                                        <div className="flex flex-wrap gap-1.5">
+                                            {data.tags.map((t) => (
+                                                <span key={t} className="px-2 py-0.5 rounded-md bg-gray-100 text-gray-700 text-[11px] font-medium border border-gray-200">{t}</span>
+                                            ))}
+                                        </div>
+                                    ) : <p className="text-xs text-gray-300 italic">No tags.</p>}
+                                </div>
+                                <div>
+                                    <p className="text-[13px] font-semibold text-gray-900 mb-2">Internal notes</p>
+                                    <AddNoteInline leadId={lead.id} portalBase={portalBase} staffOptions={staffOptions} onSaved={refetch} />
+                                    {(data?.notes || []).length ? (
+                                        <div className="space-y-2 mt-3">
+                                            {data.notes.map((n) => (
+                                                <div key={n.id} className="rounded-lg border border-gray-100 bg-gray-50/50 px-3 py-2">
+                                                    <p className="text-xs text-gray-700">{n.body}</p>
+                                                    <p className="text-[10px] text-gray-400 mt-1">{n.author_name} · {fmtDateShort(n.created_at)}</p>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    ) : <p className="text-xs text-gray-300 italic mt-3">No notes yet.</p>}
+                                </div>
+                            </div>
+                        ) : (
+                            <div>
+                                <p className="text-[13px] font-semibold text-gray-900 mb-3">Journey progress</p>
+                                <JourneyStepper currentIndex={milestoneIndex(data?.status)} />
+                                <p className="text-xs text-gray-500 mt-4">
+                                    Current stage: <span className="font-bold text-gray-900">{data?.status || "—"}</span>
+                                </p>
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                {/* Sticky footer — Save only applies to the Personal info tab. */}
+                {tab === "personal" && !loading && (
+                    <div className="border-t border-gray-100 px-6 py-3 flex items-center justify-end gap-3 bg-gray-50/60">
+                        <button
+                            type="button"
+                            onClick={onClose}
+                            className="px-4 py-2 rounded-lg text-xs font-semibold text-gray-600 hover:bg-gray-100 transition-colors"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            type="button"
+                            onClick={savePersonal}
+                            disabled={saving}
+                            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-gray-900 text-white text-xs font-bold shadow-sm hover:bg-black disabled:opacity-60 transition-colors"
+                        >
+                            {saving ? <Loader size={13} className="animate-spin" /> : <Check size={13} />}
+                            Save changes
+                        </button>
+                    </div>
+                )}
+            </div>
+        </div>,
+        document.body
+    );
+}
+
+// Grouped section inside the Personal-info tab.
+function EditSection({ title, children }) {
+    return (
+        <section>
+            <h3 className="text-[13px] font-semibold text-gray-900 mb-3">{title}</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3.5">{children}</div>
+        </section>
+    );
+}
+
+const EDIT_INPUT_CLS = "w-full px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-900 bg-white outline-none transition-all focus:border-gray-900 focus:ring-2 focus:ring-gray-900/10 hover:border-gray-300";
+
+function EditField({ label, value, onChange, type = "text" }) {
+    return (
+        <label className="block">
+            <span className="block text-[12px] font-medium text-gray-600 mb-1.5">{label}</span>
+            <input type={type} value={value ?? ""} onChange={onChange} className={EDIT_INPUT_CLS} />
+        </label>
+    );
+}
+
+function EditSelect({ label, value, onChange, options = [] }) {
+    return (
+        <label className="block">
+            <span className="block text-[12px] font-medium text-gray-600 mb-1.5">{label}</span>
+            <select value={value ?? ""} onChange={onChange} className={`${EDIT_INPUT_CLS} cursor-pointer`}>
+                {options.map((o) => <option key={o} value={o}>{o || "—"}</option>)}
+            </select>
+        </label>
+    );
+}
+
 // ── Tab notification badge — "new sign-ups in the last 7 days" count ───────
 // Red pill shown next to the Events / Registration tabs. Hidden at zero.
 function TabBadge({ count }) {
@@ -2095,7 +2721,7 @@ export function StagePicker({ lead, stages, open, onToggle, onClose, onSelect, i
                     ref={menuRef}
                     role="listbox"
                     style={{ position: "fixed", left: menuPos.left, top: menuPos.top, bottom: menuPos.bottom }}
-                    className="z-[90] bg-white rounded-xl shadow-2xl border border-gray-100 py-1.5 w-[280px] max-h-[360px] overflow-y-auto"
+                    className="z-[130] bg-white rounded-xl shadow-2xl border border-gray-100 py-1.5 w-[280px] max-h-[360px] overflow-y-auto"
                 >
                     <p className="px-3 pt-2 pb-1.5 text-[9px] font-bold text-gray-400 uppercase tracking-[0.2em]">
                         Move to stage
@@ -2117,6 +2743,107 @@ export function StagePicker({ lead, stages, open, onToggle, onClose, onSelect, i
                                 />
                                 <span className={`flex-1 text-[12.5px] truncate ${active ? "font-bold text-gray-900" : "font-medium text-gray-700"}`}>
                                     {s}
+                                </span>
+                                {active && <Check size={12} className="text-gray-900 flex-shrink-0" strokeWidth={3} />}
+                            </button>
+                        );
+                    })}
+                </div>,
+                document.body
+            )}
+        </>
+    );
+}
+
+// ── Agent picker — clickable pill + popover menu, mirrors StagePicker. Used
+//    in the Edit-lead modal to assign a recruiting agent. ─────────────────────
+
+function AgentPicker({ agent, agents = [], open, onToggle, onClose, onSelect, isSaving }) {
+    const menuRef = useRef(null);
+    const triggerRef = useRef(null);
+    const [menuPos, setMenuPos] = useState(null);
+
+    useEffect(() => {
+        if (!open) { setMenuPos(null); return; }
+        const r = triggerRef.current?.getBoundingClientRect();
+        if (r) {
+            const MENU_MAX = 320;
+            const spaceBelow = window.innerHeight - r.bottom;
+            const flipUp = spaceBelow < MENU_MAX && r.top > spaceBelow;
+            setMenuPos({
+                left: Math.max(8, Math.min(r.left, window.innerWidth - 240)),
+                top: flipUp ? undefined : Math.round(r.bottom + 4),
+                bottom: flipUp ? Math.round(window.innerHeight - r.top + 4) : undefined,
+            });
+        }
+        const onDocClick = (e) => {
+            if (menuRef.current?.contains(e.target) || triggerRef.current?.contains(e.target)) return;
+            onClose();
+        };
+        const onKey = (e) => { if (e.key === "Escape") onClose(); };
+        document.addEventListener("mousedown", onDocClick);
+        document.addEventListener("keydown", onKey);
+        return () => {
+            document.removeEventListener("mousedown", onDocClick);
+            document.removeEventListener("keydown", onKey);
+        };
+    }, [open, onClose]);
+
+    return (
+        <>
+            <button
+                ref={triggerRef}
+                type="button"
+                disabled={isSaving}
+                onClick={onToggle}
+                className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-bold border whitespace-nowrap uppercase hover:shadow-sm transition-all disabled:opacity-60 disabled:cursor-not-allowed ${
+                    agent ? "bg-violet-50 text-violet-700 border-violet-200" : "bg-gray-50 text-gray-500 border-gray-200 border-dashed"
+                }`}
+            >
+                <UserCheck size={11} className="flex-shrink-0 opacity-70" />
+                <span className="truncate max-w-[120px]">{agent?.name || "Unassigned"}</span>
+                <ChevronDown size={10} strokeWidth={2.5} className="flex-shrink-0 opacity-60" />
+            </button>
+
+            {open && menuPos && createPortal(
+                <div
+                    ref={menuRef}
+                    role="listbox"
+                    style={{ position: "fixed", left: menuPos.left, top: menuPos.top, bottom: menuPos.bottom }}
+                    className="z-[130] bg-white rounded-xl shadow-2xl border border-gray-100 py-1.5 w-[220px] max-h-[320px] overflow-y-auto"
+                >
+                    <p className="px-3 pt-2 pb-1.5 text-[9px] font-bold text-gray-400 uppercase tracking-[0.2em]">
+                        Assign agent
+                    </p>
+                    <button
+                        type="button"
+                        role="option"
+                        aria-selected={!agent}
+                        onClick={() => onSelect("")}
+                        className={`w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-gray-50 transition-colors ${!agent ? "bg-violet-50/60" : ""}`}
+                    >
+                        <span className="w-5 h-5 rounded-full bg-gray-100 text-gray-400 flex items-center justify-center flex-shrink-0">
+                            <UserCheck size={11} />
+                        </span>
+                        <span className="flex-1 text-[12.5px] font-medium text-gray-700">Unassigned</span>
+                        {!agent && <Check size={12} className="text-gray-900 flex-shrink-0" strokeWidth={3} />}
+                    </button>
+                    {agents.map((a) => {
+                        const active = String(a.id) === String(agent?.id);
+                        return (
+                            <button
+                                key={a.id}
+                                type="button"
+                                role="option"
+                                aria-selected={active}
+                                onClick={() => onSelect(a.id)}
+                                className={`w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-gray-50 transition-colors ${active ? "bg-violet-50/60" : ""}`}
+                            >
+                                <span className="w-5 h-5 rounded-full bg-violet-100 text-violet-700 text-[9px] font-bold flex items-center justify-center flex-shrink-0">
+                                    {initials(a.name)}
+                                </span>
+                                <span className={`flex-1 text-[12.5px] truncate ${active ? "font-bold text-gray-900" : "font-medium text-gray-700"}`}>
+                                    {a.name}
                                 </span>
                                 {active && <Check size={12} className="text-gray-900 flex-shrink-0" strokeWidth={3} />}
                             </button>

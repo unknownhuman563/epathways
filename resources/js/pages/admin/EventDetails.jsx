@@ -249,8 +249,11 @@ function RegistrantsTable({ filteredLeads, searchTerm, setSearchTerm, formatDate
                                         <span className="text-sm text-gray-700">{formatDate(lead.created_at)}</span>
                                     </td>
                                     <td className="px-6 py-4 text-right">
-                                        <Link href={`/admin/leads/${lead.id}`} className="text-sm font-semibold text-indigo-600 hover:text-indigo-800 hover:underline">
-                                            View Lead
+                                        {/* Opens the registration-form view (event fields +
+                                            notes) rather than the full lead profile — that's
+                                            what event-desk staff need for a registrant. */}
+                                        <Link href={`/admin/events/${event.id}/registrants/${lead.id}`} className="text-sm font-semibold text-indigo-600 hover:text-indigo-800 hover:underline">
+                                            View Registration
                                         </Link>
                                     </td>
                                 </tr>

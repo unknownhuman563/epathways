@@ -15,7 +15,25 @@
  */
 
 return [
+    // Section order matters — it drives the visual order of the checklist
+    // on both the staff Documents tab and the public tracker. Offer &
+    // Academic leads because that's the first tranche of documents sales
+    // chases from a new student lead; agreements/info-form follow only
+    // once the offer is in. Keep in sync with the JS CHECKLIST.
     'sections' => [
+        [
+            'key' => 'academic',
+            'section' => 'Offer and Academic Documents',
+            'items' => [
+                ['id' => 'acad.cv', 'name' => 'Curriculum Vitae'],
+                ['id' => 'acad.offer_of_place', 'name' => 'Offer of Place', 'hint' => 'Official letter from the New Zealand university.'],
+                ['id' => 'acad.degree_diploma', 'name' => 'Degree Certificate or Diploma'],
+                ['id' => 'acad.transcript', 'name' => 'Official Transcript of Records (TOR)', 'hint' => 'From previous school(s) showing subjects, grades, and degree awarded.'],
+                ['id' => 'acad.english_test', 'name' => 'PTE / IELTS Academic Test Result'],
+                ['id' => 'acad.sop', 'name' => 'Statement of Purpose', 'hint' => 'Explaining reason for studying in NZ, course relevance, and career goals.'],
+                ['id' => 'acad.tuition_proof', 'name' => 'Proof of Tuition Fee Payment', 'hint' => 'For applications already in NZ.'],
+            ],
+        ],
         [
             'key' => 'agreements',
             'section' => 'Agreements',
@@ -48,19 +66,6 @@ return [
                 ['id' => 'imm.inz1012', 'name' => 'Student Visa Application Form — INZ1012'],
                 ['id' => 'imm.inz1226', 'name' => 'Student Visa Declaration — INZ1226'],
                 ['id' => 'imm.inz1014', 'name' => 'Financial Undertaking for Student (Sponsorship) — INZ1014'],
-            ],
-        ],
-        [
-            'key' => 'academic',
-            'section' => 'Offer and Academic Documents',
-            'items' => [
-                ['id' => 'acad.cv', 'name' => 'Curriculum Vitae'],
-                ['id' => 'acad.offer_of_place', 'name' => 'Offer of Place', 'hint' => 'Official letter from the New Zealand university.'],
-                ['id' => 'acad.degree_diploma', 'name' => 'Degree Certificate or Diploma'],
-                ['id' => 'acad.transcript', 'name' => 'Official Transcript of Records (TOR)', 'hint' => 'From previous school(s) showing subjects, grades, and degree awarded.'],
-                ['id' => 'acad.english_test', 'name' => 'PTE / IELTS Academic Test Result'],
-                ['id' => 'acad.sop', 'name' => 'Statement of Purpose', 'hint' => 'Explaining reason for studying in NZ, course relevance, and career goals.'],
-                ['id' => 'acad.tuition_proof', 'name' => 'Proof of Tuition Fee Payment', 'hint' => 'For applications already in NZ.'],
             ],
         ],
         [

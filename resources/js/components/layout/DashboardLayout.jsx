@@ -246,11 +246,12 @@ export default function DashboardLayout({
                     <div className="flex items-center gap-4 lg:gap-5 mt-2">
                         <GlobalSearchBar />
 
-                        {user?.role !== "lead" && <RequestTicketButton />}
+                        {user?.role !== "lead" && user?.role !== "agent" && <RequestTicketButton />}
 
                         {user?.role !== "lead" && <AiChatButton aiEnabled={props.auth?.ai_enabled !== false} />}
 
-                        <NotificationBell />
+                        {/* Agents have no notifications surface. */}
+                        {user?.role !== "agent" && <NotificationBell />}
 
                         <div className="flex items-center gap-2.5">
                             <div className="text-right hidden sm:block leading-tight">

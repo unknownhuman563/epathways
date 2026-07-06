@@ -38,7 +38,25 @@ export const SECTION_STATUSES = {
 // add new shared documents as items inside any `scope: 'common'` section
 // (e.g. Personal Documents). Departments always see: common + their own scope.
 // The existing per-lead Documents tab ignores `scope` and still shows all.
+// Section order matters — it drives the visual order of the checklist on
+// both the staff Documents tab and the public tracker. Offer & Academic
+// leads because it's the first tranche of documents sales chases from a
+// new student lead; agreements/info-form follow only once the offer is in.
 export const CHECKLIST = [
+    {
+        key: "academic",
+        scope: "education",
+        section: "Offer and Academic Documents",
+        items: [
+            { id: "acad.cv", name: "Curriculum Vitae", filename: "CV-{FN}{SN}" },
+            { id: "acad.offer_of_place", name: "Offer of Place", description: "Official letter from the New Zealand university.", filename: "OOP-{FN}{SN}" },
+            { id: "acad.degree_diploma", name: "Degree Certificate or Diploma", filename: "CDPMA-{FN}{SN}" },
+            { id: "acad.transcript", name: "Official Transcript of Records (TOR)", description: "From previous school(s) showing subjects, grades, and degree awarded.", filename: "TOR-{FN}{SN}" },
+            { id: "acad.english_test", name: "PTE / IELTS Academic Test Result", filename: "PTE-{FN}{SN}" },
+            { id: "acad.sop", name: "Statement of Purpose", description: "Explaining reason for studying in NZ, course relevance, and career goals.", filename: "SoP-{FN}{SN}" },
+            { id: "acad.tuition_proof", name: "Proof of Tuition Fee Payment", description: "For applications already in NZ.", filename: "EOP-{FN}{SN}" },
+        ],
+    },
     {
         key: "agreements",
         scope: "sales",
@@ -95,20 +113,6 @@ export const CHECKLIST = [
             { id: "imm.inz1012", name: "Student Visa Application Form — INZ1012", filename: "INZ1012-{FN}{SN}" },
             { id: "imm.inz1226", name: "Student Visa Declaration — INZ1226",      filename: "INZ1226-{FN}{SN}" },
             { id: "imm.inz1014", name: "Financial Undertaking for Student (Sponsorship) — INZ1014", filename: "INZ1014-{FN}{SN}" },
-        ],
-    },
-    {
-        key: "academic",
-        scope: "education",
-        section: "Offer and Academic Documents",
-        items: [
-            { id: "acad.cv", name: "Curriculum Vitae", filename: "CV-{FN}{SN}" },
-            { id: "acad.offer_of_place", name: "Offer of Place", description: "Official letter from the New Zealand university.", filename: "OOP-{FN}{SN}" },
-            { id: "acad.degree_diploma", name: "Degree Certificate or Diploma", filename: "CDPMA-{FN}{SN}" },
-            { id: "acad.transcript", name: "Official Transcript of Records (TOR)", description: "From previous school(s) showing subjects, grades, and degree awarded.", filename: "TOR-{FN}{SN}" },
-            { id: "acad.english_test", name: "PTE / IELTS Academic Test Result", filename: "PTE-{FN}{SN}" },
-            { id: "acad.sop", name: "Statement of Purpose", description: "Explaining reason for studying in NZ, course relevance, and career goals.", filename: "SoP-{FN}{SN}" },
-            { id: "acad.tuition_proof", name: "Proof of Tuition Fee Payment", description: "For applications already in NZ.", filename: "EOP-{FN}{SN}" },
         ],
     },
     {
