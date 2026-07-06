@@ -43,7 +43,7 @@ const STAGE_STYLES = {
 };
 const stageClass = (s) => STAGE_STYLES[s] || "bg-gray-100 text-gray-700 border-gray-200";
 
-export default function LeadDetails({ lead: backendLead, activity = [], stageTimeline = [], checklistFiles = {}, statuses = [], notes = [], tags = [], allTags = [], tasks = [], staffOptions = [], eventRegistration = null, currentUser = null }) {
+export default function LeadDetails({ lead: backendLead, activity = [], stageTimeline = [], checklistFiles = {}, documentOrphans = [], statuses = [], notes = [], tags = [], allTags = [], tasks = [], staffOptions = [], eventRegistration = null, currentUser = null }) {
     // Derive the "Back to Leads" URL from the current path so sales users
     // return to /portal/sales/leads, education users to /portal/education/leads,
     // and admins to /admin/leads — never a 403.
@@ -607,7 +607,7 @@ export default function LeadDetails({ lead: backendLead, activity = [], stageTim
 
             {/* ── Documents tab ── */}
             {activeTab === 'documents' && (
-                <DocumentsPanel lead={backendLead} checklistFiles={checklistFiles} currentUser={currentUser} />
+                <DocumentsPanel lead={backendLead} checklistFiles={checklistFiles} orphans={documentOrphans} currentUser={currentUser} />
             )}
 
             {/* ── Communications tab — message history sent to this lead ── */}
@@ -3130,12 +3130,13 @@ function TagsPanel({ leadId, tags, allTags }) {
 // system agreements, set status / notes — no drill-in page. Each section
 // header row carries the per-section verify / request-revisions controls that
 // gate the lead-portal flow.
-function ChecklistTable({ state = {}, checklistFiles = {}, lead, onSave, verifications = {}, onVerifySection }) {
+function ChecklistTable({ state = {}, checklistFiles = {}, lead, onSave, verifications = {}, onVerifySection, hiddenKeys = new Set(), onToggleTrack }) {
     return (
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
             <table className="w-full text-left">
                 <thead>
                     <tr className="bg-gray-50/60 border-b border-gray-100 text-[10px] font-bold uppercase tracking-widest text-gray-500">
+                        <th className="pl-4 pr-2 py-3 w-10 text-center" title="Show on the public /track page"></th>
                         <th className="px-6 py-3">File</th>
                         <th className="px-6 py-3">Attachment</th>
                         <th className="px-6 py-3 w-40">Status</th>
@@ -3159,16 +3160,37 @@ function ChecklistTable({ state = {}, checklistFiles = {}, lead, onSave, verific
                                 onVerifySection(section.key, value, null);
                             }
                         };
+                        // Tri-state select-all: reads whether every / some / none
+                        // of this section's items are currently visible in the
+                        // public tracker. Flipping it hides or shows them all.
+                        const itemKeys = section.items.map((it) => it.id);
+                        const shownCount = itemKeys.filter((k) => ! hiddenKeys.has(k)).length;
+                        const allShown = shownCount === itemKeys.length;
+                        const someShown = shownCount > 0 && shownCount < itemKeys.length;
                         return (
                             <React.Fragment key={section.key}>
-                                <tr className="bg-gray-50/40 border-b border-gray-100">
+                                {/* Section header — matches the immigration Case
+                                    Documents tab (bg-gray-200 / border-gray-300).
+                                    The "All in tracker" toggle sits on the same
+                                    left rail as per-row checkboxes below. */}
+                                <tr className="bg-gray-200 border-y border-gray-300">
+                                    <td className="pl-4 pr-2 py-2 w-10 text-center">
+                                        <input
+                                            type="checkbox"
+                                            checked={allShown}
+                                            ref={(el) => { if (el) el.indeterminate = someShown; }}
+                                            onChange={() => onToggleTrack && onToggleTrack(itemKeys, allShown)}
+                                            title="Show all of this section on the public /track page"
+                                            className="w-4 h-4 rounded border-gray-400 text-gray-900 focus:ring-1 focus:ring-gray-500 cursor-pointer"
+                                        />
+                                    </td>
                                     <td colSpan={4} className="px-6 py-2">
                                         <div className="flex items-center justify-between gap-3 flex-wrap">
-                                            <span className="text-[11px] font-bold uppercase tracking-wider text-gray-600">{section.section}</span>
+                                            <span className="text-[11px] font-bold uppercase tracking-wider text-gray-700">{section.section}</span>
                                             <select
                                                 value={ver || ''}
                                                 onChange={(e) => setSectionStatus(e.target.value)}
-                                                className={`rounded-md border px-2 py-1 text-[10px] font-bold uppercase tracking-wider outline-none focus:border-gray-400 ${verMeta ? verMeta.chip : 'bg-white text-gray-400 border-gray-200'}`}
+                                                className={`rounded-md border px-2 py-1 text-[10px] font-bold uppercase tracking-wider outline-none focus:border-gray-400 ${verMeta ? verMeta.chip : 'bg-white text-gray-500 border-gray-300'}`}
                                             >
                                                 <option value="">Set status</option>
                                                 {Object.entries(SECTION_STATUSES).map(([key, meta]) => (
@@ -3186,6 +3208,8 @@ function ChecklistTable({ state = {}, checklistFiles = {}, lead, onSave, verific
                                         entry={state[it.id] || {}}
                                         files={checklistFiles[it.id] || []}
                                         onSave={onSave}
+                                        hidden={hiddenKeys.has(it.id)}
+                                        onToggleTrack={onToggleTrack}
                                     />
                                 ))}
                             </React.Fragment>
@@ -3200,7 +3224,7 @@ function ChecklistTable({ state = {}, checklistFiles = {}, lead, onSave, verific
 // One checklist row — owns its own upload / generate state so the File,
 // Attachment, Status and Notes columns all work inline without leaving the
 // table.
-function ChecklistRow({ item, lead, entry, files = [], onSave }) {
+function ChecklistRow({ item, lead, entry, files = [], onSave, hidden = false, onToggleTrack }) {
     const [uploading, setUploading] = useState(false);
     const [generating, setGenerating] = useState(false);
     const [variantOpen, setVariantOpen] = useState(false);
@@ -3270,6 +3294,19 @@ function ChecklistRow({ item, lead, entry, files = [], onSave }) {
 
     return (
         <tr className="border-b border-gray-50 hover:bg-emerald-50/20 transition-colors align-top">
+            {/* Tracker checkbox — leftmost column. When unchecked, this row's
+                checklist_key is pushed onto the lead's hidden_track_documents
+                list and the public /track page suppresses it. */}
+            <td className="pl-4 pr-2 py-3 w-10 text-center align-middle">
+                <input
+                    type="checkbox"
+                    checked={! hidden}
+                    onChange={() => onToggleTrack && onToggleTrack([item.id], ! hidden)}
+                    title={hidden ? 'Hidden from the public tracker — tick to show' : 'Shown on the public tracker — untick to hide'}
+                    className="w-4 h-4 rounded border-gray-300 text-gray-900 focus:ring-1 focus:ring-gray-400 cursor-pointer"
+                />
+            </td>
+
             {/* File */}
             <td className="px-6 py-3">
                 <div className="flex items-center gap-2.5">
@@ -3390,13 +3427,28 @@ function ChecklistNotesCell({ value, onSave }) {
     );
 }
 
-function DocumentsPanel({ lead, checklistFiles = {}, currentUser = null }) {
+function DocumentsPanel({ lead, checklistFiles = {}, orphans = [], currentUser = null }) {
     // The lead's saved checklist state lives on the backend in a JSON column
     // keyed by item id. We keep a local copy here so edits feel instant and
     // we can debounce notes typing if needed.
     const initial = lead?.document_checklist || {};
     const [state, setState] = useState(initial);
     const [verifications, setVerifications] = useState(lead?.section_verifications || {});
+
+    // Application-tracker visibility — mirrors the immigration Case profile.
+    // `hidden_track_documents` is a JSON list of checklist_key strings that
+    // are suppressed on the public /track/{code} view. Local state so the
+    // checkboxes flip instantly; server call happens in parallel.
+    const [hiddenKeys, setHiddenKeys] = useState(() => new Set(lead?.hidden_track_documents || []));
+    const toggleTrack = (keys, hidden) => {
+        const next = new Set(hiddenKeys);
+        keys.forEach((k) => hidden ? next.add(k) : next.delete(k));
+        setHiddenKeys(next);
+        router.post(`/admin/leads/${lead.id}/documents/track-visibility`, {
+            checklist_keys: keys,
+            hidden,
+        }, { preserveScroll: true, preserveState: true });
+    };
 
     const saveSectionStatus = (sectionKey, status, notes = null) => {
         const next = { ...verifications, [sectionKey]: { ...(verifications[sectionKey] || {}), status, ...(notes !== null ? { notes } : {}) } };
@@ -3496,7 +3548,45 @@ function DocumentsPanel({ lead, checklistFiles = {}, currentUser = null }) {
                 onSave={save}
                 verifications={verifications}
                 onVerifySection={saveSectionStatus}
+                hiddenKeys={hiddenKeys}
+                onToggleTrack={toggleTrack}
             />
+
+            {/* Legacy uploads — files with no checklist_key. These were
+                submitted before the checklist flow existed (or via the old
+                "Your uploads" widget, since removed). We keep them visible so
+                nothing is silently orphaned. */}
+            {orphans.length > 0 && (
+                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                    <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/40">
+                        <h3 className="text-sm font-bold uppercase tracking-wider text-gray-700">Other uploads</h3>
+                        <p className="text-[11px] text-gray-500 mt-1">Files not tied to a checklist item — usually legacy or unsolicited uploads.</p>
+                    </div>
+                    <ul className="divide-y divide-gray-50">
+                        {orphans.map((f) => (
+                            <li key={f.id} className="px-6 py-3 flex items-center gap-3">
+                                <FileText size={14} className="text-gray-400 shrink-0" />
+                                <div className="min-w-0 flex-1">
+                                    <p className="text-sm font-medium text-gray-800 truncate">{f.original_name}</p>
+                                    <p className="text-[11px] text-gray-500">
+                                        {(f.size / 1024).toFixed(1)} KB
+                                        {f.uploaded_by ? ` · uploaded by ${f.uploaded_by}` : ''}
+                                        {f.created_at ? ` · ${new Date(f.created_at).toLocaleString('en-NZ', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}` : ''}
+                                    </p>
+                                </div>
+                                <a href={`/admin/documents/${f.id}/download?inline=1`} target="_blank" rel="noreferrer"
+                                    className="inline-flex items-center justify-center w-8 h-8 rounded text-gray-500 hover:text-blue-600 hover:bg-blue-50 transition-colors" title="View">
+                                    <Eye size={14} />
+                                </a>
+                                <a href={`/admin/documents/${f.id}/download`}
+                                    className="inline-flex items-center justify-center w-8 h-8 rounded text-gray-500 hover:text-emerald-600 hover:bg-emerald-50 transition-colors" title="Download">
+                                    <Download size={14} />
+                                </a>
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+            )}
         </div>
     );
 }

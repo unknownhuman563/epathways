@@ -30,6 +30,14 @@ trait BuildsLeadRow
             ? $l->notes->where('kind', 'goal_setting')->sortByDesc('created_at')->first()
             : $l->notes()->where('kind', 'goal_setting')->latest()->first();
 
+        // The most recent note of ANY kind — drives the leads-table "Note"
+        // column (who wrote it + a snippet).
+        $latestNote = $l->relationLoaded('notes')
+            ? $l->notes->sortByDesc('created_at')->first()
+            : $l->notes()->latest()->first();
+
+        $checklistTotals = $this->leadChecklistTotals($l);
+
         return [
             'id' => $l->id,
             'lead_id' => $l->lead_id,
@@ -38,9 +46,24 @@ trait BuildsLeadRow
             // /track/{code} URL straight to the client.
             'tracking_code' => $l->tracking_code,
             'name' => trim("{$l->first_name} {$l->last_name}") ?: 'Unknown',
+            // Raw name parts for edit forms (the combined `name` is display-only).
+            'first_name' => $l->first_name,
+            'last_name' => $l->last_name,
             'email' => $l->email,
             'phone' => $l->phone,
             'country' => $l->residence_country ?: $l->country,
+            // Raw location parts for edit forms (`location` is the combined label).
+            'residence_city' => $l->residence_city,
+            'residence_country' => $l->residence_country,
+            // Combined "Location" column — city + country when both present.
+            'location' => trim(implode(', ', array_filter([
+                $l->residence_city,
+                $l->residence_country ?: $l->country,
+            ]))) ?: null,
+            'priority' => $l->priority,
+            // Free-form tags — drives the leads-table Tags filter.
+            'tags' => ($l->relationLoaded('tags') ? $l->tags : $l->tags()->get())
+                ->pluck('name')->filter()->values()->all(),
             'course' => optional($l->studyPlans->first())->preferred_course,
             'source' => $sourceLabel,
             'source_key' => $l->source,
@@ -51,6 +74,23 @@ trait BuildsLeadRow
             'ai_pathway' => $ai['recommended_pathway'] ?? null,
             'ai_department' => $ai['recommended_department'] ?? null,
             'created_at' => $l->created_at,
+            // "Updated" column — datetime + the staff member who last moved
+            // the lead's stage (the tracked "who touched this" signal).
+            'updated_at' => $l->updated_at,
+            'updated_by' => optional($l->stageUpdater)->name,
+            // Recruiting Agent who added this lead (null for staff-added
+            // leads). Drives the Sales Leads "Agent" column + Agents tab.
+            'agent' => $l->agent ? [
+                'id' => $l->agent->id,
+                'name' => $l->agent->name,
+                'avatar_url' => $l->agent->avatar_url,
+            ] : null,
+            // Most-recent internal note (any kind) for the "Note" column.
+            'latest_note' => $latestNote ? [
+                'author' => $latestNote->author_name ?: 'Unknown',
+                'body'   => $latestNote->body,
+                'when'   => optional($latestNote->created_at)->toIso8601String(),
+            ] : null,
             'portal_invitation_status' => $l->portal_invitation_status ?: 'none',
             'portal_last_login_at' => optional($l->portalUser)->last_login_at,
 
@@ -58,6 +98,14 @@ trait BuildsLeadRow
             'notes_count' => (int) ($l->notes_count ?? $l->notes()->count()),
             'tasks_open_count' => (int) ($l->tasks_open_count ?? $l->tasks()->where('completed', false)->count()),
             'documents_count' => (int) ($l->documents_count ?? $l->documents()->count()),
+
+            // Docs progress vs the general checklist, mirroring the
+            // immigration Cases column so the leads table shows a "%
+            // submitted" summary. `checklist_total` excludes items staff
+            // hid from this lead's tracker; `checklist_submitted` counts
+            // unique checklist_keys that have a non-rejected doc.
+            'checklist_total' => $checklistTotals['total'],
+            'checklist_submitted' => $checklistTotals['submitted'],
 
             // Latest pre-screen and goal-setting notes for the expanded
             // row panel. Null when nothing has been captured yet.
@@ -108,5 +156,58 @@ trait BuildsLeadRow
     protected function prettifySource(string $source): string
     {
         return ucwords(str_replace(['-', ':', '_'], [' ', ' / ', ' '], $source));
+    }
+
+    /**
+     * Total vs. submitted checklist items for a lead, using the general
+     * lead-documents checklist config. Items staff have hidden for this
+     * lead (via `hidden_track_documents`) are excluded from `total`, so
+     * the "%" the Leads table shows matches what the client actually sees
+     * on the public tracker. Prefers the eager-loaded `documents`
+     * relation to avoid N+1 in the leads list.
+     */
+    protected function leadChecklistTotals(Lead $l): array
+    {
+        static $allChecklistIds = null;
+        if ($allChecklistIds === null) {
+            $allChecklistIds = collect(config('lead_document_checklist.sections', []))
+                ->flatMap(fn ($s) => collect($s['items'] ?? [])->pluck('id'))
+                ->filter()
+                ->unique()
+                ->values();
+        }
+
+        $hidden = is_array($l->hidden_track_documents) ? $l->hidden_track_documents : [];
+        $visible = $allChecklistIds->reject(fn ($k) => in_array($k, $hidden, true));
+
+        $submittedKeys = ($l->relationLoaded('documents') ? $l->documents : $l->documents()->get(['id', 'lead_id', 'checklist_key', 'status']))
+            ->whereNotNull('checklist_key')
+            ->whereIn('status', ['Submitted', 'UnderReview', 'Approved'])
+            ->pluck('checklist_key')
+            ->unique();
+
+        return [
+            'total' => $visible->count(),
+            'submitted' => $visible->intersect($submittedKeys)->count(),
+        ];
+    }
+
+    /**
+     * "New sign-ups" counters for the Leads-page tab badges. Counts leads
+     * that arrived via the registration form / an event in the last 7 days,
+     * so staff see at a glance how many fresh registrations need attention.
+     *
+     * @return array{registration:int, events:int}
+     */
+    protected function leadTabCounts(): array
+    {
+        $since = now()->subDays(7);
+
+        return [
+            'registration' => Lead::where('source', 'registration')
+                ->where('created_at', '>=', $since)->count(),
+            'events' => Lead::whereNotNull('event_id')
+                ->where('created_at', '>=', $since)->count(),
+        ];
     }
 }

@@ -28,7 +28,7 @@ class User extends Authenticatable
     public const ROLE_LEAD = 'lead';
 
     /** Department portals a non-admin user can be assigned to. */
-    public const PORTAL_ROLES = ['sales', 'education', 'english', 'immigration', 'accommodation', 'finance'];
+    public const PORTAL_ROLES = ['sales', 'education', 'english', 'immigration', 'accommodation', 'finance', 'agent'];
 
     /** Roles that resolve to the Immigration portal. */
     public const IMMIGRATION_ROLES = [
@@ -58,6 +58,11 @@ class User extends Authenticatable
         'iaa_licence_number',
         'iaa_licence_expiry',
         'avatar_path',
+        // Contact details — primarily captured for recruiting Agents
+        // (location + phone shown in the admin user form), harmless for
+        // other roles.
+        'phone',
+        'location',
     ];
 
     /** Computed attributes always included in array/JSON output. */
@@ -223,5 +228,11 @@ class User extends Authenticatable
     public function lead()
     {
         return $this->belongsTo(Lead::class);
+    }
+
+    /** Leads this user recruited (role='agent'); drives the Agent portal. */
+    public function agentLeads()
+    {
+        return $this->hasMany(Lead::class, 'agent_id');
     }
 }

@@ -10,6 +10,14 @@ import {
 import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
 
+// Human-readable file size from a byte count.
+const fmtBytes = (bytes) => {
+    if (!bytes && bytes !== 0) return '';
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+};
+
 /**
  * Public application tracking page. Mono dark-gray / white theme.
  *
@@ -917,35 +925,12 @@ function DocumentsHubTab({
                 </DocsSection>
             )}
 
-            {/* SECTION 2 — your uploads */}
-            <DocsSection
-                title="Your uploads"
-                eyebrow="Submitted"
-                subtitle={counts.uploads === 0
-                    ? 'Nothing uploaded yet — start with the requirements below.'
-                    : `${counts.uploads} file${counts.uploads === 1 ? '' : 's'} on file`}
-                action={
-                    counts.uploads > 0 && (
-                        <button
-                            type="button"
-                            onClick={() => onOpenUpload()}
-                            className="text-[11px] font-bold uppercase tracking-[0.18em] text-white bg-[#282728] inline-flex items-center gap-1.5 px-3 py-2 hover:bg-black transition-colors"
-                        >
-                            <Plus size={12} strokeWidth={2.5} /> Add file
-                        </button>
-                    )
-                }
-            >
-                {counts.uploads === 0 ? (
-                    <DocsEmptyUploads onOpenUpload={() => onOpenUpload()} />
-                ) : (
-                    <UploadsTable
-                        documents={documents}
-                        onOpenReplace={onOpenReplace}
-                        onDelete={onDelete}
-                    />
-                )}
-            </DocsSection>
+            {/* SECTION 2 was "Your uploads" (unsolicited add-file widget) —
+                removed by design. Leads should only upload against a specific
+                checklist requirement in Section 3 below, so every uploaded
+                file lands with a `checklist_key`. Legacy files that were
+                submitted through the old widget stay visible to staff on the
+                admin Documents tab under "Other uploads". */}
 
             {/* SECTION 3 — outstanding requirements */}
             <DocsSection
@@ -1582,7 +1567,7 @@ function DocUploadModal({ open, onClose, code, lead = null, visa = null, documen
     const [docType, setDocType] = useState(null);
     const [search, setSearch] = useState('');
     const { data, setData, post, processing, errors, reset } = useForm({
-        file: null,
+        files: [],
         checklist_key: '',
         passport_number: '',
         passport_expiry: '',
@@ -1658,7 +1643,7 @@ function DocUploadModal({ open, onClose, code, lead = null, visa = null, documen
 
     const upload = (e) => {
         e.preventDefault();
-        if (!data.file || !docType) return;
+        if (!data.files.length || !docType) return;
 
         post(`/track/${code}/document`, {
             forceFormData: true,
@@ -1770,22 +1755,51 @@ function DocUploadModal({ open, onClose, code, lead = null, visa = null, documen
                                 </div>
                             )}
 
-                            {/* File picker */}
+                            {/* File picker — supports multiple files per item */}
                             <label className="cursor-pointer block">
                                 <div className="flex items-center gap-2 px-3 py-3 bg-gray-50 border border-gray-200 hover:bg-gray-100 transition-colors text-sm text-gray-600">
                                     <Upload size={14} className="text-gray-400" />
                                     <span className="flex-1 truncate">
-                                        {data.file ? data.file.name : 'Choose a file…'}
+                                        {data.files.length
+                                            ? `${data.files.length} file${data.files.length === 1 ? '' : 's'} selected · ${fmtBytes(data.files.reduce((s, f) => s + (f.size || 0), 0))} total`
+                                            : 'Choose file(s)…'}
                                     </span>
                                 </div>
                                 <input
                                     type="file"
+                                    multiple
                                     className="hidden"
-                                    accept=".pdf,.doc,.docx,.xls,.csv,.jpg,.jpeg,.png,.gif"
-                                    onChange={(e) => setData('file', e.target.files?.[0] || null)}
+                                    accept={(docType?.key || '').toLowerCase().includes('face') ? '.jpg,.jpeg' : '.pdf'}
+                                    onChange={(e) => setData('files', [...data.files, ...Array.from(e.target.files || [])].slice(0, 10))}
                                 />
                             </label>
-                            {errors.file && <p className="text-[11px] text-red-500">{errors.file}</p>}
+                            {data.files.length > 0 && (
+                                <ul className="mt-2 space-y-1">
+                                    {data.files.map((f, i) => (
+                                        <li key={i} className="flex items-center gap-2 text-[12px] text-gray-600 bg-gray-50 px-2.5 py-1.5 border border-gray-100">
+                                            <span className="flex-1 truncate">{f.name}</span>
+                                            <span className="text-[11px] text-gray-400 tabular-nums flex-shrink-0">{fmtBytes(f.size)}</span>
+                                            <button
+                                                type="button"
+                                                onClick={() => setData('files', data.files.filter((_, j) => j !== i))}
+                                                className="text-gray-400 hover:text-red-500 flex-shrink-0"
+                                                aria-label="Remove file"
+                                            >
+                                                <X size={13} />
+                                            </button>
+                                        </li>
+                                    ))}
+                                </ul>
+                            )}
+                            <p className="mt-1 text-[11px] text-gray-400">
+                                {(docType?.key || '').toLowerCase().includes('face')
+                                    ? 'Upload the face image as a JPEG (.jpg) file.'
+                                    : 'Upload this document as a PDF (.pdf) file.'}
+                                {' '}Up to 10 files (max 50&nbsp;MB each).
+                            </p>
+                            {(errors.files || errors['files.0']) && (
+                                <p className="text-[11px] text-red-500">{errors.files || errors['files.0']}</p>
+                            )}
                         </form>
                     )}
                 </div>
@@ -1804,7 +1818,7 @@ function DocUploadModal({ open, onClose, code, lead = null, visa = null, documen
                         <button
                             type="button"
                             onClick={upload}
-                            disabled={!data.file || processing}
+                            disabled={!data.files.length || processing}
                             className="px-5 py-2.5 bg-[#282728] text-white text-[11px] font-bold uppercase tracking-[0.22em] hover:bg-black transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
                         >
                             <Upload size={12} /> {processing ? 'Uploading…' : 'Upload'}

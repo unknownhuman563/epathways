@@ -6,7 +6,8 @@
       "Bash(findstr /C:\"leads.store\")",
       "Bash(npx --no-install esbuild --loader:.jsx=jsx --bundle=false resources/js/pages/portal/sales/Leads.jsx)",
       "Bash(echo \"esbuild exit: $?\")",
-      "PowerShell(npx --no-install esbuild --loader:.jsx=jsx --bundle=false resources/js/pages/portal/sales/Leads.jsx > $null 2>$null; Write-Output \"esbuild exit: $LASTEXITCODE\")"
+      "PowerShell(npx --no-install esbuild --loader:.jsx=jsx --bundle=false resources/js/pages/portal/sales/Leads.jsx > $null 2>$null; Write-Output \"esbuild exit: $LASTEXITCODE\")",
+      "Bash(grep -n ''\\\\''description'\\\\'' => $p->description,' app/Http/Controllers/Portal/EducationController.php app/Http/Controllers/Portal/SalesController.php)"
     ]
   }
 }

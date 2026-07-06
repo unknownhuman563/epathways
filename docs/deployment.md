@@ -480,7 +480,7 @@ server {
         deny all;
     }
 
-    client_max_body_size 20M;
+    client_max_body_size 50M;
 }
 ```
 
@@ -492,6 +492,24 @@ rm /etc/nginx/sites-enabled/default
 nginx -t
 systemctl reload nginx
 ```
+
+**Upload size limits.** Document uploads are capped at **50 MB** in the app
+(`App\Support\UploadValidation::DOCUMENT_MAX_KB`). For a large file to reach
+Laravel, all three layers must allow it, otherwise the client gets a `413`
+(nginx) or a silent "file failed to upload" (PHP) before validation runs:
+
+1. **nginx** — `client_max_body_size 50M;` in each server block (above).
+2. **PHP-FPM** — in `/etc/php/8.x/fpm/php.ini` set both:
+
+   ```ini
+   upload_max_filesize = 50M
+   post_max_size = 55M          ; a little larger than upload_max_filesize
+   ```
+
+   then `systemctl restart php8.x-fpm`.
+
+If a client "cannot submit" a big PDF on the tracker, one of these three is
+still at the old 20 M — check nginx and PHP first.
 
 ### 3.5 — Generate a CI SSH key for GitHub Actions → VPS
 
@@ -843,7 +861,7 @@ server {
         deny all;
     }
 
-    client_max_body_size 20M;
+    client_max_body_size 50M;
 }
 ```
 

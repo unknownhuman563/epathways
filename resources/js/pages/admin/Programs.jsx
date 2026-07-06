@@ -61,9 +61,11 @@ function Textarea({ className, rows, ...rest }) {
 const blankProgram = () => ({
     title: '',
     institution: '',
+    school_id: '',
     location: '',
     level: 5,
     category: 'diplomas',
+    industry: '',
     status: 'draft',
     price_text: '',
     image: null,
@@ -214,7 +216,7 @@ function getStatusStyle(status) {
     }
 }
 
-export function ProgramModal({ open, onClose, editing, portalBase = '/admin' }) {
+export function ProgramModal({ open, onClose, editing, schools = [], portalBase = '/admin' }) {
     const [step, setStep] = useState(1);
     const isEdit = !!editing;
 
@@ -266,6 +268,7 @@ export function ProgramModal({ open, onClose, editing, portalBase = '/admin' }) 
         return {
             ...blankProgram(),
             ...editing,
+            school_id: editing.school_id ?? editing.school?.id ?? '',
             image: null,
             fee_guide: editing.fee_guide && editing.fee_guide.length > 0
                 ? editing.fee_guide
@@ -298,6 +301,8 @@ export function ProgramModal({ open, onClose, editing, portalBase = '/admin' }) 
     transform((d) => {
         const out = { ...d };
         if (out.image === null && isEdit) delete out.image;
+        // Blank school picker → null so the `nullable|exists` rule passes.
+        out.school_id = out.school_id === '' || out.school_id === undefined ? null : out.school_id;
         out.fee_guide = (out.fee_guide || []).filter(r => r.region || r.fee);
         out.tuition_fees = (out.tuition_fees || [])
             .map(r => ({
@@ -426,8 +431,24 @@ export function ProgramModal({ open, onClose, editing, portalBase = '/admin' }) 
                                 </div>
                             </div>
                             <div>
-                                <Label>Location</Label>
-                                <Input value={data.location} onChange={e => setField('location', e.target.value)} placeholder="e.g. Auckland" />
+                                <Label>School</Label>
+                                <Select value={data.school_id ?? ''} onChange={e => setField('school_id', e.target.value)}>
+                                    <option value="">— No school —</option>
+                                    {schools.map(s => (
+                                        <option key={s.id} value={s.id}>{s.name}</option>
+                                    ))}
+                                </Select>
+                                <p className="text-[10px] text-gray-500 mt-1">Managed on the Schools page.</p>
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <Label>Location</Label>
+                                    <Input value={data.location} onChange={e => setField('location', e.target.value)} placeholder="e.g. Auckland" />
+                                </div>
+                                <div>
+                                    <Label>Industry</Label>
+                                    <Input value={data.industry} onChange={e => setField('industry', e.target.value)} placeholder="e.g. Healthcare, IT, Construction" />
+                                </div>
                             </div>
                             <div>
                                 <Label>Banner Image</Label>
@@ -737,7 +758,7 @@ export function ProgramModal({ open, onClose, editing, portalBase = '/admin' }) 
     );
 }
 
-export default function Programs({ programs = [] }) {
+export default function Programs({ programs = [], schools = [] }) {
     const [search, setSearch] = useState('');
     const [statusFilter, setStatusFilter] = useState('All');
     const [categoryFilter, setCategoryFilter] = useState('all');
@@ -760,7 +781,8 @@ export default function Programs({ programs = [] }) {
     const filtered = programs.filter(p => {
         const matchesSearch = !search ||
             p.title?.toLowerCase().includes(search.toLowerCase()) ||
-            p.institution?.toLowerCase().includes(search.toLowerCase());
+            p.institution?.toLowerCase().includes(search.toLowerCase()) ||
+            p.school?.name?.toLowerCase().includes(search.toLowerCase());
         const matchesStatus = statusFilter === 'All' || p.status === statusFilter.toLowerCase();
         const matchesCategory = categoryFilter === 'all' || p.category === categoryFilter;
         const matchesLevel = levelFilter === 'all' || String(p.level) === String(levelFilter);
@@ -911,6 +933,7 @@ export default function Programs({ programs = [] }) {
                         <thead>
                             <tr className="bg-gray-50/50 border-b border-gray-100">
                                 <th className="px-6 py-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">Program</th>
+                                <th className="px-6 py-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">School</th>
                                 <th className="px-6 py-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">Category</th>
                                 <th className="px-6 py-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">Location</th>
                                 <th className="px-6 py-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">Price</th>
@@ -921,7 +944,7 @@ export default function Programs({ programs = [] }) {
                         <tbody className="divide-y divide-gray-50">
                             {pageItems.length === 0 ? (
                                 <tr>
-                                    <td colSpan={6} className="px-6 py-16 text-center text-gray-500">
+                                    <td colSpan={7} className="px-6 py-16 text-center text-gray-500">
                                         <GraduationCap className="w-10 h-10 mx-auto mb-3 text-gray-200" />
                                         <p className="font-semibold">No programs found</p>
                                         <p className="text-sm mt-1">Try adjusting your filters or create a new program.</p>
@@ -946,6 +969,9 @@ export default function Programs({ programs = [] }) {
                                                 </div>
                                             </div>
                                         </div>
+                                    </td>
+                                    <td className="px-6 py-4 text-sm text-gray-700">
+                                        {program.school?.name || program.institution || <span className="text-gray-300">—</span>}
                                     </td>
                                     <td className="px-6 py-4 text-sm text-gray-700 capitalize">{CATEGORY_LABELS[program.category] || program.category}</td>
                                     <td className="px-6 py-4 text-sm text-gray-700">{program.location || '—'}</td>
@@ -1054,7 +1080,7 @@ export default function Programs({ programs = [] }) {
                 )}
             </div>
 
-            <ProgramModal open={showModal} onClose={closeModal} editing={editing} />
+            <ProgramModal open={showModal} onClose={closeModal} editing={editing} schools={schools} />
 
             {deleteTarget && (
                 <>

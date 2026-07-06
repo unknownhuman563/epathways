@@ -125,6 +125,15 @@ class HandleInertiaRequests extends Middleware
             ];
         }
 
+        if (str_starts_with($path, 'portal/agent')) {
+            $todayStart = now()->startOfDay();
+            $out['agent'] = [
+                // Scoped to the agent's own leads only.
+                'new_leads_today'      => \App\Models\Lead::where('agent_id', $user->id)->where('created_at', '>=', $todayStart)->count(),
+                'notifications_unread' => $user->unreadNotifications()->count(),
+            ];
+        }
+
         if (str_starts_with($path, 'portal/sales') || str_starts_with($path, 'admin')) {
             $todayStart = now()->startOfDay();
             $weekEnd    = now()->endOfWeek();

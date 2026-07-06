@@ -15,6 +15,8 @@ const ROLE_STYLES = {
     english:       'bg-amber-100 text-amber-700 border-amber-200',
     immigration:   'bg-rose-100 text-rose-700 border-rose-200',
     accommodation: 'bg-cyan-100 text-cyan-700 border-cyan-200',
+    finance:       'bg-lime-100 text-lime-700 border-lime-200',
+    agent:         'bg-teal-100 text-teal-700 border-teal-200',
 };
 
 const roleStyle = (role) => ROLE_STYLES[role] || 'bg-gray-100 text-gray-600 border-gray-200';
@@ -44,7 +46,7 @@ function Input(props) {
     );
 }
 
-const blankUser = () => ({ name: '', email: '', role: '', password: '', avatar: null });
+const blankUser = () => ({ name: '', email: '', phone: '', location: '', role: '', password: '', avatar: null });
 
 function UserModal({ open, onClose, editing, roles }) {
     const isEdit = !!editing;
@@ -63,6 +65,8 @@ function UserModal({ open, onClose, editing, roles }) {
         return {
             name: editing.name ?? '',
             email: editing.email ?? '',
+            phone: editing.phone ?? '',
+            location: editing.location ?? '',
             role: editing.role ?? (roles[0] || ''),
             password: '',
             avatar: null,
@@ -159,6 +163,20 @@ function UserModal({ open, onClose, editing, roles }) {
                             <Label required>Email</Label>
                             <Input type="email" value={data.email} onChange={e => setField('email', e.target.value)} placeholder="jane@epathways.co.nz" />
                         </div>
+
+                        <div className="grid grid-cols-2 gap-3">
+                            <div>
+                                <Label required={data.role === 'agent'}>Contact number</Label>
+                                <Input value={data.phone} onChange={e => setField('phone', e.target.value)} placeholder="+64 21 000 0000" />
+                            </div>
+                            <div>
+                                <Label required={data.role === 'agent'}>Location</Label>
+                                <Input value={data.location} onChange={e => setField('location', e.target.value)} placeholder="Auckland, NZ" />
+                            </div>
+                        </div>
+                        {data.role === 'agent' && (
+                            <p className="-mt-2 text-[11px] text-gray-400">Agents recruit leads on the ground — capture how to reach them and where they're based.</p>
+                        )}
 
                         <div>
                             <Label required>Role</Label>

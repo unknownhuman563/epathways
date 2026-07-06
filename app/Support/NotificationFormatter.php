@@ -55,6 +55,11 @@ class NotificationFormatter
                 'color' => 'blue',
                 'title' => $data['title'] ?? 'New department lead',
             ],
+            'NewRegistrationReceived' => [
+                'icon'  => 'UserPlus',
+                'color' => 'emerald',
+                'title' => $data['title'] ?? 'New registration',
+            ],
             'TaskAssigned' => [
                 'icon'  => 'CheckSquare',
                 'color' => 'amber',
