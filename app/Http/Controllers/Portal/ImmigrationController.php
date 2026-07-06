@@ -227,6 +227,7 @@ class ImmigrationController extends Controller
     private function eventsSummary()
     {
         return Event::withCount('leads')
+            ->with('agent:id,name')
             ->orderByDesc('date_from')
             ->latest()
             ->get()
@@ -239,6 +240,7 @@ class ImmigrationController extends Controller
                 'location' => $e->location,
                 'date_from' => optional($e->date_from)->toIso8601String(),
                 'status' => $e->status,
+                'agent' => optional($e->agent)->name,
                 'registrations_count' => $e->leads_count,
             ]);
     }

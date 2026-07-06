@@ -15,7 +15,7 @@ import {
 // Strictly read-only. The Actions column also keeps an "Open lead" link
 // for staff who need the full profile.
 //
-export default function LeadRegistration({ lead, sections = [], documents = [] }) {
+export default function LeadRegistration({ lead, sections = [], documents = [], portalBase = '/portal/sales' }) {
     const fmtDateTime = (iso) => {
         if (! iso) return null;
         const d = new Date(iso);
@@ -39,7 +39,7 @@ export default function LeadRegistration({ lead, sections = [], documents = [] }
             {/* Header */}
             <div className="flex flex-col gap-3">
                 <Link
-                    href="/portal/sales/leads?tab=registration"
+                    href={`${portalBase}/leads?tab=registration`}
                     className="inline-flex items-center gap-1.5 text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors w-max"
                 >
                     <ArrowLeft size={16} /> Back to Leads
@@ -58,7 +58,7 @@ export default function LeadRegistration({ lead, sections = [], documents = [] }
                     </div>
                     <div className="flex items-center gap-2">
                         <Link
-                            href={`/portal/sales/leads/${lead.id}`}
+                            href={`${portalBase}/leads/${lead.id}`}
                             className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 text-sm font-semibold transition-colors shadow-sm"
                         >
                             Open lead profile <ExternalLink size={13} />

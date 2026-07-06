@@ -162,6 +162,7 @@ class SalesController extends Controller
     private function eventsSummary()
     {
         return Event::withCount('leads')
+            ->with('agent:id,name')
             ->orderByDesc('date_from')
             ->latest()
             ->get()
@@ -174,6 +175,7 @@ class SalesController extends Controller
                 'location'            => $e->location,
                 'date_from'           => optional($e->date_from)->toIso8601String(),
                 'status'              => $e->status,
+                'agent'               => optional($e->agent)->name,
                 'registrations_count' => $e->leads_count,
             ]);
     }
@@ -229,6 +231,46 @@ class SalesController extends Controller
     }
 
     /**
+     * GET /portal/sales/agents/{id}/leads — full-page list of leads a
+     * recruiting agent has added, styled like Open opportunities. Reached
+     * from the Agents tab's "View leads" action.
+     */
+    public function agentLeadsPage($id)
+    {
+        $agent = \App\Models\User::where('role', 'agent')->findOrFail($id);
+
+        $leads = Lead::where('agent_id', $agent->id)
+            ->with([
+                'studyPlans',
+                'event',
+                'tags:id,name',
+                'portalUser:id,lead_id,last_login_at',
+                'stageUpdater:id,name',
+                'notes' => fn ($q) => $q->latest(),
+                'documents:id,lead_id,checklist_key,status',
+            ])
+            ->withCount(['notes', 'documents'])
+            ->withCount(['tasks as tasks_open_count' => fn ($q) => $q->where('completed', false)])
+            ->latest()
+            ->get()
+            ->map(fn (Lead $l) => $this->leadRow($l));
+
+        return inertia('portal/sales/AgentLeads', [
+            'agent' => [
+                'id'          => $agent->id,
+                'name'        => $agent->name,
+                'email'       => $agent->email,
+                'phone'       => $agent->phone,
+                'location'    => $agent->location,
+                'avatar_url'  => $agent->avatar_url,
+                'leads_count' => $leads->count(),
+            ],
+            'leads'    => $leads,
+            'statuses' => self::LEAD_STATUSES,
+        ]);
+    }
+
+    /**
      * GET /portal/sales/events/{id}/registrants — full-page equivalent of
      * the JSON drawer above. Same data plus per-registrant notes and the
      * pipeline stage picker, rendered as its own screen so staff can
@@ -259,7 +301,12 @@ class SalesController extends Controller
                     : null,
             ]));
 
-        return inertia('portal/sales/EventRegistrants', [
+        // Admin reuses this exact screen from /admin/events/{id}/registrants —
+        // render under admin/ (AdminLayout) and point row actions back at the
+        // /admin routes; department portals keep their /portal/{role} base.
+        $isAdmin = request()->is('admin/*');
+
+        return inertia($isAdmin ? 'admin/EventRegistrants' : 'portal/sales/EventRegistrants', [
             'event' => [
                 'id'         => $event->id,
                 'name'       => $event->name,
@@ -271,6 +318,7 @@ class SalesController extends Controller
             ],
             'registrations' => $registrations,
             'statuses'      => \App\Models\Lead::STAGES,
+            'portalBase'    => $isAdmin ? '/admin' : '/portal/sales',
         ]);
     }
 
@@ -317,7 +365,10 @@ class SalesController extends Controller
             return ['key' => $key, 'label' => $label, 'files' => $files];
         })->values()->all();
 
-        return inertia('portal/sales/LeadRegistration', [
+        $isAdmin = request()->is('admin/*');
+
+        return inertia($isAdmin ? 'admin/LeadRegistration' : 'portal/sales/LeadRegistration', [
+            'portalBase' => $isAdmin ? '/admin' : '/portal/sales',
             'lead' => [
                 'id'          => $lead->id,
                 'lead_id'     => $lead->lead_id,
@@ -418,10 +469,13 @@ class SalesController extends Controller
     /** Manually add a lead from the dashboard "Add Lead" form. */
     public function storeLead(Request $request)
     {
-        $validated = $request->validate($this->dashboardLeadRules(self::LEAD_STATUSES));
+        $validated = $request->validate(
+            $this->dashboardLeadRules(self::LEAD_STATUSES) + $this->dashboardDocumentRules()
+        );
 
         try {
             $lead = $this->createDashboardLead($validated);
+            $this->storeDashboardLeadDocuments($lead, $request);
 
             return back()->with('success', "Lead {$lead->lead_id} added.");
         } catch (\Throwable $e) {
@@ -451,6 +505,81 @@ class SalesController extends Controller
             Log::error('Lead update failed', ['id' => $id, 'error' => $e->getMessage()]);
 
             return back()->with('error', 'Could not update that lead. Please try again.');
+        }
+    }
+
+    /**
+     * Assign (or clear) the recruiting agent on multiple leads at once.
+     * Drives the "Set agent" bulk action on the Leads table — one query
+     * instead of a request per row.
+     */
+    public function bulkAssignAgent(Request $request)
+    {
+        $validated = $request->validate([
+            'lead_ids' => 'required|array|min:1',
+            'lead_ids.*' => 'integer|exists:leads,id',
+            'agent_id' => ['nullable', Rule::exists('users', 'id')->where('role', 'agent')],
+        ]);
+
+        try {
+            $count = Lead::whereIn('id', $validated['lead_ids'])
+                ->update(['agent_id' => $validated['agent_id'] ?: null]);
+
+            $msg = $validated['agent_id']
+                ? "Agent assigned to {$count} lead" . ($count === 1 ? '' : 's') . '.'
+                : "Agent cleared from {$count} lead" . ($count === 1 ? '' : 's') . '.';
+
+            return back()->with('success', $msg);
+        } catch (\Throwable $e) {
+            Log::error('Bulk agent assign failed', ['error' => $e->getMessage()]);
+
+            return back()->with('error', 'Could not assign the agent to the selected leads.');
+        }
+    }
+
+    /**
+     * Soft-delete (archive) multiple leads at once. Same behaviour as the
+     * single-lead delete on the lead detail page — the rows are recoverable
+     * via the admin Trash view.
+     */
+    public function bulkDelete(Request $request)
+    {
+        $validated = $request->validate([
+            'lead_ids' => 'required|array|min:1',
+            'lead_ids.*' => 'integer|exists:leads,id',
+        ]);
+
+        try {
+            $count = Lead::whereIn('id', $validated['lead_ids'])->delete();
+
+            return back()->with('success', "Deleted {$count} lead" . ($count === 1 ? '' : 's') . '.');
+        } catch (\Throwable $e) {
+            Log::error('Bulk lead delete failed', ['error' => $e->getMessage()]);
+
+            return back()->with('error', 'Could not delete the selected leads.');
+        }
+    }
+
+    /**
+     * Assign (or clear) the recruiting agent on a lead. `agent_id` must be a
+     * registered user with the 'agent' role, or null to detach.
+     */
+    public function updateLeadAgent(Request $request, $id)
+    {
+        $validated = $request->validate([
+            'agent_id' => ['nullable', Rule::exists('users', 'id')->where('role', 'agent')],
+        ]);
+
+        try {
+            $lead = Lead::findOrFail($id);
+            $lead->agent_id = $validated['agent_id'] ?: null;
+            $lead->save();
+
+            return back()->with('success', "Lead {$lead->lead_id} agent updated.");
+        } catch (\Throwable $e) {
+            Log::error('Lead agent update failed', ['id' => $id, 'error' => $e->getMessage()]);
+
+            return back()->with('error', 'Could not update the agent. Please try again.');
         }
     }
 

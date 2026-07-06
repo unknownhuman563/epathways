@@ -3,7 +3,7 @@ import { Head, useForm, usePage } from "@inertiajs/react";
 import { createPortal } from "react-dom";
 import {
     Plus, Search, X, Users as UsersIcon, Mail, Phone, MapPin,
-    GraduationCap, Pencil, AlertCircle, Info,
+    GraduationCap, Pencil, AlertCircle, Info, Upload, FileText,
 } from "lucide-react";
 import Avatar from "@/components/ui/Avatar";
 
@@ -31,6 +31,18 @@ const fmtDate = (iso) => {
     const d = new Date(iso);
     return d.toLocaleDateString("en-NZ", { day: "2-digit", month: "short", year: "numeric" });
 };
+
+// Highest education level of the lead. Free-typed via a datalist so agents
+// can pick a common level or enter something specific.
+const QUALIFICATION_OPTIONS = [
+    "High School",
+    "Certificate",
+    "Diploma",
+    "Bachelor's Degree",
+    "Postgraduate Diploma",
+    "Master's Degree",
+    "Doctorate (PhD)",
+];
 
 function StatusPill({ value }) {
     if (!value) return <span className="text-gray-300">—</span>;
@@ -98,6 +110,7 @@ export default function AgentLeads({ leads = [], programs = [] }) {
                                 <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Lead</th>
                                 <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Contact</th>
                                 <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Location</th>
+                                <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Education</th>
                                 <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Program</th>
                                 <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
                                 <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Added</th>
@@ -107,7 +120,7 @@ export default function AgentLeads({ leads = [], programs = [] }) {
                         <tbody className="divide-y divide-gray-50">
                             {filtered.length === 0 ? (
                                 <tr>
-                                    <td colSpan={7} className="px-6 py-16 text-center text-gray-400">
+                                    <td colSpan={8} className="px-6 py-16 text-center text-gray-400">
                                         <UsersIcon className="w-10 h-10 mx-auto mb-3 text-gray-200" />
                                         <p className="font-semibold">No leads yet</p>
                                         <p className="text-sm mt-1">Add your first recruited lead to get started.</p>
@@ -133,6 +146,9 @@ export default function AgentLeads({ leads = [], programs = [] }) {
                                     </td>
                                     <td className="px-6 py-4 text-sm text-gray-700">
                                         {l.location ? <span className="inline-flex items-center gap-1.5"><MapPin size={13} className="text-gray-400" />{l.location}</span> : <span className="text-gray-300">—</span>}
+                                    </td>
+                                    <td className="px-6 py-4 text-sm text-gray-700">
+                                        {l.highest_qualification ? <span className="inline-flex items-center gap-1.5"><GraduationCap size={13} className="text-gray-400" />{l.highest_qualification}</span> : <span className="text-gray-300">—</span>}
                                     </td>
                                     <td className="px-6 py-4 text-sm text-gray-700">
                                         {l.course ? <span className="inline-flex items-center gap-1.5"><GraduationCap size={13} className="text-gray-400" />{l.course}</span> : <span className="text-gray-300">—</span>}
@@ -177,11 +193,13 @@ function LeadFormDrawer({ mode, lead = null, programs = [], onClose }) {
                 phone: lead.phone ?? "",
                 residence_city: lead.residence_city ?? "",
                 residence_country: lead.residence_country ?? "",
+                highest_qualification: lead.highest_qualification ?? "",
                 program_offered: lead.course ?? "",
             }
             : {
                 first_name: "", last_name: "", suffix: "",
-                email: "", phone: "", program_offered: "",
+                email: "", phone: "", highest_qualification: "", program_offered: "",
+                cv_files: [], passport_files: [], diploma_files: [], transcript_files: [],
             }
     );
 
@@ -191,6 +209,7 @@ function LeadFormDrawer({ mode, lead = null, programs = [], onClose }) {
         const url = isEdit ? `/portal/agent/leads/${lead.id}/info` : "/portal/agent/leads";
         post(url, {
             preserveScroll: true,
+            forceFormData: true,
             onSuccess: () => { reset(); onClose(); },
         });
     };
@@ -243,6 +262,19 @@ function LeadFormDrawer({ mode, lead = null, programs = [], onClose }) {
                         </div>
                     )}
 
+                    <Field label="Highest education">
+                        <input
+                            list="agent-qualifications"
+                            value={data.highest_qualification}
+                            onChange={(e) => setData("highest_qualification", e.target.value)}
+                            placeholder="e.g. Bachelor's Degree"
+                            className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all placeholder-gray-400"
+                        />
+                        <datalist id="agent-qualifications">
+                            {QUALIFICATION_OPTIONS.map((q) => <option key={q} value={q} />)}
+                        </datalist>
+                    </Field>
+
                     <Field label="Program of interest">
                         <input
                             list="agent-programs"
@@ -255,6 +287,19 @@ function LeadFormDrawer({ mode, lead = null, programs = [], onClose }) {
                             {programs.map((p) => <option key={p} value={p} />)}
                         </datalist>
                     </Field>
+
+                    {/* Documents — same four as the public registration form. */}
+                    {!isEdit && (
+                        <div className="pt-2 border-t border-gray-100">
+                            <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-gray-500 mb-3">Documents</p>
+                            <div className="space-y-3">
+                                <DocPick label="Attach CV" files={data.cv_files} onChange={(f) => setData("cv_files", f)} />
+                                <DocPick label="Passport" files={data.passport_files} onChange={(f) => setData("passport_files", f)} />
+                                <DocPick label="Diploma" files={data.diploma_files} onChange={(f) => setData("diploma_files", f)} />
+                                <DocPick label="Transcript of Record" files={data.transcript_files} onChange={(f) => setData("transcript_files", f)} />
+                            </div>
+                        </div>
+                    )}
                 </div>
 
                 <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-end gap-2 flex-shrink-0">
@@ -274,6 +319,41 @@ function LeadFormDrawer({ mode, lead = null, programs = [], onClose }) {
             `}} />
         </>,
         document.body
+    );
+}
+
+// Multi-file picker for the Add-Lead Documents section (CV / Passport /
+// Diploma / Transcript), mirroring the public registration form.
+function DocPick({ label, files = [], onChange }) {
+    const inputId = `agent-doc-${label.replace(/\s+/g, "-").toLowerCase()}`;
+    const add = (list) => onChange([...(files || []), ...Array.from(list)]);
+    const removeAt = (i) => onChange(files.filter((_, idx) => idx !== i));
+    return (
+        <div>
+            <p className="text-xs font-semibold text-gray-600 mb-1.5">{label}</p>
+            <label htmlFor={inputId} className="flex items-center justify-center gap-2 px-3 py-2 rounded-xl border border-dashed border-gray-300 text-xs font-semibold text-gray-600 hover:border-teal-500 hover:bg-teal-50/40 cursor-pointer transition-colors">
+                <Upload size={13} /> {files.length ? "Add more…" : "Choose file(s)"}
+            </label>
+            <input
+                id={inputId}
+                type="file"
+                multiple
+                accept=".pdf,.doc,.docx,.xls,.csv,.jpg,.jpeg,.png,.gif"
+                className="hidden"
+                onChange={(e) => { if (e.target.files?.length) add(e.target.files); e.target.value = ""; }}
+            />
+            {files.length > 0 && (
+                <ul className="mt-1.5 space-y-1">
+                    {files.map((f, i) => (
+                        <li key={i} className="flex items-center gap-1.5 text-[11px] text-gray-600 bg-gray-50 border border-gray-100 rounded-lg px-2 py-1">
+                            <FileText size={11} className="text-gray-400 flex-shrink-0" />
+                            <span className="truncate flex-1">{f.name}</span>
+                            <button type="button" onClick={() => removeAt(i)} className="text-gray-400 hover:text-red-600"><X size={12} /></button>
+                        </li>
+                    ))}
+                </ul>
+            )}
+        </div>
     );
 }
 

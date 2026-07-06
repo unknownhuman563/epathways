@@ -65,6 +65,7 @@ trait BuildsLeadRow
             'tags' => ($l->relationLoaded('tags') ? $l->tags : $l->tags()->get())
                 ->pluck('name')->filter()->values()->all(),
             'course' => optional($l->studyPlans->first())->preferred_course,
+            'highest_qualification' => $l->highest_qualification,
             'source' => $sourceLabel,
             'source_key' => $l->source,
             'status' => $l->status ?: 'New',

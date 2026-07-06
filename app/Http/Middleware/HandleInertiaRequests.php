@@ -128,9 +128,9 @@ class HandleInertiaRequests extends Middleware
         if (str_starts_with($path, 'portal/agent')) {
             $todayStart = now()->startOfDay();
             $out['agent'] = [
-                // Scoped to the agent's own leads only.
-                'new_leads_today'      => \App\Models\Lead::where('agent_id', $user->id)->where('created_at', '>=', $todayStart)->count(),
-                'notifications_unread' => $user->unreadNotifications()->count(),
+                // Scoped to the agent's own leads only. Agents have no
+                // notifications surface, so no unread badge here.
+                'new_leads_today' => \App\Models\Lead::where('agent_id', $user->id)->where('created_at', '>=', $todayStart)->count(),
             ];
         }
 

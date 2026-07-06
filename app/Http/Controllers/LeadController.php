@@ -4,33 +4,168 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\StoreLeadRequest;
 use App\Jobs\AnalyzeLeadAssessment;
+use App\Models\Event;
 use App\Models\Lead;
+use App\Models\LeadTag;
+use App\Models\Program;
 use App\Models\User;
 use App\Notifications\NewRegistrationReceived;
+use App\Traits\BuildsLeadRow;
+use App\Traits\CreatesDashboardLead;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Notification;
+use Illuminate\Validation\Rule;
 
 class LeadController extends Controller
 {
+    use BuildsLeadRow;
+    use CreatesDashboardLead;
+
     /**
      * Display a listing of the leads.
      */
     public function index()
     {
+        // The admin Leads screen reuses the sales pipeline UI (portal/sales/Leads
+        // re-exported as admin/Leads). It expects the same rich row shape the
+        // department portals build via BuildsLeadRow, plus the tab/filter feeds,
+        // and a portalBase so every row action targets the /admin routes.
+        //
         // A lead drops out of this view the moment it's adopted by any
-        // department (student / English / immigration / accommodation).
-        // Each department has its own queue surface; keeping them in the
-        // sales-pipeline table would mean each row appears in two places.
-        $leads = Lead::inLeadPipeline()
-            ->with(['studyPlans', 'event'])
-            ->latest()
-            ->get();
+        // department (student / English / immigration / accommodation) — each
+        // department has its own queue surface, so a converted lead would
+        // otherwise appear in two places.
+        try {
+            $leads = Lead::inLeadPipeline()
+                ->with([
+                    'studyPlans',
+                    'event',
+                    'tags:id,name',
+                    'portalUser:id,lead_id,last_login_at',
+                    'stageUpdater:id,name',
+                    'agent:id,name,avatar_path',
+                    'notes' => fn ($q) => $q->latest(),
+                    'documents:id,lead_id,checklist_key,status',
+                ])
+                ->withCount(['notes', 'documents'])
+                ->withCount(['tasks as tasks_open_count' => fn ($q) => $q->where('completed', false)])
+                ->latest()->get();
 
-        return inertia('admin/Leads', [
-            'leads' => $leads,
+            return inertia('admin/Leads', [
+                'portal' => 'admin',
+                'portalBase' => '/admin',
+                'statuses' => Lead::STAGES,
+                'programs' => Program::orderBy('title')->pluck('title')->filter()->values(),
+                'staffOptions' => $this->dashboardStaff(),
+                'leads' => $leads->map(fn ($l) => $this->leadRow($l)),
+                'allTagNames' => LeadTag::orderBy('name')->pluck('name'),
+                'events' => $this->eventsSummary(),
+                'tabCounts' => $this->leadTabCounts(),
+                'agents' => $this->agentsSummary(),
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('Admin leads list failed', ['error' => $e->getMessage()]);
+
+            return inertia('admin/Leads', [
+                'portal' => 'admin',
+                'portalBase' => '/admin',
+                'statuses' => Lead::STAGES,
+                'programs' => Program::orderBy('title')->pluck('title')->filter()->values(),
+                'staffOptions' => $this->dashboardStaff(),
+                'leads' => collect(),
+            ]);
+        }
+    }
+
+    /** Events list for the Leads page "Events" tab — each with a registrant count. */
+    private function eventsSummary()
+    {
+        return Event::withCount('leads')
+            ->orderByDesc('date_from')
+            ->latest()
+            ->get()
+            ->map(fn (Event $e) => [
+                'id'                  => $e->id,
+                'name'                => $e->name,
+                'event_code'          => $e->event_code,
+                'type'                => $e->type,
+                'mode'                => $e->mode,
+                'location'            => $e->location,
+                'date_from'           => optional($e->date_from)->toIso8601String(),
+                'status'              => $e->status,
+                'registrations_count' => $e->leads_count,
+            ]);
+    }
+
+    /**
+     * Recruiting agents (role='agent') with a total count of leads each has
+     * added — for the Leads page "Agents" tab. The per-agent lead list is
+     * built client-side from the leads collection (which carries `agent`).
+     */
+    private function agentsSummary()
+    {
+        return User::where('role', 'agent')
+            ->withCount('agentLeads')
+            ->orderBy('name')
+            ->get(['id', 'name', 'email', 'phone', 'location', 'avatar_path'])
+            ->map(fn ($a) => [
+                'id'          => $a->id,
+                'name'        => $a->name,
+                'email'       => $a->email,
+                'phone'       => $a->phone,
+                'location'    => $a->location,
+                'avatar_url'  => $a->avatar_url,
+                'leads_count' => (int) $a->agent_leads_count,
+            ]);
+    }
+
+    /**
+     * POST /admin/leads — manual "Add Lead" from the pipeline toolbar. Mirrors
+     * the Sales/Education dashboard add flow via the shared CreatesDashboardLead
+     * trait (name + status + pre-screen / goal-setting captures + program).
+     */
+    public function storeDashboardLead(Request $request)
+    {
+        $data = $request->validate($this->dashboardLeadRules(Lead::STAGES));
+
+        try {
+            $lead = $this->createDashboardLead($data);
+
+            return back()->with('success', "Lead {$lead->lead_id} added.");
+        } catch (\Throwable $e) {
+            Log::error('Admin add-lead failed', ['error' => $e->getMessage()]);
+
+            return back()->with('error', 'Could not add that lead. Please try again.');
+        }
+    }
+
+    /**
+     * POST /admin/leads/{id} — inline pipeline-stage change from the leads
+     * table / kanban. Keeps `status` and `stage` in lock-step (same as the
+     * Sales portal) so the row and its stage badge stay consistent.
+     */
+    public function updateLeadStatus(Request $request, $id)
+    {
+        $validated = $request->validate([
+            'status' => ['required', Rule::in(Lead::STAGES)],
+            'stage'  => 'nullable|string|max:120',
         ]);
+
+        try {
+            $lead = Lead::findOrFail($id);
+            $lead->status = $validated['status'];
+            $lead->stage = ! empty($validated['stage']) ? $validated['stage'] : $validated['status'];
+            $lead->save();
+
+            return back()->with('success', "Lead {$lead->lead_id} updated.");
+        } catch (\Throwable $e) {
+            Log::error('Admin lead status update failed', ['id' => $id, 'error' => $e->getMessage()]);
+
+            return back()->with('error', 'Could not update that lead. Please try again.');
+        }
     }
 
     /**
@@ -1737,6 +1872,64 @@ class LeadController extends Controller
 
             return back()->with('error', 'Could not update personal information.');
         }
+    }
+
+    /**
+     * JSON payload backing the Leads-table "Edit lead" modal — the lead's
+     * editable personal fields plus its tags, documents, recent notes and
+     * stage/agent context. Read-only fetch; edits post to the dedicated
+     * personal / stage / priority / notes endpoints.
+     */
+    public function editData($id)
+    {
+        $lead = Lead::with([
+            'tags:id,name',
+            'documents:id,lead_id,checklist_key,original_name,status,created_at',
+            'notes' => fn ($q) => $q->latest()->limit(10),
+            'agent:id,name',
+            'stageUpdater:id,name',
+        ])->findOrFail($id);
+
+        return response()->json([
+            'id'        => $lead->id,
+            'lead_id'   => $lead->lead_id,
+            'name'      => trim("{$lead->first_name} {$lead->last_name}") ?: 'Unknown',
+            'status'    => $lead->status,
+            'stage'     => $lead->stage,
+            'priority'  => $lead->priority,
+            'agent'     => $lead->agent ? ['id' => $lead->agent->id, 'name' => $lead->agent->name] : null,
+            'personal'  => [
+                'first_name'        => $lead->first_name,
+                'last_name'         => $lead->last_name,
+                'middle_name'       => $lead->middle_name,
+                'email'             => $lead->email,
+                'phone'             => $lead->phone,
+                'gender'            => $lead->gender,
+                'marital_status'    => $lead->marital_status,
+                'dob'               => optional($lead->dob)->toDateString(),
+                'country_of_birth'  => $lead->country_of_birth,
+                'citizenship'       => $lead->citizenship,
+                'residence_city'    => $lead->residence_city,
+                'residence_country' => $lead->residence_country,
+                'passport_number'   => $lead->passport_number,
+                'passport_expiry'   => optional($lead->passport_expiry)->toDateString(),
+            ],
+            'tags'      => $lead->tags->pluck('name')->values(),
+            'documents' => $lead->documents->map(fn ($d) => [
+                'id'            => $d->id,
+                'name'          => $d->original_name ?: ($d->checklist_key ?: 'Document'),
+                'checklist_key' => $d->checklist_key,
+                'status'        => $d->status,
+                'created_at'    => optional($d->created_at)->toIso8601String(),
+            ])->values(),
+            'notes' => $lead->notes->map(fn ($n) => [
+                'id'          => $n->id,
+                'body'        => $n->body,
+                'author_name' => $n->author_name ?: 'Unknown',
+                'kind'        => $n->kind ?: 'general',
+                'created_at'  => optional($n->created_at)->toIso8601String(),
+            ])->values(),
+        ]);
     }
 
     /**

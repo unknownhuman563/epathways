@@ -10,7 +10,7 @@ import {
     User as UserIcon, ArrowRight, Sparkles, FolderOpen, Copy, Info, Undo2, Send,
     Globe, Home, Wand2, Users as UsersIcon, Eye,
     Paperclip, FileImage, Film, Music,
-    Briefcase, Trash2, RefreshCw,
+    Briefcase, Trash2, RefreshCw, MoreVertical,
 } from 'lucide-react';
 import { CHECKLIST, STATUSES, STATUS_CHIP, STATUS_LABEL, SECTION_STATUSES, IMPORTANT_NOTES, renderFilename, currentSectionIndex } from '@/data/leadDocumentChecklist';
 import SendUpdateModal from '@/components/leads/SendUpdateModal';
@@ -425,112 +425,36 @@ export default function LeadDetails({ lead: backendLead, activity = [], stageTim
                     </div>
                 </div>
 
-                {/* Action toolbar — grouped by purpose (Manage · Tracker ·
-                    Email · Export) so related actions sit together rather
-                    than in one undifferentiated row. */}
+                {/* Action toolbar — "Move to" stays as a primary control;
+                    every other action (edit / delete / tracker link / email /
+                    export) is consolidated behind a three-dot menu so the
+                    header stays compact. */}
                 <div className="flex items-end gap-3 flex-wrap">
-                    {/* Manage — pipeline conversion + edit. */}
                     <div className="flex flex-col gap-1">
                         <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 px-1">Manage</span>
                         <div className="flex items-center gap-2">
                             <ConvertMenu lead={backendLead} canRevert={currentUser?.is_admin} />
-                            <button
-                                onClick={toggleEditAll}
-                                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-colors shadow-sm ${editAll ? 'bg-gray-900 text-white hover:bg-black' : 'bg-blue-600 text-white hover:bg-blue-700'}`}
-                            >
-                                <Edit size={16} /> {editAll ? 'Done Editing' : 'Edit Lead'}
-                            </button>
-                            <button
-                                onClick={archiveLead}
-                                title="Archive this lead (recoverable)"
-                                className="flex items-center gap-2 px-4 py-2 bg-white border border-red-200 text-red-600 rounded-xl hover:bg-red-50 text-sm font-semibold transition-colors shadow-sm"
-                            >
-                                <Trash2 size={16} /> Delete
-                            </button>
-                        </div>
-                    </div>
-
-                    {/* Tracker — copy / email the public /track link. The lead
-                        opens it to see their info, documents and timeline. */}
-                    {lead.trackingCode && (
-                        <>
-                            <div className="hidden sm:block w-px h-9 bg-gray-200 self-end mb-1" />
-                            <div className="flex flex-col gap-1">
-                                <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 px-1">Tracker</span>
-                                <div className="flex items-center gap-2">
-                                    {lead.lastSeenAt && (
-                                        <span
-                                            title={`Lead last opened their tracker on ${new Date(lead.lastSeenAt).toLocaleString()}`}
-                                            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-50 text-emerald-700 text-xs font-semibold"
-                                        >
-                                            <Eye size={14} /> Seen {new Date(lead.lastSeenAt).toLocaleDateString()}
-                                        </span>
-                                    )}
-                                    <button
-                                        type="button"
-                                        title="Copy public tracking link for this lead"
-                                        onClick={() => {
-                                            const url = `${window.location.origin}/track/${lead.trackingCode}`;
-                                            // Just the URL — gets auto-linked in WhatsApp /
-                                            // SMS / email and the code lives in the path
-                                            // anyway, so a duplicate "Code: ..." line is
-                                            // just noise to the client.
-                                            navigator.clipboard?.writeText(url).then(
-                                                () => toast.success('Tracking link copied', { description: url }),
-                                                () => toast.error('Could not copy — your browser blocked clipboard access')
-                                            );
-                                        }}
-                                        className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 text-sm font-semibold transition-colors shadow-sm"
-                                    >
-                                        <Copy size={16} /> Copy Track Link
-                                    </button>
-                                    <button
-                                        type="button"
-                                        disabled={!backendLead.email}
-                                        title={backendLead.email ? 'Email this lead their tracker link' : 'Lead has no email on file'}
-                                        onClick={() => router.post(`/admin/leads/${backendLead.id}/send-tracker-link`, {}, { preserveScroll: true, preserveState: true })}
-                                        className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 text-sm font-semibold transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                                    >
-                                        <Mail size={16} /> Send Tracker Link
-                                    </button>
-                                </div>
-                            </div>
-                        </>
-                    )}
-
-                    {/* Email — send the lead an application status update. */}
-                    <div className="hidden sm:block w-px h-9 bg-gray-200 self-end mb-1" />
-                    <div className="flex flex-col gap-1">
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 px-1">Email</span>
-                        <div className="flex items-center gap-2">
-                            <button
-                                type="button"
-                                disabled={!backendLead.email}
-                                title={backendLead.email ? 'Email this lead an application status update' : 'Lead has no email on file'}
-                                onClick={() => setShowSendUpdate(true)}
-                                className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 text-sm font-semibold transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                                <Send size={16} /> Send Update
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => setComposeOpen(true)}
-                                title="Send this lead an email or SMS"
-                                className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-xl hover:bg-black text-sm font-semibold transition-colors shadow-sm"
-                            >
-                                <Send size={16} /> Compose Message
-                            </button>
-                        </div>
-                    </div>
-
-                    {/* Export. */}
-                    <div className="hidden sm:block w-px h-9 bg-gray-200 self-end mb-1" />
-                    <div className="flex flex-col gap-1">
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 px-1">Export</span>
-                        <div className="flex items-center gap-2">
-                            <button className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 text-sm font-semibold transition-colors shadow-sm">
-                                <Download size={16} /> Export PDF
-                            </button>
+                            {/* "Seen" tracker badge stays inline — it's a
+                                passive signal, not an action, and event-desk
+                                staff want it visible at a glance. */}
+                            {lead.trackingCode && lead.lastSeenAt && (
+                                <span
+                                    title={`Lead last opened their tracker on ${new Date(lead.lastSeenAt).toLocaleString()}`}
+                                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-50 text-emerald-700 text-xs font-semibold"
+                                >
+                                    <Eye size={14} /> Seen {new Date(lead.lastSeenAt).toLocaleDateString()}
+                                </span>
+                            )}
+                            <LeadActionsMenu
+                                editAll={editAll}
+                                onToggleEdit={toggleEditAll}
+                                onArchive={archiveLead}
+                                trackingCode={lead.trackingCode}
+                                hasEmail={!! backendLead.email}
+                                onSendTrackerLink={() => router.post(`/admin/leads/${backendLead.id}/send-tracker-link`, {}, { preserveScroll: true, preserveState: true })}
+                                onSendUpdate={() => setShowSendUpdate(true)}
+                                onCompose={() => setComposeOpen(true)}
+                            />
                         </div>
                     </div>
                 </div>
@@ -1663,6 +1587,120 @@ function InzTrackingPanel({ lead }) {
                 </label>
             </div>
         </form>
+    );
+}
+
+// ── Lead actions menu — every header action except "Move to" lives in a
+//    three-dot dropdown so the toolbar stays compact. Each item calls back
+//    into LeadDetails; the parent still owns state (edit-all toggle, modals,
+//    router.post) so this component is a thin renderer.
+function LeadActionsMenu({
+    editAll,
+    onToggleEdit,
+    onArchive,
+    trackingCode,
+    hasEmail,
+    onSendTrackerLink,
+    onSendUpdate,
+    onCompose,
+}) {
+    const [open, setOpen] = useState(false);
+
+    const copyTrackerLink = () => {
+        const url = `${window.location.origin}/track/${trackingCode}`;
+        // Just the URL — WhatsApp / SMS / email auto-link it, and a
+        // duplicate "Code: ..." line is noise for the client.
+        navigator.clipboard?.writeText(url).then(
+            () => toast.success('Tracking link copied', { description: url }),
+            () => toast.error('Could not copy — your browser blocked clipboard access')
+        );
+        setOpen(false);
+    };
+
+    const wrap = (fn) => () => { setOpen(false); fn && fn(); };
+
+    return (
+        <div className="relative">
+            <button
+                type="button"
+                onClick={() => setOpen((o) => ! o)}
+                title="More actions"
+                className="flex items-center justify-center w-10 h-10 rounded-xl bg-white border border-gray-200 text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors shadow-sm"
+            >
+                <MoreVertical size={18} />
+            </button>
+
+            {open && (
+                <>
+                    <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
+                    <div className="absolute right-0 top-full mt-2 w-56 bg-white rounded-xl shadow-xl border border-gray-100 py-1.5 z-40">
+                        <MenuItem icon={Edit} onClick={wrap(onToggleEdit)}>
+                            {editAll ? 'Done editing' : 'Edit lead'}
+                        </MenuItem>
+
+                        {trackingCode && (
+                            <>
+                                <div className="my-1 border-t border-gray-100" />
+                                <p className="px-3 pt-1 pb-0.5 text-[9px] font-bold text-gray-400 uppercase tracking-[0.2em]">Tracker</p>
+                                <MenuItem icon={Copy} onClick={copyTrackerLink}>
+                                    Copy track link
+                                </MenuItem>
+                                <MenuItem
+                                    icon={Mail}
+                                    disabled={! hasEmail}
+                                    disabledTitle="Lead has no email on file"
+                                    onClick={wrap(onSendTrackerLink)}
+                                >
+                                    Send tracker link
+                                </MenuItem>
+                            </>
+                        )}
+
+                        <div className="my-1 border-t border-gray-100" />
+                        <p className="px-3 pt-1 pb-0.5 text-[9px] font-bold text-gray-400 uppercase tracking-[0.2em]">Email</p>
+                        <MenuItem
+                            icon={Send}
+                            disabled={! hasEmail}
+                            disabledTitle="Lead has no email on file"
+                            onClick={wrap(onSendUpdate)}
+                        >
+                            Send update
+                        </MenuItem>
+                        <MenuItem icon={Send} onClick={wrap(onCompose)}>
+                            Compose message
+                        </MenuItem>
+
+                        <div className="my-1 border-t border-gray-100" />
+                        <MenuItem icon={Download} onClick={wrap(() => {})}>
+                            Export PDF
+                        </MenuItem>
+
+                        <div className="my-1 border-t border-gray-100" />
+                        <MenuItem icon={Trash2} onClick={wrap(onArchive)} tone="danger">
+                            Delete
+                        </MenuItem>
+                    </div>
+                </>
+            )}
+        </div>
+    );
+}
+
+function MenuItem({ icon: Icon, children, onClick, disabled, disabledTitle, tone = 'default' }) {
+    const toneClass = tone === 'danger'
+        ? 'text-red-600 hover:bg-red-50'
+        : 'text-gray-700 hover:bg-gray-50';
+    return (
+        <button
+            type="button"
+            onClick={onClick}
+            disabled={disabled}
+            title={disabled ? disabledTitle : undefined}
+            className={`w-full flex items-center gap-2.5 px-3 py-2 text-sm font-medium transition-colors ${toneClass} disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent`}
+        >
+            <Icon size={15} className="text-gray-400 flex-shrink-0" />
+            <span className="truncate">{children}</span>
+        </button>
     );
 }
 

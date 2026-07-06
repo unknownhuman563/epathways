@@ -3,8 +3,10 @@
 namespace App\Traits;
 
 use App\Models\Lead;
+use App\Models\LeadDocument;
 use App\Models\LeadNote;
 use App\Models\LeadStudyPlan;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
 /**
@@ -28,6 +30,10 @@ trait CreatesDashboardLead
             'suffix'                => 'nullable|string|max:30',
             'email'                 => 'nullable|email|max:200',
             'phone'                 => 'nullable|string|max:40',
+            'highest_qualification' => 'nullable|string|max:200',
+            // Recruiting agent this lead is attributed to (staff-picked on the
+            // sales add form). Must be a registered user with the 'agent' role.
+            'agent_id'              => ['nullable', \Illuminate\Validation\Rule::exists('users', 'id')->where('role', 'agent')],
             'status'                => ['nullable', \Illuminate\Validation\Rule::in($statuses)],
             'assessment_date'       => 'nullable|date',
             'pre_screened_by'       => 'nullable|string|max:120',
@@ -86,6 +92,7 @@ trait CreatesDashboardLead
             'last_name'             => $last,
             'email'                 => $data['email'] ?? null,
             'phone'                 => $data['phone'] ?? null,
+            'highest_qualification' => $data['highest_qualification'] ?? null,
             'status'                => $status,
             'stage'                 => $status,
             'source'                => 'manual',
@@ -148,5 +155,64 @@ trait CreatesDashboardLead
         }
 
         return $lead;
+    }
+
+    /**
+     * Maps the four "Add Lead" document upload fields to their checklist keys,
+     * mirroring the public registration form (CV / Passport / Diploma /
+     * Transcript). Stored as LeadDocument rows so they show in the lead's
+     * Documents checklist.
+     */
+    private const DASHBOARD_DOC_MAP = [
+        'cv_files'         => 'acad.cv',
+        'passport_files'   => 'pers.passport',
+        'diploma_files'    => 'acad.degree_diploma',
+        'transcript_files' => 'acad.transcript',
+    ];
+
+    /**
+     * Validation rules for the optional Add-Lead document uploads. Merge into
+     * the calling controller's validator.
+     */
+    protected function dashboardDocumentRules(): array
+    {
+        $rules = [];
+        foreach (array_keys(self::DASHBOARD_DOC_MAP) as $field) {
+            $rules[$field] = 'nullable|array|max:10';
+            $rules["{$field}.*"] = 'file|mimes:pdf,doc,docx,xls,csv,jpg,jpeg,png,gif|max:10240';
+        }
+
+        return $rules;
+    }
+
+    /**
+     * Persist any uploaded Add-Lead documents as LeadDocument rows against the
+     * matching checklist key. Files go on the private 'local' disk, the same
+     * place staff/lead checklist uploads live.
+     */
+    protected function storeDashboardLeadDocuments(Lead $lead, Request $request): void
+    {
+        foreach (self::DASHBOARD_DOC_MAP as $field => $checklistKey) {
+            if (! $request->hasFile($field)) {
+                continue;
+            }
+            foreach ((array) $request->file($field) as $file) {
+                if (! $file) {
+                    continue;
+                }
+                $path = $file->store("lead-documents/{$lead->id}", 'local');
+                LeadDocument::create([
+                    'lead_id'       => $lead->id,
+                    'checklist_key' => $checklistKey,
+                    'original_name' => $file->getClientOriginalName(),
+                    'file_path'     => $path,
+                    'mime'          => $file->getMimeType(),
+                    'size'          => $file->getSize(),
+                    'status'        => LeadDocument::STATUS_SUBMITTED,
+                    'source'        => 'manual',
+                    'uploaded_by'   => Auth::id(),
+                ]);
+            }
+        }
     }
 }

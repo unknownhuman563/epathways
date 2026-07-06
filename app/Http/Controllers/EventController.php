@@ -4,9 +4,11 @@ namespace App\Http\Controllers;
 
 use App\Models\Event;
 use App\Models\FacebookLiveSession;
+use App\Models\Lead;
 use App\Models\User;
 use App\Notifications\NewRegistrationReceived;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Notification;
@@ -20,7 +22,7 @@ class EventController extends Controller
      */
     public function index(Request $request)
     {
-        $events = Event::with('sessions')->withCount(['sessions', 'leads'])->latest()->get();
+        $events = Event::with(['sessions', 'agent:id,name,avatar_path'])->withCount(['sessions', 'leads'])->latest()->get();
 
         // Append the registration URL (and banner URL, if any) to each event
         $events->each(function ($event) {
@@ -35,6 +37,10 @@ class EventController extends Controller
             'defaultFormFields' => Event::DEFAULT_FIELDS,
             'customFieldTypes' => Event::CUSTOM_FIELD_TYPES,
             'lockedFieldKeys' => Event::LOCKED_KEYS,
+            // Recruiting agents for the "Agent" dropdown in the event editor.
+            'agents' => \App\Models\User::where('role', 'agent')
+                ->orderBy('name')
+                ->get(['id', 'name']),
         ]);
     }
 
@@ -224,6 +230,9 @@ class EventController extends Controller
             'mode' => 'required|in:in-person,online,hybrid',
             'location' => 'nullable|string|max:255',
             'organizer_id' => 'nullable|string|max:255',
+            // Recruiting agent assigned to this event (registrants get
+            // attributed to them). Must be a user with the 'agent' role.
+            'agent_id' => ['nullable', \Illuminate\Validation\Rule::exists('users', 'id')->where('role', 'agent')],
             'notes' => 'nullable|string',
             'banner_image' => 'nullable|image|mimes:jpeg,png,jpg,webp,gif|max:4096',
             // Custom registration-form schema. Null/missing = default fields.
@@ -322,6 +331,9 @@ class EventController extends Controller
             'mode' => 'required|in:in-person,online,hybrid',
             'location' => 'nullable|string|max:255',
             'organizer_id' => 'nullable|string|max:255',
+            // Recruiting agent assigned to this event (registrants get
+            // attributed to them). Must be a user with the 'agent' role.
+            'agent_id' => ['nullable', \Illuminate\Validation\Rule::exists('users', 'id')->where('role', 'agent')],
             'notes' => 'nullable|string',
             'banner_image' => 'nullable|image|mimes:jpeg,png,jpg,webp,gif|max:4096',
             // Custom registration-form schema. Null/missing = default fields.
@@ -368,6 +380,13 @@ class EventController extends Controller
             unset($validated['sessions']);
 
             $event->update($validated);
+
+            // Retroactively credit the event's recruiting agent to registrants
+            // who don't already have one, so setting/changing the agent on an
+            // event with existing sign-ups flows straight to that agent's tab.
+            if ($event->agent_id) {
+                $event->leads()->whereNull('agent_id')->update(['agent_id' => $event->agent_id]);
+            }
 
             // Sync sessions only when the key is present in the request.
             // Existing sessions (matched by id) are updated, new ones created,
@@ -548,6 +567,9 @@ class EventController extends Controller
                 'branch' => $lead->branch ?: 'Online Registration',
                 'event_id' => $event->id,
                 'event_session_id' => $validated['event_session_id'] ?? null,
+                // Credit the event's recruiting agent — unless the lead is
+                // already attributed to an agent (don't override).
+                'agent_id' => $lead->agent_id ?: $event->agent_id,
                 'work_info' => $lead->work_info ?: ($workInfo ?: null),
                 'financial_info' => $lead->financial_info ?: ($financialInfo ?: null),
                 'event_response' => $customResponses ?: null,
@@ -686,5 +708,123 @@ class EventController extends Controller
             'pastSessions' => $pastSessions->values(),
             'featuredSession' => $featuredSession,
         ]);
+    }
+
+    /**
+     * GET /admin/events/{eventId}/registrants/{leadId}
+     *
+     * Read-only registrant view — renders the event registration form
+     * as-filled + an editable notes area, without the full lead-management
+     * chrome. Reachable from the Events page → "View Lead" link on any
+     * registrant row.
+     *
+     * Field resolution mirrors LeadController::show()'s eventRegistration
+     * block: each of the event's effective fields is looked up in the
+     * lead's dedicated columns, JSON buckets, related rows, or in the
+     * event_response JSON for custom fields.
+     */
+    public function showRegistrant($eventId, $leadId)
+    {
+        $event = Event::findOrFail($eventId);
+        $lead = Lead::with(['studyPlans', 'educationExps', 'eventNotesEditor:id,name'])
+            ->where('event_id', $event->id)
+            ->findOrFail($leadId);
+
+        $eventFields = $event->effectiveFields();
+        $eduFirst = $lead->educationExps->first();
+        $planFirst = $lead->studyPlans->first();
+        $work = is_array($lead->work_info) ? $lead->work_info : [];
+        $finance = is_array($lead->financial_info) ? $lead->financial_info : [];
+        $custom = is_array($lead->event_response) ? $lead->event_response : [];
+
+        $resolveValue = function (array $field) use ($lead, $custom, $work, $finance, $eduFirst, $planFirst) {
+            $key = $field['key'];
+            if (array_key_exists($key, $custom)) {
+                return $custom[$key];
+            }
+
+            return match ($key) {
+                'first_name' => $lead->first_name,
+                'last_name' => $lead->last_name,
+                'email' => $lead->email,
+                'phone' => $lead->phone,
+                'country' => $lead->country ?: $lead->residence_country,
+                'city' => $work['city'] ?? $lead->residence_city,
+                'employment_status' => $work['employment_status'] ?? null,
+                'remarks' => $work['remarks'] ?? null,
+                'funding_source' => $finance['funding_source'] ?? null,
+                'education_level' => optional($eduFirst)->level,
+                'field_of_study' => optional($eduFirst)->field_of_study,
+                'interest' => optional($planFirst)->preferred_course,
+                'planning_timeline' => optional($planFirst)->preferred_intake,
+                default => null,
+            };
+        };
+
+        $registrationFields = collect($eventFields)
+            ->filter(fn ($f) => ($f['locked'] ?? false) === true || ($f['enabled'] ?? true) !== false)
+            ->map(fn ($f) => [
+                'key' => $f['key'],
+                'label' => $f['label'] ?? $f['key'],
+                'type' => $f['type'] ?? 'text',
+                'section' => $f['section'] ?? 'Additional',
+                'options' => $f['options'] ?? null,
+                'value' => $resolveValue($f),
+            ])
+            ->values()
+            ->all();
+
+        return inertia('admin/EventRegistrantView', [
+            'event' => [
+                'id' => $event->id,
+                'name' => $event->name,
+                'event_code' => $event->event_code,
+                'type' => $event->type,
+                'date_from' => optional($event->date_from)->toIso8601String(),
+                'location' => $event->location,
+                'mode' => $event->mode,
+            ],
+            'lead' => [
+                'id' => $lead->id,
+                'lead_id' => $lead->lead_id,
+                'first_name' => $lead->first_name,
+                'last_name' => $lead->last_name,
+                'email' => $lead->email,
+                'phone' => $lead->phone,
+                'status' => $lead->status,
+                'stage' => $lead->stage,
+                'created_at' => optional($lead->created_at)->toIso8601String(),
+            ],
+            'registrationFields' => $registrationFields,
+            'notes' => [
+                'body' => $lead->event_notes,
+                'updated_at' => optional($lead->event_notes_updated_at)->toIso8601String(),
+                'editor_name' => optional($lead->eventNotesEditor)->name,
+            ],
+        ]);
+    }
+
+    /**
+     * POST /admin/events/{eventId}/registrants/{leadId}/notes
+     *
+     * Save event-desk notes attached to this registrant. Notes live on the
+     * lead itself (event_notes / event_notes_updated_at / event_notes_by)
+     * because they're per-lead-per-event and there's exactly one event per
+     * lead. Any staff member can edit.
+     */
+    public function updateRegistrantNotes(Request $request, $eventId, $leadId)
+    {
+        $validated = $request->validate([
+            'event_notes' => 'nullable|string|max:10000',
+        ]);
+
+        $lead = Lead::where('event_id', $eventId)->findOrFail($leadId);
+        $lead->fill([
+            'event_notes' => $validated['event_notes'] ?? null,
+            'event_notes_updated_at' => now(),
+            'event_notes_updated_by' => Auth::id(),
+        ])->save();
+
+        return back()->with('success', 'Notes saved.');
     }
 }

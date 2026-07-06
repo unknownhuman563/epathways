@@ -12,7 +12,7 @@ class Event extends Model
     protected $fillable = [
         'name', 'description', 'type', 'event_code', 'date_from', 'date_to',
         'time_start', 'time_end',
-        'status', 'organizer_id', 'registration_link', 'notes', 'mode', 'location', 'banner_image',
+        'status', 'organizer_id', 'agent_id', 'registration_link', 'notes', 'mode', 'location', 'banner_image',
         'form_fields',
     ];
 
@@ -98,6 +98,12 @@ class Event extends Model
     public function leads()
     {
         return $this->hasMany(Lead::class);
+    }
+
+    /** Recruiting Agent (role='agent') assigned to this event, or null. */
+    public function agent()
+    {
+        return $this->belongsTo(User::class, 'agent_id');
     }
 
     /**

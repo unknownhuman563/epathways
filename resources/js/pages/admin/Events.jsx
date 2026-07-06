@@ -47,6 +47,9 @@ const MOCK_EVENTS = [
 ];
 
 const EVENT_TYPES = ['Seminar', 'Webinar', 'Education Fair', 'Open Day', 'Info Night', 'Expo', 'One-on-one', 'Workshop'];
+// Canonical enums the backend validates against (status `in:…`, mode `in:…`).
+const EVENT_STATUSES = ['draft', 'upcoming', 'ongoing', 'completed', 'cancelled'];
+const EVENT_MODES = ['in-person', 'online', 'hybrid'];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function getStatusStyle(status = '') {
@@ -607,7 +610,7 @@ function ToggleSmall({ label, checked, onChange }) {
 }
 
 // ─── Create / Edit Event Slide-Over ───────────────────────────────────────────
-function EventFormModal({ open, onClose, editingEvent, defaultFormFields = [], customFieldTypes = ['text','email','tel','textarea','select','pills'], lockedFieldKeys = ['first_name','last_name','email','phone'] }) {
+function EventFormModal({ open, onClose, editingEvent, defaultFormFields = [], customFieldTypes = ['text','email','tel','textarea','select','pills'], lockedFieldKeys = ['first_name','last_name','email','phone'], agents = [] }) {
     const isEditing = !!editingEvent;
     const [step, setStep] = useState(1);
     const [hasSessions, setHasSessions] = useState(false);
@@ -622,7 +625,7 @@ function EventFormModal({ open, onClose, editingEvent, defaultFormFields = [], c
         // Event-level start/end times — used when the event has no
         // sessions. Sessions still own their own time columns.
         time_start: '', time_end: '',
-        status: 'upcoming', mode: 'in-person', location: '', organizer_id: '', notes: '',
+        status: 'upcoming', mode: 'in-person', location: '', organizer_id: '', agent_id: '', notes: '',
         banner_image: null,
         sessions: [emptySession()],
         // Per-event registration-form schema. Seeded from the canonical
@@ -653,10 +656,15 @@ function EventFormModal({ open, onClose, editingEvent, defaultFormFields = [], c
                 date_to: toDateInput(editingEvent.date_to),
                 time_start: editingEvent.time_start ? String(editingEvent.time_start).slice(0, 5) : '',
                 time_end:   editingEvent.time_end   ? String(editingEvent.time_end).slice(0, 5)   : '',
-                status: editingEvent.status || 'upcoming',
-                mode: editingEvent.mode || 'in-person',
+                // Coerce legacy/out-of-range values (e.g. status "published",
+                // mode "in_person") to valid enum options so the Select shows
+                // and submits a value the backend accepts.
+                status: EVENT_STATUSES.includes(editingEvent.status) ? editingEvent.status : 'upcoming',
+                mode: EVENT_MODES.includes(editingEvent.mode) ? editingEvent.mode
+                    : (editingEvent.mode === 'in_person' ? 'in-person' : 'in-person'),
                 location: editingEvent.location || '',
                 organizer_id: editingEvent.organizer_id || '',
+                agent_id: editingEvent.agent_id || '',
                 notes: editingEvent.notes || '',
                 banner_image: null,
                 sessions: sessions.length ? sessions : [emptySession()],
@@ -685,6 +693,8 @@ function EventFormModal({ open, onClose, editingEvent, defaultFormFields = [], c
     // `boolean` validation rule rejects. Ints round-trip cleanly.
     transform((data) => ({
         ...data,
+        // Empty select value → null so the nullable `exists` rule passes.
+        agent_id: data.agent_id || null,
         sessions: hasSessions ? data.sessions.map(({ _key, ...rest }) => rest) : [],
         form_fields: Array.isArray(data.form_fields)
             ? data.form_fields.map((f) => ({
@@ -897,6 +907,17 @@ function EventFormModal({ open, onClose, editingEvent, defaultFormFields = [], c
                                 </div>
                             </div>
 
+                            {/* Agent — recruiting agent assigned to this event.
+                                Registrants get attributed to them. */}
+                            <div>
+                                <Label>Agent</Label>
+                                <Select value={data.agent_id} onChange={e => setField('agent_id', e.target.value)}>
+                                    <option value="">— No agent —</option>
+                                    {agents.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+                                </Select>
+                                <p className="text-[11px] text-gray-400 mt-1">Leads who register for this event are credited to this agent.</p>
+                            </div>
+
                             {/* Address / venue — only for in-person & hybrid events */}
                             {data.mode !== 'online' && (
                                 <div>
@@ -1100,7 +1121,7 @@ function EventFormModal({ open, onClose, editingEvent, defaultFormFields = [], c
 }
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
-export default function Events({ events: backendEvents, defaultFormFields = [], customFieldTypes = [], lockedFieldKeys = [] }) {
+export default function Events({ events: backendEvents, defaultFormFields = [], customFieldTypes = [], lockedFieldKeys = [], agents = [] }) {
     const events = backendEvents && backendEvents.length > 0 ? backendEvents : MOCK_EVENTS;
     const [selectedEvents, setSelectedEvents] = useState([]);
     const [activeDropdown, setActiveDropdown] = useState(null);
@@ -1224,6 +1245,7 @@ export default function Events({ events: backendEvents, defaultFormFields = [], 
                                 <th className="px-6 py-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">Date & Time</th>
                                 <th className="px-6 py-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">Location</th>
                                 <th className="px-6 py-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">No. of Registrants</th>
+                                <th className="px-6 py-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">Agent</th>
                                 <th className="px-6 py-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">Status</th>
                                 <th className="px-6 py-4 text-xs font-semibold text-gray-600 uppercase tracking-wider text-right pr-8">Actions</th>
                             </tr>
@@ -1231,7 +1253,7 @@ export default function Events({ events: backendEvents, defaultFormFields = [], 
                         <tbody className="divide-y divide-gray-50">
                             {filtered.length === 0 ? (
                                 <tr>
-                                    <td colSpan={7} className="px-6 py-16 text-center text-gray-500">
+                                    <td colSpan={8} className="px-6 py-16 text-center text-gray-500">
                                         <Calendar className="w-10 h-10 mx-auto mb-3 text-gray-200" />
                                         <p className="font-semibold">No events found</p>
                                         <p className="text-sm mt-1">Try adjusting your filters or
@@ -1305,6 +1327,18 @@ export default function Events({ events: backendEvents, defaultFormFields = [], 
                                         </div>
                                     </td>
                                     <td className="px-6 py-4">
+                                        {event.agent ? (
+                                            <div className="flex items-center gap-1.5" title={`Agent: ${event.agent.name}`}>
+                                                <div className="w-5 h-5 rounded-full bg-teal-100 text-teal-700 flex items-center justify-center text-[9px] font-bold">
+                                                    {(event.agent.name || '?').charAt(0)}
+                                                </div>
+                                                <span className="text-xs text-gray-700 font-medium max-w-[120px] truncate">{event.agent.name}</span>
+                                            </div>
+                                        ) : (
+                                            <span className="text-xs text-gray-300">—</span>
+                                        )}
+                                    </td>
+                                    <td className="px-6 py-4">
                                         <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-bold border capitalize ${getStatusStyle(event.status)}`}>{event.status}</span>
                                     </td>
                                     <td className="px-6 py-4 text-right pr-6 relative">
@@ -1369,6 +1403,7 @@ export default function Events({ events: backendEvents, defaultFormFields = [], 
                 defaultFormFields={defaultFormFields}
                 customFieldTypes={customFieldTypes}
                 lockedFieldKeys={lockedFieldKeys}
+                agents={agents}
             />
 
             <style dangerouslySetInnerHTML={{ __html: `

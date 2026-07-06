@@ -93,9 +93,12 @@ class AgentController extends Controller
     /** Add a new lead — agent_id is auto-stamped by CreatesDashboardLead. */
     public function storeLead(Request $request)
     {
-        $validated = $request->validate($this->dashboardLeadRules(self::LEAD_STATUSES));
+        $validated = $request->validate(
+            $this->dashboardLeadRules(self::LEAD_STATUSES) + $this->dashboardDocumentRules()
+        );
 
-        $this->createDashboardLead($validated);
+        $lead = $this->createDashboardLead($validated);
+        $this->storeDashboardLeadDocuments($lead, $request);
 
         return back()->with('success', 'Lead added successfully.');
     }
@@ -117,6 +120,7 @@ class AgentController extends Controller
             'phone'             => 'nullable|string|max:40',
             'residence_city'    => 'nullable|string|max:120',
             'residence_country' => 'nullable|string|max:120',
+            'highest_qualification' => 'nullable|string|max:200',
             'program_offered'   => 'nullable|string|max:200',
         ]);
 
@@ -126,6 +130,7 @@ class AgentController extends Controller
         $lead->phone = $validated['phone'] ?? null;
         $lead->residence_city = $validated['residence_city'] ?? null;
         $lead->residence_country = $validated['residence_country'] ?? null;
+        $lead->highest_qualification = $validated['highest_qualification'] ?? null;
         $lead->save();
 
         // PROGRAM OFFERED → mirror into the lead's study plan (create/update
