@@ -503,6 +503,8 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/admin/leads/{id}/stage', [LeadController::class, 'updateStage'])->name('admin.leads.stage');
         // Archive (soft-delete) a lead / case — used by the Cases + Leads row menus.
         Route::delete('/admin/leads/{id}', [LeadController::class, 'destroy'])->name('admin.leads.destroy');
+        // General lead priority — shared by every portal's Leads table.
+        Route::post('/admin/leads/{id}/priority', [LeadController::class, 'updatePriority'])->name('admin.leads.priority');
         Route::post('/admin/leads/{id}/personal', [LeadController::class, 'updatePersonal'])->name('admin.leads.personal');
         Route::post('/admin/leads/{id}/journey', [LeadController::class, 'updateJourney'])->name('admin.leads.journey');
         Route::post('/admin/leads/{id}/convert-to-student', [LeadController::class, 'convertToStudent'])->name('admin.leads.convert-student');
@@ -761,6 +763,17 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/leads/{id}', [LeadController::class, 'show'])->name('leads.show');
         });
 
+        // Agent portal — recruiting agents who add leads and edit their info,
+        // but can't touch stage/status, convert, or delete (those stay with
+        // sales/admin). Everything here is scoped to the agent's own leads.
+        Route::middleware('portal:agent')->prefix('agent')->name('portal.agent.')->group(function () {
+            Route::get('/dashboard', [\App\Http\Controllers\Portal\AgentController::class, 'dashboard'])->name('dashboard');
+            Route::get('/leads', [\App\Http\Controllers\Portal\AgentController::class, 'leads'])->name('leads');
+            Route::post('/leads', [\App\Http\Controllers\Portal\AgentController::class, 'storeLead'])->name('leads.store');
+            Route::post('/leads/{id}/info', [\App\Http\Controllers\Portal\AgentController::class, 'updateLeadInfo'])->name('leads.info');
+            Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications');
+        });
+
         // Other portals — each has its own controller + dedicated dashboard
         // page. Admins satisfy every portal:* check via canAccessPortal(), so
         // they can view any role's dashboard.
@@ -774,6 +787,9 @@ Route::middleware(['auth'])->group(function () {
             Route::post('/leads/{id}', [EducationController::class, 'updateLead'])->name('leads.update');
             Route::post('/leads/{id}/portal-invitation/request', [LeadPortalInvitationController::class, 'request'])
                 ->name('leads.portal-invitation.request');
+            // Read-only registration snapshot — mirrors the sales route so the
+            // shared Leads component's View link resolves under this portal.
+            Route::get('/leads/{id}/registration', [SalesController::class, 'showLeadRegistration'])->name('leads.registration');
             Route::get('/leads/{id}', [LeadController::class, 'show'])->name('leads.show');
 
             // WORK
@@ -848,6 +864,9 @@ Route::middleware(['auth'])->group(function () {
             Route::post('/leads/{id}', [ImmigrationController::class, 'updateLead'])->name('leads.update');
             Route::post('/leads/{id}/portal-invitation/request', [LeadPortalInvitationController::class, 'request'])
                 ->name('leads.portal-invitation.request');
+            // Read-only registration snapshot — mirrors the sales route so the
+            // shared Leads component's View link resolves under this portal.
+            Route::get('/leads/{id}/registration', [SalesController::class, 'showLeadRegistration'])->name('leads.registration');
             Route::get('/leads/{id}', [LeadController::class, 'show'])->name('leads.show');
 
             // WORK

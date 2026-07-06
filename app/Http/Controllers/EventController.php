@@ -4,9 +4,12 @@ namespace App\Http\Controllers;
 
 use App\Models\Event;
 use App\Models\FacebookLiveSession;
+use App\Models\User;
+use App\Notifications\NewRegistrationReceived;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
@@ -631,6 +634,22 @@ class EventController extends Controller
                 'status' => 'error',
                 'message' => 'Registration failed. Please try again later.',
             ], 500);
+        }
+    }
+
+    /**
+     * Notify the sales team (+ admins/super-admins) of a new registration.
+     * Database channel only — best-effort, never blocks the public submit.
+     */
+    private function notifyNewRegistration(\App\Models\Lead $lead, string $kind, ?Event $event = null): void
+    {
+        try {
+            $recipients = User::whereIn('role', ['sales', 'admin', 'super_admin'])->get();
+            if ($recipients->isNotEmpty()) {
+                Notification::send($recipients, new NewRegistrationReceived($lead, $kind, $event));
+            }
+        } catch (\Throwable $e) {
+            Log::warning('New-registration notification failed', ['lead_id' => $lead->id, 'error' => $e->getMessage()]);
         }
     }
 

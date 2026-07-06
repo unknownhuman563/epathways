@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Program;
+use App\Models\School;
 use App\Services\PromoFeed;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -14,9 +15,11 @@ class ProgramController extends Controller
         return [
             'title' => 'required|string|max:255',
             'institution' => 'nullable|string|max:255',
+            'school_id' => 'nullable|integer|exists:schools,id',
             'location' => 'nullable|string|max:255',
             'level' => 'required|integer|min:1|max:10',
             'category' => 'required|in:certificate,diplomas,bachelors,masters',
+            'industry' => 'nullable|string|max:255',
             'status' => 'required|in:draft,published,archived',
             'price_text' => 'nullable|string|max:255',
             'image' => 'nullable|image|mimes:jpeg,png,jpg,webp,gif|max:4096',
@@ -68,10 +71,17 @@ class ProgramController extends Controller
 
     public function index()
     {
-        $programs = Program::latest()->get();
+        // Eager-load the school so the table can show its name without an
+        // N+1, and expose the picker options for the modal dropdown.
+        $programs = Program::with('school:id,name')->latest()->get();
         $programs->each(fn ($p) => $this->appendImageUrl($p));
 
-        return inertia('admin/Programs', ['programs' => $programs]);
+        $schools = School::orderBy('name')->get(['id', 'name']);
+
+        return inertia('admin/Programs', [
+            'programs' => $programs,
+            'schools'  => $schools,
+        ]);
     }
 
     public function store(Request $request)

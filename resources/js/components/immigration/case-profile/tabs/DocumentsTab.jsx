@@ -323,8 +323,13 @@ function Row({ row, leadId }) {
             <td className="px-4 py-3">
                 {doc ? (
                     <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="text-[11px] text-gray-700 max-w-[160px] truncate" title={doc.original_name}>
-                            {doc.original_name}
+                        <span className="flex flex-col min-w-0 max-w-[160px]">
+                            <span className="text-[11px] text-gray-700 truncate" title={doc.original_name}>
+                                {doc.original_name}
+                            </span>
+                            {doc.size ? (
+                                <span className="text-[10px] text-gray-400 tabular-nums">{formatBytes(doc.size)}</span>
+                            ) : null}
                         </span>
                         <a
                             href={`/admin/documents/${doc.id}/download?inline=1`}
@@ -780,3 +785,11 @@ function categoryFromKey(key) {
 
 const formatDate = (iso) =>
     iso ? new Date(iso).toLocaleDateString("en-NZ", { day: "numeric", month: "short", year: "numeric" }) : "—";
+
+// Human-readable file size from a byte count.
+const formatBytes = (bytes) => {
+    if (!bytes && bytes !== 0) return "";
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+};

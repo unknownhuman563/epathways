@@ -14,6 +14,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
@@ -87,7 +88,11 @@ class LeadTrackingController extends Controller
         $payload['timeline'] = $lead->is_immigration_case
             ? $this->buildImmigrationJourney($lead)
             : $this->buildTimeline($lead);
-        $payload['visa'] = $this->resolveVisa($lead);
+        // Immigration cases get the visa-type-specific checklist.
+        // General leads / students fall back to the shared documents
+        // checklist so their tracker actually shows "What we still need"
+        // instead of an empty state.
+        $payload['visa'] = $this->resolveVisa($lead) ?? $this->resolveGeneralChecklist($lead);
 
         return inertia('track/TrackingPage', $payload);
     }
@@ -190,8 +195,15 @@ class LeadTrackingController extends Controller
             return back()->with('error', 'Tracking code not recognised.');
         }
 
+        // Accept a single `file` (legacy / one-off uploads) OR a `files[]`
+        // array (multi-file batch). Collect into one list so the rest of the
+        // method has a single code path. (We read the files directly rather
+        // than mutating the request, since Laravel caches converted files.)
+        $files = $request->hasFile('files')
+            ? array_values($request->file('files'))
+            : array_filter([$request->file('file')]);
+
         $request->validate([
-            'file' => 'required|'.UploadValidation::document(),
             'checklist_key' => 'nullable|string|max:80',
             // Optional metadata captured at upload-time for passport docs so
             // the lead doesn't have to re-enter passport number / expiry in
@@ -201,31 +213,58 @@ class LeadTrackingController extends Controller
             'passport_expiry' => 'nullable|date',
         ]);
 
-        $file = $request->file('file');
-        $path = $file->store("lead-documents/{$lead->id}", 'public');
-
         $checklistKey = $request->input('checklist_key');
 
-        $document = LeadDocument::create([
-            'lead_id' => $lead->id,
-            'checklist_key' => $checklistKey,
-            'original_name' => $file->getClientOriginalName(),
-            'file_path' => $path,
-            'mime' => $file->getMimeType(),
-            'size' => $file->getSize(),
-            'status' => LeadDocument::STATUS_SUBMITTED,
-            'source' => LeadDocument::SOURCE_UPLOAD,
-        ]);
+        // Format is enforced per checklist item: every document must be a PDF,
+        // except the Face Image, which must be a JPEG — keeps the case file
+        // consistent for INZ lodgement.
+        $isFaceImage = str_contains(strtolower((string) $checklistKey), 'face');
+        $fileRule = $isFaceImage
+            ? 'file|mimes:jpg,jpeg|max:'.UploadValidation::DOCUMENT_MAX_KB
+            : 'file|mimes:pdf|max:'.UploadValidation::DOCUMENT_MAX_KB;
 
-        $this->notifyDocumentSubmitted($lead, $document, 'submitted');
+        // Validate the collected files — one OR many against a single
+        // checklist item (a 6-month bank statement or multi-page scan often
+        // arrives as several PDFs).
+        Validator::make(['files' => $files], [
+            'files' => 'required|array|min:1|max:10',
+            'files.*' => $fileRule,
+        ], [
+            'files.*.mimes' => $isFaceImage
+                ? 'Please upload the face image as a JPEG (.jpg) file.'
+                : 'Please upload this document as a PDF (.pdf) file.',
+        ])->validate();
+        $lastDoc = null;
+        $firstPath = null;
+
+        foreach ($files as $file) {
+            $path = $file->store("lead-documents/{$lead->id}", 'public');
+            $firstPath ??= $path;
+
+            $lastDoc = LeadDocument::create([
+                'lead_id' => $lead->id,
+                'checklist_key' => $checklistKey,
+                'original_name' => $file->getClientOriginalName(),
+                'file_path' => $path,
+                'mime' => $file->getMimeType(),
+                'size' => $file->getSize(),
+                'status' => LeadDocument::STATUS_SUBMITTED,
+                'source' => LeadDocument::SOURCE_UPLOAD,
+            ]);
+        }
+
+        // One notification per upload batch, not per file.
+        if ($lastDoc) {
+            $this->notifyDocumentSubmitted($lead, $lastDoc, 'submitted');
+        }
 
         // Passport upload: surface the entered passport metadata onto the
         // lead row itself so admin search / visa lodgement / immigration
-        // workflows pick it up without anyone re-keying. We also store the
-        // file path so the passport scan is the authoritative source if
+        // workflows pick it up without anyone re-keying. We store the first
+        // file's path so the passport scan is the authoritative source if
         // the staff need to verify the typed numbers.
-        if ($checklistKey === 'passport') {
-            $patch = ['has_passport' => 'Yes', 'passport_path' => $path];
+        if ($checklistKey === 'passport' && $firstPath) {
+            $patch = ['has_passport' => 'Yes', 'passport_path' => $firstPath];
             if ($request->filled('passport_number')) {
                 $patch['passport_number'] = $request->input('passport_number');
             }
@@ -615,6 +654,79 @@ class LeadTrackingController extends Controller
             'name' => $visa->name,
             'code' => $visa->code,
             'short_description' => $visa->short_description,
+            'checklist' => $decorated,
+            'totals' => [
+                'required' => $requiredCount,
+                'submitted' => $submittedCount,
+                'approved' => $approvedCount,
+            ],
+        ];
+    }
+
+    /**
+     * Fallback checklist for leads/students that aren't tied to a specific
+     * visa type. Reads the shared config-based checklist (the same one the
+     * staff Documents tab uses), decorates each item with the lead's own
+     * upload status, honours `hidden_track_documents`, and returns the
+     * exact same shape as resolveVisa() so the tracker template can render
+     * it interchangeably.
+     */
+    private function resolveGeneralChecklist(Lead $lead): array
+    {
+        $sections = config('lead_document_checklist.sections', []);
+
+        $docsByKey = $lead->documents()
+            ->whereNotNull('checklist_key')
+            ->get()
+            ->groupBy('checklist_key');
+
+        $hidden = is_array($lead->hidden_track_documents) ? $lead->hidden_track_documents : [];
+
+        $decorated = [];
+        foreach ($sections as $section) {
+            foreach (($section['items'] ?? []) as $item) {
+                $key = $item['id'] ?? null;
+                if (! $key || in_array($key, $hidden, true)) {
+                    continue;
+                }
+
+                $docs = $docsByKey->get($key) ?? collect();
+                $status = 'missing';
+                if ($docs->contains(fn ($d) => $d->status === LeadDocument::STATUS_APPROVED)) {
+                    $status = 'approved';
+                } elseif ($docs->contains(fn ($d) => in_array($d->status, [LeadDocument::STATUS_SUBMITTED, LeadDocument::STATUS_UNDER_REVIEW]))) {
+                    $status = 'submitted';
+                } elseif ($docs->contains(fn ($d) => $d->status === LeadDocument::STATUS_REJECTED)) {
+                    $status = 'rejected';
+                }
+
+                // Frontend parseChecklistLabel splits on " · " to recover
+                // the section header, so encode it in the label.
+                $decorated[] = [
+                    'key' => $key,
+                    'label' => ($section['section'] ?? 'General') . ' · ' . ($item['name'] ?? $key),
+                    'hint' => $item['hint'] ?? null,
+                    'required' => ($item['required'] ?? true) ? true : false,
+                    'status' => $status,
+                    'count' => $docs->count(),
+                ];
+            }
+        }
+
+        $requiredCount = collect($decorated)->where('required', true)->count();
+        $submittedCount = collect($decorated)
+            ->where('required', true)
+            ->whereIn('status', ['submitted', 'approved'])
+            ->count();
+        $approvedCount = collect($decorated)
+            ->where('required', true)
+            ->where('status', 'approved')
+            ->count();
+
+        return [
+            'name' => 'Document Checklist',
+            'code' => null,
+            'short_description' => null,
             'checklist' => $decorated,
             'totals' => [
                 'required' => $requiredCount,

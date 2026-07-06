@@ -25,7 +25,7 @@ class UserController extends Controller
         // staff directory.
         $users = User::whereNotIn('role', ['lead', 'revoked_lead'])
             ->orderBy('name')
-            ->get(['id', 'name', 'email', 'role', 'avatar_path', 'created_at']);
+            ->get(['id', 'name', 'email', 'phone', 'location', 'role', 'avatar_path', 'created_at']);
 
         // Cross-link rolls for the User Management tabs. Each list is a
         // thin name + email + stage projection that the frontend renders
@@ -60,9 +60,14 @@ class UserController extends Controller
 
     public function store(Request $request)
     {
+        // Agents recruit on the ground — capture their contact + location.
+        $contactRule = $request->input('role') === 'agent' ? 'required' : 'nullable';
+
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'email' => 'required|email|max:255|unique:users,email',
+            'phone' => [$contactRule, 'string', 'max:60'],
+            'location' => [$contactRule, 'string', 'max:255'],
             'role' => ['required', Rule::in($this->roleValues())],
             'password' => ['required', \Illuminate\Validation\Rules\Password::defaults()],
             'avatar' => ['nullable', UploadValidation::image()],
@@ -92,9 +97,13 @@ class UserController extends Controller
     {
         $user = User::findOrFail($id);
 
+        $contactRule = $request->input('role') === 'agent' ? 'required' : 'nullable';
+
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'email' => ['required', 'email', 'max:255', Rule::unique('users', 'email')->ignore($user->id)],
+            'phone' => [$contactRule, 'string', 'max:60'],
+            'location' => [$contactRule, 'string', 'max:255'],
             'role' => ['required', Rule::in($this->roleValues())],
             'password' => ['nullable', \Illuminate\Validation\Rules\Password::defaults()],
             'avatar' => ['nullable', UploadValidation::image()],
@@ -116,6 +125,8 @@ class UserController extends Controller
 
         $user->name = $validated['name'];
         $user->email = $validated['email'];
+        $user->phone = $validated['phone'] ?? null;
+        $user->location = $validated['location'] ?? null;
         $user->role = $validated['role'];
         $passwordChanged = ! empty($validated['password']);
         if ($passwordChanged) {

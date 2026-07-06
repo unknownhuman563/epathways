@@ -12,6 +12,7 @@ import EnglishLayout from './components/layout/EnglishLayout';
 import ImmigrationLayout from './components/layout/ImmigrationLayout';
 import AccommodationLayout from './components/layout/AccommodationLayout';
 import FinanceLayout from './components/layout/FinanceLayout';
+import AgentLayout from './components/layout/AgentLayout';
 import LeadLayout from './components/layout/LeadLayout';
 import FlashToaster from './components/ui/FlashToaster';
 import FloatingContact from './components/ui/FloatingContact';
@@ -26,6 +27,7 @@ const PORTAL_LAYOUTS = {
   'portal/immigration/': ImmigrationLayout,
   'portal/accommodation/': AccommodationLayout,
   'portal/finance/': FinanceLayout,
+  'portal/agent/': AgentLayout,
   'portal/lead/': LeadLayout,
 };
 

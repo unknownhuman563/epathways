@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { Head, Link, router, usePage } from "@inertiajs/react";
 import { toast } from "sonner";
 import BulkEmailModal from "@/components/sales/BulkEmailModal";
+import Avatar from "@/components/ui/Avatar";
 import { getJson } from "@/lib/http";
 import {
     DndContext, DragOverlay, KeyboardSensor, PointerSensor,
@@ -48,7 +49,7 @@ const STAGE_STYLES = {
     "Processing": "bg-indigo-100 text-indigo-800 border-indigo-200",
     "Closed":     "bg-green-100 text-green-800 border-green-200",
 };
-const stageClass = (s) => STAGE_STYLES[s] || "bg-gray-100 text-gray-700 border-gray-200";
+export const stageClass = (s) => STAGE_STYLES[s] || "bg-gray-100 text-gray-700 border-gray-200";
 
 // Hex tones for the StagePicker dropdown's colour dot — inline `style`
 // instead of a `bg-xxx-500` class so Tailwind's JIT purge can't drop a
@@ -117,7 +118,7 @@ const AVATAR_PALETTE = [
     "bg-fuchsia-100 text-fuchsia-700",
 ];
 const avatarColor = (id) => AVATAR_PALETTE[(Number(id) || 0) % AVATAR_PALETTE.length];
-const initials = (name) =>
+export const initials = (name) =>
     (name || "")
         .split(" ")
         .filter(Boolean)
@@ -126,10 +127,24 @@ const initials = (name) =>
         .join("")
         .toUpperCase() || "—";
 
-const fmtDateShort = (iso) =>
+export const fmtDateShort = (iso) =>
     iso ? new Date(iso).toLocaleDateString("en-US", { day: "numeric", month: "short", year: "numeric" }) : "—";
-const fmtTime = (iso) =>
+export const fmtTime = (iso) =>
     iso ? new Date(iso).toLocaleTimeString("en-NZ", { hour: "2-digit", minute: "2-digit" }) : "";
+
+// General lead priority — mirrors the Cases board (urgent | medium | low).
+// null / "" renders as an unset "Set" placeholder.
+const PRIORITY_OPTIONS = [
+    { value: "urgent", label: "Urgent", dot: "bg-red-500",    pill: "bg-red-50 text-red-700 border-red-200" },
+    { value: "medium", label: "Medium", dot: "bg-amber-500",  pill: "bg-amber-50 text-amber-700 border-amber-200" },
+    { value: "low",    label: "Low",    dot: "bg-emerald-500",pill: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+];
+export const priorityMeta = (p) => PRIORITY_OPTIONS.find((o) => o.value === p) || null;
+// Coloured dot per priority; unset shows light gray.
+export const priorityDot = (p) => priorityMeta(p)?.dot || "bg-gray-300";
+// Sort weight so urgent floats to the top, then medium, low, then leads
+// with no priority set.
+const priorityRank = (p) => ({ urgent: 0, medium: 1, low: 2 }[p] ?? 3);
 
 const PAGE_SIZE = 20;
 
@@ -140,7 +155,7 @@ const PAGE_SIZE = 20;
 // prop is missing.
 const PORTAL_LABEL = { sales: "Sales", education: "Education", immigration: "Immigration" };
 
-export default function SalesLeads({ leads = [], statuses = [], programs = [], staffOptions = [], events = [], portal = "sales" }) {
+export default function SalesLeads({ leads = [], statuses = [], programs = [], staffOptions = [], events = [], allTagNames = [], tabCounts = {}, agents = [], portal = "sales" }) {
     const portalBase = `/portal/${portal}`;
     const portalLabel = PORTAL_LABEL[portal] || "Sales";
     // Sales, Education, and Immigration can all request portal invitations
@@ -149,7 +164,23 @@ export default function SalesLeads({ leads = [], statuses = [], programs = [], s
 
     const [search, setSearch] = useState("");
     const [statusFilter, setStatusFilter] = useState("All");
-    const [view, setView]                 = useState("table"); // table | kanban
+    // Active tab is mirrored in the URL (?tab=) so navigating into a lead and
+    // pressing Back returns to the same tab instead of Open opportunities.
+    const VALID_TABS = ["table", "kanban", "events", "registration", "agents"];
+    const [view, _setView] = useState(() => {
+        if (typeof window === "undefined") return "table";
+        const t = new URLSearchParams(window.location.search).get("tab");
+        return VALID_TABS.includes(t) ? t : "table";
+    });
+    const setView = (v) => {
+        _setView(v);
+        if (typeof window !== "undefined") {
+            const url = new URL(window.location.href);
+            if (v === "table") url.searchParams.delete("tab");
+            else url.searchParams.set("tab", v);
+            window.history.replaceState(window.history.state, "", url);
+        }
+    };
     const [savingId, setSavingId] = useState(null);
     const [selectedIds, setSelectedIds] = useState(new Set());
     const [bulkOpen, setBulkOpen] = useState(false);
@@ -160,7 +191,7 @@ export default function SalesLeads({ leads = [], statuses = [], programs = [], s
     const [openRowMenuId, setOpenRowMenuId] = useState(null);
     const [expandedId, setExpandedId] = useState(null);
     const [showFilters, setShowFilters] = useState(false);
-    const EMPTY_ADV = { goal_status: "", pre_screened_by: "", program: "", portal: "" };
+    const EMPTY_ADV = { goal_status: "", pre_screened_by: "", program: "", portal: "", tag: "" };
     const [adv, setAdv] = useState(EMPTY_ADV);
     const activeAdvCount = Object.values(adv).filter(Boolean).length + (statusFilter !== "All" ? 1 : 0);
     const clearAdv = () => { setAdv(EMPTY_ADV); setStatusFilter("All"); setPage(1); };
@@ -181,11 +212,18 @@ export default function SalesLeads({ leads = [], statuses = [], programs = [], s
             const matchPre     = !adv.pre_screened_by || l.pre_screened_by === adv.pre_screened_by;
             const matchProgram = !adv.program || l.program_offered === adv.program;
             const matchPortal  = !adv.portal || (l.portal_invitation_status || "none") === adv.portal;
-            return matchSearch && matchStatus && matchGoal && matchPre && matchProgram && matchPortal;
+            const matchTag     = !adv.tag || (l.tags || []).includes(adv.tag);
+            return matchSearch && matchStatus && matchGoal && matchPre && matchProgram && matchPortal && matchTag;
         });
 
         const dir = sortDir === "asc" ? 1 : -1;
         return [...rows].sort((a, b) => {
+            // Priority always leads the ordering: urgent → medium → low →
+            // no-priority (matches the Cases board). The chosen column only
+            // breaks ties within the same priority band.
+            const pr = priorityRank(a.priority) - priorityRank(b.priority);
+            if (pr !== 0) return pr;
+
             const av = a[sortKey] ?? "";
             const bv = b[sortKey] ?? "";
             if (av < bv) return -1 * dir;
@@ -193,6 +231,17 @@ export default function SalesLeads({ leads = [], statuses = [], programs = [], s
             return 0;
         });
     }, [leads, search, statusFilter, adv, sortKey, sortDir, view]);
+
+    // Tag filter options — union of the full dictionary from the server
+    // (`allTagNames`) and any tags attached to leads currently in the list.
+    // Using the dictionary means a tag stays selectable even if it's only
+    // been attached to a lead that's been converted out of this pipeline.
+    const tagOptions = useMemo(() => {
+        const set = new Set();
+        for (const t of allTagNames) if (t) set.add(t);
+        for (const l of leads) for (const t of (l.tags || [])) set.add(t);
+        return [...set].sort((a, b) => a.localeCompare(b));
+    }, [leads, allTagNames]);
 
     const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
     const safePage = Math.min(page, totalPages);
@@ -285,30 +334,48 @@ export default function SalesLeads({ leads = [], statuses = [], programs = [], s
                             <button
                                 type="button"
                                 onClick={() => setView("events")}
-                                className={`px-3 py-3 text-xs font-bold transition-colors -mb-px ${
+                                className={`inline-flex items-center gap-1.5 px-3 py-3 text-xs font-bold transition-colors -mb-px ${
                                     view === "events"
                                         ? "text-gray-900 border-b-2 border-gray-900"
                                         : "text-gray-400 border-b-2 border-transparent hover:text-gray-700"
                                 }`}
                             >
                                 Events
+                                <TabBadge count={tabCounts.events} />
                             </button>
                         )}
                         <button
                             type="button"
                             onClick={() => { setView("registration"); setPage(1); }}
-                            className={`px-3 py-3 text-xs font-bold transition-colors -mb-px ${
+                            className={`inline-flex items-center gap-1.5 px-3 py-3 text-xs font-bold transition-colors -mb-px ${
                                 view === "registration"
                                     ? "text-gray-900 border-b-2 border-gray-900"
                                     : "text-gray-400 border-b-2 border-transparent hover:text-gray-700"
                             }`}
                         >
                             Registration
+                            <TabBadge count={tabCounts.registration} />
                         </button>
+                        {/* Agents tab — recruiting-agent roster + their leads.
+                            Sales (and admins on the sales screen) only. */}
+                        {portal === "sales" && (
+                            <button
+                                type="button"
+                                onClick={() => { setView("agents"); setPage(1); }}
+                                className={`inline-flex items-center gap-1.5 px-3 py-3 text-xs font-bold transition-colors -mb-px ${
+                                    view === "agents"
+                                        ? "text-gray-900 border-b-2 border-gray-900"
+                                        : "text-gray-400 border-b-2 border-transparent hover:text-gray-700"
+                                }`}
+                            >
+                                Agents
+                                <TabBadge count={agents.length} />
+                            </button>
+                        )}
                     </div>
                 </div>
 
-                {view !== "events" && (
+                {view !== "events" && view !== "agents" && (
                 <div className="flex flex-col lg:flex-row gap-3 lg:items-center lg:justify-between p-4 sm:p-5">
                     <div className="flex flex-wrap items-center gap-2">
                         <div className="flex flex-wrap gap-1.5 max-w-3xl">
@@ -352,6 +419,7 @@ export default function SalesLeads({ leads = [], statuses = [], programs = [], s
                             onStatusChange={(v) => { setStatusFilter(v); setPage(1); }}
                             programs={programs}
                             staffOptions={staffOptions}
+                            tagOptions={tagOptions}
                         />
                         <button
                             type="button"
@@ -398,16 +466,18 @@ export default function SalesLeads({ leads = [], statuses = [], programs = [], s
                                 <th className="pr-2 py-3 w-6" />
                                 <SortableTh label="Lead" sortKey="name" current={sortKey} dir={sortDir} onSort={toggleSort} />
                                 <SortableTh label="Stage" sortKey="status" current={sortKey} dir={sortDir} onSort={toggleSort} />
-                                <th className="px-3 py-3">Email</th>
-                                <th className="px-3 py-3">Phone</th>
-                                <SortableTh label="Created" sortKey="created_at" current={sortKey} dir={sortDir} onSort={toggleSort} />
+                                <th className="px-3 py-3">Contact</th>
+                                <th className="px-3 py-3">Location</th>
+                                <th className="px-3 py-3">Agent</th>
+                                <th className="px-3 py-3">Docs</th>
+                                <SortableTh label="Updated" sortKey="updated_at" current={sortKey} dir={sortDir} onSort={toggleSort} />
                                 <th className="px-3 py-3 text-right pr-4">Actions</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
                             {paged.length === 0 ? (
                                 <tr>
-                                    <td colSpan={8} className="px-6 py-20 text-center">
+                                    <td colSpan={10} className="px-6 py-20 text-center">
                                         <div className="flex flex-col items-center gap-2 text-gray-400">
                                             <Search size={22} />
                                             <p className="text-sm font-medium">No leads match your filters</p>
@@ -463,7 +533,15 @@ export default function SalesLeads({ leads = [], statuses = [], programs = [], s
                                                 className="flex items-center gap-2.5 min-w-[180px] group/lead"
                                             >
                                                 <div className="relative flex-shrink-0">
-                                                    <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold ${avatarColor(l.id)}`}>
+                                                    {/* Avatar circle doubles as the priority indicator (same as the
+                                                        Cases board): tinted by priority when set, neutral hash colour
+                                                        otherwise. */}
+                                                    <div
+                                                        className={`w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold ${
+                                                            priorityMeta(l.priority) ? `${priorityMeta(l.priority).dot} text-white` : "bg-gray-200 text-gray-500"
+                                                        }`}
+                                                        title={priorityMeta(l.priority) ? `Priority: ${priorityMeta(l.priority).label}` : "No priority set"}
+                                                    >
                                                         {initials(l.name)}
                                                     </div>
                                                     {/* Presence dot — green online, gray has-portal-offline,
@@ -499,27 +577,77 @@ export default function SalesLeads({ leads = [], statuses = [], programs = [], s
                                             />
                                         </td>
 
+                                        {/* CONTACT — email + phone merged into one column */}
                                         <td className="px-3 py-2.5">
-                                            <div className="inline-flex items-center gap-1.5 text-gray-600">
-                                                <Mail size={11} className="text-gray-300 flex-shrink-0" />
-                                                <span className="truncate max-w-[180px]">{l.email || "—"}</span>
+                                            <div className="flex flex-col gap-0.5 min-w-0">
+                                                <div className="inline-flex items-center gap-1.5 text-gray-600">
+                                                    <Mail size={11} className="text-gray-300 flex-shrink-0" />
+                                                    <span className="truncate max-w-[180px]">{l.email || "—"}</span>
+                                                </div>
+                                                {l.phone ? (
+                                                    <div className="inline-flex items-center gap-1.5 text-gray-500 whitespace-nowrap">
+                                                        <Phone size={11} className="text-gray-300 flex-shrink-0" />
+                                                        <span>{l.phone}</span>
+                                                    </div>
+                                                ) : null}
                                             </div>
                                         </td>
 
+                                        {/* LOCATION — city + country */}
                                         <td className="px-3 py-2.5">
-                                            {l.phone ? (
-                                                <div className="inline-flex items-center gap-1.5 text-gray-600 whitespace-nowrap">
-                                                    <Phone size={11} className="text-gray-300" />
-                                                    <span>{l.phone}</span>
+                                            {l.location ? (
+                                                <div className="inline-flex items-center gap-1.5 text-gray-600">
+                                                    <MapPin size={11} className="text-gray-300 flex-shrink-0" />
+                                                    <span className="truncate max-w-[140px]">{l.location}</span>
                                                 </div>
                                             ) : (
                                                 <span className="text-gray-300">—</span>
                                             )}
                                         </td>
 
+                                        {/* AGENT — recruiting agent who added this lead (null
+                                            for staff-added leads). */}
+                                        <td className="px-3 py-2.5">
+                                            {l.agent ? (
+                                                <div className="inline-flex items-center gap-1.5 text-gray-700" title={`Recruited by ${l.agent.name}`}>
+                                                    <Avatar name={l.agent.name} src={l.agent.avatar_url} colorKey={l.agent.id} size={20} />
+                                                    <span className="truncate max-w-[120px] font-medium">{l.agent.name}</span>
+                                                </div>
+                                            ) : (
+                                                <span className="text-gray-300">—</span>
+                                            )}
+                                        </td>
+
+                                        {/* DOCS — % of the visible checklist this lead has
+                                            submitted. Mirrors the immigration Cases column
+                                            so the two tables read the same. `checklist_total`
+                                            already excludes items staff hid from the tracker
+                                            for this lead. */}
+                                        <td className="px-3 py-2.5">
+                                            {l.checklist_total > 0 ? (
+                                                <div className="flex items-center gap-2 min-w-[100px]" title={`${l.checklist_submitted} of ${l.checklist_total} checklist items submitted`}>
+                                                    <div className="h-1.5 flex-1 rounded-full bg-gray-100 overflow-hidden">
+                                                        <div
+                                                            className="h-full rounded-full bg-emerald-500"
+                                                            style={{ width: `${Math.round((l.checklist_submitted / l.checklist_total) * 100)}%` }}
+                                                        />
+                                                    </div>
+                                                    <span className="text-xs font-semibold tabular-nums whitespace-nowrap text-emerald-600">
+                                                        {Math.round((l.checklist_submitted / l.checklist_total) * 100)}%
+                                                    </span>
+                                                </div>
+                                            ) : (
+                                                <span className="text-gray-300">—</span>
+                                            )}
+                                        </td>
+
+                                        {/* UPDATED — datetime + staff who last moved the stage */}
                                         <td className="px-3 py-2.5 whitespace-nowrap">
-                                            <div className="text-gray-600">{fmtDateShort(l.created_at)}</div>
-                                            <div className="text-[10px] text-gray-400">{fmtTime(l.created_at)}</div>
+                                            <div className="text-gray-600">{fmtDateShort(l.updated_at)}</div>
+                                            <div className="text-[10px] text-gray-400">
+                                                {fmtTime(l.updated_at)}
+                                                {l.updated_by ? ` · ${l.updated_by}` : ""}
+                                            </div>
                                         </td>
 
                                         <td className="px-3 py-2.5 pr-4 text-right">
@@ -535,13 +663,6 @@ export default function SalesLeads({ leads = [], statuses = [], programs = [], s
                                                         <Eye size={12} />
                                                     </Link>
                                                 )}
-                                                <a
-                                                    href={`${portalBase}/leads/${l.id}/documents`}
-                                                    title="Open documents"
-                                                    className="inline-flex items-center justify-center w-7 h-7 rounded-md text-gray-500 hover:text-gray-900 hover:bg-gray-100 transition-colors"
-                                                >
-                                                    <FileText size={12} />
-                                                </a>
                                                 <RowMenu
                                                     lead={l}
                                                     open={openRowMenuId === l.id}
@@ -560,7 +681,7 @@ export default function SalesLeads({ leads = [], statuses = [], programs = [], s
                                         live here so the table itself stays compact. */}
                                     {isExpanded && (
                                         <tr className="bg-blue-50/20 border-t border-blue-100/60">
-                                            <td colSpan={8} className="px-6 py-4">
+                                            <td colSpan={10} className="px-6 py-4">
                                                 <LeadDashboardPanel lead={l} goalChipClass={goalChipClass} portalBase={portalBase} staffOptions={staffOptions} />
                                             </td>
                                         </tr>
@@ -621,7 +742,141 @@ export default function SalesLeads({ leads = [], statuses = [], programs = [], s
                 <EventsTab events={events} portalBase={portalBase} statuses={statuses} />
             )}
 
+            {view === "agents" && (
+                <AgentsTab agents={agents} leads={leads} />
+            )}
+
             <BulkEmailModal open={bulkOpen} onClose={() => setBulkOpen(false)} leadIds={[...selectedIds]} />
+        </div>
+    );
+}
+
+// ── Agents tab — recruiting-agent roster (left) + the selected agent's own
+//    recruited leads (right). Read-only: sales views who brought each lead
+//    in. The per-agent lead list is derived from the leads collection, which
+//    carries each lead's `agent`. ─────────────────────────────────────────────
+
+function AgentsTab({ agents = [], leads = [] }) {
+    const [selectedId, setSelectedId] = useState(agents[0]?.id ?? null);
+    const selected = agents.find((a) => a.id === selectedId) || null;
+
+    const agentLeads = useMemo(
+        () => leads.filter((l) => l.agent && l.agent.id === selectedId),
+        [leads, selectedId]
+    );
+
+    if (agents.length === 0) {
+        return (
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-14 text-center">
+                <Users size={26} className="mx-auto mb-3 text-gray-300" />
+                <p className="font-semibold text-gray-700">No recruiting agents yet</p>
+                <p className="text-sm text-gray-400 mt-1">Create an account with the “Agent” role in User Management and they'll appear here.</p>
+            </div>
+        );
+    }
+
+    return (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            {/* Roster */}
+            <div className="lg:col-span-1 bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden self-start">
+                <div className="px-4 py-3 border-b border-gray-100 text-[11px] font-bold text-gray-500 uppercase tracking-wider">
+                    Agents · {agents.length}
+                </div>
+                <ul className="divide-y divide-gray-50 max-h-[560px] overflow-y-auto">
+                    {agents.map((a) => {
+                        const active = a.id === selectedId;
+                        return (
+                            <li key={a.id}>
+                                <button
+                                    type="button"
+                                    onClick={() => setSelectedId(a.id)}
+                                    className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors ${active ? "bg-teal-50/70" : "hover:bg-gray-50"}`}
+                                >
+                                    <Avatar name={a.name} src={a.avatar_url} colorKey={a.id} size={36} />
+                                    <div className="min-w-0 flex-1">
+                                        <div className="font-semibold text-gray-900 text-sm truncate">{a.name}</div>
+                                        {a.location && (
+                                            <div className="text-[11px] text-gray-400 truncate inline-flex items-center gap-1">
+                                                <MapPin size={10} />{a.location}
+                                            </div>
+                                        )}
+                                    </div>
+                                    <span className={`text-[11px] font-bold tabular-nums px-2 py-0.5 rounded-full ${active ? "bg-teal-600 text-white" : "bg-gray-100 text-gray-600"}`}>
+                                        {a.leads_count ?? 0}
+                                    </span>
+                                </button>
+                            </li>
+                        );
+                    })}
+                </ul>
+            </div>
+
+            {/* Selected agent's leads */}
+            <div className="lg:col-span-2 bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                {selected && (
+                    <div className="px-5 py-4 border-b border-gray-100 flex flex-wrap items-center gap-x-5 gap-y-1.5">
+                        <div className="flex items-center gap-3">
+                            <Avatar name={selected.name} src={selected.avatar_url} colorKey={selected.id} size={40} />
+                            <div>
+                                <div className="font-bold text-gray-900">{selected.name}</div>
+                                <div className="text-[12px] text-gray-500">{(selected.leads_count ?? 0)} lead{(selected.leads_count ?? 0) === 1 ? "" : "s"} recruited</div>
+                            </div>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px] text-gray-600 ml-auto">
+                            {selected.email && <span className="inline-flex items-center gap-1.5"><Mail size={12} className="text-gray-400" />{selected.email}</span>}
+                            {selected.phone && <span className="inline-flex items-center gap-1.5"><Phone size={12} className="text-gray-400" />{selected.phone}</span>}
+                            {selected.location && <span className="inline-flex items-center gap-1.5"><MapPin size={12} className="text-gray-400" />{selected.location}</span>}
+                        </div>
+                    </div>
+                )}
+
+                <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs">
+                        <thead>
+                            <tr className="bg-gray-50/60 border-b border-gray-200 text-[10px] font-bold text-gray-500 uppercase tracking-wider">
+                                <th className="px-4 py-3">Lead</th>
+                                <th className="px-3 py-3">Contact</th>
+                                <th className="px-3 py-3">Stage</th>
+                                <th className="px-3 py-3">Added</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                            {agentLeads.length === 0 ? (
+                                <tr>
+                                    <td colSpan={4} className="px-6 py-16 text-center text-gray-400">
+                                        <p className="text-sm font-medium">No leads recruited by this agent yet.</p>
+                                    </td>
+                                </tr>
+                            ) : agentLeads.map((l) => (
+                                <tr key={l.id} className="hover:bg-gray-50/50 transition-colors">
+                                    <td className="px-4 py-2.5">
+                                        <div className="flex items-center gap-2.5">
+                                            <Avatar name={l.name} colorKey={l.id} size={28} />
+                                            <div>
+                                                <div className="font-semibold text-gray-900">{l.name}</div>
+                                                <div className="text-[10px] text-gray-400">{l.lead_id}</div>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td className="px-3 py-2.5 text-gray-600">
+                                        <div className="space-y-0.5">
+                                            {l.email && <div className="inline-flex items-center gap-1"><Mail size={10} className="text-gray-300" />{l.email}</div>}
+                                            {l.phone && <div className="inline-flex items-center gap-1"><Phone size={10} className="text-gray-300" />{l.phone}</div>}
+                                            {!l.email && !l.phone && <span className="text-gray-300">—</span>}
+                                        </div>
+                                    </td>
+                                    <td className="px-3 py-2.5">
+                                        <span className={`inline-block px-2 py-0.5 rounded-md text-[10px] font-bold border ${STAGE_STYLES[l.stage] || "bg-gray-100 text-gray-600 border-gray-200"}`}>
+                                            {l.stage || l.status || "—"}
+                                        </span>
+                                    </td>
+                                    <td className="px-3 py-2.5 text-gray-500 whitespace-nowrap">{fmtDateShort(l.created_at)}</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
         </div>
     );
 }
@@ -1298,12 +1553,18 @@ const JOURNEY_MILESTONES = [
 ];
 const milestoneIndex = (status) => JOURNEY_MILESTONES.findIndex((m) => m.statuses.includes(status));
 
-function LeadDashboardPanel({ lead, goalChipClass, portalBase, staffOptions = [] }) {
+export function LeadDashboardPanel({ lead, goalChipClass = "bg-gray-100 text-gray-600 border-gray-200", portalBase = "/portal/sales", staffOptions = [] }) {
     const curIdx = milestoneIndex(lead.status);
     const detailUrl = `${portalBase}/leads/${lead.id}`;
 
     return (
         <div className="space-y-4">
+            {/* 0 — Priority selector (sits above the journey; drives the row
+                   avatar colour + the urgent-first ordering). */}
+            <section>
+                <PriorityField lead={lead} />
+            </section>
+
             {/* 1 — Journey progress */}
             <section>
                 <PanelTitle>Journey progress</PanelTitle>
@@ -1608,7 +1869,7 @@ const PORTAL_FILTER_OPTIONS = [
     { v: "revoked", label: "Revoked" },
 ];
 
-function FiltersPopover({ open, onToggle, onClose, activeCount, adv, setAdvFilter, clearAdv, statuses = [], statusFilter = "All", onStatusChange, programs = [], staffOptions = [] }) {
+function FiltersPopover({ open, onToggle, onClose, activeCount, adv, setAdvFilter, clearAdv, statuses = [], statusFilter = "All", onStatusChange, programs = [], staffOptions = [], tagOptions = [] }) {
     const ref = useRef(null);
 
     useEffect(() => {
@@ -1691,9 +1952,29 @@ function FiltersPopover({ open, onToggle, onClose, activeCount, adv, setAdvFilte
                             {PORTAL_FILTER_OPTIONS.map((o) => <option key={o.v} value={o.v}>{o.label}</option>)}
                         </select>
                     </div>
+
+                    <div>
+                        <label className={lbl}>Tag</label>
+                        <select value={adv.tag} onChange={setAdvFilter("tag")} className={cls}>
+                            <option value="">Any</option>
+                            {tagOptions.map((t) => <option key={t} value={t}>{t}</option>)}
+                        </select>
+                    </div>
                 </div>
             )}
         </div>
+    );
+}
+
+// ── Tab notification badge — "new sign-ups in the last 7 days" count ───────
+// Red pill shown next to the Events / Registration tabs. Hidden at zero.
+function TabBadge({ count }) {
+    const n = Number(count) || 0;
+    if (n <= 0) return null;
+    return (
+        <span className="inline-flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full bg-red-500 text-white text-[10px] font-bold tabular-nums leading-none">
+            {n > 99 ? "99+" : n}
+        </span>
     );
 }
 
@@ -1716,9 +1997,52 @@ function SortableTh({ label, sortKey, current, dir, onSort }) {
     );
 }
 
+// ── Priority field — inline selector shown in the expanded row, above the
+//    journey (mirrors the Cases board). Posts immediately to the role-agnostic
+//    /admin/leads/{id}/priority endpoint. The coloured dot mirrors the row
+//    avatar; an unset priority reads light gray.
+
+function PriorityField({ lead }) {
+    const [saving, setSaving] = useState(false);
+    const value = lead.priority || "";
+
+    const change = (e) => {
+        const v = e.target.value;
+        setSaving(true);
+        router.post(`/admin/leads/${lead.id}/priority`, { priority: v || null }, {
+            preserveScroll: true,
+            preserveState: false,
+            onError: () => toast.error("Could not update priority."),
+            onFinish: () => setSaving(false),
+        });
+    };
+
+    return (
+        <div className="bg-white rounded-lg border border-gray-200 px-3 py-2 max-w-xs">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-gray-500 mb-1">
+                Priority
+            </p>
+            <div className="flex items-center gap-1.5">
+                <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${priorityDot(value)}`} />
+                <select
+                    value={value}
+                    onChange={change}
+                    disabled={saving}
+                    className="flex-1 text-xs font-semibold text-gray-900 bg-transparent outline-none cursor-pointer disabled:opacity-60"
+                >
+                    <option value="">No priority</option>
+                    <option value="urgent">Urgent</option>
+                    <option value="medium">Medium</option>
+                    <option value="low">Low</option>
+                </select>
+            </div>
+        </div>
+    );
+}
+
 // ── Stage picker — clickable pill with popover menu ────────────────────────
 
-function StagePicker({ lead, stages, open, onToggle, onClose, onSelect, isSaving }) {
+export function StagePicker({ lead, stages, open, onToggle, onClose, onSelect, isSaving }) {
     const menuRef = useRef(null);
     const triggerRef = useRef(null);
     const [menuPos, setMenuPos] = useState(null);

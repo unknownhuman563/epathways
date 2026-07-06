@@ -165,11 +165,11 @@ class UploadChecklistTest extends TestCase
 
         $this->post("/track/{$lead->tracking_code}/document", [
             'file'          => UploadedFile::fake()->create('passport.pdf', 200, 'application/pdf'),
-            'checklist_key' => 'passport_pdf',
+            'checklist_key' => 'passport',
         ])->assertRedirect();
 
         $doc = LeadDocument::where('lead_id', $lead->id)->firstOrFail();
-        $this->assertSame('passport_pdf', $doc->checklist_key);
+        $this->assertSame('passport', $doc->checklist_key);
         $this->assertSame(LeadDocument::STATUS_SUBMITTED, $doc->status);
     }
 
@@ -185,13 +185,13 @@ class UploadChecklistTest extends TestCase
         $this->get("/track/{$lead->tracking_code}")
             ->assertInertia(fn ($page) => $page->where(
                 'visa.checklist',
-                fn ($items) => collect($items)->firstWhere('key', 'passport_pdf')['status'] === 'missing'
+                fn ($items) => collect($items)->firstWhere('key', 'passport')['status'] === 'missing'
             ));
 
-        // Upload one against passport_pdf.
+        // Upload one against passport.
         $this->post("/track/{$lead->tracking_code}/document", [
             'file'          => UploadedFile::fake()->create('passport.pdf', 200, 'application/pdf'),
-            'checklist_key' => 'passport_pdf',
+            'checklist_key' => 'passport',
         ]);
 
         // Item now shows submitted, totals.submitted incremented.
@@ -199,7 +199,7 @@ class UploadChecklistTest extends TestCase
             ->assertInertia(fn ($page) => $page
                 ->where(
                     'visa.checklist',
-                    fn ($items) => collect($items)->firstWhere('key', 'passport_pdf')['status'] === 'submitted'
+                    fn ($items) => collect($items)->firstWhere('key', 'passport')['status'] === 'submitted'
                 )
                 ->where('visa.totals.submitted', 1)
                 ->where('visa.totals.approved', 0)
@@ -237,7 +237,7 @@ class UploadChecklistTest extends TestCase
         // Lead uploads.
         $this->post("/track/{$lead->tracking_code}/document", [
             'file'          => UploadedFile::fake()->create('passport.pdf', 200, 'application/pdf'),
-            'checklist_key' => 'passport_pdf',
+            'checklist_key' => 'passport',
         ]);
         $doc = LeadDocument::where('lead_id', $lead->id)->firstOrFail();
 
@@ -252,7 +252,7 @@ class UploadChecklistTest extends TestCase
             ->assertInertia(fn ($page) => $page
                 ->where(
                     'visa.checklist',
-                    fn ($items) => collect($items)->firstWhere('key', 'passport_pdf')['status'] === 'approved'
+                    fn ($items) => collect($items)->firstWhere('key', 'passport')['status'] === 'approved'
                 )
                 ->where('visa.totals.approved', 1)
                 ->where('visa.totals.submitted', 1)

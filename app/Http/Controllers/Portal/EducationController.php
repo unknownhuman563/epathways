@@ -90,8 +90,14 @@ class EducationController extends Controller
                 ->with([
                     'studyPlans',
                     'event',
+                    'tags:id,name',
                     'portalUser:id,lead_id,last_login_at',
+                    'stageUpdater:id,name',
+                    'agent:id,name,avatar_path',
                     'notes' => fn ($q) => $q->latest(),
+                    // Doc rows drive the "Docs progress" column in the
+                    // leads table (via BuildsLeadRow::leadChecklistTotals).
+                    'documents:id,lead_id,checklist_key,status',
                 ])
                 ->withCount(['notes', 'documents'])
                 ->withCount(['tasks as tasks_open_count' => fn ($q) => $q->where('completed', false)])
@@ -103,7 +109,11 @@ class EducationController extends Controller
                 'programs' => Program::orderBy('title')->pluck('title')->filter()->values(),
                 'staffOptions' => $this->dashboardStaff(),
                 'leads' => $leads->map(fn ($l) => $this->leadRow($l)),
+                // Full tag dictionary — the Leads-page Tag filter lists every
+                // tag ever created, not just the ones on visible leads.
+                'allTagNames' => \App\Models\LeadTag::orderBy('name')->pluck('name'),
                 'events' => $this->eventsSummary(),
+                'tabCounts' => $this->leadTabCounts(),
             ]);
         } catch (\Throwable $e) {
             Log::error('Education leads list failed', ['error' => $e->getMessage()]);
@@ -809,6 +819,7 @@ class EducationController extends Controller
                 'location' => $p->location,
                 'level' => $p->level,
                 'category' => $p->category,
+                'industry' => $p->industry,
                 'status' => $p->status,
                 'duration_months' => $p->duration_months,
                 'intake_months' => $p->intake_months,

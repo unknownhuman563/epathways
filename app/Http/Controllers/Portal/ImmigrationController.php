@@ -181,9 +181,20 @@ class ImmigrationController extends Controller
                 'statuses' => self::LEAD_STATUSES,
                 // Pipeline only — converted leads (cases) move to the Cases page.
                 'leads' => Lead::inLeadPipeline()
-                    ->with(['studyPlans', 'event', 'portalUser:id,lead_id,last_login_at'])
+                    ->with([
+                        'studyPlans', 'event', 'tags:id,name', 'portalUser:id,lead_id,last_login_at',
+                        'stageUpdater:id,name', 'agent:id,name,avatar_path', 'notes' => fn ($q) => $q->latest(),
+                        // Doc rows drive the "Docs progress" column in the
+                        // leads table (via BuildsLeadRow::leadChecklistTotals).
+                        'documents:id,lead_id,checklist_key,status',
+                    ])
+                    ->withCount(['notes', 'documents'])
                     ->latest()->get()->map(fn ($l) => $this->leadRow($l)),
+                // Full tag dictionary — the Leads-page Tag filter lists every
+                // tag ever created, not just the ones on visible leads.
+                'allTagNames' => \App\Models\LeadTag::orderBy('name')->pluck('name'),
                 'events' => $this->eventsSummary(),
+                'tabCounts' => $this->leadTabCounts(),
             ]);
         } catch (\Throwable $e) {
             Log::error('Immigration leads list failed', ['error' => $e->getMessage()]);

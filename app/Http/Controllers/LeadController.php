@@ -5,9 +5,12 @@ namespace App\Http\Controllers;
 use App\Http\Requests\StoreLeadRequest;
 use App\Jobs\AnalyzeLeadAssessment;
 use App\Models\Lead;
+use App\Models\User;
+use App\Notifications\NewRegistrationReceived;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Notification;
 
 class LeadController extends Controller
 {
@@ -780,6 +783,8 @@ class LeadController extends Controller
                 'phone' => $validated['phone'] ?? null,
                 'country' => $data['residence_country'] ?? null,
             ], $request);
+            // Capture BEFORE the follow-up ->update()/->fresh() calls reset it.
+            $isNewRegistration = $existing->wasRecentlyCreated;
 
             $existing->update([
                 'lead_id' => str_starts_with((string) $existing->lead_id, 'REG-')
@@ -928,6 +933,20 @@ class LeadController extends Controller
             }
 
             DB::commit();
+
+            // Notify the sales team (+ admins) of genuinely new registrations
+            // so the bell + Registration tab badge light up. Resubmissions by
+            // an existing lead are skipped to avoid noise.
+            if ($isNewRegistration) {
+                try {
+                    $recipients = User::whereIn('role', ['sales', 'admin', 'super_admin'])->get();
+                    if ($recipients->isNotEmpty()) {
+                        Notification::send($recipients, new NewRegistrationReceived($lead, 'registration'));
+                    }
+                } catch (\Throwable $e) {
+                    Log::warning('New-registration notification failed', ['lead_id' => $lead->id, 'error' => $e->getMessage()]);
+                }
+            }
 
             // Run the AI analysis AFTER the response is sent so a slow / missing
             // queue worker can never make the submission hang. Wrapped so a
@@ -1142,6 +1161,26 @@ class LeadController extends Controller
                 'created_at' => $f->created_at,
             ])->values());
 
+        // Orphans — legacy uploads made before the checklist flow existed,
+        // or files a lead added via the (now-removed) "Your uploads" widget.
+        // They have no `checklist_key`, so the Documents tab surfaces them
+        // as a separate list at the bottom instead of losing them.
+        $documentOrphans = \App\Models\LeadDocument::where('lead_id', $lead->id)
+            ->whereNull('checklist_key')
+            ->with('uploader:id,name')
+            ->orderByDesc('created_at')
+            ->get()
+            ->map(fn ($f) => [
+                'id' => $f->id,
+                'original_name' => $f->original_name,
+                'mime' => $f->mime,
+                'size' => $f->size,
+                'status' => $f->status,
+                'source' => $f->source,
+                'uploaded_by' => optional($f->uploader)->name,
+                'created_at' => $f->created_at,
+            ])->values();
+
         // Event registration snapshot — only when this lead came in via
         // an event registration form. Reconstructs the form-as-filled by
         // looking up each field's value from wherever it landed (lead
@@ -1212,6 +1251,7 @@ class LeadController extends Controller
             'activity' => $activity,
             'stageTimeline' => $stageTimeline,
             'checklistFiles' => $checklistFiles,
+            'documentOrphans' => $documentOrphans,
             'notes' => $notes,
             'tags' => $leadTags,
             'allTags' => $allTags,
@@ -1779,6 +1819,29 @@ class LeadController extends Controller
             \Illuminate\Support\Facades\Log::error('Lead archive failed', ['id' => $id, 'error' => $e->getMessage()]);
 
             return back()->with('error', 'Could not archive this lead.');
+        }
+    }
+
+    /**
+     * Set the general lead priority (urgent | medium | low | null = none).
+     * Shared by every portal's Leads table via POST /admin/leads/{id}/priority,
+     * so we don't have to thread priority through each department's updateLead.
+     */
+    public function updatePriority(Request $request, $id)
+    {
+        $data = $request->validate([
+            'priority' => 'nullable|in:urgent,medium,low',
+        ]);
+
+        try {
+            $lead = Lead::findOrFail($id);
+            $lead->update(['priority' => $data['priority'] ?? null]);
+
+            return back()->with('success', 'Priority updated.');
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('Lead priority update failed', ['id' => $id, 'error' => $e->getMessage()]);
+
+            return back()->with('error', 'Could not update priority.');
         }
     }
 

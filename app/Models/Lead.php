@@ -189,7 +189,7 @@ class Lead extends Model
 
     protected $fillable = [
         'lead_id', 'tracking_code', 'first_name', 'middle_name', 'last_name', 'suffix', 'dob', 'other_names', 'email', 'phone', 'referral', 'school_id',
-        'gender', 'marital_status', 'branch', 'stage', 'status',
+        'gender', 'marital_status', 'branch', 'stage', 'status', 'priority',
         'country_of_birth', 'place_of_birth', 'citizenship',
         'residence_city', 'residence_state', 'residence_country',
         'has_passport', 'passport_number', 'passport_expiry', 'passport_path',
@@ -225,6 +225,9 @@ class Lead extends Model
         'is_english_student', 'english_converted_at', 'english_converted_by',
         // Staff member responsible for this lead (drives assignment notifications)
         'assigned_to',
+        // Recruiting Agent (role='agent') who added this lead. Scopes the
+        // Agent portal to its own leads + surfaces on the Sales Agents tab.
+        'agent_id',
         // Last time the lead opened their /track/{code} page
         'last_seen_at',
         // INZ lodgement tracking
@@ -418,6 +421,12 @@ class Lead extends Model
     public function assignee()
     {
         return $this->belongsTo(User::class, 'assigned_to');
+    }
+
+    /** Recruiting Agent (role='agent') who added this lead, or null. */
+    public function agent()
+    {
+        return $this->belongsTo(User::class, 'agent_id');
     }
 
     // ─── Computed accessors used by the Personal Info tab ─────────────

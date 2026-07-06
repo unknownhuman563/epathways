@@ -75,6 +75,12 @@ trait CreatesDashboardLead
 
         $status = $data['status'] ?? 'New Leads';
 
+        // When a recruiting Agent adds the lead, stamp them as its owner so
+        // it scopes to their portal and shows on the Sales Agents tab. Other
+        // roles (sales/education/admin) leave agent_id null.
+        $creator = Auth::user();
+        $agentId = ($creator && $creator->role === 'agent') ? $creator->id : ($data['agent_id'] ?? null);
+
         $lead = new Lead([
             'first_name'            => $first,
             'last_name'             => $last,
@@ -83,6 +89,7 @@ trait CreatesDashboardLead
             'status'                => $status,
             'stage'                 => $status,
             'source'                => 'manual',
+            'agent_id'              => $agentId,
             'calendar_date'         => $data['calendar_date'] ?? null,
             'client_info_link'      => $data['client_info_link'] ?? null,
             'call_update_form_link' => $data['call_update_form_link'] ?? null,

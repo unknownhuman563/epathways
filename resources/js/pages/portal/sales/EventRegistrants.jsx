@@ -1,25 +1,31 @@
-import { useState, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Head, Link, router } from '@inertiajs/react';
 import {
-    ArrowLeft, Calendar, MapPin, Users, Search, Eye, ExternalLink,
-    ChevronDown, StickyNote,
+    ArrowLeft, Calendar, MapPin, Users, Search, Eye, StickyNote, Mail, Phone,
+    ChevronRight as ChevronRightIcon,
 } from 'lucide-react';
+// Reuse the exact pieces the Open-opportunities table uses so this table
+// reads identically (colour-coded stage picker, priority-tinted avatar,
+// expandable dashboard panel, same helpers).
+import {
+    StagePicker, LeadDashboardPanel, initials, priorityMeta, fmtDateShort, fmtTime,
+} from '@/pages/portal/sales/Leads';
+
+const priorityLabel = (p) => (p ? `Priority: ${p[0].toUpperCase()}${p.slice(1)}` : 'No priority set');
 
 // ─── Full-page registrants view ────────────────────────────────────────
 //
-// Replaces the old drawer modal that used to open on
-// /portal/sales/leads → Events tab → "View registrants".
-//
-// Each row shows the lead's stage (editable via the same picker pattern
-// used elsewhere in the sales portal), contact details, notes preview
-// with "updated by X" caption, and two actions: View Registration (the
-// form the lead filled) and Open lead (the full profile).
+// Mirrors the Open-opportunities table design: priority-tinted avatar,
+// colour-coded stage picker, merged contact, location, note, registered.
+// The single row action is "View Registration" (the form the lead filled).
 //
 export default function EventRegistrants({ event, registrations = [], statuses = [] }) {
     const [searchTerm, setSearchTerm] = useState('');
     const [openStageId, setOpenStageId] = useState(null);
     const [savingId, setSavingId] = useState(null);
+    const [expandedId, setExpandedId] = useState(null);
     const [rows, setRows] = useState(registrations);
+    const toggleExpand = (id) => setExpandedId(expandedId === id ? null : id);
 
     const changeStage = (reg, stage) => {
         setSavingId(reg.id);
@@ -44,12 +50,6 @@ export default function EventRegistrants({ event, registrations = [], statuses =
 
     const fmtDate = (iso) =>
         iso ? new Date(iso).toLocaleDateString('en-NZ', { day: '2-digit', month: 'short', year: 'numeric' }) : null;
-    const fmtDateTime = (iso) => {
-        if (! iso) return null;
-        const d = new Date(iso);
-        return d.toLocaleDateString('en-NZ', { day: '2-digit', month: 'short', year: 'numeric' })
-            + ' · ' + d.toLocaleTimeString('en-NZ', { hour: '2-digit', minute: '2-digit' });
-    };
 
     return (
         <div className="space-y-6 max-w-[1400px] mx-auto pb-12">
@@ -118,24 +118,26 @@ export default function EventRegistrants({ event, registrations = [], statuses =
                 />
             </div>
 
-            {/* Table */}
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-                <div className="overflow-x-auto">
-                    <table className="w-full text-left text-sm">
+            {/* Table — mirrors the Open-opportunities design */}
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-visible">
+                <div className="overflow-x-auto overflow-y-visible">
+                    <table className="w-full text-left text-xs">
                         <thead>
                             <tr className="bg-gray-50/60 border-b border-gray-200 text-[10px] font-bold text-gray-500 uppercase tracking-wider">
-                                <th className="px-5 py-3">Lead</th>
+                                <th className="pl-4 pr-2 py-3 w-6" />
+                                <th className="px-3 py-3">Lead</th>
                                 <th className="px-3 py-3">Stage</th>
                                 <th className="px-3 py-3">Contact</th>
-                                <th className="px-3 py-3">Notes</th>
+                                <th className="px-3 py-3">Location</th>
+                                <th className="px-3 py-3">Note</th>
                                 <th className="px-3 py-3">Registered</th>
-                                <th className="px-3 py-3 text-right pr-5">Actions</th>
+                                <th className="px-3 py-3 text-right pr-4">Actions</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
                             {filtered.length === 0 ? (
                                 <tr>
-                                    <td colSpan={6} className="px-6 py-16 text-center text-gray-400">
+                                    <td colSpan={8} className="px-6 py-16 text-center text-gray-400">
                                         <Users size={26} className="mx-auto mb-2 text-gray-300" />
                                         <p className="text-sm font-medium">No registrants yet</p>
                                         <p className="text-xs text-gray-400 mt-1">
@@ -143,24 +145,45 @@ export default function EventRegistrants({ event, registrations = [], statuses =
                                         </p>
                                     </td>
                                 </tr>
-                            ) : filtered.map((r) => (
-                                <tr key={r.id} className="hover:bg-gray-50/60 transition-colors align-top">
-                                    <td className="px-5 py-3">
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-9 h-9 rounded-full bg-gray-900 text-white flex items-center justify-center font-bold text-xs shrink-0">
-                                                {(r.first_name?.charAt(0) || '?')}{(r.last_name?.charAt(0) || '')}
+                            ) : filtered.map((r) => {
+                                const isExpanded = expandedId === r.id;
+                                return (
+                                <React.Fragment key={r.id}>
+                                <tr className={`group transition-colors ${isExpanded ? 'bg-blue-50/30' : 'hover:bg-gray-50/50'}`}>
+                                    {/* Expand toggle — chevron rotates when open. */}
+                                    <td className="pl-4 pr-2 py-2.5">
+                                        <button
+                                            type="button"
+                                            onClick={() => toggleExpand(r.id)}
+                                            className="inline-flex items-center justify-center w-5 h-5 rounded text-gray-400 hover:text-gray-900 hover:bg-gray-100 transition-colors"
+                                            title={isExpanded ? 'Collapse details' : 'Expand details'}
+                                        >
+                                            <ChevronRightIcon size={14} className={`transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
+                                        </button>
+                                    </td>
+
+                                    {/* LEAD — priority-tinted avatar + name */}
+                                    <td className="px-3 py-2.5">
+                                        <div className="flex items-center gap-2.5 min-w-[180px]">
+                                            <div
+                                                className={`w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 ${
+                                                    priorityMeta(r.priority) ? `${priorityMeta(r.priority).dot} text-white` : 'bg-gray-200 text-gray-500'
+                                                }`}
+                                                title={priorityLabel(r.priority)}
+                                            >
+                                                {initials(r.name)}
                                             </div>
                                             <div className="min-w-0">
-                                                <p className="text-[13px] font-bold text-gray-900 truncate">{r.name}</p>
+                                                <div className="font-semibold text-gray-900 text-xs truncate">{r.name}</div>
                                                 {r.lead_id && (
-                                                    <p className="text-[10px] text-gray-400 tabular-nums font-mono">
-                                                        {r.lead_id}
-                                                    </p>
+                                                    <div className="text-[10px] text-gray-400 font-mono truncate">{r.lead_id}</div>
                                                 )}
                                             </div>
                                         </div>
                                     </td>
-                                    <td className="px-3 py-3 relative">
+
+                                    {/* STAGE — colour-coded picker, identical to Open opportunities */}
+                                    <td className="px-3 py-2.5 relative">
                                         <StagePicker
                                             lead={r}
                                             stages={statuses}
@@ -171,104 +194,86 @@ export default function EventRegistrants({ event, registrations = [], statuses =
                                             isSaving={savingId === r.id}
                                         />
                                     </td>
-                                    <td className="px-3 py-3 text-gray-600">
+
+                                    {/* CONTACT — email + phone merged */}
+                                    <td className="px-3 py-2.5">
                                         <div className="flex flex-col gap-0.5 min-w-0">
-                                            {r.email && (
-                                                <a href={`mailto:${r.email}`} className="text-[12px] hover:text-gray-900 hover:underline truncate">
-                                                    {r.email}
-                                                </a>
-                                            )}
-                                            {r.phone && (
-                                                <a href={`tel:${r.phone}`} className="text-[11px] text-gray-500 hover:text-gray-900">
-                                                    {r.phone}
-                                                </a>
-                                            )}
+                                            <div className="inline-flex items-center gap-1.5 text-gray-600">
+                                                <Mail size={11} className="text-gray-300 flex-shrink-0" />
+                                                <span className="truncate max-w-[180px]">{r.email || '—'}</span>
+                                            </div>
+                                            {r.phone ? (
+                                                <div className="inline-flex items-center gap-1.5 text-gray-500 whitespace-nowrap">
+                                                    <Phone size={11} className="text-gray-300 flex-shrink-0" />
+                                                    <span>{r.phone}</span>
+                                                </div>
+                                            ) : null}
                                         </div>
                                     </td>
-                                    <td className="px-3 py-3 max-w-[260px]">
+
+                                    {/* LOCATION */}
+                                    <td className="px-3 py-2.5">
+                                        {r.location ? (
+                                            <div className="inline-flex items-center gap-1.5 text-gray-600">
+                                                <MapPin size={11} className="text-gray-300 flex-shrink-0" />
+                                                <span className="truncate max-w-[140px]">{r.location}</span>
+                                            </div>
+                                        ) : (
+                                            <span className="text-gray-300">—</span>
+                                        )}
+                                    </td>
+
+                                    {/* NOTE — event note + who last edited it */}
+                                    <td className="px-3 py-2.5">
                                         {r.event_notes ? (
-                                            <div className="min-w-0">
-                                                <p
-                                                    className="text-[12px] text-gray-800 line-clamp-2 leading-relaxed"
-                                                    title={r.event_notes}
-                                                >
-                                                    {r.event_notes}
-                                                </p>
-                                                {r.event_notes_updated_at && (
-                                                    <p className="text-[10px] text-gray-400 mt-1">
-                                                        Updated {fmtDateTime(r.event_notes_updated_at)}
-                                                        {r.event_notes_editor?.name && (
-                                                            <span className="text-gray-500"> by {r.event_notes_editor.name}</span>
-                                                        )}
-                                                    </p>
+                                            <div className="flex flex-col gap-0.5 min-w-0 max-w-[220px]">
+                                                <div className="inline-flex items-center gap-1.5 text-gray-700">
+                                                    <StickyNote size={11} className="text-gray-300 flex-shrink-0" />
+                                                    <span className="truncate">{r.event_notes}</span>
+                                                </div>
+                                                {r.event_notes_editor?.name && (
+                                                    <span className="text-[10px] text-gray-400 truncate">
+                                                        by {r.event_notes_editor.name}
+                                                    </span>
                                                 )}
                                             </div>
                                         ) : (
-                                            <span className="text-[11px] text-gray-400 italic">No notes yet</span>
+                                            <span className="text-gray-300">—</span>
                                         )}
                                     </td>
-                                    <td className="px-3 py-3 text-[12px] text-gray-600 whitespace-nowrap">
-                                        {fmtDate(r.created_at) || '—'}
+
+                                    {/* REGISTERED */}
+                                    <td className="px-3 py-2.5 whitespace-nowrap">
+                                        <div className="text-gray-600">{fmtDateShort(r.created_at)}</div>
+                                        <div className="text-[10px] text-gray-400">{fmtTime(r.created_at)}</div>
                                     </td>
-                                    <td className="px-3 py-3 pr-5">
-                                        <div className="flex items-center justify-end gap-3">
-                                            <Link
-                                                href={`/admin/events/${event.id}/registrants/${r.id}`}
-                                                className="inline-flex items-center gap-1 text-[12px] font-semibold text-gray-700 hover:text-gray-900 hover:underline whitespace-nowrap"
-                                                title="Open the registration form the lead filled + notes"
-                                            >
-                                                <Eye size={13} /> View Registration
-                                            </Link>
-                                            <Link
-                                                href={`/portal/sales/leads/${r.id}`}
-                                                className="inline-flex items-center gap-1 text-[12px] font-semibold text-gray-500 hover:text-gray-900 whitespace-nowrap"
-                                            >
-                                                Open <ExternalLink size={11} />
-                                            </Link>
-                                        </div>
+
+                                    {/* ACTIONS — view the registration form only */}
+                                    <td className="px-3 py-2.5 pr-4 text-right">
+                                        <Link
+                                            href={`/admin/events/${event.id}/registrants/${r.id}`}
+                                            className="inline-flex items-center justify-center w-7 h-7 rounded-md text-gray-400 hover:text-gray-900 hover:bg-gray-100 transition-colors"
+                                            title="Open the registration form the lead filled + notes"
+                                        >
+                                            <Eye size={15} />
+                                        </Link>
                                     </td>
                                 </tr>
-                            ))}
+
+                                {isExpanded && (
+                                    <tr className="bg-blue-50/20 border-t border-blue-100/60">
+                                        <td colSpan={8} className="px-6 py-4">
+                                            <LeadDashboardPanel lead={r} portalBase="/portal/sales" />
+                                        </td>
+                                    </tr>
+                                )}
+                                </React.Fragment>
+                                );
+                            })}
                         </tbody>
                     </table>
                 </div>
             </div>
-        </div>
-    );
-}
-
-// ─── Small stage picker — mirrors the one on the sales Leads.jsx ────
-function StagePicker({ lead, stages, open, onToggle, onClose, onSelect, isSaving }) {
-    return (
-        <div className="relative">
-            <button
-                type="button"
-                onClick={onToggle}
-                disabled={isSaving}
-                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gray-900 text-white text-[10px] font-bold uppercase tracking-wider hover:bg-black transition-colors disabled:opacity-50"
-            >
-                {lead.status || 'Set stage'}
-                <ChevronDown size={11} />
-            </button>
-            {open && (
-                <>
-                    <div className="fixed inset-0 z-10" onClick={onClose} />
-                    <div className="absolute left-0 top-full mt-1.5 z-20 w-56 bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden max-h-72 overflow-y-auto">
-                        {stages.map((s) => (
-                            <button
-                                key={s}
-                                type="button"
-                                onClick={() => onSelect(s)}
-                                className={`w-full text-left px-3 py-2 text-[12px] font-medium hover:bg-gray-50 transition-colors ${
-                                    s === lead.status ? 'text-gray-900 bg-gray-50' : 'text-gray-700'
-                                }`}
-                            >
-                                {s}
-                            </button>
-                        ))}
-                    </div>
-                </>
-            )}
         </div>
     );
 }

@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Traits\LogsActivity;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Str;
 
 class Program extends Model
@@ -14,9 +15,11 @@ class Program extends Model
         'title',
         'slug',
         'institution',
+        'school_id',
         'location',
         'level',
         'category',
+        'industry',
         'status',
         'price_text',
         'image',
@@ -53,6 +56,11 @@ class Program extends Model
     public function getRouteKeyName(): string
     {
         return 'slug';
+    }
+
+    public function school(): BelongsTo
+    {
+        return $this->belongsTo(School::class);
     }
 
     protected static function booted(): void

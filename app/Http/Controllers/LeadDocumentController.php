@@ -189,6 +189,7 @@ class LeadDocumentController extends Controller
 
         $validated = $request->validate([
             'status' => ['required', Rule::in([
+                LeadDocument::STATUS_SUBMITTED,
                 LeadDocument::STATUS_UNDER_REVIEW,
                 LeadDocument::STATUS_APPROVED,
                 LeadDocument::STATUS_REJECTED,

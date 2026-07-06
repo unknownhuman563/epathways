@@ -123,8 +123,14 @@ class SalesController extends Controller
                 ->with([
                     'studyPlans',
                     'event',
+                    'tags:id,name',
                     'portalUser:id,lead_id,last_login_at',
+                    'stageUpdater:id,name',
+                    'agent:id,name,avatar_path',
                     'notes' => fn ($q) => $q->latest(),
+                    // Doc rows drive the "Docs progress" column in the
+                    // leads table (via BuildsLeadRow::leadChecklistTotals).
+                    'documents:id,lead_id,checklist_key,status',
                 ])
                 ->withCount(['notes', 'documents'])
                 ->withCount(['tasks as tasks_open_count' => fn ($q) => $q->where('completed', false)])
@@ -136,7 +142,14 @@ class SalesController extends Controller
                 'programs' => Program::orderBy('title')->pluck('title')->filter()->values(),
                 'staffOptions' => $this->dashboardStaff(),
                 'leads' => $leads->map(fn ($l) => $this->leadRow($l)),
+                // Full tag dictionary — the Leads-page Tag filter lists every
+                // tag ever created, not just the ones on visible leads.
+                'allTagNames' => \App\Models\LeadTag::orderBy('name')->pluck('name'),
                 'events' => $this->eventsSummary(),
+                'tabCounts' => $this->leadTabCounts(),
+                // Recruiting agents roster for the Leads "Agents" tab — each
+                // with a count of leads they've added (incl. converted ones).
+                'agents' => $this->agentsSummary(),
             ]);
         } catch (\Throwable $e) {
             Log::error('Sales leads list failed', ['error' => $e->getMessage()]);
@@ -162,6 +175,29 @@ class SalesController extends Controller
                 'date_from'           => optional($e->date_from)->toIso8601String(),
                 'status'              => $e->status,
                 'registrations_count' => $e->leads_count,
+            ]);
+    }
+
+    /**
+     * Recruiting agents (role='agent') with a total count of leads each has
+     * added — for the Leads page "Agents" tab. The per-agent lead list is
+     * built client-side from the leads collection (which carries `agent`),
+     * so this only needs the roster + a headline count.
+     */
+    private function agentsSummary()
+    {
+        return \App\Models\User::where('role', 'agent')
+            ->withCount('agentLeads')
+            ->orderBy('name')
+            ->get(['id', 'name', 'email', 'phone', 'location', 'avatar_path'])
+            ->map(fn ($a) => [
+                'id'          => $a->id,
+                'name'        => $a->name,
+                'email'       => $a->email,
+                'phone'       => $a->phone,
+                'location'    => $a->location,
+                'avatar_url'  => $a->avatar_url,
+                'leads_count' => (int) $a->agent_leads_count,
             ]);
     }
 
@@ -203,27 +239,25 @@ class SalesController extends Controller
     {
         $event = Event::findOrFail($id);
 
+        // Same leadRow() shape the Open-opportunities table uses, so the
+        // registrants table + its expandable dashboard panel render
+        // identically. Event-specific note fields are merged on top.
         $registrations = $event->leads()
-            ->with('eventNotesEditor:id,name')
+            ->with([
+                'studyPlans', 'tags:id,name', 'portalUser:id,lead_id,last_login_at',
+                'stageUpdater:id,name', 'eventNotesEditor:id,name',
+                'notes' => fn ($q) => $q->latest(),
+            ])
+            ->withCount(['notes', 'documents'])
             ->latest()
             ->get()
-            ->map(fn (Lead $l) => [
-                'id'                      => $l->id,
-                'lead_id'                 => $l->lead_id,
-                'first_name'              => $l->first_name,
-                'last_name'               => $l->last_name,
-                'name'                    => trim("{$l->first_name} {$l->last_name}") ?: 'Unnamed lead',
-                'email'                   => $l->email,
-                'phone'                   => $l->phone,
-                'stage'                   => $l->stage,
-                'status'                  => $l->status,
-                'created_at'              => optional($l->created_at)->toIso8601String(),
+            ->map(fn (Lead $l) => array_merge($this->leadRow($l), [
                 'event_notes'             => $l->event_notes,
                 'event_notes_updated_at'  => optional($l->event_notes_updated_at)->toIso8601String(),
                 'event_notes_editor'      => $l->eventNotesEditor
                     ? ['id' => $l->eventNotesEditor->id, 'name' => $l->eventNotesEditor->name]
                     : null,
-            ]);
+            ]));
 
         return inertia('portal/sales/EventRegistrants', [
             'event' => [
@@ -366,6 +400,7 @@ class SalesController extends Controller
             'location'        => $p->location,
             'level'           => $p->level,
             'category'        => $p->category,
+            'industry'        => $p->industry,
             'status'          => $p->status,
             'duration_months' => $p->duration_months,
             'intake_months'   => $p->intake_months,
