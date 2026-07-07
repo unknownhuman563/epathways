@@ -70,7 +70,7 @@ class UserController extends Controller
             'location' => [$contactRule, 'string', 'max:255'],
             'role' => ['required', Rule::in($this->roleValues())],
             'password' => ['required', \Illuminate\Validation\Rules\Password::defaults()],
-            'avatar' => ['nullable', UploadValidation::image()],
+            'avatar' => 'nullable|'.UploadValidation::image(),
         ]);
 
         // Only a super admin may create another super admin.
@@ -106,7 +106,7 @@ class UserController extends Controller
             'location' => [$contactRule, 'string', 'max:255'],
             'role' => ['required', Rule::in($this->roleValues())],
             'password' => ['nullable', \Illuminate\Validation\Rules\Password::defaults()],
-            'avatar' => ['nullable', UploadValidation::image()],
+            'avatar' => 'nullable|'.UploadValidation::image(),
         ]);
 
         // Don't let anyone change their own role — avoids locking yourself out
