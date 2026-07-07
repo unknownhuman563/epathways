@@ -839,37 +839,69 @@ function DocumentsHubTab({
         return map;
     }, [documents]);
 
-    // Outstanding requirements: a checklist item with no upload yet OR with
-    // a rejected upload. Both belong on the "to-do" list.
-    const outstanding = useMemo(() => {
-        return checklist
-            .map((it) => {
-                const doc = docsByKey.get(it.key) || null;
-                const isMissing  = ! doc;
-                const isRejected = doc && doc.status === 'Rejected';
-                if (! isMissing && ! isRejected) return null;
-                const { section, name } = parseChecklistLabel(it.label || it.key);
-                return {
-                    key: it.key,
-                    section,
-                    name,
-                    label: it.label || it.key,
-                    hint: it.hint || '',
-                    required: it.required !== false,
-                    rejectedDoc: isRejected ? doc : null,
-                };
-            })
-            .filter(Boolean);
-    }, [checklist, docsByKey]);
+    // Set of keys that belong to the checklist — used to split uploaded docs
+    // into "belongs to a checklist item" vs "other".
+    const checklistKeySet = useMemo(() => new Set(checklist.map((it) => it.key)), [checklist]);
 
-    const outstandingBySection = useMemo(() => {
+    // Build a requirement row from a checklist item, attaching its uploaded
+    // file (if any) so the row stays put + shows the file after upload.
+    // State: missing | submitted | review | approved | rejected.
+    const buildRow = (it) => {
+        const doc = docsByKey.get(it.key) || null;
+        const parsed = parseChecklistLabel(it.label || it.key);
+        const state = ! doc ? 'missing'
+            : doc.status === 'Rejected' ? 'rejected'
+                : doc.status === 'Approved' ? 'approved'
+                    : doc.status === 'UnderReview' ? 'review'
+                        : 'submitted';
+        return {
+            key: it.key,
+            section: parsed.section,
+            // Universal items carry a bare label (no "Section · Name"), so use
+            // the label as the display name.
+            name: it.universal ? (it.label || parsed.name) : parsed.name,
+            label: it.label || it.key,
+            hint: it.hint || '',
+            required: it.required !== false,
+            doc,
+            state,
+            rejectedDoc: state === 'rejected' ? doc : null,
+        };
+    };
+
+    // Universal items (e.g. SV Information Form) pinned to the very top.
+    const svRows = useMemo(
+        () => checklist.filter((it) => it.universal).map(buildRow),
+        [checklist, docsByKey] // eslint-disable-line react-hooks/exhaustive-deps
+    );
+
+    // The rest of the checklist, grouped by section further down.
+    const requirementRows = useMemo(
+        () => checklist.filter((it) => ! it.universal).map(buildRow),
+        [checklist, docsByKey] // eslint-disable-line react-hooks/exhaustive-deps
+    );
+
+    const requirementsBySection = useMemo(() => {
         const m = new Map();
-        for (const row of outstanding) {
+        for (const row of requirementRows) {
             if (! m.has(row.section)) m.set(row.section, []);
             m.get(row.section).push(row);
         }
         return Array.from(m.entries()).map(([section, items]) => ({ section, items }));
-    }, [outstanding]);
+    }, [requirementRows]);
+
+    // Count still needed (missing or rejected) — drives the section subtitle.
+    const outstandingCount = useMemo(
+        () => requirementRows.filter((r) => r.state === 'missing' || r.state === 'rejected').length,
+        [requirementRows]
+    );
+
+    // Uploaded files that don't map to any checklist item — shown on their own
+    // in the last section.
+    const otherDocs = useMemo(
+        () => documents.filter((d) => ! d.checklist_key || ! checklistKeySet.has(d.checklist_key)),
+        [documents, checklistKeySet]
+    );
 
     // Group uploads by canonical status. Sort within each group newest-first.
     const uploadGroups = useMemo(() => {
@@ -890,10 +922,11 @@ function DocumentsHubTab({
         review:      uploadGroups.UnderReview.length,
         submitted:   uploadGroups.Submitted.length,
         rejected:    uploadGroups.Rejected.length,
-        outstanding: outstanding.length,
+        outstanding: outstandingCount,
         agreements:  agreements.length,
         requirementsTotal: checklist.length,
-    }), [documents, uploadGroups, outstanding, agreements, checklist]);
+        other:       otherDocs.length,
+    }), [documents, uploadGroups, outstandingCount, agreements, checklist, otherDocs]);
 
     const progressPct = counts.requirementsTotal > 0
         ? Math.round((counts.approved / counts.requirementsTotal) * 100)
@@ -908,6 +941,28 @@ function DocumentsHubTab({
                 counts={counts}
                 visaName={visa?.name}
             />
+
+            {/* SECTION 0 — universal top documents (SV Information Form),
+                pinned above everything else on every tracker. Only present
+                when staff haven't hidden it for this case. */}
+            {svRows.length > 0 && (
+                <DocsSection
+                    title="SV Information Form"
+                    eyebrow="Start here"
+                >
+                    <ul className="divide-y divide-gray-100 border border-gray-100">
+                        {svRows.map((row) => (
+                            <RequirementRow
+                                key={row.key}
+                                row={row}
+                                onOpenUpload={onOpenUpload}
+                                onOpenReplace={onOpenReplace}
+                                onDelete={onDelete}
+                            />
+                        ))}
+                    </ul>
+                </DocsSection>
+            )}
 
             {/* SECTION 1 — agreements (consultancy paperwork comes first,
                 ahead of any document collection) */}
@@ -925,33 +980,28 @@ function DocumentsHubTab({
                 </DocsSection>
             )}
 
-            {/* SECTION 2 was "Your uploads" (unsolicited add-file widget) —
-                removed by design. Leads should only upload against a specific
-                checklist requirement in Section 3 below, so every uploaded
-                file lands with a `checklist_key`. Legacy files that were
-                submitted through the old widget stay visible to staff on the
-                admin Documents tab under "Other uploads". */}
-
-            {/* SECTION 3 — outstanding requirements */}
+            {/* SECTION 2 — the document checklist. EVERY item stays under its
+                section; once a file is uploaded the row shows it inline (View +
+                status) instead of disappearing. Items are only removed when a
+                staff member unchecks them (hidden_track_documents, filtered
+                server-side). */}
             <DocsSection
-                title="What we still need"
-                eyebrow="Requirements"
+                title="Documents"
+                eyebrow="Checklist"
                 subtitle={
                     counts.requirementsTotal === 0
                         ? null
                         : counts.outstanding === 0
                             ? 'Everything we need has been received.'
-                            : `${counts.outstanding} of ${counts.requirementsTotal} requirements outstanding`
+                            : `${counts.outstanding} of ${counts.requirementsTotal} still needed`
                 }
-                last
+                last={counts.other === 0}
             >
                 {counts.requirementsTotal === 0 ? (
                     <DocsEmptyRequirements />
-                ) : counts.outstanding === 0 ? (
-                    <DocsRequirementsComplete />
                 ) : (
                     <div className="space-y-5">
-                        {outstandingBySection.map(({ section, items }) => (
+                        {requirementsBySection.map(({ section, items }) => (
                             <div key={section}>
                                 <p className="text-[10px] font-bold tracking-[0.22em] uppercase text-gray-500 mb-2 inline-flex items-center gap-1.5">
                                     <FolderIcon size={11} strokeWidth={2} /> {section}
@@ -962,6 +1012,8 @@ function DocumentsHubTab({
                                             key={row.key}
                                             row={row}
                                             onOpenUpload={onOpenUpload}
+                                            onOpenReplace={onOpenReplace}
+                                            onDelete={onDelete}
                                         />
                                     ))}
                                 </ul>
@@ -970,6 +1022,23 @@ function DocumentsHubTab({
                     </div>
                 )}
             </DocsSection>
+
+            {/* SECTION 3 (last) — uploaded files that don't map to any
+                checklist item. */}
+            {counts.other > 0 && (
+                <DocsSection
+                    title="Other documents"
+                    eyebrow="Uploads"
+                    subtitle={`${counts.other} file${counts.other === 1 ? '' : 's'} not tied to a checklist item`}
+                    last
+                >
+                    <UploadsTable
+                        documents={otherDocs}
+                        onOpenReplace={onOpenReplace}
+                        onDelete={onDelete}
+                    />
+                </DocsSection>
+            )}
         </div>
     );
 }
@@ -1179,7 +1248,9 @@ function UploadsTable({ documents, onOpenReplace, onDelete }) {
 
 function UploadRow({ doc, onOpenReplace, onDelete }) {
     const sizeKb = doc.size ? `${(doc.size / 1024).toFixed(0)} KB` : null;
-    const viewUrl = `/admin/documents/${doc.id}/download?inline=1`;
+    // Public tracker: use the file's public storage URL. Fall back to the
+    // staff download route only if no public URL is available.
+    const viewUrl = doc.url || `/admin/documents/${doc.id}/download?inline=1`;
     return (
         <tr className="border-t border-gray-50 align-top hover:bg-gray-50/40">
             {/* File */}
@@ -1256,7 +1327,7 @@ function UploadRow({ doc, onOpenReplace, onDelete }) {
 
 function UploadMobileCard({ doc, onOpenReplace, onDelete }) {
     const sizeKb = doc.size ? `${(doc.size / 1024).toFixed(0)} KB` : null;
-    const viewUrl = `/admin/documents/${doc.id}/download?inline=1`;
+    const viewUrl = doc.url || `/admin/documents/${doc.id}/download?inline=1`;
     return (
         <div className="border border-gray-200 bg-white px-3.5 py-3">
             <div className="flex items-start gap-3">
@@ -1317,51 +1388,106 @@ function UploadMobileCard({ doc, onOpenReplace, onDelete }) {
 
 // ── Requirement rows ───────────────────────────────────────────────────────
 
-function RequirementRow({ row, onOpenUpload }) {
-    const isReupload = !! row.rejectedDoc;
+function RequirementRow({ row, onOpenUpload, onOpenReplace, onDelete }) {
+    const doc = row.doc;
+    const isRejected = row.state === 'rejected';
+    const hasFile = doc && ! isRejected;         // an accepted / pending file
+    const viewUrl = doc ? (doc.url || `/admin/documents/${doc.id}/download?inline=1`) : null;
+
+    const circle = isRejected ? (
+        <span className="mt-0.5 inline-flex items-center justify-center w-5 h-5 rounded-full border-2 border-red-500 bg-red-100 flex-shrink-0">
+            <X size={11} className="text-red-700" strokeWidth={3} />
+        </span>
+    ) : hasFile ? (
+        <span className="mt-0.5 inline-flex items-center justify-center w-5 h-5 rounded-full border-2 border-emerald-500 bg-emerald-100 flex-shrink-0">
+            <Check size={11} className="text-emerald-700" strokeWidth={3} />
+        </span>
+    ) : (
+        <span className="mt-0.5 inline-flex items-center justify-center w-5 h-5 rounded-full border-2 border-gray-300 border-dashed bg-transparent flex-shrink-0" />
+    );
+
     return (
         <li className="px-3 sm:px-4 py-3 bg-white flex items-start gap-3">
-            <span className={`mt-0.5 inline-flex items-center justify-center w-5 h-5 rounded-full border-2 flex-shrink-0 ${
-                isReupload
-                    ? 'border-red-500 bg-red-100'
-                    : 'border-gray-300 border-dashed bg-transparent'
-            }`}>
-                {isReupload && <X size={11} className="text-red-700" strokeWidth={3} />}
-            </span>
+            {circle}
             <div className="flex-1 min-w-0">
                 <p className="text-[13px] font-semibold text-[#282728] flex items-center gap-1.5 flex-wrap">
                     {row.name}
-                    {row.required && !isReupload && (
+                    {hasFile ? (
+                        <span className={`px-1.5 py-0.5 text-[9px] font-bold tracking-wide uppercase border ${UPLOAD_STATUS_TONE[doc.status] || 'bg-emerald-50 text-emerald-700 border-emerald-200'}`}>
+                            {UPLOAD_STATUS_LABEL[doc.status] || doc.status}
+                        </span>
+                    ) : isRejected ? (
+                        <span className="px-1.5 py-0.5 text-[9px] font-bold tracking-wide uppercase bg-red-50 text-red-700 border border-red-200">
+                            Needs re-upload
+                        </span>
+                    ) : row.required ? (
                         <span className="px-1.5 py-0.5 text-[9px] font-bold tracking-wide uppercase bg-red-50 text-red-700 border border-red-200">
                             Required
                         </span>
-                    )}
-                    {! row.required && !isReupload && (
+                    ) : (
                         <span className="px-1.5 py-0.5 text-[9px] font-bold tracking-wide uppercase bg-gray-50 text-gray-500 border border-gray-200">
                             Optional
                         </span>
                     )}
-                    {isReupload && (
-                        <span className="px-1.5 py-0.5 text-[9px] font-bold tracking-wide uppercase bg-red-50 text-red-700 border border-red-200">
-                            Needs re-upload
-                        </span>
-                    )}
                 </p>
-                {isReupload && row.rejectedDoc?.note ? (
+                {isRejected && row.rejectedDoc?.note ? (
                     <p className="text-[11px] text-red-700 mt-1">
                         Reason: {row.rejectedDoc.note}
                     </p>
                 ) : row.hint ? (
                     <p className="text-[11px] text-gray-500 mt-0.5">{row.hint}</p>
                 ) : null}
+
+                {/* The uploaded file stays right here under its checklist row. */}
+                {hasFile && (
+                    <div className="mt-2 flex items-center gap-2 border border-gray-100 bg-gray-50/70 px-2.5 py-1.5">
+                        <FileText size={13} className="text-gray-400 flex-shrink-0" />
+                        <span className="text-[12px] text-[#282728] truncate flex-1 min-w-0" title={doc.original_name}>
+                            {doc.original_name}
+                        </span>
+                        <a
+                            href={viewUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            title="View"
+                            className="inline-flex items-center justify-center p-1 border border-gray-200 bg-white text-gray-600 hover:text-[#282728] hover:bg-gray-50"
+                        >
+                            <Eye size={11} />
+                        </a>
+                        {doc.is_editable && (
+                            <>
+                                <button
+                                    type="button"
+                                    onClick={() => onOpenReplace(doc)}
+                                    title="Replace"
+                                    className="inline-flex items-center justify-center p-1 border border-gray-200 bg-white text-gray-600 hover:text-[#282728] hover:bg-gray-50"
+                                >
+                                    <Upload size={11} />
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => onDelete(doc)}
+                                    title="Remove"
+                                    className="inline-flex items-center justify-center p-1 border border-gray-200 bg-white text-gray-600 hover:text-red-600 hover:bg-gray-50"
+                                >
+                                    <X size={11} />
+                                </button>
+                            </>
+                        )}
+                    </div>
+                )}
             </div>
-            <button
-                type="button"
-                onClick={() => onOpenUpload(row)}
-                className="text-[10px] font-bold uppercase tracking-wide inline-flex items-center gap-1 bg-[#282728] text-white px-3 py-1.5 hover:bg-black transition-colors flex-shrink-0"
-            >
-                <Upload size={11} /> {isReupload ? 'Re-upload' : 'Upload'}
-            </button>
+
+            {/* Upload / Re-upload prompt — only while nothing is accepted yet. */}
+            {! hasFile && (
+                <button
+                    type="button"
+                    onClick={() => onOpenUpload(row)}
+                    className="text-[10px] font-bold uppercase tracking-wide inline-flex items-center gap-1 bg-[#282728] text-white px-3 py-1.5 hover:bg-black transition-colors flex-shrink-0"
+                >
+                    <Upload size={11} /> {isRejected ? 'Re-upload' : 'Upload'}
+                </button>
+            )}
         </li>
     );
 }

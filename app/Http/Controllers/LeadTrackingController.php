@@ -575,6 +575,55 @@ class LeadTrackingController extends Controller
      * Returns null when the lead has no `inz_visa_type` set OR the visa
      * type can't be located in the catalogue.
      */
+    /**
+     * Documents shown on EVERY tracker, whatever the visa type — pinned to the
+     * top of the Documents tab. Staff can still hide them per-case through the
+     * same hidden_track_documents mechanism as any other checklist item.
+     */
+    private const UNIVERSAL_ITEMS = [
+        ['key' => 'svf', 'label' => 'SV Information Form', 'hint' => 'Student Visa information form prepared with your adviser.'],
+    ];
+
+    /**
+     * Decorate the universal top items with this lead's upload status, skipping
+     * any the staff have hidden. Returned in the same shape as the checklist so
+     * the tracker template renders them identically.
+     */
+    private function universalTopItems(Lead $lead, $docsByKey): array
+    {
+        $hidden = is_array($lead->hidden_track_documents) ? $lead->hidden_track_documents : [];
+        $out = [];
+
+        foreach (self::UNIVERSAL_ITEMS as $u) {
+            if (in_array($u['key'], $hidden, true)) {
+                continue;
+            }
+
+            $docs = $docsByKey->get($u['key']) ?? collect();
+            $status = 'missing';
+            if ($docs->contains(fn ($d) => $d->status === LeadDocument::STATUS_APPROVED)) {
+                $status = 'approved';
+            } elseif ($docs->contains(fn ($d) => in_array($d->status, [LeadDocument::STATUS_SUBMITTED, LeadDocument::STATUS_UNDER_REVIEW]))) {
+                $status = 'submitted';
+            } elseif ($docs->contains(fn ($d) => $d->status === LeadDocument::STATUS_REJECTED)) {
+                $status = 'rejected';
+            }
+
+            $out[] = [
+                'key' => $u['key'],
+                'label' => $u['label'],
+                'hint' => $u['hint'] ?? null,
+                'required' => true,
+                'status' => $status,
+                'count' => $docs->count(),
+                // Flag the frontend keys on to pin this to the top section.
+                'universal' => true,
+            ];
+        }
+
+        return $out;
+    }
+
     private function resolveVisa(Lead $lead): ?array
     {
         if (! $lead->inz_visa_type) {
@@ -654,7 +703,7 @@ class LeadTrackingController extends Controller
             'name' => $visa->name,
             'code' => $visa->code,
             'short_description' => $visa->short_description,
-            'checklist' => $decorated,
+            'checklist' => array_merge($this->universalTopItems($lead, $docsByKey), $decorated),
             'totals' => [
                 'required' => $requiredCount,
                 'submitted' => $submittedCount,
@@ -727,7 +776,7 @@ class LeadTrackingController extends Controller
             'name' => 'Document Checklist',
             'code' => null,
             'short_description' => null,
-            'checklist' => $decorated,
+            'checklist' => array_merge($this->universalTopItems($lead, $docsByKey), $decorated),
             'totals' => [
                 'required' => $requiredCount,
                 'submitted' => $submittedCount,

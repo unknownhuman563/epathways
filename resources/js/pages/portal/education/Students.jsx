@@ -302,6 +302,45 @@ const educationStageClass = (s) => EDUCATION_STAGE_STYLES[s] || stageClass(s);
 
 const fmtPct = (a, t) => (t > 0 ? Math.round((a / t) * 100) : 0);
 
+// General lead priority (mirrors the Leads / Cases board): urgent | medium |
+// low. Unset reads light gray. Edited inline via the role-agnostic
+// /admin/leads/{id}/priority endpoint (a student is just a lead).
+const PRIORITY_OPTIONS = [
+    { value: "urgent", label: "Urgent", dot: "bg-red-500" },
+    { value: "medium", label: "Medium", dot: "bg-amber-500" },
+    { value: "low", label: "Low", dot: "bg-emerald-500" },
+];
+const priorityDot = (p) => PRIORITY_OPTIONS.find((o) => o.value === p)?.dot || "bg-gray-300";
+
+function StudentPriority({ student }) {
+    const [saving, setSaving] = useState(false);
+    const value = student.priority || "";
+    const change = (e) => {
+        const v = e.target.value;
+        setSaving(true);
+        router.post(`/admin/leads/${student.id}/priority`, { priority: v || null }, {
+            preserveScroll: true,
+            preserveState: false,
+            onError: () => toast.error("Could not update priority."),
+            onFinish: () => setSaving(false),
+        });
+    };
+    return (
+        <span className="inline-flex items-center gap-1" title="Priority" onClick={(e) => e.stopPropagation()}>
+            <span className={`w-2 h-2 rounded-full flex-shrink-0 ${priorityDot(value)}`} />
+            <select
+                value={value}
+                onChange={change}
+                disabled={saving}
+                className="text-[10px] font-semibold text-gray-500 bg-transparent outline-none cursor-pointer disabled:opacity-60 hover:text-gray-800"
+            >
+                <option value="">Priority</option>
+                {PRIORITY_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+        </span>
+    );
+}
+
 const fmtDate = (iso) => {
     if (!iso) return "";
     try {
@@ -601,10 +640,10 @@ export default function EducationStudents({ students = [], schoolOptions = [], p
                             ) : paged.map((s) => {
                                 const isSelected = selectedIds.has(s.id);
                                 const isExpanded = expandedId === s.id;
-                                const pct      = fmtPct(s.docs_approved, s.docs_total);
-                                const hasDocs  = (s.docs_total || 0) > 0;
-                                const docsDone = hasDocs && s.docs_approved >= s.docs_total;
-                                const barColor = docsDone ? "bg-emerald-500" : pct >= 50 ? "bg-amber-500" : "bg-gray-400";
+                                // Docs progress mirrors Immigration Cases / Leads:
+                                // % of the visible checklist that's been submitted.
+                                const hasDocs  = (s.checklist_total || 0) > 0;
+                                const pct      = fmtPct(s.checklist_submitted, s.checklist_total);
 
                                 return (
                                     <React.Fragment key={s.id}>
@@ -637,13 +676,16 @@ export default function EducationStudents({ students = [], schoolOptions = [], p
                                                 </button>
                                             </td>
 
-                                            {/* Student */}
+                                            {/* Student — avatar tinted by priority (mirrors the
+                                                Leads/Cases board); priority also editable inline
+                                                just below the name. */}
                                             <td className="px-3 py-2.5">
+                                                <div className="min-w-[180px]">
                                                 <Link
                                                     href={`/portal/education/leads/${s.id}`}
-                                                    className="flex items-center gap-2.5 min-w-[180px] group/student"
+                                                    className="flex items-center gap-2.5 group/student"
                                                 >
-                                                    <div className={`w-7 h-7 rounded-full flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0 ${avatarColor(s.id)}`}>
+                                                    <div className={`w-7 h-7 rounded-full flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0 ${s.priority ? priorityDot(s.priority) : avatarColor(s.id)}`}>
                                                         {initials(s.name)}
                                                     </div>
                                                     <div className="min-w-0">
@@ -655,6 +697,10 @@ export default function EducationStudents({ students = [], schoolOptions = [], p
                                                         )}
                                                     </div>
                                                 </Link>
+                                                <div className="mt-1 pl-[38px]">
+                                                    <StudentPriority student={s} />
+                                                </div>
+                                                </div>
                                             </td>
 
                                             {/* Status — department-aware stage picker. The
@@ -726,15 +772,16 @@ export default function EducationStudents({ students = [], schoolOptions = [], p
                                                 )}
                                             </td>
 
-                                            {/* Docs */}
+                                            {/* Docs — % of the visible checklist submitted,
+                                                same as the Immigration Cases / Leads column. */}
                                             <td className="px-3 py-2.5">
                                                 {hasDocs ? (
-                                                    <div className="flex items-center gap-2 min-w-[100px]">
+                                                    <div className="flex items-center gap-2 min-w-[100px]" title={`${s.checklist_submitted} of ${s.checklist_total} checklist items submitted`}>
                                                         <div className="h-1.5 flex-1 rounded-full bg-gray-100 overflow-hidden">
-                                                            <div className={`h-full rounded-full ${barColor}`} style={{ width: `${pct}%` }} />
+                                                            <div className="h-full rounded-full bg-emerald-500" style={{ width: `${pct}%` }} />
                                                         </div>
-                                                        <span className="text-[10px] text-gray-500 tabular-nums whitespace-nowrap">
-                                                            {s.docs_approved}/{s.docs_total}
+                                                        <span className="text-xs font-semibold tabular-nums whitespace-nowrap text-emerald-600">
+                                                            {pct}%
                                                         </span>
                                                     </div>
                                                 ) : (

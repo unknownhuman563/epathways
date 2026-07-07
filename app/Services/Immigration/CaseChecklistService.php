@@ -36,7 +36,33 @@ class CaseChecklistService
      *
      * @return array<int, array<string, mixed>>
      */
+    /**
+     * Documents that apply to EVERY case regardless of visa type, pinned to
+     * the front of the checklist. Staff hide/show them per-case exactly like
+     * any other item; the public tracker (LeadTrackingController) mirrors the
+     * same list — KEEP IN SYNC.
+     */
+    private const UNIVERSAL_ITEMS = [
+        ['key' => 'svf', 'label' => 'SV Information Form', 'hint' => 'Student Visa information form prepared with your adviser.', 'required' => true, 'category' => 'Information Form'],
+    ];
+
     public function forCase(Lead $lead): array
+    {
+        $base = $this->baseChecklist($lead);
+
+        // Prepend the universal items (deduping any the visa list already has)
+        // so they show — and can be hidden/shown — on every case.
+        $universalKeys = array_column(self::UNIVERSAL_ITEMS, 'key');
+        $base = array_values(array_filter(
+            $base,
+            fn ($i) => ! in_array($i['key'] ?? null, $universalKeys, true)
+        ));
+
+        return array_merge($this->normaliseItems(self::UNIVERSAL_ITEMS), $base);
+    }
+
+    /** The visa-type / per-lead / config checklist before universal items. */
+    private function baseChecklist(Lead $lead): array
     {
         // 1. Per-lead override. The Lead model has `document_checklist`
         //    (JSON cast) for cases where the standard visa-type list
