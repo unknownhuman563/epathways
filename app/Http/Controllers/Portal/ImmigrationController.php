@@ -1035,24 +1035,110 @@ class ImmigrationController extends Controller
     public function appointments()
     {
         try {
-            $rows = Booking::orderByDesc('appointment_date')->limit(100)->get()
+            $rows = Booking::where('service_type', 'like', '%Immigration%')
+                ->with('visaType:id,name,code')
+                ->orderByDesc('appointment_date')->limit(300)->get()
                 ->map(fn ($b) => [
                     'id' => $b->id,
                     'name' => trim("{$b->first_name} {$b->last_name}") ?: 'Unknown',
                     'email' => $b->email,
+                    'phone' => $b->phone,
                     'service_type' => $b->service_type,
+                    'visa' => $b->visaType?->name,
                     'consultant_name' => $b->consultant_name,
                     'platform' => $b->platform,
                     'status' => $b->status ?: 'Pending',
+                    'payment_status' => $b->payment_status ?: 'unpaid',
+                    'amount' => $b->amount,
+                    'currency' => $b->currency,
                     'appointment_date' => $b->appointment_date ? \Illuminate\Support\Carbon::parse($b->appointment_date)->toDateString() : null,
                     'appointment_time' => $b->appointment_time,
+                    'created_at' => optional($b->created_at)->toIso8601String(),
                 ]);
 
-            return inertia('portal/immigration/Appointments', ['appointments' => $rows]);
+            return inertia('portal/immigration/Appointments', array_merge(
+                ['appointments' => $rows],
+                $this->availabilityProps(),
+            ));
         } catch (\Throwable $e) {
             Log::error('Immigration appointments page failed', ['error' => $e->getMessage()]);
 
-            return inertia('portal/immigration/Appointments', ['appointments' => []]);
+            return inertia('portal/immigration/Appointments', array_merge(
+                ['appointments' => []],
+                $this->availabilityProps(),
+            ));
+        }
+    }
+
+    /** Current user's availability + the immigration team's, for the settings tab. */
+    private function availabilityProps(): array
+    {
+        $me = auth()->user();
+        $default = \App\Models\StaffAvailability::defaultSchedule();
+        $saved = \App\Models\StaffAvailability::pluck('schedule', 'user_id');
+
+        $staff = \App\Models\User::whereIn('role', ['immigration', 'immigration_manager', 'immigration_adviser'])
+            ->orderBy('name')->get(['id', 'name', 'role']);
+
+        // Ensure the acting user (e.g. an admin) can always set their own hours.
+        if ($me && ! $staff->contains('id', $me->id)) {
+            $staff->push($me);
+        }
+
+        return [
+            'currentUserId' => $me?->id,
+            'myAvailability' => ($me && isset($saved[$me->id])) ? $saved[$me->id] : $default,
+            'teamAvailability' => $staff->map(fn ($u) => [
+                'id' => $u->id,
+                'name' => $u->name,
+                'role' => $u->role,
+                'schedule' => $saved[$u->id] ?? $default,
+                'is_set' => isset($saved[$u->id]),
+            ])->values(),
+        ];
+    }
+
+    /** Save the acting user's weekly availability. */
+    public function saveAvailability(Request $request)
+    {
+        $data = $request->validate([
+            'schedule' => 'required|array',
+            'schedule.*.enabled' => 'required|boolean',
+            'schedule.*.start' => 'nullable|date_format:H:i',
+            'schedule.*.end' => 'nullable|date_format:H:i',
+        ]);
+
+        // Keep only known days.
+        $schedule = array_intersect_key($data['schedule'], array_flip(\App\Models\StaffAvailability::DAYS));
+
+        \App\Models\StaffAvailability::updateOrCreate(
+            ['user_id' => $request->user()->id],
+            ['schedule' => $schedule],
+        );
+
+        return back()->with('success', 'Your availability has been saved.');
+    }
+
+    /** Re-send the booking confirmation + invoice email to the client. */
+    public function resendInvoice($id)
+    {
+        $booking = Booking::findOrFail($id);
+
+        if (empty($booking->email)) {
+            return back()->with('error', 'This booking has no email address.');
+        }
+
+        try {
+            // Queued so the SMTP round-trip never blocks the single-threaded
+            // dev server (which caused the page to blank mid-send).
+            \Illuminate\Support\Facades\Mail::to($booking->email)
+                ->queue(new \App\Mail\BookingConfirmationMail($booking->fresh('visaType')));
+
+            return back()->with('success', 'Invoice re-sent to '.$booking->email.'.');
+        } catch (\Throwable $e) {
+            Log::error('Resend invoice failed', ['booking_id' => $booking->id, 'error' => $e->getMessage()]);
+
+            return back()->with('error', 'Could not send the invoice. Please try again.');
         }
     }
 

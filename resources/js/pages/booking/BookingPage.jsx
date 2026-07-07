@@ -1,5 +1,9 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { DayPicker } from "react-day-picker";
+import "react-day-picker/style.css";
+import { format } from "date-fns";
+import { TZDate } from "@date-fns/tz";
 import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
 import ScrollToTop from "@/components/ui/ScrollToTop";
@@ -61,8 +65,7 @@ const categories = [
         price: 'NZD $200',
         icon: Globe,
         label: 'IMMIGRATION',
-        image: visaImg,
-        comingSoon: true
+        image: visaImg
     },
     {
         id: 'accommodation',
@@ -206,7 +209,7 @@ const consultants = {
     ]
 };
 
-export default function BookingPage() {
+export default function BookingPage({ visaTypes = [], availability = {}, bookingTimezone = "Pacific/Auckland" }) {
     const [step, setStep] = useState(1);
     const [openFaq, setOpenFaq] = useState(null);
     const [selection, setSelection] = useState({
@@ -222,8 +225,10 @@ export default function BookingPage() {
             phoneNumber: '',
             country: '',
             inquiryType: '',
+            visaTypeId: '',
             appointmentDate: '',
             appointmentTime: '',
+            appointmentAt: '',
             message: '',
             agreeTerms: false
         }
@@ -309,6 +314,83 @@ export default function BookingPage() {
         }
     };
 
+    const updateInfo = (patch) => setSelection(prev => ({ ...prev, info: { ...prev.info, ...patch } }));
+
+    // In-system booking (immigration): the visitor picks a date + time on our
+    // own calendar — no external widget — so we submit those details directly.
+    const submitNativeBooking = async () => {
+        setError(null);
+        const info = selection.info;
+        const firstName = (info.firstName || '').trim();
+        const email = (info.email || '').trim();
+        if (visaTypes.length > 0 && !info.visaTypeId) { setError('Please select a visa type.'); return; }
+        if (!firstName || !email) { setError('Please enter your name and email.'); return; }
+        if (!info.appointmentDate) { setError('Please pick a date on the calendar.'); return; }
+        if (!info.appointmentTime) { setError('Please pick a time slot.'); return; }
+        if (submittedRef.current) return;
+        submittedRef.current = true;
+        setIsSubmitting(true);
+        try {
+            const response = await fetch('/bookings', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content'),
+                },
+                body: JSON.stringify({
+                    first_name: firstName,
+                    last_name: info.lastName || null,
+                    email,
+                    phone: info.phoneNumber || null,
+                    current_country: info.country || null,
+                    service_type: selection.category?.title,
+                    visa_type_id: info.visaTypeId || null,
+                    consultant_name: selection.consultant?.name || 'Immigration Advisers (Dev Bhageerutty & Hendry Dai)',
+                    appointment_date: info.appointmentDate,
+                    appointment_time: info.appointmentTime,
+                    appointment_at: info.appointmentAt || null,
+                    client_timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+                    message: info.message || null,
+                    platform: 'In-System',
+                }),
+            });
+            if (response.ok) {
+                const data = await response.json().catch(() => ({}));
+                const bookingId = data.booking_id;
+                // Booking is saved (unpaid). Hand off to Stripe Checkout; if it's
+                // unavailable, we still show the saved (unpaid) confirmation.
+                if (bookingId) {
+                    try {
+                        const co = await fetch(`/bookings/${bookingId}/checkout`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Accept': 'application/json',
+                                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content'),
+                            },
+                        });
+                        const coData = await co.json().catch(() => ({}));
+                        if (co.ok && coData.url) {
+                            window.location.href = coData.url;
+                            return;
+                        }
+                    } catch { /* fall through to saved-unpaid confirmation */ }
+                }
+                setBookingSuccess(true);
+            } else {
+                submittedRef.current = false;
+                const data = await response.json().catch(() => ({}));
+                setError(data.message || 'Could not confirm your booking. Please try again.');
+            }
+        } catch {
+            submittedRef.current = false;
+            setError('Network error. Please try again.');
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
     // Listen to the embedded GoHighLevel widget. It posts the contact's details
     // as the visitor fills them in, and a completion event when they finish —
     // at which point we auto-create the booking in our system (name + email).
@@ -377,12 +459,17 @@ export default function BookingPage() {
     // 3=consultant, 4=form. Every other branch: 1=category, 2=consultant,
     // 3=form. Centralised here so step labels + background swaps stay in sync.
     const isEducation = selection.category?.id === 'education';
+    const isImmigration = selection.category?.id === 'immigration';
     const ui = (() => {
         if (step === 1) return 'category';
         if (isEducation) {
             if (step === 2) return 'intent';
             if (step === 3) return selection.intent === 'book' ? 'consultant' : null;
             if (step === 4) return selection.intent === 'book' ? 'form' : null;
+        } else if (isImmigration) {
+            // Immigration skips consultant selection — advisers are shown for
+            // display on the scheduler itself.
+            if (step === 2) return 'form';
         } else {
             if (step === 2) return 'consultant';
             if (step === 3) return 'form';
@@ -860,42 +947,79 @@ export default function BookingPage() {
                                                         )}
                                                     </div>
                                                 </div>
+
+                                                {/* Who you'll meet — beside the form (immigration) */}
+                                                {selection.category?.id === 'immigration' && (
+                                                    <div>
+                                                        <p className="text-[10px] text-gray-600 font-bold uppercase tracking-widest mb-3">Who you'll meet</p>
+                                                        <div className="space-y-3">
+                                                            {consultants.immigration.map((a) => (
+                                                                <div key={a.id} className="relative overflow-hidden rounded-2xl bg-[#161917] h-32 flex shadow-sm">
+                                                                    <div className="flex-1 p-4 flex flex-col justify-center min-w-0">
+                                                                        <p className="text-[9px] font-bold uppercase tracking-widest text-gray-400 leading-tight">{a.role}</p>
+                                                                        <p className="text-white font-semibold text-lg mt-1.5 leading-tight">{a.name}</p>
+                                                                        <p className="text-[10px] text-gray-500 mt-2">{a.availability}</p>
+                                                                    </div>
+                                                                    <div className="w-28 shrink-0 bg-gray-200">
+                                                                        <img src={a.image} alt={a.name} className="w-full h-full object-cover object-top" />
+                                                                    </div>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                        <p className="text-[11px] text-gray-400 mt-3">Your session will be assigned to one of our licensed advisers.</p>
+                                                    </div>
+                                                )}
                                             </div>
 
                                             {/* Right Column: Form */}
                                             <div className="lg:col-span-8">
-                                                {selection.consultant?.bookingUrl && (
-                                                    <div>
-                                                        <div className="flex items-center justify-between mb-2 gap-3 flex-wrap">
-                                                            <label className="block text-sm font-light text-gray-800">Pick a time on the calendar</label>
-                                                            <a
-                                                                href={selection.consultant.bookingUrl}
-                                                                target="_blank"
-                                                                rel="noopener noreferrer"
-                                                                className="inline-flex items-center gap-1.5 text-xs font-medium text-gray-500 hover:text-[#436235] transition-colors"
-                                                            >
-                                                                <Calendar size={14} /> Open in new tab
-                                                            </a>
-                                                        </div>
-                                                        <div className="w-full bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-                                                            <iframe
-                                                                src={selection.consultant.bookingUrl}
-                                                                title="Booking calendar"
-                                                                className="w-full h-[640px] lg:h-[760px] block"
-                                                                style={{ border: 0 }}
-                                                                frameBorder="0"
-                                                                loading="lazy"
-                                                            ></iframe>
-                                                        </div>
-                                                    </div>
-                                                )}
+                                                {selection.category?.id === 'immigration' ? (
+                                                    <NativeScheduler
+                                                        visaTypes={visaTypes}
+                                                        availability={availability}
+                                                        businessTz={bookingTimezone}
+                                                        info={selection.info}
+                                                        onChange={updateInfo}
+                                                        onConfirm={submitNativeBooking}
+                                                        isSubmitting={isSubmitting}
+                                                        error={error}
+                                                    />
+                                                ) : (
+                                                    <>
+                                                        {selection.consultant?.bookingUrl && (
+                                                            <div>
+                                                                <div className="flex items-center justify-between mb-2 gap-3 flex-wrap">
+                                                                    <label className="block text-sm font-light text-gray-800">Pick a time on the calendar</label>
+                                                                    <a
+                                                                        href={selection.consultant.bookingUrl}
+                                                                        target="_blank"
+                                                                        rel="noopener noreferrer"
+                                                                        className="inline-flex items-center gap-1.5 text-xs font-medium text-gray-500 hover:text-[#436235] transition-colors"
+                                                                    >
+                                                                        <Calendar size={14} /> Open in new tab
+                                                                    </a>
+                                                                </div>
+                                                                <div className="w-full bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+                                                                    <iframe
+                                                                        src={selection.consultant.bookingUrl}
+                                                                        title="Booking calendar"
+                                                                        className="w-full h-[640px] lg:h-[760px] block"
+                                                                        style={{ border: 0 }}
+                                                                        frameBorder="0"
+                                                                        loading="lazy"
+                                                                    ></iframe>
+                                                                </div>
+                                                            </div>
+                                                        )}
 
-                                                {/* No fields — once the visitor completes the booking in the
-                                                    widget above, their name + email are captured automatically
-                                                    and recorded on our side. */}
-                                                <p className="mt-4 text-xs text-gray-400">
-                                                    Your details are captured automatically when you complete the booking above — no need to retype them.
-                                                </p>
+                                                        {/* No fields — once the visitor completes the booking in the
+                                                            widget above, their name + email are captured automatically
+                                                            and recorded on our side. */}
+                                                        <p className="mt-4 text-xs text-gray-400">
+                                                            Your details are captured automatically when you complete the booking above — no need to retype them.
+                                                        </p>
+                                                    </>
+                                                )}
                                             </div>
                                         </div>
                                     ) : (
@@ -909,7 +1033,7 @@ export default function BookingPage() {
                                             <h3 className="text-5xl md:text-6xl font-light text-black mb-6 tracking-tight">Booking Confirmed.</h3>
 
                                             <p className="text-gray-600 text-xl font-light max-w-4xl mx-auto leading-relaxed mb-16 px-4">
-                                                We've successfully saved your details. You will receive an email shortly regarding your consultation with <span className="font-medium text-black">{selection.consultant?.name}</span>.
+                                                We've successfully saved your details. You will receive an email shortly regarding your consultation{selection.consultant?.name ? <> with <span className="font-medium text-black">{selection.consultant.name}</span></> : ' with one of our advisers'}.
                                             </p>
 
                                             <div className="mt-12 text-center">
@@ -932,6 +1056,191 @@ export default function BookingPage() {
 
             <ScrollToTop />
             <Footer />
+        </div>
+    );
+}
+
+// Fallback weekly availability when no adviser has set theirs (Mon–Fri 9–5).
+const DEFAULT_AVAILABILITY = {
+    mon: { start: '09:00', end: '17:00' }, tue: { start: '09:00', end: '17:00' },
+    wed: { start: '09:00', end: '17:00' }, thu: { start: '09:00', end: '17:00' },
+    fri: { start: '09:00', end: '17:00' },
+};
+const DOW = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat']; // JS getDay() index → key
+
+const to12h = (t) => {
+    const [h, m] = t.split(':').map(Number);
+    const ap = h >= 12 ? 'PM' : 'AM';
+    const hh = ((h + 11) % 12) + 1;
+    return `${hh}:${String(m).padStart(2, '0')} ${ap}`;
+};
+
+// Hourly slot starts within a start–end window (last start is one hour before
+// end, since a consultation runs ~1 hour).
+const slotsBetween = (start, end) => {
+    const [sh] = start.split(':').map(Number);
+    const [eh] = end.split(':').map(Number);
+    const out = [];
+    for (let h = sh; h < eh; h++) out.push(`${String(h).padStart(2, '0')}:00`);
+    return out;
+};
+
+// In-system booking calendar for immigration consultations. Both advisers are
+// shown for display (who you'll meet) — no selection — then the visitor picks a
+// date (native react-day-picker, past/off-days disabled), a time slot, and
+// enters their contact details, all saved to a Booking on confirm.
+function NativeScheduler({ visaTypes = [], availability = {}, businessTz = 'Pacific/Auckland', info, onChange, onConfirm, isSubmitting, error }) {
+    // Advisers' saved availability drives the bookable days + time slots;
+    // fall back to Mon–Fri 9–5 if none has been set. Availability windows are in
+    // the business timezone (NZ); the client sees each slot in their own.
+    const avail = availability && Object.keys(availability).length ? availability : DEFAULT_AVAILABILITY;
+    const disallowed = [0, 1, 2, 3, 4, 5, 6].filter((d) => !avail[DOW[d]]);
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const [day, setDay] = useState(info.appointmentDate ? new Date(`${info.appointmentDate}T00:00:00`) : undefined);
+
+    const clientTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const showBoth = clientTz !== businessTz;
+    const fmtIn = (date, tz) => date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: tz });
+
+    // Each NZ slot → exact UTC instant → labels in both the client's and the
+    // business timezone. The stored time is NZ (for staff); the client sees local.
+    const dayAvail = day ? avail[DOW[day.getDay()]] : null;
+    const slots = useMemo(() => {
+        if (! day || ! dayAvail) return [];
+        return slotsBetween(dayAvail.start, dayAvail.end).map((t) => {
+            const [hh] = t.split(':').map(Number);
+            const utc = new Date(new TZDate(day.getFullYear(), day.getMonth(), day.getDate(), hh, 0, 0, businessTz).getTime());
+            return { nzLabel: fmtIn(utc, businessTz), localLabel: fmtIn(utc, clientTz), utc: utc.toISOString() };
+        });
+    }, [day, dayAvail, businessTz, clientTz]);
+
+    const localTimeLabel = info.appointmentAt ? fmtIn(new Date(info.appointmentAt), clientTz) : info.appointmentTime;
+
+    const pickDay = (d) => {
+        setDay(d);
+        onChange({ appointmentDate: d ? format(d, 'yyyy-MM-dd') : '', appointmentTime: '', appointmentAt: '' });
+    };
+
+    const selectedVisa = visaTypes.find((v) => String(v.id) === String(info.visaTypeId));
+    const inputCls = "w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm outline-none focus:ring-2 focus:ring-[#436235]/30 focus:border-[#436235]";
+    const canConfirm = (visaTypes.length === 0 || info.visaTypeId) && info.firstName?.trim() && info.email?.trim() && info.appointmentDate && info.appointmentTime && !isSubmitting;
+    const payLabel = selectedVisa ? `Confirm & pay NZD $${selectedVisa.price}` : 'Confirm booking';
+
+    return (
+        <div className="space-y-6">
+            <div>
+                <h3 className="text-lg font-semibold text-gray-900">Select a date &amp; time</h3>
+                <p className="text-sm text-gray-500 mt-0.5">Choose a slot that works for you and confirm your details below.</p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Calendar */}
+                <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-3 flex justify-center">
+                    <DayPicker
+                        mode="single"
+                        selected={day}
+                        onSelect={pickDay}
+                        startMonth={today}
+                        disabled={[{ before: today }, { dayOfWeek: disallowed }]}
+                        style={{ '--rdp-accent-color': '#436235', '--rdp-accent-background-color': '#43623515' }}
+                    />
+                </div>
+
+                {/* Time slots */}
+                <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1">
+                        {day ? `Times · ${format(day, 'EEE, d MMM yyyy')}` : 'Pick a date first'}
+                    </p>
+                    {day && showBoth && (
+                        <p className="text-[11px] text-gray-400 mb-2">Shown in your timezone ({clientTz.replace('_', ' ')}). Adviser time is NZ.</p>
+                    )}
+                    {!day ? (
+                        <div className="h-40 flex items-center justify-center text-sm text-gray-400 text-center">
+                            Select a day on the calendar to see available times.
+                        </div>
+                    ) : slots.length === 0 ? (
+                        <div className="h-40 flex items-center justify-center text-sm text-gray-400 text-center">
+                            No times available on this day.
+                        </div>
+                    ) : (
+                        <div className="grid grid-cols-3 gap-2">
+                            {slots.map((s) => {
+                                const active = info.appointmentAt === s.utc;
+                                return (
+                                    <button
+                                        key={s.utc}
+                                        type="button"
+                                        onClick={() => onChange({ appointmentTime: s.nzLabel, appointmentAt: s.utc })}
+                                        title={showBoth ? `NZ time: ${s.nzLabel}` : undefined}
+                                        className={`px-2 py-1.5 rounded-lg text-sm font-medium border transition-colors ${active
+                                            ? 'bg-[#436235] text-white border-[#436235]'
+                                            : 'bg-white text-gray-700 border-gray-200 hover:border-[#436235] hover:text-[#436235]'}`}
+                                    >
+                                        {s.localLabel}
+                                        {showBoth && <span className={`block text-[9px] ${active ? 'text-white/70' : 'text-gray-400'}`}>NZ {s.nzLabel}</span>}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            {/* Contact details */}
+            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5 space-y-4">
+                <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">Your details</p>
+
+                {/* Visa type — drives the consultation fee */}
+                {visaTypes.length > 0 && (
+                    <div>
+                        <label className="block text-xs font-semibold text-gray-600 mb-1">Visa type <span className="text-rose-500">*</span></label>
+                        <select value={info.visaTypeId} onChange={(e) => onChange({ visaTypeId: e.target.value })} className={inputCls}>
+                            <option value="">Select the visa you're applying for…</option>
+                            {visaTypes.map((v) => (
+                                <option key={v.id} value={v.id}>{v.name}{v.code ? ` (${v.code})` : ''} — NZD ${v.price}</option>
+                            ))}
+                        </select>
+                        {selectedVisa && (
+                            <div className="mt-2 flex items-start justify-between gap-3 bg-[#436235]/5 border border-[#436235]/15 rounded-xl px-3 py-2">
+                                <div className="min-w-0">
+                                    <p className="text-sm font-semibold text-gray-800">{selectedVisa.name}</p>
+                                    {selectedVisa.description && <p className="text-xs text-gray-500 mt-0.5">{selectedVisa.description}</p>}
+                                    {selectedVisa.duration ? <p className="text-[11px] text-gray-400 mt-0.5">{selectedVisa.duration} min consultation</p> : null}
+                                </div>
+                                <p className="text-sm font-bold text-[#436235] whitespace-nowrap">NZD ${selectedVisa.price}</p>
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <input className={inputCls} placeholder="First name *" value={info.firstName} onChange={(e) => onChange({ firstName: e.target.value })} />
+                    <input className={inputCls} placeholder="Last name" value={info.lastName} onChange={(e) => onChange({ lastName: e.target.value })} />
+                    <input className={inputCls} type="email" placeholder="Email *" value={info.email} onChange={(e) => onChange({ email: e.target.value })} />
+                    <input className={inputCls} placeholder="Phone" value={info.phoneNumber} onChange={(e) => onChange({ phoneNumber: e.target.value })} />
+                    <input className={`${inputCls} sm:col-span-2`} placeholder="Current country" value={info.country} onChange={(e) => onChange({ country: e.target.value })} />
+                    <textarea className={`${inputCls} sm:col-span-2 resize-y`} rows={3} placeholder="Anything you'd like the adviser to know (optional)" value={info.message} onChange={(e) => onChange({ message: e.target.value })} />
+                </div>
+
+                {(info.appointmentDate && info.appointmentTime) && (
+                    <div className="flex items-center gap-2 text-sm text-[#436235] bg-[#436235]/5 border border-[#436235]/15 rounded-xl px-3 py-2">
+                        <Calendar size={15} /> {format(new Date(`${info.appointmentDate}T00:00:00`), 'EEEE, d MMMM yyyy')} at {localTimeLabel}
+                        {showBoth && <span className="text-[#436235]/70">(NZ {info.appointmentTime})</span>}
+                    </div>
+                )}
+
+                {error && <p className="text-sm text-rose-600">{error}</p>}
+
+                <button
+                    type="button"
+                    onClick={onConfirm}
+                    disabled={!canConfirm}
+                    className="w-full inline-flex items-center justify-center gap-2 px-5 py-3 bg-[#436235] text-white text-sm font-semibold rounded-xl hover:bg-[#375029] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                    {isSubmitting ? 'Confirming…' : payLabel}
+                </button>
+                <p className="text-[11px] text-gray-400 text-center">You'll receive a confirmation email. Times are shown in New Zealand time (NZST).</p>
+            </div>
         </div>
     );
 }

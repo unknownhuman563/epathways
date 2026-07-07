@@ -27,6 +27,7 @@ class BookingController extends Controller
             'email' => 'required|email|max:255',
             'phone' => 'nullable|string|max:20',
             'service_type' => 'required|string',
+            'visa_type_id' => 'nullable|integer|exists:visa_types,id',
             'consultant_name' => 'required|string',
             'message' => 'nullable|string',
             'platform' => 'nullable|string',
@@ -35,6 +36,8 @@ class BookingController extends Controller
             // Sales dashboard's calendar + list immediately on submit.
             'appointment_date' => 'nullable|date',
             'appointment_time' => 'nullable|string|max:50',
+            'appointment_at' => 'nullable|date',
+            'client_timezone' => 'nullable|string|max:64',
         ]);
 
         try {
@@ -50,9 +53,13 @@ class BookingController extends Controller
             ], $request);
 
             $validated['lead_id'] = $lead->id;
-            Booking::create($validated);
+            $validated['payment_status'] = Booking::PAYMENT_UNPAID;
+            $booking = Booking::create($validated);
 
-            return response()->json(['message' => 'Booking created and lead linked successfully'], 201);
+            return response()->json([
+                'message' => 'Booking created and lead linked successfully',
+                'booking_id' => $booking->id,
+            ], 201);
         } catch (\Throwable $e) {
             Log::error('Booking create failed', ['error' => $e->getMessage()]);
 

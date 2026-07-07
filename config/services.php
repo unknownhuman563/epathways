@@ -67,6 +67,17 @@ return [
         'webhook_secret' => env('STRIPE_WEBHOOK_SECRET'),
     ],
 
+    // Consultation booking fees (whole-currency units, e.g. 200 = NZD $200).
+    // Configurable so staff can change pricing without a code change.
+    'booking' => [
+        'immigration_fee' => (int) env('IMMIGRATION_CONSULT_FEE', 200),
+        'currency' => env('BOOKING_CURRENCY', 'nzd'),
+        // Business timezone the advisers' availability is defined in. Clients
+        // see slots converted to their own device timezone; bookings store the
+        // exact UTC moment.
+        'timezone' => env('BOOKING_TIMEZONE', 'Pacific/Auckland'),
+    ],
+
     // Twilio SMS — used by App\Services\Sms\TwilioSmsProvider. Leave
     // TWILIO_SID empty to disable SMS (the system falls back to a no-op
     // provider that logs a 'failed' MessageLog with a clear reason).

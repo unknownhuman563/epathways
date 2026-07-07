@@ -16,6 +16,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->validateCsrfTokens(except: [
             '/api/sync-calendar',
             '/api/chat',
+            '/stripe/webhook',
             '/webhook/zernio',
         ]);
         $middleware->web(append: [

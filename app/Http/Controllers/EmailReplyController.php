@@ -5,8 +5,9 @@ namespace App\Http\Controllers;
 use App\Models\EmailReply;
 use App\Services\CommunicationService;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Str;
+use Symfony\Component\HtmlSanitizer\HtmlSanitizer;
+use Symfony\Component\HtmlSanitizer\HtmlSanitizerConfig;
 
 /**
  * Email Replies inbox — a conversation view per lead. Inbound messages are
@@ -18,6 +19,7 @@ class EmailReplyController extends Controller
     public function index(Request $request)
     {
         $search = trim((string) $request->query('q', ''));
+        $sanitizer = $this->htmlSanitizer();
 
         $messages = EmailReply::with('lead:id,first_name,last_name,email')
             ->whereNotNull('lead_id')
@@ -27,7 +29,7 @@ class EmailReplyController extends Controller
         // Group every message into a per-lead conversation thread.
         $threads = $messages
             ->groupBy('lead_id')
-            ->map(function ($msgs) {
+            ->map(function ($msgs) use ($sanitizer) {
                 $lead = $msgs->first()->lead;
                 $last = $msgs->last();
 
@@ -47,7 +49,10 @@ class EmailReplyController extends Controller
                         'direction' => $m->direction,
                         'from_email' => $m->from_email,
                         'from_name' => $m->from_name,
-                        'body_html' => $m->body_html,
+                        // Inbound HTML comes from arbitrary external senders —
+                        // sanitize before it ever reaches the admin's browser
+                        // (strips scripts, event handlers, javascript: URLs).
+                        'body_html' => $m->body_html ? $sanitizer->sanitize($m->body_html) : null,
                         'body_text' => $m->body_text,
                         'received_at' => optional($m->received_at)->toIso8601String(),
                     ])->values(),
@@ -67,6 +72,24 @@ class EmailReplyController extends Controller
             'mailbox' => config('services.imap.username'),
             'search' => $search,
         ]);
+    }
+
+    /**
+     * Sanitizer for untrusted inbound email HTML. Allows a safe subset of
+     * presentational elements/attributes and only http(s)/mailto links; drops
+     * <script>, event handlers, javascript:/data: URLs, iframes, forms, etc.
+     */
+    private function htmlSanitizer(): HtmlSanitizer
+    {
+        $config = (new HtmlSanitizerConfig)
+            ->allowSafeElements()
+            ->allowRelativeLinks()
+            ->allowRelativeMedias()
+            ->allowLinkSchemes(['https', 'http', 'mailto'])
+            ->allowMediaSchemes(['https', 'http', 'data'])
+            ->dropAttribute('style', '*');
+
+        return new HtmlSanitizer($config);
     }
 
     /** Mark a lead's whole thread (its inbound messages) as read. */
