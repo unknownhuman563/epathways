@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
+import AvatarCropModal from '@/components/ui/AvatarCropModal';
+import Avatar from '@/components/ui/Avatar';
 import {
     Search, Plus, Edit2, Trash2, ChevronDown, ChevronLeft, ChevronRight,
     Users as UsersIcon, ShieldCheck, Briefcase, X, AlertCircle, AlertTriangle, Mail,
@@ -52,6 +54,8 @@ function UserModal({ open, onClose, editing, roles }) {
     const isEdit = !!editing;
     const [preview, setPreview] = useState(null);
     const [showPassword, setShowPassword] = useState(false);
+    // Holds the just-picked image while the user crops/centres it.
+    const [cropState, setCropState] = useState(null); // { src, name } | null
 
     // Only a super admin may assign the Super Admin role. Admins don't see it —
     // unless they're editing someone who already has it (so it isn't silently
@@ -81,17 +85,32 @@ function UserModal({ open, onClose, editing, roles }) {
             clearErrors();
             setPreview(null);
             setShowPassword(false);
+            setCropState(null);
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [open, editing?.id]);
 
     const setField = (key, val) => setData(key, val);
 
+    // Picking a file opens the cropper; the actual avatar is set only after
+    // the user centres the face and hits Apply.
     const onPickAvatar = (e) => {
         const file = e.target.files?.[0];
+        e.target.value = ''; // allow re-picking the same file
         if (!file) return;
+        setCropState({ src: URL.createObjectURL(file), name: file.name });
+    };
+
+    const onCropCancel = () => {
+        if (cropState?.src) URL.revokeObjectURL(cropState.src);
+        setCropState(null);
+    };
+
+    const onCropDone = (file, previewUrl) => {
         setData('avatar', file);
-        setPreview(URL.createObjectURL(file));
+        setPreview(previewUrl);
+        if (cropState?.src) URL.revokeObjectURL(cropState.src);
+        setCropState(null);
     };
 
     const submit = () => {
@@ -237,6 +256,15 @@ function UserModal({ open, onClose, editing, roles }) {
                 @keyframes slideInRight { from { transform: translateX(100%); } to { transform: translateX(0); } }
                 .animate-slide-in-right { animation: slideInRight 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
             `}} />
+
+            {cropState && (
+                <AvatarCropModal
+                    src={cropState.src}
+                    fileName={cropState.name}
+                    onCancel={onCropCancel}
+                    onDone={onCropDone}
+                />
+            )}
         </>
     );
 }
@@ -435,9 +463,7 @@ export default function Users({ users = [], roles = [], leads = [], students = [
                                     <tr key={user.id} className="hover:bg-blue-50/30 transition-colors">
                                         <td className="px-6 py-4">
                                             <div className="flex items-center gap-3">
-                                                <div className="w-9 h-9 rounded-full bg-gray-900 text-white flex items-center justify-center text-sm font-bold flex-shrink-0">
-                                                    {user.name?.charAt(0)?.toUpperCase() || '?'}
-                                                </div>
+                                                <Avatar name={user.name} src={user.avatar_url} colorKey={user.id} size={36} className="flex-shrink-0" />
                                                 <div className="flex items-center gap-2">
                                                     <span className="font-bold text-gray-900 text-sm">{user.name}</span>
                                                     {isSelf && <span className="text-[10px] font-bold uppercase tracking-wide text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">You</span>}
