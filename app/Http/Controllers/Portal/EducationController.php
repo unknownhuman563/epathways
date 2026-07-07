@@ -251,10 +251,16 @@ class EducationController extends Controller
                 ->get()
                 ->map(function ($l) {
                     $plan = $l->studyPlans->first();
+                    // Checklist progress (submitted vs visible items) — same
+                    // metric the Immigration Cases + Leads Docs column uses.
+                    $checklist = $this->leadChecklistTotals($l);
 
                     return [
                         'id' => $l->id,
                         'lead_id' => $l->lead_id,
+                        // General lead priority (urgent | medium | low) —
+                        // shown + editable in the collapsed row.
+                        'priority' => $l->priority,
                         // Customer-shareable tracking code — drives the
                         // "Copy tracking link" row action so staff can
                         // paste a /track/{code} URL straight to the student.
@@ -313,6 +319,9 @@ class EducationController extends Controller
                         'comments' => $l->student_comments,
                         'docs_total' => $l->documents->count(),
                         'docs_approved' => $l->documents->where('status', 'Approved')->count(),
+                        // Checklist-based progress for the Docs column bar.
+                        'checklist_total' => $checklist['total'],
+                        'checklist_submitted' => $checklist['submitted'],
                     ];
                 });
 
