@@ -950,17 +950,14 @@ function DocumentsHubTab({
                     title="SV Information Form"
                     eyebrow="Start here"
                 >
-                    <ul className="divide-y divide-gray-100 border border-gray-100">
-                        {svRows.map((row) => (
-                            <RequirementRow
-                                key={row.key}
-                                row={row}
-                                onOpenUpload={onOpenUpload}
-                                onOpenReplace={onOpenReplace}
-                                onDelete={onDelete}
-                            />
-                        ))}
-                    </ul>
+                    <div className="bg-gray-50/70 border border-gray-100 rounded-xl p-3 sm:p-4">
+                        <ChecklistTable
+                            rows={svRows}
+                            onOpenUpload={onOpenUpload}
+                            onOpenReplace={onOpenReplace}
+                            onDelete={onDelete}
+                        />
+                    </div>
                 </DocsSection>
             )}
 
@@ -1002,21 +999,16 @@ function DocumentsHubTab({
                 ) : (
                     <div className="space-y-5">
                         {requirementsBySection.map(({ section, items }) => (
-                            <div key={section}>
+                            <div key={section} className="bg-gray-50/70 border border-gray-100 rounded-xl p-3 sm:p-4">
                                 <p className="text-[10px] font-bold tracking-[0.22em] uppercase text-gray-500 mb-2 inline-flex items-center gap-1.5">
                                     <FolderIcon size={11} strokeWidth={2} /> {section}
                                 </p>
-                                <ul className="divide-y divide-gray-100 border border-gray-100">
-                                    {items.map((row) => (
-                                        <RequirementRow
-                                            key={row.key}
-                                            row={row}
-                                            onOpenUpload={onOpenUpload}
-                                            onOpenReplace={onOpenReplace}
-                                            onDelete={onDelete}
-                                        />
-                                    ))}
-                                </ul>
+                                <ChecklistTable
+                                    rows={items}
+                                    onOpenUpload={onOpenUpload}
+                                    onOpenReplace={onOpenReplace}
+                                    onDelete={onDelete}
+                                />
                             </div>
                         ))}
                     </div>
@@ -1383,6 +1375,138 @@ function UploadMobileCard({ doc, onOpenReplace, onDelete }) {
                 </div>
             </div>
         </div>
+    );
+}
+
+// ── Checklist as a table ───────────────────────────────────────────────────
+// Columns: File name · Attachment (the file for this case) · Status · Actions
+// (View / Upload another / Replace). Scrolls horizontally on small screens.
+
+const trackBtn = "inline-flex items-center gap-1 px-2 py-1 border border-gray-200 bg-white text-[11px] font-semibold text-gray-600 hover:text-[#282728] hover:bg-gray-50 transition-colors";
+
+function ChecklistTable({ rows, onOpenUpload, onOpenReplace, onDelete }) {
+    return (
+        <div className="overflow-x-auto bg-white border border-gray-200 rounded-lg shadow-sm">
+            <table className="w-full text-[13px] min-w-[560px]" style={{ tableLayout: 'fixed' }}>
+                <colgroup>
+                    <col style={{ width: '30%' }} />
+                    <col style={{ width: '26%' }} />
+                    <col style={{ width: '15%' }} />
+                    <col />
+                </colgroup>
+                <thead>
+                    <tr className="bg-gray-50/60 border-b border-gray-100 text-[10px] font-bold tracking-[0.16em] uppercase text-gray-500">
+                        <th className="text-left px-4 py-2.5">File name</th>
+                        <th className="text-left px-4 py-2.5">Attachment</th>
+                        <th className="text-left px-4 py-2.5">Status</th>
+                        <th className="text-left px-4 py-2.5">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {rows.map((row) => (
+                        <ChecklistRow
+                            key={row.key}
+                            row={row}
+                            onOpenUpload={onOpenUpload}
+                            onOpenReplace={onOpenReplace}
+                            onDelete={onDelete}
+                        />
+                    ))}
+                </tbody>
+            </table>
+        </div>
+    );
+}
+
+function ChecklistRow({ row, onOpenUpload, onOpenReplace, onDelete }) {
+    const doc = row.doc;
+    const isRejected = row.state === 'rejected';
+    const hasFile = doc && ! isRejected;
+    const viewUrl = doc ? (doc.url || `/admin/documents/${doc.id}/download?inline=1`) : null;
+
+    const dot = isRejected ? 'bg-red-500' : hasFile ? 'bg-emerald-500' : 'bg-gray-300';
+
+    const statusBadge = hasFile ? (
+        <span className={`inline-flex items-center px-1.5 py-0.5 text-[9px] font-bold tracking-[0.1em] uppercase border ${UPLOAD_STATUS_TONE[doc.status] || 'bg-emerald-50 text-emerald-700 border-emerald-200'}`}>
+            {UPLOAD_STATUS_LABEL[doc.status] || doc.status}
+        </span>
+    ) : isRejected ? (
+        <span className="inline-flex items-center px-1.5 py-0.5 text-[9px] font-bold tracking-[0.1em] uppercase border bg-red-50 text-red-700 border-red-200">Rejected</span>
+    ) : (
+        <span className="inline-flex items-center px-1.5 py-0.5 text-[9px] font-bold tracking-[0.1em] uppercase border bg-gray-50 text-gray-500 border-gray-200">Not submitted</span>
+    );
+
+    return (
+        <tr className="border-t border-gray-50 align-top hover:bg-gray-50/40">
+            {/* File name (the document / checklist item) */}
+            <td className="px-4 py-3">
+                <div className="flex items-start gap-2 min-w-0">
+                    <span className={`mt-1 w-2 h-2 rounded-full flex-shrink-0 ${dot}`} />
+                    <div className="min-w-0">
+                        <p className="text-[13px] font-semibold text-[#282728] flex items-center gap-1.5 flex-wrap">
+                            {row.name}
+                            {! hasFile && ! isRejected && ! row.required && (
+                                <span className="px-1.5 py-0.5 text-[9px] font-bold tracking-wide uppercase bg-gray-50 text-gray-500 border border-gray-200">Optional</span>
+                            )}
+                        </p>
+                        {isRejected && row.rejectedDoc?.note ? (
+                            <p className="text-[11px] text-red-700 mt-0.5">Reason: {row.rejectedDoc.note}</p>
+                        ) : row.hint ? (
+                            <p className="text-[11px] text-gray-500 mt-0.5">{row.hint}</p>
+                        ) : null}
+                    </div>
+                </div>
+            </td>
+
+            {/* Attachment — the file attached for this case */}
+            <td className="px-4 py-3">
+                {doc ? (
+                    <span className="inline-flex items-center gap-1.5 text-[12px] text-gray-700 min-w-0 max-w-full">
+                        <FileText size={12} className="text-gray-400 flex-shrink-0" />
+                        <span className="truncate" title={doc.original_name}>{doc.original_name}</span>
+                    </span>
+                ) : (
+                    <span className="text-[12px] text-gray-400 italic">No file attached</span>
+                )}
+            </td>
+
+            {/* Status */}
+            <td className="px-4 py-3">{statusBadge}</td>
+
+            {/* Actions — view / upload another / replace */}
+            <td className="px-4 py-3">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                    {hasFile ? (
+                        <>
+                            <a href={viewUrl} target="_blank" rel="noopener noreferrer" title="View" className={trackBtn}>
+                                <Eye size={12} />
+                            </a>
+                            <button type="button" onClick={() => onOpenUpload(row)} className={trackBtn}>
+                                <Plus size={12} /> Upload another
+                            </button>
+                            {doc.is_editable && (
+                                <button type="button" onClick={() => onOpenReplace(doc)} className={trackBtn}>
+                                    <Upload size={12} /> Replace
+                                </button>
+                            )}
+                            {doc.is_editable && (
+                                <button type="button" onClick={() => onDelete(doc)} title="Remove" className={`${trackBtn} hover:text-red-600`}>
+                                    <Trash2 size={12} />
+                                </button>
+                            )}
+                        </>
+                    ) : (
+                        <button
+                            type="button"
+                            onClick={() => onOpenUpload(row)}
+                            className="inline-flex items-center gap-1 bg-[#282728] text-white text-[11px] font-bold uppercase tracking-wide px-3 py-1.5 hover:bg-black transition-colors"
+                        >
+                            <Upload size={12} /> {isRejected ? 'Re-upload' : 'Upload'}
+                        </button>
+                    )}
+                </div>
+            </td>
+        </tr>
     );
 }
 
