@@ -222,7 +222,13 @@ export default function SalesLeads({ leads = [], statuses = [], programs = [], s
             },
         });
     };
-    const [sortKey, setSortKey] = useState("created_at");
+    // Default sort — most-recently-touched first. `updated_at` bumps
+    // whenever any field on the row changes (stage, note attach, priority,
+    // manual edit, etc.), so it's the closest single-column proxy for
+    // "current activity". Priority still leads the tie-break (see the
+    // comparator below) so urgent/medium leads stay pinned above no-
+    // priority rows in the same time band.
+    const [sortKey, setSortKey] = useState("updated_at");
     const [sortDir, setSortDir] = useState("desc");
     const [page, setPage] = useState(1);
     const [openStageMenuId, setOpenStageMenuId] = useState(null);
@@ -256,6 +262,13 @@ export default function SalesLeads({ leads = [], statuses = [], programs = [], s
         });
 
         const dir = sortDir === "asc" ? 1 : -1;
+        // When sorting by pipeline activity, fall back to `updated_at` for
+        // rows that have never had a stage move — otherwise brand-new
+        // leads (null stage_updated_at) all pile up at the bottom.
+        const readSortValue = (row) => {
+            if (sortKey === "stage_updated_at") return row.stage_updated_at || row.updated_at || "";
+            return row[sortKey] ?? "";
+        };
         return [...rows].sort((a, b) => {
             // Priority always leads the ordering: urgent → medium → low →
             // no-priority (matches the Cases board). The chosen column only
@@ -263,8 +276,8 @@ export default function SalesLeads({ leads = [], statuses = [], programs = [], s
             const pr = priorityRank(a.priority) - priorityRank(b.priority);
             if (pr !== 0) return pr;
 
-            const av = a[sortKey] ?? "";
-            const bv = b[sortKey] ?? "";
+            const av = readSortValue(a);
+            const bv = readSortValue(b);
             if (av < bv) return -1 * dir;
             if (av > bv) return 1 * dir;
             return 0;

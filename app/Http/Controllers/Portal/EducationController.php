@@ -174,6 +174,17 @@ class EducationController extends Controller
         ]);
     }
 
+    /** GET /portal/education/events/{id}/registrants — full-page registrants view. */
+    public function eventRegistrantsPage($id)
+    {
+        $event = Event::findOrFail($id);
+
+        return inertia('portal/education/EventRegistrants', array_merge(
+            $this->eventRegistrantsPayload($event),
+            ['portalBase' => '/portal/education']
+        ));
+    }
+
     /** Manually add a lead from the dashboard "Add Lead" form. */
     public function storeLead(Request $request)
     {
