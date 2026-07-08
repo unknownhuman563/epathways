@@ -658,12 +658,22 @@ export default function SalesLeads({ leads = [], statuses = [], programs = [], s
                                             </div>
                                         </td>
 
-                                        {/* LOCATION — city + country */}
+                                        {/* LOCATION — city highlighted on top,
+                                            country underneath. Falls back to
+                                            country-only when the lead never
+                                            told us their city. */}
                                         <td className="px-3 py-2.5">
-                                            {l.location ? (
-                                                <div className="inline-flex items-center gap-1.5 text-gray-600">
-                                                    <MapPin size={11} className="text-gray-300 flex-shrink-0" />
-                                                    <span className="truncate max-w-[140px]">{l.location}</span>
+                                            {l.residence_city || l.residence_country || l.country ? (
+                                                <div className="flex items-start gap-1.5">
+                                                    <MapPin size={11} className="text-gray-300 flex-shrink-0 mt-0.5" />
+                                                    <div className="min-w-0">
+                                                        {l.residence_city && (
+                                                            <div className="font-semibold text-gray-900 truncate max-w-[140px]">{l.residence_city}</div>
+                                                        )}
+                                                        {(l.residence_country || l.country) && (
+                                                            <div className="text-[11px] text-gray-500 truncate max-w-[140px]">{l.residence_country || l.country}</div>
+                                                        )}
+                                                    </div>
                                                 </div>
                                             ) : (
                                                 <span className="text-gray-300">—</span>
@@ -2030,6 +2040,17 @@ function AddNoteInline({ leadId, portalBase, staffOptions = [], onSaved }) {
     const [goalBy, setGoalBy] = useState("");
     const [saving, setSaving] = useState(false);
 
+    // Auto-grow the textarea so long notes expand the box rather than
+    // scroll inside a fixed-height frame. Re-runs on every keystroke +
+    // whenever the composer opens.
+    const textareaRef = useRef(null);
+    useEffect(() => {
+        const el = textareaRef.current;
+        if (! el) return;
+        el.style.height = "auto";
+        el.style.height = `${el.scrollHeight}px`;
+    }, [body, open]);
+
     const reset = () => { setKind("general"); setBody(""); setPreBy(""); setGoalStatus(""); setGoalBy(""); };
 
     const submit = () => {
@@ -2102,11 +2123,13 @@ function AddNoteInline({ leadId, portalBase, staffOptions = [], onSaved }) {
             )}
 
             <textarea
+                ref={textareaRef}
                 value={body}
                 onChange={(e) => setBody(e.target.value)}
                 rows={2}
                 placeholder="Type here"
-                className={fieldCls + " resize-none"}
+                className={fieldCls + " resize-none overflow-hidden"}
+                style={{ minHeight: "3rem" }}
             />
 
             <div className="flex items-center justify-end gap-2">

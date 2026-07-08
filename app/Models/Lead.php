@@ -347,6 +347,7 @@ class Lead extends Model
 
         // ── Wide profile-info build (column shapes match the
         //    widen_lead_personal_info_columns migration). ──────────────
+        //    widen_lead_personal_info_columns migration). ──────────────
         'dob' => 'date',
         'passport_expiry' => 'date',
         'passport_issue_date' => 'date',
@@ -392,6 +393,14 @@ class Lead extends Model
         'english_test_writing' => 'decimal:2',
         'english_test_speaking' => 'decimal:2',
     ];
+
+    /**
+     * Computed accessors serialised onto every Lead JSON payload. `age`
+     * is derived from `dob` (see getAgeAttribute below) so the Personal
+     * Information section on the lead detail page can display it
+     * without an extra client-side calculation.
+     */
+    protected $appends = ['age'];
 
     /** Portal account (User row with role='lead'), if one exists. */
     public function portalUser()
