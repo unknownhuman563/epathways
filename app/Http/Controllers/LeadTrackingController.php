@@ -581,7 +581,7 @@ class LeadTrackingController extends Controller
      * same hidden_track_documents mechanism as any other checklist item.
      */
     private const UNIVERSAL_ITEMS = [
-        ['key' => 'svf', 'label' => 'SV Information Form', 'hint' => 'Student Visa information form prepared with your adviser.'],
+        ['key' => 'svf', 'label' => 'Visa Information Form', 'hint' => 'Visa information form prepared with your adviser.'],
     ];
 
     /**
@@ -592,6 +592,9 @@ class LeadTrackingController extends Controller
     private function universalTopItems(Lead $lead, $docsByKey): array
     {
         $hidden = is_array($lead->hidden_track_documents) ? $lead->hidden_track_documents : [];
+        // The Information Form is "Student Visa Information Form" for student
+        // visas, plain "Visa Information Form" everywhere else.
+        $isStudent = str_contains(strtolower((string) $lead->inz_visa_type), 'student');
         $out = [];
 
         foreach (self::UNIVERSAL_ITEMS as $u) {
@@ -611,7 +614,7 @@ class LeadTrackingController extends Controller
 
             $out[] = [
                 'key' => $u['key'],
-                'label' => $u['label'],
+                'label' => ($u['key'] === 'svf' && $isStudent) ? 'Student Visa Information Form' : $u['label'],
                 'hint' => $u['hint'] ?? null,
                 'required' => true,
                 'status' => $status,
@@ -753,7 +756,7 @@ class LeadTrackingController extends Controller
                 // the section header, so encode it in the label.
                 $decorated[] = [
                     'key' => $key,
-                    'label' => ($section['section'] ?? 'General') . ' · ' . ($item['name'] ?? $key),
+                    'label' => ($section['section'] ?? 'General').' · '.($item['name'] ?? $key),
                     'hint' => $item['hint'] ?? null,
                     'required' => ($item['required'] ?? true) ? true : false,
                     'status' => $status,

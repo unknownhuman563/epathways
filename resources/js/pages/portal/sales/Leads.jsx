@@ -716,13 +716,16 @@ export default function SalesLeads({ leads = [], statuses = [], programs = [], s
                                             )}
                                         </td>
 
-                                        {/* UPDATED — datetime + staff who last moved the stage */}
+                                        {/* UPDATED — line 1: date + time,
+                                            line 2: staff who last moved the stage. */}
                                         <td className="px-3 py-2.5 whitespace-nowrap">
-                                            <div className="text-gray-600">{fmtDateShort(l.updated_at)}</div>
-                                            <div className="text-[10px] text-gray-400">
-                                                {fmtTime(l.updated_at)}
-                                                {l.updated_by ? ` · ${l.updated_by}` : ""}
+                                            <div className="text-gray-600">
+                                                {fmtDateShort(l.updated_at)}
+                                                <span className="text-gray-400"> · {fmtTime(l.updated_at)}</span>
                                             </div>
+                                            {l.updated_by && (
+                                                <div className="text-[10px] text-gray-400">{l.updated_by}</div>
+                                            )}
                                         </td>
 
                                         <td className="px-3 py-2.5 pr-4 text-right">

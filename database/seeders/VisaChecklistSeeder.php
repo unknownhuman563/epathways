@@ -538,34 +538,43 @@ class VisaChecklistSeeder extends Seeder
 
     private function studentVisaDependentChild(): array
     {
+        $identity = 'Identity & Photo';
+        $rel = 'Relationship & Sponsorship';
+        $health = 'Health & Character';
+        $living = 'Proof of Living Situation';
+
         return [
-            $this->item('passport_pdf', 'Identity', 'Passport (PDF)',
-                "Clear colour scan of the child's current, valid passport in PDF format."),
-            $this->item('passport_bio_page', 'Identity', 'Passport biographical page',
-                "The photo/details page showing the child's name, date of birth, passport number and expiry."),
-            $this->item('face_image_jpg', 'Identity', 'Face image (JPG)',
-                'Recent passport-style photo – plain light background, full face – saved as a JPG file.'),
+            // ── Identity & Photo ─────────────────────────────────────────
+            $this->item('passport', $identity, 'Passport (PDF)',
+                "Clear colour scan of the child's current, valid passport in PDF format.", true, 'PPT'),
+            $this->item('passport_bio_page', $identity, 'Passport biographical page',
+                "The photo/details page showing the child's name, date of birth, passport number and expiry.", true, 'PPTBIO'),
+            $this->item('face_image', $identity, 'Face image (JPG)',
+                'Recent passport-style photo — plain light background, full face — saved as a JPG file.', true, 'FI'),
 
-            $this->item('birth_certificate', 'Relationship & Sponsorship', 'Birth certificate',
-                "Full birth certificate naming both parents, to prove the child's relationship to the sponsoring parent."),
-            $this->item('sponsor_sv_visa', 'Relationship & Sponsorship', "Sponsor's most recent NZ visa (SV)",
-                "Copy of the sponsoring parent's current NZ Student Visa."),
-            $this->item('applicant_nz_visa', 'Relationship & Sponsorship', "Applicant's current NZ visa",
-                "Copy of the child's existing NZ visa, if they currently hold one. If applicable.", false),
-            $this->item('family_visa_info_form', 'Relationship & Sponsorship', 'Family Visa Information Form',
-                'The completed and signed Immigration NZ family/dependent information form.'),
-            $this->item('inz_1241_by_parent', 'Relationship & Sponsorship', 'Signed INZ 1241 (by parent)',
-                'Declaration form signed by the parent in support of the dependent child.'),
+            // ── Relationship & Sponsorship ───────────────────────────────
+            $this->item('birth_certificate', $rel, 'Birth certificate',
+                "Full birth certificate naming both parents, to prove the child's relationship to the sponsoring parent.", true, 'BC', '(of child)'),
+            $this->item('sponsor_sv_visa', $rel, "Sponsor's most recent NZ visa (SV)",
+                "Copy of the sponsoring parent's current NZ Student Visa.", true, 'SV', '(of sponsor)'),
+            $this->item('applicant_nz_visa', $rel, "Applicant's current NZ visa (if held)",
+                "Copy of the child's existing NZ visa, if they currently hold one. If applicable.", false, 'NZVISA'),
+            $this->item('family_visa_info_form', $rel, 'Family Visa Information Form',
+                'The completed and signed Immigration NZ family/dependent information form.', true, 'FVIF'),
+            $this->item('inz_1241', $rel, 'Signed INZ 1241 (by parent)',
+                'Declaration form signed by the parent in support of the dependent child.', true, 'INZ1241', '(by parent)'),
 
-            $this->item('medical_certificate', 'Health & Character', 'E-medicals (X-ray & general medical)',
-                'Completed at an Immigration NZ-approved panel clinic. Required if the previous medical has expired (over 3 years old) or was never provided.'),
-            $this->item('police_clearance', 'Health & Character', 'NBI clearance (if 18+)',
-                'A recent police/character certificate, required if the applicant is 18 years or older. Required if applicable.', false),
+            // ── Health & Character ───────────────────────────────────────
+            $this->item('medical_certificate', $health, 'E-medicals (X-ray & general medical)',
+                'Completed at an INZ-approved panel clinic. Required if the previous medical has expired (over 3 years old) or was never provided.', false, 'eMED'),
+            $this->item('nbi_police_clearance', $health, 'NBI clearance (if 18+)',
+                'A recent police/character certificate (NBI for the Philippines), required if the applicant is 18 years or older.', false, 'NBI'),
 
-            $this->item('shared_address_bills', 'Proof of Living', 'Bills & mail to the same address',
-                "Utility bills, bank statements or dated online purchases showing the applicant's name at the shared address."),
-            $this->item('house_tenancy', 'Proof of Living', 'House ownership or tenancy agreement',
-                'Proof of the home – ownership/title document or a current tenancy agreement.'),
+            // ── Proof of Living Situation ────────────────────────────────
+            $this->item('shared_address_bills', $living, 'Bills & mail to the same address',
+                "Utility bills, bank statements or dated online purchases showing the applicant's name at the shared address.", true, 'BILLS'),
+            $this->item('house_tenancy', $living, 'House ownership or tenancy agreement',
+                'Proof of the home — ownership/title document or a current tenancy agreement.', true, 'HOUSE'),
         ];
     }
 }
