@@ -43,7 +43,7 @@ class CaseChecklistService
      * same list — KEEP IN SYNC.
      */
     private const UNIVERSAL_ITEMS = [
-        ['key' => 'svf', 'label' => 'SV Information Form', 'hint' => 'Student Visa information form prepared with your adviser.', 'required' => true, 'category' => 'Information Form'],
+        ['key' => 'svf', 'label' => 'Visa Information Form', 'hint' => 'Visa information form prepared with your adviser.', 'required' => true, 'category' => 'Information Form'],
     ];
 
     public function forCase(Lead $lead): array
@@ -58,7 +58,25 @@ class CaseChecklistService
             fn ($i) => ! in_array($i['key'] ?? null, $universalKeys, true)
         ));
 
-        return array_merge($this->normaliseItems(self::UNIVERSAL_ITEMS), $base);
+        return array_merge($this->normaliseItems($this->universalItemsFor($lead)), $base);
+    }
+
+    /**
+     * Universal items with per-lead label tweaks: the Information Form reads
+     * "Student Visa Information Form" for student visas, plain "Visa
+     * Information Form" everywhere else.
+     */
+    private function universalItemsFor(Lead $lead): array
+    {
+        $isStudent = str_contains(strtolower((string) $lead->inz_visa_type), 'student');
+
+        return array_map(function ($item) use ($isStudent) {
+            if (($item['key'] ?? null) === 'svf' && $isStudent) {
+                $item['label'] = 'Student Visa Information Form';
+            }
+
+            return $item;
+        }, self::UNIVERSAL_ITEMS);
     }
 
     /** The visa-type / per-lead / config checklist before universal items. */

@@ -4,7 +4,7 @@ import { router } from '@inertiajs/react';
 import {
     GraduationCap, Briefcase, Plane, Heart, Home, HelpCircle, Globe,
     Pencil, X, History as HistoryIcon, ChevronDown, ChevronUp, AlertTriangle, Save,
-    Plus, Trash2,
+    Plus, Trash2, Copy,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -781,6 +781,14 @@ function ChecklistEditor({ items = [], onChange, errors = {} }) {
 
     const remove = (i) => onChange(items.filter((_, idx) => idx !== i));
 
+    // Insert a copy of item `i` right after it. Keys must stay unique, so the
+    // clone's key gets a `_copy` suffix for the staffer to adjust.
+    const duplicate = (i) => {
+        const src = items[i] || {};
+        const copy = { ...src, key: src.key ? `${src.key}_copy` : '' };
+        onChange([...items.slice(0, i + 1), copy, ...items.slice(i + 1)]);
+    };
+
     const move = (i, dir) => {
         const j = i + dir;
         if (j < 0 || j >= items.length) return;
@@ -913,14 +921,24 @@ function ChecklistEditor({ items = [], onChange, errors = {} }) {
                             </div>
                         </div>
 
-                        <button
-                            type="button"
-                            onClick={() => remove(i)}
-                            title="Remove this requirement"
-                            className="w-7 h-7 flex items-center justify-center text-rose-500 hover:bg-rose-50 rounded-md transition-colors flex-shrink-0"
-                        >
-                            <Trash2 size={13} />
-                        </button>
+                        <div className="flex items-center gap-0.5 flex-shrink-0">
+                            <button
+                                type="button"
+                                onClick={() => duplicate(i)}
+                                title="Duplicate this requirement"
+                                className="w-7 h-7 flex items-center justify-center text-gray-400 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-colors"
+                            >
+                                <Copy size={13} />
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => remove(i)}
+                                title="Remove this requirement"
+                                className="w-7 h-7 flex items-center justify-center text-rose-500 hover:bg-rose-50 rounded-md transition-colors"
+                            >
+                                <Trash2 size={13} />
+                            </button>
+                        </div>
                     </div>
 
                     <div className="ml-7 grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-2 items-start">
