@@ -6,6 +6,7 @@ import {
     Briefcase, Languages, Building2, KeyRound, Sparkles, Tag,
     Radio, PenLine, CalendarDays, Inbox, Megaphone, BarChart3,
     CheckSquare, Clock, Crown, LifeBuoy, Mail, MessageSquare, Smartphone,
+    Wallet, UserCheck,
 } from "lucide-react";
 
 // Super-admin-only entry — only injected when the current user holds
@@ -74,6 +75,8 @@ const ADMIN_NAV = [
             { name: "English Portal", href: "/portal/english/dashboard", icon: <Languages size={16} /> },
             { name: "Immigration Portal", href: "/portal/immigration/dashboard", icon: <Globe size={16} /> },
             { name: "Accommodation Portal", href: "/portal/accommodation/dashboard", icon: <Building2 size={16} /> },
+            { name: "Finance Portal", href: "/portal/finance/dashboard", icon: <Wallet size={16} /> },
+            { name: "Agent Portal", href: "/portal/agent/dashboard", icon: <UserCheck size={16} /> },
         ],
     },
     { name: "User Management", href: "/admin/users", icon: <UserCog size={20} /> },

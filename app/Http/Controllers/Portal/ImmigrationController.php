@@ -269,6 +269,17 @@ class ImmigrationController extends Controller
         ]);
     }
 
+    /** GET /portal/immigration/events/{id}/registrants — full-page registrants view. */
+    public function eventRegistrantsPage($id)
+    {
+        $event = Event::findOrFail($id);
+
+        return inertia('portal/immigration/EventRegistrants', array_merge(
+            $this->eventRegistrantsPayload($event),
+            ['portalBase' => '/portal/immigration']
+        ));
+    }
+
     /**
      * Cases — leads that have engaged Immigration (currently proxied via
      * Visa Process stage; a dedicated is_immigration_case flag is the next

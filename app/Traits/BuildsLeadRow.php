@@ -2,6 +2,7 @@
 
 namespace App\Traits;
 
+use App\Models\Event;
 use App\Models\Lead;
 
 /**
@@ -79,6 +80,10 @@ trait BuildsLeadRow
             // the lead's stage (the tracked "who touched this" signal).
             'updated_at' => $l->updated_at,
             'updated_by' => optional($l->stageUpdater)->name,
+            // When staff last moved this lead through the pipeline. Drives
+            // the default "actively-being-worked-on" sort on the Sales
+            // Leads table so recently-advanced leads bubble to the top.
+            'stage_updated_at' => $l->stage_updated_at,
             // Recruiting Agent who added this lead (null for staff-added
             // leads). Drives the Sales Leads "Agent" column + Agents tab.
             'agent' => $l->agent ? [
@@ -190,6 +195,48 @@ trait BuildsLeadRow
         return [
             'total' => $visible->count(),
             'submitted' => $visible->intersect($submittedKeys)->count(),
+        ];
+    }
+
+    /**
+     * Inertia props for the full-page "View registrants" screen — shared by
+     * every portal so the registrants table + expandable dashboard panel
+     * render identically to the Open-opportunities table. Callers add their
+     * own `portalBase` (drives the row-action / back-link URLs).
+     *
+     * @return array{event: array, registrations: \Illuminate\Support\Collection, statuses: array}
+     */
+    protected function eventRegistrantsPayload(Event $event): array
+    {
+        $registrations = $event->leads()
+            ->with([
+                'studyPlans', 'tags:id,name', 'portalUser:id,lead_id,last_login_at',
+                'stageUpdater:id,name', 'eventNotesEditor:id,name',
+                'notes' => fn ($q) => $q->latest(),
+            ])
+            ->withCount(['notes', 'documents'])
+            ->latest()
+            ->get()
+            ->map(fn (Lead $l) => array_merge($this->leadRow($l), [
+                'event_notes'            => $l->event_notes,
+                'event_notes_updated_at' => optional($l->event_notes_updated_at)->toIso8601String(),
+                'event_notes_editor'     => $l->eventNotesEditor
+                    ? ['id' => $l->eventNotesEditor->id, 'name' => $l->eventNotesEditor->name]
+                    : null,
+            ]));
+
+        return [
+            'event' => [
+                'id'         => $event->id,
+                'name'       => $event->name,
+                'event_code' => $event->event_code,
+                'type'       => $event->type,
+                'date_from'  => optional($event->date_from)->toIso8601String(),
+                'location'   => $event->location,
+                'mode'       => $event->mode,
+            ],
+            'registrations' => $registrations,
+            'statuses'      => Lead::STAGES,
         ];
     }
 
