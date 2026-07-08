@@ -767,10 +767,15 @@ export default function LeadDetails({ lead: backendLead, activity = [], stageTim
                             <Field editing={editing} label="Gender" field="gender" form={form} setF={setF} errors={errors} type="select" options={GENDER_OPTIONS} />
                             <Field editing={editing} label="Marital Status" field="marital_status" form={form} setF={setF} errors={errors} type="select" options={MARITAL_OPTIONS} />
                             <Field editing={editing} label="Date of Birth" field="dob" form={form} setF={setF} errors={errors} type="date" />
+                            {/* Age is derived from DOB by the Lead model
+                                (see getAgeAttribute) — read-only, always
+                                shown so staff don't have to do the math. */}
+                            <DataRow label="Age" value={form.age != null && form.age !== '' ? `${form.age}` : null} />
                             <Field editing={editing} label="Country of Birth" field="country_of_birth" form={form} setF={setF} errors={errors} />
                             <Field editing={editing} label="Place of Birth" field="place_of_birth" form={form} setF={setF} errors={errors} />
                             <Field editing={editing} label="Citizenship" field="citizenship" form={form} setF={setF} errors={errors} />
                             <Field editing={editing} label="Current Country" field="residence_country" form={form} setF={setF} errors={errors} />
+                            <Field editing={editing} label="State / Province" field="residence_state" form={form} setF={setF} errors={errors} />
                             <Field editing={editing} label="Current City" field="residence_city" form={form} setF={setF} errors={errors} />
                             <Field editing={editing} label="Address Line 1" field="residence_address_line_1" form={form} setF={setF} errors={errors} fullWidth />
                             <Field editing={editing} label="Address Line 2" field="residence_address_line_2" form={form} setF={setF} errors={errors} fullWidth />
@@ -1380,10 +1385,15 @@ function snapshotForSection(lead, key) {
                 gender: lead.gender || '',
                 marital_status: lead.marital_status || '',
                 dob: d(lead.dob),
+                // Age is read-only in the UI (derived from dob on the
+                // Lead model), so we don't send it back on save — the
+                // form just displays it via the appended attribute.
+                age: lead.age ?? '',
                 country_of_birth: lead.country_of_birth || '',
                 place_of_birth: lead.place_of_birth || '',
                 citizenship: lead.citizenship || '',
                 residence_city: lead.residence_city || '',
+                residence_state: lead.residence_state || '',
                 residence_country: lead.residence_country || '',
                 residence_address_line_1: lead.residence_address_line_1 || '',
                 residence_address_line_2: lead.residence_address_line_2 || '',
@@ -4356,6 +4366,19 @@ function NotesPanel({ leadId, notes, currentUser, staffOptions = [] }) {
     const [editingId, setEditingId] = useState(null);
     const [editBody, setEditBody] = useState('');
 
+    // Auto-grow the compose + edit textareas so long notes expand the box
+    // instead of showing an inner scrollbar. Runs after every keystroke
+    // and every time we open/reset the edit form.
+    const composeRef = useRef(null);
+    const editRef = useRef(null);
+    const grow = (el) => {
+        if (! el) return;
+        el.style.height = 'auto';
+        el.style.height = `${el.scrollHeight}px`;
+    };
+    useEffect(() => { grow(composeRef.current); }, [body]);
+    useEffect(() => { grow(editRef.current); }, [editBody, editingId]);
+
     const reset = () => {
         setBody(''); setPinned(false); setKind('general');
         setPreScreenedBy(''); setPreScreenMode(''); setPreScreenDate('');
@@ -4544,11 +4567,13 @@ function NotesPanel({ leadId, notes, currentUser, staffOptions = [] }) {
                 )}
 
                 <textarea
+                    ref={composeRef}
                     value={body}
                     onChange={(e) => setBody(e.target.value)}
                     placeholder="Type here"
                     rows={2}
-                    className="w-full px-3.5 py-2.5 border border-gray-200 rounded-lg text-sm bg-white outline-none focus:border-gray-900 transition-colors resize-none"
+                    className="w-full px-3.5 py-2.5 border border-gray-200 rounded-lg text-sm bg-white outline-none focus:border-gray-900 transition-colors resize-none overflow-hidden"
+                    style={{ minHeight: '3rem' }}
                 />
                 <div className="flex items-center justify-between">
                     <label className="inline-flex items-center gap-2 text-xs text-gray-500 cursor-pointer">
@@ -4639,10 +4664,12 @@ function NotesPanel({ leadId, notes, currentUser, staffOptions = [] }) {
                                 {isEditing ? (
                                     <div>
                                         <textarea
+                                            ref={editRef}
                                             value={editBody}
                                             onChange={(e) => setEditBody(e.target.value)}
                                             rows={2}
-                                            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white outline-none focus:border-gray-900 resize-none"
+                                            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white outline-none focus:border-gray-900 resize-none overflow-hidden"
+                                            style={{ minHeight: '3rem' }}
                                             autoFocus
                                         />
                                         <div className="flex items-center justify-end gap-2 mt-2">

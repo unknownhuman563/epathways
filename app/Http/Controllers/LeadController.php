@@ -1709,6 +1709,7 @@ class LeadController extends Controller
             'place_of_birth' => 'nullable|string|max:120',
             'citizenship' => 'nullable|string|max:120',
             'residence_city' => 'nullable|string|max:160',
+            'residence_state' => 'nullable|string|max:120',
             'residence_country' => 'nullable|string|max:120',
             'residence_address_line_1' => 'nullable|string|max:200',
             'residence_address_line_2' => 'nullable|string|max:200',
