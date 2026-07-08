@@ -409,8 +409,8 @@ export default function SalesLeads({ leads = [], statuses = [], programs = [], s
                             <TabBadge count={tabCounts.registration} />
                         </button>
                         {/* Agents tab — recruiting-agent roster + their leads.
-                            Sales portal + the admin leads screen. */}
-                        {(portal === "sales" || portal === "admin") && (
+                            Sales, education portals + the admin leads screen. */}
+                        {(portal === "sales" || portal === "admin" || portal === "education") && (
                             <button
                                 type="button"
                                 onClick={() => { setView("agents"); setPage(1); }}

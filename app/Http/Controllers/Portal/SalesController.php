@@ -167,15 +167,15 @@ class SalesController extends Controller
             ->latest()
             ->get()
             ->map(fn (Event $e) => [
-                'id'                  => $e->id,
-                'name'                => $e->name,
-                'event_code'          => $e->event_code,
-                'type'                => $e->type,
-                'mode'                => $e->mode,
-                'location'            => $e->location,
-                'date_from'           => optional($e->date_from)->toIso8601String(),
-                'status'              => $e->status,
-                'agent'               => optional($e->agent)->name,
+                'id' => $e->id,
+                'name' => $e->name,
+                'event_code' => $e->event_code,
+                'type' => $e->type,
+                'mode' => $e->mode,
+                'location' => $e->location,
+                'date_from' => optional($e->date_from)->toIso8601String(),
+                'status' => $e->status,
+                'agent' => optional($e->agent)->name,
                 'registrations_count' => $e->leads_count,
             ]);
     }
@@ -193,12 +193,12 @@ class SalesController extends Controller
             ->orderBy('name')
             ->get(['id', 'name', 'email', 'phone', 'location', 'avatar_path'])
             ->map(fn ($a) => [
-                'id'          => $a->id,
-                'name'        => $a->name,
-                'email'       => $a->email,
-                'phone'       => $a->phone,
-                'location'    => $a->location,
-                'avatar_url'  => $a->avatar_url,
+                'id' => $a->id,
+                'name' => $a->name,
+                'email' => $a->email,
+                'phone' => $a->phone,
+                'location' => $a->location,
+                'avatar_url' => $a->avatar_url,
                 'leads_count' => (int) $a->agent_leads_count,
             ]);
     }
@@ -215,17 +215,17 @@ class SalesController extends Controller
             ->latest()
             ->get()
             ->map(fn (Lead $l) => [
-                'id'         => $l->id,
-                'lead_id'    => $l->lead_id,
-                'name'       => trim("{$l->first_name} {$l->last_name}") ?: 'Unnamed lead',
-                'email'      => $l->email,
-                'phone'      => $l->phone,
-                'status'     => $l->status,
+                'id' => $l->id,
+                'lead_id' => $l->lead_id,
+                'name' => trim("{$l->first_name} {$l->last_name}") ?: 'Unnamed lead',
+                'email' => $l->email,
+                'phone' => $l->phone,
+                'status' => $l->status,
                 'created_at' => optional($l->created_at)->toIso8601String(),
             ]);
 
         return response()->json([
-            'event'         => ['id' => $event->id, 'name' => $event->name],
+            'event' => ['id' => $event->id, 'name' => $event->name],
             'registrations' => $registrations,
         ]);
     }
@@ -234,6 +234,10 @@ class SalesController extends Controller
      * GET /portal/sales/agents/{id}/leads — full-page list of leads a
      * recruiting agent has added, styled like Open opportunities. Reached
      * from the Agents tab's "View leads" action.
+     *
+     * Shared by sales, education and admin. The screen (and its row actions)
+     * are picked by request path so each portal lands in its own layout with
+     * a matching portalBase — same approach as eventRegistrantsPage.
      */
     public function agentLeadsPage($id)
     {
@@ -255,18 +259,25 @@ class SalesController extends Controller
             ->get()
             ->map(fn (Lead $l) => $this->leadRow($l));
 
-        return inertia('portal/sales/AgentLeads', [
+        [$component, $portalBase] = match (true) {
+            request()->is('admin/*') => ['admin/AgentLeads', '/admin'],
+            request()->is('portal/education/*') => ['portal/education/AgentLeads', '/portal/education'],
+            default => ['portal/sales/AgentLeads', '/portal/sales'],
+        };
+
+        return inertia($component, [
             'agent' => [
-                'id'          => $agent->id,
-                'name'        => $agent->name,
-                'email'       => $agent->email,
-                'phone'       => $agent->phone,
-                'location'    => $agent->location,
-                'avatar_url'  => $agent->avatar_url,
+                'id' => $agent->id,
+                'name' => $agent->name,
+                'email' => $agent->email,
+                'phone' => $agent->phone,
+                'location' => $agent->location,
+                'avatar_url' => $agent->avatar_url,
                 'leads_count' => $leads->count(),
             ],
-            'leads'    => $leads,
+            'leads' => $leads,
             'statuses' => self::LEAD_STATUSES,
+            'portalBase' => $portalBase,
         ]);
     }
 
@@ -294,9 +305,9 @@ class SalesController extends Controller
             ->latest()
             ->get()
             ->map(fn (Lead $l) => array_merge($this->leadRow($l), [
-                'event_notes'             => $l->event_notes,
-                'event_notes_updated_at'  => optional($l->event_notes_updated_at)->toIso8601String(),
-                'event_notes_editor'      => $l->eventNotesEditor
+                'event_notes' => $l->event_notes,
+                'event_notes_updated_at' => optional($l->event_notes_updated_at)->toIso8601String(),
+                'event_notes_editor' => $l->eventNotesEditor
                     ? ['id' => $l->eventNotesEditor->id, 'name' => $l->eventNotesEditor->name]
                     : null,
             ]));
@@ -308,17 +319,17 @@ class SalesController extends Controller
 
         return inertia($isAdmin ? 'admin/EventRegistrants' : 'portal/sales/EventRegistrants', [
             'event' => [
-                'id'         => $event->id,
-                'name'       => $event->name,
+                'id' => $event->id,
+                'name' => $event->name,
                 'event_code' => $event->event_code,
-                'type'       => $event->type,
-                'date_from'  => optional($event->date_from)->toIso8601String(),
-                'location'   => $event->location,
-                'mode'       => $event->mode,
+                'type' => $event->type,
+                'date_from' => optional($event->date_from)->toIso8601String(),
+                'location' => $event->location,
+                'mode' => $event->mode,
             ],
             'registrations' => $registrations,
-            'statuses'      => \App\Models\Lead::STAGES,
-            'portalBase'    => $isAdmin ? '/admin' : '/portal/sales',
+            'statuses' => \App\Models\Lead::STAGES,
+            'portalBase' => $isAdmin ? '/admin' : '/portal/sales',
         ]);
     }
 
@@ -339,9 +350,9 @@ class SalesController extends Controller
         $lead = Lead::with(['documents:id,lead_id,checklist_key,original_name,file_path,size,mime,status,created_at'])
             ->findOrFail($id);
 
-        $work   = is_array($lead->work_info)       ? $lead->work_info       : [];
-        $edu    = is_array($lead->education_notes) ? $lead->education_notes : [];
-        $family = is_array($lead->family_info)     ? $lead->family_info     : [];
+        $work = is_array($lead->work_info) ? $lead->work_info : [];
+        $edu = is_array($lead->education_notes) ? $lead->education_notes : [];
+        $family = is_array($lead->family_info) ? $lead->family_info : [];
         $partner = is_array($family['partner'] ?? null) ? $family['partner'] : [];
 
         // Group uploaded LeadDocument rows by the checklist bucket the
@@ -354,14 +365,15 @@ class SalesController extends Controller
                 ->where('checklist_key', $key)
                 ->values()
                 ->map(fn ($d) => [
-                    'id'            => $d->id,
+                    'id' => $d->id,
                     'original_name' => $d->original_name,
-                    'size'          => $d->size,
-                    'mime'          => $d->mime,
-                    'url'           => $d->file_path ? \Illuminate\Support\Facades\Storage::disk('public')->url($d->file_path) : null,
-                    'created_at'    => optional($d->created_at)->toIso8601String(),
+                    'size' => $d->size,
+                    'mime' => $d->mime,
+                    'url' => $d->file_path ? \Illuminate\Support\Facades\Storage::disk('public')->url($d->file_path) : null,
+                    'created_at' => optional($d->created_at)->toIso8601String(),
                 ])
                 ->all();
+
             return ['key' => $key, 'label' => $label, 'files' => $files];
         })->values()->all();
 
@@ -370,17 +382,17 @@ class SalesController extends Controller
         return inertia($isAdmin ? 'admin/LeadRegistration' : 'portal/sales/LeadRegistration', [
             'portalBase' => $isAdmin ? '/admin' : '/portal/sales',
             'lead' => [
-                'id'          => $lead->id,
-                'lead_id'     => $lead->lead_id,
-                'first_name'  => $lead->first_name,
-                'last_name'   => $lead->last_name,
-                'name'        => trim("{$lead->first_name} {$lead->last_name}") ?: 'Unnamed lead',
-                'email'       => $lead->email,
-                'phone'       => $lead->phone,
-                'stage'       => $lead->stage,
-                'status'      => $lead->status,
-                'source'      => $lead->source,
-                'created_at'  => optional($lead->created_at)->toIso8601String(),
+                'id' => $lead->id,
+                'lead_id' => $lead->lead_id,
+                'first_name' => $lead->first_name,
+                'last_name' => $lead->last_name,
+                'name' => trim("{$lead->first_name} {$lead->last_name}") ?: 'Unnamed lead',
+                'email' => $lead->email,
+                'phone' => $lead->phone,
+                'stage' => $lead->stage,
+                'status' => $lead->status,
+                'source' => $lead->source,
+                'created_at' => optional($lead->created_at)->toIso8601String(),
             ],
             // Reconstructed form sections, matching the /register page's
             // section order + labels so staff read exactly what the lead
@@ -409,13 +421,13 @@ class SalesController extends Controller
                     ],
                 ],
                 [
-                    'title'  => 'Partner / Spouse',
+                    'title' => 'Partner / Spouse',
                     'visible' => ($lead->marital_status === 'Married') || array_filter($partner, fn ($v) => $v !== null && $v !== ''),
                     'fields' => [
-                        ['label' => 'Full name',                        'value' => $partner['full_name']        ?? null],
-                        ['label' => 'Age',                              'value' => $partner['age']              ?? null],
-                        ['label' => 'Current education level',          'value' => $partner['education_level']  ?? null],
-                        ['label' => 'Current work experience',          'value' => $partner['work_experience']  ?? null],
+                        ['label' => 'Full name',                        'value' => $partner['full_name'] ?? null],
+                        ['label' => 'Age',                              'value' => $partner['age'] ?? null],
+                        ['label' => 'Current education level',          'value' => $partner['education_level'] ?? null],
+                        ['label' => 'Current work experience',          'value' => $partner['work_experience'] ?? null],
                         ['label' => 'Years of experience',              'value' => $partner['years_experience'] ?? null],
                     ],
                 ],
@@ -444,24 +456,24 @@ class SalesController extends Controller
     public function programs()
     {
         $programs = Program::orderBy('title')->get()->map(fn (Program $p) => [
-            'id'              => $p->id,
-            'title'           => $p->title,
-            'slug'            => $p->slug,
-            'institution'     => $p->institution,
-            'location'        => $p->location,
-            'level'           => $p->level,
-            'category'        => $p->category,
-            'industry'        => $p->industry,
-            'status'          => $p->status,
+            'id' => $p->id,
+            'title' => $p->title,
+            'slug' => $p->slug,
+            'institution' => $p->institution,
+            'location' => $p->location,
+            'level' => $p->level,
+            'category' => $p->category,
+            'industry' => $p->industry,
+            'status' => $p->status,
             'duration_months' => $p->duration_months,
-            'intake_months'   => $p->intake_months,
-            'price_text'      => $p->price_text,
-            'description'     => $p->description,
-            'enrolled'        => Lead::whereHas('studyPlans', fn ($q) => $q->where('preferred_course', $p->title))->count(),
+            'intake_months' => $p->intake_months,
+            'price_text' => $p->price_text,
+            'description' => $p->description,
+            'enrolled' => Lead::whereHas('studyPlans', fn ($q) => $q->where('preferred_course', $p->title))->count(),
         ]);
 
         return inertia('portal/sales/Programs', [
-            'portal'   => 'sales',
+            'portal' => 'sales',
             'programs' => $programs,
         ]);
     }
@@ -526,8 +538,8 @@ class SalesController extends Controller
                 ->update(['agent_id' => $validated['agent_id'] ?: null]);
 
             $msg = $validated['agent_id']
-                ? "Agent assigned to {$count} lead" . ($count === 1 ? '' : 's') . '.'
-                : "Agent cleared from {$count} lead" . ($count === 1 ? '' : 's') . '.';
+                ? "Agent assigned to {$count} lead".($count === 1 ? '' : 's').'.'
+                : "Agent cleared from {$count} lead".($count === 1 ? '' : 's').'.';
 
             return back()->with('success', $msg);
         } catch (\Throwable $e) {
@@ -552,7 +564,7 @@ class SalesController extends Controller
         try {
             $count = Lead::whereIn('id', $validated['lead_ids'])->delete();
 
-            return back()->with('success', "Deleted {$count} lead" . ($count === 1 ? '' : 's') . '.');
+            return back()->with('success', "Deleted {$count} lead".($count === 1 ? '' : 's').'.');
         } catch (\Throwable $e) {
             Log::error('Bulk lead delete failed', ['error' => $e->getMessage()]);
 

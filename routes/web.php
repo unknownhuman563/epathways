@@ -545,6 +545,11 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/admin/events/{id}/registrants', [SalesController::class, 'eventRegistrantsPage'])
             ->name('admin.events.registrants');
 
+        // Leads-page "Agents" tab → per-agent leads (reuses the sales page under
+        // AdminLayout; SalesController picks the admin/ view + portalBase by path).
+        Route::get('/admin/agents/{id}/leads', [SalesController::class, 'agentLeadsPage'])
+            ->name('admin.agents.leads');
+
         // Manual "Add Lead" from the pipeline toolbar (dashboard add flow).
         Route::post('/admin/leads', [LeadController::class, 'storeDashboardLead'])->name('admin.leads.store');
         // Leads-page "Registration" tab → read-only snapshot of the /register form.
@@ -849,6 +854,9 @@ Route::middleware(['auth'])->group(function () {
             // Events tab — registrants for one event (JSON drawer), same as sales.
             Route::get('/events/{id}/registrations', [EducationController::class, 'eventRegistrations'])->name('events.registrations');
             Route::get('/events/{id}/registrants', [EducationController::class, 'eventRegistrantsPage'])->name('events.registrants');
+            // Agents tab — per-agent leads full page (shared sales screen, rendered
+            // under EducationLayout with a /portal/education base by request path).
+            Route::get('/agents/{id}/leads', [SalesController::class, 'agentLeadsPage'])->name('agents.leads');
             Route::post('/leads', [EducationController::class, 'storeLead'])->name('leads.store');
             Route::post('/leads/{id}/notes', [\App\Http\Controllers\LeadNoteController::class, 'store'])->name('leads.notes.store');
             Route::post('/leads/{id}', [EducationController::class, 'updateLead'])->name('leads.update');

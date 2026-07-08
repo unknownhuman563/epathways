@@ -114,6 +114,7 @@ class EducationController extends Controller
                 'allTagNames' => \App\Models\LeadTag::orderBy('name')->pluck('name'),
                 'events' => $this->eventsSummary(),
                 'tabCounts' => $this->leadTabCounts(),
+                'agents' => $this->agentsSummary(),
             ]);
         } catch (\Throwable $e) {
             Log::error('Education leads list failed', ['error' => $e->getMessage()]);
@@ -128,6 +129,28 @@ class EducationController extends Controller
         }
     }
 
+    /**
+     * Recruiting agents (role='agent') with a total count of leads each has
+     * added — for the Leads page "Agents" tab. Mirrors the sales/admin feed
+     * so the shared Leads component renders the same roster + "View leads".
+     */
+    private function agentsSummary()
+    {
+        return \App\Models\User::where('role', 'agent')
+            ->withCount('agentLeads')
+            ->orderBy('name')
+            ->get(['id', 'name', 'email', 'phone', 'location', 'avatar_path'])
+            ->map(fn ($a) => [
+                'id' => $a->id,
+                'name' => $a->name,
+                'email' => $a->email,
+                'phone' => $a->phone,
+                'location' => $a->location,
+                'avatar_url' => $a->avatar_url,
+                'leads_count' => (int) $a->agent_leads_count,
+            ]);
+    }
+
     /** Events list for the Leads page "Events" tab — each with a registrant count. */
     private function eventsSummary()
     {
@@ -137,15 +160,15 @@ class EducationController extends Controller
             ->latest()
             ->get()
             ->map(fn (Event $e) => [
-                'id'                  => $e->id,
-                'name'                => $e->name,
-                'event_code'          => $e->event_code,
-                'type'                => $e->type,
-                'mode'                => $e->mode,
-                'location'            => $e->location,
-                'date_from'           => optional($e->date_from)->toIso8601String(),
-                'status'              => $e->status,
-                'agent'               => optional($e->agent)->name,
+                'id' => $e->id,
+                'name' => $e->name,
+                'event_code' => $e->event_code,
+                'type' => $e->type,
+                'mode' => $e->mode,
+                'location' => $e->location,
+                'date_from' => optional($e->date_from)->toIso8601String(),
+                'status' => $e->status,
+                'agent' => optional($e->agent)->name,
                 'registrations_count' => $e->leads_count,
             ]);
     }
@@ -159,17 +182,17 @@ class EducationController extends Controller
             ->latest()
             ->get()
             ->map(fn (Lead $l) => [
-                'id'         => $l->id,
-                'lead_id'    => $l->lead_id,
-                'name'       => trim("{$l->first_name} {$l->last_name}") ?: 'Unnamed lead',
-                'email'      => $l->email,
-                'phone'      => $l->phone,
-                'status'     => $l->status,
+                'id' => $l->id,
+                'lead_id' => $l->lead_id,
+                'name' => trim("{$l->first_name} {$l->last_name}") ?: 'Unnamed lead',
+                'email' => $l->email,
+                'phone' => $l->phone,
+                'status' => $l->status,
                 'created_at' => optional($l->created_at)->toIso8601String(),
             ]);
 
         return response()->json([
-            'event'         => ['id' => $event->id, 'name' => $event->name],
+            'event' => ['id' => $event->id, 'name' => $event->name],
             'registrations' => $registrations,
         ]);
     }
