@@ -175,7 +175,7 @@ function CreateModal({ onClose }) {
             className="fixed inset-0 z-[100] bg-black/40 backdrop-blur-sm flex items-start justify-center p-4 sm:p-8 overflow-y-auto"
             onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
         >
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl my-8">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl my-8">
                 <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
                     <h2 className="text-lg font-bold text-gray-900">New visa</h2>
                     <button type="button" onClick={onClose} className="p-1 text-gray-400 hover:text-gray-700">
@@ -489,7 +489,7 @@ function EditModal({ visaType, onClose, canViewHistory }) {
             className="fixed inset-0 z-[100] bg-black/40 backdrop-blur-sm flex items-start justify-center p-4 sm:p-8 overflow-y-auto"
             onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
         >
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl my-8">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl my-8">
                 <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
                     <h2 className="text-lg font-bold text-gray-900">Edit Visa: {visaType.name}</h2>
                     <button type="button" onClick={onClose} className="p-1 text-gray-400 hover:text-gray-700">
