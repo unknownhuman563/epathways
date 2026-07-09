@@ -858,6 +858,12 @@ Route::middleware(['auth'])->group(function () {
             // under EducationLayout with a /portal/education base by request path).
             Route::get('/agents/{id}/leads', [SalesController::class, 'agentLeadsPage'])->name('agents.leads');
             Route::post('/leads', [EducationController::class, 'storeLead'])->name('leads.store');
+            // Bulk actions — mirror the sales portal so the shared Leads
+            // component's checkbox-selection toolbar POSTs land on real
+            // routes when the page is served under EducationLayout.
+            // Declared before /leads/{id} so the two static segments win.
+            Route::post('/leads/bulk-agent', [SalesController::class, 'bulkAssignAgent'])->name('leads.bulk-agent');
+            Route::post('/leads/bulk-delete', [SalesController::class, 'bulkDelete'])->name('leads.bulk-delete');
             Route::post('/leads/{id}/notes', [\App\Http\Controllers\LeadNoteController::class, 'store'])->name('leads.notes.store');
             Route::post('/leads/{id}', [EducationController::class, 'updateLead'])->name('leads.update');
             Route::post('/leads/{id}/portal-invitation/request', [LeadPortalInvitationController::class, 'request'])
@@ -937,6 +943,12 @@ Route::middleware(['auth'])->group(function () {
             // Events tab — registrants for one event (JSON drawer), same as sales.
             Route::get('/events/{id}/registrations', [ImmigrationController::class, 'eventRegistrations'])->name('events.registrations');
             Route::get('/events/{id}/registrants', [ImmigrationController::class, 'eventRegistrantsPage'])->name('events.registrants');
+            // Bulk actions — mirror the sales portal so the shared Leads
+            // component's checkbox-selection toolbar POSTs land on real
+            // routes when the page is served under ImmigrationLayout.
+            // Declared before /leads/{id} so the two static segments win.
+            Route::post('/leads/bulk-agent', [SalesController::class, 'bulkAssignAgent'])->name('leads.bulk-agent');
+            Route::post('/leads/bulk-delete', [SalesController::class, 'bulkDelete'])->name('leads.bulk-delete');
             Route::post('/leads/{id}', [ImmigrationController::class, 'updateLead'])->name('leads.update');
             Route::post('/leads/{id}/portal-invitation/request', [LeadPortalInvitationController::class, 'request'])
                 ->name('leads.portal-invitation.request');
