@@ -274,7 +274,7 @@ export default function DashboardLayout({
                 {/* Content */}
                 <main className="flex-1 overflow-y-auto px-4 md:px-8 pb-8 pt-2">
                     {/* Cross-portal admin banner — shown when an admin user is viewing a department portal. */}
-                    {user?.role === "admin" && url.startsWith("/portal/") && (
+                    {(user?.role === "admin" || user?.role === "super_admin") && url.startsWith("/portal/") && (
                         <div className="mb-4 flex items-center justify-between gap-3 px-4 py-2.5 rounded-2xl bg-gray-900 text-white text-sm shadow-sm">
                             <div className="flex items-center gap-2">
                                 <Eye size={15} className="text-gray-300" />
