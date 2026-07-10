@@ -229,8 +229,8 @@ class BulkEmailController extends Controller
     {
         $isSms = $channel === EmailCampaign::CHANNEL_SMS;
 
+        // Shared library — every portal may send with any active template.
         return MessageTemplate::active()
-            ->when($department !== null, fn ($q) => $q->whereIn('department', [$department, '']))
             ->orderBy('name')->get()
             ->filter(fn (MessageTemplate $t) => $t->hasChannel($channel))
             ->map(fn (MessageTemplate $t) => [
@@ -291,9 +291,7 @@ class BulkEmailController extends Controller
 
     private function authorizeTemplate(?string $department, MessageTemplate $template): void
     {
-        if ($department !== null && ! in_array($template->department, [$department, ''], true)) {
-            abort(403, 'This template belongs to another department.');
-        }
+        // Templates are a shared library — any portal may send with any of them.
     }
 
     private function authorizeCampaign(?string $department, EmailCampaign $campaign): void

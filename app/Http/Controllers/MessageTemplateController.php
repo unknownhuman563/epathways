@@ -41,13 +41,11 @@ class MessageTemplateController extends Controller
     public function index(Request $request)
     {
         $ctx = $this->context($request);
-        $query = MessageTemplate::query();
-        if ($ctx['department'] !== null) {
-            $query->forDepartment($ctx['department']);
-        }
 
+        // Templates are a shared library — every portal (admin + each
+        // department) sees the full set and may use/edit any of them.
         return inertia($ctx['listComponent'], [
-            'templates' => $query->orderBy('name')->get()->map(fn (MessageTemplate $t) => [
+            'templates' => MessageTemplate::query()->orderBy('name')->get()->map(fn (MessageTemplate $t) => [
                 'id' => $t->id, 'key' => $t->key, 'name' => $t->name,
                 'department' => $t->department, 'channels' => $t->channels ?? [],
                 'is_active' => $t->is_active,
@@ -246,12 +244,14 @@ class MessageTemplateController extends Controller
         return (string) ($request->input('department') ?: '');
     }
 
-    /** Staff may only touch their own department's templates; admins, any. */
+    /**
+     * Templates are a shared library across all portals — any staff member
+     * (admin or department) may view, edit, and delete any template. Kept as a
+     * hook so the call sites stay unchanged if per-department rules return.
+     */
     private function authorizeTemplate(?string $actingDepartment, MessageTemplate $template): void
     {
-        if ($actingDepartment !== null && $template->department !== $actingDepartment) {
-            abort(403, 'This template belongs to another department.');
-        }
+        // no-op — fully shared
     }
 
     /** Admin-only department picker: a blank shared option plus each portal. */
