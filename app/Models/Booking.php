@@ -22,6 +22,7 @@ class Booking extends Model
         'phone',
         'service_type',
         'visa_type_id',
+        'property_id',
         'consultant_name',
         'message',
         'platform',
@@ -60,5 +61,10 @@ class Booking extends Model
     public function visaType()
     {
         return $this->belongsTo(VisaType::class);
+    }
+
+    public function property()
+    {
+        return $this->belongsTo(Property::class);
     }
 }

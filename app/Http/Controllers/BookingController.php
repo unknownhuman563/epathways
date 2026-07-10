@@ -28,6 +28,7 @@ class BookingController extends Controller
             'phone' => 'nullable|string|max:20',
             'service_type' => 'required|string',
             'visa_type_id' => 'nullable|integer|exists:visa_types,id',
+            'property_id' => 'nullable|integer|exists:accommodation_properties,id',
             'consultant_name' => 'required|string',
             'message' => 'nullable|string',
             'platform' => 'nullable|string',
@@ -55,6 +56,18 @@ class BookingController extends Controller
             $validated['lead_id'] = $lead->id;
             $validated['payment_status'] = Booking::PAYMENT_UNPAID;
             $booking = Booking::create($validated);
+
+            // Property-viewing bookings are free — confirm them by email right
+            // away. (Consultation bookings email their invoice after payment,
+            // handled in PaymentController.)
+            if (! empty($booking->property_id) && ! empty($booking->email)) {
+                try {
+                    \Illuminate\Support\Facades\Mail::to($booking->email)
+                        ->queue(new \App\Mail\ViewingConfirmationMail($booking->fresh('property')));
+                } catch (\Throwable $e) {
+                    Log::error('Viewing confirmation email failed', ['booking_id' => $booking->id, 'error' => $e->getMessage()]);
+                }
+            }
 
             return response()->json([
                 'message' => 'Booking created and lead linked successfully',

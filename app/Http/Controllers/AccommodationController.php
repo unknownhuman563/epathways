@@ -16,7 +16,14 @@ class AccommodationController extends Controller
             ->latest()
             ->get();
 
-        return inertia('accommodation/AccommodationPage', ['properties' => $properties]);
+        return inertia('accommodation/AccommodationPage', [
+            'properties' => $properties,
+            // Viewing scheduler shares the immigration booking's fixed business
+            // timezone; the client-side calendar shows each slot in the visitor's
+            // own timezone. No per-staff availability yet — the component falls
+            // back to Mon–Fri 9–5.
+            'bookingTimezone' => config('services.booking.timezone', 'Pacific/Auckland'),
+        ]);
     }
 
     public function show($slug)

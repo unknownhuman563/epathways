@@ -1075,6 +1075,12 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/tasks', [AccommodationController::class, 'tasks'])->name('tasks');
             Route::get('/leads/{id}', [LeadController::class, 'show'])->name('leads.show');
 
+            // Property viewing bookings from the public /accommodation page —
+            // table + calendar, with per-booking status management.
+            Route::get('/viewings', [AccommodationController::class, 'viewings'])->name('viewings');
+            Route::post('/viewings/{id}/status', [AccommodationController::class, 'updateViewingStatus'])->name('viewings.status');
+            Route::post('/viewings/{id}/resend', [AccommodationController::class, 'resendViewingConfirmation'])->name('viewings.resend');
+
             // Property CRUD (multipart: update is POST + _method=PUT). Public
             // listing fields + internal management record share one model.
             // Literal paths (create, export) are declared before /{property}.

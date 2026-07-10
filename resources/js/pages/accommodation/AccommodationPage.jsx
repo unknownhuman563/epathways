@@ -4,6 +4,7 @@ import { Autoplay } from 'swiper';
 import 'swiper/css';
 import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
+import PropertyViewingBooking from '@/components/accommodation/PropertyViewingBooking';
 
 // Split the free-text "includes" into bullets on commas — but ignore commas
 // inside parentheses, e.g. "Shared common areas (fridge, dining table)" stays one item.
@@ -26,7 +27,7 @@ function splitIncludes(text) {
   return items;
 }
 
-const Accommodation = ({ properties = [] }) => {
+const Accommodation = ({ properties = [], bookingTimezone = 'Pacific/Auckland' }) => {
   const [search, setSearch] = useState('');
   const [roomFilter, setRoomFilter] = useState('all');
   const [bedFilter, setBedFilter] = useState('all');
@@ -95,7 +96,13 @@ const Accommodation = ({ properties = [] }) => {
   return (
     <div className="bg-[#fafafa] min-h-screen font-urbanist text-black">
       <Navbar />
-      
+
+      {/* Book a viewing — property-based scheduler (mirrors the immigration
+          consultation booking, but driven by accommodation properties). */}
+      <section className="container mx-auto px-4 pt-12 lg:pt-16 max-w-5xl">
+        <PropertyViewingBooking properties={properties} businessTz={bookingTimezone} />
+      </section>
+
       {/* Hero Section */}
       <section className="container mx-auto px-4 py-16 lg:py-24 max-w-7xl">
         <div className="flex flex-col lg:flex-row gap-16 items-center">
