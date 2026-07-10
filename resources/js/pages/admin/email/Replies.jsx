@@ -4,7 +4,7 @@ import { Mail, Search, Send, User, Inbox, AlertTriangle, RefreshCw } from 'lucid
 
 // Email Replies — conversation view per lead. Inbound (from the mailbox) and
 // outbound (staff replies) messages live in one thread.
-export default function Replies({ threads = [], unreadCount = 0, imapConfigured = false, mailbox, search = '' }) {
+export default function Replies({ threads = [], unreadCount = 0, imapConfigured = false, mailbox, search = '', basePath = '/admin/email/replies' }) {
     const [selectedId, setSelectedId] = useState(threads[0]?.lead_id ?? null);
     const [q, setQ] = useState(search);
     const selected = threads.find((t) => t.lead_id === selectedId) || null;
@@ -14,23 +14,23 @@ export default function Replies({ threads = [], unreadCount = 0, imapConfigured 
 
     const openThread = (t) => {
         setSelectedId(t.lead_id);
-        if (t.unread > 0) router.post(`/admin/email/replies/${t.lead_id}/read`, {}, { preserveScroll: true, preserveState: true });
+        if (t.unread > 0) router.post(`${basePath}/${t.lead_id}/read`, {}, { preserveScroll: true, preserveState: true });
     };
 
     const submitSearch = (e) => {
         e.preventDefault();
-        router.get('/admin/email/replies', { q }, { preserveState: true, replace: true });
+        router.get(basePath, { q }, { preserveState: true, replace: true });
     };
 
     const syncNow = () => {
         setSyncing(true);
-        router.post('/admin/email/replies/sync', {}, { preserveScroll: true, onFinish: () => setSyncing(false) });
+        router.post(`${basePath}/sync`, {}, { preserveScroll: true, onFinish: () => setSyncing(false) });
     };
 
     const sendReply = (e) => {
         e.preventDefault();
         if (!selected) return;
-        replyForm.post(`/admin/email/replies/${selected.lead_id}/reply`, {
+        replyForm.post(`${basePath}/${selected.lead_id}/reply`, {
             preserveScroll: true,
             onSuccess: () => replyForm.reset('body'),
         });

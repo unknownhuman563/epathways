@@ -190,29 +190,38 @@ class BulkEmailController extends Controller
     /** Page component to render for this channel/scope. */
     private function page(Request $request, string $which): string
     {
-        if ($this->channel($request) === EmailCampaign::CHANNEL_SMS) {
+        $dept = $this->department($request);
+        $isSms = $this->channel($request) === EmailCampaign::CHANNEL_SMS;
+
+        // Portal (department) scope → render under that department's layout so
+        // sales/education/immigration each get their own chrome.
+        if ($dept !== null) {
+            if ($which === 'show') {
+                return "portal/{$dept}/CampaignDetail";
+            }
+
+            return $isSms ? "portal/{$dept}/Sms" : "portal/{$dept}/BulkEmail";
+        }
+
+        // Admin scope.
+        if ($isSms) {
             return $which === 'show' ? 'admin/email/CampaignDetail' : 'admin/email/Sms';
         }
-        if ($this->isAdmin($request)) {
-            return $which === 'show' ? 'admin/email/CampaignDetail' : 'admin/email/BulkMail';
-        }
 
-        return $which === 'show' ? 'portal/sales/CampaignDetail' : 'portal/sales/BulkEmail';
+        return $which === 'show' ? 'admin/email/CampaignDetail' : 'admin/email/BulkMail';
     }
 
-    /** Base URL for links/redirects/posts — SMS, admin email, or the portal. */
+    /** Base URL for links/redirects/posts — portal department or admin scope. */
     private function basePath(Request $request): string
     {
-        if ($this->channel($request) === EmailCampaign::CHANNEL_SMS) {
-            return '/admin/email/sms';
-        }
-        if ($this->isAdmin($request)) {
-            return '/admin/email/bulk';
+        $isSms = $this->channel($request) === EmailCampaign::CHANNEL_SMS;
+        $dept = $this->department($request);
+
+        if ($dept !== null) {
+            return $isSms ? "/portal/{$dept}/sms" : "/portal/{$dept}/bulk-email";
         }
 
-        $dept = $this->department($request) ?? 'sales';
-
-        return "/portal/{$dept}/bulk-email";
+        return $isSms ? '/admin/email/sms' : '/admin/email/bulk';
     }
 
     /** Active templates this department may use on the channel (own + shared). */

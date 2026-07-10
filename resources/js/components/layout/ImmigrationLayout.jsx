@@ -4,6 +4,7 @@ import {
     LayoutDashboard, ClipboardCheck, UserSquare2, Globe, FolderOpen,
     Calendar, FileBadge, CalendarDays, FileText, ListChecks, LineChart,
     User, Bell, CheckSquare, Ticket, Mail,
+    PenLine, Megaphone, Smartphone, MessageSquare,
 } from "lucide-react";
 
 export default function ImmigrationLayout({ children }) {
@@ -26,7 +27,17 @@ export default function ImmigrationLayout({ children }) {
         { name: "Intakes",             href: "/portal/immigration/intakes",             icon: <CalendarDays size={20} /> },
         { name: "INZ Forms",           href: "/portal/immigration/inz-forms",           icon: <FileText size={20} /> },
         { name: "Checklist Templates", href: "/portal/immigration/checklist-templates", icon: <ListChecks size={20} /> },
-        { name: "Email Templates",     href: "/portal/immigration/email-templates",     icon: <Mail size={20} /> },
+
+        {
+            name: "Email",
+            icon: <Mail size={20} />,
+            children: [
+                { name: "Templates", href: "/portal/immigration/email-templates", icon: <PenLine size={16} /> },
+                { name: "Bulk Mail", href: "/portal/immigration/bulk-email",      icon: <Megaphone size={16} /> },
+                { name: "SMS",       href: "/portal/immigration/sms",             icon: <Smartphone size={16} /> },
+                { name: "Replies",   href: "/portal/immigration/email/replies",   icon: <MessageSquare size={16} /> },
+            ],
+        },
 
         { name: "Reports", href: "/portal/immigration/reports", icon: <LineChart size={20} /> },
 

@@ -857,6 +857,22 @@ Route::middleware(['auth'])->group(function () {
             // Agents tab — per-agent leads full page (shared sales screen, rendered
             // under EducationLayout with a /portal/education base by request path).
             Route::get('/agents/{id}/leads', [SalesController::class, 'agentLeadsPage'])->name('agents.leads');
+
+            // Email module — shared Bulk Mail / SMS / Replies (same feature as
+            // the sales + admin screens, rendered under this portal's layout).
+            // Templates live at /email-templates (registered for every portal).
+            Route::get('/bulk-email', [\App\Http\Controllers\BulkEmailController::class, 'index'])->name('bulk-email');
+            Route::post('/bulk-email', [\App\Http\Controllers\BulkEmailController::class, 'store'])->name('bulk-email.store');
+            Route::get('/bulk-email/{id}', [\App\Http\Controllers\BulkEmailController::class, 'show'])->name('bulk-email.show');
+            Route::post('/bulk-email/{id}/cancel', [\App\Http\Controllers\BulkEmailController::class, 'cancel'])->name('bulk-email.cancel');
+            Route::get('/sms', [\App\Http\Controllers\BulkEmailController::class, 'index'])->name('sms');
+            Route::post('/sms', [\App\Http\Controllers\BulkEmailController::class, 'store'])->name('sms.store');
+            Route::get('/sms/{id}', [\App\Http\Controllers\BulkEmailController::class, 'show'])->name('sms.show');
+            Route::post('/sms/{id}/cancel', [\App\Http\Controllers\BulkEmailController::class, 'cancel'])->name('sms.cancel');
+            Route::get('/email/replies', [\App\Http\Controllers\EmailReplyController::class, 'index'])->name('email.replies');
+            Route::post('/email/replies/sync', [\App\Http\Controllers\EmailReplyController::class, 'syncNow'])->name('email.replies.sync');
+            Route::post('/email/replies/{leadId}/read', [\App\Http\Controllers\EmailReplyController::class, 'markThreadRead'])->name('email.replies.read');
+            Route::post('/email/replies/{leadId}/reply', [\App\Http\Controllers\EmailReplyController::class, 'reply'])->name('email.replies.reply');
             Route::post('/leads', [EducationController::class, 'storeLead'])->name('leads.store');
             Route::post('/leads/{id}/notes', [\App\Http\Controllers\LeadNoteController::class, 'store'])->name('leads.notes.store');
             Route::post('/leads/{id}', [EducationController::class, 'updateLead'])->name('leads.update');
@@ -934,6 +950,22 @@ Route::middleware(['auth'])->group(function () {
         Route::middleware('portal:immigration')->prefix('immigration')->name('portal.immigration.')->group(function () {
             Route::get('/dashboard', [ImmigrationController::class, 'dashboard'])->name('dashboard');
             Route::get('/leads', [ImmigrationController::class, 'leads'])->name('leads');
+
+            // Email module — shared Bulk Mail / SMS / Replies (same feature as
+            // the sales + admin screens, rendered under this portal's layout).
+            // Templates live at /email-templates (registered for every portal).
+            Route::get('/bulk-email', [\App\Http\Controllers\BulkEmailController::class, 'index'])->name('bulk-email');
+            Route::post('/bulk-email', [\App\Http\Controllers\BulkEmailController::class, 'store'])->name('bulk-email.store');
+            Route::get('/bulk-email/{id}', [\App\Http\Controllers\BulkEmailController::class, 'show'])->name('bulk-email.show');
+            Route::post('/bulk-email/{id}/cancel', [\App\Http\Controllers\BulkEmailController::class, 'cancel'])->name('bulk-email.cancel');
+            Route::get('/sms', [\App\Http\Controllers\BulkEmailController::class, 'index'])->name('sms');
+            Route::post('/sms', [\App\Http\Controllers\BulkEmailController::class, 'store'])->name('sms.store');
+            Route::get('/sms/{id}', [\App\Http\Controllers\BulkEmailController::class, 'show'])->name('sms.show');
+            Route::post('/sms/{id}/cancel', [\App\Http\Controllers\BulkEmailController::class, 'cancel'])->name('sms.cancel');
+            Route::get('/email/replies', [\App\Http\Controllers\EmailReplyController::class, 'index'])->name('email.replies');
+            Route::post('/email/replies/sync', [\App\Http\Controllers\EmailReplyController::class, 'syncNow'])->name('email.replies.sync');
+            Route::post('/email/replies/{leadId}/read', [\App\Http\Controllers\EmailReplyController::class, 'markThreadRead'])->name('email.replies.read');
+            Route::post('/email/replies/{leadId}/reply', [\App\Http\Controllers\EmailReplyController::class, 'reply'])->name('email.replies.reply');
             // Events tab — registrants for one event (JSON drawer), same as sales.
             Route::get('/events/{id}/registrations', [ImmigrationController::class, 'eventRegistrations'])->name('events.registrations');
             Route::get('/events/{id}/registrants', [ImmigrationController::class, 'eventRegistrantsPage'])->name('events.registrants');

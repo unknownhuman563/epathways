@@ -65,13 +65,36 @@ class EmailReplyController extends Controller
             ->sortByDesc('last_at')
             ->values();
 
-        return inertia('admin/email/Replies', [
+        [$component, $basePath] = $this->scope($request);
+
+        return inertia($component, [
+            'basePath' => $basePath,
             'threads' => $threads,
             'unreadCount' => EmailReply::where('direction', 'inbound')->where('is_read', false)->count(),
             'imapConfigured' => ! empty(config('services.imap.username')) && ! empty(config('services.imap.password')),
             'mailbox' => config('services.imap.username'),
             'search' => $search,
         ]);
+    }
+
+    /**
+     * Resolve [component, basePath] from the route. The shared inbox renders
+     * under whichever portal opened it (same data everywhere); /admin keeps the
+     * admin screen. Access is gated by the portal:* middleware on each route.
+     *
+     * @return array{0: string, 1: string}
+     */
+    private function scope(Request $request): array
+    {
+        $name = (string) $request->route()?->getName();
+        if (str_starts_with($name, 'portal.')) {
+            $dept = explode('.', $name)[1] ?? null;
+            if (in_array($dept, \App\Models\MessageTemplate::DEPARTMENTS, true)) {
+                return ["portal/{$dept}/Replies", "/portal/{$dept}/email/replies"];
+            }
+        }
+
+        return ['admin/email/Replies', '/admin/email/replies'];
     }
 
     /**

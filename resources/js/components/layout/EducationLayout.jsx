@@ -4,6 +4,7 @@ import {
     LayoutDashboard, UserSquare2, Users, FolderOpen, GraduationCap,
     ListChecks, LineChart, User, Bell, Tag, Star, CheckSquare, ClipboardCheck,
     Building2, Ticket, Mail,
+    PenLine, Megaphone, Smartphone, MessageSquare,
 } from "lucide-react";
 
 export default function EducationLayout({ children }) {
@@ -26,7 +27,17 @@ export default function EducationLayout({ children }) {
         { name: "Schools",             href: "/portal/education/schools",             icon: <Building2 size={20} /> },
         { name: "Promotions",          href: "/admin/promos",                         icon: <Tag size={20} /> },
         { name: "Checklist Templates", href: "/portal/education/checklist-templates", icon: <ListChecks size={20} /> },
-        { name: "Email Templates",     href: "/portal/education/email-templates",     icon: <Mail size={20} /> },
+
+        {
+            name: "Email",
+            icon: <Mail size={20} />,
+            children: [
+                { name: "Templates", href: "/portal/education/email-templates", icon: <PenLine size={16} /> },
+                { name: "Bulk Mail", href: "/portal/education/bulk-email",      icon: <Megaphone size={16} /> },
+                { name: "SMS",       href: "/portal/education/sms",             icon: <Smartphone size={16} /> },
+                { name: "Replies",   href: "/portal/education/email/replies",   icon: <MessageSquare size={16} /> },
+            ],
+        },
 
         { name: "Reports", href: "/portal/education/reports", icon: <LineChart size={20} /> },
 
