@@ -220,7 +220,7 @@ class Lead extends Model
         // Student conversion flag
         'is_student', 'student_converted_at', 'student_converted_by',
         // Multi-service flags
-        'is_immigration_case', 'immigration_converted_at', 'immigration_converted_by',
+        'is_immigration_case', 'immigration_converted_at', 'immigration_converted_by', 'assessment_id',
         'is_accommodation_client', 'accommodation_converted_at', 'accommodation_converted_by',
         'is_english_student', 'english_converted_at', 'english_converted_by',
         // Staff member responsible for this lead (drives assignment notifications)
