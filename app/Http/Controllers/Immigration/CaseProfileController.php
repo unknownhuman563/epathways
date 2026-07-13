@@ -169,6 +169,9 @@ class CaseProfileController extends Controller
             $assessment = Assessment::whereNotNull('intakeable_type')->find($lead->assessment_id);
         }
 
+        $wantLast = strtolower(trim((string) $lead->last_name));
+        $wantFirst = strtolower(trim((string) $lead->first_name));
+
         // 2. Legacy fallback (cases converted before the FK existed): match by
         //    email, but prefer the assessment whose intake name matches this
         //    lead — email alone is ambiguous when applicants share one.
@@ -177,9 +180,6 @@ class CaseProfileController extends Controller
                 ->whereNotNull('intakeable_type')
                 ->latest('id')
                 ->get();
-
-            $wantLast = strtolower(trim((string) $lead->last_name));
-            $wantFirst = strtolower(trim((string) $lead->first_name));
 
             $assessment = $candidates->first(function ($a) use ($wantLast, $wantFirst) {
                 $i = $a->intakeable;
@@ -190,7 +190,22 @@ class CaseProfileController extends Controller
                 $iFirst = strtolower(trim((string) ($i->first_name ?? '')));
 
                 return $wantLast !== '' && $iLast === $wantLast && ($wantFirst === '' || $iFirst === $wantFirst);
-            }) ?? $candidates->first();
+            });
+        }
+
+        // 3. Name match — covers a case with no email (or no email match),
+        //    e.g. a staff-created case. Uses the assessment's own applicant
+        //    name and only links when the match is unambiguous.
+        if (! $assessment && $wantFirst !== '' && $wantLast !== '') {
+            $byName = Assessment::whereNotNull('intakeable_type')
+                ->whereRaw('LOWER(TRIM(applicant_last_name)) = ?', [$wantLast])
+                ->whereRaw('LOWER(TRIM(applicant_first_name)) = ?', [$wantFirst])
+                ->latest('id')
+                ->get();
+
+            if ($byName->count() === 1) {
+                $assessment = $byName->first();
+            }
         }
 
         if (! $assessment) {
