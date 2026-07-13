@@ -691,23 +691,37 @@ class ImmigrationController extends Controller
             $lastName = $intake->last_name ?? $intake->family_name ?? null;
 
             return DB::transaction(function () use ($assessment, $intake, $visaName, $lastName) {
-                // Find-or-create the Lead by email. Emails can be shared
-                // across applicants (e.g. a parent registering several
-                // people), so when more than one lead matches we disambiguate
-                // by last name — otherwise we'd attach this assessment to the
-                // wrong person's case.
+                // Find-or-create the Lead. Emails are NOT unique to a person
+                // (a parent often registers several people under one email),
+                // so a same-email lead is only the right target when the NAME
+                // also matches — otherwise we'd attach this assessment to a
+                // different person's case.
                 $email = $intake->email ?: $assessment->applicant_email;
-                $byEmail = $email ? Lead::where('email', $email)->get() : collect();
+                $wantLast = strtolower(trim((string) $lastName));
+                $wantFirst = strtolower(trim((string) ($intake->first_name ?? $assessment->applicant_first_name ?? '')));
 
-                if ($byEmail->count() <= 1) {
-                    $lead = $byEmail->first();
-                } else {
-                    $wantLast = strtolower(trim((string) $lastName));
-                    $lead = $byEmail->first(fn ($l) => strtolower(trim((string) $l->last_name)) === $wantLast && $wantLast !== '');
-                    // No name match among the shared-email leads → make a
-                    // fresh case for this applicant rather than hijacking
-                    // someone else's row.
+                $lead = null;
+
+                // 1. Same email AND matching last name — the confident match.
+                if ($email && $wantLast !== '') {
+                    $lead = Lead::where('email', $email)->get()
+                        ->first(fn ($l) => strtolower(trim((string) $l->last_name)) === $wantLast);
                 }
+
+                // 2. No email match — a staff-created case may exist under the
+                //    same name with no email on it yet. Link only when the
+                //    first + last name match is unambiguous (exactly one).
+                if (! $lead && $wantFirst !== '' && $wantLast !== '') {
+                    $named = Lead::whereRaw('LOWER(TRIM(last_name)) = ?', [$wantLast])
+                        ->whereRaw('LOWER(TRIM(first_name)) = ?', [$wantFirst])
+                        ->limit(2)->get();
+                    if ($named->count() === 1) {
+                        $lead = $named->first();
+                    }
+                }
+
+                // 3. Nothing matched → create a fresh case for this applicant
+                //    (below) rather than hijacking a same-email row.
 
                 if (! $lead) {
                     $lead = Lead::create([
@@ -957,15 +971,22 @@ class ImmigrationController extends Controller
             ->where('intakeable_id', $intake->id)
             ->first();
 
-        // If the applicant's email matches a Lead already converted to
-        // an immigration case, link to it so the adviser can jump
-        // straight to the working file instead of re-converting.
-        $email = strtolower(trim((string) ($intake->email ?? '')));
+        // Resolve the case this intake was converted into. Prefer the exact
+        // assessment_id link (a shared email points at the wrong person), and
+        // only fall back to email when the name also matches.
         $lead = null;
-        if ($email !== '') {
-            $lead = Lead::where('is_immigration_case', true)
-                ->whereRaw('LOWER(email) = ?', [$email])
+        if ($assessment) {
+            $lead = Lead::where('assessment_id', $assessment->id)
                 ->first(['id', 'lead_id', 'first_name', 'last_name', 'status']);
+        }
+        $email = strtolower(trim((string) ($intake->email ?? '')));
+        if (! $lead && $email !== '') {
+            $wantLast = strtolower(trim((string) ($intake->last_name ?? $intake->family_name ?? '')));
+            $candidates = Lead::where('is_immigration_case', true)
+                ->whereRaw('LOWER(email) = ?', [$email])
+                ->get(['id', 'lead_id', 'first_name', 'last_name', 'status']);
+            $lead = $candidates->first(fn ($l) => $wantLast !== '' && strtolower(trim((string) $l->last_name)) === $wantLast);
+            // No confident name match on a shared email → don't claim a link.
         }
 
         return inertia('portal/immigration/IntakeDetails', [
