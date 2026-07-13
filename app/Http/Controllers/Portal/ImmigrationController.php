@@ -980,13 +980,28 @@ class ImmigrationController extends Controller
                 ->first(['id', 'lead_id', 'first_name', 'last_name', 'status']);
         }
         $email = strtolower(trim((string) ($intake->email ?? '')));
+        $wantLast = strtolower(trim((string) ($intake->last_name ?? $intake->family_name ?? '')));
+        $wantFirst = strtolower(trim((string) ($intake->first_name ?? '')));
+
         if (! $lead && $email !== '') {
-            $wantLast = strtolower(trim((string) ($intake->last_name ?? $intake->family_name ?? '')));
             $candidates = Lead::where('is_immigration_case', true)
                 ->whereRaw('LOWER(email) = ?', [$email])
                 ->get(['id', 'lead_id', 'first_name', 'last_name', 'status']);
             $lead = $candidates->first(fn ($l) => $wantLast !== '' && strtolower(trim((string) $l->last_name)) === $wantLast);
             // No confident name match on a shared email → don't claim a link.
+        }
+
+        // Name match — covers a staff-created case with no email on it.
+        // Only link when the first + last name match is unambiguous.
+        if (! $lead && $wantFirst !== '' && $wantLast !== '') {
+            $named = Lead::where('is_immigration_case', true)
+                ->whereRaw('LOWER(TRIM(last_name)) = ?', [$wantLast])
+                ->whereRaw('LOWER(TRIM(first_name)) = ?', [$wantFirst])
+                ->limit(2)
+                ->get(['id', 'lead_id', 'first_name', 'last_name', 'status']);
+            if ($named->count() === 1) {
+                $lead = $named->first();
+            }
         }
 
         return inertia('portal/immigration/IntakeDetails', [
