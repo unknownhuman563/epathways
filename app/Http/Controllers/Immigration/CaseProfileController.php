@@ -56,26 +56,26 @@ class CaseProfileController extends Controller
         [$intakeType, $intake] = $this->resolveIntake($lead);
 
         return Inertia::render('portal/immigration/CaseProfile', [
-            'lead'                  => $this->serializeLead($lead),
-            'intake'                => $intake ? ['type' => $intakeType, 'data' => $intake] : null,
-            'documents'             => $this->loadDocuments($lead),
+            'lead' => $this->serializeLead($lead),
+            'intake' => $intake ? ['type' => $intakeType, 'data' => $intake] : null,
+            'documents' => $this->loadDocuments($lead),
             // Build 11.D Phase 4 — checklist resolution delegated to
             // CaseChecklistService. `items` is the flat list (kept for
             // backward-compat with the existing table view); `grouped`
             // partitions the same items by category; `unstructured` covers
             // docs uploaded under a no-longer-matching key; `progress`
             // drives the "X of Y required approved" header.
-            'checklist'             => array_merge(
+            'checklist' => array_merge(
                 $checklist->sourceFor($lead),
                 ['items' => $checklist->withStatuses($lead)],
             ),
-            'checklistGrouped'      => $checklist->groupedByCategory($lead),
+            'checklistGrouped' => $checklist->groupedByCategory($lead),
             'unstructuredDocuments' => $checklist->unstructuredDocuments($lead),
-            'checklistProgress'     => $checklist->progress($lead),
-            'communications'        => $this->loadCommunications($lead),
-            'agreements'            => $this->loadAgreements($lead),
-            'notes'                 => $this->loadNotes($lead),
-            'activity'              => $this->loadActivity($lead),
+            'checklistProgress' => $checklist->progress($lead),
+            'communications' => $this->loadCommunications($lead),
+            'agreements' => $this->loadAgreements($lead),
+            'notes' => $this->loadNotes($lead),
+            'activity' => $this->loadActivity($lead),
         ]);
     }
 
@@ -89,19 +89,19 @@ class CaseProfileController extends Controller
         abort_unless($lead->is_immigration_case, 404);
 
         $validated = $request->validate([
-            'first_name'        => 'required|string|max:120',
-            'middle_name'       => 'nullable|string|max:120',
-            'last_name'         => 'nullable|string|max:120',
-            'suffix'            => 'nullable|string|max:20',
-            'gender'            => 'nullable|string|max:40',
-            'marital_status'    => 'nullable|string|max:40',
-            'dob'               => 'nullable|date',
-            'email'             => 'required|email|max:255',
-            'phone'             => 'nullable|string|max:40',
-            'citizenship'       => 'nullable|string|max:120',
+            'first_name' => 'required|string|max:120',
+            'middle_name' => 'nullable|string|max:120',
+            'last_name' => 'nullable|string|max:120',
+            'suffix' => 'nullable|string|max:20',
+            'gender' => 'nullable|string|max:40',
+            'marital_status' => 'nullable|string|max:40',
+            'dob' => 'nullable|date',
+            'email' => 'required|email|max:255',
+            'phone' => 'nullable|string|max:40',
+            'citizenship' => 'nullable|string|max:120',
             'residence_country' => 'nullable|string|max:120',
-            'passport_number'   => 'nullable|string|max:60',
-            'passport_expiry'   => 'nullable|date',
+            'passport_number' => 'nullable|string|max:60',
+            'passport_expiry' => 'nullable|date',
         ]);
 
         $lead->update($validated);
@@ -132,19 +132,19 @@ class CaseProfileController extends Controller
     {
         try {
             CaseAuditView::create([
-                'lead_id'     => $lead->id,
-                'viewer_id'   => $user->id,
+                'lead_id' => $lead->id,
+                'viewer_id' => $user->id,
                 'viewer_name' => $user->name,
                 'viewer_role' => $user->role,
-                'action'      => 'view',
-                'context'     => 'case_profile',
-                'ip'          => request()->ip(),
-                'viewed_at'   => now(),
+                'action' => 'view',
+                'context' => 'case_profile',
+                'ip' => request()->ip(),
+                'viewed_at' => now(),
             ]);
         } catch (\Throwable $e) {
             Log::warning('Case profile audit view write failed', [
                 'lead_id' => $lead->id,
-                'error'   => $e->getMessage(),
+                'error' => $e->getMessage(),
             ]);
         }
     }
@@ -154,20 +154,44 @@ class CaseProfileController extends Controller
      *   1. Sales-converted via LeadController::convertToCase — no intake row, returns [null, null]
      *   2. Assessment-converted via Portal\ImmigrationController::convertAssessmentToCase —
      *      a polymorphic Assessment row paired with one of resident/work/student/visitor
-     *      intakes. Joined to the Lead by email (no FK exists today).
+     *      intakes. Linked to the Lead via `leads.assessment_id` (stamped at
+     *      conversion); older cases fall back to a name-aware email match.
      *
      * Returns [type, intakeArray] where type is 'resident'|'work'|'student'|'visitor'|null.
      */
     protected function resolveIntake(Lead $lead): array
     {
-        if (! $lead->email) {
-            return [null, null];
+        $assessment = null;
+
+        // 1. Authoritative link, stamped at conversion time — the case points
+        //    at the EXACT assessment it came from.
+        if ($lead->assessment_id) {
+            $assessment = Assessment::whereNotNull('intakeable_type')->find($lead->assessment_id);
         }
 
-        $assessment = Assessment::where('applicant_email', $lead->email)
-            ->whereNotNull('intakeable_type')
-            ->latest('id')
-            ->first();
+        // 2. Legacy fallback (cases converted before the FK existed): match by
+        //    email, but prefer the assessment whose intake name matches this
+        //    lead — email alone is ambiguous when applicants share one.
+        if (! $assessment && $lead->email) {
+            $candidates = Assessment::where('applicant_email', $lead->email)
+                ->whereNotNull('intakeable_type')
+                ->latest('id')
+                ->get();
+
+            $wantLast = strtolower(trim((string) $lead->last_name));
+            $wantFirst = strtolower(trim((string) $lead->first_name));
+
+            $assessment = $candidates->first(function ($a) use ($wantLast, $wantFirst) {
+                $i = $a->intakeable;
+                if (! $i) {
+                    return false;
+                }
+                $iLast = strtolower(trim((string) ($i->last_name ?? $i->family_name ?? '')));
+                $iFirst = strtolower(trim((string) ($i->first_name ?? '')));
+
+                return $wantLast !== '' && $iLast === $wantLast && ($wantFirst === '' || $iFirst === $wantFirst);
+            }) ?? $candidates->first();
+        }
 
         if (! $assessment) {
             return [null, null];
@@ -180,10 +204,10 @@ class CaseProfileController extends Controller
 
         $type = match ($intake::class) {
             ResidentIntake::class => 'resident',
-            WorkIntake::class     => 'work',
-            StudentIntake::class  => 'student',
-            VisitorIntake::class  => 'visitor',
-            default               => null,
+            WorkIntake::class => 'work',
+            StudentIntake::class => 'student',
+            VisitorIntake::class => 'visitor',
+            default => null,
         };
 
         if ($type === null) {
@@ -191,10 +215,10 @@ class CaseProfileController extends Controller
         }
 
         return [$type, array_merge($intake->toArray(), [
-            'assessment_id'             => $assessment->id,
-            'assessment_status'         => $assessment->status,
+            'assessment_id' => $assessment->id,
+            'assessment_status' => $assessment->status,
             'assessment_payment_status' => $assessment->payment_status,
-            'assessment_booking_id'     => $assessment->booking_id,
+            'assessment_booking_id' => $assessment->booking_id,
         ])];
     }
 
@@ -203,36 +227,36 @@ class CaseProfileController extends Controller
         $lead->loadMissing(['assignee:id,name,email,role']);
 
         return [
-            'id'                            => $lead->id,
-            'lead_id'                       => $lead->lead_id,
-            'first_name'                    => $lead->first_name,
-            'middle_name'                   => $lead->middle_name,
-            'last_name'                     => $lead->last_name,
-            'suffix'                        => $lead->suffix,
-            'gender'                        => $lead->gender,
-            'marital_status'                => $lead->marital_status,
-            'email'                         => $lead->email,
-            'phone'                         => $lead->phone,
-            'dob'                           => optional($lead->dob)->format('Y-m-d'),
-            'citizenship'                   => $lead->citizenship,
-            'residence_country'             => $lead->residence_country,
-            'passport_number'               => $lead->passport_number,
-            'passport_expiry'               => optional($lead->passport_expiry)->format('Y-m-d'),
-            'tracking_code'                 => $lead->tracking_code,
-            'status'                        => $lead->status,
-            'stage'                         => $lead->stage,
-            'immigration_stage'             => $lead->immigration_stage,
-            'inz_visa_type'                 => $lead->inz_visa_type,
-            'inz_reference'                 => $lead->inz_reference,
-            'inz_status'                    => $lead->inz_status,
-            'inz_lodged_at'                 => $lead->inz_lodged_at,
-            'inz_decision_at'               => $lead->inz_decision_at,
-            'is_immigration_case'           => (bool) $lead->is_immigration_case,
-            'immigration_converted_at'      => $lead->immigration_converted_at,
-            'immigration_converted_by'      => $lead->immigration_converted_by,
-            'source'                        => $lead->source,
-            'assignee'                      => $lead->assignee,
-            'is_assessment_converted'       => $this->wasAssessmentConverted($lead),
+            'id' => $lead->id,
+            'lead_id' => $lead->lead_id,
+            'first_name' => $lead->first_name,
+            'middle_name' => $lead->middle_name,
+            'last_name' => $lead->last_name,
+            'suffix' => $lead->suffix,
+            'gender' => $lead->gender,
+            'marital_status' => $lead->marital_status,
+            'email' => $lead->email,
+            'phone' => $lead->phone,
+            'dob' => optional($lead->dob)->format('Y-m-d'),
+            'citizenship' => $lead->citizenship,
+            'residence_country' => $lead->residence_country,
+            'passport_number' => $lead->passport_number,
+            'passport_expiry' => optional($lead->passport_expiry)->format('Y-m-d'),
+            'tracking_code' => $lead->tracking_code,
+            'status' => $lead->status,
+            'stage' => $lead->stage,
+            'immigration_stage' => $lead->immigration_stage,
+            'inz_visa_type' => $lead->inz_visa_type,
+            'inz_reference' => $lead->inz_reference,
+            'inz_status' => $lead->inz_status,
+            'inz_lodged_at' => $lead->inz_lodged_at,
+            'inz_decision_at' => $lead->inz_decision_at,
+            'is_immigration_case' => (bool) $lead->is_immigration_case,
+            'immigration_converted_at' => $lead->immigration_converted_at,
+            'immigration_converted_by' => $lead->immigration_converted_by,
+            'source' => $lead->source,
+            'assignee' => $lead->assignee,
+            'is_assessment_converted' => $this->wasAssessmentConverted($lead),
         ];
     }
 
@@ -242,9 +266,13 @@ class CaseProfileController extends Controller
      */
     private function wasAssessmentConverted(Lead $lead): bool
     {
+        if ($lead->assessment_id) {
+            return true;
+        }
         if (! $lead->email) {
             return false;
         }
+
         return Assessment::where('applicant_email', $lead->email)->exists();
     }
 
@@ -254,17 +282,17 @@ class CaseProfileController extends Controller
             ->orderByDesc('created_at')
             ->get()
             ->map(fn (LeadDocument $d) => [
-                'id'             => $d->id,
-                'checklist_key'  => $d->checklist_key,
-                'original_name'  => $d->original_name,
-                'mime'           => $d->mime,
-                'size'           => $d->size,
-                'status'         => $d->status,
-                'source'         => $d->source,
+                'id' => $d->id,
+                'checklist_key' => $d->checklist_key,
+                'original_name' => $d->original_name,
+                'mime' => $d->mime,
+                'size' => $d->size,
+                'status' => $d->status,
+                'source' => $d->source,
                 'source_variant' => $d->source_variant,
-                'note'           => $d->note,
-                'reviewed_at'    => $d->reviewed_at,
-                'created_at'     => $d->created_at,
+                'note' => $d->note,
+                'reviewed_at' => $d->reviewed_at,
+                'created_at' => $d->created_at,
             ])
             ->all();
     }
@@ -284,7 +312,7 @@ class CaseProfileController extends Controller
             ->where(function ($q) use ($lead) {
                 $q->where(function ($qq) use ($lead) {
                     $qq->where('recipient_type', 'lead')
-                       ->where('recipient_id', $lead->id);
+                        ->where('recipient_id', $lead->id);
                 })->orWhere('recipient_address', $lead->email);
             })
             ->orderByDesc('id')
@@ -294,24 +322,27 @@ class CaseProfileController extends Controller
                 'recipient_address', 'sent_at', 'failed_at', 'created_at',
             ])
             ->map(fn ($row) => [
-                'id'                => $row->id,
-                'channel'           => $row->channel,
-                'subject'           => $row->subject,
-                'snippet'           => $this->snippet($row->body),
-                'status'            => $row->status,
+                'id' => $row->id,
+                'channel' => $row->channel,
+                'subject' => $row->subject,
+                'snippet' => $this->snippet($row->body),
+                'status' => $row->status,
                 'recipient_address' => $row->recipient_address,
-                'sent_at'           => $row->sent_at,
-                'failed_at'         => $row->failed_at,
-                'created_at'        => $row->created_at,
+                'sent_at' => $row->sent_at,
+                'failed_at' => $row->failed_at,
+                'created_at' => $row->created_at,
             ])
             ->all();
     }
 
     private function snippet(?string $body): string
     {
-        if (! $body) return '';
+        if (! $body) {
+            return '';
+        }
         $plain = trim(strip_tags($body));
-        return mb_strlen($plain) > 160 ? mb_substr($plain, 0, 160) . '…' : $plain;
+
+        return mb_strlen($plain) > 160 ? mb_substr($plain, 0, 160).'…' : $plain;
     }
 
     /**
@@ -326,23 +357,23 @@ class CaseProfileController extends Controller
             ->latest()
             ->get()
             ->map(fn (\App\Models\Agreement $a) => [
-                'id'                    => $a->id,
-                'title'                 => $a->title,
-                'status'                => $a->status,
-                'template'              => $a->template
+                'id' => $a->id,
+                'title' => $a->title,
+                'status' => $a->status,
+                'template' => $a->template
                     ? ['id' => $a->template->id, 'name' => $a->template->name, 'visa_type' => $a->template->visa_type]
                     : null,
-                'generated_by'          => $a->generatedBy?->name,
-                'sent_at'               => $a->sent_at,
-                'viewed_at'             => $a->viewed_at,
-                'signed_at'             => $a->signed_at,
-                'signer_name'           => $a->signer_name,
-                'signer_ip'             => $a->signer_ip,
-                'signer_user_agent'     => $a->signer_user_agent,
-                'has_pdf'               => (bool) $a->pdf_path,
-                'has_signed_pdf'        => (bool) $a->signed_pdf_path,
+                'generated_by' => $a->generatedBy?->name,
+                'sent_at' => $a->sent_at,
+                'viewed_at' => $a->viewed_at,
+                'signed_at' => $a->signed_at,
+                'signer_name' => $a->signer_name,
+                'signer_ip' => $a->signer_ip,
+                'signer_user_agent' => $a->signer_user_agent,
+                'has_pdf' => (bool) $a->pdf_path,
+                'has_signed_pdf' => (bool) $a->signed_pdf_path,
                 'tracker_signing_token' => $a->tracker_signing_token,
-                'created_at'            => $a->created_at,
+                'created_at' => $a->created_at,
             ])
             ->all();
     }
@@ -355,10 +386,10 @@ class CaseProfileController extends Controller
             ->limit(50)
             ->get()
             ->map(fn (LeadNote $n) => [
-                'id'         => $n->id,
-                'body'       => $n->body,
-                'pinned'     => (bool) ($n->pinned ?? false),
-                'author'     => $n->author_name ?? null,
+                'id' => $n->id,
+                'body' => $n->body,
+                'pinned' => (bool) ($n->pinned ?? false),
+                'author' => $n->author_name ?? null,
                 'created_at' => $n->created_at,
             ])
             ->all();
@@ -373,12 +404,12 @@ class CaseProfileController extends Controller
             ->limit(40)
             ->get()
             ->map(fn ($log) => [
-                'id'          => $log->id,
-                'action'      => $log->action,
+                'id' => $log->id,
+                'action' => $log->action,
                 'description' => $log->description,
-                'actor_name'  => $log->actor_name ?: 'System',
-                'actor_role'  => $log->actor_role ?: 'public',
-                'created_at'  => $log->created_at,
+                'actor_name' => $log->actor_name ?: 'System',
+                'actor_role' => $log->actor_role ?: 'public',
+                'created_at' => $log->created_at,
             ])
             ->all();
     }

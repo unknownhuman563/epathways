@@ -89,6 +89,7 @@ class VisaChecklistSeeder extends Seeder
             'PRV' => $t['prv']['items'],
             'DCRV' => $t['dcrv']['items'],
             'SVDC' => $t['svdc']['items'],
+            'VISITOR' => $t['visitor']['items'],
         ];
     }
 
@@ -112,6 +113,7 @@ class VisaChecklistSeeder extends Seeder
             'prv' => ['label' => 'Permanent Resident Visa', 'items' => $this->permanentResidentVisa()],
             'dcrv' => ['label' => 'Dependent Child Resident Visa', 'items' => $this->dependentChildResidentVisa()],
             'svdc' => ['label' => 'Student Visa — Dependent Child', 'items' => $this->studentVisaDependentChild()],
+            'visitor' => ['label' => 'General Visitor Visa', 'items' => $this->generalVisitorVisa()],
         ];
     }
 
@@ -575,6 +577,60 @@ class VisaChecklistSeeder extends Seeder
                 "Utility bills, bank statements or dated online purchases showing the applicant's name at the shared address.", true, 'BILLS'),
             $this->item('house_tenancy', $living, 'House ownership or tenancy agreement',
                 'Proof of the home — ownership/title document or a current tenancy agreement.', true, 'HOUSE'),
+        ];
+    }
+
+    private function generalVisitorVisa(): array
+    {
+        $identity = 'Identity & Forms';
+        $support = 'Sponsorship & Support (if applicable)';
+        $financial = 'Financial & Ties';
+        $employment = 'Employment (if applicable)';
+
+        return [
+            // ── Identity & Forms ─────────────────────────────────────────
+            $this->item('passport', $identity, 'Passport (PDF)',
+                'Clear colour scan of your current, valid passport in PDF format.', true, 'PPT'),
+            $this->item('passport_bio_page', $identity, 'Passport biographical page',
+                'The photo/details page showing your name, date of birth, passport number and expiry.', true, 'PPTBIO'),
+            $this->item('face_image', $identity, 'Face image (JPG, 35×45mm)',
+                'Recent passport-style photo — 35mm wide × 45mm high, plain background, full face — saved as a JPG file.', true, 'FI'),
+            $this->item('inz_1224', $identity, 'Signed INZ1224 Declaration Form',
+                'Visitor Visa declaration form, completed and signed.', true, 'INZ1224'),
+            $this->item('current_nz_visa', $identity, 'Copy of most recent NZ visa (if applicable)',
+                'Copy of your most recent NZ visa, if you have held one. If applicable.', false, 'NZVISA'),
+            $this->item('police_clearance', $identity, 'Police Clearance (if over 2 years old)',
+                'Updated police clearance if your previous one is more than 2 years old. Can be provided later or when INZ requests it.', false, 'PCC'),
+
+            // ── Sponsorship & Support (if applicable) ────────────────────
+            $this->item('inz_1256', $support, 'Signed INZ1256 Sponsorship Form',
+                'Sponsorship form signed by the NZ supporting person. Required only if sponsored.', false, 'INZ1256', '(NZ supporter)'),
+            $this->item('relationship_certificate', $support, 'Relationship certificate (NZ supporter ↔ applicant)',
+                'Birth, kinship or family register evidencing the relationship between the NZ supporting person and the applicant. If applicable.', false, 'RC'),
+            $this->item('sponsor_passport_visa', $support, "NZ supporting person's passport & resident visa",
+                "Copy of the NZ supporting person's passport and resident visa. If applicable.", false, 'SPV', '(NZ supporter)'),
+
+            // ── Financial & Ties ─────────────────────────────────────────
+            $this->item('bank_savings', $financial, 'Bank savings (NZ$1,000 per month of stay)',
+                "At least NZ\$1,000 in savings for each month of stay if you don't have accommodation.", false, 'BNKSAV'),
+            $this->item('bank_statement', $financial, "Last 6 months' bank statement",
+                'Bank statements for the last 6 months showing income from work. If applicable (e.g. PHP 150,000).', false, 'BNKS'),
+            $this->item('ties_evidence', $financial, 'Evidence of ties to home country',
+                'Family relationship / birth certificates with parents and children, property ownership, savings, updated CV and qualification / occupational certificates.', true, 'TIES'),
+            $this->item('house_ownership', $financial, 'House ownership',
+                'Evidence of any property you own in your home country. If applicable.', false, 'HOUSE'),
+            $this->item('marriage_certificate', $financial, 'Marriage certificate (if applicable)',
+                'Official marriage certificate, if you are married. If applicable.', false, 'MC'),
+            $this->item('travel_plan', $financial, 'Travel plan / itinerary',
+                'A brief travel plan or itinerary — dates, main activities, purpose of travel and place of stay.', true, 'TRAVEL'),
+
+            // ── Employment (if applicable) ───────────────────────────────
+            $this->item('leave_permit', $employment, 'Leave permit from current workplace',
+                'Approved leave permit from your current employer. If applicable.', false, 'LEAVE'),
+            $this->item('payslips', $employment, 'Most recent payslips (1 month)',
+                'Your most recent one month of payslips. If applicable.', false, 'PYSLP'),
+            $this->item('employer_correspondence', $employment, 'Evidence of communication with potential employer',
+                'Correspondence showing a job check preparation / application is in progress. If applicable.', false, 'EMPCOR'),
         ];
     }
 }

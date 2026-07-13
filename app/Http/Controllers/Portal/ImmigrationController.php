@@ -691,10 +691,23 @@ class ImmigrationController extends Controller
             $lastName = $intake->last_name ?? $intake->family_name ?? null;
 
             return DB::transaction(function () use ($assessment, $intake, $visaName, $lastName) {
-                // Find-or-create the Lead by email. firstOrNew lets us
-                // populate snapshot fields only on a fresh row.
+                // Find-or-create the Lead by email. Emails can be shared
+                // across applicants (e.g. a parent registering several
+                // people), so when more than one lead matches we disambiguate
+                // by last name — otherwise we'd attach this assessment to the
+                // wrong person's case.
                 $email = $intake->email ?: $assessment->applicant_email;
-                $lead = $email ? Lead::where('email', $email)->first() : null;
+                $byEmail = $email ? Lead::where('email', $email)->get() : collect();
+
+                if ($byEmail->count() <= 1) {
+                    $lead = $byEmail->first();
+                } else {
+                    $wantLast = strtolower(trim((string) $lastName));
+                    $lead = $byEmail->first(fn ($l) => strtolower(trim((string) $l->last_name)) === $wantLast && $wantLast !== '');
+                    // No name match among the shared-email leads → make a
+                    // fresh case for this applicant rather than hijacking
+                    // someone else's row.
+                }
 
                 if (! $lead) {
                     $lead = Lead::create([
@@ -717,8 +730,10 @@ class ImmigrationController extends Controller
                 // Idempotent flip — preserve the original conversion
                 // timestamp on a re-run. We still stamp inz_visa_type so
                 // a Work-then-Resident conversion can update the visa
-                // label without changing the conversion date.
-                $patch = ['inz_visa_type' => $visaName];
+                // label without changing the conversion date. assessment_id
+                // is always (re)linked so the case profile resolves THIS
+                // exact assessment, not a same-email one.
+                $patch = ['inz_visa_type' => $visaName, 'assessment_id' => $assessment->id];
                 if (! $lead->is_immigration_case) {
                     $patch['is_immigration_case'] = true;
                     $patch['immigration_converted_at'] = now();
@@ -815,22 +830,20 @@ class ImmigrationController extends Controller
                     ->keyBy('intakeable_id');
             };
 
-            // Pre-compute the set of applicant emails that already map to
-            // a Lead flagged as an immigration case. The Convert button
-            // is hidden when an email matches so we don't surface a
-            // duplicate-conversion path; the row still renders with the
-            // "Converted to Case" step lit up.
-            $caseEmails = Lead::query()
+            // Pre-compute which Assessment ids already map to a Lead flagged
+            // as an immigration case. Matching by the exact assessment_id
+            // (not email) means only the assessment actually converted shows
+            // as "Converted" — a second same-email applicant's assessment
+            // stays convertible on its own.
+            $convertedAssessmentIds = Lead::query()
                 ->where('is_immigration_case', true)
-                ->whereNotNull('email')
-                ->pluck('email')
-                ->map(fn ($e) => strtolower(trim($e)))
-                ->flip(); // O(1) lookup via array key
+                ->whereNotNull('assessment_id')
+                ->pluck('assessment_id')
+                ->flip();
 
-            $normalize = function ($intake, string $visaType, $assessment) use ($caseEmails): array {
+            $normalize = function ($intake, string $visaType, $assessment) use ($convertedAssessmentIds): array {
                 $first = (string) ($intake->first_name ?? '');
                 $last = (string) ($intake->last_name ?? $intake->family_name ?? '');
-                $email = strtolower(trim((string) ($intake->email ?? '')));
                 $hasAssessment = (bool) $assessment;
 
                 // Triaged — staff have changed the intake status away from
@@ -840,10 +853,9 @@ class ImmigrationController extends Controller
                 $isTriaged = $intake->status !== null
                     && ! in_array($intake->status, $defaultStatuses, true);
 
-                // Converted — either matched a Lead already flagged as
-                // an immigration case, or the row's intake status has
-                // been set to "Engaged" (the post-convert state).
-                $isConverted = ($email !== '' && isset($caseEmails[$email]))
+                // Converted — this exact assessment is linked to a case, or
+                // the intake itself has been marked "Engaged" post-convert.
+                $isConverted = ($assessment && isset($convertedAssessmentIds[$assessment->id]))
                     || $intake->status === 'Engaged';
 
                 return [
@@ -1158,13 +1170,117 @@ class ImmigrationController extends Controller
         $period = in_array($request->input('period', 'weekly'), ['weekly', 'monthly', 'quarterly', 'custom'], true)
             ? $request->input('period', 'weekly') : 'weekly';
 
+        $now = now();
+        $weekStart = $now->copy()->startOfWeek();
+
+        // Stage groupings (based on the case's current immigration_stage).
+        $awaitingStages = ['Visa Lodged', 'Request for Information', 'Approved in Principle'];
+        $inProgress = ['For Assessment', 'Endorsed', 'Agreement Sent', 'Agreement Signed', 'Invoice Paid'];
+        $lodgedStages = ['Visa Lodged', 'Request for Information', 'Approved in Principle', 'Approved Visa', 'Decline Visa'];
+        $endorsedStages = ['Endorsed', 'Agreement Sent', 'Agreement Signed', 'Invoice Paid', 'Visa Lodged', 'Request for Information', 'Approved in Principle', 'Approved Visa', 'Decline Visa'];
+        $engagedStages = ['Agreement Signed', 'Invoice Paid', 'Visa Lodged', 'Request for Information', 'Approved in Principle', 'Approved Visa', 'Decline Visa'];
+
+        $count = fn ($stages) => Lead::immigrationCase()->whereIn('immigration_stage', (array) $stages)->count();
+        $countWeek = fn ($stages) => Lead::immigrationCase()
+            ->whereIn('immigration_stage', (array) $stages)
+            ->where('stage_updated_at', '>=', $weekStart)
+            ->count();
+
+        // Adviser most cases were endorsed/assigned to this week.
+        $adviser = Lead::immigrationCase()
+            ->whereNotNull('immigration_assignee')
+            ->where('stage_updated_at', '>=', $weekStart)
+            ->selectRaw('immigration_assignee, COUNT(*) as c')
+            ->groupBy('immigration_assignee')
+            ->orderByDesc('c')
+            ->first();
+
+        $weekly = [
+            'new_clients' => Lead::immigrationCase()->where('immigration_converted_at', '>=', $weekStart)->count(),
+            'files_endorsed' => $countWeek(['For Assessment', 'Endorsed']),
+            'endorsed_to' => $adviser->immigration_assignee ?? (Lead::IMMIGRATION_STAGE_ASSIGNEES[0] ?? 'the team'),
+            'endorsed_to_count' => (int) ($adviser->c ?? 0),
+            'agreements_signed' => $countWeek('Agreement Signed'),
+            'apps_lodged' => $countWeek('Visa Lodged'),
+            'visas_approved' => $countWeek('Approved Visa'),
+        ];
+
+        $pipeline = [
+            'ready' => $count('Invoice Paid'),
+            'in_progress' => $count($inProgress),
+            'awaiting_decision' => $count($awaitingStages),
+        ];
+
+        // ── Cases by stage — the full pipeline breakdown (primary focus) ──
+        $stageDistribution = collect(Lead::IMMIGRATION_STAGES)
+            ->map(fn ($s) => ['stage' => $s, 'count' => $count($s)])
+            ->push(['stage' => 'Unassigned', 'count' => Lead::immigrationCase()->whereNull('immigration_stage')->count()])
+            ->values();
+        $totalCases = $stageDistribution->sum('count');
+
+        // ── Documents submitted this week (secondary focus) ──────────────
+        $docWeek = fn () => LeadDocument::where('created_at', '>=', $weekStart);
+        $byDay = [];
+        for ($i = 0; $i < 7; $i++) {
+            $day = $weekStart->copy()->addDays($i);
+            $byDay[] = [
+                'label' => $day->format('D'),
+                'count' => LeadDocument::whereBetween('created_at', [$day->copy()->startOfDay(), $day->copy()->endOfDay()])->count(),
+            ];
+        }
+        $documents = [
+            'total' => (clone $docWeek())->count(),
+            'approved' => (clone $docWeek())->where('status', 'Approved')->count(),
+            'pending' => (clone $docWeek())->whereIn('status', ['Submitted', 'UnderReview'])->count(),
+            'rejected' => (clone $docWeek())->where('status', 'Rejected')->count(),
+            'pending_review_all' => LeadDocument::whereIn('status', ['Submitted', 'UnderReview'])->count(),
+            'by_day' => $byDay,
+        ];
+
+        // ── 6-month trend — new cases vs visas approved per month ────────
+        $trend = [];
+        for ($i = 5; $i >= 0; $i--) {
+            $m = $now->copy()->subMonths($i);
+            $start = $m->copy()->startOfMonth();
+            $end = $m->copy()->endOfMonth();
+            $trend[] = [
+                'label' => $m->format('M'),
+                'new_cases' => Lead::immigrationCase()->whereBetween('immigration_converted_at', [$start, $end])->count(),
+                'approved' => Lead::immigrationCase()->where('immigration_stage', 'Approved Visa')->whereBetween('stage_updated_at', [$start, $end])->count(),
+            ];
+        }
+
+        $approved = $count('Approved Visa');
+        $declined = $count('Decline Visa');
+        $decided = $approved + $declined;
+
+        $kpis = [
+            'active_cases' => Lead::immigrationCase()->count(),
+            'with_inz' => $count($awaitingStages),
+            'docs_pending' => $documents['pending_review_all'],
+            'approval_rate' => $decided > 0 ? (int) round($approved / $decided * 100) : 0,
+        ];
+
+        $ytd = [
+            'total_clients' => Lead::immigrationCase()->count(),
+            'endorsed' => $count($endorsedStages),
+            'lodged' => $count($lodgedStages),
+            'approved' => $approved,
+            'engagements' => $count($engagedStages),
+            'declined' => $declined,
+            'decided' => $decided,
+            'approval_rate' => $decided > 0 ? (int) round($approved / $decided * 100) : 0,
+        ];
+
         return inertia('portal/immigration/Reports', [
             'period' => $period,
-            'tiles' => [
-                'active_cases' => Lead::where('status', 'Visa Process')->count(),
-                'new_assessments' => ResidentIntake::where('created_at', '>=', now()->startOfWeek())->count(),
-                'docs_pending' => LeadDocument::whereIn('status', ['Submitted', 'UnderReview'])->count(),
-            ],
+            'kpis' => $kpis,
+            'weekly' => $weekly,
+            'stageDistribution' => $stageDistribution,
+            'totalCases' => $totalCases,
+            'documents' => $documents,
+            'trend' => $trend,
+            'ytd' => $ytd,
             'generated_at' => now()->toIso8601String(),
             'generated_by' => optional(auth()->user())->name,
         ]);
