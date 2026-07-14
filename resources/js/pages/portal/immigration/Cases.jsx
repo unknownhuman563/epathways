@@ -19,6 +19,7 @@ const STAGE_COLORS = {
     'Endorsed':                'bg-sky-500',
     'Agreement Sent':          'bg-purple-500',
     'Agreement Signed':        'bg-teal-500',
+    'For Invoice':             'bg-orange-500',
     'Invoice Paid':            'bg-lime-500',
     'Visa Lodged':             'bg-indigo-500',
     'Request for Information': 'bg-amber-500',
@@ -35,6 +36,7 @@ const STAGE_HEX = {
     'Endorsed':                '#0ea5e9',
     'Agreement Sent':          '#a855f7',
     'Agreement Signed':        '#14b8a6',
+    'For Invoice':             '#f97316',
     'Invoice Paid':            '#84cc16',
     'Visa Lodged':             '#6366f1',
     'Request for Information': '#f59e0b',
@@ -49,6 +51,7 @@ const STAGE_CHIP = {
     'Endorsed':                'bg-sky-50 text-sky-700 border-sky-200',
     'Agreement Sent':          'bg-purple-50 text-purple-700 border-purple-200',
     'Agreement Signed':        'bg-teal-50 text-teal-700 border-teal-200',
+    'For Invoice':             'bg-orange-50 text-orange-700 border-orange-200',
     'Invoice Paid':            'bg-lime-50 text-lime-700 border-lime-200',
     'Visa Lodged':             'bg-indigo-50 text-indigo-700 border-indigo-200',
     'Request for Information': 'bg-amber-50 text-amber-700 border-amber-200',
@@ -445,9 +448,11 @@ function CreateCaseModal({ stages, visaTypes, editing = null, onClose }) {
                                 className={caseInput(errors.immigration_priority)}
                             >
                                 <option value="">— none —</option>
-                                <option value="urgent">🔴 Urgent</option>
-                                <option value="medium">🟠 Medium</option>
-                                <option value="low">🟢 Low</option>
+                                <option value="urgent">🔴 Urgent — needs action today</option>
+                                <option value="high">🟠 High — action this week</option>
+                                <option value="medium">🟡 Medium — scheduled / on track</option>
+                                <option value="low">🟢 Low — no rush</option>
+                                <option value="done">✅ Done — completed</option>
                             </select>
                         </CaseField>
                         <CaseField label="Payment" hint="Optional — free-form (e.g. amount, reference, status)" error={errors.payment}>
@@ -556,15 +561,17 @@ function caseInput(error) {
 // the case avatar (red / orange / green / gray).
 function PriorityBreakdown({ priorities = {} }) {
     const rows = [
-        { key: 'urgent', label: 'Urgent',      solid: 'bg-rose-500',    soft: 'bg-rose-50',    ring: 'ring-rose-100',    text: 'text-rose-600' },
-        { key: 'medium', label: 'Medium',      solid: 'bg-amber-500',   soft: 'bg-amber-50',   ring: 'ring-amber-100',   text: 'text-amber-600' },
+        { key: 'urgent', label: 'Urgent',      solid: 'bg-red-500',     soft: 'bg-red-50',     ring: 'ring-red-100',     text: 'text-red-600' },
+        { key: 'high',   label: 'High',        solid: 'bg-orange-500',  soft: 'bg-orange-50',  ring: 'ring-orange-100',  text: 'text-orange-600' },
+        { key: 'medium', label: 'Medium',      solid: 'bg-yellow-400',  soft: 'bg-yellow-50',  ring: 'ring-yellow-100',  text: 'text-yellow-600' },
         { key: 'low',    label: 'Low',         solid: 'bg-emerald-500', soft: 'bg-emerald-50', ring: 'ring-emerald-100', text: 'text-emerald-600' },
-        { key: 'none',   label: 'No priority', solid: 'bg-gray-300',    soft: 'bg-gray-50',    ring: 'ring-gray-100',    text: 'text-gray-500' },
+        { key: 'done',   label: 'Done',        solid: 'bg-emerald-600', soft: 'bg-emerald-50', ring: 'ring-emerald-100', text: 'text-emerald-700' },
+        { key: 'none',   label: 'No priority', solid: 'bg-gray-300',    soft: 'bg-gray-50',    ring: 'ring-gray-100',     text: 'text-gray-500' },
     ];
     const total = rows.reduce((sum, r) => sum + (priorities[r.key] || 0), 0);
 
     return (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
             {rows.map((r) => {
                 const count = priorities[r.key] || 0;
                 const pct = total > 0 ? Math.round((count / total) * 100) : 0;
@@ -958,8 +965,10 @@ function PriorityField({ c }) {
                 >
                     <option value="">No priority</option>
                     <option value="urgent">Urgent</option>
+                    <option value="high">High</option>
                     <option value="medium">Medium</option>
                     <option value="low">Low</option>
+                    <option value="done">Done</option>
                 </select>
             </div>
         </div>
@@ -1268,25 +1277,28 @@ function avatarColor(id) {
     return palette[Math.abs((id || 0) * 31) % palette.length];
 }
 
-// Priority → avatar colour: urgent (red), medium (orange), low (green).
-// Cases with no priority set show a neutral gray circle.
+// Priority → avatar colour: urgent (red), high (orange), medium (yellow),
+// low (green), done (completed). No priority set → neutral gray circle.
 function priorityColor(priority) {
     switch (priority) {
         case 'urgent': return 'bg-red-500';
-        case 'medium': return 'bg-orange-500';
+        case 'high':   return 'bg-orange-500';
+        case 'medium': return 'bg-yellow-400';
         case 'low':    return 'bg-emerald-500';
+        case 'done':   return 'bg-emerald-600';
         default:       return 'bg-gray-400';
     }
 }
 
-// Sort weight so urgent floats to the top, then medium, then low, then
-// cases with no priority set.
+// Sort weight: urgent → high → medium → low → done → no priority.
 function priorityRank(priority) {
     switch (priority) {
         case 'urgent': return 0;
-        case 'medium': return 1;
-        case 'low':    return 2;
-        default:       return 3;
+        case 'high':   return 1;
+        case 'medium': return 2;
+        case 'low':    return 3;
+        case 'done':   return 4;
+        default:       return 5;
     }
 }
 

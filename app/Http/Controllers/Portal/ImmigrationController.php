@@ -389,13 +389,14 @@ class ImmigrationController extends Controller
                 ])
                 ->values();
 
-            // Priority breakdown for the small counter next to the stage
-            // graph — urgent / medium / low + a "none" bucket for cases with
-            // no priority set.
+            // Priority breakdown for the counters above the table — one per
+            // level plus a "none" bucket for cases with no priority set.
             $priorities = [
                 'urgent' => $cases->where('immigration_priority', 'urgent')->count(),
+                'high' => $cases->where('immigration_priority', 'high')->count(),
                 'medium' => $cases->where('immigration_priority', 'medium')->count(),
                 'low' => $cases->where('immigration_priority', 'low')->count(),
+                'done' => $cases->where('immigration_priority', 'done')->count(),
             ];
             $priorities['none'] = max(0, $cases->count() - array_sum($priorities));
 
@@ -421,7 +422,7 @@ class ImmigrationController extends Controller
             return inertia('portal/immigration/Cases', [
                 'cases' => [],
                 'distribution' => [],
-                'priorities' => ['urgent' => 0, 'medium' => 0, 'low' => 0, 'none' => 0],
+                'priorities' => ['urgent' => 0, 'high' => 0, 'medium' => 0, 'low' => 0, 'done' => 0, 'none' => 0],
                 'stages' => Lead::IMMIGRATION_STAGES,
                 'visaTypes' => [],
             ]);
@@ -1211,10 +1212,10 @@ class ImmigrationController extends Controller
 
         // Stage groupings (based on the case's current immigration_stage).
         $awaitingStages = ['Visa Lodged', 'Request for Information', 'Approved in Principle'];
-        $inProgress = ['For Assessment', 'Endorsed', 'Agreement Sent', 'Agreement Signed', 'Invoice Paid'];
+        $inProgress = ['For Assessment', 'Endorsed', 'Agreement Sent', 'Agreement Signed', 'For Invoice', 'Invoice Paid'];
         $lodgedStages = ['Visa Lodged', 'Request for Information', 'Approved in Principle', 'Approved Visa', 'Decline Visa'];
-        $endorsedStages = ['Endorsed', 'Agreement Sent', 'Agreement Signed', 'Invoice Paid', 'Visa Lodged', 'Request for Information', 'Approved in Principle', 'Approved Visa', 'Decline Visa'];
-        $engagedStages = ['Agreement Signed', 'Invoice Paid', 'Visa Lodged', 'Request for Information', 'Approved in Principle', 'Approved Visa', 'Decline Visa'];
+        $endorsedStages = ['Endorsed', 'Agreement Sent', 'Agreement Signed', 'For Invoice', 'Invoice Paid', 'Visa Lodged', 'Request for Information', 'Approved in Principle', 'Approved Visa', 'Decline Visa'];
+        $engagedStages = ['Agreement Signed', 'For Invoice', 'Invoice Paid', 'Visa Lodged', 'Request for Information', 'Approved in Principle', 'Approved Visa', 'Decline Visa'];
 
         $count = fn ($stages) => Lead::immigrationCase()->whereIn('immigration_stage', (array) $stages)->count();
         $countWeek = fn ($stages) => Lead::immigrationCase()

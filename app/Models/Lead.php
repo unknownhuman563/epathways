@@ -72,6 +72,7 @@ class Lead extends Model
         'Endorsed',
         'Agreement Sent',
         'Agreement Signed',
+        'For Invoice',
         'Invoice Paid',
         'Visa Lodged',
         'Request for Information',
@@ -82,9 +83,10 @@ class Lead extends Model
 
     /**
      * Case priority levels, surfaced on the Cases board as a coloured
-     * avatar — urgent (red), medium (orange), low (green).
+     * avatar — urgent (red, today), high (orange, this week), medium
+     * (yellow, on track), low (green, no rush), done (completed).
      */
-    public const IMMIGRATION_PRIORITIES = ['urgent', 'medium', 'low'];
+    public const IMMIGRATION_PRIORITIES = ['urgent', 'high', 'medium', 'low', 'done'];
 
     /**
      * Named people who can be assigned to a lead while it sits at a given
