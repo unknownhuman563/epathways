@@ -1212,10 +1212,10 @@ class ImmigrationController extends Controller
 
         // Stage groupings (based on the case's current immigration_stage).
         $awaitingStages = ['Visa Lodged', 'Request for Information', 'Approved in Principle'];
-        $inProgress = ['For Assessment', 'Endorsed', 'Agreement Sent', 'Agreement Signed', 'For Invoice', 'Invoice Paid'];
+        $inProgress = ['For Assessment', 'Endorsed', 'Agreement Sent', 'Agreement Signed', 'For Agreement & Invoice', 'Invoice Paid'];
         $lodgedStages = ['Visa Lodged', 'Request for Information', 'Approved in Principle', 'Approved Visa', 'Decline Visa'];
-        $endorsedStages = ['Endorsed', 'Agreement Sent', 'Agreement Signed', 'For Invoice', 'Invoice Paid', 'Visa Lodged', 'Request for Information', 'Approved in Principle', 'Approved Visa', 'Decline Visa'];
-        $engagedStages = ['Agreement Signed', 'For Invoice', 'Invoice Paid', 'Visa Lodged', 'Request for Information', 'Approved in Principle', 'Approved Visa', 'Decline Visa'];
+        $endorsedStages = ['Endorsed', 'Agreement Sent', 'Agreement Signed', 'For Agreement & Invoice', 'Invoice Paid', 'Visa Lodged', 'Request for Information', 'Approved in Principle', 'Approved Visa', 'Decline Visa'];
+        $engagedStages = ['Agreement Signed', 'For Agreement & Invoice', 'Invoice Paid', 'Visa Lodged', 'Request for Information', 'Approved in Principle', 'Approved Visa', 'Decline Visa'];
 
         $count = fn ($stages) => Lead::immigrationCase()->whereIn('immigration_stage', (array) $stages)->count();
         $countWeek = fn ($stages) => Lead::immigrationCase()

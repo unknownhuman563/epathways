@@ -72,7 +72,7 @@ class Lead extends Model
         'Endorsed',
         'Agreement Sent',
         'Agreement Signed',
-        'For Invoice',
+        'For Agreement & Invoice',
         'Invoice Paid',
         'Visa Lodged',
         'Request for Information',
