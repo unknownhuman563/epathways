@@ -14,8 +14,15 @@
 <meta charset="UTF-8">
 <title>English Engagement Agreement</title>
 <style>
-    @page { margin: 70px 60px 70px 60px; }
-    body { font-family: DejaVu Sans, sans-serif; font-size: 11pt; color: #111; line-height: 1.5; }
+    @font-face { font-family: 'Urbanist'; font-style: normal; font-weight: 400; src: url('{{ base_path("resources/fonts/urbanist/Urbanist-Regular.ttf") }}') format('truetype'); }
+    @font-face { font-family: 'Urbanist'; font-style: italic; font-weight: 400; src: url('{{ base_path("resources/fonts/urbanist/Urbanist-Italic.ttf") }}') format('truetype'); }
+    @font-face { font-family: 'Urbanist'; font-style: normal; font-weight: 700; src: url('{{ base_path("resources/fonts/urbanist/Urbanist-Bold.ttf") }}') format('truetype'); }
+    @font-face { font-family: 'Urbanist'; font-style: italic; font-weight: 700; src: url('{{ base_path("resources/fonts/urbanist/Urbanist-BoldItalic.ttf") }}') format('truetype'); }
+
+    @page { margin: 120px 60px 70px 60px; }
+    body { font-family: 'Urbanist', DejaVu Sans, sans-serif; font-size: 12pt; color: #111; line-height: 1.5; }
+    .page-header { position: fixed; top: -80px; left: 0; right: 0; text-align: center; }
+    .page-header img { height: 60px; width: auto; }
     .eyebrow { text-align: center; color: #436235; font-weight: bold; font-size: 9pt; letter-spacing: 2px; margin-bottom: 6px; }
     h1 { text-align: center; font-size: 22pt; font-weight: 900; letter-spacing: 1px; margin: 0 0 4px 0; color: #1a1a1a; }
     .subtitle { text-align: center; color: #555; font-size: 10pt; font-style: italic; margin-bottom: 18px; }
@@ -49,6 +56,10 @@
 </style>
 </head>
 <body>
+
+    <div class="page-header">
+        <img src="{{ base_path('resources/assets/philipine_ep_logo.png') }}" alt="ePathways Philippines">
+    </div>
 
     <div class="eyebrow">OFFICIAL DOCUMENT &nbsp;•&nbsp; CONFIDENTIAL</div>
     <h1>ENGLISH ENGAGEMENT AGREEMENT</h1>

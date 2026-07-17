@@ -72,6 +72,7 @@ class Lead extends Model
         'Endorsed',
         'Agreement Sent',
         'Agreement Signed',
+        'For Agreement & Invoice',
         'Invoice Paid',
         'Visa Lodged',
         'Request for Information',
@@ -82,9 +83,10 @@ class Lead extends Model
 
     /**
      * Case priority levels, surfaced on the Cases board as a coloured
-     * avatar — urgent (red), medium (orange), low (green).
+     * avatar — urgent (red, today), high (orange, this week), medium
+     * (yellow, on track), low (green, no rush), done (completed).
      */
-    public const IMMIGRATION_PRIORITIES = ['urgent', 'medium', 'low'];
+    public const IMMIGRATION_PRIORITIES = ['urgent', 'high', 'medium', 'low', 'done'];
 
     /**
      * Named people who can be assigned to a lead while it sits at a given
@@ -216,6 +218,13 @@ class Lead extends Model
         'calendar_date', 'client_info_link', 'call_update_form_link',
         'document_checklist',
         'hidden_track_documents',
+        // Up to 3 program IDs staff have proposed for this lead — drives
+        // the "Proposal" tab on the Proposal & Agreements page and the
+        // program shortlist rendered on the tracker.
+        'proposed_program_ids',
+        // Lead's chosen program (FK to programs.id) from that shortlist,
+        // set by the tracker's "Choose this one" action.
+        'preferred_program_id', 'preferred_program_chosen_at',
         'section_verifications',
         // Student conversion flag
         'is_student', 'student_converted_at', 'student_converted_by',
@@ -330,6 +339,8 @@ class Lead extends Model
         'calendar_date' => 'date',
         'document_checklist' => 'array',
         'hidden_track_documents' => 'array',
+        'proposed_program_ids' => 'array',
+        'preferred_program_chosen_at' => 'datetime',
         'section_verifications' => 'array',
         'agreements_acknowledged_at' => 'datetime',
         'stage_updated_at' => 'datetime',

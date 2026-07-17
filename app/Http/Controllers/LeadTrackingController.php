@@ -81,6 +81,9 @@ class LeadTrackingController extends Controller
         $payload['lead'] = $this->publicLeadShape($lead);
         $payload['info'] = $this->editableInfo($lead);
         $payload['documents'] = $this->publicDocuments($lead);
+        // Documents the adviser has generated/shared for the client to
+        // download (engagement pack: agreement + IAA standards, etc.).
+        $payload['shared_documents'] = $this->sharedDocuments($lead, $code);
         $payload['agreements'] = $this->publicAgreements($lead, $code);
         // Immigration cases get the 12-step "My Visa Application Journey"
         // roadmap; everyone else (general leads / education students)
@@ -93,8 +96,57 @@ class LeadTrackingController extends Controller
         // checklist so their tracker actually shows "What we still need"
         // instead of an empty state.
         $payload['visa'] = $this->resolveVisa($lead) ?? $this->resolveGeneralChecklist($lead);
+        // Staff-suggested program shortlist (from the Proposals tab on
+        // the internal Proposal & Agreements page). Present here as
+        // resolved Program rows plus the lead's current pick (if any),
+        // driving the "Programs suggested for you" card on the tracker.
+        $payload['proposal'] = $this->publicProposal($lead);
 
         return inertia('track/TrackingPage', $payload);
+    }
+
+    /**
+     * Public shape of the staff-suggested program shortlist. Returns null
+     * (so the tracker can bail cleanly) when the lead has no shortlist.
+     * Program details are trimmed down to only what the tracker card needs.
+     */
+    private function publicProposal(Lead $lead): ?array
+    {
+        $ids = is_array($lead->proposed_program_ids) ? array_values($lead->proposed_program_ids) : [];
+        if (empty($ids)) {
+            return null;
+        }
+
+        $programs = \App\Models\Program::whereIn('id', $ids)
+            ->get(['id', 'title', 'slug', 'level', 'category', 'industry', 'location', 'price_text', 'duration_months', 'intake_months', 'image'])
+            ->keyBy('id');
+
+        // Preserve staff-picked ordering exactly (their order = their
+        // recommendation). Drop any IDs whose Program row has vanished.
+        $ordered = collect($ids)
+            ->map(fn ($id) => $programs->get($id))
+            ->filter()
+            ->map(fn ($p) => [
+                'id' => $p->id,
+                'title' => $p->title,
+                'slug' => $p->slug,
+                'level' => $p->level,
+                'category' => $p->category,
+                'industry' => $p->industry,
+                'location' => $p->location,
+                'price_text' => $p->price_text,
+                'duration_months' => $p->duration_months,
+                'intake_months' => $p->intake_months,
+                'image_url' => $p->image ? \Illuminate\Support\Facades\Storage::disk('public')->url($p->image) : null,
+                'public_url' => '/program-details/' . ($p->slug ?: $p->id),
+            ])
+            ->values();
+
+        return [
+            'programs' => $ordered,
+            'preferred_program_id' => $lead->preferred_program_id,
+            'chosen_at' => optional($lead->preferred_program_chosen_at)->toIso8601String(),
+        ];
     }
 
     /**
@@ -357,6 +409,60 @@ class LeadTrackingController extends Controller
      * Lead-side delete for a still-pending document. Same status guard as
      * updateDoc — once reviewed, only staff can remove it.
      */
+    /**
+     * Lead picks (or changes) one program from the staff-suggested
+     * shortlist. Passing `program_id: null` clears the pick. The chosen
+     * id must be one of the leads.proposed_program_ids values so the
+     * lead can't post an arbitrary program.
+     */
+    public function chooseProgram(Request $request, string $code)
+    {
+        $lead = $this->resolveLead($code);
+        if (! $lead) {
+            return back()->with('error', 'Tracking code not recognised.');
+        }
+
+        $validated = $request->validate([
+            'program_id' => 'nullable|integer',
+        ]);
+
+        $newId  = $validated['program_id'] ?? null;
+        $shortlist = is_array($lead->proposed_program_ids) ? $lead->proposed_program_ids : [];
+
+        if ($newId !== null && ! in_array((int) $newId, array_map('intval', $shortlist), true)) {
+            return back()->with('error', 'That program is not in your shortlist.');
+        }
+
+        $previousId = $lead->preferred_program_id;
+        $lead->fill([
+            'preferred_program_id'         => $newId,
+            'preferred_program_chosen_at'  => $newId ? now() : null,
+        ])->saveQuietly();
+
+        if ((int) $previousId !== (int) $newId) {
+            ActivityLog::record('lead.program_chosen', [
+                'actor_name'  => $lead->tracking_code,
+                'actor_role'  => 'tracker',
+                'portal'      => 'public',
+                'entity_type' => Lead::class,
+                'entity_id'   => $lead->id,
+                'description' => $newId
+                    ? 'Lead chose a program from the shortlist'
+                    : 'Lead cleared their program pick',
+                'properties'  => [
+                    'subject_type' => 'Lead',
+                    'subject_id'   => $lead->id,
+                    'from'         => $previousId,
+                    'to'           => $newId,
+                ],
+            ]);
+        }
+
+        return redirect()
+            ->route('track.lookup', ['code' => $lead->tracking_code])
+            ->with('success', $newId ? 'Your preferred program is saved.' : 'Program preference cleared.');
+    }
+
     public function deleteDoc(Request $request, string $code, int $docId)
     {
         $lead = $this->resolveLead($code);
@@ -504,6 +610,10 @@ class LeadTrackingController extends Controller
         return $lead->documents()
             ->orderByDesc('created_at')
             ->get()
+            // Only the client's own uploads belong in this gallery. Staff
+            // generated / shared documents surface separately (and are
+            // stored privately, so a public URL wouldn't resolve anyway).
+            ->filter(fn (LeadDocument $d) => $d->source === LeadDocument::SOURCE_UPLOAD)
             ->reject(fn (LeadDocument $d) => $d->checklist_key && in_array($d->checklist_key, $hidden, true))
             ->map(fn (LeadDocument $d) => [
                 'id' => $d->id,
@@ -526,6 +636,76 @@ class LeadTrackingController extends Controller
             ])
             ->values()
             ->all();
+    }
+
+    /**
+     * Documents the adviser has produced FOR the client to download —
+     * generated engagement documents (Written Agreement + IAA standards)
+     * and any staff-shared files. Stored on the private disk, so downloads
+     * stream through a code-gated controller route, never a public URL.
+     */
+    private function sharedDocuments(Lead $lead, string $code): array
+    {
+        $hidden = is_array($lead->hidden_track_documents) ? $lead->hidden_track_documents : [];
+        $labels = \App\Services\Immigration\EngagementDocumentGenerator::DOCS;
+
+        return $lead->documents()
+            ->where(function ($q) {
+                $q->where('source', LeadDocument::SOURCE_GENERATED)
+                    ->orWhere('status', LeadDocument::STATUS_STAFF_SHARED);
+            })
+            ->orderByDesc('created_at')
+            ->get()
+            ->reject(fn (LeadDocument $d) => $d->checklist_key && in_array($d->checklist_key, $hidden, true))
+            ->map(function (LeadDocument $d) use ($code, $labels) {
+                // Prefer a friendly label for engagement docs (engagement:<type>).
+                $type = str_starts_with((string) $d->source_variant, 'engagement:')
+                    ? str_replace('engagement:', '', $d->source_variant)
+                    : null;
+
+                return [
+                    'id' => $d->id,
+                    'title' => $type && isset($labels[$type]) ? $labels[$type]['label'] : $d->original_name,
+                    'original_name' => $d->original_name,
+                    'size' => $d->size,
+                    'created_at' => $d->created_at?->toIso8601String(),
+                    'download_url' => "/track/{$code}/documents/{$d->id}/download",
+                ];
+            })
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Stream a staff-shared / generated document to the client. Gated by
+     * the tracking code (the bearer credential): the document must belong
+     * to the lead the code resolves to, be a shared/generated doc, and not
+     * be hidden from the tracker.
+     */
+    public function downloadDoc(Request $request, string $code, $docId)
+    {
+        $lead = $this->resolveLead($code);
+        abort_unless($lead, 404);
+
+        $doc = LeadDocument::where('id', $docId)
+            ->where('lead_id', $lead->id)
+            ->firstOrFail();
+
+        // Only adviser-produced documents are downloadable here.
+        $isShared = $doc->source === LeadDocument::SOURCE_GENERATED
+            || $doc->status === LeadDocument::STATUS_STAFF_SHARED;
+        abort_unless($isShared, 403);
+
+        // Respect the same tracker-visibility toggle staff use elsewhere.
+        $hidden = is_array($lead->hidden_track_documents) ? $lead->hidden_track_documents : [];
+        abort_if($doc->checklist_key && in_array($doc->checklist_key, $hidden, true), 404);
+
+        abort_unless($doc->file_path && Storage::disk('local')->exists($doc->file_path), 404);
+
+        return response()->download(
+            Storage::disk('local')->path($doc->file_path),
+            $doc->original_name
+        );
     }
 
     /**

@@ -6,6 +6,8 @@ import {
     Eye, FileType, Plus, Trash2, Edit3, Edit,
     Check, Clock, MessageSquare, ShieldCheck,
     User as UserIcon, Folder as FolderIcon,
+    Sparkles, GraduationCap, MapPin, Award,
+    Mail, Calendar as CalendarIcon, Download,
 } from 'lucide-react';
 import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
@@ -32,9 +34,11 @@ export default function TrackingPage({
     lead = null,
     info = null,
     documents = [],
+    shared_documents = [],
     agreements = [],
     timeline = [],
     visa = null,
+    proposal = null,
     error = null,
 }) {
     const [input, setInput] = useState(code || '');
@@ -79,67 +83,61 @@ export default function TrackingPage({
             <Head title="Track Your Application — ePathways" />
             <Navbar />
 
-            <main className="flex-1 bg-[#f7f7f5]">
-                {/* Hero — only shows when no lead is loaded yet (landing
-                    state). Once the code resolves the hero collapses
-                    into the identity header so vertical space goes to
-                    the content. */}
+            <main className="flex-1 bg-gray-50">
+                {/* Hero — landing state before a code resolves. Clean white
+                    card on a soft gray backdrop; matches the staff portal
+                    dashboard look. */}
                 {!lead && (
-                    <section className="relative bg-[#0c1611] text-white py-24 overflow-hidden">
-                        <div
-                            aria-hidden
-                            className="absolute inset-0 opacity-60 pointer-events-none"
-                            style={{
-                                background:
-                                    'radial-gradient(ellipse at top, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0) 60%)',
-                            }}
-                        />
-                        <div className="relative container mx-auto px-6 md:px-12 max-w-3xl text-center">
-                            <p className="text-[10px] font-bold tracking-[0.5em] uppercase text-white/50 mb-5">
-                                Application Tracking
-                            </p>
-                            <h1 className="text-4xl md:text-5xl font-medium tracking-tight mb-3 leading-[1.05]">
-                                Your journey,<br className="sm:hidden" /> on one page.
-                            </h1>
-                            <p className="text-white/55 text-sm md:text-[15px] max-w-md mx-auto">
-                                Enter the tracking code we sent you to see your details, documents, and progress.
-                            </p>
-                            <form
-                                onSubmit={submitLookup}
-                                className="mt-10 flex flex-col sm:flex-row gap-2 max-w-2xl mx-auto"
-                            >
-                                <div className="flex-1 flex items-center gap-3 px-5 py-3.5 bg-white/5 border border-white/15 focus-within:border-white/50 focus-within:bg-white/10 transition-colors">
-                                    <Search size={16} className="text-white/40 flex-shrink-0" />
-                                    <input
-                                        type="text"
-                                        placeholder="EP-AB23CDEF"
-                                        value={input}
-                                        onChange={(e) => setInput(e.target.value)}
-                                        className="flex-1 bg-transparent text-white placeholder-white/30 focus:outline-none tracking-[0.22em] uppercase text-sm text-center sm:text-left"
-                                        autoFocus={!lead}
-                                    />
+                    <section className="py-16 sm:py-20">
+                        <div className="container mx-auto px-6 md:px-12 max-w-2xl">
+                            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-8 sm:p-10 text-center">
+                                <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100 text-[10px] font-bold uppercase tracking-[0.22em] mb-4">
+                                    <Sparkles size={11} strokeWidth={2.5} />
+                                    Application Tracker
                                 </div>
-                                <button
-                                    type="submit"
-                                    className="px-7 py-3.5 bg-white text-[#0c1611] text-[11px] font-bold uppercase tracking-[0.28em] hover:bg-gray-200 transition-colors flex items-center justify-center gap-2"
+                                <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 tracking-tight mb-2">
+                                    Your journey, on one page.
+                                </h1>
+                                <p className="text-sm text-gray-500 max-w-md mx-auto leading-relaxed">
+                                    Enter the tracking code we sent you to see your details, documents, and progress.
+                                </p>
+                                <form
+                                    onSubmit={submitLookup}
+                                    className="mt-8 flex flex-col sm:flex-row gap-2 max-w-lg mx-auto"
                                 >
-                                    Track <ArrowRight size={13} strokeWidth={2.5} />
-                                </button>
-                            </form>
+                                    <div className="flex-1 flex items-center gap-2.5 px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus-within:border-gray-900 focus-within:bg-white transition-all">
+                                        <Search size={15} className="text-gray-400 flex-shrink-0" />
+                                        <input
+                                            type="text"
+                                            placeholder="EP-AB23CDEF"
+                                            value={input}
+                                            onChange={(e) => setInput(e.target.value)}
+                                            className="flex-1 bg-transparent text-gray-900 placeholder-gray-400 focus:outline-none tracking-[0.18em] uppercase text-sm font-mono"
+                                            autoFocus={!lead}
+                                        />
+                                    </div>
+                                    <button
+                                        type="submit"
+                                        className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-gray-900 text-white rounded-xl text-sm font-bold hover:bg-black transition-colors shadow-sm"
+                                    >
+                                        Track <ArrowRight size={14} strokeWidth={2.5} />
+                                    </button>
+                                </form>
+                            </div>
                         </div>
                     </section>
                 )}
 
-                <section className="container mx-auto px-6 md:px-12 max-w-7xl py-10">
+                <section className="container mx-auto px-6 md:px-12 max-w-7xl py-8">
                     {flash.success && (
-                        <div className="mb-6 bg-gray-50 border border-gray-300 px-5 py-3 text-sm text-[#282728] flex items-center gap-3">
-                            <CheckCircle2 size={16} className="text-[#282728] flex-shrink-0" />
+                        <div className="mb-4 bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3 text-sm text-emerald-800 flex items-center gap-2.5">
+                            <CheckCircle2 size={16} className="text-emerald-600 flex-shrink-0" />
                             {flash.success}
                         </div>
                     )}
 
                     {error && (
-                        <div className="bg-red-50 border border-red-200 px-5 py-4 flex items-start gap-3 max-w-2xl mx-auto">
+                        <div className="bg-red-50 border border-red-200 rounded-xl px-5 py-4 flex items-start gap-3 max-w-2xl mx-auto shadow-sm">
                             <AlertCircle size={18} className="text-red-500 flex-shrink-0 mt-0.5" />
                             <div>
                                 <p className="text-sm font-semibold text-red-700 mb-0.5">Code not found</p>
@@ -155,6 +153,15 @@ export default function TrackingPage({
                                 timeline={timeline}
                                 onSeeFull={() => setJourneyOpen(true)}
                             />
+
+                            {/* Programs suggested by the adviser — only
+                                renders when staff has shortlisted programs
+                                on the internal Proposal & Agreements page.
+                                Sits above the tab strip so the lead sees it
+                                straight after their journey snapshot. */}
+                            {proposal && proposal.programs?.length > 0 && (
+                                <ProposalShortlist proposal={proposal} code={lead.tracking_code} />
+                            )}
 
                             {/* Tab strip + tab content. Counts on the Visa
                                 and Documents tabs nudge the lead toward
@@ -173,6 +180,7 @@ export default function TrackingPage({
                                     <DocumentsHubTab
                                         visa={visa}
                                         documents={documents}
+                                        sharedDocuments={shared_documents}
                                         agreements={agreements}
                                         sectionFilter={sectionFilter}
                                         onSectionFilter={setSectionFilter}
@@ -184,7 +192,7 @@ export default function TrackingPage({
                                     />
                                 )}
                                 {activeTab === 'information' && (
-                                    <div className="bg-white border-x border-b border-gray-200 p-4 sm:p-6">
+                                    <div className="bg-white rounded-b-2xl border border-t-0 border-gray-100 shadow-sm p-4 sm:p-6">
                                         <InformationPanel code={lead.tracking_code} info={info} />
                                     </div>
                                 )}
@@ -478,33 +486,146 @@ function IdentityHeader({ lead, visa, timeline = [] }) {
         stepLabel = `Step ${currentIdx + 1} of ${timeline.length}`;
     }
 
+    // Initials for the avatar chip on the left.
+    const initials = (fullName || '?')
+        .split(/\s+/)
+        .filter(Boolean)
+        .slice(0, 2)
+        .map((s) => s.charAt(0).toUpperCase())
+        .join('');
+
+    // HR-style profile layout, dark-gray palette. Banner sits above a
+    // circular avatar that overlaps onto white; name + status pill + kebab
+    // on one row; four pill fields below (Visa / Application / Email /
+    // Tracking Code). No greens on the header chrome — status pill keeps
+    // its state tone so the applicant can read progress at a glance.
+    const isComplete = allCompleted && ! declinedStep;
+    const hasEmail = !! lead?.email;
+
     return (
-        <div className="bg-white border border-gray-200 px-6 py-5">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 items-start">
-                <div>
-                    <p className="text-[10px] font-bold tracking-[0.28em] uppercase text-gray-400 mb-2">
-                        Application Name
-                    </p>
-                    <p className="text-lg font-semibold text-[#282728] tracking-tight leading-snug">
-                        {fullName}
-                    </p>
-                    <p className="text-[12px] text-gray-500 mt-1">
-                        {visaName ? `${visaName} · ` : ''}
-                        <span className="font-mono">{trackingCode}</span>
-                    </p>
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+            {/* BANNER — deep gray gradient with faint decorative arcs.
+                Fixed 128px on mobile / 144px desktop so the avatar has
+                room to overlap by half its height without clipping. */}
+            <div
+                className="h-32 sm:h-36 relative overflow-hidden"
+                style={{
+                    background:
+                        'linear-gradient(120deg, #1f2937 0%, #111827 55%, #0c1611 100%)',
+                }}
+            >
+                <svg
+                    aria-hidden
+                    className="absolute right-6 -top-12 opacity-15"
+                    width="280" height="220" viewBox="0 0 280 220" fill="none"
+                >
+                    <circle cx="160" cy="130" r="100" stroke="#ffffff" strokeWidth="1.5" strokeOpacity="0.6" />
+                    <circle cx="220" cy="60"  r="70"  stroke="#ffffff" strokeWidth="1"   strokeOpacity="0.5" />
+                    <circle cx="90"  cy="170" r="50"  stroke="#ffffff" strokeWidth="1"   strokeOpacity="0.4" />
+                </svg>
+                <div
+                    aria-hidden
+                    className="absolute inset-0 opacity-[0.08] mix-blend-overlay pointer-events-none"
+                    style={{
+                        backgroundImage:
+                            "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>\")",
+                    }}
+                />
+            </div>
+
+            {/* IDENTITY ROW — avatar overlaps the banner by ~half its height */}
+            <div className="px-4 sm:px-6 pb-5">
+                <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
+                    <div className="flex items-end gap-4 min-w-0 -mt-14">
+                        {/* Avatar — dark gray gradient to match banner, ring-4 white */}
+                        <div className="w-24 h-24 rounded-full bg-gradient-to-br from-gray-700 via-gray-800 to-gray-900 text-white flex items-center justify-center font-black text-2xl ring-4 ring-white shadow-lg shrink-0">
+                            {initials || <UserIcon size={32} />}
+                        </div>
+                        <div className="min-w-0 pb-1">
+                            <div className="flex items-center gap-2 min-w-0">
+                                <h1 className="text-xl sm:text-2xl font-bold text-[#282728] tracking-tight leading-tight truncate">
+                                    {fullName}
+                                </h1>
+                                {isComplete && (
+                                    <span
+                                        title="Visa issued"
+                                        className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-[#282728] text-white shrink-0"
+                                    >
+                                        <Check size={12} strokeWidth={3} />
+                                    </span>
+                                )}
+                            </div>
+                            <p className="text-[13px] text-gray-500 mt-0.5 truncate">
+                                {trackingCode && <span className="font-mono">{trackingCode}</span>}
+                                {trackingCode && visaName && <span className="mx-1.5 text-gray-300">·</span>}
+                                {visaName || 'Application'}
+                            </p>
+                        </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 pb-1 shrink-0 sm:pt-2">
+                        <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[11px] font-bold uppercase tracking-wider border ${badgeTone}`}>
+                            <span className="w-1.5 h-1.5 rounded-full bg-current opacity-70" />
+                            {statusLabel}
+                        </span>
+                        {stepLabel && (
+                            <span className="text-[11px] text-gray-500 hidden md:inline">
+                                {stepLabel}
+                            </span>
+                        )}
+                    </div>
                 </div>
-                <div className="sm:text-right">
-                    <p className="text-[10px] font-bold tracking-[0.28em] uppercase text-gray-400 mb-2">
-                        Application Status
-                    </p>
-                    <span className={`inline-flex items-center px-3 py-1 text-[11px] font-bold tracking-wide border ${badgeTone}`}>
-                        {statusLabel}
-                    </span>
-                    {stepLabel && (
-                        <p className="text-[12px] text-gray-500 mt-1">{stepLabel}</p>
+
+                {/* PILL FIELDS — Visa / Application / Email / Tracking Code.
+                    Email cell hides when the lead has no address on file so
+                    we're not surfacing a dangling em-dash. */}
+                <div className={`mt-6 grid grid-cols-1 sm:grid-cols-2 ${hasEmail ? 'lg:grid-cols-4' : 'lg:grid-cols-3'} gap-3`}>
+                    <PillField
+                        icon={<Award size={12} />}
+                        label="Visa Type"
+                        value={visaName || '—'}
+                    />
+                    <PillField
+                        icon={<CalendarIcon size={12} />}
+                        label="Application"
+                        value={stepLabel || (isComplete ? 'Completed' : 'In progress')}
+                    />
+                    {hasEmail && (
+                        <PillField
+                            icon={<Mail size={12} />}
+                            label="Email"
+                            value={lead.email}
+                            truncate
+                        />
                     )}
+                    <PillField
+                        icon={<UserIcon size={12} />}
+                        label="Tracking Code"
+                        value={trackingCode || '—'}
+                        mono
+                    />
                 </div>
             </div>
+        </div>
+    );
+}
+
+// Reference-style pill field: icon + tiny uppercase label + value.
+// Dark-gray theme throughout — no dots, no accents. The reference's
+// coloured dots were noisy and don't earn their weight on 4 fields.
+function PillField({ icon, label, value, truncate = false, mono = false }) {
+    return (
+        <div className="rounded-xl border border-gray-100 bg-gray-50/60 px-4 py-3">
+            <p className="text-[10px] font-bold tracking-[0.16em] uppercase text-gray-400 mb-1 flex items-center gap-1.5">
+                <span className="text-gray-400">{icon}</span>
+                {label}
+            </p>
+            <p
+                className={`text-[13.5px] font-semibold text-[#282728] ${truncate ? 'truncate' : ''} ${mono ? 'font-mono' : ''}`}
+                title={truncate ? value : undefined}
+            >
+                {value}
+            </p>
         </div>
     );
 }
@@ -550,23 +671,26 @@ function JourneySnapshot({ timeline = [], onSeeFull }) {
     }, [timeline]);
 
     return (
-        <div className="bg-white border border-gray-200 px-6 py-6">
-            <div className="flex items-center justify-between mb-6">
-                <h2 className="text-sm font-semibold text-[#282728] tracking-tight">
-                    Your journey
-                </h2>
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm px-6 py-5">
+            <div className="flex items-center justify-between mb-5">
+                <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-lg bg-gray-100 text-gray-800 flex items-center justify-center">
+                        <ArrowRight size={14} />
+                    </div>
+                    <h2 className="text-sm font-bold text-gray-900 tracking-tight">Your journey</h2>
+                </div>
                 <button
                     type="button"
                     onClick={onSeeFull}
-                    className="text-[11px] font-semibold text-[#282728] hover:underline inline-flex items-center gap-1"
+                    className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-[11px] font-semibold text-gray-700 hover:text-gray-900 hover:bg-gray-100 transition-colors"
                 >
                     See full journey <ArrowRight size={12} />
                 </button>
             </div>
 
             {declined ? (
-                <div className="border-l-4 border-red-500 bg-red-50 px-4 py-3">
-                    <p className="text-[10px] font-bold tracking-[0.22em] uppercase text-red-600 mb-1">
+                <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3">
+                    <p className="text-[10px] font-bold tracking-[0.2em] uppercase text-red-600 mb-1">
                         Outcome
                     </p>
                     <p className="text-sm font-semibold text-red-900">{declined.label}</p>
@@ -575,11 +699,11 @@ function JourneySnapshot({ timeline = [], onSeeFull }) {
                     )}
                 </div>
             ) : allCompleted ? (
-                <div className="border-l-4 border-emerald-500 bg-emerald-50 px-4 py-3">
-                    <p className="text-[10px] font-bold tracking-[0.22em] uppercase text-emerald-700 mb-1">
+                <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
+                    <p className="text-[10px] font-bold tracking-[0.2em] uppercase text-gray-700 mb-1">
                         Complete
                     </p>
-                    <p className="text-sm font-semibold text-emerald-900">All journey steps complete.</p>
+                    <p className="text-sm font-semibold text-gray-900">All journey steps complete.</p>
                 </div>
             ) : visibleSteps.length > 0 ? (
                 <HorizontalStepper steps={visibleSteps} />
@@ -617,7 +741,7 @@ function HorizontalStepper({ steps }) {
             {filledCols > 0 && (
                 <div
                     aria-hidden
-                    className="absolute top-[20px] left-[16.667%] h-[2px] bg-[#282728]"
+                    className="absolute top-[20px] left-[16.667%] h-[2px] bg-gray-900"
                     style={{ width: `${filledCols * (100 / 3)}%` }}
                 />
             )}
@@ -644,13 +768,13 @@ function StepNode({ step }) {
                 Step {globalIndex}
             </p>
             <p className={`mt-1 text-[14px] font-semibold leading-snug ${
-                status === 'pending' ? 'text-gray-400' : 'text-[#282728]'
+                status === 'pending' ? 'text-gray-400' : 'text-gray-900'
             }`}>
                 {label}
             </p>
             <p className={`mt-1 text-[11px] italic ${
-                status === 'completed' ? 'text-emerald-600' :
-                status === 'current'   ? 'text-[#282728]' :
+                status === 'completed' ? 'text-gray-700' :
+                status === 'current'   ? 'text-gray-900' :
                 'text-gray-400'
             }`}>
                 {statusWord}
@@ -666,25 +790,22 @@ function StepNode({ step }) {
 
 function StepCircle({ status }) {
     if (status === 'completed') {
-        // Filled dark circle with white check — same family as the
-        // "current" treatment so completed nodes read as "this happened"
-        // not "this is happening".
+        // Dark filled — "this happened, no longer active".
         return (
-            <span className="relative z-10 inline-flex w-10 h-10 rounded-full bg-[#282728] items-center justify-center flex-shrink-0">
+            <span className="relative z-10 inline-flex w-10 h-10 rounded-full bg-gray-900 items-center justify-center flex-shrink-0 shadow-sm">
                 <Check size={16} className="text-white" strokeWidth={3} />
             </span>
         );
     }
     if (status === 'current') {
-        // Dark filled circle with inner white dot — the "active" marker
-        // from the reference. Ringed with a soft halo to emphasise focus.
+        // White circle with dark ring + dark dot — active-focus.
         return (
-            <span className="relative z-10 inline-flex w-10 h-10 rounded-full bg-[#282728] items-center justify-center flex-shrink-0 ring-4 ring-[#282728]/10">
-                <span className="block w-2 h-2 rounded-full bg-white" />
+            <span className="relative z-10 inline-flex w-10 h-10 rounded-full bg-white border-2 border-gray-900 items-center justify-center flex-shrink-0 ring-4 ring-gray-200 shadow-sm">
+                <span className="block w-2.5 h-2.5 rounded-full bg-gray-900" />
             </span>
         );
     }
-    // Pending — hollow gray ring with a soft inner dot.
+    // Pending — soft gray ring, no fill.
     return (
         <span className="relative z-10 inline-flex w-10 h-10 rounded-full bg-white border-2 border-gray-200 items-center justify-center flex-shrink-0">
             <span className="block w-2 h-2 rounded-full bg-gray-300" />
@@ -746,8 +867,8 @@ function TabStrip({ active, onChange, counts = {} }) {
         { key: 'messages',    label: 'Messages',    Icon: MessageSquare, badge: null },
     ];
     return (
-        <div className="bg-white border-x border-t border-gray-200">
-            <div className="flex overflow-x-auto">
+        <div className="bg-white rounded-t-2xl border border-b-0 border-gray-100 shadow-sm">
+            <div className="flex overflow-x-auto px-4 border-b border-gray-100">
                 {items.map((it) => {
                     const isActive = active === it.key;
                     return (
@@ -755,18 +876,18 @@ function TabStrip({ active, onChange, counts = {} }) {
                             key={it.key}
                             type="button"
                             onClick={() => onChange(it.key)}
-                            className={`flex items-center gap-2 px-5 py-3 text-[13px] font-semibold tracking-tight whitespace-nowrap transition-colors border-b-2 ${
+                            className={`inline-flex items-center gap-2 px-4 py-3 text-[13px] font-semibold whitespace-nowrap transition-colors border-b-2 -mb-px ${
                                 isActive
-                                    ? 'text-[#282728] border-[#282728]'
-                                    : 'text-gray-500 border-transparent hover:text-[#282728]'
+                                    ? 'text-gray-900 border-gray-900'
+                                    : 'text-gray-500 border-transparent hover:text-gray-800'
                             }`}
                             aria-current={isActive ? 'page' : undefined}
                         >
                             <it.Icon size={14} strokeWidth={2} />
                             <span>{it.label}</span>
                             {typeof it.badge === 'number' && it.badge > 0 && (
-                                <span className={`text-[10px] font-bold tracking-wide px-1.5 py-0.5 ${
-                                    isActive ? 'bg-[#282728] text-white' : 'bg-gray-100 text-gray-600'
+                                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
+                                    isActive ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600'
                                 }`}>
                                     {it.badge}
                                 </span>
@@ -782,9 +903,9 @@ function TabStrip({ active, onChange, counts = {} }) {
 
 function MessagesTabStub() {
     return (
-        <div className="bg-white border-x border-b border-gray-200 px-6 py-16 text-center">
+        <div className="bg-white rounded-b-2xl border border-t-0 border-gray-100 shadow-sm px-6 py-16 text-center">
             <MessageSquare size={28} className="mx-auto text-gray-300 mb-3" strokeWidth={1.5} />
-            <p className="text-[13px] font-semibold text-[#282728] mb-1">
+            <p className="text-[13px] font-semibold text-gray-900 mb-1">
                 Messages from your adviser will appear here
             </p>
             <p className="text-[12px] text-gray-500 max-w-sm mx-auto leading-relaxed">
@@ -814,6 +935,7 @@ function MessagesTabStub() {
 function DocumentsHubTab({
     visa,
     documents = [],
+    sharedDocuments = [],
     agreements = [],
     sectionFilter,
     onSectionFilter,
@@ -972,6 +1094,22 @@ function DocumentsHubTab({
                     <ul className="space-y-2">
                         {agreements.map((a) => (
                             <AgreementCardRow key={a.id} agreement={a} />
+                        ))}
+                    </ul>
+                </DocsSection>
+            )}
+
+            {/* SECTION 1.5 — documents the adviser shared for the client to
+                download (engagement pack: written agreement + IAA standards). */}
+            {sharedDocuments.length > 0 && (
+                <DocsSection
+                    title="Documents from your adviser"
+                    eyebrow="For you"
+                    subtitle={`${sharedDocuments.length} document${sharedDocuments.length === 1 ? '' : 's'} to download`}
+                >
+                    <ul className="space-y-2">
+                        {sharedDocuments.map((d) => (
+                            <SharedDocRow key={d.id} doc={d} />
                         ))}
                     </ul>
                 </DocsSection>
@@ -1662,6 +1800,37 @@ function AgreementCardRow({ agreement: a }) {
         </li>
     );
 }
+/**
+ * A staff-shared / generated document the client can download (engagement
+ * pack). Streams through the code-gated tracker download route.
+ */
+function SharedDocRow({ doc: d }) {
+    const kb = d.size ? (d.size < 1024 * 1024
+        ? `${Math.max(1, Math.round(d.size / 1024))} KB`
+        : `${(d.size / (1024 * 1024)).toFixed(1)} MB`) : null;
+    return (
+        <li className="flex items-center justify-between gap-3 px-4 py-3 border border-gray-200 bg-white">
+            <div className="flex items-start gap-3 min-w-0">
+                <div className="w-9 h-9 bg-gray-50 border border-gray-100 flex items-center justify-center flex-shrink-0">
+                    <FileText size={15} className="text-gray-400" strokeWidth={2} />
+                </div>
+                <div className="min-w-0">
+                    <p className="text-[13px] font-semibold text-[#282728] truncate">{d.title}</p>
+                    <p className="text-[11px] text-gray-500 mt-0.5">
+                        {formatStamp(d.created_at)}{kb ? ` · ${kb}` : ''}
+                    </p>
+                </div>
+            </div>
+            <a
+                href={d.download_url}
+                className="text-[10px] font-bold uppercase tracking-wide inline-flex items-center gap-1.5 bg-[#282728] text-white px-3 py-1.5 hover:bg-black transition-colors flex-shrink-0"
+            >
+                <Download size={12} strokeWidth={2.2} /> Download
+            </a>
+        </li>
+    );
+}
+
 /**
  * Parse a "Section · Item Name" checklist label into its two halves. The
  * seeder embeds the section in the label this way because the underlying
@@ -2454,6 +2623,156 @@ function StatusLabel({ status, alternative = false }) {
         <span className="text-[11px] font-medium text-gray-400">
             Pending
         </span>
+    );
+}
+
+// ── Proposal Shortlist ──────────────────────────────────────────────────
+// Staff has picked up to 3 programs on the internal Proposal & Agreements
+// page. The lead sees them here as cards and can pick one — the pick is
+// saved via POST /track/{code}/choose-program and flows back through the
+// preferred_program_id column on leads.
+//
+// The card whose id matches `preferred_program_id` gets the "Your choice"
+// badge + darker treatment; "Change" clears the pick server-side so the
+// lead can re-choose without any confirm modal (it's their preference,
+// low stakes).
+function ProposalShortlist({ proposal, code }) {
+    const [savingId, setSavingId] = useState(null);
+    const chosenId = proposal.preferred_program_id;
+
+    const submit = (programId) => {
+        setSavingId(programId ?? -1);
+        router.post(`/track/${code}/choose-program`, { program_id: programId }, {
+            preserveScroll: true,
+            onFinish: () => setSavingId(null),
+        });
+    };
+
+    return (
+        <section className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+            <div className="px-6 py-5 border-b border-gray-100 flex items-start justify-between gap-4 bg-gradient-to-br from-gray-50 to-white">
+                <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-9 h-9 rounded-lg bg-gray-100 text-gray-800 flex items-center justify-center shrink-0">
+                        <Sparkles size={16} strokeWidth={2.25} />
+                    </div>
+                    <div className="min-w-0">
+                        <div className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-[0.18em] text-gray-500 mb-0.5">
+                            Suggested for you
+                        </div>
+                        <h2 className="text-base font-bold text-gray-900 tracking-tight">
+                            {chosenId ? 'Your chosen study path' : 'Programs your adviser prepared'}
+                        </h2>
+                        <p className="text-[12px] text-gray-500 mt-0.5 leading-relaxed">
+                            {chosenId
+                                ? 'You can switch to another option at any time — your adviser follows up on the one you\'ve chosen.'
+                                : 'Pick the one you\'d like to pursue. Your adviser will move ahead with your choice.'}
+                        </p>
+                    </div>
+                </div>
+                <div className="text-right shrink-0 hidden sm:block">
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold tabular-nums bg-gray-100 text-gray-700">
+                        {proposal.programs.length} option{proposal.programs.length === 1 ? '' : 's'}
+                    </span>
+                </div>
+            </div>
+
+            <div className="p-4 sm:p-5 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {proposal.programs.map((p) => {
+                    const isChosen = chosenId === p.id;
+                    const isSaving = savingId === p.id;
+                    return (
+                        <article
+                            key={p.id}
+                            className={`relative flex flex-col rounded-xl border shadow-sm transition-all overflow-hidden ${
+                                isChosen
+                                    ? 'border-gray-900 ring-2 ring-gray-900/15 bg-gray-50'
+                                    : 'border-gray-100 bg-white hover:border-gray-300 hover:shadow-md'
+                            }`}
+                        >
+                            {isChosen && (
+                                <span className="absolute top-3 right-3 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-gray-900 text-white text-[9px] font-bold uppercase tracking-[0.14em] shadow-sm">
+                                    <Check size={10} strokeWidth={3} /> Chosen
+                                </span>
+                            )}
+                            {p.image_url ? (
+                                <div className="h-28 w-full overflow-hidden bg-gray-100">
+                                    <img src={p.image_url} alt="" className="w-full h-full object-cover" />
+                                </div>
+                            ) : (
+                                <div className="h-28 w-full bg-gradient-to-br from-gray-100 via-gray-50 to-white flex items-center justify-center">
+                                    <GraduationCap size={30} className="text-gray-400" />
+                                </div>
+                            )}
+                            <div className="p-4 flex-1 flex flex-col">
+                                <div className="flex items-center gap-1.5 mb-2">
+                                    {p.level != null && (
+                                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-gray-100 text-gray-800 border border-gray-200">
+                                            Level {p.level}
+                                        </span>
+                                    )}
+                                    {p.category && (
+                                        <span className="text-[10px] font-medium text-gray-500 capitalize">{p.category}</span>
+                                    )}
+                                </div>
+                                <h3 className="text-[14px] font-bold text-gray-900 leading-snug mb-2">{p.title}</h3>
+                                <ul className="text-[12px] text-gray-600 space-y-1 mb-3">
+                                    {p.location && (
+                                        <li className="inline-flex items-center gap-1.5">
+                                            <MapPin size={11} className="text-gray-400" /> {p.location}
+                                        </li>
+                                    )}
+                                    {p.duration_months && (
+                                        <li className="inline-flex items-center gap-1.5">
+                                            <Clock size={11} className="text-gray-400" /> {p.duration_months} months
+                                        </li>
+                                    )}
+                                    {p.intake_months && (
+                                        <li className="inline-flex items-center gap-1.5">
+                                            <Award size={11} className="text-gray-400" /> Intake: {p.intake_months}
+                                        </li>
+                                    )}
+                                </ul>
+                                {p.price_text && (
+                                    <p className="text-[11px] font-semibold text-gray-700 mb-3">{p.price_text}</p>
+                                )}
+                                <div className="mt-auto flex items-center gap-2">
+                                    {isChosen ? (
+                                        <button
+                                            type="button"
+                                            onClick={() => submit(null)}
+                                            disabled={isSaving || savingId === -1}
+                                            className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-gray-200 bg-white text-[11px] font-bold text-gray-700 hover:border-gray-400 hover:text-gray-900 hover:bg-gray-50 transition-colors disabled:opacity-50"
+                                        >
+                                            {savingId === -1 ? 'Clearing…' : 'Change'}
+                                        </button>
+                                    ) : (
+                                        <button
+                                            type="button"
+                                            onClick={() => submit(p.id)}
+                                            disabled={isSaving}
+                                            className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-gray-900 text-white text-[11px] font-bold hover:bg-black transition-colors disabled:opacity-60 shadow-sm"
+                                        >
+                                            {isSaving ? 'Saving…' : (<>Choose this <ArrowRight size={11} strokeWidth={2.5} /></>)}
+                                        </button>
+                                    )}
+                                    {p.public_url && (
+                                        <a
+                                            href={p.public_url}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="inline-flex items-center justify-center w-8 h-8 rounded-lg border border-gray-200 text-gray-500 hover:text-gray-900 hover:border-gray-400 hover:bg-gray-50 transition-colors"
+                                            title="See full details"
+                                        >
+                                            <Eye size={12} />
+                                        </a>
+                                    )}
+                                </div>
+                            </div>
+                        </article>
+                    );
+                })}
+            </div>
+        </section>
     );
 }
 

@@ -5,6 +5,7 @@ import {
     Calendar, FileBadge, CalendarDays, FileText, ListChecks, LineChart,
     User, Bell, CheckSquare, Ticket, Mail,
     PenLine, Megaphone, Smartphone, MessageSquare,
+    FileSignature, ReceiptText,
 } from "lucide-react";
 
 export default function ImmigrationLayout({ children }) {
@@ -16,8 +17,27 @@ export default function ImmigrationLayout({ children }) {
 
         { name: "Work", section: true },
         { name: "Visa Assessment", href: "/portal/immigration/assessments",  icon: <ClipboardCheck size={20} />, badge: badges.new_assessments, badgeTone: "default" },
-        { name: "Leads",        href: "/portal/immigration/leads",        icon: <UserSquare2 size={20} />,    badge: badges.new_leads_today, badgeTone: "default" },
-        { name: "Cases",        href: "/portal/immigration/cases",        icon: <Globe size={20} />,          badge: badges.active_cases, badgeTone: "default" },
+        {
+            name: "Leads",
+            icon: <UserSquare2 size={20} />,
+            badge: badges.new_leads_today,
+            badgeTone: "default",
+            children: [
+                { name: "List of Leads",         href: "/portal/immigration/leads",                      icon: <UserSquare2 size={16} /> },
+                { name: "Proposal & Agreements", href: "/portal/immigration/leads/proposals-agreements", icon: <FileText size={16} /> },
+            ],
+        },
+        {
+            name: "Case",
+            icon: <Globe size={20} />,
+            badge: badges.active_cases,
+            badgeTone: "default",
+            children: [
+                { name: "List of Cases", href: "/portal/immigration/cases",            icon: <Globe size={16} /> },
+                { name: "Engagement",    href: "/portal/immigration/cases/engagement", icon: <FileSignature size={16} /> },
+                { name: "Invoice",       href: "/portal/immigration/cases/invoice",    icon: <ReceiptText size={16} /> },
+            ],
+        },
         { name: "Documents",    href: "/portal/immigration/documents",    icon: <FolderOpen size={20} />,     badge: badges.docs_pending_review, badgeTone: "warning" },
         { name: "Task Board",   href: "/portal/immigration/tasks",        icon: <CheckSquare size={20} /> },
         { name: "Appointments", href: "/portal/immigration/appointments", icon: <Calendar size={20} /> },

@@ -32,7 +32,27 @@ export default function DashboardLayout({
     const { url, props } = usePage();
     const user = props.auth?.user;
 
-    const isAccordionActive = (item) => item.children?.some((c) => url.startsWith(c.href));
+    // Match `/leads` against `/leads/123` (lead detail) but NOT against
+    // `/leads/proposals-agreements` — otherwise sibling children share
+    // a prefix and both light up. Path must either equal the href or
+    // continue with a `/`.
+    const isPathMatch = (href) => url === href || url.startsWith(href + "/");
+
+    // Among a group's children, only ONE is active — the child whose
+    // href is the longest prefix of the current URL. That way
+    // /leads/proposals-agreements beats /leads even though both are
+    // valid prefixes.
+    const activeChildFor = (item) => {
+        if (! item.children) return null;
+        let best = null;
+        for (const c of item.children) {
+            if (! isPathMatch(c.href)) continue;
+            if (! best || c.href.length > best.href.length) best = c;
+        }
+        return best;
+    };
+
+    const isAccordionActive = (item) => activeChildFor(item) !== null;
 
     const [openAccordions, setOpenAccordions] = useState(() => {
         const initial = {};
@@ -59,11 +79,9 @@ export default function DashboardLayout({
 
     const getPageTitle = () => {
         for (const item of nav) {
-            if (item.href && url.startsWith(item.href)) return item.name;
-            if (item.children) {
-                const child = item.children.find((c) => url.startsWith(c.href));
-                if (child) return child.name;
-            }
+            if (item.href && isPathMatch(item.href)) return item.name;
+            const child = activeChildFor(item);
+            if (child) return child.name;
         }
         return "Dashboard";
     };
@@ -86,7 +104,8 @@ export default function DashboardLayout({
                 {nav.map((item) => {
                     if (item.children) {
                         const open = !!openAccordions[item.name];
-                        const groupActive = isAccordionActive(item);
+                        const activeChild = activeChildFor(item);
+                        const groupActive = activeChild !== null;
                         return (
                             <div key={item.name} className="flex flex-col">
                                 <button
@@ -116,7 +135,7 @@ export default function DashboardLayout({
                                     <div className="overflow-hidden">
                                         <div className="pl-4 pt-1 pb-1 flex flex-col gap-1 border-l border-gray-100 ml-6 mt-1">
                                             {item.children.map((child) => {
-                                                const childActive = url.startsWith(child.href);
+                                                const childActive = child === activeChild;
                                                 return (
                                                     <Link
                                                         key={child.name}
@@ -153,7 +172,7 @@ export default function DashboardLayout({
                         );
                     }
 
-                    const isActive = url.startsWith(item.href);
+                    const isActive = isPathMatch(item.href);
                     return (
                         <Link
                             key={item.name}
