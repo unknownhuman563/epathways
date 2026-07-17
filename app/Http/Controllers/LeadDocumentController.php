@@ -407,8 +407,12 @@ class LeadDocumentController extends Controller
         $overrides = ! empty($data['signer_id']) ? ['signer_id' => $data['signer_id']] : [];
 
         try {
+            // Keep the created document id per type so the notification can
+            // deep-link each icon straight to its generated PDF.
+            $generatedDocIds = [];
             foreach ($data['types'] as $t) {
-                $generator->generate($lead, $t, $overrides);
+                $doc = $generator->generate($lead, $t, $overrides);
+                $generatedDocIds[$t] = $doc->id;
             }
 
             $n = count($data['types']);
@@ -422,7 +426,7 @@ class LeadDocumentController extends Controller
                 } elseif (empty($lead->tracking_code)) {
                     $message .= ' Email not sent — no tracking code on file.';
                 } else {
-                    Mail::to($lead->email)->send(new \App\Mail\DocumentReadyNotification($lead, 'agreement'));
+                    Mail::to($lead->email)->send(new \App\Mail\EngagementDocumentsReady($lead, $data['types'], $generatedDocIds));
                     $message .= " Client notified at {$lead->email}.";
                 }
             }

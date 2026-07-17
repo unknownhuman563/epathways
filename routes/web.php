@@ -5,7 +5,6 @@ use App\Http\Controllers\ActivityLogController;
 use App\Http\Controllers\Admin\SuperAdminDashboardController;
 use App\Http\Controllers\AssessmentController;
 use App\Http\Controllers\AuthController;
-use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\AvailabilityController;
 use App\Http\Controllers\BookingController;
 use App\Http\Controllers\EventController;
@@ -14,6 +13,7 @@ use App\Http\Controllers\LeadController;
 use App\Http\Controllers\LeadDocumentController;
 use App\Http\Controllers\LeadPortalInvitationController;
 use App\Http\Controllers\LeadTrackingController;
+use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\Portal\Accommodation\CalendarController;
 use App\Http\Controllers\Portal\Accommodation\GasDeliveryController;
 use App\Http\Controllers\Portal\Accommodation\MessageTemplateController;
@@ -44,6 +44,32 @@ use App\Services\PromoFeed;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', [HomeController::class, 'index']);
+
+// Local-only: render the engagement-documents email in the browser so the
+// banner/icons/footer (served from this app's public/) load — email clients
+// can't fetch localhost image URLs, so a delivered test shows broken images.
+if (app()->environment('local')) {
+    Route::get('/dev/engagement-preview', function () {
+        $lead = \App\Models\Lead::whereNotNull('tracking_code')->first()
+            ?? new \App\Models\Lead(['first_name' => 'Angelika', 'tracking_code' => 'PREVIEW']);
+
+        // Map any already-generated engagement PDFs (source_variant
+        // "engagement:<key>") to their doc ids so the preview's icons
+        // deep-link to real files when they exist.
+        $docIds = [];
+        if ($lead->exists) {
+            foreach ($lead->documents()->where('source_variant', 'like', 'engagement:%')->get() as $d) {
+                $docIds[substr($d->source_variant, strlen('engagement:'))] = $d->id;
+            }
+        }
+
+        return new \App\Mail\EngagementDocumentsReady(
+            $lead,
+            array_keys(\App\Services\Immigration\EngagementDocumentGenerator::DOCS),
+            $docIds,
+        );
+    });
+}
 
 Route::get('/booking', function () {
     // Aggregate the immigration advisers' saved weekly availability into a
@@ -238,9 +264,9 @@ Route::middleware('throttle:tracker')->group(function () {
     // URL is the bearer credential for the agreement; the controller
     // validates that it belongs to the lead resolved from {code}, so a
     // valid code paired with a guessed token still 404s.
-    Route::get('/track/{code}/agreements/{token}/sign',     [\App\Http\Controllers\Tracker\TrackerAgreementController::class, 'showSigning'])->name('track.agreements.sign.show');
-    Route::post('/track/{code}/agreements/{token}/sign',    [\App\Http\Controllers\Tracker\TrackerAgreementController::class, 'sign'])->name('track.agreements.sign');
-    Route::get('/track/{code}/agreements/{token}/signed',   [\App\Http\Controllers\Tracker\TrackerAgreementController::class, 'signedConfirmation'])->name('track.agreements.signed');
+    Route::get('/track/{code}/agreements/{token}/sign', [\App\Http\Controllers\Tracker\TrackerAgreementController::class, 'showSigning'])->name('track.agreements.sign.show');
+    Route::post('/track/{code}/agreements/{token}/sign', [\App\Http\Controllers\Tracker\TrackerAgreementController::class, 'sign'])->name('track.agreements.sign');
+    Route::get('/track/{code}/agreements/{token}/signed', [\App\Http\Controllers\Tracker\TrackerAgreementController::class, 'signedConfirmation'])->name('track.agreements.signed');
 });
 
 // Public Registration & Assessment Routes
@@ -1072,12 +1098,12 @@ Route::middleware(['auth'])->group(function () {
             // /agreements/templates must come before /agreements/{agreement}
             // or the literal 'templates' would be captured as an Agreement id.
             Route::prefix('cases/{lead}/agreements')->name('cases.agreements.')->group(function () {
-                Route::get('/',                       [\App\Http\Controllers\Immigration\AgreementController::class, 'index'])->name('index');
-                Route::get('/templates',              [\App\Http\Controllers\Immigration\AgreementController::class, 'templates'])->name('templates');
-                Route::post('/',                      [\App\Http\Controllers\Immigration\AgreementController::class, 'generate'])->name('generate');
-                Route::post('/{agreement}/send',      [\App\Http\Controllers\Immigration\AgreementController::class, 'send'])->name('send');
-                Route::get('/{agreement}/pdf',        [\App\Http\Controllers\Immigration\AgreementController::class, 'downloadPdf'])->name('pdf');
-                Route::post('/{agreement}/void',      [\App\Http\Controllers\Immigration\AgreementController::class, 'void'])->name('void');
+                Route::get('/', [\App\Http\Controllers\Immigration\AgreementController::class, 'index'])->name('index');
+                Route::get('/templates', [\App\Http\Controllers\Immigration\AgreementController::class, 'templates'])->name('templates');
+                Route::post('/', [\App\Http\Controllers\Immigration\AgreementController::class, 'generate'])->name('generate');
+                Route::post('/{agreement}/send', [\App\Http\Controllers\Immigration\AgreementController::class, 'send'])->name('send');
+                Route::get('/{agreement}/pdf', [\App\Http\Controllers\Immigration\AgreementController::class, 'downloadPdf'])->name('pdf');
+                Route::post('/{agreement}/void', [\App\Http\Controllers\Immigration\AgreementController::class, 'void'])->name('void');
             });
             Route::get('/documents', [ImmigrationController::class, 'documents'])->name('documents');
             Route::get('/appointments', [ImmigrationController::class, 'appointments'])->name('appointments');
