@@ -4,7 +4,7 @@ import {
     LayoutDashboard, UserSquare2, Users, FolderOpen, GraduationCap,
     ListChecks, LineChart, User, Bell, Tag, Star, CheckSquare, ClipboardCheck,
     Building2, Ticket, Mail,
-    PenLine, Megaphone, Smartphone, MessageSquare,
+    PenLine, Megaphone, Smartphone, MessageSquare, FileText,
 } from "lucide-react";
 
 export default function EducationLayout({ children }) {
@@ -15,7 +15,16 @@ export default function EducationLayout({ children }) {
         { name: "Dashboard", href: "/portal/education/dashboard", icon: <LayoutDashboard size={20} /> },
 
         { name: "Work", section: true },
-        { name: "Leads",     href: "/portal/education/leads",     icon: <UserSquare2 size={20} />, badge: badges.new_leads_today, badgeTone: "default" },
+        {
+            name: "Leads",
+            icon: <UserSquare2 size={20} />,
+            badge: badges.new_leads_today,
+            badgeTone: "default",
+            children: [
+                { name: "List of Leads",         href: "/portal/education/leads",                      icon: <UserSquare2 size={16} /> },
+                { name: "Proposal & Agreements", href: "/portal/education/leads/proposals-agreements", icon: <FileText size={16} /> },
+            ],
+        },
         { name: "Task Board", href: "/portal/education/tasks", icon: <CheckSquare size={20} />, badge: badges.tasks_open, badgeTone: badges.tasks_overdue > 0 ? "danger" : "default" },
         { name: "Assessments", href: "/portal/education/assessments", icon: <ClipboardCheck size={20} /> },
         { name: "Students",  href: "/portal/education/students",  icon: <Users size={20} /> },

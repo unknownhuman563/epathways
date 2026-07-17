@@ -9,11 +9,14 @@ use App\Models\Event;
 use App\Models\Lead;
 use App\Models\LeadDocument;
 use App\Models\ResidentIntake;
+use App\Models\User;
 use App\Models\UserReview;
 use App\Traits\BuildsLeadRow;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
 class ImmigrationController extends Controller
@@ -426,6 +429,145 @@ class ImmigrationController extends Controller
                 'stages' => Lead::IMMIGRATION_STAGES,
                 'visaTypes' => [],
             ]);
+        }
+    }
+
+    /**
+     * Lightweight case list shared by the Engagement + Invoice generation
+     * workspaces. Returns just enough per-case detail to pick a case and
+     * generate the relevant document, without the full Cases-page payload.
+     */
+    private function caseListForGeneration()
+    {
+        return Lead::immigrationCase()
+            ->orderByDesc('updated_at')
+            ->limit(300)
+            ->get(['id', 'lead_id', 'first_name', 'last_name', 'email', 'phone', 'residence_country', 'inz_visa_type', 'immigration_stage'])
+            ->map(fn ($l) => [
+                'id' => $l->id,
+                'lead_id' => $l->lead_id,
+                'name' => trim("{$l->first_name} {$l->last_name}") ?: 'Unknown',
+                'email' => $l->email,
+                'phone' => $l->phone,
+                'country' => $l->residence_country,
+                'inz_visa_type' => $l->inz_visa_type,
+                'immigration_stage' => $l->immigration_stage,
+            ])
+            ->values();
+    }
+
+    /**
+     * Engagement generation workspace — pick a case, choose which
+     * engagement documents to generate (Written Agreement + IAA
+     * standards), preview them live, and generate. The Written Agreement's
+     * fees come from the case's visa on the Visas page.
+     */
+    public function engagement()
+    {
+        try {
+            // Visa fee lookup so the picker can flag cases whose visa has
+            // no fees set (the Written Agreement would render placeholders).
+            $visaFees = \App\Models\VisaType::query()
+                ->get(['name', 'professional_fees', 'inz_application_fee'])
+                ->mapWithKeys(fn ($v) => [$v->name => [
+                    'professional_fees' => $v->professional_fees !== null ? (float) $v->professional_fees : null,
+                    'inz_application_fee' => $v->inz_application_fee !== null ? (float) $v->inz_application_fee : null,
+                ]]);
+
+            $cases = Lead::immigrationCase()
+                ->orderByDesc('updated_at')
+                ->limit(300)
+                ->get(['id', 'lead_id', 'first_name', 'last_name', 'email', 'phone', 'residence_country', 'inz_visa_type', 'immigration_stage'])
+                ->map(function ($l) use ($visaFees) {
+                    $fees = $visaFees[$l->inz_visa_type] ?? null;
+
+                    return [
+                        'id' => $l->id,
+                        'lead_id' => $l->lead_id,
+                        'name' => trim("{$l->first_name} {$l->last_name}") ?: 'Unknown',
+                        'email' => $l->email,
+                        'phone' => $l->phone,
+                        'country' => $l->residence_country,
+                        'inz_visa_type' => $l->inz_visa_type,
+                        'immigration_stage' => $l->immigration_stage,
+                        'professional_fees' => $fees['professional_fees'] ?? null,
+                        'inz_application_fee' => $fees['inz_application_fee'] ?? null,
+                    ];
+                })
+                ->values();
+
+            $generated = LeadDocument::with('lead:id,first_name,last_name,lead_id')
+                ->where('source_variant', 'like', 'engagement:%')
+                ->orderByDesc('created_at')
+                ->limit(60)
+                ->get()
+                ->map(fn ($d) => [
+                    'id' => $d->id,
+                    'name' => $d->original_name,
+                    'type_label' => \App\Services\Immigration\EngagementDocumentGenerator::DOCS[str_replace('engagement:', '', $d->source_variant)]['label']
+                        ?? 'Document',
+                    'case_id' => $d->lead_id,
+                    'case_name' => $d->lead ? trim("{$d->lead->first_name} {$d->lead->last_name}") : '—',
+                    'created_at' => optional($d->created_at)?->toIso8601String(),
+                    'download_url' => route('admin.documents.download', $d->id),
+                ]);
+
+            return inertia('portal/immigration/Engagement', [
+                'cases' => $cases,
+                'documents' => \App\Services\Immigration\EngagementDocumentGenerator::catalogue(),
+                'generated' => $generated,
+                'signers' => $this->signingAdvisers(),
+                'me_id' => auth()->id(),
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('Immigration engagement page failed', ['error' => $e->getMessage()]);
+
+            return inertia('portal/immigration/Engagement', [
+                'cases' => [],
+                'documents' => \App\Services\Immigration\EngagementDocumentGenerator::catalogue(),
+                'generated' => [],
+                'signers' => $this->signingAdvisers(),
+                'me_id' => auth()->id(),
+            ]);
+        }
+    }
+
+    /**
+     * Licensed immigration advisers who can sign engagement documents.
+     *
+     * Immigration staff and advisers share the same portal role, so the
+     * signer isn't a role distinction — an "adviser" is anyone who holds an
+     * IAA licence number (the NZ-licensed advisers, e.g. the full-licence
+     * and provisional advisers). Non-adviser staff are excluded. Each row
+     * carries a `has_signature` flag so the picker can warn when the chosen
+     * adviser hasn't set a signature up yet.
+     */
+    private function signingAdvisers(): \Illuminate\Support\Collection
+    {
+        return User::whereNotNull('iaa_licence_number')
+            ->where('iaa_licence_number', '!=', '')
+            ->orderBy('name')
+            ->get(['id', 'name', 'iaa_licence_number', 'signature_path'])
+            ->map(fn ($u) => [
+                'id' => $u->id,
+                'name' => $u->name,
+                'licence' => $u->iaa_licence_number,
+                'has_signature' => (bool) $u->signature_path,
+            ])
+            ->values();
+    }
+
+    /**
+     * Invoice generation workspace — pick a case and generate its invoice.
+     */
+    public function invoice()
+    {
+        try {
+            return inertia('portal/immigration/Invoice', ['cases' => $this->caseListForGeneration()]);
+        } catch (\Throwable $e) {
+            Log::error('Immigration invoice page failed', ['error' => $e->getMessage()]);
+
+            return inertia('portal/immigration/Invoice', ['cases' => []]);
         }
     }
 
@@ -1349,7 +1491,11 @@ class ImmigrationController extends Controller
         $me = auth()->user();
 
         return inertia('portal/immigration/Profile', [
-            'user' => $me->only(['id', 'name', 'email', 'role', 'iaa_licence_number', 'iaa_licence_expiry']),
+            'user' => $me->only(['id', 'name', 'email', 'role', 'iaa_licence_number', 'iaa_licence_type', 'iaa_licence_expiry']),
+            'signature' => [
+                'data_uri' => $me->signatureDataUri(),
+                'updated_at' => optional($me->signature_updated_at)?->toIso8601String(),
+            ],
         ]);
     }
 
@@ -1357,7 +1503,7 @@ class ImmigrationController extends Controller
     {
         $validated = $request->validate([
             'iaa_licence_number' => 'nullable|string|max:60',
-            'iaa_licence_expiry' => 'nullable|date',
+            'iaa_licence_type' => 'nullable|string|in:Full,Provisional,Limited',
         ]);
         try {
             $me = auth()->user();
@@ -1368,6 +1514,83 @@ class ImmigrationController extends Controller
             Log::error('Immigration profile update failed', ['error' => $e->getMessage()]);
 
             return back()->with('error', 'Could not update profile.');
+        }
+    }
+
+    /**
+     * Save the staff member's e-signature — accepts either a drawn canvas
+     * PNG (base64 data URL) or an uploaded image. Stored privately and
+     * rendered onto engagement documents this user signs.
+     */
+    public function saveSignature(Request $request)
+    {
+        $request->validate([
+            'signature_image' => 'nullable|image|mimes:png,jpg,jpeg|max:2048',
+            'signature_data' => 'nullable|string',
+        ]);
+
+        $me = auth()->user();
+
+        try {
+            $binary = null;
+            $ext = 'png';
+
+            if ($request->hasFile('signature_image')) {
+                $file = $request->file('signature_image');
+                $binary = file_get_contents($file->getRealPath());
+                $ext = strtolower($file->getClientOriginalExtension()) === 'jpg' ? 'jpeg' : strtolower($file->getClientOriginalExtension());
+                $ext = in_array($ext, ['png', 'jpeg'], true) ? $ext : 'png';
+            } elseif ($request->filled('signature_data')) {
+                // data:image/png;base64,XXXX  → raw bytes
+                $data = $request->input('signature_data');
+                if (preg_match('/^data:image\/(png|jpe?g);base64,/', $data, $m)) {
+                    $ext = str_starts_with($m[1], 'jp') ? 'jpeg' : 'png';
+                    $data = substr($data, strpos($data, ',') + 1);
+                }
+                $binary = base64_decode(str_replace(' ', '+', $data), true);
+            }
+
+            if (! $binary) {
+                return back()->withErrors(['error' => 'No signature provided.']);
+            }
+
+            // Overwrite any previous signature file for this user.
+            if ($me->signature_path) {
+                Storage::disk('local')->delete($me->signature_path);
+            }
+
+            $path = "signatures/user-{$me->id}-".Str::random(8).".{$ext}";
+            Storage::disk('local')->put($path, $binary);
+
+            $me->forceFill([
+                'signature_path' => $path,
+                'signature_updated_at' => now(),
+            ])->save();
+
+            return back()->with('success', 'Signature saved.');
+        } catch (\Throwable $e) {
+            Log::error('Signature save failed', ['user_id' => $me?->id, 'error' => $e->getMessage()]);
+
+            return back()->withErrors(['error' => 'Could not save the signature.']);
+        }
+    }
+
+    /** Remove the staff member's stored e-signature. */
+    public function deleteSignature(Request $request)
+    {
+        $me = auth()->user();
+
+        try {
+            if ($me->signature_path) {
+                Storage::disk('local')->delete($me->signature_path);
+            }
+            $me->forceFill(['signature_path' => null, 'signature_updated_at' => null])->save();
+
+            return back()->with('success', 'Signature removed.');
+        } catch (\Throwable $e) {
+            Log::error('Signature delete failed', ['user_id' => $me?->id, 'error' => $e->getMessage()]);
+
+            return back()->withErrors(['error' => 'Could not remove the signature.']);
         }
     }
 

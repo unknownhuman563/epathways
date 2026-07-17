@@ -21,7 +21,14 @@ const SUPER_ADMIN_NAV = {
 
 const ADMIN_NAV = [
     { name: "Dashboard", href: "/admin/dashboard", icon: <Home size={20} /> },
-    { name: "Leads", href: "/admin/leads", icon: <Users size={20} /> },
+    {
+        name: "Leads",
+        icon: <Users size={20} />,
+        children: [
+            { name: "List of Leads",         href: "/admin/leads",                      icon: <Users size={16} /> },
+            { name: "Proposal & Agreements", href: "/admin/leads/proposals-agreements", icon: <FileText size={16} /> },
+        ],
+    },
     { name: "Document Queue", href: "/admin/document-queue", icon: <Inbox size={20} /> },
     { name: "Portal Invitations", href: "/admin/portal-invitations", icon: <KeyRound size={20} /> },
     { name: "Events", href: "/admin/events", icon: <CalendarIcon size={20} /> },

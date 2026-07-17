@@ -7,6 +7,7 @@ use App\Models\LeadDocument;
 use App\Models\LeadDocumentRequest;
 use App\Services\AgreementGenerator;
 use App\Services\Immigration\CaseChecklistService;
+use App\Services\Immigration\EngagementDocumentGenerator;
 use App\Support\UploadValidation;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -332,6 +333,277 @@ class LeadDocumentController extends Controller
             ]);
 
             return back()->withErrors(['error' => 'Could not generate the agreement: '.$e->getMessage()]);
+        }
+    }
+
+    /**
+     * Unified generate endpoint for the "Proposal & Agreements" page.
+     * Types:
+     *   consultancy_std_150      → Scenario #1 STANDARD 150,000
+     *   consultancy_voucher_150  → Scenario #2 WITH VOUCHER 150,000
+     *   consultancy_std_100      → Scenario #3 STANDARD 100,000
+     *   consultancy_english_100  → Scenario #3 WITH ENGLISH 100,000
+     *   english_engagement       → English Engagement Agreement
+     *
+     * Optional POST body: school_enrolment_fee, english_proficiency_fee
+     * — override the two editable amounts on the modal Settings panel.
+     */
+    public function generateDocument(Request $request, AgreementGenerator $generator, $leadId, $type)
+    {
+        $lead = Lead::findOrFail($leadId);
+
+        try {
+            // Immigration engagement docs (written agreement + IAA standards)
+            // are backed by their own generator/templates.
+            $engageType = $this->engagementTypeFor($type);
+            if ($engageType !== null) {
+                app(EngagementDocumentGenerator::class)->generate($lead, $engageType);
+                $label = EngagementDocumentGenerator::DOCS[$engageType]['label'];
+
+                return back()->with('success', "{$label} generated for {$lead->first_name} {$lead->last_name}.");
+            }
+
+            $consultancyScenario = $this->consultancyScenarioForType($type);
+            $overrides = $this->feeOverridesFromRequest($request);
+
+            if ($consultancyScenario !== null) {
+                $generator->consultancy($lead, $consultancyScenario, $overrides);
+                $friendly = 'Consultancy Agreement';
+            } elseif ($type === 'english_engagement') {
+                $generator->englishEngagement($lead);
+                $friendly = 'English Engagement';
+            } else {
+                return back()->withErrors(['error' => "Unknown document type: {$type}"]);
+            }
+
+            return back()->with('success', "{$friendly} generated for {$lead->first_name} {$lead->last_name}.");
+        } catch (\Throwable $e) {
+            Log::error('Unified document generation failed', [
+                'lead_id' => $leadId,
+                'type' => $type,
+                'error' => $e->getMessage(),
+            ]);
+
+            return back()->withErrors(['error' => 'Could not generate the document: '.$e->getMessage()]);
+        }
+    }
+
+    /**
+     * Generate one or more immigration engagement documents at once —
+     * driven by the "New" flow on the Engagement workspace. Each selected
+     * type is rendered to a PDF and stored against the case.
+     */
+    public function generateEngagement(Request $request, EngagementDocumentGenerator $generator, $leadId)
+    {
+        $lead = Lead::findOrFail($leadId);
+
+        $data = $request->validate([
+            'types' => 'required|array|min:1',
+            'types.*' => ['string', Rule::in(array_keys(EngagementDocumentGenerator::DOCS))],
+            'notify' => 'sometimes|boolean',
+            'signer_id' => 'nullable|integer|exists:users,id',
+        ]);
+
+        $overrides = ! empty($data['signer_id']) ? ['signer_id' => $data['signer_id']] : [];
+
+        try {
+            foreach ($data['types'] as $t) {
+                $generator->generate($lead, $t, $overrides);
+            }
+
+            $n = count($data['types']);
+            $message = "{$n} engagement document(s) generated for {$lead->first_name} {$lead->last_name}.";
+
+            // Optionally email the client that their documents are now
+            // available on their application tracker.
+            if (! empty($data['notify'])) {
+                if (empty($lead->email)) {
+                    $message .= ' Email not sent — no email on file.';
+                } elseif (empty($lead->tracking_code)) {
+                    $message .= ' Email not sent — no tracking code on file.';
+                } else {
+                    Mail::to($lead->email)->send(new \App\Mail\DocumentReadyNotification($lead, 'agreement'));
+                    $message .= " Client notified at {$lead->email}.";
+                }
+            }
+
+            return back()->with('success', $message);
+        } catch (\Throwable $e) {
+            Log::error('Engagement bulk generation failed', ['lead_id' => $leadId, 'error' => $e->getMessage()]);
+
+            return back()->withErrors(['error' => 'Could not generate the documents: '.$e->getMessage()]);
+        }
+    }
+
+    /**
+     * Resolve a URL `type` of the form `engage_<key>` to its engagement
+     * document key, or null when it isn't an engagement document.
+     */
+    private function engagementTypeFor(string $type): ?string
+    {
+        if (! str_starts_with($type, 'engage_')) {
+            return null;
+        }
+
+        $key = substr($type, strlen('engage_'));
+
+        return array_key_exists($key, EngagementDocumentGenerator::DOCS) ? $key : null;
+    }
+
+    /** Map a URL type to its consultancy scenario key, or null if not a consultancy. */
+    private function consultancyScenarioForType(string $type): ?string
+    {
+        return match ($type) {
+            'consultancy_std_150' => 'std_150',
+            'consultancy_voucher_150' => 'voucher_150',
+            'consultancy_std_100' => 'std_100',
+            'consultancy_english_100' => 'english_100',
+            default => null,
+        };
+    }
+
+    /**
+     * Pull school_enrolment_fee + english_proficiency_fee out of the
+     * request (query string on GET preview, form body on POST generate)
+     * and coerce them to positive integers. Missing keys stay unset so
+     * the generator falls back to defaults.
+     */
+    private function feeOverridesFromRequest(Request $request): array
+    {
+        $out = [];
+        foreach (['school_enrolment_fee', 'english_proficiency_fee'] as $key) {
+            $val = $request->input($key);
+            if ($val !== null && $val !== '' && is_numeric($val) && (int) $val > 0) {
+                $out[$key] = (int) $val;
+            }
+        }
+        // Single vs Couple pick — only honoured by the generator for
+        // scenarios that support both. Anything else is coerced back
+        // to 'single' server-side.
+        $mode = $request->input('applicant_mode');
+        if (in_array($mode, ['single', 'couple'], true)) {
+            $out['applicant_mode'] = $mode;
+        }
+
+        return $out;
+    }
+
+    /**
+     * Render the same Blade template that generateDocument() will run
+     * through dompdf, but return it as raw HTML for iframe preview. Lets
+     * the "New" modal on the Proposal & Agreements page show a live
+     * preview that updates as staff pick lead + type — dompdf is way
+     * too slow to spin up on every keystroke.
+     */
+    public function previewDocument(Request $request, AgreementGenerator $generator, $leadId, $type)
+    {
+        $lead = Lead::findOrFail($leadId);
+
+        // Immigration engagement docs render through their own generator.
+        $engageType = $this->engagementTypeFor($type);
+        if ($engageType !== null) {
+            $signer = $request->query('signer');
+            $html = app(EngagementDocumentGenerator::class)
+                ->renderHtml($lead, $engageType, $signer ? ['signer_id' => (int) $signer] : []);
+
+            return response($html)->header('Content-Type', 'text/html; charset=utf-8');
+        }
+
+        $overrides = $this->feeOverridesFromRequest($request);
+        $consultancyScenario = $this->consultancyScenarioForType($type);
+
+        if ($consultancyScenario !== null) {
+            [$payload] = $generator->buildConsultancyPayload($lead, $consultancyScenario, $overrides);
+            $view = 'agreements.consultancy';
+        } elseif ($type === 'english_engagement') {
+            $view = 'agreements.engagement-english';
+            $payload = $this->englishEngagementPayload($lead);
+        } else {
+            return response('<html><body style="font-family:sans-serif;padding:2rem;color:#666">Unknown document type.</body></html>', 400)
+                ->header('Content-Type', 'text/html; charset=utf-8');
+        }
+
+        return response(view($view, $payload)->render())
+            ->header('Content-Type', 'text/html; charset=utf-8');
+    }
+
+    private function englishEngagementPayload(Lead $lead): array
+    {
+        $clientName = trim("{$lead->first_name} {$lead->last_name}");
+
+        return [
+            'client_name' => $clientName,
+            'client_reference' => \Illuminate\Support\Str::slug($clientName ?: 'ClientName', '') ?: 'ClientName',
+            'generated_at' => now(),
+            'generated_at_formatted' => now()->format('jS').' day of '.now()->format('F Y'),
+        ];
+    }
+
+    /**
+     * Save the staff-proposed program shortlist for a lead. Not a document —
+     * this is what the "Proposal" tab on the Proposal & Agreements page
+     * builds up: up to 3 program IDs stored on `leads.proposed_program_ids`
+     * so the tracker can render them for the lead to choose from.
+     *
+     * An empty array clears the proposal.
+     */
+    public function saveProposal(Request $request, $leadId)
+    {
+        $validated = $request->validate([
+            'program_ids' => 'nullable|array|max:3',
+            'program_ids.*' => 'integer|exists:programs,id',
+        ]);
+
+        try {
+            $lead = Lead::findOrFail($leadId);
+            // Uniquify + reindex so the JSON stays clean regardless of
+            // client-side ordering / duplicates.
+            $ids = array_values(array_unique(array_map('intval', $validated['program_ids'] ?? [])));
+            $lead->proposed_program_ids = $ids ?: null;
+            $lead->save();
+
+            $count = count($ids);
+            $msg = $count === 0
+                ? "Proposal cleared for {$lead->first_name} {$lead->last_name}."
+                : "Proposed {$count} program".($count === 1 ? '' : 's')." for {$lead->first_name} {$lead->last_name}.";
+
+            return back()->with('success', $msg);
+        } catch (\Throwable $e) {
+            Log::error('Save proposal failed', ['lead_id' => $leadId, 'error' => $e->getMessage()]);
+
+            return back()->withErrors(['error' => 'Could not save the proposal: '.$e->getMessage()]);
+        }
+    }
+
+    /**
+     * "Your document is ready" nudge — sends the lead the queued
+     * DocumentReadyNotification pointing at their /track/{code} page.
+     * Called from the Notify button on the Proposal & Agreements table
+     * after staff has generated a document.
+     */
+    public function notifyDocumentReady(Request $request, $leadId)
+    {
+        $validated = $request->validate([
+            'kind' => 'nullable|string|in:proposal,agreement',
+        ]);
+
+        try {
+            $lead = Lead::findOrFail($leadId);
+
+            if (empty($lead->email)) {
+                return back()->withErrors(['error' => "{$lead->first_name} {$lead->last_name} has no email on file — cannot notify."]);
+            }
+            if (empty($lead->tracking_code)) {
+                return back()->withErrors(['error' => 'Lead has no tracking code — cannot build the tracker URL.']);
+            }
+
+            Mail::to($lead->email)->send(new \App\Mail\DocumentReadyNotification($lead, $validated['kind'] ?? 'agreement'));
+
+            return back()->with('success', "Notification sent to {$lead->first_name} {$lead->last_name}.");
+        } catch (\Throwable $e) {
+            Log::error('Document-ready notification failed', ['lead_id' => $leadId, 'error' => $e->getMessage()]);
+
+            return back()->withErrors(['error' => 'Could not send the notification: '.$e->getMessage()]);
         }
     }
 

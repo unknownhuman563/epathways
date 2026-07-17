@@ -8,7 +8,6 @@ import {
     ArrowUp, ArrowDown, Plus, X, TrendingUp, Copy, MoreHorizontal,
     Archive, Pencil, Mail, Phone,
 } from "lucide-react";
-import PortalPageHeader from "@/components/portal/PortalPageHeader";
 
 /**
  * Distribution palette — colour per immigration stage. Kept distinct from
@@ -126,12 +125,24 @@ export default function ImmigrationCases({ cases = [], distribution = [], priori
     return (
         <div className="space-y-5 max-w-[1400px] mx-auto pb-12">
             <Head title="Cases — Immigration" />
-            <div className="flex items-start justify-between gap-4">
-                <PortalPageHeader
-                    eyebrow="Work"
-                    title="Cases"
-                    description="Active visa cases — both direct enquiries and students handed over from Education."
-                />
+
+            {/* Overview: stage graph fills the left, priority cards sit in a
+                2×3 grid on the right (matches the requested layout). */}
+            <div className="flex flex-col lg:flex-row gap-4 items-stretch">
+                <div className="lg:flex-1 min-w-0">
+                    <DistributionGraph
+                        distribution={distribution}
+                        total={total}
+                        activeStage={stageFilter}
+                        onPick={(stage) => setStageFilter(stageFilter === stage ? null : stage)}
+                    />
+                </div>
+                <div className="lg:w-[340px] flex-shrink-0">
+                    <PriorityBreakdown priorities={priorities} />
+                </div>
+            </div>
+
+            <div className="flex items-center justify-end">
                 <button
                     type="button"
                     onClick={() => setCreating(true)}
@@ -140,17 +151,6 @@ export default function ImmigrationCases({ cases = [], distribution = [], priori
                     <Plus size={14} strokeWidth={2.5} /> Add new case
                 </button>
             </div>
-
-            {/* Priority summary cards (row of 4) */}
-            <PriorityBreakdown priorities={priorities} />
-
-            {/* Immigration stage bar graph (full-width card below) */}
-            <DistributionGraph
-                distribution={distribution}
-                total={total}
-                activeStage={stageFilter}
-                onPick={(stage) => setStageFilter(stageFilter === stage ? null : stage)}
-            />
 
             {/* Toolbar */}
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm">
@@ -571,22 +571,22 @@ function PriorityBreakdown({ priorities = {} }) {
     const total = rows.reduce((sum, r) => sum + (priorities[r.key] || 0), 0);
 
     return (
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+        <div className="grid grid-cols-2 grid-rows-3 gap-3 w-full h-full">
             {rows.map((r) => {
                 const count = priorities[r.key] || 0;
                 const pct = total > 0 ? Math.round((count / total) * 100) : 0;
                 return (
-                    <div key={r.key} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex flex-col">
+                    <div key={r.key} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-3.5 flex flex-col justify-between">
                         <div className="flex items-center justify-between">
-                            <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-gray-400">
+                            <span className="text-[10.5px] font-bold uppercase tracking-[0.1em] text-gray-400">
                                 {r.label}
                             </span>
                             <span className={`w-6 h-6 rounded-lg ${r.soft} ring-1 ${r.ring} flex items-center justify-center flex-shrink-0`}>
                                 <span className={`w-2 h-2 rounded-full ${r.solid}`} />
                             </span>
                         </div>
-                        <p className="text-[26px] leading-none font-bold text-gray-900 tabular-nums mt-3">{count}</p>
-                        <div className="flex items-center gap-2 mt-3">
+                        <p className="text-[24px] leading-none font-bold text-gray-900 tabular-nums mt-2">{count}</p>
+                        <div className="flex items-center gap-2 mt-2">
                             <div className="flex-1 h-1 rounded-full bg-gray-100 overflow-hidden">
                                 <div className={`h-full rounded-full ${r.solid}`} style={{ width: `${pct}%` }} />
                             </div>
@@ -618,7 +618,27 @@ function DistributionGraph({ distribution = [], total = 0, activeStage = null, o
     const unstaged = distribution.find((d) => d.stage === 'Unassigned')?.count || 0;
     const placed = placedStages.reduce((sum, d) => sum + d.count, 0);
 
-    if (total === 0) return null;
+    // Empty state — still render the card so the graph column keeps its
+    // place beside the priority cards instead of collapsing the layout.
+    if (total === 0) {
+        return (
+            <section className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden flex flex-col w-full h-full min-h-[220px]">
+                <div className="px-5 pt-4 pb-3 flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-emerald-50 to-teal-50 text-emerald-600 flex items-center justify-center ring-1 ring-emerald-100/70">
+                        <TrendingUp size={14} />
+                    </div>
+                    <h2 className="text-[12px] font-bold uppercase tracking-[0.14em] text-gray-700">
+                        Immigration stage distribution
+                    </h2>
+                </div>
+                <div className="flex-1 flex flex-col items-center justify-center text-center px-6 pb-6">
+                    <TrendingUp size={26} className="text-gray-300" />
+                    <p className="text-sm font-semibold text-gray-500 mt-2">No cases to chart yet</p>
+                    <p className="text-xs text-gray-400 mt-1">Cases will appear here once they're assigned an immigration stage.</p>
+                </div>
+            </section>
+        );
+    }
 
     const stages = placedStages.map((d) => d.stage);
     const data   = placedStages.map((d) => d.count);
@@ -640,7 +660,7 @@ function DistributionGraph({ distribution = [], total = 0, activeStage = null, o
     const barW = Math.min(26, (chartW / Math.max(1, stages.length)) * 0.55);
 
     return (
-        <section className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+        <section className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden flex flex-col w-full h-full">
             <div className="px-5 pt-4 pb-3 flex items-center justify-between gap-3 flex-wrap">
                 <div className="flex items-center gap-2.5">
                     <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-emerald-50 to-teal-50 text-emerald-600 flex items-center justify-center ring-1 ring-emerald-100/70">
@@ -668,11 +688,11 @@ function DistributionGraph({ distribution = [], total = 0, activeStage = null, o
                 </span>
             </div>
 
-            <div className="px-3 py-3">
+            <div className="px-3 py-3 flex-1 flex items-center">
                 <svg
                     viewBox={`0 0 ${W} ${H}`}
                     className="w-full"
-                    style={{ maxHeight: 160 }}
+                    style={{ maxHeight: 260 }}
                     role="img"
                     aria-label="Bar graph of case count per Immigration stage"
                 >

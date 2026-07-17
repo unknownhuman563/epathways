@@ -227,6 +227,11 @@ Route::middleware('throttle:tracker')->group(function () {
     Route::post('/track/{code}/info', [LeadTrackingController::class, 'update'])->name('track.update');
     Route::post('/track/{code}/document', [LeadTrackingController::class, 'uploadDoc'])->name('track.upload');
     Route::post('/track/{code}/document/{doc}', [LeadTrackingController::class, 'updateDoc'])->name('track.doc.update');
+    // Download a staff-shared / generated document (engagement pack).
+    Route::get('/track/{code}/documents/{doc}/download', [LeadTrackingController::class, 'downloadDoc'])->name('track.doc.download');
+    // Lead picks (or clears) one program from their staff-suggested
+    // shortlist. Server validates the id is actually in the shortlist.
+    Route::post('/track/{code}/choose-program', [LeadTrackingController::class, 'chooseProgram'])->name('track.choose-program');
     Route::delete('/track/{code}/document/{doc}', [LeadTrackingController::class, 'deleteDoc'])->name('track.doc.delete');
 
     // Build 11.D Phase 3 — Agreement signing. tracker_signing_token in the
@@ -361,6 +366,7 @@ Route::middleware(['auth'])->group(function () {
         });
         Route::get('/admin/team-cards', fn () => inertia('admin/TeamCards'))->name('admin.team-cards');
         Route::get('/admin/leads', [LeadController::class, 'index'])->name('admin.leads');
+        Route::get('/admin/leads/proposals-agreements', [SalesController::class, 'proposalsAgreementsPage'])->name('admin.leads.proposals-agreements');
         Route::get('/admin/events', [EventController::class, 'index'])->name('admin.events');
         Route::post('/admin/events', [EventController::class, 'store']);
         Route::get('/admin/events/{id}', [EventController::class, 'show'])->name('admin.events.show');
@@ -658,6 +664,29 @@ Route::middleware(['auth'])->group(function () {
         // (single|partner variant) is wired up right now.
         Route::post('/admin/leads/{id}/documents/checklist/{key}/generate', [LeadDocumentController::class, 'generateAgreement'])
             ->name('admin.leads.documents.checklist.generate');
+        // Unified generate route driven by a friendly `type` — used by the
+        // new Proposal & Agreements page's "+ New" flow. Supported types:
+        //   proposal | consultancy_single | consultancy_partner | english_engagement
+        Route::post('/admin/leads/{id}/generate/{type}', [LeadDocumentController::class, 'generateDocument'])
+            ->name('admin.leads.generate');
+        // Bulk generate immigration engagement documents (written agreement
+        // + IAA standards) for a case in one call — the Engagement workspace.
+        Route::post('/admin/leads/{id}/engagement/generate', [LeadDocumentController::class, 'generateEngagement'])
+            ->name('admin.leads.engagement.generate');
+        // Live HTML preview of the same Blade template — feeds the iframe
+        // on the Proposal & Agreements "New" modal. Cheap: renders the
+        // view without going through dompdf.
+        Route::get('/admin/leads/{id}/generate/{type}/preview', [LeadDocumentController::class, 'previewDocument'])
+            ->name('admin.leads.generate.preview');
+        // "Proposal" — not a document. Staff pick up to 3 programs to
+        // suggest to the lead; saved as a JSON array on the lead row.
+        Route::post('/admin/leads/{id}/proposal', [LeadDocumentController::class, 'saveProposal'])
+            ->name('admin.leads.proposal.save');
+        // "Your proposal / agreement is ready" — queued email to the
+        // lead pointing at their /track/{code} page. Fired from the
+        // Notify button on the Proposal & Agreements table.
+        Route::post('/admin/leads/{id}/notify-document-ready', [LeadDocumentController::class, 'notifyDocumentReady'])
+            ->name('admin.leads.notify-document-ready');
         Route::delete('/admin/leads/{leadId}/documents/{docId}', [LeadDocumentController::class, 'destroyDocument'])
             ->name('admin.leads.documents.destroy');
         // Staff download — same controller, role-gated inside.
@@ -762,6 +791,10 @@ Route::middleware(['auth'])->group(function () {
         Route::middleware('portal:sales')->prefix('sales')->name('portal.sales.')->group(function () {
             Route::get('/dashboard', [SalesController::class, 'dashboard'])->name('dashboard');
             Route::get('/leads', [SalesController::class, 'leads'])->name('leads');
+            // Sidebar sub-item — leads that have a generated Proposal or
+            // Agreement. Declared before /leads/{id} so the static suffix
+            // segment wins.
+            Route::get('/leads/proposals-agreements', [SalesController::class, 'proposalsAgreementsPage'])->name('leads.proposals-agreements');
 
             // Events tab — registrants for one event.
             //   /registrations → JSON (legacy; still used elsewhere)
@@ -851,6 +884,7 @@ Route::middleware(['auth'])->group(function () {
         Route::middleware('portal:education')->prefix('education')->name('portal.education.')->group(function () {
             Route::get('/dashboard', [EducationController::class, 'dashboard'])->name('dashboard');
             Route::get('/leads', [EducationController::class, 'leads'])->name('leads');
+            Route::get('/leads/proposals-agreements', [SalesController::class, 'proposalsAgreementsPage'])->name('leads.proposals-agreements');
             // Events tab — registrants for one event (JSON drawer), same as sales.
             Route::get('/events/{id}/registrations', [EducationController::class, 'eventRegistrations'])->name('events.registrations');
             Route::get('/events/{id}/registrants', [EducationController::class, 'eventRegistrantsPage'])->name('events.registrants');
@@ -956,6 +990,7 @@ Route::middleware(['auth'])->group(function () {
         Route::middleware('portal:immigration')->prefix('immigration')->name('portal.immigration.')->group(function () {
             Route::get('/dashboard', [ImmigrationController::class, 'dashboard'])->name('dashboard');
             Route::get('/leads', [ImmigrationController::class, 'leads'])->name('leads');
+            Route::get('/leads/proposals-agreements', [SalesController::class, 'proposalsAgreementsPage'])->name('leads.proposals-agreements');
 
             // Email module — shared Bulk Mail / SMS / Replies (same feature as
             // the sales + admin screens, rendered under this portal's layout).
@@ -1004,6 +1039,11 @@ Route::middleware(['auth'])->group(function () {
             // bookmark that POSTed an intake id still resolves cleanly.
             Route::post('/assessments/{id}/convert-to-case', [ImmigrationController::class, 'convertAssessmentToCase'])->name('assessments.convert');
             Route::get('/cases', [ImmigrationController::class, 'cases'])->name('cases');
+            // Engagement + Invoice generation workspaces. Declared before the
+            // /cases/{lead}/... routes below; both are single-segment literals
+            // so they never collide with the {lead} binding.
+            Route::get('/cases/engagement', [ImmigrationController::class, 'engagement'])->name('cases.engagement');
+            Route::get('/cases/invoice', [ImmigrationController::class, 'invoice'])->name('cases.invoice');
             // Create new case from the Cases page "Add new case" modal.
             Route::post('/cases', [ImmigrationController::class, 'storeCase'])->name('cases.store');
             // Edit an existing case (same modal fields as create).
@@ -1067,6 +1107,9 @@ Route::middleware(['auth'])->group(function () {
             // ACCOUNT
             Route::get('/profile', [ImmigrationController::class, 'profile'])->name('profile');
             Route::post('/profile', [ImmigrationController::class, 'updateProfile'])->name('profile.update');
+            // Staff e-signature — drawn or uploaded, rendered on engagement docs.
+            Route::post('/profile/signature', [ImmigrationController::class, 'saveSignature'])->name('profile.signature.save');
+            Route::delete('/profile/signature', [ImmigrationController::class, 'deleteSignature'])->name('profile.signature.delete');
             Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications');
         });
 

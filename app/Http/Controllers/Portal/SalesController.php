@@ -550,6 +550,263 @@ class SalesController extends Controller
     }
 
     /**
+     * GET /portal/{role}/leads/proposals-agreements — sidebar page listing
+     * every lead that has at least one generated Proposal or Agreement
+     * (checklist_key in the agreement bucket + source='generated'). The
+     * "+ New" button on this page targets any lead, so we also expose a
+     * lightweight roster of pipeline leads for the picker.
+     */
+    public function proposalsAgreementsPage(Request $request)
+    {
+        try {
+            // Proposals are no longer PDF docs — they're a shortlist of up
+            // to 3 programs a staff member suggested for the lead, stored
+            // on leads.proposed_program_ids. Agreements are still generated
+            // PDFs (Consultancy, English Engagement).
+            $agreementKeys  = ['agree.consultancy', 'agree.engagement_english'];
+            $generatedKeys  = $agreementKeys;
+
+            // Stages the system reads as "ready for a document":
+            //   Proposal-ready → Consultation Done  (adviser has met the lead,
+            //                    time to send a written pitch)
+            //   Agreement-ready → Proposal Sent + Consultancy Agreement stage
+            //                    (client has seen the proposal / is ready to
+            //                    sign, but no consultancy agreement generated yet)
+            $suggestionProposalStages  = ['Consultation Done'];
+            $suggestionAgreementStages = ['Proposal Sent', 'Consultancy Agreement'];
+            $suggestionStages          = array_merge($suggestionProposalStages, $suggestionAgreementStages);
+
+            // Every lead that has at least one generated doc, plus a per-lead
+            // count / latest-generated date so each tab can render useful
+            // context without a second query.
+            $withDocs = Lead::whereHas('documents', function ($q) use ($generatedKeys) {
+                    $q->whereIn('checklist_key', $generatedKeys)
+                      ->where('source', \App\Models\LeadDocument::SOURCE_GENERATED);
+                })
+                ->with(['documents' => function ($q) use ($generatedKeys) {
+                    $q->whereIn('checklist_key', $generatedKeys)
+                      ->where('source', \App\Models\LeadDocument::SOURCE_GENERATED)
+                      ->orderByDesc('created_at');
+                }])
+                ->orderByDesc('updated_at')
+                ->get();
+
+            $mapRow = function (Lead $l) {
+                $docs = $l->documents->map(fn ($d) => [
+                    'id' => $d->id,
+                    'checklist_key' => $d->checklist_key,
+                    'type' => match ($d->checklist_key) {
+                        'agree.proposal'           => 'Proposal',
+                        'agree.consultancy'        => 'Consultancy Agreement',
+                        'agree.engagement_english' => 'English Engagement',
+                        default => ucfirst(str_replace(['agree.', '_'], ['', ' '], $d->checklist_key)),
+                    },
+                    'variant' => $d->source_variant,
+                    'original_name' => $d->original_name,
+                    'size' => $d->size,
+                    'created_at' => optional($d->created_at)->toIso8601String(),
+                ])->values();
+
+                return [
+                    'id' => $l->id,
+                    'lead_id' => $l->lead_id,
+                    'name' => trim("{$l->first_name} {$l->last_name}") ?: 'Unknown',
+                    'email' => $l->email,
+                    'phone' => $l->phone,
+                    'stage' => $l->stage,
+                    'status' => $l->status,
+                    'documents' => $docs,
+                    'documents_count' => $docs->count(),
+                    'latest_generated_at' => $docs->first()['created_at'] ?? null,
+                ];
+            };
+
+            // Tab: Agreements — leads with at least one Agreement generated
+            // (Consultancy or English Engagement).
+            $agreements = $withDocs
+                ->filter(fn ($l) => $l->documents->contains(fn ($d) => in_array($d->checklist_key, $agreementKeys, true)))
+                ->map($mapRow)
+                ->values();
+
+            // Tab: Proposals — leads with a program shortlist saved. Each
+            // row exposes the picked programs (id + title) so the frontend
+            // can render badges without a second lookup.
+            $programCatalog = Program::orderBy('title')
+                ->get(['id', 'title', 'level', 'category', 'price_text', 'location', 'industry']);
+            $programMap = $programCatalog->keyBy('id');
+
+            $proposalLeads = Lead::whereNotNull('proposed_program_ids')
+                ->where(function ($q) {
+                    // JSON_LENGTH not portable across SQLite (tests) and
+                    // MySQL, so filter empty arrays in PHP instead.
+                    $q->whereRaw("proposed_program_ids != '[]'");
+                })
+                ->orderByDesc('updated_at')
+                ->get();
+
+            $proposals = $proposalLeads
+                ->filter(fn (Lead $l) => is_array($l->proposed_program_ids) && count($l->proposed_program_ids) > 0)
+                ->map(function (Lead $l) use ($programMap) {
+                    $picks = collect($l->proposed_program_ids)
+                        ->map(fn ($pid) => $programMap->get($pid))
+                        ->filter()
+                        ->map(fn ($p) => [
+                            'id' => $p->id,
+                            'title' => $p->title,
+                            'level' => $p->level,
+                            'category' => $p->category,
+                            'price_text' => $p->price_text,
+                            'location' => $p->location,
+                        ])
+                        ->values();
+
+                    return [
+                        'id' => $l->id,
+                        'lead_id' => $l->lead_id,
+                        'name' => trim("{$l->first_name} {$l->last_name}") ?: 'Unknown',
+                        'email' => $l->email,
+                        'phone' => $l->phone,
+                        'stage' => $l->stage,
+                        'status' => $l->status,
+                        'programs' => $picks,
+                        'programs_count' => $picks->count(),
+                        'updated_at' => optional($l->updated_at)->toIso8601String(),
+                    ];
+                })
+                ->values();
+
+            // Tab: Suggestions — leads whose pipeline stage tells us they
+            // should have a proposal (program shortlist) or agreement (PDF)
+            // but don't yet. Each row carries a `suggestion` field so the
+            // frontend can hint what the New button should create.
+            $suggestions = Lead::inLeadPipeline()
+                ->whereIn('status', $suggestionStages)
+                ->where(function ($q) use ($generatedKeys) {
+                    // Proposal-ready leads: no program shortlist yet.
+                    // Agreement-ready leads: no generated PDF yet. Either
+                    // gap qualifies, so OR the two conditions.
+                    $q->where(function ($qq) {
+                        $qq->whereNull('proposed_program_ids')
+                           ->orWhereRaw("proposed_program_ids = '[]'");
+                    })->orWhereDoesntHave('documents', function ($qq) use ($generatedKeys) {
+                        $qq->whereIn('checklist_key', $generatedKeys)
+                           ->where('source', \App\Models\LeadDocument::SOURCE_GENERATED);
+                    });
+                })
+                ->orderByDesc('updated_at')
+                ->get()
+                ->map(function (Lead $l) use ($suggestionProposalStages, $generatedKeys) {
+                    $suggested = in_array($l->status, $suggestionProposalStages, true) ? 'proposal' : 'agreement';
+                    // Skip suggestions where the specific gap is already
+                    // closed for THIS suggestion type. Prevents a lead who
+                    // has a proposal but no agreement from showing up as
+                    // "needs proposal" and vice versa.
+                    if ($suggested === 'proposal' && ! empty($l->proposed_program_ids)) {
+                        return null;
+                    }
+                    if ($suggested === 'agreement') {
+                        $hasAgreement = $l->documents()
+                            ->whereIn('checklist_key', $generatedKeys)
+                            ->where('source', \App\Models\LeadDocument::SOURCE_GENERATED)
+                            ->exists();
+                        if ($hasAgreement) {
+                            return null;
+                        }
+                    }
+
+                    return [
+                        'id' => $l->id,
+                        'lead_id' => $l->lead_id,
+                        'name' => trim("{$l->first_name} {$l->last_name}") ?: 'Unknown',
+                        'email' => $l->email,
+                        'phone' => $l->phone,
+                        'stage' => $l->stage,
+                        'status' => $l->status,
+                        'suggestion' => $suggested,
+                        'updated_at' => optional($l->updated_at)->toIso8601String(),
+                    ];
+                })
+                ->filter()
+                ->values();
+
+            // Roster for the "+ New" picker — every pipeline lead so staff
+            // can generate a proposal/agreement for someone who doesn't
+            // have one yet.
+            $picker = Lead::inLeadPipeline()
+                ->orderBy('first_name')
+                ->limit(500)
+                ->get(['id', 'lead_id', 'first_name', 'last_name', 'email'])
+                ->map(fn (Lead $l) => [
+                    'id' => $l->id,
+                    'lead_id' => $l->lead_id,
+                    'name' => trim("{$l->first_name} {$l->last_name}") ?: 'Unknown',
+                    'email' => $l->email,
+                ]);
+
+            return inertia($this->proposalsPageForRequest($request), [
+                'portal' => $this->currentPortalFromRequest($request),
+                'suggestions' => $suggestions,
+                'proposals' => $proposals,
+                'agreements' => $agreements,
+                'picker' => $picker,
+                // Program catalogue for the Proposal picker in the New modal.
+                'programs' => $programCatalog->map(fn ($p) => [
+                    'id' => $p->id,
+                    'title' => $p->title,
+                    'level' => $p->level,
+                    'category' => $p->category,
+                    'price_text' => $p->price_text,
+                    'location' => $p->location,
+                    'industry' => $p->industry,
+                ])->values(),
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('Proposals & Agreements page failed', ['error' => $e->getMessage()]);
+
+            return inertia($this->proposalsPageForRequest($request), [
+                'portal' => $this->currentPortalFromRequest($request),
+                'suggestions' => collect(),
+                'proposals' => collect(),
+                'agreements' => collect(),
+                'picker' => collect(),
+                'programs' => collect(),
+            ]);
+        }
+    }
+
+    /** Which portal prefix served this request (drives the frontend base URL). */
+    private function currentPortalFromRequest(Request $request): string
+    {
+        $path = $request->path();
+        foreach (['sales', 'education', 'immigration'] as $p) {
+            if (str_starts_with($path, "portal/{$p}/")) {
+                return $p;
+            }
+        }
+        if (str_starts_with($path, 'admin/')) {
+            return 'admin';
+        }
+
+        return 'sales';
+    }
+
+    /**
+     * Which Inertia page to render — matches the URL prefix so the right
+     * layout wraps it (EducationLayout for /portal/education, AdminLayout
+     * for /admin, etc). Each non-sales entry is a thin re-export of the
+     * sales page.
+     */
+    private function proposalsPageForRequest(Request $request): string
+    {
+        return match ($this->currentPortalFromRequest($request)) {
+            'education'   => 'portal/education/ProposalsAgreements',
+            'immigration' => 'portal/immigration/ProposalsAgreements',
+            'admin'       => 'admin/ProposalsAgreements',
+            default       => 'portal/sales/ProposalsAgreements',
+        };
+    }
+
+    /**
      * Soft-delete (archive) multiple leads at once. Same behaviour as the
      * single-lead delete on the lead detail page — the rows are recoverable
      * via the admin Trash view.

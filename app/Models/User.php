@@ -56,8 +56,11 @@ class User extends Authenticatable
         'role',
         'lead_id',
         'iaa_licence_number',
+        'iaa_licence_type',
         'iaa_licence_expiry',
         'avatar_path',
+        'signature_path',
+        'signature_updated_at',
         // Contact details — primarily captured for recruiting Agents
         // (location + phone shown in the admin user form), harmless for
         // other roles.
@@ -89,8 +92,31 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'last_login_at' => 'datetime',
             'iaa_licence_expiry' => 'date',
+            'signature_updated_at' => 'datetime',
             'password' => 'hashed',
         ];
+    }
+
+    /**
+     * The staff signature as a base64 data URI, or null when none is set.
+     * Signatures live on the private disk (never a public URL) and are
+     * embedded straight into generated PDFs / previews.
+     */
+    public function signatureDataUri(): ?string
+    {
+        if (! $this->signature_path) {
+            return null;
+        }
+
+        $disk = \Illuminate\Support\Facades\Storage::disk('local');
+        if (! $disk->exists($this->signature_path)) {
+            return null;
+        }
+
+        $ext = strtolower(pathinfo($this->signature_path, PATHINFO_EXTENSION));
+        $mime = $ext === 'jpg' || $ext === 'jpeg' ? 'image/jpeg' : 'image/png';
+
+        return "data:{$mime};base64,".base64_encode($disk->get($this->signature_path));
     }
 
     /**

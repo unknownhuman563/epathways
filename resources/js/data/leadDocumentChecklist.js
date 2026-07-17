@@ -62,6 +62,7 @@ export const CHECKLIST = [
         scope: "sales",
         section: "Agreements",
         items: [
+            { id: "agree.proposal", name: "Study Proposal", filename: "Proposal-{FN}{LN}", system: true },
             { id: "agree.consultancy", name: "Consultancy Agreement", filename: "CA-{FN}{LN}", system: true },
             { id: "agree.engagement_english", name: "Engagement Agreement for English Review", filename: "Eng-{FN}{LN}", system: true },
         ],

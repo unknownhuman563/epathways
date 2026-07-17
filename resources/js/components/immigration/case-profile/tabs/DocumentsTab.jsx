@@ -82,14 +82,25 @@ export default function DocumentsTab({
         };
     });
 
-    const orphanRows = orphans.map((d) => ({
-        kind:     "orphan",
-        key:      `orphan-${d.id}`,
-        label:    d.original_name,
-        category: "Other (no checklist match)",
-        required: false,
-        document: d,
-    }));
+    const orphanRows = orphans.map((d) => {
+        // Adviser-generated engagement documents (Written Agreement + IAA
+        // standards) get their own clearly-named group rather than being
+        // lumped in with unmatched uploads.
+        const isEngagement = typeof d.source_variant === "string" && d.source_variant.startsWith("engagement:");
+        const isGenerated = d.source === "generated";
+        return {
+            kind:     "orphan",
+            key:      `orphan-${d.id}`,
+            label:    d.original_name,
+            category: isEngagement
+                ? "Engagement documents"
+                : isGenerated
+                    ? "Generated documents"
+                    : "Other (no checklist match)",
+            required: false,
+            document: d,
+        };
+    });
 
     const allRows = [...rows, ...orphanRows];
     const totals = useMemo(() => {
