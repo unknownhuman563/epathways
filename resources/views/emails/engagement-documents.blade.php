@@ -17,10 +17,13 @@
 
         $teal = '#137C86';
 
-        $phone        = config('services.contact.phone');
-        $whatsapp     = config('services.contact.whatsapp');
-        $facebook     = config('services.contact.facebook');
-        $contactEmail = config('services.contact.email');
+        // Immigration-brand footer contacts (fixed — not the generic
+        // config('services.contact.*'), which is the PH marketing brand).
+        $facebook       = config('services.contact.facebook');
+        $footerSiteUrl  = 'https://epathways.co.nz/immigration';
+        $footerSiteHost = 'epathways.co.nz/immigration';
+        $contactEmail   = 'migration@epathways.co.nz';
+        $whatsapp       = '+64 22 188 2800';
     @endphp
 
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#eef0f4;">
@@ -157,31 +160,27 @@
                                 <tr>
                                     <td align="center" style="padding:6px 0 0 0;">
                                         <p style="margin:0; font-size:12px; font-weight:700; color:#444444;">Website:</p>
-                                        <a href="{{ $siteUrl }}" style="font-size:12px; color:{{ $teal }}; text-decoration:underline;">{{ $siteHost }}</a>
+                                        <a href="{{ $footerSiteUrl }}" style="font-size:12px; color:{{ $teal }}; text-decoration:underline;">{{ $footerSiteHost }}</a>
                                     </td>
                                 </tr>
-                                @if ($contactEmail)
                                 <tr>
                                     <td align="center" style="padding:8px 0 0 0;">
                                         <p style="margin:0; font-size:12px; font-weight:700; color:#444444;">E-mail:</p>
                                         <a href="mailto:{{ $contactEmail }}" style="font-size:12px; color:{{ $teal }}; text-decoration:underline;">{{ $contactEmail }}</a>
                                     </td>
                                 </tr>
-                                @endif
                                 <tr>
                                     <td align="center" style="padding:8px 0 0 0;">
                                         <p style="margin:0; font-size:12px; font-weight:700; color:#444444;">Location:</p>
                                         <p style="margin:0; font-size:12px; color:{{ $teal }};">Auckland, New Zealand</p>
                                     </td>
                                 </tr>
-                                @if ($whatsapp)
                                 <tr>
                                     <td align="center" style="padding:8px 0 0 0;">
                                         <p style="margin:0; font-size:12px; font-weight:700; color:#444444;">Whatsapp:</p>
                                         <p style="margin:0; font-size:12px; color:#555555;">{{ $whatsapp }}</p>
                                     </td>
                                 </tr>
-                                @endif
                             </table>
                         </td>
                     </tr>
