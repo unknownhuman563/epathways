@@ -79,6 +79,17 @@ class DefaultMessageTemplatesSeeder extends Seeder
                 ]),
             ],
             [
+                'key' => 'consultancy_agreement',
+                'name' => 'Consultancy Agreement',
+                'description' => 'Sent from Proposal & Agreements → Notify on any consultancy/English agreement. Points the lead at their tracker to review and sign.',
+                'channels' => ['email'],
+                'email_subject' => 'Your Consultancy Agreement with ePathways is ready',
+                'from_email' => 'hello@epathways.ph',
+                'from_name' => 'ePathways Philippines',
+                'email_body' => $this->consultancyAgreementBody(),
+                'variables_documented' => $standardVars,
+            ],
+            [
                 'key' => 'portal_invitation',
                 'name' => 'Portal Invitation (legacy)',
                 'description' => 'Reference template. The live send still uses the LeadPortalInvitation Mailable because the setup link is a signed, single-use token generated in code.',
@@ -152,6 +163,27 @@ class DefaultMessageTemplatesSeeder extends Seeder
 <p>Please feel free to reach out if you require any further information or wish to proceed with applications. You can review these options any time on your personal tracker &mdash; no login required:</p>
 <p style="text-align:center;"><a href="{{tracker_url}}" style="display:inline-block;padding:12px 26px;background:#2e7d32;color:#ffffff;text-decoration:none;border-radius:6px;font-weight:700;">View my study options</a></p>
 <p style="text-align:center;font-weight:700;margin-top:20px;">At ePathways, our purpose is simple:<br>We help you succeed by guiding you toward the right pathways, turning your New Zealand study dreams into reality.</p>
+HTML;
+    }
+
+    /**
+     * HTML body for the Consultancy Agreement email. The portal link is
+     * {{tracker_url}} — never a hardcoded /track/CODE URL, or every recipient
+     * lands on one lead's tracker.
+     */
+    private function consultancyAgreementBody(): string
+    {
+        $button = 'display:inline-block;padding:12px 26px;background:#2e7d32;color:#ffffff;text-decoration:none;border-radius:6px;font-weight:700;';
+        $booking = 'https://go.epathways.co.nz/widget/bookings/meet-with-bryll-emma';
+
+        return <<<HTML
+<p style="font-weight:700;color:#2e7d32;">Kia Ora {{first_name}},</p>
+<p>Your Consultancy Agreement is now available for review on your ePathways portal.</p>
+<p>Please use the link below to view the document &mdash; no login required:</p>
+<p style="text-align:center;"><a href="{{tracker_url}}" style="{$button}">View my agreement</a></p>
+<p>Once you have reviewed the agreement, kindly sign it through the portal to confirm your acceptance so we can proceed with the next steps in your application.</p>
+<p>If you would like to meet with Bryll virtually to walk through the agreement, you may book a consultation here:</p>
+<p style="text-align:center;"><a href="{$booking}" style="{$button}">Book a consultation</a></p>
 HTML;
     }
 

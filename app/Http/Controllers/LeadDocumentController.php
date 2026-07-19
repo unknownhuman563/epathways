@@ -603,17 +603,17 @@ class LeadDocumentController extends Controller
 
             $kind = $validated['kind'] ?? 'agreement';
 
-            // The "proposal" notify sends the branded Study Proposal template
-            // (editable under Email → Templates) with the lead's up-to-3
-            // suggested programs filled in. Falls back to the plain Mailable
-            // if the template is missing/inactive or has no email channel.
-            if ($kind === 'proposal') {
-                $res = app(\App\Services\CommunicationService::class)
-                    ->sendTemplated('program_proposal', $lead, $this->proposalProgramVars($lead));
-                if (! $res['email']) {
-                    Mail::to($lead->email)->send(new \App\Mail\DocumentReadyNotification($lead, 'proposal'));
-                }
-            } else {
+            // Each notify kind has its own branded template, editable under
+            // Email → Templates. Proposals also carry the lead's up-to-3
+            // suggested programs. Falls back to the plain Mailable if the
+            // template is missing/inactive or has no email channel.
+            $templateKey = $kind === 'proposal' ? 'program_proposal' : 'consultancy_agreement';
+            $vars = $kind === 'proposal' ? $this->proposalProgramVars($lead) : [];
+
+            $res = app(\App\Services\CommunicationService::class)
+                ->sendTemplated($templateKey, $lead, $vars);
+
+            if (! $res['email']) {
                 Mail::to($lead->email)->send(new \App\Mail\DocumentReadyNotification($lead, $kind));
             }
 
