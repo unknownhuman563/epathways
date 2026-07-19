@@ -4,10 +4,37 @@ import { StarterKit } from "@tiptap/starter-kit";
 import { TextStyle, Color, FontSize } from "@tiptap/extension-text-style";
 import { Highlight } from "@tiptap/extension-highlight";
 import { TextAlign } from "@tiptap/extension-text-align";
+import { Link } from "@tiptap/extension-link";
 import {
     Bold, Italic, Underline as UnderlineIcon, Heading1, Heading2, List, ListOrdered,
     AlignLeft, AlignCenter, AlignRight, Link as LinkIcon, Highlighter, Baseline, RemoveFormatting,
+    MousePointerClick,
 } from "lucide-react";
+
+/**
+ * The stock Link mark only round-trips href/rel/target, so saving a template
+ * silently strips the inline `style` off CTA anchors — a green button turns
+ * back into a plain blue link. Carrying `style` through keeps buttons intact.
+ * Safe: the server still strips on*= handlers and javascript: URLs
+ * (MessageTemplateController::sanitizeBody).
+ */
+const StyledLink = Link.extend({
+    addAttributes() {
+        return {
+            ...this.parent?.(),
+            style: {
+                default: null,
+                parseHTML: (el) => el.getAttribute("style"),
+                renderHTML: (attrs) => (attrs.style ? { style: attrs.style } : {}),
+            },
+        };
+    },
+});
+
+// House CTA pill — matches the buttons in DefaultMessageTemplatesSeeder so
+// staff-authored buttons look identical to the seeded ones.
+const BUTTON_STYLE =
+    "display:inline-block;padding:12px 26px;background:#2e7d32;color:#ffffff;text-decoration:none;border-radius:6px;font-weight:700;";
 
 /**
  * TipTap rich-text editor for the email body. Emits HTML (bold, headings,
@@ -51,9 +78,10 @@ export default function RichTextEditor({ value = "", onChange }) {
     const editor = useEditor({
         extensions: [
             StarterKit.configure({
-                link: { openOnClick: false, HTMLAttributes: { rel: "noopener", target: "_blank" } },
+                link: false,   // replaced by StyledLink, which keeps inline styles
                 heading: { levels: [1, 2, 3] },
             }),
+            StyledLink.configure({ openOnClick: false, HTMLAttributes: { rel: "noopener", target: "_blank" } }),
             TextStyle,
             Color,
             FontSize,
@@ -101,7 +129,19 @@ export default function RichTextEditor({ value = "", onChange }) {
         const url = window.prompt("Link URL", prev);
         if (url === null) return;
         if (url === "") editor.chain().focus().extendMarkRange("link").unsetLink().run();
-        else editor.chain().focus().extendMarkRange("link").setLink({ href: url }).run();
+        // Keep any existing inline style so re-pointing a button's URL doesn't
+        // flatten it back into a plain link.
+        else editor.chain().focus().extendMarkRange("link")
+            .setLink({ href: url, style: editor.getAttributes("link").style || null }).run();
+    };
+
+    // Wrap the selection in a link carrying the house CTA pill styling.
+    const setButton = () => {
+        const prev = editor.getAttributes("link").href || "";
+        const url = window.prompt("Button link URL", prev);
+        if (url === null || url === "") return;
+        editor.chain().focus().extendMarkRange("link")
+            .setLink({ href: url, style: BUTTON_STYLE }).run();
     };
 
     return (
@@ -159,6 +199,7 @@ export default function RichTextEditor({ value = "", onChange }) {
                 <Btn title="Bullet list" active={editor.isActive("bulletList")} onClick={() => editor.chain().focus().toggleBulletList().run()}><List size={15} /></Btn>
                 <Btn title="Numbered list" active={editor.isActive("orderedList")} onClick={() => editor.chain().focus().toggleOrderedList().run()}><ListOrdered size={15} /></Btn>
                 <Btn title="Link" active={editor.isActive("link")} onClick={setLink}><LinkIcon size={15} /></Btn>
+                <Btn title="Button" active={editor.isActive("link", { style: BUTTON_STYLE })} onClick={setButton}><MousePointerClick size={15} /></Btn>
 
                 <Divider />
 
