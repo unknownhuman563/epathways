@@ -518,6 +518,7 @@ class LeadDocumentController extends Controller
 
         if ($consultancyScenario !== null) {
             [$payload] = $generator->buildConsultancyPayload($lead, $consultancyScenario, $overrides);
+            $payload['preview'] = true;   // in-flow logo, no PDF-only running footer
             $view = 'agreements.consultancy';
         } elseif ($type === 'english_engagement') {
             $view = 'agreements.engagement-english';

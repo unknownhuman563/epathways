@@ -20,6 +20,22 @@
 @php
     $fmt = fn ($n) => 'PhP ' . number_format((float) $n, 2);
     $fmt0 = fn ($n) => 'Php ' . number_format((float) $n, 0);
+
+    // The live-preview endpoint renders this same view straight to HTML.
+    // There the running header/footer must sit in normal flow — the fixed
+    // negative offsets that make dompdf repeat them per page would push
+    // them off-screen in a browser.
+    $preview = $preview ?? false;
+
+    // dompdf reads assets off disk; the browser needs URLs. Without this
+    // the preview silently falls back to a generic sans, which is why it
+    // never looked like the PDF.
+    $logoSrc = $preview
+        ? asset('images/philippines-logo.png')
+        : public_path('images/philippines-logo.png');
+    $font = fn ($file) => $preview
+        ? asset("fonts/urbanist/{$file}")
+        : public_path("fonts/urbanist/{$file}");
 @endphp
 <!DOCTYPE html>
 <html lang="en">
@@ -27,31 +43,55 @@
 <meta charset="UTF-8">
 <title>Consultancy Agreement — {{ $client_name }}</title>
 <style>
-    /* Urbanist — sits in resources/fonts/urbanist/. dompdf resolves
-       relative url() from the view's directory, so we anchor with an
-       absolute path via storage_path (evaluated at render time). */
-    @font-face { font-family: 'Urbanist'; font-style: normal; font-weight: 400; src: url('{{ base_path("resources/fonts/urbanist/Urbanist-Regular.ttf") }}') format('truetype'); }
-    @font-face { font-family: 'Urbanist'; font-style: italic; font-weight: 400; src: url('{{ base_path("resources/fonts/urbanist/Urbanist-Italic.ttf") }}') format('truetype'); }
-    @font-face { font-family: 'Urbanist'; font-style: normal; font-weight: 700; src: url('{{ base_path("resources/fonts/urbanist/Urbanist-Bold.ttf") }}') format('truetype'); }
-    @font-face { font-family: 'Urbanist'; font-style: italic; font-weight: 700; src: url('{{ base_path("resources/fonts/urbanist/Urbanist-BoldItalic.ttf") }}') format('truetype'); }
+    /* Urbanist — published to public/fonts/urbanist so both dompdf (disk
+       path) and the browser preview (URL) can resolve the same files. */
+    @font-face { font-family: 'Urbanist'; font-style: normal; font-weight: 400; src: url('{{ $font("Urbanist-Regular.ttf") }}') format('truetype'); }
+    @font-face { font-family: 'Urbanist'; font-style: italic; font-weight: 400; src: url('{{ $font("Urbanist-Italic.ttf") }}') format('truetype'); }
+    @font-face { font-family: 'Urbanist'; font-style: normal; font-weight: 700; src: url('{{ $font("Urbanist-Bold.ttf") }}') format('truetype'); }
+    @font-face { font-family: 'Urbanist'; font-style: italic; font-weight: 700; src: url('{{ $font("Urbanist-BoldItalic.ttf") }}') format('truetype'); }
 
-    @page { margin: 120px 55px 60px 55px; }
-    body { font-family: 'Urbanist', DejaVu Sans, sans-serif; font-size: 12pt; color: #111; line-height: 1.55; }
+    @page { margin: 132px 62px 75px 62px; }
+    /* The browser preview has no page box, so the @page side margins above
+       don't apply and content would sit flush against the panel edge. */
+    body.preview { padding: 24px 62px; }
+    /* 10pt / 1.42 matches the density of the approved Word original and
+       lands the document on 9 pages; at 12pt it reflows onto 12. */
+    body { font-family: 'Urbanist', DejaVu Sans, sans-serif; font-size: 10pt; color: #111; line-height: 1.42; }
 
     /* Running header — dompdf repeats fixed-position elements on every
        page, so the logo shows at the top of pages 1 through 9. Height
        chosen to fit the logo comfortably; body @page margin above
        reserves the space so text doesn't run under it. */
-    .page-header { position: fixed; top: -80px; left: 0; right: 0; text-align: center; }
-    .page-header img { height: 60px; width: auto; }
+    /* The logo file is pre-trimmed (the raw asset is ~72% transparent
+       padding), so this height is all artwork — keep it that way if the
+       image is ever re-exported. */
+    .page-header { position: fixed; top: -96px; left: 0; right: 0; text-align: center;
+                   border-bottom: 1.5px solid #436235; padding-bottom: 10px; }
+    .page-header img { height: 68px; width: auto; }
+    /* Preview-only: drop the logo into normal flow so it's actually visible
+       in the browser, where the negative fixed offset would hide it. */
+    .page-header.in-flow { position: static; margin-bottom: 16px; }
+
+    /* Running footer rule — fixed position repeats it on every page. The
+       text itself is drawn by the page_text() block at the end of <body>:
+       dompdf supports counter(page) in CSS but NOT counter(pages), so a
+       pure-CSS footer renders "Page 3 of 0". */
+    .page-footer { position: fixed; bottom: -34px; left: 0; right: 0;
+                   border-top: 1.5px solid #436235; }
+
+    /* Explicit breaks so the PDF paginates like the approved Word original
+       instead of wherever the text happens to reflow. */
+    .page-break { page-break-before: always; }
+    .no-break { page-break-inside: avoid; }
     .eyebrow { text-align: center; color: #436235; font-weight: bold; font-size: 9pt; letter-spacing: 2px; margin-bottom: 6px; }
     h1 { text-align: center; font-size: 22pt; font-weight: 900; letter-spacing: 1px; margin: 0 0 4px 0; color: #14213b; }
     .subtitle { text-align: center; color: #555; font-size: 10pt; font-style: italic; margin-bottom: 18px; }
     hr { border: 0; border-top: 1.5px solid #436235; margin: 14px 0; }
-    .article-bar { text-align: center; font-weight: bold; color: #436235; font-size: 11pt; letter-spacing: 1.2px; padding: 4px 0; border-top: 1.5px solid #436235; border-bottom: 1.5px solid #436235; margin: 22px 0 14px 0; }
+    .article-bar { text-align: center; font-weight: bold; color: #436235; font-size: 11pt; letter-spacing: 1.2px; padding: 5px 0; border-top: 1.5px solid #436235; border-bottom: 1.5px solid #436235; margin: 15px 0 11px 0; }
     .article-bar.thin { border-color: #436235; }
-    h3 { color: #436235; font-size: 10.5pt; margin-top: 16px; margin-bottom: 6px; }
-    p { margin: 8px 0; text-align: justify; }
+    h3 { color: #436235; font-size: 10.5pt; margin-top: 12px; margin-bottom: 5px; }
+    p { margin: 7px 0; text-align: justify; }
+    ul li { margin: 3px 0; }
     .strong { font-weight: bold; }
     .name-strong { font-weight: bold; color: #556B2F; }
     .company-name { font-weight: bold; font-style: italic; }
@@ -59,9 +99,9 @@
     /* Application Type table (page 1). */
     table.apptype { width: 100%; border-collapse: collapse; margin: 12px 0; }
     table.apptype thead th { background: #436235; color: #fff; text-align: center; padding: 6px 8px; font-size: 10pt; }
-    table.apptype td { border: 1px solid #b7b7b7; padding: 10px 12px; font-size: 10pt; vertical-align: top; }
-    table.apptype td.check-cell { width: 44px; text-align: center; font-size: 14pt; }
-    table.apptype td.fee-cell { width: 150px; text-align: left; font-weight: bold; color: #14213b; font-size: 11pt; }
+    table.apptype td { border: 1px solid #b7ceac; background: #f4f8f0; padding: 10px 12px; font-size: 10pt; vertical-align: top; }
+    table.apptype td.check-cell { width: 44px; text-align: center; font-size: 14pt; background: #fbfdf9; }
+    table.apptype td.fee-cell { width: 150px; text-align: left; font-weight: bold; color: #2e7d32; font-size: 11pt; }
     .voucher-strike { text-decoration: line-through; color: #555; font-weight: normal; display: block; margin-top: 8px; font-size: 10pt; }
     .voucher-note { color: #436235; font-weight: bold; font-size: 9pt; margin-top: 6px; }
 
@@ -73,15 +113,17 @@
     .bank-box .ref-red { color: #d0121a; font-weight: bold; }
 
     /* Cost breakdown tables (pages 3-4). */
-    table.cost { width: 100%; border-collapse: collapse; margin: 10px 0 6px 0; }
-    table.cost th { background: #e8f0e2; color: #14213b; text-align: left; padding: 6px 8px; font-size: 10pt; }
+    /* Kept dense on purpose — at looser padding the SINGLE breakdown spills
+       past its page and pushes every later page out of alignment. */
+    table.cost { width: 100%; border-collapse: collapse; margin: 8px 0 4px 0; line-height: 1.3; }
+    table.cost th { background: #436235; color: #fff; text-align: left; padding: 4px 8px; font-size: 9.5pt; }
     table.cost th.right { text-align: right; }
-    table.cost td { border: 1px solid #d8d8d8; padding: 6px 10px; font-size: 9.5pt; vertical-align: top; }
+    table.cost td { border: 1px solid #d8d8d8; padding: 3px 8px; font-size: 9pt; vertical-align: top; }
     table.cost td.right { text-align: right; font-weight: bold; }
-    table.cost tr.group td { background: #e8f0e2; color: #14213b; font-weight: bold; font-size: 10pt; border-color: #b7ceac; }
-    table.cost .muted { color: #666; font-style: italic; font-size: 8.5pt; }
+    table.cost tr.group td { background: #e8f0e2; color: #14213b; font-weight: bold; font-size: 9.5pt; border-color: #b7ceac; }
+    table.cost .muted { color: #666; font-style: italic; font-size: 8pt; }
     table.cost tr.total td { background: #14213b; color: #fff; font-weight: bold; }
-    .breakdown-caption { color: #436235; font-weight: bold; font-size: 10pt; margin-top: 14px; margin-bottom: 4px; letter-spacing: 0.4px; }
+    .breakdown-caption { color: #436235; font-weight: bold; font-size: 9.5pt; margin-top: 10px; margin-bottom: 3px; letter-spacing: 0.4px; }
 
     ul { margin: 6px 0 10px 20px; padding: 0; }
     ul li { margin: 4px 0; font-size: 10pt; }
@@ -97,11 +139,15 @@
     .footer-rule { border-top: 1px solid #d8d8d8; margin-top: 24px; padding-top: 6px; font-size: 8pt; color: #888; text-align: center; }
 </style>
 </head>
-<body>
+<body class="{{ $preview ? 'preview' : '' }}">
 
-<div class="page-header">
-    <img src="{{ base_path('resources/assets/philipine_ep_logo.png') }}" alt="ePathways Philippines">
+<div class="page-header{{ $preview ? ' in-flow' : '' }}">
+    <img src="{{ $logoSrc }}" alt="ePathways Philippines">
 </div>
+
+@unless ($preview)
+<div class="page-footer"></div>
+@endunless
 
 <div class="eyebrow">OFFICIAL DOCUMENT &nbsp;•&nbsp; CONFIDENTIAL</div>
 <h1>CONSULTANCY AGREEMENT</h1>
@@ -114,31 +160,71 @@
 
 <p><em>Application Type</em> &mdash; please indicate your application type by clicking the box beside your chosen option. The applicable package fee is shown on the right.</p>
 
-{{-- Application Type — ONLY the chosen scenario renders here. Staff pick
-     which scenario applies for this lead and the fee cell reflects the
-     amount they edited on the "New" modal. --}}
+{{-- Application Type — every scenario is listed so the client sees the
+     full menu, exactly as in the Word original. Only the scenario staff
+     picked is ticked, and only that row's fee reflects the amount they
+     edited on the "New" modal; the rest show their catalogue defaults.
+
+     Split across two pages to match the approved pagination: scenarios
+     1-3 on page 1, WITH ENGLISH on page 2 under a repeated header. --}}
+@php
+    $renderRow = function (array $s) use ($scenario, $scenario_applicant, $school_enrolment_fee, $inz_voucher_fee, $fmt, $fmt0) {
+        $isChosen = $s['key'] === $scenario;
+        $fee = $isChosen ? $school_enrolment_fee : $s['default_school_fee'];
+        // The chosen row shows the Single/Couple the staff actually selected.
+        $applicant = $isChosen ? $scenario_applicant : $s['applicant'];
+
+        return compact('isChosen', 'fee', 'applicant');
+    };
+    $page1 = ['std_150', 'voucher_150', 'std_100'];
+@endphp
+
 <table class="apptype">
     <thead>
         <tr><th colspan="3">APPLICATION TYPE &nbsp;•&nbsp; PLEASE TICK ONE BOX</th></tr>
     </thead>
     <tbody>
+        @foreach ($page1 as $key)
+            @php $s = $scenarios[$key]; $r = $renderRow($s); @endphp
+            <tr>
+                <td class="check-cell"><strong>{!! $r['isChosen'] ? '&#9745;' : '&#9744;' !!}</strong></td>
+                <td>
+                    <div class="strong">Scenario #{{ $s['number'] }}: &nbsp; {{ $s['title'] }}</div>
+                    <div class="strong">{{ $r['applicant'] }}</div>
+                    <div style="margin-top: 4px;">{!! $s['description'] !!}</div>
+                    @if ($s['has_voucher'])
+                        <div style="margin-top: 10px;"><strong>Immigration NZ Fee</strong></div>
+                        <div class="voucher-note">Already covered within the School Enrolment and Documentation Fee</div>
+                    @endif
+                </td>
+                <td class="fee-cell">
+                    {{ $fmt0($r['fee']) }}
+                    @if ($s['has_voucher'])
+                        <span class="voucher-strike">{{ $fmt($inz_voucher_fee) }}</span>
+                    @endif
+                </td>
+            </tr>
+        @endforeach
+    </tbody>
+</table>
+
+{{-- ── Page 2 ───────────────────────────────────────────────── --}}
+<div class="page-break"></div>
+
+@php $s = $scenarios['english_100']; $r = $renderRow($s); @endphp
+<table class="apptype no-break">
+    <thead>
+        <tr><th colspan="3">APPLICATION TYPE &nbsp;•&nbsp; PLEASE TICK ONE BOX</th></tr>
+    </thead>
+    <tbody>
         <tr>
-            <td class="check-cell"><strong>&#9745;</strong></td>
+            <td class="check-cell"><strong>{!! $r['isChosen'] ? '&#9745;' : '&#9744;' !!}</strong></td>
             <td>
-                <div class="strong">Scenario #{{ $scenario_number }}: &nbsp; {{ $scenario_title }}</div>
-                <div class="strong">{{ $scenario_applicant }}</div>
-                <div style="margin-top: 4px;">{!! $scenario_description !!}</div>
-                @if ($scenario_has_voucher)
-                    <div style="margin-top: 10px;"><strong>Immigration NZ Fee</strong></div>
-                    <div class="voucher-note">Already covered within the School Enrolment and Documentation Fee</div>
-                @endif
+                <div class="strong">Scenario #{{ $s['number'] }}: &nbsp; {{ $s['title'] }}</div>
+                <div class="strong">{{ $r['applicant'] }}</div>
+                <div style="margin-top: 4px;">{!! $s['description'] !!}</div>
             </td>
-            <td class="fee-cell">
-                {{ $fmt0($school_enrolment_fee) }}
-                @if ($scenario_has_voucher)
-                    <span class="voucher-strike">{{ $fmt($inz_voucher_fee) }}</span>
-                @endif
-            </td>
+            <td class="fee-cell">{{ $fmt0($r['fee']) }}</td>
         </tr>
     </tbody>
 </table>
@@ -154,11 +240,16 @@
     <div class="row"><span class="label">Reference:</span> <span class="ref-red">#{{ $client_reference }}</span></div>
 </div>
 
-<div class="article-bar">REFERENCE &nbsp;•&nbsp; INDICATIVE COST BREAKDOWN</div>
+{{-- ── Page 3 ───────────────────────────────────────────────── --}}
+<div class="page-break"></div>
+
+<div class="article-bar" style="margin-top:0;">REFERENCE &nbsp;•&nbsp; INDICATIVE COST BREAKDOWN</div>
 
 <p><em>The table below is provided for reference only. It sets out the indicative end-to-end cost of a New Zealand student visa application. All amounts marked (approximate) are estimates only and may vary with exchange rates, third-party providers, and the chosen program. Disbursements such as tuition, airfare, and show money are the responsibility of the Client.</em></p>
 
-@if ($applicant_mode === 'single')
+{{-- Both breakdowns always render. They are reference-only tables from
+     the Word original, so the client sees single and couple side by side
+     regardless of which scenario was ticked. --}}
 <div class="breakdown-caption">BREAKDOWN COST FOR STUDENT VISA APPLICATION (SINGLE) &nbsp;•&nbsp; WITHOUT A VOUCHER</div>
 <table class="cost">
     <tr class="group"><td colspan="2">School Enrolment and Documentation Fee</td></tr>
@@ -203,11 +294,16 @@
         <td class="right">PhP 720,000.00<br><span class="muted">(approximate)</span></td>
     </tr>
 </table>
-@endif
 
-@if ($applicant_mode === 'couple')
 <div class="breakdown-caption">BREAKDOWN COST FOR STUDENT VISA APPLICATION (COUPLE) &nbsp;•&nbsp; WITHOUT A VOUCHER</div>
+
+{{-- ── Page 4 ───────────────────────────────────────────────── --}}
+<div class="page-break"></div>
+
 <table class="cost">
+    <thead>
+        <tr><th>Particulars</th><th class="right">Cost</th></tr>
+    </thead>
     <tr class="group"><td colspan="2">School Enrolment and Documentation Fee</td></tr>
     <tr>
         <td>School Enrollment and Documentation Fee (couple)</td>
@@ -242,13 +338,15 @@
         <td class="right">PhP 69,000.00<br><span class="muted">(approximate)</span></td>
     </tr>
     <tr class="total"><td>TOTAL EXPENSE (estimate only)</td><td class="right">PHP 475,100.00</td></tr>
+    <tr><td>Tuition Fee (depends on the program)</td><td class="right">&hellip;&hellip;</td></tr>
+    <tr><td>Travel to New Zealand (flight tickets and other travel expenses)</td><td class="right">&hellip;&hellip;</td></tr>
     <tr class="group"><td colspan="2">SHOW MONEY (required by Immigration New Zealand)</td></tr>
     <tr>
         <td>Living Expenses (per year for couple)<br><span class="muted">NZ$ 25,000.00</span></td>
         <td class="right">PhP 900,000.00<br><span class="muted">(approximate)</span></td>
     </tr>
+    <tr><td>Tuition Fee (depends on the program)</td><td class="right">&hellip;&hellip;</td></tr>
 </table>
-@endif
 
 <div class="article-bar">ARTICLE 2 &nbsp;•&nbsp; SCOPE OF SERVICES</div>
 
@@ -318,7 +416,10 @@
 
 <p>Should you concur with the terms delineated herein and elect to avail yourself of our services, kindly affix your signature and promptly return a duplicate of this Agreement to signify your acceptance thereof. Should any queries arise or if further elucidation is warranted, we encourage you to promptly reach out to us for clarification. Anticipating the privilege of accompanying you on this journey and facilitating the realization of your educational and settlement objectives in New Zealand, we remain at your service.</p>
 
-<div class="article-bar">EXECUTION &amp; ACCEPTANCE</div>
+{{-- ── Page 9 ───────────────────────────────────────────────── --}}
+<div class="page-break"></div>
+
+<div class="article-bar" style="margin-top:0;">EXECUTION &amp; ACCEPTANCE</div>
 
 <p><strong>IN WITNESS WHEREOF</strong>, both parties have hereunto set their hands this <span class="strong" style="text-decoration: underline">{{ $generated_at_formatted }}</span>.</p>
 
@@ -354,9 +455,20 @@
     &#9744; &nbsp;&nbsp; I have read and agreed to the Consultancy Agreement terms.
 </div>
 
-<div class="footer-rule">
-    ePathways Philippines Consultancy &nbsp;|&nbsp; Consultancy Agreement &nbsp;|&nbsp; Scenario #{{ $scenario_number }}: {{ $scenario_title }}
-</div>
+{{-- Footer text. dompdf substitutes {PAGE_NUM}/{PAGE_COUNT} here, which is
+     the only way to get a total page count — counter(pages) always yields 0.
+     Requires isPhpEnabled, which AgreementGenerator turns on for this render
+     only. Browsers ignore an unknown script type, so the live HTML preview
+     is unaffected. --}}
+<script type="text/php">
+    if (isset($pdf)) {
+        $font = $fontMetrics->getFont('DejaVu Sans', 'bold');
+        $size = 7.5;
+        $text = 'ePathways Philippines Consultancy  |  Consultancy Agreement  |  Page {PAGE_NUM} of {PAGE_COUNT}';
+        $x = ($pdf->get_width() - $fontMetrics->getTextWidth($text, $font, $size)) / 2;
+        $pdf->page_text($x, $pdf->get_height() - 46, $text, $font, $size, [0.26, 0.38, 0.21]);
+    }
+</script>
 
 </body>
 </html>
