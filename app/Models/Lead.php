@@ -580,6 +580,34 @@ class Lead extends Model
     }
 
     /**
+     * The applicant's latest uploaded Face image — used as the profile
+     * picture (avatar) across the staff leads / cases / students tables and
+     * the client tracker. Eager-load with `->with('faceImage')` to avoid an
+     * N+1 in list views.
+     */
+    public function faceImage()
+    {
+        return $this->hasOne(LeadDocument::class)
+            ->where('checklist_key', 'like', '%face%')
+            ->where('status', '!=', LeadDocument::STATUS_REJECTED)
+            ->where('mime', 'like', 'image/%')
+            ->latest();
+    }
+
+    /**
+     * Public URL of the applicant's Face image, or null when none uploaded.
+     * Prefers an eager-loaded relation; falls back to a query otherwise.
+     */
+    public function faceImageUrl(): ?string
+    {
+        $doc = $this->relationLoaded('faceImage') ? $this->faceImage : $this->faceImage()->first();
+
+        return $doc && $doc->file_path
+            ? \Illuminate\Support\Facades\Storage::disk('public')->url($doc->file_path)
+            : null;
+    }
+
+    /**
      * Managed agreements for this lead (Build 11.D Phase 2). Distinct from
      * documents — agreements have their own lifecycle (draft → sent → signed)
      * and the signing audit trail. The pre-existing AgreementGenerator

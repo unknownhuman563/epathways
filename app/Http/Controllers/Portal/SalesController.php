@@ -131,6 +131,7 @@ class SalesController extends Controller
                     // Doc rows drive the "Docs progress" column in the
                     // leads table (via BuildsLeadRow::leadChecklistTotals).
                     'documents:id,lead_id,checklist_key,status',
+                    'faceImage',
                 ])
                 ->withCount(['notes', 'documents'])
                 ->withCount(['tasks as tasks_open_count' => fn ($q) => $q->where('completed', false)])
@@ -583,34 +584,53 @@ class SalesController extends Controller
                     $q->whereIn('checklist_key', $generatedKeys)
                       ->where('source', \App\Models\LeadDocument::SOURCE_GENERATED);
                 })
-                ->with(['documents' => function ($q) use ($generatedKeys) {
+                ->with(['faceImage', 'documents' => function ($q) use ($generatedKeys) {
                     $q->whereIn('checklist_key', $generatedKeys)
                       ->where('source', \App\Models\LeadDocument::SOURCE_GENERATED)
+                      ->with('uploader:id,name,email')
                       ->orderByDesc('created_at');
                 }])
                 ->orderByDesc('updated_at')
                 ->get();
 
             $mapRow = function (Lead $l) {
-                $docs = $l->documents->map(fn ($d) => [
-                    'id' => $d->id,
-                    'checklist_key' => $d->checklist_key,
-                    'type' => match ($d->checklist_key) {
-                        'agree.proposal'           => 'Proposal',
-                        'agree.consultancy'        => 'Consultancy Agreement',
-                        'agree.engagement_english' => 'English Engagement',
-                        default => ucfirst(str_replace(['agree.', '_'], ['', ' '], $d->checklist_key)),
-                    },
-                    'variant' => $d->source_variant,
-                    'original_name' => $d->original_name,
-                    'size' => $d->size,
-                    'created_at' => optional($d->created_at)->toIso8601String(),
-                ])->values();
+                $docs = $l->documents->map(function ($d) {
+                    // source_variant now carries the applicant mode as a
+                    // third segment (e.g. "consultancy:std_150:couple").
+                    // Older rows will have only 2 segments — default to
+                    // 'single' since that was the only mode at the time.
+                    $applicantMode = null;
+                    if ($d->checklist_key === 'agree.consultancy') {
+                        $parts = explode(':', (string) $d->source_variant);
+                        $applicantMode = $parts[2] ?? 'single';
+                    }
+
+                    return [
+                        'id' => $d->id,
+                        'checklist_key' => $d->checklist_key,
+                        'type' => match ($d->checklist_key) {
+                            'agree.proposal'           => 'Proposal',
+                            'agree.consultancy'        => 'Consultancy Agreement',
+                            'agree.engagement_english' => 'English Engagement',
+                            default => ucfirst(str_replace(['agree.', '_'], ['', ' '], $d->checklist_key)),
+                        },
+                        'variant' => $d->source_variant,
+                        'applicant_mode' => $applicantMode,
+                        'original_name' => $d->original_name,
+                        'size' => $d->size,
+                        'created_at' => optional($d->created_at)->toIso8601String(),
+                        'uploader' => $d->uploader ? [
+                            'id' => $d->uploader->id,
+                            'name' => $d->uploader->name,
+                        ] : null,
+                    ];
+                })->values();
 
                 return [
                     'id' => $l->id,
                     'lead_id' => $l->lead_id,
                     'name' => trim("{$l->first_name} {$l->last_name}") ?: 'Unknown',
+                    'avatar_url' => $l->faceImageUrl(),
                     'email' => $l->email,
                     'phone' => $l->phone,
                     'stage' => $l->stage,
@@ -641,6 +661,7 @@ class SalesController extends Controller
                     // MySQL, so filter empty arrays in PHP instead.
                     $q->whereRaw("proposed_program_ids != '[]'");
                 })
+                ->with('faceImage')
                 ->orderByDesc('updated_at')
                 ->get();
 
@@ -664,6 +685,7 @@ class SalesController extends Controller
                         'id' => $l->id,
                         'lead_id' => $l->lead_id,
                         'name' => trim("{$l->first_name} {$l->last_name}") ?: 'Unknown',
+                        'avatar_url' => $l->faceImageUrl(),
                         'email' => $l->email,
                         'phone' => $l->phone,
                         'stage' => $l->stage,

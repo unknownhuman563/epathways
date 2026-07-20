@@ -268,6 +268,7 @@ class EducationController extends Controller
             $students = Lead::with([
                 'studyPlans',
                 'documents',
+                'faceImage',
                 'school',
                 'studentConverter:id,name',
                 'immigrationConverter:id,name',
@@ -309,6 +310,7 @@ class EducationController extends Controller
                                             ?? optional($l->immigrationConverter)->name,
                         'stage_updated_at' => optional($l->stage_updated_at)?->toIso8601String(),
                         'name' => trim("{$l->first_name} {$l->last_name}") ?: 'Unknown',
+                        'avatar_url' => $l->faceImageUrl(),
                         'email' => $l->email,
                         'phone' => $l->phone,
                         'referral' => $l->referral,

@@ -49,6 +49,7 @@ class LeadController extends Controller
                     'agent:id,name,avatar_path',
                     'notes' => fn ($q) => $q->latest(),
                     'documents:id,lead_id,checklist_key,status',
+                    'faceImage',
                 ])
                 ->withCount(['notes', 'documents'])
                 ->withCount(['tasks as tasks_open_count' => fn ($q) => $q->where('completed', false)])

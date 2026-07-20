@@ -173,7 +173,14 @@
             </td>
         </tr>
         <tr>
-            <td><div class="sign-line"></div><div class="sign-cap">(Applicant's Signature or Representative's)</div></td>
+            <td>
+                <div style="height:34px; position:relative;">
+                    <img id="applicant-signature" src="{{ $client['signature'] ?? '' }}" alt="Signature"
+                         style="max-height:44px; max-width:220px; position:absolute; bottom:-2px; left:0; display:{{ !empty($client['signature']) ? 'block' : 'none' }};">
+                    <div style="border-bottom:1px solid #374151; position:absolute; bottom:0; left:0; right:24px;"></div>
+                </div>
+                <div class="sign-cap">(Applicant's Signature or Representative's)</div>
+            </td>
             <td>
                 <div style="height:34px; position:relative;">
                     @if(!empty($adviser['signature']))
@@ -187,4 +194,24 @@
     </table>
     <p style="margin-top:14px;">Date: <span class="fill">{{ $generated_date }}</span></p>
     <p class="muted">* Please note You have understood the adviser's working hours: NZ time, Monday–Friday, 10am–5pm. If You have reached Us outside the above working hours, You can leave a message, and We will try Our best to respond as soon as We can.</p>
+
+    @if(!empty($preview))
+    {{-- Live signing: the tracker sign modal posts the applicant's drawn
+         signature here so it appears on the document in real time. --}}
+    <script>
+        (function () {
+            window.addEventListener('message', function (e) {
+                var msg = e.data || {};
+                if (msg.type !== 'applicant-signature') return;
+                var img = document.getElementById('applicant-signature');
+                if (! img) return;
+                img.src = msg.value || '';
+                img.style.display = msg.value ? 'block' : 'none';
+                if (msg.value) {
+                    try { img.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (err) {}
+                }
+            });
+        })();
+    </script>
+    @endif
 @endsection

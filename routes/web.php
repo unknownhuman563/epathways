@@ -229,6 +229,10 @@ Route::middleware('throttle:tracker')->group(function () {
     Route::post('/track/{code}/document/{doc}', [LeadTrackingController::class, 'updateDoc'])->name('track.doc.update');
     // Download a staff-shared / generated document (engagement pack).
     Route::get('/track/{code}/documents/{doc}/download', [LeadTrackingController::class, 'downloadDoc'])->name('track.doc.download');
+    // Live HTML preview for the signing modal (real-time signature).
+    Route::get('/track/{code}/documents/{doc}/preview', [LeadTrackingController::class, 'previewDoc'])->name('track.doc.preview');
+    // Client e-signs the generated Written Agreement.
+    Route::post('/track/{code}/documents/{doc}/sign', [LeadTrackingController::class, 'signDoc'])->name('track.doc.sign');
     // Lead picks (or clears) one program from their staff-suggested
     // shortlist. Server validates the id is actually in the shortlist.
     Route::post('/track/{code}/choose-program', [LeadTrackingController::class, 'chooseProgram'])->name('track.choose-program');

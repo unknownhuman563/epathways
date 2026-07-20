@@ -798,10 +798,12 @@ function CaseRow({ c, stages, visaTypes = [], isExpanded, onExpand, stageMenuOpe
                         className="flex items-center gap-2.5 min-w-[200px] group/case"
                     >
                         <div
-                            className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-[11px] font-bold flex-shrink-0 ${priorityColor(c.immigration_priority)}`}
+                            className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-[11px] font-bold flex-shrink-0 overflow-hidden ${c.avatar_url ? `ring-2 ring-offset-1 ${priorityRing(c.immigration_priority)}` : priorityColor(c.immigration_priority)}`}
                             title={c.immigration_priority ? `Priority: ${c.immigration_priority}` : 'No priority set'}
                         >
-                            {initials(c.name)}
+                            {c.avatar_url
+                                ? <img src={c.avatar_url} alt={c.name} className="w-full h-full object-cover" />
+                                : initials(c.name)}
                         </div>
                         <div className="min-w-0">
                             <div className="font-semibold text-gray-900 text-sm truncate group-hover/case:text-amber-700 transition-colors">
@@ -1307,6 +1309,20 @@ function priorityColor(priority) {
         case 'low':    return 'bg-emerald-500';
         case 'done':   return 'bg-emerald-600';
         default:       return 'bg-gray-400';
+    }
+}
+
+// Ring colour for the profile-photo avatar so the priority is still
+// signalled once a face image replaces the coloured initials circle.
+// Literal class strings so Tailwind's JIT generates them.
+function priorityRing(priority) {
+    switch (priority) {
+        case 'urgent': return 'ring-red-500';
+        case 'high':   return 'ring-orange-500';
+        case 'medium': return 'ring-yellow-400';
+        case 'low':    return 'ring-emerald-500';
+        case 'done':   return 'ring-emerald-600';
+        default:       return 'ring-gray-300';
     }
 }
 

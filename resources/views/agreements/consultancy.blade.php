@@ -38,6 +38,16 @@
     @page { margin: 120px 55px 60px 55px; }
     body { font-family: 'Urbanist', DejaVu Sans, sans-serif; font-size: 12pt; color: #111; line-height: 1.55; }
 
+    /* Screen-only preview measure. dompdf honours @page; browsers do
+       not, so without this the iframe stretches body full-width and
+       12pt lines get too long to read. Centering at 794px + matching
+       55px horizontal padding replicates the printed A4 measure. */
+    @media screen {
+        body { max-width: 794px; margin: 0 auto; padding: 24px 55px; background: #fff; }
+        .page-header { position: static; text-align: center; margin: -8px 0 12px 0; }
+        .page-header img { height: 56px; }
+    }
+
     /* Running header — dompdf repeats fixed-position elements on every
        page, so the logo shows at the top of pages 1 through 9. Height
        chosen to fit the logo comfortably; body @page margin above

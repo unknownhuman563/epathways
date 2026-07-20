@@ -96,7 +96,10 @@ class AgreementGenerator
             'size'           => strlen($binary),
             'status'         => LeadDocument::STATUS_SUBMITTED,
             'source'         => LeadDocument::SOURCE_GENERATED,
-            'source_variant' => "consultancy:{$scenarioMeta['key']}",
+            // Encode applicant mode so the tracker / documents table can
+            // surface "Single" vs "Couple" without re-opening the PDF.
+            // Old rows without the suffix default to 'single' at read time.
+            'source_variant' => "consultancy:{$scenarioMeta['key']}:{$payload['applicant_mode']}",
             'uploaded_by'    => Auth::id(),
         ]);
     }

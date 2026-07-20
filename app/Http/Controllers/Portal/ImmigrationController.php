@@ -301,6 +301,7 @@ class ImmigrationController extends Controller
 
             $cases = Lead::with([
                 'documents',
+                'faceImage',
                 'portalUser:id,lead_id,last_login_at',
                 'immigrationConverter:id,name',
                 'studentConverter:id,name',
@@ -338,6 +339,7 @@ class ImmigrationController extends Controller
                                                 ?? optional($l->studentConverter)->name,
                         'stage_updated_at' => optional($l->stage_updated_at)?->toIso8601String(),
                         'name' => trim("{$l->first_name} {$l->last_name}") ?: 'Unknown',
+                        'avatar_url' => $l->faceImageUrl(),
                         // Individual name parts + a few more fields so the row
                         // "Edit case" modal can pre-fill without another fetch.
                         'first_name' => $l->first_name,

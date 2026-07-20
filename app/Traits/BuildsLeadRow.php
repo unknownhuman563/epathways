@@ -47,6 +47,9 @@ trait BuildsLeadRow
             // /track/{code} URL straight to the client.
             'tracking_code' => $l->tracking_code,
             'name' => trim("{$l->first_name} {$l->last_name}") ?: 'Unknown',
+            // Profile picture — the applicant's uploaded Face image (null =
+            // fall back to an initials avatar in the table).
+            'avatar_url' => $l->faceImageUrl(),
             // Raw name parts for edit forms (the combined `name` is display-only).
             'first_name' => $l->first_name,
             'last_name' => $l->last_name,

@@ -23,6 +23,15 @@
     body { font-family: 'Urbanist', DejaVu Sans, sans-serif; font-size: 12pt; color: #111; line-height: 1.5; }
     .page-header { position: fixed; top: -80px; left: 0; right: 0; text-align: center; }
     .page-header img { height: 60px; width: auto; }
+
+    /* Screen-only preview measure — see consultancy.blade.php for
+       the rationale. Same 794px A4 measure so the iframe preview
+       wraps at the printed page width. */
+    @media screen {
+        body { max-width: 794px; margin: 0 auto; padding: 24px 60px; background: #fff; }
+        .page-header { position: static; text-align: center; margin: -8px 0 12px 0; }
+        .page-header img { height: 56px; }
+    }
     .eyebrow { text-align: center; color: #436235; font-weight: bold; font-size: 9pt; letter-spacing: 2px; margin-bottom: 6px; }
     h1 { text-align: center; font-size: 22pt; font-weight: 900; letter-spacing: 1px; margin: 0 0 4px 0; color: #1a1a1a; }
     .subtitle { text-align: center; color: #555; font-size: 10pt; font-style: italic; margin-bottom: 18px; }
