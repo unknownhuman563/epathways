@@ -201,7 +201,7 @@ export default function TrackingPage({
                                         documents={documents}
                                         sharedDocuments={shared_documents}
                                         agreements={agreements}
-                                        showAdviserDocs={false}
+                                        showAdviserDocs={true}
                                         sectionFilter={sectionFilter}
                                         onSectionFilter={setSectionFilter}
                                         statusFilter={statusFilter}
@@ -2159,6 +2159,10 @@ function SharedDocRow({ doc: d }) {
 function ClientSignModal({ doc: d, onClose }) {
     const [submitting, setSubmitting] = useState(false);
     const [hasDrawing, setHasDrawing] = useState(false);
+    // Terms acknowledgment lives in the sign panel now — the checkbox
+    // in the PDF body is a mirror only. Client must tick this before
+    // the Sign button unlocks.
+    const [acknowledged, setAcknowledged] = useState(false);
 
     const canvasRef = useRef(null);
     const iframeRef = useRef(null);
@@ -2179,6 +2183,23 @@ function ClientSignModal({ doc: d, onClose }) {
             { type: 'applicant-signature', value: dataUrl || '' },
             '*'
         );
+    };
+    // Mirror the ack tick into the preview's checkbox glyph so the client
+    // sees the doc update as they toggle.
+    const pushAck = (value) => {
+        iframeRef.current?.contentWindow?.postMessage(
+            { type: 'acknowledged', value: !! value },
+            '*'
+        );
+    };
+    // Re-push signature + ack when the iframe finishes loading so the
+    // preview reflects current UI state (matters after a src swap).
+    const onIframeLoad = () => {
+        // Give the iframe's inline script a tick to attach its listener.
+        setTimeout(() => {
+            if (hasDrawing) pushSignature(canvasRef.current?.toDataURL('image/png'));
+            pushAck(acknowledged);
+        }, 60);
     };
 
     const pos = (e) => {
@@ -2211,7 +2232,10 @@ function ClientSignModal({ doc: d, onClose }) {
 
     const submit = () => {
         setSubmitting(true);
-        router.post(d.sign_url, { signature_data: canvasRef.current.toDataURL('image/png') }, {
+        router.post(d.sign_url, {
+            signature_data: canvasRef.current.toDataURL('image/png'),
+            acknowledged: acknowledged ? 1 : 0,
+        }, {
             preserveScroll: true,
             onSuccess: () => onClose(),
             onError: () => setSubmitting(false),
@@ -2219,7 +2243,7 @@ function ClientSignModal({ doc: d, onClose }) {
         });
     };
 
-    const canSubmit = hasDrawing;
+    const canSubmit = hasDrawing && acknowledged;
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/50" onClick={onClose}>
@@ -2240,6 +2264,7 @@ function ClientSignModal({ doc: d, onClose }) {
                                 src={d.preview_url || `${d.view_url}#toolbar=1&view=FitH`}
                                 title="Document preview"
                                 className="w-full h-full bg-white"
+                                onLoad={onIframeLoad}
                             />
                         ) : (
                             <div className="w-full h-full flex items-center justify-center text-xs text-gray-400">
@@ -2268,6 +2293,35 @@ function ClientSignModal({ doc: d, onClose }) {
                         <button onClick={clear} className="mt-2 text-[12px] font-semibold text-gray-500 hover:text-gray-700 inline-flex items-center gap-1.5">
                             <Eraser size={13} /> Clear
                         </button>
+
+                        {/* Terms acknowledgment — moved here from the
+                            static PDF checkbox. Ticking mirrors into
+                            the preview's ack box in real time. */}
+                        <label
+                            className={`mt-5 flex items-start gap-2.5 p-3 rounded-lg border transition-colors cursor-pointer ${
+                                acknowledged
+                                    ? 'border-emerald-300 bg-emerald-50'
+                                    : 'border-gray-200 bg-white hover:border-gray-300'
+                            }`}
+                        >
+                            <button
+                                type="button"
+                                onClick={() => { const v = ! acknowledged; setAcknowledged(v); pushAck(v); }}
+                                className={`mt-0.5 w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 transition-colors ${
+                                    acknowledged ? 'bg-emerald-600 border-emerald-600' : 'bg-white border-gray-400'
+                                }`}
+                                aria-checked={acknowledged}
+                                role="checkbox"
+                            >
+                                {acknowledged && <Check size={11} className="text-white" strokeWidth={3} />}
+                            </button>
+                            <span
+                                className="text-[12px] text-gray-700 leading-snug select-none"
+                                onClick={(e) => { e.preventDefault(); const v = ! acknowledged; setAcknowledged(v); pushAck(v); }}
+                            >
+                                I have read and agreed to the <span className="font-semibold">{d.title}</span> terms.
+                            </span>
+                        </label>
                     </div>
                 </div>
 
