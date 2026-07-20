@@ -32,12 +32,12 @@ class AgreementGenerator
         $clientName = trim("{$lead->first_name} {$lead->last_name}");
         $clientReference = Str::slug($clientName ?: 'ClientName', '');
         $today = now();
-        $dateLine = $today->format('jS') . ' day of ' . $today->format('F Y');
+        $dateLine = $today->format('jS').' day of '.$today->format('F Y');
 
         $payload = [
-            'client_name'            => $clientName,
-            'client_reference'       => $clientReference ?: 'ClientName',
-            'generated_at'           => $today,
+            'client_name' => $clientName,
+            'client_reference' => $clientReference ?: 'ClientName',
+            'generated_at' => $today,
             'generated_at_formatted' => $dateLine,
         ];
 
@@ -46,22 +46,22 @@ class AgreementGenerator
 
         $safeName = $this->safeBaseName($clientName ?: 'Client');
         $filename = "Eng-{$safeName}.pdf";
-        $path     = "lead-documents/{$lead->id}/" . Str::random(12) . "-{$filename}";
+        $path = "lead-documents/{$lead->id}/".Str::random(12)."-{$filename}";
 
         Storage::disk(self::DISK)->put($path, $binary);
 
         return LeadDocument::create([
-            'lead_id'        => $lead->id,
-            'request_id'     => null,
-            'checklist_key'  => 'agree.engagement_english',
-            'original_name'  => $filename,
-            'file_path'      => $path,
-            'mime'           => 'application/pdf',
-            'size'           => strlen($binary),
-            'status'         => LeadDocument::STATUS_SUBMITTED,
-            'source'         => LeadDocument::SOURCE_GENERATED,
+            'lead_id' => $lead->id,
+            'request_id' => null,
+            'checklist_key' => 'agree.engagement_english',
+            'original_name' => $filename,
+            'file_path' => $path,
+            'mime' => 'application/pdf',
+            'size' => strlen($binary),
+            'status' => LeadDocument::STATUS_SUBMITTED,
+            'source' => LeadDocument::SOURCE_GENERATED,
             'source_variant' => 'engagement-english',
-            'uploaded_by'    => Auth::id(),
+            'uploaded_by' => Auth::id(),
         ]);
     }
 
@@ -77,30 +77,36 @@ class AgreementGenerator
     {
         [$payload, $scenarioMeta] = $this->buildConsultancyPayload($lead, $scenario, $overrides);
 
-        $pdf = Pdf::loadView('agreements.consultancy', $payload)->setPaper('a4');
+        // isPhpEnabled powers the page_text() footer at the end of the view
+        // ("Page 3 of 9"). Scoped to this render — the template is ours and
+        // every interpolated value is Blade-escaped, so no caller-supplied
+        // markup can reach dompdf's script handler.
+        $pdf = Pdf::loadView('agreements.consultancy', $payload)
+            ->setPaper('a4')
+            ->setOption('isPhpEnabled', true);
         $binary = $pdf->output();
 
         $safeName = $this->safeBaseName($payload['client_name'] ?: 'Client');
         $filename = "CA-{$safeName}-{$scenarioMeta['file_suffix']}.pdf";
-        $path     = "lead-documents/{$lead->id}/" . Str::random(12) . "-{$filename}";
+        $path = "lead-documents/{$lead->id}/".Str::random(12)."-{$filename}";
 
         Storage::disk(self::DISK)->put($path, $binary);
 
         return LeadDocument::create([
-            'lead_id'        => $lead->id,
-            'request_id'     => null,
-            'checklist_key'  => 'agree.consultancy',
-            'original_name'  => $filename,
-            'file_path'      => $path,
-            'mime'           => 'application/pdf',
-            'size'           => strlen($binary),
-            'status'         => LeadDocument::STATUS_SUBMITTED,
-            'source'         => LeadDocument::SOURCE_GENERATED,
+            'lead_id' => $lead->id,
+            'request_id' => null,
+            'checklist_key' => 'agree.consultancy',
+            'original_name' => $filename,
+            'file_path' => $path,
+            'mime' => 'application/pdf',
+            'size' => strlen($binary),
+            'status' => LeadDocument::STATUS_SUBMITTED,
+            'source' => LeadDocument::SOURCE_GENERATED,
             // Encode applicant mode so the tracker / documents table can
             // surface "Single" vs "Couple" without re-opening the PDF.
             // Old rows without the suffix default to 'single' at read time.
             'source_variant' => "consultancy:{$scenarioMeta['key']}:{$payload['applicant_mode']}",
-            'uploaded_by'    => Auth::id(),
+            'uploaded_by' => Auth::id(),
         ]);
     }
 
@@ -117,15 +123,15 @@ class AgreementGenerator
         $scenarios = self::consultancyScenarios();
         $s = $scenarios[$scenario] ?? $scenarios['std_100'];
 
-        $clientName      = trim("{$lead->first_name} {$lead->last_name}");
+        $clientName = trim("{$lead->first_name} {$lead->last_name}");
         $clientReference = Str::slug($clientName ?: 'ClientName', '') ?: 'ClientName';
-        $today           = now();
+        $today = now();
 
         // Only these two are editable from the modal. Everything else in
         // the cost-breakdown table stays static — those are canonical
         // reference amounts from the ePathways template.
-        $schoolFee   = (int) ($overrides['school_enrolment_fee']    ?? $s['default_school_fee']);
-        $englishFee  = (int) ($overrides['english_proficiency_fee'] ?? 14500);
+        $schoolFee = (int) ($overrides['school_enrolment_fee'] ?? $s['default_school_fee']);
+        $englishFee = (int) ($overrides['english_proficiency_fee'] ?? 14500);
 
         // Applicant mode — Single or Couple. Only meaningful for scenarios
         // that support both (Std 150, Voucher 150). Single-only scenarios
@@ -141,22 +147,26 @@ class AgreementGenerator
             : 'MAIN APPLICANT (Single)';
 
         $payload = [
-            'scenario'                => $s['key'],
-            'scenario_number'         => $s['number'],
-            'scenario_title'          => $s['title'],
-            'scenario_applicant'      => $applicantLabel,
-            'scenario_description'    => $s['description'],
-            'scenario_has_voucher'    => $s['has_voucher'],
-            'applicant_mode'          => $applicantMode,
-            'supports_both'           => $s['supports_both'],
-            'is_couple_scenario'      => $applicantMode === 'couple',
-            'school_enrolment_fee'    => $schoolFee,
+            // Full catalogue so the Application Type table can list every
+            // scenario with only the chosen one ticked, matching the Word
+            // original. The view keys off `scenario` to know which is live.
+            'scenarios' => self::consultancyScenarios(),
+            'scenario' => $s['key'],
+            'scenario_number' => $s['number'],
+            'scenario_title' => $s['title'],
+            'scenario_applicant' => $applicantLabel,
+            'scenario_description' => $s['description'],
+            'scenario_has_voucher' => $s['has_voucher'],
+            'applicant_mode' => $applicantMode,
+            'supports_both' => $s['supports_both'],
+            'is_couple_scenario' => $applicantMode === 'couple',
+            'school_enrolment_fee' => $schoolFee,
             'english_proficiency_fee' => $englishFee,
-            'inz_voucher_fee'         => 30600,
-            'client_name'             => $clientName,
-            'client_reference'        => $clientReference,
-            'generated_at'            => $today,
-            'generated_at_formatted'  => $today->format('jS') . ' day of ' . $today->format('F Y'),
+            'inz_voucher_fee' => 30600,
+            'client_name' => $clientName,
+            'client_reference' => $clientReference,
+            'generated_at' => $today,
+            'generated_at_formatted' => $today->format('jS').' day of '.$today->format('F Y'),
         ];
 
         return [$payload, $s];
@@ -232,17 +242,17 @@ class AgreementGenerator
         $clientName = trim("{$lead->first_name} {$lead->last_name}");
         $clientReference = Str::slug($clientName ?: 'ClientName', '');
         $today = now();
-        $dateLine = $today->format('jS') . ' day of ' . $today->format('F Y');
+        $dateLine = $today->format('jS').' day of '.$today->format('F Y');
 
         $payload = [
-            'client_name'             => $clientName,
-            'client_reference'        => $clientReference ?: 'ClientName',
-            'preferred_course'        => $lead->preferred_course,
-            'preferred_intake'        => $lead->preferred_intake,
+            'client_name' => $clientName,
+            'client_reference' => $clientReference ?: 'ClientName',
+            'preferred_course' => $lead->preferred_course,
+            'preferred_intake' => $lead->preferred_intake,
             'preferred_city_of_study' => $lead->preferred_city_of_study,
-            'target_institution'      => $lead->target_institution,
-            'generated_at'            => $today,
-            'generated_at_formatted'  => $dateLine,
+            'target_institution' => $lead->target_institution,
+            'generated_at' => $today,
+            'generated_at_formatted' => $dateLine,
         ];
 
         $pdf = Pdf::loadView('agreements.proposal', $payload)->setPaper('a4');
@@ -250,22 +260,22 @@ class AgreementGenerator
 
         $safeName = $this->safeBaseName($clientName ?: 'Client');
         $filename = "Proposal-{$safeName}.pdf";
-        $path     = "lead-documents/{$lead->id}/" . Str::random(12) . "-{$filename}";
+        $path = "lead-documents/{$lead->id}/".Str::random(12)."-{$filename}";
 
         Storage::disk(self::DISK)->put($path, $binary);
 
         return LeadDocument::create([
-            'lead_id'        => $lead->id,
-            'request_id'     => null,
-            'checklist_key'  => 'agree.proposal',
-            'original_name'  => $filename,
-            'file_path'      => $path,
-            'mime'           => 'application/pdf',
-            'size'           => strlen($binary),
-            'status'         => LeadDocument::STATUS_SUBMITTED,
-            'source'         => LeadDocument::SOURCE_GENERATED,
+            'lead_id' => $lead->id,
+            'request_id' => null,
+            'checklist_key' => 'agree.proposal',
+            'original_name' => $filename,
+            'file_path' => $path,
+            'mime' => 'application/pdf',
+            'size' => strlen($binary),
+            'status' => LeadDocument::STATUS_SUBMITTED,
+            'source' => LeadDocument::SOURCE_GENERATED,
             'source_variant' => 'proposal',
-            'uploaded_by'    => Auth::id(),
+            'uploaded_by' => Auth::id(),
         ]);
     }
 

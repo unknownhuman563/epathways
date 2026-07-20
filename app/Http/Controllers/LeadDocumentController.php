@@ -407,8 +407,12 @@ class LeadDocumentController extends Controller
         $overrides = ! empty($data['signer_id']) ? ['signer_id' => $data['signer_id']] : [];
 
         try {
+            // Keep the created document id per type so the notification can
+            // deep-link each icon straight to its generated PDF.
+            $generatedDocIds = [];
             foreach ($data['types'] as $t) {
-                $generator->generate($lead, $t, $overrides);
+                $doc = $generator->generate($lead, $t, $overrides);
+                $generatedDocIds[$t] = $doc->id;
             }
 
             $n = count($data['types']);
@@ -422,7 +426,7 @@ class LeadDocumentController extends Controller
                 } elseif (empty($lead->tracking_code)) {
                     $message .= ' Email not sent — no tracking code on file.';
                 } else {
-                    Mail::to($lead->email)->send(new \App\Mail\DocumentReadyNotification($lead, 'agreement'));
+                    Mail::to($lead->email)->send(new \App\Mail\EngagementDocumentsReady($lead, $data['types'], $generatedDocIds));
                     $message .= " Client notified at {$lead->email}.";
                 }
             }
@@ -514,6 +518,7 @@ class LeadDocumentController extends Controller
 
         if ($consultancyScenario !== null) {
             [$payload] = $generator->buildConsultancyPayload($lead, $consultancyScenario, $overrides);
+            $payload['preview'] = true;   // in-flow logo, no PDF-only running footer
             $view = 'agreements.consultancy';
         } elseif ($type === 'english_engagement') {
             $view = 'agreements.engagement-english';
@@ -597,7 +602,21 @@ class LeadDocumentController extends Controller
                 return back()->withErrors(['error' => 'Lead has no tracking code — cannot build the tracker URL.']);
             }
 
-            Mail::to($lead->email)->send(new \App\Mail\DocumentReadyNotification($lead, $validated['kind'] ?? 'agreement'));
+            $kind = $validated['kind'] ?? 'agreement';
+
+            // Each notify kind has its own branded template, editable under
+            // Email → Templates. Proposals also carry the lead's up-to-3
+            // suggested programs. Falls back to the plain Mailable if the
+            // template is missing/inactive or has no email channel.
+            $templateKey = $kind === 'proposal' ? 'program_proposal' : 'consultancy_agreement';
+            $vars = $kind === 'proposal' ? $this->proposalProgramVars($lead) : [];
+
+            $res = app(\App\Services\CommunicationService::class)
+                ->sendTemplated($templateKey, $lead, $vars);
+
+            if (! $res['email']) {
+                Mail::to($lead->email)->send(new \App\Mail\DocumentReadyNotification($lead, $kind));
+            }
 
             return back()->with('success', "Notification sent to {$lead->first_name} {$lead->last_name}.");
         } catch (\Throwable $e) {
@@ -605,6 +624,44 @@ class LeadDocumentController extends Controller
 
             return back()->withErrors(['error' => 'Could not send the notification: '.$e->getMessage()]);
         }
+    }
+
+    /**
+     * Build the {{program_1}}..{{program_3}} context for the Study Proposal
+     * template from the lead's proposed_program_ids. Each is a plain-text
+     * "Title — Level · Fee" line; missing slots are empty strings so the
+     * template's fixed three Option lines still render cleanly.
+     */
+    private function proposalProgramVars(Lead $lead): array
+    {
+        $ids = is_array($lead->proposed_program_ids) ? $lead->proposed_program_ids : [];
+
+        $lines = \App\Models\Program::whereIn('id', $ids)
+            ->get(['id', 'title', 'level', 'price_text'])
+            ->keyBy('id');
+
+        $vars = ['program_1' => '', 'program_2' => '', 'program_3' => ''];
+
+        $slot = 1;
+        foreach ($ids as $pid) {
+            if ($slot > 3) {
+                break;
+            }
+            $p = $lines->get($pid);
+            if (! $p) {
+                continue;
+            }
+
+            $parts = array_filter([
+                $p->title,
+                $p->level ? "Level {$p->level}" : null,
+                $p->price_text ?: null,
+            ]);
+            $vars['program_'.$slot] = implode(' · ', $parts);
+            $slot++;
+        }
+
+        return $vars;
     }
 
     /**

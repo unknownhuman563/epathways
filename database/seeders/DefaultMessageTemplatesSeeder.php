@@ -64,6 +64,32 @@ class DefaultMessageTemplatesSeeder extends Seeder
                 ]),
             ],
             [
+                'key' => 'program_proposal',
+                'name' => 'Study Proposal',
+                'description' => 'Sent from Proposal & Agreements → Notify. Presents the up-to-3 suggested programs and the ePathways study-support pitch.',
+                'channels' => ['email'],
+                'email_subject' => 'Proposal for Study Options in New Zealand — ePathways',
+                'from_email' => 'hello@epathways.ph',
+                'from_name' => 'ePathways Philippines',
+                'email_body' => $this->studyProposalBody(),
+                'variables_documented' => array_merge($standardVars, [
+                    ['name' => 'program_1', 'description' => 'First suggested program (title · level · fee)'],
+                    ['name' => 'program_2', 'description' => 'Second suggested program (blank if none)'],
+                    ['name' => 'program_3', 'description' => 'Third suggested program (blank if none)'],
+                ]),
+            ],
+            [
+                'key' => 'consultancy_agreement',
+                'name' => 'Consultancy Agreement',
+                'description' => 'Sent from Proposal & Agreements → Notify on any consultancy/English agreement. Points the lead at their tracker to review and sign.',
+                'channels' => ['email'],
+                'email_subject' => 'Your Consultancy Agreement with ePathways is ready',
+                'from_email' => 'hello@epathways.ph',
+                'from_name' => 'ePathways Philippines',
+                'email_body' => $this->consultancyAgreementBody(),
+                'variables_documented' => $standardVars,
+            ],
+            [
                 'key' => 'portal_invitation',
                 'name' => 'Portal Invitation (legacy)',
                 'description' => 'Reference template. The live send still uses the LeadPortalInvitation Mailable because the setup link is a signed, single-use token generated in code.',
@@ -83,6 +109,82 @@ class DefaultMessageTemplatesSeeder extends Seeder
         }
 
         $this->seedDepartmentStatusUpdates($standardVars);
+    }
+
+    /**
+     * HTML body for the Study Proposal email. Rendered raw inside the branded
+     * shell (banner + footer contact come from the shell, not this body).
+     * Program lines use plain-text {{program_N}} vars because the templating
+     * layer HTML-escapes substituted values.
+     */
+    private function studyProposalBody(): string
+    {
+        return <<<'HTML'
+<p style="text-align:center;font-weight:700;font-size:16px;color:#2e7d32;margin:0 0 18px;">Proposal for Study Options in New Zealand</p>
+<p style="font-weight:700;">Kia Ora {{first_name}},</p>
+<p>Further to our recent discussion, we are pleased to present a tailored selection of programme options aligned with your qualifications. Each option includes key details on programme duration and indicative total tuition fees for your consideration.</p>
+<p>At ePathways, we are committed to guiding you toward high-quality education pathways in New Zealand. Thank you for your interest in advancing your academic journey with us. The programmes outlined below are carefully selected to support your ambitions and position you for long-term success in an increasingly global career landscape.</p>
+<p style="font-weight:700;color:#2e7d32;font-size:15px;margin-top:22px;">Why Study in New Zealand?</p>
+<ul>
+<li><strong>Partner Work Opportunities</strong> &mdash; Your partner may be eligible for an Open Work Visa, enabling full-time employment with any employer across a wide range of roles.</li>
+<li><strong>Education Benefits for Your Children</strong> &mdash; Dependent children aged 5&ndash;19 may qualify for access to domestic schooling, significantly reducing education costs.</li>
+<li><strong>Flexible Work While Studying</strong> &mdash; Students may be eligible to work while studying, with full-time work rights during scheduled breaks (subject to programme conditions).</li>
+<li><strong>Post-Study Work Opportunities</strong> &mdash; Graduates may qualify for a Post-Study Work Visa of up to 3 years, providing valuable New Zealand work experience.</li>
+<li><strong>Pathway to Residency</strong> &mdash; Study pathways can support long-term migration goals, including potential eligibility for residency under relevant immigration categories.</li>
+</ul>
+<p style="font-weight:700;color:#2e7d32;font-size:15px;margin-top:22px;">Recommended Programs</p>
+<p style="margin:4px 0;"><strong>Option 1:</strong> {{program_1}}</p>
+<p style="margin:4px 0;"><strong>Option 2:</strong> {{program_2}}</p>
+<p style="margin:4px 0;"><strong>Option 3:</strong> {{program_3}}</p>
+<p style="font-weight:700;color:#2e7d32;font-size:15px;margin-top:22px;">Why Choose ePathways?</p>
+<p>At ePathways, we go beyond just processing applications &mdash; we provide <strong>end-to-end personalised support</strong> to ensure a smooth and successful journey to New Zealand.</p>
+<p style="margin-bottom:4px;"><strong>We offer:</strong></p>
+<ul>
+<li><strong>Expert course and eligibility guidance</strong> tailored to your goals from our Licensed Immigration Advisers</li>
+<li><strong>Fast and accurate application processing</strong></li>
+<li><strong>Dedicated student visa support</strong> with up-to-date immigration advice</li>
+<li><strong>Pre-departure orientation</strong> to fully prepare you for life in New Zealand</li>
+</ul>
+<p style="margin-bottom:4px;"><strong>Our Student Support Services:</strong></p>
+<ul>
+<li><strong>FREE Airport Pick-Up</strong> &mdash; so you arrive safely and stress-free</li>
+<li><strong>Accommodation Assistance</strong> &mdash; we help you secure safe and suitable housing before arrival</li>
+<li><strong>Bank Account Setup</strong> &mdash; quick and easy financial setup</li>
+<li><strong>IRD Number Support</strong> &mdash; so you can start working as soon as possible</li>
+<li><strong>Insurance Assistance</strong> &mdash; ensuring you are covered from day one</li>
+</ul>
+<p style="margin-bottom:4px;"><strong>What Makes Us Different:</strong></p>
+<ul>
+<li><strong>Ongoing support after arrival</strong> &mdash; we don't stop once you land</li>
+<li><strong>Local presence in New Zealand</strong> &mdash; real support when you need it</li>
+<li><strong>Student-focused approach</strong> &mdash; we prioritise your success, not just your application</li>
+<li><strong>Trusted network</strong> &mdash; strong relationships with institutions and student communities</li>
+</ul>
+<p>Please feel free to reach out if you require any further information or wish to proceed with applications. You can review these options any time on your personal tracker &mdash; no login required:</p>
+<p style="text-align:center;"><a href="{{tracker_url}}" style="display:inline-block;padding:12px 26px;background:#2e7d32;color:#ffffff;text-decoration:none;border-radius:6px;font-weight:700;">View my study options</a></p>
+<p style="text-align:center;font-weight:700;margin-top:20px;">At ePathways, our purpose is simple:<br>We help you succeed by guiding you toward the right pathways, turning your New Zealand study dreams into reality.</p>
+HTML;
+    }
+
+    /**
+     * HTML body for the Consultancy Agreement email. The portal link is
+     * {{tracker_url}} — never a hardcoded /track/CODE URL, or every recipient
+     * lands on one lead's tracker.
+     */
+    private function consultancyAgreementBody(): string
+    {
+        $button = 'display:inline-block;padding:12px 26px;background:#2e7d32;color:#ffffff;text-decoration:none;border-radius:6px;font-weight:700;';
+        $booking = 'https://go.epathways.co.nz/widget/bookings/meet-with-bryll-emma';
+
+        return <<<HTML
+<p style="font-weight:700;color:#2e7d32;">Kia Ora {{first_name}},</p>
+<p>Your Consultancy Agreement is now available for review on your ePathways portal.</p>
+<p>Please use the link below to view the document &mdash; no login required:</p>
+<p style="text-align:center;"><a href="{{tracker_url}}" style="{$button}">View my agreement</a></p>
+<p>Once you have reviewed the agreement, kindly sign it through the portal to confirm your acceptance so we can proceed with the next steps in your application.</p>
+<p>If you would like to meet with Bryll virtually to walk through the agreement, you may book a consultation here:</p>
+<p style="text-align:center;"><a href="{$booking}" style="{$button}">Book a consultation</a></p>
+HTML;
     }
 
     /**

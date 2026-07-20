@@ -156,6 +156,7 @@ class EngagementDocumentGenerator
 
         $payload = [
             'logo_data' => $this->logoData(),
+            'cover_bg_data' => $this->coverBgData(),
             'contact' => self::CONTACT,
             'doc_header' => $meta['header'],
             'cover_eyebrow' => $meta['eyebrow'],
@@ -239,6 +240,22 @@ class EngagementDocumentGenerator
         }
 
         return '$'.number_format((float) $value, 2);
+    }
+
+    /**
+     * Base64 data URI of the Auckland skyline used behind the cover title.
+     * The teal wash and the top fade are baked into the PNG — dompdf has no
+     * blend modes and no opacity on background images, so tinting at render
+     * time is not an option. Returns '' if the asset is missing, which just
+     * leaves the flat teal cover.
+     */
+    private function coverBgData(): string
+    {
+        $path = base_path('resources/assets/Immigration/cover-skyline.png');
+
+        return is_file($path)
+            ? 'data:image/png;base64,'.base64_encode(file_get_contents($path))
+            : '';
     }
 
     /** Base64 data URI of the ePathways Migration logo for cover + PDF. */

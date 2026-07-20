@@ -29,7 +29,11 @@
     body { font-family: 'Urbanist', DejaVu Sans, sans-serif; font-size: 10.5pt; color: #1f2937; line-height: 1.5; margin: 0; }
 
     /* ---- Cover page ---- */
-    .cover { position: relative; background: #2f7d84; color: #ffffff; height: 940px; margin: -95px -55px 0 -55px; padding: 55px 55px 40px 55px; }
+    /* Skyline sits bottom-anchored over the flat teal. The image already
+       carries the teal wash and its own top fade (see coverBgData), so no
+       opacity or blend mode is needed — dompdf supports neither. */
+    .cover { position: relative; background: #2f7d84; color: #ffffff; height: 940px; margin: -95px -55px 0 -55px; padding: 55px 55px 40px 55px;
+             background-image: url('{{ $cover_bg_data ?? '' }}'); background-repeat: no-repeat; background-position: bottom center; }
     .cover .brand-row { width: 100%; }
     .cover .brand-row td { vertical-align: top; }
     .cover .logo-chip { background: #ffffff; display: inline-block; padding: 14px 18px; border-radius: 2px; }
