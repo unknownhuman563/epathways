@@ -27,7 +27,7 @@ class SuperAdminSeeder extends Seeder
         User::updateOrCreate(
             ['email' => env('SUPER_ADMIN_SEED_EMAIL', 'superadmin@epathways.co.nz')],
             [
-                'name' => 'Super Admin',
+                'name' => 'Admin',
                 'password' => bcrypt($password),
                 'role' => User::ROLE_SUPER_ADMIN,
             ]

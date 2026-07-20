@@ -440,6 +440,137 @@ class LeadDocumentController extends Controller
     }
 
     /**
+     * Pull the invoice settings (fees, dates, number) out of a request —
+     * shared by the live preview (query string) and generate (form body).
+     */
+    private function invoiceOverridesFrom(Request $request): array
+    {
+        $out = [];
+        foreach (['invoice_number', 'invoice_date', 'due_date', 'visa_label'] as $k) {
+            if ($request->filled($k)) {
+                $out[$k] = $request->input($k);
+            }
+        }
+        foreach (['service_fee', 'inz_fee'] as $k) {
+            $v = $request->input($k);
+            if ($v !== null && $v !== '' && is_numeric($v)) {
+                $out[$k] = (float) $v;
+            }
+        }
+        if ($request->has('include_disbursement')) {
+            $out['include_disbursement'] = filter_var($request->input('include_disbursement'), FILTER_VALIDATE_BOOLEAN);
+        }
+
+        // Custom line items — a JSON string on the preview (query string)
+        // or a real array on generate (form body).
+        $items = $request->input('items');
+        if (is_string($items) && $items !== '') {
+            $items = json_decode($items, true);
+        }
+        if (is_array($items)) {
+            $out['items'] = $items;
+        }
+
+        return $out;
+    }
+
+    /** Live HTML preview of the tax invoice (feeds the New-invoice modal). */
+    public function previewInvoice(Request $request, \App\Services\Immigration\InvoiceGenerator $generator, $leadId)
+    {
+        $lead = Lead::findOrFail($leadId);
+
+        return response($generator->renderHtml($lead, $this->invoiceOverridesFrom($request)))
+            ->header('Content-Type', 'text/html; charset=utf-8');
+    }
+
+    /** Generate + store the tax invoice for a case. */
+    public function generateInvoice(Request $request, \App\Services\Immigration\InvoiceGenerator $generator, $leadId)
+    {
+        $lead = Lead::findOrFail($leadId);
+
+        $request->validate([
+            'invoice_number' => 'nullable|string|max:40',
+            'invoice_date' => 'nullable|date',
+            'due_date' => 'nullable|date',
+            'service_fee' => 'nullable|numeric|min:0',
+            'inz_fee' => 'nullable|numeric|min:0',
+            'items' => 'nullable|array|max:30',
+            'items.*.description' => 'nullable|string|max:600',
+            'items.*.quantity' => 'nullable|numeric|min:0',
+            'items.*.unit_price' => 'nullable|numeric|min:0',
+        ]);
+
+        try {
+            $doc = $generator->generate($lead, $this->invoiceOverridesFrom($request));
+
+            return back()->with('success', "Invoice {$doc->invoice_number} generated for {$lead->first_name} {$lead->last_name}.");
+        } catch (\Throwable $e) {
+            Log::error('Invoice generation failed', ['lead_id' => $leadId, 'error' => $e->getMessage()]);
+
+            return back()->withErrors(['error' => 'Could not generate the invoice: '.$e->getMessage()]);
+        }
+    }
+
+    /** Delete every generated invoice for a case (one row = one case). */
+    public function destroyInvoices(Request $request, $leadId)
+    {
+        $lead = Lead::findOrFail($leadId);
+
+        try {
+            $docs = LeadDocument::where('lead_id', $lead->id)
+                ->where('source_variant', 'invoice')
+                ->get();
+
+            foreach ($docs as $doc) {
+                if ($doc->file_path && Storage::disk(self::DISK)->exists($doc->file_path)) {
+                    Storage::disk(self::DISK)->delete($doc->file_path);
+                }
+                $doc->delete();
+            }
+
+            return back()->with('success', $docs->count()." invoice(s) deleted for {$lead->first_name} {$lead->last_name}.");
+        } catch (\Throwable $e) {
+            Log::error('Invoice delete failed', ['lead_id' => $leadId, 'error' => $e->getMessage()]);
+
+            return back()->withErrors(['error' => 'Could not delete the invoices.']);
+        }
+    }
+
+    /**
+     * Delete every generated engagement document for a case in one call —
+     * the Engagement workspace shows one row per case, so its Delete action
+     * clears that case's whole engagement pack (files + rows, plus any
+     * captured client signature).
+     */
+    public function destroyEngagementDocs(Request $request, $leadId)
+    {
+        $lead = Lead::findOrFail($leadId);
+
+        try {
+            $docs = LeadDocument::where('lead_id', $lead->id)
+                ->where('source_variant', 'like', 'engagement:%')
+                ->get();
+
+            foreach ($docs as $doc) {
+                foreach ([$doc->file_path, $doc->client_signature_path] as $path) {
+                    if ($path && Storage::disk(self::DISK)->exists($path)) {
+                        Storage::disk(self::DISK)->delete($path);
+                    }
+                }
+                $doc->delete();
+            }
+
+            $n = $docs->count();
+
+            return back()->with('success', "{$n} engagement document(s) deleted for {$lead->first_name} {$lead->last_name}.");
+        } catch (\Throwable $e) {
+            Log::error('Engagement docs delete failed', ['lead_id' => $leadId, 'error' => $e->getMessage()]);
+
+            return back()->withErrors(['error' => 'Could not delete the documents.']);
+        }
+    }
+
+    /**
      * Resolve a URL `type` of the form `engage_<key>` to its engagement
      * document key, or null when it isn't an engagement document.
      */
@@ -536,9 +667,17 @@ class LeadDocumentController extends Controller
     {
         $clientName = trim("{$lead->first_name} {$lead->last_name}");
 
+        // Company signatory — same rule as consultancy: pre-sign with
+        // the current staff member. Fallbacks keep old renders looking
+        // like the original template.
+        $signer = \Illuminate\Support\Facades\Auth::user();
+
         return [
             'client_name' => $clientName,
             'client_reference' => \Illuminate\Support\Str::slug($clientName ?: 'ClientName', '') ?: 'ClientName',
+            'signer_name' => $signer?->name ?: 'Neil Bryan Escaner',
+            'signer_mobile' => $signer?->phone ?: '+63945 107 6871',
+            'signer_signature' => method_exists($signer, 'signatureDataUriTrimmed') ? $signer->signatureDataUriTrimmed() : null,
             'generated_at' => now(),
             'generated_at_formatted' => now()->format('jS').' day of '.now()->format('F Y'),
         ];

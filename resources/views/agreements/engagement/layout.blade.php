@@ -32,6 +32,9 @@
     /* Skyline sits bottom-anchored over the flat teal. The image already
        carries the teal wash and its own top fade (see coverBgData), so no
        opacity or blend mode is needed — dompdf supports neither. */
+    /* Full-bleed cover: height = full A4 (1123px @96dpi) and negative
+       margins absorb the @page margins, so its flow height is exactly the
+       968px content area (fits page 1) while the teal paints edge-to-edge. */
     .cover { position: relative; background: #2f7d84; color: #ffffff; height: 940px; margin: -95px -55px 0 -55px; padding: 55px 55px 40px 55px;
              background-image: url('{{ $cover_bg_data ?? '' }}'); background-repeat: no-repeat; background-position: bottom center; }
     .cover .brand-row { width: 100%; }
@@ -43,8 +46,8 @@
     .cover .eyebrow { font-size: 15pt; font-weight: 400; opacity: 0.92; margin-bottom: 8px; }
     .cover .title { font-size: 46pt; font-weight: 700; line-height: 1.02; letter-spacing: -1px; }
     .cover .subtitle { font-size: 17pt; font-weight: 400; opacity: 0.92; margin-top: 10px; }
-    .cover .rule { position: absolute; left: 55px; right: 55px; bottom: 120px; border-top: 2px solid rgba(255,255,255,0.5); }
-    .cover .contact { position: absolute; left: 55px; right: 55px; bottom: 46px; width: auto; }
+    .cover .rule { position: absolute; left: 55px; right: 55px; bottom: 132px; border-top: 2px solid rgba(255,255,255,0.5); }
+    .cover .contact { position: absolute; left: 55px; right: 55px; bottom: 58px; width: auto; }
     .cover .contact td { width: 33%; vertical-align: top; }
     .cover .contact .c-label { font-size: 9.5pt; font-weight: 700; margin-bottom: 3px; }
     .cover .contact .c-val { font-size: 9.5pt; opacity: 0.92; }

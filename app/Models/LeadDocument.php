@@ -30,6 +30,7 @@ class LeadDocument extends Model
         'uploaded_by', 'reviewed_by', 'reviewed_at',
         'engagement_signer_id', 'client_signature_path',
         'client_signed_at', 'client_signer_name', 'client_signer_ip',
+        'invoice_number',
     ];
 
     protected $casts = [

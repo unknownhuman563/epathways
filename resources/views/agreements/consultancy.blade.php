@@ -175,66 +175,33 @@
      picked is ticked, and only that row's fee reflects the amount they
      edited on the "New" modal; the rest show their catalogue defaults.
 
-     Split across two pages to match the approved pagination: scenarios
-     1-3 on page 1, WITH ENGLISH on page 2 under a repeated header. --}}
+     Only the selected scenario renders — staff picks it in the "New"
+     modal, so the PDF doesn't need to enumerate the other three. --}}
 @php
-    $renderRow = function (array $s) use ($scenario, $scenario_applicant, $school_enrolment_fee, $inz_voucher_fee, $fmt, $fmt0) {
-        $isChosen = $s['key'] === $scenario;
-        $fee = $isChosen ? $school_enrolment_fee : $s['default_school_fee'];
-        // The chosen row shows the Single/Couple the staff actually selected.
-        $applicant = $isChosen ? $scenario_applicant : $s['applicant'];
-
-        return compact('isChosen', 'fee', 'applicant');
-    };
-    $page1 = ['std_150', 'voucher_150', 'std_100'];
+    $s = $scenarios[(string) $scenario] ?? $scenarios['std_100'];
 @endphp
 
-<table class="apptype">
-    <thead>
-        <tr><th colspan="3">APPLICATION TYPE &nbsp;•&nbsp; PLEASE TICK ONE BOX</th></tr>
-    </thead>
-    <tbody>
-        @foreach ($page1 as $key)
-            @php $s = $scenarios[$key]; $r = $renderRow($s); @endphp
-            <tr>
-                <td class="check-cell"><strong>{!! $r['isChosen'] ? '&#9745;' : '&#9744;' !!}</strong></td>
-                <td>
-                    <div class="strong">Scenario #{{ $s['number'] }}: &nbsp; {{ $s['title'] }}</div>
-                    <div class="strong">{{ $r['applicant'] }}</div>
-                    <div style="margin-top: 4px;">{!! $s['description'] !!}</div>
-                    @if ($s['has_voucher'])
-                        <div style="margin-top: 10px;"><strong>Immigration NZ Fee</strong></div>
-                        <div class="voucher-note">Already covered within the School Enrolment and Documentation Fee</div>
-                    @endif
-                </td>
-                <td class="fee-cell">
-                    {{ $fmt0($r['fee']) }}
-                    @if ($s['has_voucher'])
-                        <span class="voucher-strike">{{ $fmt($inz_voucher_fee) }}</span>
-                    @endif
-                </td>
-            </tr>
-        @endforeach
-    </tbody>
-</table>
-
-{{-- ── Page 2 ───────────────────────────────────────────────── --}}
-<div class="page-break"></div>
-
-@php $s = $scenarios['english_100']; $r = $renderRow($s); @endphp
 <table class="apptype no-break">
     <thead>
-        <tr><th colspan="3">APPLICATION TYPE &nbsp;•&nbsp; PLEASE TICK ONE BOX</th></tr>
+        <tr><th colspan="2">APPLICATION TYPE</th></tr>
     </thead>
     <tbody>
         <tr>
-            <td class="check-cell"><strong>{!! $r['isChosen'] ? '&#9745;' : '&#9744;' !!}</strong></td>
             <td>
-                <div class="strong">Scenario #{{ $s['number'] }}: &nbsp; {{ $s['title'] }}</div>
-                <div class="strong">{{ $r['applicant'] }}</div>
+                <div class="strong">{{ $s['title'] }}</div>
+                <div class="strong">{{ $scenario_applicant }}</div>
                 <div style="margin-top: 4px;">{!! $s['description'] !!}</div>
+                @if ($s['has_voucher'])
+                    <div style="margin-top: 10px;"><strong>Immigration NZ Fee</strong></div>
+                    <div class="voucher-note">Already covered within the School Enrolment and Documentation Fee</div>
+                @endif
             </td>
-            <td class="fee-cell">{{ $fmt0($r['fee']) }}</td>
+            <td class="fee-cell">
+                {{ $fmt0($school_enrolment_fee) }}
+                @if ($s['has_voucher'])
+                    <span class="voucher-strike">{{ $fmt($inz_voucher_fee) }}</span>
+                @endif
+            </td>
         </tr>
     </tbody>
 </table>
@@ -444,9 +411,13 @@
                 <div class="sig-name">{{ $client_name ?: 'INSERT NAME HERE' }}</div>
                 <div class="sig-role">Client</div>
             </td>
-            <td>
-                <div style="font-style:italic; font-size:8pt; color:#888;">Authorized signatory on behalf of the Company.</div>
-                <div class="sig-name">Neil Bryan Escaner</div>
+            <td style="text-align:center;">
+                @if (! empty($signer_signature))
+                    <img src="{{ $signer_signature }}" alt="Signature" style="max-height:48px; max-width:160px; margin:0 auto 2px auto; display:block;">
+                @else
+                    <div style="font-style:italic; font-size:8pt; color:#888; text-align:left;">Authorized signatory on behalf of the Company.</div>
+                @endif
+                <div class="sig-name" style="margin-top:{{ ! empty($signer_signature) ? '0' : '22px' }};">{{ $signer_name ?? 'Neil Bryan Escaner' }}</div>
                 <div class="sig-role">ePathways &mdash; Philippines</div>
             </td>
         </tr>
@@ -456,7 +427,7 @@
         </tr>
         <tr class="sig-meta-row">
             <td><strong>Mobile:</strong> ____________________________</td>
-            <td><strong>Mobile:</strong> +63945 107 6871 <em>[WhatsApp]</em></td>
+            <td><strong>Mobile:</strong> {{ $signer_mobile ?? '+63945 107 6871' }} <em>[WhatsApp]</em></td>
         </tr>
     </tbody>
 </table>

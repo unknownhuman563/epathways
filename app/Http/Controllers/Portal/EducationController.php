@@ -872,17 +872,21 @@ class EducationController extends Controller
                 'intake_months' => $p->intake_months,
                 'price_text' => $p->price_text,
                 'description' => $p->description,
+                'school_id' => $p->school_id,
                 'enrolled' => Lead::whereHas('studyPlans', fn ($q) => $q->where('preferred_course', $p->title))->count(),
             ]);
+
+            $schools = \App\Models\School::orderBy('name')->get(['id', 'name']);
 
             return inertia('portal/education/Programs', [
                 'portal' => 'education',
                 'programs' => $programs,
+                'schools' => $schools,
             ]);
         } catch (\Throwable $e) {
             Log::error('Education programs page failed', ['error' => $e->getMessage()]);
 
-            return inertia('portal/education/Programs', ['portal' => 'education', 'programs' => collect()]);
+            return inertia('portal/education/Programs', ['portal' => 'education', 'programs' => collect(), 'schools' => collect()]);
         }
     }
 

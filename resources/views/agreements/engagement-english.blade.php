@@ -218,9 +218,13 @@
                     <div class="sig-name">{{ $client_name ?: 'INSERT NAME HERE' }}</div>
                     <div class="sig-role">Client</div>
                 </td>
-                <td>
-                    <div style="font-style:italic; font-size:8pt; color:#888;">Authorized signatory on behalf of the Company.</div>
-                    <div class="sig-name">Neil Bryan Escaner</div>
+                <td style="text-align:center;">
+                    @if (! empty($signer_signature))
+                        <img src="{{ $signer_signature }}" alt="Signature" style="max-height:48px; max-width:160px; margin:0 auto 2px auto; display:block;">
+                    @else
+                        <div style="font-style:italic; font-size:8pt; color:#888; text-align:left;">Authorized signatory on behalf of the Company.</div>
+                    @endif
+                    <div class="sig-name" style="margin-top:{{ ! empty($signer_signature) ? '0' : '22px' }};">{{ $signer_name ?? 'Neil Bryan Escaner' }}</div>
                     <div class="sig-role">ePathways - Philippines</div>
                 </td>
             </tr>
@@ -230,7 +234,7 @@
             </tr>
             <tr class="sig-meta-row">
                 <td><strong>Mobile:</strong> ____________________________</td>
-                <td><strong>Mobile:</strong> +63945 107 6871 <em>[WhatsApp]</em></td>
+                <td><strong>Mobile:</strong> {{ $signer_mobile ?? '+63945 107 6871' }} <em>[WhatsApp]</em></td>
             </tr>
         </tbody>
     </table>

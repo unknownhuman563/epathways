@@ -703,6 +703,16 @@ Route::middleware(['auth'])->group(function () {
         // + IAA standards) for a case in one call — the Engagement workspace.
         Route::post('/admin/leads/{id}/engagement/generate', [LeadDocumentController::class, 'generateEngagement'])
             ->name('admin.leads.engagement.generate');
+        // Delete a case's whole generated engagement pack (one row = one case).
+        Route::delete('/admin/leads/{id}/engagement/documents', [LeadDocumentController::class, 'destroyEngagementDocs'])
+            ->name('admin.leads.engagement.destroy');
+        // Tax invoice — live preview, generate, and per-case delete.
+        Route::get('/admin/leads/{id}/invoice/preview', [LeadDocumentController::class, 'previewInvoice'])
+            ->name('admin.leads.invoice.preview');
+        Route::post('/admin/leads/{id}/invoice/generate', [LeadDocumentController::class, 'generateInvoice'])
+            ->name('admin.leads.invoice.generate');
+        Route::delete('/admin/leads/{id}/invoice/documents', [LeadDocumentController::class, 'destroyInvoices'])
+            ->name('admin.leads.invoice.destroy');
         // Live HTML preview of the same Blade template — feeds the iframe
         // on the Proposal & Agreements "New" modal. Cheap: renders the
         // view without going through dompdf.

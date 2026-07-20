@@ -470,12 +470,18 @@ class SalesController extends Controller
             'intake_months' => $p->intake_months,
             'price_text' => $p->price_text,
             'description' => $p->description,
+            'school_id' => $p->school_id,
             'enrolled' => Lead::whereHas('studyPlans', fn ($q) => $q->where('preferred_course', $p->title))->count(),
         ]);
+
+        // Picker options for the "School" dropdown in the New/Edit
+        // Program modal — same shape the admin Programs page ships.
+        $schools = \App\Models\School::orderBy('name')->get(['id', 'name']);
 
         return inertia('portal/sales/Programs', [
             'portal' => 'sales',
             'programs' => $programs,
+            'schools' => $schools,
         ]);
     }
 

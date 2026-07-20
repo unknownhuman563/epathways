@@ -1194,7 +1194,7 @@ function NewDocumentModal({ open, onClose, picker, programs = [], prefill = null
                 <div className="flex-1 flex min-h-0">
 
                     {/* ── LEFT SIDEBAR ─────────────────────────────── */}
-                    <div className={`w-[380px] border-r border-gray-100 flex flex-col min-h-0 flex-shrink-0 ${isProposalType ? '' : 'overflow-y-auto'}`}>
+                    <div className="w-[380px] border-r border-gray-100 flex flex-col min-h-0 flex-shrink-0 overflow-y-auto">
 
                         {/* Lead section */}
                         <div className="px-5 py-4 border-b border-gray-100">
@@ -1329,34 +1329,23 @@ function NewDocumentModal({ open, onClose, picker, programs = [], prefill = null
                             </div>
                         )}
 
-                        {/* Program picker — proposal only. Fills the
-                            remainder of the sidebar so its own scroll
-                            takes over below Lead + Document Type. */}
-                        {isProposalType && (
-                            <div className="flex-1 min-h-0 flex flex-col">
-                                <ProgramPicker
-                                    allPrograms={programs}
-                                    programs={filteredPrograms}
-                                    search={programSearch}
-                                    setSearch={setProgramSearch}
-                                    pickedIds={pickedProgramIds}
-                                    togglePicked={togglePickedProgram}
-                                    max={MAX_PROPOSED_PROGRAMS}
-                                />
-                            </div>
-                        )}
                     </div>
 
-                    {/* ── RIGHT: preview area ──────────────────────── */}
+                    {/* ── RIGHT: preview area OR program picker ────── */}
                     <div className="flex-1 flex flex-col min-h-0 bg-gray-50">
-                        {/* Preview label strip */}
+                        {/* Top strip — label + selection pill. Swaps between
+                            "Preview" (agreements) and "Shortlist" (proposal). */}
                         <div className="px-4 py-2.5 border-b border-gray-100 bg-white flex items-center gap-3 flex-shrink-0">
-                            <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-gray-500">Preview</span>
+                            <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-gray-500">
+                                {isProposalType ? 'Shortlist' : 'Preview'}
+                            </span>
                             <div className="flex items-center gap-1.5 flex-wrap">
                                 {type ? (
                                     <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gray-900 text-white text-[11px] font-semibold">
-                                        <FileText size={11} />
-                                        {currentTypeLabel}
+                                        {isProposalType ? <Lightbulb size={11} /> : <FileText size={11} />}
+                                        {isProposalType
+                                            ? `${pickedProgramIds.length} / ${MAX_PROPOSED_PROGRAMS} programs`
+                                            : currentTypeLabel}
                                     </span>
                                 ) : (
                                     <span className="text-[11px] text-gray-400 italic">nothing selected yet</span>
@@ -1364,19 +1353,21 @@ function NewDocumentModal({ open, onClose, picker, programs = [], prefill = null
                             </div>
                         </div>
 
-                        {/* Preview surface */}
+                        {/* Body — proposal shows the full-width picker so
+                            staff has real room to browse; agreements show
+                            the iframe preview. */}
                         <div className="flex-1 relative min-h-0">
                             {isProposalType ? (
-                                <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-8 bg-gray-50">
-                                    <div className="w-14 h-14 rounded-2xl bg-white shadow-sm border border-gray-100 flex items-center justify-center mb-3">
-                                        <Lightbulb size={22} className="text-gray-400" />
-                                    </div>
-                                    <p className="text-sm font-bold text-gray-800">
-                                        {pickedProgramIds.length} of {MAX_PROPOSED_PROGRAMS} programs selected
-                                    </p>
-                                    <p className="text-xs text-gray-500 mt-1 max-w-sm">
-                                        Study proposals aren't a PDF — the lead picks their preferred program from the shortlist on their tracker.
-                                    </p>
+                                <div className="absolute inset-0 bg-white flex flex-col min-h-0">
+                                    <ProgramPicker
+                                        allPrograms={programs}
+                                        programs={filteredPrograms}
+                                        search={programSearch}
+                                        setSearch={setProgramSearch}
+                                        pickedIds={pickedProgramIds}
+                                        togglePicked={togglePickedProgram}
+                                        max={MAX_PROPOSED_PROGRAMS}
+                                    />
                                 </div>
                             ) : previewUrl ? (
                                 <>
