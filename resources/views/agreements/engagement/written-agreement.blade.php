@@ -165,26 +165,59 @@
     <p style="margin-top:18px;">I have read and understood the terms and conditions set out above.</p>
     <table class="sign-tbl avoid-break">
         <tr>
-            <td><div class="sign-line" style="border-bottom:0;"></div><div style="border-bottom:1px solid #374151;">&nbsp;{{ $client['name'] ?: '[Full Name of Applicant]' }}</div><div class="sign-cap">(Full Name of Applicant)</div></td>
             <td>
                 <div class="sign-line" style="border-bottom:0;"></div>
-                <div style="border-bottom:1px solid #374151;">&nbsp;{{ $adviser['name'] }}</div>
-                <div class="sign-cap">(Full Name of Immigration Adviser){{ $adviser['licence'] ? ' · Licence '.$adviser['licence'] : '' }}</div>
+                <div style="border-bottom:1px solid #374151; text-align:center;">{{ $client['name'] ?: '[Full Name of Applicant]' }}</div>
+                <div class="sign-cap" style="text-align:center;">(Full Name of Applicant)</div>
+            </td>
+            <td>
+                <div class="sign-line" style="border-bottom:0;"></div>
+                <div style="border-bottom:1px solid #374151; text-align:center;">{{ $adviser['name'] }}</div>
+                <div class="sign-cap" style="text-align:center;">(Full Name of Immigration Adviser){{ $adviser['licence'] ? ' · Licence '.$adviser['licence'] : '' }}</div>
             </td>
         </tr>
         <tr>
-            <td><div class="sign-line"></div><div class="sign-cap">(Applicant's Signature or Representative's)</div></td>
+            {{-- Signature sits ON the line and is centred: the wrapper holds
+                 the rule as its bottom border, and text-align centres the
+                 inline <img> (dompdf-safe — no transforms). --}}
             <td>
-                <div style="height:34px; position:relative;">
-                    @if(!empty($adviser['signature']))
-                        <img src="{{ $adviser['signature'] }}" alt="Signature" style="max-height:44px; max-width:220px; position:absolute; bottom:-2px; left:0;">
-                    @endif
-                    <div style="border-bottom:1px solid #374151; position:absolute; bottom:0; left:0; right:24px;"></div>
+                <div style="height:46px; text-align:center; border-bottom:1px solid #374151;">
+                    <img id="applicant-signature" src="{{ $client['signature'] ?? '' }}" alt="Signature"
+                         style="max-height:42px; max-width:220px; margin-top:3px; display:{{ !empty($client['signature']) ? 'inline' : 'none' }};">
                 </div>
-                <div class="sign-cap">(Immigration Adviser's Signature)</div>
+                <div class="sign-cap" style="text-align:center;">(Applicant's Signature or Representative's)</div>
+            </td>
+            <td>
+                <div style="height:46px; text-align:center; border-bottom:1px solid #374151;">
+                    @if(!empty($adviser['signature']))
+                        <img src="{{ $adviser['signature'] }}" alt="Signature" style="max-height:42px; max-width:220px; margin-top:3px;">
+                    @endif
+                </div>
+                <div class="sign-cap" style="text-align:center;">(Immigration Adviser's Signature)</div>
             </td>
         </tr>
     </table>
     <p style="margin-top:14px;">Date: <span class="fill">{{ $generated_date }}</span></p>
     <p class="muted">* Please note You have understood the adviser's working hours: NZ time, Monday–Friday, 10am–5pm. If You have reached Us outside the above working hours, You can leave a message, and We will try Our best to respond as soon as We can.</p>
+
+    @if(!empty($preview))
+    {{-- Live signing: the tracker sign modal posts the applicant's drawn
+         signature here so it appears on the document in real time. --}}
+    <script>
+        (function () {
+            window.addEventListener('message', function (e) {
+                var msg = e.data || {};
+                if (msg.type !== 'applicant-signature') return;
+                var img = document.getElementById('applicant-signature');
+                if (! img) return;
+                img.src = msg.value || '';
+                // inline (not block) so text-align:center keeps it centred
+                img.style.display = msg.value ? 'inline' : 'none';
+                if (msg.value) {
+                    try { img.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (err) {}
+                }
+            });
+        })();
+    </script>
+    @endif
 @endsection

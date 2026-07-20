@@ -1,10 +1,61 @@
 import React, { useState, useMemo, useEffect } from "react";
-import { Head, router } from "@inertiajs/react";
+import { Head, router, Link } from "@inertiajs/react";
 import { toast } from "sonner";
 import {
     FileSignature, Search, Plus, X, Download, Check, AlertTriangle,
-    FileText, Loader2, Mail,
+    FileText, Loader2, Mail, Eye, Trash2,
 } from "lucide-react";
+
+// Initials fallback for the profile avatar when there's no face image.
+const rowInitials = (name = "") =>
+    (name || "?").split(/\s+/).filter(Boolean).slice(0, 2).map((s) => s[0].toUpperCase()).join("") || "?";
+
+const fmtSize = (bytes) => {
+    if (! bytes) return "—";
+    return bytes < 1024 * 1024
+        ? `${Math.max(1, Math.round(bytes / 1024))} KB`
+        : `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+};
+
+const fmtDate = (iso) => {
+    if (! iso) return "—";
+    const d = new Date(iso);
+    return d.toLocaleString(undefined, {
+        day: "2-digit", month: "short", year: "numeric",
+        hour: "2-digit", minute: "2-digit",
+    });
+};
+
+/**
+ * Delete a case's whole generated engagement pack in one call. Confirms
+ * first (naming the case + document count), then removes the stored files
+ * and their rows server-side.
+ */
+function DeleteCaseDocsButton({ caseId, caseName, count }) {
+    const [busy, setBusy] = useState(false);
+
+    const remove = () => {
+        if (! confirm(`Delete all ${count} engagement document${count === 1 ? '' : 's'} for ${caseName}? This removes the files permanently.`)) return;
+        setBusy(true);
+        router.delete(`/admin/leads/${caseId}/engagement/documents`, {
+            preserveScroll: true,
+            onError: () => toast.error("Could not delete the documents."),
+            onFinish: () => setBusy(false),
+        });
+    };
+
+    return (
+        <button
+            type="button"
+            onClick={remove}
+            disabled={busy}
+            title={`Delete all engagement documents for ${caseName}`}
+            className="text-[11px] font-semibold text-rose-600 hover:text-rose-700 inline-flex items-center gap-1 disabled:opacity-40"
+        >
+            {busy ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />} Delete
+        </button>
+    );
+}
 
 /**
  * Engagement generation workspace. Staff click "New", pick a case, choose
@@ -38,35 +89,120 @@ export default function Engagement({ cases = [], documents = [], generated = [],
                 </button>
             </div>
 
-            {/* Recently generated */}
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm">
+            {/* Recently generated — same column layout as Proposals & Agreements */}
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
                 <div className="px-5 py-3 border-b border-gray-100">
                     <h2 className="text-[12px] font-bold uppercase tracking-[0.12em] text-gray-500">Generated documents</h2>
                 </div>
-                <div className="divide-y divide-gray-50">
-                    {generated.length === 0 && (
-                        <div className="px-5 py-12 text-center text-sm text-gray-400">
-                            No engagement documents generated yet. Click <span className="font-semibold text-gray-600">New</span> to start.
-                        </div>
-                    )}
-                    {generated.map((d) => (
-                        <div key={d.id} className="flex items-center gap-4 px-5 py-3">
-                            <div className="w-9 h-9 rounded-lg bg-gray-100 text-gray-700 flex items-center justify-center flex-shrink-0">
-                                <FileText size={16} />
-                            </div>
-                            <div className="min-w-0 flex-1">
-                                <p className="text-sm font-semibold text-gray-900 truncate">{d.type_label}</p>
-                                <p className="text-[11px] text-gray-400 truncate">{d.case_name} · {d.name}</p>
-                            </div>
-                            <a
-                                href={d.download_url}
-                                className="text-xs font-semibold text-gray-800 hover:text-black inline-flex items-center gap-1.5 flex-shrink-0"
-                            >
-                                <Download size={14} /> Download
-                            </a>
-                        </div>
-                    ))}
-                </div>
+
+                {generated.length === 0 ? (
+                    <div className="px-5 py-12 text-center text-sm text-gray-400">
+                        No engagement documents generated yet. Click <span className="font-semibold text-gray-600">New</span> to start.
+                    </div>
+                ) : (
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-left text-xs">
+                            <thead>
+                                <tr className="bg-gray-50/60 border-b border-gray-200 text-[10px] font-bold text-gray-500 uppercase tracking-wider">
+                                    <th className="px-4 py-3">Profile</th>
+                                    <th className="px-3 py-3">Name</th>
+                                    <th className="px-3 py-3">Contacts</th>
+                                    <th className="px-3 py-3">Documents</th>
+                                    <th className="px-3 py-3">Created</th>
+                                    <th className="px-3 py-3 text-right pr-4">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100">
+                                {/* One row per CASE — its generated documents stack inside. */}
+                                {generated.map((c) => (
+                                    <tr key={c.case_id} className="hover:bg-gray-50/60 transition-colors align-top">
+                                        {/* Profile */}
+                                        <td className="px-4 py-3">
+                                            <Link href={`/portal/immigration/cases/${c.case_id}/profile`} className="inline-block">
+                                                <div className="w-9 h-9 rounded-full overflow-hidden flex items-center justify-center bg-gray-100 text-gray-500 text-[11px] font-bold ring-1 ring-gray-200">
+                                                    {c.avatar_url
+                                                        ? <img src={c.avatar_url} alt={c.case_name} className="w-full h-full object-cover" />
+                                                        : rowInitials(c.case_name)}
+                                                </div>
+                                            </Link>
+                                        </td>
+                                        {/* Name */}
+                                        <td className="px-3 py-3">
+                                            <Link
+                                                href={`/portal/immigration/cases/${c.case_id}/profile`}
+                                                className="font-semibold text-gray-900 hover:text-gray-700 hover:underline underline-offset-2"
+                                            >
+                                                {c.case_name}
+                                            </Link>
+                                            {c.case_ref && (
+                                                <div className="text-[10px] text-gray-400 font-mono mt-0.5">{c.case_ref}</div>
+                                            )}
+                                            <div className="text-[10px] text-gray-400 mt-1">
+                                                {c.documents.length} document{c.documents.length === 1 ? '' : 's'}
+                                            </div>
+                                        </td>
+                                        {/* Contacts */}
+                                        <td className="px-3 py-3">
+                                            {c.email && <div className="text-[11px] text-gray-600 truncate max-w-[220px]">{c.email}</div>}
+                                            {c.phone && <div className="text-[11px] text-gray-500 truncate max-w-[220px] mt-0.5">{c.phone}</div>}
+                                            {! c.email && ! c.phone && <span className="text-[11px] text-gray-300">—</span>}
+                                        </td>
+                                        {/* Documents — one line each, with its own actions */}
+                                        <td className="px-3 py-3">
+                                            <div className="flex flex-col gap-2">
+                                                {c.documents.map((d) => (
+                                                    <div key={d.id} className="flex items-center gap-2 flex-wrap">
+                                                        <FileText size={13} className="text-gray-400 shrink-0" />
+                                                        <span className="text-[12px] font-semibold text-gray-800">{d.type_label}</span>
+                                                        {d.signed && (
+                                                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-100">
+                                                                Signed
+                                                            </span>
+                                                        )}
+                                                        <span className="text-[10px] text-gray-400">{fmtSize(d.size)}</span>
+                                                        <span className="inline-flex items-center gap-2 ml-1">
+                                                            <a
+                                                                href={d.view_url}
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                                className="text-[11px] font-semibold text-gray-600 hover:text-gray-900 inline-flex items-center gap-1"
+                                                            >
+                                                                <Eye size={12} /> View
+                                                            </a>
+                                                            <a
+                                                                href={d.download_url}
+                                                                className="text-[11px] font-semibold text-gray-600 hover:text-gray-900 inline-flex items-center gap-1"
+                                                            >
+                                                                <Download size={12} /> Download
+                                                            </a>
+                                                        </span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </td>
+                                        {/* Created — latest generation for this case */}
+                                        <td className="px-3 py-3 whitespace-nowrap">
+                                            <div className="text-[12px] text-gray-700 font-medium">{fmtDate(c.latest_created_at)}</div>
+                                            {c.latest_by && (
+                                                <div className="text-[11px] text-gray-500 mt-0.5">
+                                                    by <span className="font-medium text-gray-600">{c.latest_by}</span>
+                                                </div>
+                                            )}
+                                        </td>
+                                        {/* Actions — a single delete for the case's whole pack */}
+                                        <td className="px-3 py-3 pr-4 text-right whitespace-nowrap">
+                                            <DeleteCaseDocsButton
+                                                caseId={c.case_id}
+                                                caseName={c.case_name}
+                                                count={c.documents.length}
+                                            />
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
             </div>
 
             {modalOpen && (

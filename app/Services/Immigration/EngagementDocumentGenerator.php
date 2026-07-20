@@ -102,6 +102,14 @@ class EngagementDocumentGenerator
         return view($view, $payload)->render();
     }
 
+    /** Render a document to raw PDF bytes (no persistence). */
+    public function pdfBinary(Lead $lead, string $type, array $overrides = []): string
+    {
+        [$view, $payload] = $this->resolve($lead, $type, $overrides);
+
+        return Pdf::loadView($view, $payload)->setPaper('a4')->output();
+    }
+
     /** Render a document to a PDF and store it against the case. */
     public function generate(Lead $lead, string $type, array $overrides = []): LeadDocument
     {
@@ -126,6 +134,9 @@ class EngagementDocumentGenerator
             'status' => LeadDocument::STATUS_SUBMITTED,
             'source' => LeadDocument::SOURCE_GENERATED,
             'source_variant' => "engagement:{$type}",
+            // Remember which adviser signed so a client-signed re-render
+            // reproduces the same adviser signature block.
+            'engagement_signer_id' => $overrides['signer_id'] ?? null,
             'uploaded_by' => Auth::id(),
         ]);
     }
@@ -176,6 +187,8 @@ class EngagementDocumentGenerator
                 'address' => $overrides['client_address'] ?? $this->clientAddress($lead),
                 'phone' => $lead->phone,
                 'email' => $lead->email,
+                // Applicant e-signature (data URI) once the client has signed.
+                'signature' => $overrides['client_signature'] ?? null,
             ],
             'visa_category' => $overrides['visa_category'] ?? $lead->inz_visa_type,
             'professional_fee' => $this->money($professionalFee),

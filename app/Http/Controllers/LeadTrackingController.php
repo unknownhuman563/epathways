@@ -12,6 +12,7 @@ use App\Notifications\LeadInfoUpdated;
 use App\Support\UploadValidation;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
@@ -79,6 +80,7 @@ class LeadTrackingController extends Controller
         $this->recordVisit($request, $lead);
 
         $payload['lead'] = $this->publicLeadShape($lead);
+        $payload['avatar'] = $this->faceAvatar($lead);
         $payload['info'] = $this->editableInfo($lead);
         $payload['documents'] = $this->publicDocuments($lead);
         // Documents the adviser has generated/shared for the client to
@@ -138,7 +140,7 @@ class LeadTrackingController extends Controller
                 'duration_months' => $p->duration_months,
                 'intake_months' => $p->intake_months,
                 'image_url' => $p->image ? \Illuminate\Support\Facades\Storage::disk('public')->url($p->image) : null,
-                'public_url' => '/program-details/' . ($p->slug ?: $p->id),
+                'public_url' => '/program-details/'.($p->slug ?: $p->id),
             ])
             ->values();
 
@@ -426,7 +428,7 @@ class LeadTrackingController extends Controller
             'program_id' => 'nullable|integer',
         ]);
 
-        $newId  = $validated['program_id'] ?? null;
+        $newId = $validated['program_id'] ?? null;
         $shortlist = is_array($lead->proposed_program_ids) ? $lead->proposed_program_ids : [];
 
         if ($newId !== null && ! in_array((int) $newId, array_map('intval', $shortlist), true)) {
@@ -435,25 +437,25 @@ class LeadTrackingController extends Controller
 
         $previousId = $lead->preferred_program_id;
         $lead->fill([
-            'preferred_program_id'         => $newId,
-            'preferred_program_chosen_at'  => $newId ? now() : null,
+            'preferred_program_id' => $newId,
+            'preferred_program_chosen_at' => $newId ? now() : null,
         ])->saveQuietly();
 
         if ((int) $previousId !== (int) $newId) {
             ActivityLog::record('lead.program_chosen', [
-                'actor_name'  => $lead->tracking_code,
-                'actor_role'  => 'tracker',
-                'portal'      => 'public',
+                'actor_name' => $lead->tracking_code,
+                'actor_role' => 'tracker',
+                'portal' => 'public',
                 'entity_type' => Lead::class,
-                'entity_id'   => $lead->id,
+                'entity_id' => $lead->id,
                 'description' => $newId
                     ? 'Lead chose a program from the shortlist'
                     : 'Lead cleared their program pick',
-                'properties'  => [
+                'properties' => [
                     'subject_type' => 'Lead',
-                    'subject_id'   => $lead->id,
-                    'from'         => $previousId,
-                    'to'           => $newId,
+                    'subject_id' => $lead->id,
+                    'from' => $previousId,
+                    'to' => $newId,
                 ],
             ]);
         }
@@ -581,6 +583,8 @@ class LeadTrackingController extends Controller
             'tracking_code' => $lead->tracking_code,
             'first_name' => $lead->first_name,
             'last_name' => $lead->last_name,
+            'email' => $lead->email,
+            'phone' => $lead->phone,
             'stage' => $lead->stage,
             'created_at' => optional($lead->created_at)?->toIso8601String(),
             'is_student' => (bool) $lead->is_student,
@@ -598,6 +602,30 @@ class LeadTrackingController extends Controller
         return collect(self::EDITABLE)
             ->mapWithKeys(fn ($key) => [$key => $lead->{$key}])
             ->toArray();
+    }
+
+    /**
+     * The applicant's uploaded Face image, surfaced as the tracker profile
+     * picture. Latest non-rejected face-image upload wins.
+     */
+    private function faceAvatar(Lead $lead): ?array
+    {
+        $doc = $lead->documents()
+            ->whereNotNull('checklist_key')
+            ->where('checklist_key', 'like', '%face%')
+            ->where('status', '!=', LeadDocument::STATUS_REJECTED)
+            ->orderByDesc('created_at')
+            ->first();
+
+        if (! $doc || ! $doc->file_path || ! str_starts_with((string) $doc->mime, 'image/')) {
+            return null;
+        }
+
+        return [
+            'url' => Storage::disk('public')->url($doc->file_path),
+            'document_id' => $doc->id,
+            'checklist_key' => $doc->checklist_key,
+        ];
     }
 
     private function publicDocuments(Lead $lead): array
@@ -663,13 +691,27 @@ class LeadTrackingController extends Controller
                     ? str_replace('engagement:', '', $d->source_variant)
                     : null;
 
+                // The Written Agreement is signable by the client.
+                $isAgreement = $type === 'written_agreement';
+                $signed = (bool) $d->client_signed_at;
+
                 return [
                     'id' => $d->id,
                     'title' => $type && isset($labels[$type]) ? $labels[$type]['label'] : $d->original_name,
                     'original_name' => $d->original_name,
                     'size' => $d->size,
                     'created_at' => $d->created_at?->toIso8601String(),
+                    'view_url' => "/track/{$code}/documents/{$d->id}/download?inline=1",
                     'download_url' => "/track/{$code}/documents/{$d->id}/download",
+                    // Live HTML preview for the signing modal (Written
+                    // Agreement) — the drawn signature streams into it.
+                    'preview_url' => $isAgreement ? "/track/{$code}/documents/{$d->id}/preview" : null,
+                    // Client-signing surface (Written Agreement only).
+                    'signable' => $isAgreement,
+                    'signed' => $signed,
+                    'signed_at' => $d->client_signed_at?->toIso8601String(),
+                    'signer_name' => $d->client_signer_name,
+                    'sign_url' => $isAgreement ? "/track/{$code}/documents/{$d->id}/sign" : null,
                 ];
             })
             ->values()
@@ -702,10 +744,139 @@ class LeadTrackingController extends Controller
 
         abort_unless($doc->file_path && Storage::disk('local')->exists($doc->file_path), 404);
 
+        // ?inline=1 → render in the browser (View); otherwise force download.
+        if ($request->boolean('inline')) {
+            return response()->file(Storage::disk('local')->path($doc->file_path), [
+                'Content-Type' => $doc->mime ?: 'application/pdf',
+                'Content-Disposition' => 'inline; filename="'.$doc->original_name.'"',
+            ]);
+        }
+
         return response()->download(
             Storage::disk('local')->path($doc->file_path),
             $doc->original_name
         );
+    }
+
+    /**
+     * Live HTML preview of a generated engagement document for the signing
+     * modal. The applicant signature slot is a live element the sign modal
+     * streams the drawn signature into (postMessage), so the client sees
+     * their signature land on the document in real time.
+     */
+    public function previewDoc(Request $request, \App\Services\Immigration\EngagementDocumentGenerator $generator, string $code, $docId)
+    {
+        $lead = $this->resolveLead($code);
+        abort_unless($lead, 404);
+
+        $doc = LeadDocument::where('id', $docId)
+            ->where('lead_id', $lead->id)
+            ->firstOrFail();
+
+        abort_unless(str_starts_with((string) $doc->source_variant, 'engagement:'), 403);
+
+        $type = str_replace('engagement:', '', $doc->source_variant);
+
+        $overrides = ['signer_id' => $doc->engagement_signer_id];
+        // Show any signature already captured as the starting state.
+        if ($doc->client_signature_path && Storage::disk('local')->exists($doc->client_signature_path)) {
+            $ext = strtolower(pathinfo($doc->client_signature_path, PATHINFO_EXTENSION));
+            $mime = in_array($ext, ['jpg', 'jpeg'], true) ? 'image/jpeg' : 'image/png';
+            $overrides['client_signature'] = "data:{$mime};base64,".base64_encode(Storage::disk('local')->get($doc->client_signature_path));
+        }
+
+        $html = $generator->renderHtml($lead, $type, $overrides);
+
+        return response($html)->header('Content-Type', 'text/html; charset=utf-8');
+    }
+
+    /**
+     * Client e-signs the Written Agreement on the tracker. Accepts a drawn
+     * canvas PNG (base64) or an uploaded image, stores it privately, then
+     * re-renders the PDF with the applicant signature embedded (keeping the
+     * adviser signature that was used at generation).
+     */
+    public function signDoc(Request $request, \App\Services\Immigration\EngagementDocumentGenerator $generator, string $code, $docId)
+    {
+        $lead = $this->resolveLead($code);
+        abort_unless($lead, 404);
+
+        $doc = LeadDocument::where('id', $docId)
+            ->where('lead_id', $lead->id)
+            ->firstOrFail();
+
+        // Only the generated Written Agreement is signable here.
+        abort_unless($doc->source_variant === 'engagement:written_agreement', 403);
+
+        $request->validate([
+            'signature_image' => 'nullable|image|mimes:png,jpg,jpeg|max:2048',
+            'signature_data' => 'nullable|string',
+            'signer_name' => 'nullable|string|max:120',
+        ]);
+
+        try {
+            [$binary, $ext] = $this->readSignatureUpload($request);
+            abort_if($binary === null, 422, 'No signature provided.');
+
+            // Store the applicant signature privately.
+            if ($doc->client_signature_path) {
+                Storage::disk('local')->delete($doc->client_signature_path);
+            }
+            $sigPath = "signatures/client-doc-{$doc->id}-".Str::random(8).".{$ext}";
+            Storage::disk('local')->put($sigPath, $binary);
+
+            // Re-render the PDF: same adviser signature + the new applicant one.
+            $clientSig = 'data:image/'.($ext === 'jpeg' ? 'jpeg' : 'png').';base64,'.base64_encode($binary);
+            $pdf = $generator->pdfBinary($lead, 'written_agreement', [
+                'signer_id' => $doc->engagement_signer_id,
+                'client_signature' => $clientSig,
+            ]);
+            Storage::disk('local')->put($doc->file_path, $pdf);
+
+            $doc->forceFill([
+                'size' => strlen($pdf),
+                'client_signature_path' => $sigPath,
+                'client_signed_at' => now(),
+                'client_signer_name' => $request->input('signer_name') ?: trim("{$lead->first_name} {$lead->last_name}"),
+                'client_signer_ip' => $request->ip(),
+            ])->save();
+
+            return back()->with('success', 'Thank you — your agreement has been signed.');
+        } catch (\Throwable $e) {
+            Log::error('Client agreement signing failed', ['doc_id' => $docId, 'error' => $e->getMessage()]);
+
+            return back()->withErrors(['error' => 'Could not save your signature. Please try again.']);
+        }
+    }
+
+    /**
+     * Pull raw signature bytes + extension from an uploaded image or a
+     * base64 canvas data URL. Returns [null, 'png'] when neither is present.
+     *
+     * @return array{0: ?string, 1: string}
+     */
+    private function readSignatureUpload(Request $request): array
+    {
+        if ($request->hasFile('signature_image')) {
+            $file = $request->file('signature_image');
+            $ext = strtolower($file->getClientOriginalExtension()) === 'jpg' ? 'jpeg' : strtolower($file->getClientOriginalExtension());
+            $ext = in_array($ext, ['png', 'jpeg'], true) ? $ext : 'png';
+
+            return [file_get_contents($file->getRealPath()), $ext];
+        }
+
+        if ($request->filled('signature_data')) {
+            $data = $request->input('signature_data');
+            $ext = 'png';
+            if (preg_match('/^data:image\/(png|jpe?g);base64,/', $data, $m)) {
+                $ext = str_starts_with($m[1], 'jp') ? 'jpeg' : 'png';
+                $data = substr($data, strpos($data, ',') + 1);
+            }
+
+            return [base64_decode(str_replace(' ', '+', $data), true) ?: null, $ext];
+        }
+
+        return [null, 'png'];
     }
 
     /**

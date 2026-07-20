@@ -268,6 +268,7 @@ class EducationController extends Controller
             $students = Lead::with([
                 'studyPlans',
                 'documents',
+                'faceImage',
                 'school',
                 'studentConverter:id,name',
                 'immigrationConverter:id,name',
@@ -309,6 +310,7 @@ class EducationController extends Controller
                                             ?? optional($l->immigrationConverter)->name,
                         'stage_updated_at' => optional($l->stage_updated_at)?->toIso8601String(),
                         'name' => trim("{$l->first_name} {$l->last_name}") ?: 'Unknown',
+                        'avatar_url' => $l->faceImageUrl(),
                         'email' => $l->email,
                         'phone' => $l->phone,
                         'referral' => $l->referral,
@@ -870,17 +872,21 @@ class EducationController extends Controller
                 'intake_months' => $p->intake_months,
                 'price_text' => $p->price_text,
                 'description' => $p->description,
+                'school_id' => $p->school_id,
                 'enrolled' => Lead::whereHas('studyPlans', fn ($q) => $q->where('preferred_course', $p->title))->count(),
             ]);
+
+            $schools = \App\Models\School::orderBy('name')->get(['id', 'name']);
 
             return inertia('portal/education/Programs', [
                 'portal' => 'education',
                 'programs' => $programs,
+                'schools' => $schools,
             ]);
         } catch (\Throwable $e) {
             Log::error('Education programs page failed', ['error' => $e->getMessage()]);
 
-            return inertia('portal/education/Programs', ['portal' => 'education', 'programs' => collect()]);
+            return inertia('portal/education/Programs', ['portal' => 'education', 'programs' => collect(), 'schools' => collect()]);
         }
     }
 

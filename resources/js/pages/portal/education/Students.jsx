@@ -311,6 +311,12 @@ const PRIORITY_OPTIONS = [
     { value: "low", label: "Low", dot: "bg-emerald-500" },
 ];
 const priorityDot = (p) => PRIORITY_OPTIONS.find((o) => o.value === p)?.dot || "bg-gray-300";
+// Ring colour for the profile-photo avatar (literal classes for Tailwind).
+const priorityRing = (p) => ({
+    urgent: "ring-red-500",
+    medium: "ring-amber-500",
+    low: "ring-emerald-500",
+}[p] || "ring-gray-300");
 
 function StudentPriority({ student }) {
     const [saving, setSaving] = useState(false);
@@ -685,8 +691,10 @@ export default function EducationStudents({ students = [], schoolOptions = [], p
                                                     href={`/portal/education/leads/${s.id}`}
                                                     className="flex items-center gap-2.5 group/student"
                                                 >
-                                                    <div className={`w-7 h-7 rounded-full flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0 ${s.priority ? priorityDot(s.priority) : avatarColor(s.id)}`}>
-                                                        {initials(s.name)}
+                                                    <div className={`w-7 h-7 rounded-full flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0 overflow-hidden ${s.avatar_url ? `ring-2 ring-offset-1 ${priorityRing(s.priority)}` : (s.priority ? priorityDot(s.priority) : avatarColor(s.id))}`}>
+                                                        {s.avatar_url
+                                                            ? <img src={s.avatar_url} alt={s.name} className="w-full h-full object-cover" />
+                                                            : initials(s.name)}
                                                     </div>
                                                     <div className="min-w-0">
                                                         <div className="font-semibold text-gray-900 text-xs truncate group-hover/student:text-indigo-600 transition-colors">

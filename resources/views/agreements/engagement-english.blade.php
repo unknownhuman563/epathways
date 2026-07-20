@@ -23,6 +23,15 @@
     body { font-family: 'Urbanist', DejaVu Sans, sans-serif; font-size: 12pt; color: #111; line-height: 1.5; }
     .page-header { position: fixed; top: -80px; left: 0; right: 0; text-align: center; }
     .page-header img { height: 60px; width: auto; }
+
+    /* Screen-only preview measure — see consultancy.blade.php for
+       the rationale. Same 794px A4 measure so the iframe preview
+       wraps at the printed page width. */
+    @media screen {
+        body { max-width: 794px; margin: 0 auto; padding: 24px 60px; background: #fff; }
+        .page-header { position: static; text-align: center; margin: -8px 0 12px 0; }
+        .page-header img { height: 56px; }
+    }
     .eyebrow { text-align: center; color: #436235; font-weight: bold; font-size: 9pt; letter-spacing: 2px; margin-bottom: 6px; }
     h1 { text-align: center; font-size: 22pt; font-weight: 900; letter-spacing: 1px; margin: 0 0 4px 0; color: #1a1a1a; }
     .subtitle { text-align: center; color: #555; font-size: 10pt; font-style: italic; margin-bottom: 18px; }
@@ -209,9 +218,13 @@
                     <div class="sig-name">{{ $client_name ?: 'INSERT NAME HERE' }}</div>
                     <div class="sig-role">Client</div>
                 </td>
-                <td>
-                    <div style="font-style:italic; font-size:8pt; color:#888;">Authorized signatory on behalf of the Company.</div>
-                    <div class="sig-name">Neil Bryan Escaner</div>
+                <td style="text-align:center;">
+                    @if (! empty($signer_signature))
+                        <img src="{{ $signer_signature }}" alt="Signature" style="max-height:48px; max-width:160px; margin:0 auto 2px auto; display:block;">
+                    @else
+                        <div style="font-style:italic; font-size:8pt; color:#888; text-align:left;">Authorized signatory on behalf of the Company.</div>
+                    @endif
+                    <div class="sig-name" style="margin-top:{{ ! empty($signer_signature) ? '0' : '22px' }};">{{ $signer_name ?? 'Neil Bryan Escaner' }}</div>
                     <div class="sig-role">ePathways - Philippines</div>
                 </td>
             </tr>
@@ -221,7 +234,7 @@
             </tr>
             <tr class="sig-meta-row">
                 <td><strong>Mobile:</strong> ____________________________</td>
-                <td><strong>Mobile:</strong> +63945 107 6871 <em>[WhatsApp]</em></td>
+                <td><strong>Mobile:</strong> {{ $signer_mobile ?? '+63945 107 6871' }} <em>[WhatsApp]</em></td>
             </tr>
         </tbody>
     </table>

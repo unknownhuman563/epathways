@@ -142,6 +142,12 @@ const PRIORITY_OPTIONS = [
 export const priorityMeta = (p) => PRIORITY_OPTIONS.find((o) => o.value === p) || null;
 // Coloured dot per priority; unset shows light gray.
 export const priorityDot = (p) => priorityMeta(p)?.dot || "bg-gray-300";
+// Ring colour for the profile-photo avatar (literal classes for Tailwind).
+export const priorityRing = (p) => ({
+    urgent: "ring-red-500",
+    medium: "ring-amber-500",
+    low: "ring-emerald-500",
+}[p] || "ring-gray-300");
 // Sort weight so urgent floats to the top, then medium, low, then leads
 // with no priority set.
 export const priorityRank = (p) => ({ urgent: 0, medium: 1, low: 2 }[p] ?? 3);
@@ -602,12 +608,14 @@ export default function SalesLeads({ leads = [], statuses = [], programs = [], s
                                                         Cases board): tinted by priority when set, neutral hash colour
                                                         otherwise. */}
                                                     <div
-                                                        className={`w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold ${
-                                                            priorityMeta(l.priority) ? `${priorityMeta(l.priority).dot} text-white` : "bg-gray-200 text-gray-500"
+                                                        className={`w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold overflow-hidden ${
+                                                            l.avatar_url ? `ring-2 ring-offset-1 ${priorityRing(l.priority)}` : priorityMeta(l.priority) ? `${priorityMeta(l.priority).dot} text-white` : "bg-gray-200 text-gray-500"
                                                         }`}
                                                         title={priorityMeta(l.priority) ? `Priority: ${priorityMeta(l.priority).label}` : "No priority set"}
                                                     >
-                                                        {initials(l.name)}
+                                                        {l.avatar_url
+                                                            ? <img src={l.avatar_url} alt={l.name} className="w-full h-full object-cover" />
+                                                            : initials(l.name)}
                                                     </div>
                                                     {/* Presence dot — green online, gray has-portal-offline,
                                                         blue invitation-sent. Nothing when lead has no portal. */}

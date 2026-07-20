@@ -255,6 +255,10 @@ Route::middleware('throttle:tracker')->group(function () {
     Route::post('/track/{code}/document/{doc}', [LeadTrackingController::class, 'updateDoc'])->name('track.doc.update');
     // Download a staff-shared / generated document (engagement pack).
     Route::get('/track/{code}/documents/{doc}/download', [LeadTrackingController::class, 'downloadDoc'])->name('track.doc.download');
+    // Live HTML preview for the signing modal (real-time signature).
+    Route::get('/track/{code}/documents/{doc}/preview', [LeadTrackingController::class, 'previewDoc'])->name('track.doc.preview');
+    // Client e-signs the generated Written Agreement.
+    Route::post('/track/{code}/documents/{doc}/sign', [LeadTrackingController::class, 'signDoc'])->name('track.doc.sign');
     // Lead picks (or clears) one program from their staff-suggested
     // shortlist. Server validates the id is actually in the shortlist.
     Route::post('/track/{code}/choose-program', [LeadTrackingController::class, 'chooseProgram'])->name('track.choose-program');
@@ -699,6 +703,16 @@ Route::middleware(['auth'])->group(function () {
         // + IAA standards) for a case in one call — the Engagement workspace.
         Route::post('/admin/leads/{id}/engagement/generate', [LeadDocumentController::class, 'generateEngagement'])
             ->name('admin.leads.engagement.generate');
+        // Delete a case's whole generated engagement pack (one row = one case).
+        Route::delete('/admin/leads/{id}/engagement/documents', [LeadDocumentController::class, 'destroyEngagementDocs'])
+            ->name('admin.leads.engagement.destroy');
+        // Tax invoice — live preview, generate, and per-case delete.
+        Route::get('/admin/leads/{id}/invoice/preview', [LeadDocumentController::class, 'previewInvoice'])
+            ->name('admin.leads.invoice.preview');
+        Route::post('/admin/leads/{id}/invoice/generate', [LeadDocumentController::class, 'generateInvoice'])
+            ->name('admin.leads.invoice.generate');
+        Route::delete('/admin/leads/{id}/invoice/documents', [LeadDocumentController::class, 'destroyInvoices'])
+            ->name('admin.leads.invoice.destroy');
         // Live HTML preview of the same Blade template — feeds the iframe
         // on the Proposal & Agreements "New" modal. Cheap: renders the
         // view without going through dompdf.

@@ -301,6 +301,7 @@ class ImmigrationController extends Controller
 
             $cases = Lead::with([
                 'documents',
+                'faceImage',
                 'portalUser:id,lead_id,last_login_at',
                 'immigrationConverter:id,name',
                 'studentConverter:id,name',
@@ -338,6 +339,7 @@ class ImmigrationController extends Controller
                                                 ?? optional($l->studentConverter)->name,
                         'stage_updated_at' => optional($l->stage_updated_at)?->toIso8601String(),
                         'name' => trim("{$l->first_name} {$l->last_name}") ?: 'Unknown',
+                        'avatar_url' => $l->faceImageUrl(),
                         // Individual name parts + a few more fields so the row
                         // "Edit case" modal can pre-fill without another fetch.
                         'first_name' => $l->first_name,
@@ -496,21 +498,46 @@ class ImmigrationController extends Controller
                 })
                 ->values();
 
-            $generated = LeadDocument::with('lead:id,first_name,last_name,lead_id')
+            $generated = LeadDocument::with([
+                'lead:id,first_name,last_name,lead_id,email,phone',
+                'lead.faceImage',
+                'uploader:id,name',
+            ])
                 ->where('source_variant', 'like', 'engagement:%')
                 ->orderByDesc('created_at')
-                ->limit(60)
+                ->limit(300)
                 ->get()
-                ->map(fn ($d) => [
-                    'id' => $d->id,
-                    'name' => $d->original_name,
-                    'type_label' => \App\Services\Immigration\EngagementDocumentGenerator::DOCS[str_replace('engagement:', '', $d->source_variant)]['label']
-                        ?? 'Document',
-                    'case_id' => $d->lead_id,
-                    'case_name' => $d->lead ? trim("{$d->lead->first_name} {$d->lead->last_name}") : '—',
-                    'created_at' => optional($d->created_at)?->toIso8601String(),
-                    'download_url' => route('admin.documents.download', $d->id),
-                ]);
+                // One row per CASE — the case's generated documents are
+                // nested so the table renders a single line per applicant
+                // instead of one line per file.
+                ->groupBy('lead_id')
+                ->map(function ($docs) {
+                    $first = $docs->first(); // newest first (ordered desc)
+                    $lead = $first->lead;
+
+                    return [
+                        'case_id' => $first->lead_id,
+                        'case_name' => $lead ? trim("{$lead->first_name} {$lead->last_name}") : '—',
+                        'case_ref' => $lead?->lead_id,
+                        'avatar_url' => $lead?->faceImageUrl(),
+                        'email' => $lead?->email,
+                        'phone' => $lead?->phone,
+                        'latest_created_at' => optional($first->created_at)?->toIso8601String(),
+                        'latest_by' => $first->uploader?->name,
+                        'documents' => $docs->map(fn ($d) => [
+                            'id' => $d->id,
+                            'type_label' => \App\Services\Immigration\EngagementDocumentGenerator::DOCS[str_replace('engagement:', '', $d->source_variant)]['label']
+                                ?? 'Document',
+                            'size' => $d->size,
+                            'signed' => (bool) $d->client_signed_at,
+                            'created_at' => optional($d->created_at)?->toIso8601String(),
+                            'uploaded_by' => $d->uploader?->name,
+                            'download_url' => route('admin.documents.download', $d->id),
+                            'view_url' => route('admin.documents.download', $d->id).'?inline=1',
+                        ])->values(),
+                    ];
+                })
+                ->values();
 
             return inertia('portal/immigration/Engagement', [
                 'cases' => $cases,
@@ -563,11 +590,82 @@ class ImmigrationController extends Controller
     public function invoice()
     {
         try {
-            return inertia('portal/immigration/Invoice', ['cases' => $this->caseListForGeneration()]);
+            // Visa fees drive the invoice's default line items, so the
+            // picker can pre-fill amounts (and flag visas with none set).
+            $visaFees = \App\Models\VisaType::query()
+                ->get(['name', 'professional_fees', 'inz_application_fee'])
+                ->mapWithKeys(fn ($v) => [$v->name => [
+                    'professional_fees' => $v->professional_fees !== null ? (float) $v->professional_fees : null,
+                    'inz_application_fee' => $v->inz_application_fee !== null ? (float) $v->inz_application_fee : null,
+                ]]);
+
+            $cases = Lead::immigrationCase()
+                ->with('faceImage')
+                ->orderByDesc('updated_at')
+                ->limit(300)
+                ->get(['id', 'lead_id', 'first_name', 'last_name', 'email', 'phone', 'residence_country', 'inz_visa_type', 'immigration_stage'])
+                ->map(function ($l) use ($visaFees) {
+                    $fees = $visaFees[$l->inz_visa_type] ?? null;
+
+                    return [
+                        'id' => $l->id,
+                        'lead_id' => $l->lead_id,
+                        'name' => trim("{$l->first_name} {$l->last_name}") ?: 'Unknown',
+                        'email' => $l->email,
+                        'phone' => $l->phone,
+                        'inz_visa_type' => $l->inz_visa_type,
+                        'immigration_stage' => $l->immigration_stage,
+                        'professional_fees' => $fees['professional_fees'] ?? null,
+                        'inz_application_fee' => $fees['inz_application_fee'] ?? null,
+                    ];
+                })
+                ->values();
+
+            // Generated invoices — one row per case, invoices nested.
+            $generated = LeadDocument::with([
+                'lead:id,first_name,last_name,lead_id,email,phone',
+                'lead.faceImage',
+                'uploader:id,name',
+            ])
+                ->where('source_variant', 'invoice')
+                ->orderByDesc('created_at')
+                ->limit(300)
+                ->get()
+                ->groupBy('lead_id')
+                ->map(function ($docs) {
+                    $first = $docs->first();
+                    $lead = $first->lead;
+
+                    return [
+                        'case_id' => $first->lead_id,
+                        'case_name' => $lead ? trim("{$lead->first_name} {$lead->last_name}") : '—',
+                        'case_ref' => $lead?->lead_id,
+                        'avatar_url' => $lead?->faceImageUrl(),
+                        'email' => $lead?->email,
+                        'phone' => $lead?->phone,
+                        'latest_created_at' => optional($first->created_at)?->toIso8601String(),
+                        'latest_by' => $first->uploader?->name,
+                        'invoices' => $docs->map(fn ($d) => [
+                            'id' => $d->id,
+                            'number' => $d->invoice_number,
+                            'size' => $d->size,
+                            'created_at' => optional($d->created_at)?->toIso8601String(),
+                            'download_url' => route('admin.documents.download', $d->id),
+                            'view_url' => route('admin.documents.download', $d->id).'?inline=1',
+                        ])->values(),
+                    ];
+                })
+                ->values();
+
+            return inertia('portal/immigration/Invoice', [
+                'cases' => $cases,
+                'generated' => $generated,
+                'nextNumber' => app(\App\Services\Immigration\InvoiceGenerator::class)->nextInvoiceNumber(),
+            ]);
         } catch (\Throwable $e) {
             Log::error('Immigration invoice page failed', ['error' => $e->getMessage()]);
 
-            return inertia('portal/immigration/Invoice', ['cases' => []]);
+            return inertia('portal/immigration/Invoice', ['cases' => [], 'generated' => [], 'nextNumber' => null]);
         }
     }
 

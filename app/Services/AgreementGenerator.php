@@ -34,9 +34,15 @@ class AgreementGenerator
         $today = now();
         $dateLine = $today->format('jS').' day of '.$today->format('F Y');
 
+        // Company signatory — pre-sign with the current staff member.
+        $signer = Auth::user();
+
         $payload = [
             'client_name' => $clientName,
             'client_reference' => $clientReference ?: 'ClientName',
+            'signer_name' => $signer?->name ?: 'Neil Bryan Escaner',
+            'signer_mobile' => $signer?->phone ?: '+63945 107 6871',
+            'signer_signature' => method_exists($signer, 'signatureDataUriTrimmed') ? $signer->signatureDataUriTrimmed() : null,
             'generated_at' => $today,
             'generated_at_formatted' => $dateLine,
         ];
@@ -102,7 +108,10 @@ class AgreementGenerator
             'size' => strlen($binary),
             'status' => LeadDocument::STATUS_SUBMITTED,
             'source' => LeadDocument::SOURCE_GENERATED,
-            'source_variant' => "consultancy:{$scenarioMeta['key']}",
+            // Encode applicant mode so the tracker / documents table can
+            // surface "Single" vs "Couple" without re-opening the PDF.
+            // Old rows without the suffix default to 'single' at read time.
+            'source_variant' => "consultancy:{$scenarioMeta['key']}:{$payload['applicant_mode']}",
             'uploaded_by' => Auth::id(),
         ]);
     }
@@ -143,6 +152,26 @@ class AgreementGenerator
             ? 'MAIN APPLICANT (Couple)'
             : 'MAIN APPLICANT (Single)';
 
+        // Company signatory — defaults to the authenticated staff member
+        // so the generated PDF is pre-signed on the Company side by
+        // whoever hit Generate. Callers can override via
+        // $overrides['signer_id'] (immigration Engagement flow does this
+        // when adviser ≠ generator). Legacy fallback keeps unsigned
+        // historic renders working.
+        $signer = null;
+        if (! empty($overrides['signer_id'])) {
+            $signer = \App\Models\User::find($overrides['signer_id']);
+        }
+        if (! $signer) {
+            $signer = Auth::user();
+        }
+
+        $signerName = $signer?->name ?: 'Neil Bryan Escaner';
+        $signerMobile = $signer?->phone ?: '+63945 107 6871';
+        $signerSignature = method_exists($signer, 'signatureDataUri')
+            ? $signer->signatureDataUri()
+            : null;
+
         $payload = [
             // Full catalogue so the Application Type table can list every
             // scenario with only the chosen one ticked, matching the Word
@@ -162,6 +191,9 @@ class AgreementGenerator
             'inz_voucher_fee' => 30600,
             'client_name' => $clientName,
             'client_reference' => $clientReference,
+            'signer_name' => $signerName,
+            'signer_mobile' => $signerMobile,
+            'signer_signature' => $signerSignature,
             'generated_at' => $today,
             'generated_at_formatted' => $today->format('jS').' day of '.$today->format('F Y'),
         ];
