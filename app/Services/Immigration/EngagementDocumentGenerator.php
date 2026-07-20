@@ -207,8 +207,11 @@ class EngagementDocumentGenerator
     {
         $user = $signerId ? \App\Models\User::find($signerId) : null;
 
+        // No signer chosen (or the user has since been removed) — render a
+        // neutral placeholder rather than naming a real adviser who never
+        // agreed to sign this document.
         if (! $user) {
-            return ['name' => 'Yuxiang (Hendry) DAI', 'licence' => '201500074', 'signature' => null];
+            return ['name' => '[Full Name of Immigration Adviser]', 'licence' => null, 'signature' => null];
         }
 
         return [

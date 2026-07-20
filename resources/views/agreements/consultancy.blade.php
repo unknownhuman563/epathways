@@ -406,9 +406,19 @@
     </thead>
     <tbody>
         <tr>
-            <td>
-                <div style="font-style:italic; font-size:8pt; color:#888;">Insert your e-signature above, or place a check mark (&#10004;) below if unavailable.</div>
-                <div class="sig-name">{{ $client_name ?: 'INSERT NAME HERE' }}</div>
+            <td style="text-align:center;">
+                {{-- Two elements: an <img> the sign modal streams into
+                     via postMessage in preview, and a fallback caption
+                     when no signature yet. Both toggled by the script
+                     block near the end of the doc. --}}
+                <img id="ep-client-signature"
+                    src="{{ $client_signature ?? '' }}"
+                    alt="Client signature"
+                    style="max-height:48px; max-width:160px; margin:0 auto 2px auto; display:{{ ! empty($client_signature ?? null) ? 'block' : 'none' }};">
+                <div id="ep-client-sig-fallback" style="font-style:italic; font-size:8pt; color:#888; text-align:left; display:{{ empty($client_signature ?? null) ? 'block' : 'none' }};">
+                    Insert your e-signature above, or place a check mark (&#10004;) below if unavailable.
+                </div>
+                <div id="ep-client-sig-name" class="sig-name" style="margin-top:{{ ! empty($client_signature ?? null) ? '0' : '22px' }};">{{ $client_name ?: 'INSERT NAME HERE' }}</div>
                 <div class="sig-role">Client</div>
             </td>
             <td style="text-align:center;">
@@ -433,8 +443,38 @@
 </table>
 
 <div class="ack-box">
-    &#9744; &nbsp;&nbsp; I have read and agreed to the Consultancy Agreement terms.
+    <span id="ep-ack-mark">{!! ($acknowledged ?? false) ? '&#9745;' : '&#9744;' !!}</span>&nbsp;&nbsp; I have read and agreed to the Consultancy Agreement terms.
 </div>
+
+@if (($preview ?? false))
+    {{-- Preview-only: listen for the client sign modal streaming a
+         signature dataURL + ack toggle into the preview iframe. Wrapped
+         so dompdf's HTML pipeline never sees it. --}}
+    <script>
+        (function () {
+            var sigImg = document.getElementById('ep-client-signature');
+            var sigFallback = document.getElementById('ep-client-sig-fallback');
+            var sigName = document.getElementById('ep-client-sig-name');
+            var ackMark = document.getElementById('ep-ack-mark');
+            window.addEventListener('message', function (e) {
+                var d = e.data || {};
+                if (d.type === 'applicant-signature') {
+                    if (d.value) {
+                        if (sigImg) { sigImg.src = d.value; sigImg.style.display = 'block'; }
+                        if (sigFallback) sigFallback.style.display = 'none';
+                        if (sigName) sigName.style.marginTop = '0';
+                    } else {
+                        if (sigImg) { sigImg.src = ''; sigImg.style.display = 'none'; }
+                        if (sigFallback) sigFallback.style.display = 'block';
+                        if (sigName) sigName.style.marginTop = '22px';
+                    }
+                } else if (d.type === 'acknowledged') {
+                    if (ackMark) ackMark.innerHTML = d.value ? '&#9745;' : '&#9744;';
+                }
+            });
+        })();
+    </script>
+@endif
 
 {{-- Footer text. dompdf substitutes {PAGE_NUM}/{PAGE_COUNT} here, which is
      the only way to get a total page count — counter(pages) always yields 0.
