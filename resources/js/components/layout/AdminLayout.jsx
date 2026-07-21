@@ -6,7 +6,7 @@ import {
     Briefcase, Languages, Building2, KeyRound, Sparkles, Tag,
     Radio, PenLine, CalendarDays, Inbox, Megaphone, BarChart3,
     CheckSquare, Clock, Crown, LifeBuoy, Mail, MessageSquare, Smartphone,
-    Wallet, UserCheck,
+    Wallet, UserCheck, Wrench,
 } from "lucide-react";
 
 // Super-admin-only entry — only injected when the current user holds
@@ -17,6 +17,14 @@ const SUPER_ADMIN_NAV = {
     name: "Super Dashboard",
     href: "/admin/super-dashboard",
     icon: <Crown size={20} />,
+};
+
+// Also super-admin-only, but belongs at the bottom next to the other
+// system-level controls rather than up top with the dashboard.
+const SUPER_ADMIN_MAINTENANCE_NAV = {
+    name: "Maintenance Mode",
+    href: "/admin/maintenance",
+    icon: <Wrench size={20} />,
 };
 
 const ADMIN_NAV = [
@@ -96,7 +104,9 @@ export default function AdminLayout({ children }) {
     const isSuperAdmin = props?.auth?.user?.role === "super_admin";
     // Slip the Super Dashboard link in at the top for super-admins; the
     // rest of the nav stays untouched for plain admins.
-    const nav = isSuperAdmin ? [SUPER_ADMIN_NAV, ...ADMIN_NAV] : ADMIN_NAV;
+    const nav = isSuperAdmin
+        ? [SUPER_ADMIN_NAV, ...ADMIN_NAV, SUPER_ADMIN_MAINTENANCE_NAV]
+        : ADMIN_NAV;
 
     return (
         <DashboardLayout

@@ -79,6 +79,26 @@ class CaseChecklistService
         }, self::UNIVERSAL_ITEMS);
     }
 
+    /**
+     * Resolve the catalogue row for a lead's visa. THE single source of
+     * truth — the staff dashboard and the public tracker must land on the
+     * same VisaType or their checklists silently disagree.
+     *
+     * An exact `name` match always wins; `code` is only a fallback for
+     * leads stamped with a visa code. Matching on "name OR code" in one
+     * query is unsafe: once any visa's code equals another visa's name the
+     * database is free to return either row.
+     */
+    public function resolveVisaType(Lead $lead): ?VisaType
+    {
+        if (empty($lead->inz_visa_type)) {
+            return null;
+        }
+
+        return VisaType::query()->where('name', $lead->inz_visa_type)->first()
+            ?? VisaType::query()->where('code', $lead->inz_visa_type)->first();
+    }
+
     /** The visa-type / per-lead / config checklist before universal items. */
     private function baseChecklist(Lead $lead): array
     {
@@ -93,7 +113,7 @@ class CaseChecklistService
         //    (no FK), so an unknown value just resolves to null and we
         //    fall through to the empty fallback.
         if (! empty($lead->inz_visa_type)) {
-            $visaType = VisaType::query()->where('name', $lead->inz_visa_type)->first();
+            $visaType = $this->resolveVisaType($lead);
             if ($visaType && ! empty($visaType->checklist_items) && is_array($visaType->checklist_items)) {
                 return $this->normaliseItems($visaType->checklist_items);
             }
@@ -114,7 +134,7 @@ class CaseChecklistService
             return ['source' => 'lead_override', 'visa' => $lead->inz_visa_type];
         }
         if (! empty($lead->inz_visa_type)) {
-            $hit = VisaType::query()->where('name', $lead->inz_visa_type)->first();
+            $hit = $this->resolveVisaType($lead);
             if ($hit && ! empty($hit->checklist_items)) {
                 return ['source' => 'visa_type', 'visa' => $hit->name];
             }
