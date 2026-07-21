@@ -17,7 +17,20 @@ export default function SalesLayout({ children }) {
         { name: "Dashboard", href: "/portal/sales/dashboard", icon: <LayoutDashboard size={20} /> },
 
         { name: "Work", section: true },
-        { name: "Leads",     href: "/portal/sales/leads",     icon: <Users size={20} />,        badge: badges.new_leads_today, badgeTone: "default" },
+        // Leads is now a group — "List of Leads" is the original leads
+        // table; "Proposal & Agreements" is the new sidebar page for
+        // system-generated docs. Children pattern is supported by
+        // DashboardLayout — see its accordion render path.
+        {
+            name: "Leads",
+            icon: <Users size={20} />,
+            badge: badges.new_leads_today,
+            badgeTone: "default",
+            children: [
+                { name: "List of Leads",           href: "/portal/sales/leads",                      icon: <Users size={16} /> },
+                { name: "Proposal & Agreements",   href: "/portal/sales/leads/proposals-agreements", icon: <FileText size={16} /> },
+            ],
+        },
         { name: "Task Board", href: "/portal/sales/tasks", icon: <CheckSquare size={20} />, badge: badges.tasks_open, badgeTone: badges.tasks_overdue > 0 ? "danger" : "default" },
         { name: "Assessments", href: "/portal/sales/assessments", icon: <ClipboardCheck size={20} /> },
         { name: "Bookings",  href: "/portal/sales/bookings",  icon: <CalendarCheck size={20} />, badge: badges.bookings_this_week, badgeTone: "default" },

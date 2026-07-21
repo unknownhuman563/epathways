@@ -119,14 +119,13 @@
                                     </td>
                                 </tr>
                                 @endif
-                                @if ($whatsapp)
                                 <tr>
                                     <td align="center" style="padding:8px 0 0 0;">
                                         <p style="margin:0; font-size:12px; font-weight:700; color:#444444;">Whatsapp:</p>
-                                        <p style="margin:0; font-size:12px; color:#555555;">{{ $whatsapp }}</p>
+                                        <p style="margin:0; font-size:12px; color:#555555;">+64 21 227 8000 Emma</p>
+                                        <p style="margin:0; font-size:12px; color:#555555;">+63939 5863 654 Bryll</p>
                                     </td>
                                 </tr>
-                                @endif
                                 <tr>
                                     <td align="center" style="padding:8px 0 0 0;">
                                         <p style="margin:0; font-size:12px; font-weight:700; color:#444444;">Website:</p>

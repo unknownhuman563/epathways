@@ -3,12 +3,13 @@ import { Head, router } from "@inertiajs/react";
 import { User, Mail, Briefcase, ShieldCheck, Lock, BadgeCheck } from "lucide-react";
 import PortalPageHeader from "@/components/portal/PortalPageHeader";
 import AvatarUploader from "@/components/AvatarUploader";
+import SignatureCard from "@/components/SignatureCard";
 
-export default function ImmigrationProfile({ user }) {
+export default function ImmigrationProfile({ user, signature }) {
     const initial = (user?.name || "?").slice(0, 1).toUpperCase();
     const [form, setForm] = useState({
         iaa_licence_number: user?.iaa_licence_number || "",
-        iaa_licence_expiry: user?.iaa_licence_expiry ? String(user.iaa_licence_expiry).slice(0, 10) : "",
+        iaa_licence_type: user?.iaa_licence_type || "",
     });
     const [saving, setSaving] = useState(false);
 
@@ -56,7 +57,7 @@ export default function ImmigrationProfile({ user }) {
                     </button>
                 </div>
                 <p className="text-[11px] text-gray-500">
-                    Required for NZ-licensed Immigration Advisers. Shows on every case you view and triggers an expiry alert 60 days out.
+                    Required for NZ-licensed Immigration Advisers. Your licence number and type appear on the engagement documents you sign.
                 </p>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -71,16 +72,26 @@ export default function ImmigrationProfile({ user }) {
                         />
                     </label>
                     <label className="block">
-                        <span className="block text-[11px] font-semibold text-gray-600 mb-1.5">Expiry date</span>
-                        <input
-                            type="date"
-                            value={form.iaa_licence_expiry}
-                            onChange={(e) => setForm((f) => ({ ...f, iaa_licence_expiry: e.target.value }))}
-                            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:border-amber-500"
-                        />
+                        <span className="block text-[11px] font-semibold text-gray-600 mb-1.5">Type of licence</span>
+                        <select
+                            value={form.iaa_licence_type}
+                            onChange={(e) => setForm((f) => ({ ...f, iaa_licence_type: e.target.value }))}
+                            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:border-amber-500 bg-white"
+                        >
+                            <option value="">Select…</option>
+                            <option value="Full">Full</option>
+                            <option value="Provisional">Provisional</option>
+                            <option value="Limited">Limited</option>
+                        </select>
                     </label>
                 </div>
             </form>
+
+            <SignatureCard
+                signature={signature}
+                saveUrl="/portal/immigration/profile/signature"
+                deleteUrl="/portal/immigration/profile/signature"
+            />
 
             <section className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
                 <div className="flex items-center gap-2.5 mb-4">

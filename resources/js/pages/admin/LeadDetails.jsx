@@ -3408,26 +3408,11 @@ function ChecklistRow({ item, lead, entry, files = [], onSave, hidden = false, o
                             {uploading ? 'Uploading…' : files.length > 0 ? 'Upload another' : 'Upload'}
                         </button>
 
-                        {canGenerate && (
-                            <div className="relative">
-                                <button
-                                    type="button"
-                                    onClick={handleGenerateClick}
-                                    disabled={generating}
-                                    style={{ backgroundColor: '#7c3aed', color: '#ffffff' }}
-                                    className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider hover:opacity-90 transition-all disabled:opacity-60"
-                                >
-                                    <Wand2 size={11} />
-                                    {generating ? 'Generating…' : hasGenerated ? 'Re-generate' : 'Generate'}
-                                </button>
-                                {variantOpen && (
-                                    <div className="absolute z-20 top-full mt-1 left-0 bg-white border border-gray-200 rounded-md shadow-lg py-1 min-w-[120px]">
-                                        <button type="button" onClick={() => runGenerate('single')} className="block w-full text-left px-3 py-1.5 text-[11px] font-semibold text-gray-700 hover:bg-gray-50">Single</button>
-                                        <button type="button" onClick={() => runGenerate('partner')} className="block w-full text-left px-3 py-1.5 text-[11px] font-semibold text-gray-700 hover:bg-gray-50">Partner</button>
-                                    </div>
-                                )}
-                            </div>
-                        )}
+                        {/* Generate button intentionally removed from here —
+                            generation now lives on the sidebar's Proposal &
+                            Agreements page. Generated files still surface
+                            in this row because they're LeadDocument records
+                            keyed by checklist_key. */}
                     </div>
                 </div>
             </td>
@@ -4156,22 +4141,10 @@ function ChecklistCard({ item, lead, entry, onSave, files = [], currentUser = nu
                     {uploading ? 'Uploading…' : fileCount > 0 ? 'Upload another' : 'Upload file(s)'}
                 </button>
 
-                {/* Auto-generate (Consultancy Agreement only). Renders the
-                    Blade template -> PDF and attaches it to this checklist
-                    item. Solid violet so it's unmissable next to the dashed
-                    upload button. */}
-                {canGenerate && (
-                    <button
-                        type="button"
-                        onClick={handleGenerateClick}
-                        disabled={generating}
-                        style={{ backgroundColor: '#7c3aed', color: '#ffffff' }}
-                        className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-[11px] font-bold uppercase tracking-wider hover:opacity-90 transition-all disabled:opacity-60 shadow-sm"
-                    >
-                        <Wand2 size={12} />
-                        {generating ? 'Generating…' : hasGenerated ? 'Re-generate Agreement' : 'Generate Agreement'}
-                    </button>
-                )}
+                {/* Generate button removed — generation now lives on the
+                    sidebar's Proposal & Agreements page. Generated files
+                    still appear in this card because they're LeadDocument
+                    records keyed by checklist_key. */}
 
                 {/* Spacer pushes the footer to the card bottom */}
                 <div className="flex-1" />

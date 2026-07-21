@@ -14,8 +14,24 @@
 <meta charset="UTF-8">
 <title>English Engagement Agreement</title>
 <style>
-    @page { margin: 70px 60px 70px 60px; }
-    body { font-family: DejaVu Sans, sans-serif; font-size: 11pt; color: #111; line-height: 1.5; }
+    @font-face { font-family: 'Urbanist'; font-style: normal; font-weight: 400; src: url('{{ base_path("resources/fonts/urbanist/Urbanist-Regular.ttf") }}') format('truetype'); }
+    @font-face { font-family: 'Urbanist'; font-style: italic; font-weight: 400; src: url('{{ base_path("resources/fonts/urbanist/Urbanist-Italic.ttf") }}') format('truetype'); }
+    @font-face { font-family: 'Urbanist'; font-style: normal; font-weight: 700; src: url('{{ base_path("resources/fonts/urbanist/Urbanist-Bold.ttf") }}') format('truetype'); }
+    @font-face { font-family: 'Urbanist'; font-style: italic; font-weight: 700; src: url('{{ base_path("resources/fonts/urbanist/Urbanist-BoldItalic.ttf") }}') format('truetype'); }
+
+    @page { margin: 120px 60px 70px 60px; }
+    body { font-family: 'Urbanist', DejaVu Sans, sans-serif; font-size: 12pt; color: #111; line-height: 1.5; }
+    .page-header { position: fixed; top: -80px; left: 0; right: 0; text-align: center; }
+    .page-header img { height: 60px; width: auto; }
+
+    /* Screen-only preview measure — see consultancy.blade.php for
+       the rationale. Same 794px A4 measure so the iframe preview
+       wraps at the printed page width. */
+    @media screen {
+        body { max-width: 794px; margin: 0 auto; padding: 24px 60px; background: #fff; }
+        .page-header { position: static; text-align: center; margin: -8px 0 12px 0; }
+        .page-header img { height: 56px; }
+    }
     .eyebrow { text-align: center; color: #436235; font-weight: bold; font-size: 9pt; letter-spacing: 2px; margin-bottom: 6px; }
     h1 { text-align: center; font-size: 22pt; font-weight: 900; letter-spacing: 1px; margin: 0 0 4px 0; color: #1a1a1a; }
     .subtitle { text-align: center; color: #555; font-size: 10pt; font-style: italic; margin-bottom: 18px; }
@@ -49,6 +65,10 @@
 </style>
 </head>
 <body>
+
+    <div class="page-header">
+        <img src="{{ base_path('resources/assets/philipine_ep_logo.png') }}" alt="ePathways Philippines">
+    </div>
 
     <div class="eyebrow">OFFICIAL DOCUMENT &nbsp;•&nbsp; CONFIDENTIAL</div>
     <h1>ENGLISH ENGAGEMENT AGREEMENT</h1>
@@ -193,14 +213,24 @@
         </thead>
         <tbody>
             <tr>
-                <td>
-                    <div style="font-style:italic; font-size:8pt; color:#888;">Insert your e-signature above, or place a check mark (✓) below if unavailable.</div>
-                    <div class="sig-name">{{ $client_name ?: 'INSERT NAME HERE' }}</div>
+                <td style="text-align:center;">
+                    <img id="ep-client-signature"
+                        src="{{ $client_signature ?? '' }}"
+                        alt="Client signature"
+                        style="max-height:48px; max-width:160px; margin:0 auto 2px auto; display:{{ ! empty($client_signature ?? null) ? 'block' : 'none' }};">
+                    <div id="ep-client-sig-fallback" style="font-style:italic; font-size:8pt; color:#888; text-align:left; display:{{ empty($client_signature ?? null) ? 'block' : 'none' }};">
+                        Insert your e-signature above, or place a check mark (✓) below if unavailable.
+                    </div>
+                    <div id="ep-client-sig-name" class="sig-name" style="margin-top:{{ ! empty($client_signature ?? null) ? '0' : '22px' }};">{{ $client_name ?: 'INSERT NAME HERE' }}</div>
                     <div class="sig-role">Client</div>
                 </td>
-                <td>
-                    <div style="font-style:italic; font-size:8pt; color:#888;">Authorized signatory on behalf of the Company.</div>
-                    <div class="sig-name">Neil Bryan Escaner</div>
+                <td style="text-align:center;">
+                    @if (! empty($signer_signature))
+                        <img src="{{ $signer_signature }}" alt="Signature" style="max-height:48px; max-width:160px; margin:0 auto 2px auto; display:block;">
+                    @else
+                        <div style="font-style:italic; font-size:8pt; color:#888; text-align:left;">Authorized signatory on behalf of the Company.</div>
+                    @endif
+                    <div class="sig-name" style="margin-top:{{ ! empty($signer_signature) ? '0' : '22px' }};">{{ $signer_name ?? 'Neil Bryan Escaner' }}</div>
                     <div class="sig-role">ePathways - Philippines</div>
                 </td>
             </tr>
@@ -210,18 +240,47 @@
             </tr>
             <tr class="sig-meta-row">
                 <td><strong>Mobile:</strong> ____________________________</td>
-                <td><strong>Mobile:</strong> +63945 107 6871 <em>[WhatsApp]</em></td>
+                <td><strong>Mobile:</strong> {{ $signer_mobile ?? '+63945 107 6871' }} <em>[WhatsApp]</em></td>
             </tr>
         </tbody>
     </table>
 
     <div class="ack-box">
-        &#9744; &nbsp;&nbsp; I have read and agreed to the Consultancy Agreement terms.
+        <span id="ep-ack-mark">{!! ($acknowledged ?? false) ? '&#9745;' : '&#9744;' !!}</span>&nbsp;&nbsp; I have read and agreed to the English Engagement Agreement terms.
     </div>
 
     <div class="footer-rule">
         ePathways Philippines Consultancy &nbsp;|&nbsp; English Engagement Agreement
     </div>
+
+    @if (($preview ?? false))
+        {{-- Preview-only: mirror signature + ack toggle from the tracker
+             sign modal via postMessage. Dompdf never sees this. --}}
+        <script>
+            (function () {
+                var sigImg = document.getElementById('ep-client-signature');
+                var sigFallback = document.getElementById('ep-client-sig-fallback');
+                var sigName = document.getElementById('ep-client-sig-name');
+                var ackMark = document.getElementById('ep-ack-mark');
+                window.addEventListener('message', function (e) {
+                    var d = e.data || {};
+                    if (d.type === 'applicant-signature') {
+                        if (d.value) {
+                            if (sigImg) { sigImg.src = d.value; sigImg.style.display = 'block'; }
+                            if (sigFallback) sigFallback.style.display = 'none';
+                            if (sigName) sigName.style.marginTop = '0';
+                        } else {
+                            if (sigImg) { sigImg.src = ''; sigImg.style.display = 'none'; }
+                            if (sigFallback) sigFallback.style.display = 'block';
+                            if (sigName) sigName.style.marginTop = '22px';
+                        }
+                    } else if (d.type === 'acknowledged') {
+                        if (ackMark) ackMark.innerHTML = d.value ? '&#9745;' : '&#9744;';
+                    }
+                });
+            })();
+        </script>
+    @endif
 
 </body>
 </html>

@@ -5,7 +5,6 @@ use App\Http\Controllers\ActivityLogController;
 use App\Http\Controllers\Admin\SuperAdminDashboardController;
 use App\Http\Controllers\AssessmentController;
 use App\Http\Controllers\AuthController;
-use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\AvailabilityController;
 use App\Http\Controllers\BookingController;
 use App\Http\Controllers\EventController;
@@ -14,6 +13,7 @@ use App\Http\Controllers\LeadController;
 use App\Http\Controllers\LeadDocumentController;
 use App\Http\Controllers\LeadPortalInvitationController;
 use App\Http\Controllers\LeadTrackingController;
+use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\Portal\Accommodation\CalendarController;
 use App\Http\Controllers\Portal\Accommodation\GasDeliveryController;
 use App\Http\Controllers\Portal\Accommodation\MessageTemplateController;
@@ -44,6 +44,32 @@ use App\Services\PromoFeed;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', [HomeController::class, 'index']);
+
+// Local-only: render the engagement-documents email in the browser so the
+// banner/icons/footer (served from this app's public/) load — email clients
+// can't fetch localhost image URLs, so a delivered test shows broken images.
+if (app()->environment('local')) {
+    Route::get('/dev/engagement-preview', function () {
+        $lead = \App\Models\Lead::whereNotNull('tracking_code')->first()
+            ?? new \App\Models\Lead(['first_name' => 'Angelika', 'tracking_code' => 'PREVIEW']);
+
+        // Map any already-generated engagement PDFs (source_variant
+        // "engagement:<key>") to their doc ids so the preview's icons
+        // deep-link to real files when they exist.
+        $docIds = [];
+        if ($lead->exists) {
+            foreach ($lead->documents()->where('source_variant', 'like', 'engagement:%')->get() as $d) {
+                $docIds[substr($d->source_variant, strlen('engagement:'))] = $d->id;
+            }
+        }
+
+        return new \App\Mail\EngagementDocumentsReady(
+            $lead,
+            array_keys(\App\Services\Immigration\EngagementDocumentGenerator::DOCS),
+            $docIds,
+        );
+    });
+}
 
 Route::get('/booking', function () {
     // Aggregate the immigration advisers' saved weekly availability into a
@@ -227,15 +253,24 @@ Route::middleware('throttle:tracker')->group(function () {
     Route::post('/track/{code}/info', [LeadTrackingController::class, 'update'])->name('track.update');
     Route::post('/track/{code}/document', [LeadTrackingController::class, 'uploadDoc'])->name('track.upload');
     Route::post('/track/{code}/document/{doc}', [LeadTrackingController::class, 'updateDoc'])->name('track.doc.update');
+    // Download a staff-shared / generated document (engagement pack).
+    Route::get('/track/{code}/documents/{doc}/download', [LeadTrackingController::class, 'downloadDoc'])->name('track.doc.download');
+    // Live HTML preview for the signing modal (real-time signature).
+    Route::get('/track/{code}/documents/{doc}/preview', [LeadTrackingController::class, 'previewDoc'])->name('track.doc.preview');
+    // Client e-signs the generated Written Agreement.
+    Route::post('/track/{code}/documents/{doc}/sign', [LeadTrackingController::class, 'signDoc'])->name('track.doc.sign');
+    // Lead picks (or clears) one program from their staff-suggested
+    // shortlist. Server validates the id is actually in the shortlist.
+    Route::post('/track/{code}/choose-program', [LeadTrackingController::class, 'chooseProgram'])->name('track.choose-program');
     Route::delete('/track/{code}/document/{doc}', [LeadTrackingController::class, 'deleteDoc'])->name('track.doc.delete');
 
     // Build 11.D Phase 3 — Agreement signing. tracker_signing_token in the
     // URL is the bearer credential for the agreement; the controller
     // validates that it belongs to the lead resolved from {code}, so a
     // valid code paired with a guessed token still 404s.
-    Route::get('/track/{code}/agreements/{token}/sign',     [\App\Http\Controllers\Tracker\TrackerAgreementController::class, 'showSigning'])->name('track.agreements.sign.show');
-    Route::post('/track/{code}/agreements/{token}/sign',    [\App\Http\Controllers\Tracker\TrackerAgreementController::class, 'sign'])->name('track.agreements.sign');
-    Route::get('/track/{code}/agreements/{token}/signed',   [\App\Http\Controllers\Tracker\TrackerAgreementController::class, 'signedConfirmation'])->name('track.agreements.signed');
+    Route::get('/track/{code}/agreements/{token}/sign', [\App\Http\Controllers\Tracker\TrackerAgreementController::class, 'showSigning'])->name('track.agreements.sign.show');
+    Route::post('/track/{code}/agreements/{token}/sign', [\App\Http\Controllers\Tracker\TrackerAgreementController::class, 'sign'])->name('track.agreements.sign');
+    Route::get('/track/{code}/agreements/{token}/signed', [\App\Http\Controllers\Tracker\TrackerAgreementController::class, 'signedConfirmation'])->name('track.agreements.signed');
 });
 
 // Public Registration & Assessment Routes
@@ -361,6 +396,7 @@ Route::middleware(['auth'])->group(function () {
         });
         Route::get('/admin/team-cards', fn () => inertia('admin/TeamCards'))->name('admin.team-cards');
         Route::get('/admin/leads', [LeadController::class, 'index'])->name('admin.leads');
+        Route::get('/admin/leads/proposals-agreements', [SalesController::class, 'proposalsAgreementsPage'])->name('admin.leads.proposals-agreements');
         Route::get('/admin/events', [EventController::class, 'index'])->name('admin.events');
         Route::post('/admin/events', [EventController::class, 'store']);
         Route::get('/admin/events/{id}', [EventController::class, 'show'])->name('admin.events.show');
@@ -658,6 +694,39 @@ Route::middleware(['auth'])->group(function () {
         // (single|partner variant) is wired up right now.
         Route::post('/admin/leads/{id}/documents/checklist/{key}/generate', [LeadDocumentController::class, 'generateAgreement'])
             ->name('admin.leads.documents.checklist.generate');
+        // Unified generate route driven by a friendly `type` — used by the
+        // new Proposal & Agreements page's "+ New" flow. Supported types:
+        //   proposal | consultancy_single | consultancy_partner | english_engagement
+        Route::post('/admin/leads/{id}/generate/{type}', [LeadDocumentController::class, 'generateDocument'])
+            ->name('admin.leads.generate');
+        // Bulk generate immigration engagement documents (written agreement
+        // + IAA standards) for a case in one call — the Engagement workspace.
+        Route::post('/admin/leads/{id}/engagement/generate', [LeadDocumentController::class, 'generateEngagement'])
+            ->name('admin.leads.engagement.generate');
+        // Delete a case's whole generated engagement pack (one row = one case).
+        Route::delete('/admin/leads/{id}/engagement/documents', [LeadDocumentController::class, 'destroyEngagementDocs'])
+            ->name('admin.leads.engagement.destroy');
+        // Tax invoice — live preview, generate, and per-case delete.
+        Route::get('/admin/leads/{id}/invoice/preview', [LeadDocumentController::class, 'previewInvoice'])
+            ->name('admin.leads.invoice.preview');
+        Route::post('/admin/leads/{id}/invoice/generate', [LeadDocumentController::class, 'generateInvoice'])
+            ->name('admin.leads.invoice.generate');
+        Route::delete('/admin/leads/{id}/invoice/documents', [LeadDocumentController::class, 'destroyInvoices'])
+            ->name('admin.leads.invoice.destroy');
+        // Live HTML preview of the same Blade template — feeds the iframe
+        // on the Proposal & Agreements "New" modal. Cheap: renders the
+        // view without going through dompdf.
+        Route::get('/admin/leads/{id}/generate/{type}/preview', [LeadDocumentController::class, 'previewDocument'])
+            ->name('admin.leads.generate.preview');
+        // "Proposal" — not a document. Staff pick up to 3 programs to
+        // suggest to the lead; saved as a JSON array on the lead row.
+        Route::post('/admin/leads/{id}/proposal', [LeadDocumentController::class, 'saveProposal'])
+            ->name('admin.leads.proposal.save');
+        // "Your proposal / agreement is ready" — queued email to the
+        // lead pointing at their /track/{code} page. Fired from the
+        // Notify button on the Proposal & Agreements table.
+        Route::post('/admin/leads/{id}/notify-document-ready', [LeadDocumentController::class, 'notifyDocumentReady'])
+            ->name('admin.leads.notify-document-ready');
         Route::delete('/admin/leads/{leadId}/documents/{docId}', [LeadDocumentController::class, 'destroyDocument'])
             ->name('admin.leads.documents.destroy');
         // Staff download — same controller, role-gated inside.
@@ -762,6 +831,10 @@ Route::middleware(['auth'])->group(function () {
         Route::middleware('portal:sales')->prefix('sales')->name('portal.sales.')->group(function () {
             Route::get('/dashboard', [SalesController::class, 'dashboard'])->name('dashboard');
             Route::get('/leads', [SalesController::class, 'leads'])->name('leads');
+            // Sidebar sub-item — leads that have a generated Proposal or
+            // Agreement. Declared before /leads/{id} so the static suffix
+            // segment wins.
+            Route::get('/leads/proposals-agreements', [SalesController::class, 'proposalsAgreementsPage'])->name('leads.proposals-agreements');
 
             // Events tab — registrants for one event.
             //   /registrations → JSON (legacy; still used elsewhere)
@@ -851,6 +924,7 @@ Route::middleware(['auth'])->group(function () {
         Route::middleware('portal:education')->prefix('education')->name('portal.education.')->group(function () {
             Route::get('/dashboard', [EducationController::class, 'dashboard'])->name('dashboard');
             Route::get('/leads', [EducationController::class, 'leads'])->name('leads');
+            Route::get('/leads/proposals-agreements', [SalesController::class, 'proposalsAgreementsPage'])->name('leads.proposals-agreements');
             // Events tab — registrants for one event (JSON drawer), same as sales.
             Route::get('/events/{id}/registrations', [EducationController::class, 'eventRegistrations'])->name('events.registrations');
             Route::get('/events/{id}/registrants', [EducationController::class, 'eventRegistrantsPage'])->name('events.registrants');
@@ -956,6 +1030,7 @@ Route::middleware(['auth'])->group(function () {
         Route::middleware('portal:immigration')->prefix('immigration')->name('portal.immigration.')->group(function () {
             Route::get('/dashboard', [ImmigrationController::class, 'dashboard'])->name('dashboard');
             Route::get('/leads', [ImmigrationController::class, 'leads'])->name('leads');
+            Route::get('/leads/proposals-agreements', [SalesController::class, 'proposalsAgreementsPage'])->name('leads.proposals-agreements');
 
             // Email module — shared Bulk Mail / SMS / Replies (same feature as
             // the sales + admin screens, rendered under this portal's layout).
@@ -1004,6 +1079,11 @@ Route::middleware(['auth'])->group(function () {
             // bookmark that POSTed an intake id still resolves cleanly.
             Route::post('/assessments/{id}/convert-to-case', [ImmigrationController::class, 'convertAssessmentToCase'])->name('assessments.convert');
             Route::get('/cases', [ImmigrationController::class, 'cases'])->name('cases');
+            // Engagement + Invoice generation workspaces. Declared before the
+            // /cases/{lead}/... routes below; both are single-segment literals
+            // so they never collide with the {lead} binding.
+            Route::get('/cases/engagement', [ImmigrationController::class, 'engagement'])->name('cases.engagement');
+            Route::get('/cases/invoice', [ImmigrationController::class, 'invoice'])->name('cases.invoice');
             // Create new case from the Cases page "Add new case" modal.
             Route::post('/cases', [ImmigrationController::class, 'storeCase'])->name('cases.store');
             // Edit an existing case (same modal fields as create).
@@ -1032,12 +1112,12 @@ Route::middleware(['auth'])->group(function () {
             // /agreements/templates must come before /agreements/{agreement}
             // or the literal 'templates' would be captured as an Agreement id.
             Route::prefix('cases/{lead}/agreements')->name('cases.agreements.')->group(function () {
-                Route::get('/',                       [\App\Http\Controllers\Immigration\AgreementController::class, 'index'])->name('index');
-                Route::get('/templates',              [\App\Http\Controllers\Immigration\AgreementController::class, 'templates'])->name('templates');
-                Route::post('/',                      [\App\Http\Controllers\Immigration\AgreementController::class, 'generate'])->name('generate');
-                Route::post('/{agreement}/send',      [\App\Http\Controllers\Immigration\AgreementController::class, 'send'])->name('send');
-                Route::get('/{agreement}/pdf',        [\App\Http\Controllers\Immigration\AgreementController::class, 'downloadPdf'])->name('pdf');
-                Route::post('/{agreement}/void',      [\App\Http\Controllers\Immigration\AgreementController::class, 'void'])->name('void');
+                Route::get('/', [\App\Http\Controllers\Immigration\AgreementController::class, 'index'])->name('index');
+                Route::get('/templates', [\App\Http\Controllers\Immigration\AgreementController::class, 'templates'])->name('templates');
+                Route::post('/', [\App\Http\Controllers\Immigration\AgreementController::class, 'generate'])->name('generate');
+                Route::post('/{agreement}/send', [\App\Http\Controllers\Immigration\AgreementController::class, 'send'])->name('send');
+                Route::get('/{agreement}/pdf', [\App\Http\Controllers\Immigration\AgreementController::class, 'downloadPdf'])->name('pdf');
+                Route::post('/{agreement}/void', [\App\Http\Controllers\Immigration\AgreementController::class, 'void'])->name('void');
             });
             Route::get('/documents', [ImmigrationController::class, 'documents'])->name('documents');
             Route::get('/appointments', [ImmigrationController::class, 'appointments'])->name('appointments');
@@ -1067,6 +1147,9 @@ Route::middleware(['auth'])->group(function () {
             // ACCOUNT
             Route::get('/profile', [ImmigrationController::class, 'profile'])->name('profile');
             Route::post('/profile', [ImmigrationController::class, 'updateProfile'])->name('profile.update');
+            // Staff e-signature — drawn or uploaded, rendered on engagement docs.
+            Route::post('/profile/signature', [ImmigrationController::class, 'saveSignature'])->name('profile.signature.save');
+            Route::delete('/profile/signature', [ImmigrationController::class, 'deleteSignature'])->name('profile.signature.delete');
             Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications');
         });
 

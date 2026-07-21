@@ -38,6 +38,7 @@ return [
             'key' => 'agreements',
             'section' => 'Agreements',
             'items' => [
+                ['id' => 'agree.proposal', 'name' => 'Study Proposal'],
                 ['id' => 'agree.consultancy', 'name' => 'Consultancy Agreement'],
                 ['id' => 'agree.engagement_english', 'name' => 'Engagement Agreement for English Review'],
             ],

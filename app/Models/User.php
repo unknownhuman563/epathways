@@ -56,8 +56,11 @@ class User extends Authenticatable
         'role',
         'lead_id',
         'iaa_licence_number',
+        'iaa_licence_type',
         'iaa_licence_expiry',
         'avatar_path',
+        'signature_path',
+        'signature_updated_at',
         // Contact details — primarily captured for recruiting Agents
         // (location + phone shown in the admin user form), harmless for
         // other roles.
@@ -89,8 +92,123 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'last_login_at' => 'datetime',
             'iaa_licence_expiry' => 'date',
+            'signature_updated_at' => 'datetime',
             'password' => 'hashed',
         ];
+    }
+
+    /**
+     * The staff signature as a base64 data URI, or null when none is set.
+     * Signatures live on the private disk (never a public URL) and are
+     * embedded straight into generated PDFs / previews.
+     */
+    public function signatureDataUri(): ?string
+    {
+        if (! $this->signature_path) {
+            return null;
+        }
+
+        $disk = \Illuminate\Support\Facades\Storage::disk('local');
+        if (! $disk->exists($this->signature_path)) {
+            return null;
+        }
+
+        $ext = strtolower(pathinfo($this->signature_path, PATHINFO_EXTENSION));
+        $mime = $ext === 'jpg' || $ext === 'jpeg' ? 'image/jpeg' : 'image/png';
+
+        return "data:{$mime};base64,".base64_encode($disk->get($this->signature_path));
+    }
+
+    /**
+     * Same as signatureDataUri() but with transparent (PNG) / near-white
+     * (JPEG) borders stripped so the visible ink centers cleanly when
+     * dropped into a signature block. Signature-pad exports tend to have
+     * a huge canvas with a tiny scribble in one corner — without trimming
+     * the ink looks off-center no matter how you align the <img>.
+     */
+    public function signatureDataUriTrimmed(): ?string
+    {
+        if (! $this->signature_path) {
+            return null;
+        }
+        $disk = \Illuminate\Support\Facades\Storage::disk('local');
+        if (! $disk->exists($this->signature_path)) {
+            return null;
+        }
+        if (! function_exists('imagecreatefromstring')) {
+            // GD absent — fall back to the raw image rather than error.
+            return $this->signatureDataUri();
+        }
+
+        $binary = $disk->get($this->signature_path);
+        $img = @imagecreatefromstring($binary);
+        if (! $img) {
+            return $this->signatureDataUri();
+        }
+
+        $w = imagesx($img);
+        $h = imagesy($img);
+        $left = $w;
+        $right = 0;
+        $top = $h;
+        $bottom = 0;
+
+        // Alpha threshold — pixels with alpha above this are treated as
+        // background. 100 (out of 127) tolerates faint anti-aliased edges
+        // without eating into thin pen strokes.
+        $alphaThreshold = 100;
+        // Brightness threshold for the JPEG fallback path — anything
+        // above 240 average RGB counts as background.
+        $brightThreshold = 240;
+
+        for ($y = 0; $y < $h; $y++) {
+            for ($x = 0; $x < $w; $x++) {
+                $rgba = imagecolorat($img, $x, $y);
+                $a = ($rgba >> 24) & 0x7F;
+                $r = ($rgba >> 16) & 0xFF;
+                $g = ($rgba >> 8) & 0xFF;
+                $b = $rgba & 0xFF;
+
+                $isInk = $a < $alphaThreshold && ($r + $g + $b) / 3 < $brightThreshold;
+                if (! $isInk) {
+                    continue;
+                }
+                if ($x < $left)   $left = $x;
+                if ($x > $right)  $right = $x;
+                if ($y < $top)    $top = $y;
+                if ($y > $bottom) $bottom = $y;
+            }
+        }
+
+        if ($right < $left || $bottom < $top) {
+            imagedestroy($img);
+            return $this->signatureDataUri();
+        }
+
+        // Small breathing room around the ink so descenders don't
+        // touch the crop edge.
+        $pad = 4;
+        $left = max(0, $left - $pad);
+        $top = max(0, $top - $pad);
+        $right = min($w - 1, $right + $pad);
+        $bottom = min($h - 1, $bottom + $pad);
+
+        $cw = $right - $left + 1;
+        $ch = $bottom - $top + 1;
+        $out = imagecreatetruecolor($cw, $ch);
+        imagealphablending($out, false);
+        imagesavealpha($out, true);
+        $transparent = imagecolorallocatealpha($out, 0, 0, 0, 127);
+        imagefill($out, 0, 0, $transparent);
+        imagecopy($out, $img, 0, 0, $left, $top, $cw, $ch);
+
+        ob_start();
+        imagepng($out);
+        $trimmed = ob_get_clean();
+        imagedestroy($img);
+        imagedestroy($out);
+
+        return 'data:image/png;base64,'.base64_encode($trimmed);
     }
 
     /**

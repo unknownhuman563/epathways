@@ -19,7 +19,7 @@ const STATUS_STYLE = {
  * (e.g. "/portal/education" or "/portal/sales"); all CRUD posts to the same
  * ProgramController under that prefix.
  */
-export default function ProgramsManager({ programs = [], portalBase, description }) {
+export default function ProgramsManager({ programs = [], schools = [], portalBase, description }) {
     const [search, setSearch] = useState("");
     const [status, setStatus] = useState("all");
     const [editing, setEditing] = useState(undefined); // undefined = closed, null = add, object = edit
@@ -176,6 +176,7 @@ export default function ProgramsManager({ programs = [], portalBase, description
             <ProgramModal
                 open={editing !== undefined}
                 editing={editing || null}
+                schools={schools}
                 portalBase={portalBase}
                 onClose={() => setEditing(undefined)}
             />

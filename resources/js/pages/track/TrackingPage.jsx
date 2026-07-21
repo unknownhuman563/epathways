@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { Head, router, useForm, usePage } from '@inertiajs/react';
 import {
     Search, CheckCircle2, AlertCircle, ArrowRight,
@@ -6,6 +6,8 @@ import {
     Eye, FileType, Plus, Trash2, Edit3, Edit,
     Check, Clock, MessageSquare, ShieldCheck,
     User as UserIcon, Folder as FolderIcon,
+    Sparkles, GraduationCap, MapPin, Award,
+    Mail, Calendar as CalendarIcon, Download, PenTool, Eraser, Camera,
 } from 'lucide-react';
 import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
@@ -30,11 +32,14 @@ const fmtBytes = (bytes) => {
 export default function TrackingPage({
     code = null,
     lead = null,
+    avatar = null,
     info = null,
     documents = [],
+    shared_documents = [],
     agreements = [],
     timeline = [],
     visa = null,
+    proposal = null,
     error = null,
 }) {
     const [input, setInput] = useState(code || '');
@@ -44,7 +49,7 @@ export default function TrackingPage({
     // ?tab=, ?section=, ?status= on first render and writes back via
     // history.replaceState as the user clicks around. Direct links to a
     // specific tab/filter combination work without an extra round-trip.
-    const [activeTab, setActiveTab] = useUrlParam('tab', 'documents');
+    const [activeTab, setActiveTab] = useUrlParam('tab', 'overview');
     const [sectionFilter, setSectionFilter] = useUrlParam('section', 'all');
     const [statusFilter, setStatusFilter] = useUrlParam('status', 'all');
 
@@ -79,67 +84,61 @@ export default function TrackingPage({
             <Head title="Track Your Application — ePathways" />
             <Navbar />
 
-            <main className="flex-1 bg-[#f7f7f5]">
-                {/* Hero — only shows when no lead is loaded yet (landing
-                    state). Once the code resolves the hero collapses
-                    into the identity header so vertical space goes to
-                    the content. */}
+            <main className="flex-1 bg-gray-50">
+                {/* Hero — landing state before a code resolves. Clean white
+                    card on a soft gray backdrop; matches the staff portal
+                    dashboard look. */}
                 {!lead && (
-                    <section className="relative bg-[#0c1611] text-white py-24 overflow-hidden">
-                        <div
-                            aria-hidden
-                            className="absolute inset-0 opacity-60 pointer-events-none"
-                            style={{
-                                background:
-                                    'radial-gradient(ellipse at top, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0) 60%)',
-                            }}
-                        />
-                        <div className="relative container mx-auto px-6 md:px-12 max-w-3xl text-center">
-                            <p className="text-[10px] font-bold tracking-[0.5em] uppercase text-white/50 mb-5">
-                                Application Tracking
-                            </p>
-                            <h1 className="text-4xl md:text-5xl font-medium tracking-tight mb-3 leading-[1.05]">
-                                Your journey,<br className="sm:hidden" /> on one page.
-                            </h1>
-                            <p className="text-white/55 text-sm md:text-[15px] max-w-md mx-auto">
-                                Enter the tracking code we sent you to see your details, documents, and progress.
-                            </p>
-                            <form
-                                onSubmit={submitLookup}
-                                className="mt-10 flex flex-col sm:flex-row gap-2 max-w-2xl mx-auto"
-                            >
-                                <div className="flex-1 flex items-center gap-3 px-5 py-3.5 bg-white/5 border border-white/15 focus-within:border-white/50 focus-within:bg-white/10 transition-colors">
-                                    <Search size={16} className="text-white/40 flex-shrink-0" />
-                                    <input
-                                        type="text"
-                                        placeholder="EP-AB23CDEF"
-                                        value={input}
-                                        onChange={(e) => setInput(e.target.value)}
-                                        className="flex-1 bg-transparent text-white placeholder-white/30 focus:outline-none tracking-[0.22em] uppercase text-sm text-center sm:text-left"
-                                        autoFocus={!lead}
-                                    />
+                    <section className="py-16 sm:py-20">
+                        <div className="container mx-auto px-6 md:px-12 max-w-2xl">
+                            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-8 sm:p-10 text-center">
+                                <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100 text-[10px] font-bold uppercase tracking-[0.22em] mb-4">
+                                    <Sparkles size={11} strokeWidth={2.5} />
+                                    Application Tracker
                                 </div>
-                                <button
-                                    type="submit"
-                                    className="px-7 py-3.5 bg-white text-[#0c1611] text-[11px] font-bold uppercase tracking-[0.28em] hover:bg-gray-200 transition-colors flex items-center justify-center gap-2"
+                                <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 tracking-tight mb-2">
+                                    Your journey, on one page.
+                                </h1>
+                                <p className="text-sm text-gray-500 max-w-md mx-auto leading-relaxed">
+                                    Enter the tracking code we sent you to see your details, documents, and progress.
+                                </p>
+                                <form
+                                    onSubmit={submitLookup}
+                                    className="mt-8 flex flex-col sm:flex-row gap-2 max-w-lg mx-auto"
                                 >
-                                    Track <ArrowRight size={13} strokeWidth={2.5} />
-                                </button>
-                            </form>
+                                    <div className="flex-1 flex items-center gap-2.5 px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus-within:border-gray-900 focus-within:bg-white transition-all">
+                                        <Search size={15} className="text-gray-400 flex-shrink-0" />
+                                        <input
+                                            type="text"
+                                            placeholder="EP-AB23CDEF"
+                                            value={input}
+                                            onChange={(e) => setInput(e.target.value)}
+                                            className="flex-1 bg-transparent text-gray-900 placeholder-gray-400 focus:outline-none tracking-[0.18em] uppercase text-sm font-mono"
+                                            autoFocus={!lead}
+                                        />
+                                    </div>
+                                    <button
+                                        type="submit"
+                                        className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-gray-900 text-white rounded-xl text-sm font-bold hover:bg-black transition-colors shadow-sm"
+                                    >
+                                        Track <ArrowRight size={14} strokeWidth={2.5} />
+                                    </button>
+                                </form>
+                            </div>
                         </div>
                     </section>
                 )}
 
-                <section className="container mx-auto px-6 md:px-12 max-w-7xl py-10">
+                <section className="container mx-auto px-6 md:px-12 max-w-7xl py-8">
                     {flash.success && (
-                        <div className="mb-6 bg-gray-50 border border-gray-300 px-5 py-3 text-sm text-[#282728] flex items-center gap-3">
-                            <CheckCircle2 size={16} className="text-[#282728] flex-shrink-0" />
+                        <div className="mb-4 bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3 text-sm text-emerald-800 flex items-center gap-2.5">
+                            <CheckCircle2 size={16} className="text-emerald-600 flex-shrink-0" />
                             {flash.success}
                         </div>
                     )}
 
                     {error && (
-                        <div className="bg-red-50 border border-red-200 px-5 py-4 flex items-start gap-3 max-w-2xl mx-auto">
+                        <div className="bg-red-50 border border-red-200 rounded-xl px-5 py-4 flex items-start gap-3 max-w-2xl mx-auto shadow-sm">
                             <AlertCircle size={18} className="text-red-500 flex-shrink-0 mt-0.5" />
                             <div>
                                 <p className="text-sm font-semibold text-red-700 mb-0.5">Code not found</p>
@@ -150,11 +149,27 @@ export default function TrackingPage({
 
                     {lead && (
                         <div className="space-y-4">
-                            <IdentityHeader lead={lead} visa={visa} timeline={timeline} />
-                            <JourneySnapshot
+                            <IdentityHeader
+                                lead={lead}
+                                visa={visa}
                                 timeline={timeline}
-                                onSeeFull={() => setJourneyOpen(true)}
+                                avatar={avatar}
+                                code={lead.tracking_code}
+                                faceKey={
+                                    (visa?.checklist || []).find((it) => (it.key || '').toLowerCase().includes('face'))?.key
+                                    || avatar?.checklist_key
+                                    || 'face_image'
+                                }
                             />
+
+                            {/* Programs suggested by the adviser — only
+                                renders when staff has shortlisted programs
+                                on the internal Proposal & Agreements page.
+                                Sits above the tab strip so the lead sees it
+                                straight after their journey snapshot. */}
+                            {proposal && proposal.programs?.length > 0 && (
+                                <ProposalShortlist proposal={proposal} code={lead.tracking_code} />
+                            )}
 
                             {/* Tab strip + tab content. Counts on the Visa
                                 and Documents tabs nudge the lead toward
@@ -164,16 +179,29 @@ export default function TrackingPage({
                                     active={activeTab}
                                     onChange={setActiveTab}
                                     counts={{
-                                        // Single counter for the merged tab — uploads + requirements.
-                                        documents: documents.length + (visa?.checklist?.length || 0),
+                                        attention: attentionCount({ documents, sharedDocuments: shared_documents, visa }),
+                                        visa: (visa?.checklist?.length || 0),
                                     }}
                                 />
 
-                                {activeTab === 'documents' && (
+                                {activeTab === 'overview' && (
+                                    <OverviewTab
+                                        visa={visa}
+                                        documents={documents}
+                                        sharedDocuments={shared_documents}
+                                        agreements={agreements}
+                                        timeline={timeline}
+                                        onSeeFull={() => setJourneyOpen(true)}
+                                        onGoToVisa={() => setActiveTab('visa')}
+                                    />
+                                )}
+                                {activeTab === 'visa' && (
                                     <DocumentsHubTab
                                         visa={visa}
                                         documents={documents}
+                                        sharedDocuments={shared_documents}
                                         agreements={agreements}
+                                        showAdviserDocs={true}
                                         sectionFilter={sectionFilter}
                                         onSectionFilter={setSectionFilter}
                                         statusFilter={statusFilter}
@@ -183,12 +211,11 @@ export default function TrackingPage({
                                         onDelete={setDeletingDoc}
                                     />
                                 )}
-                                {activeTab === 'information' && (
-                                    <div className="bg-white border-x border-b border-gray-200 p-4 sm:p-6">
+                                {activeTab === 'profile' && (
+                                    <div className="bg-white rounded-b-2xl border border-t-0 border-gray-100 shadow-sm p-4 sm:p-6">
                                         <InformationPanel code={lead.tracking_code} info={info} />
                                     </div>
                                 )}
-                                {activeTab === 'messages' && <MessagesTabStub />}
                             </div>
                         </div>
                     )}
@@ -414,7 +441,7 @@ const DOC_TYPES = [
     { key: 'other',      label: 'Other supporting document', hint: 'Anything else we\'ve asked for.' },
 ];
 
-const TABS = ['documents', 'information', 'messages'];
+const TABS = ['overview', 'visa', 'profile'];
 
 /**
  * Read a query-string param from the current URL with a fallback. Wrapped
@@ -455,8 +482,35 @@ function useUrlParam(name, fallback) {
  * application page. Left = application name + visa + tracking code.
  * Right = current journey status badge + "Step X of N".
  */
-function IdentityHeader({ lead, visa, timeline = [] }) {
+function IdentityHeader({ lead, visa, timeline = [], avatar = null, code = '', faceKey = 'face_image' }) {
     const fullName = [lead?.first_name, lead?.last_name].filter(Boolean).join(' ') || 'Application';
+    // Which department is handling the case — surfaced beside the visa type.
+    const department = lead?.is_immigration_case ? 'Immigration'
+        : lead?.is_student ? 'Education'
+            : lead?.is_accommodation_client ? 'Accommodation'
+                : 'Sales';
+    const [photoMenu, setPhotoMenu] = useState(false);
+    const [photoBusy, setPhotoBusy] = useState(false);
+    const photoInputRef = useRef(null);
+
+    const uploadPhoto = (e) => {
+        const file = e.target.files?.[0];
+        if (! file) return;
+        setPhotoBusy(true);
+        router.post(`/track/${code}/document`, { file, checklist_key: faceKey }, {
+            forceFormData: true,
+            preserveScroll: true,
+            onFinish: () => { setPhotoBusy(false); setPhotoMenu(false); if (photoInputRef.current) photoInputRef.current.value = ''; },
+        });
+    };
+    const removePhoto = () => {
+        if (! avatar?.document_id) return;
+        setPhotoBusy(true);
+        router.delete(`/track/${code}/document/${avatar.document_id}`, {
+            preserveScroll: true,
+            onFinish: () => { setPhotoBusy(false); setPhotoMenu(false); },
+        });
+    };
     const visaName = visa?.name || null;
     const trackingCode = lead?.tracking_code || '';
 
@@ -478,33 +532,187 @@ function IdentityHeader({ lead, visa, timeline = [] }) {
         stepLabel = `Step ${currentIdx + 1} of ${timeline.length}`;
     }
 
+    // Initials for the avatar chip on the left.
+    const initials = (fullName || '?')
+        .split(/\s+/)
+        .filter(Boolean)
+        .slice(0, 2)
+        .map((s) => s.charAt(0).toUpperCase())
+        .join('');
+
+    // HR-style profile layout, dark-gray palette. Banner sits above a
+    // circular avatar that overlaps onto white; name + status pill + kebab
+    // on one row; four pill fields below (Visa / Application / Email /
+    // Tracking Code). No greens on the header chrome — status pill keeps
+    // its state tone so the applicant can read progress at a glance.
+    const isComplete = allCompleted && ! declinedStep;
+    const hasEmail = !! lead?.email;
+    const hasPhone = !! lead?.phone;
+
     return (
-        <div className="bg-white border border-gray-200 px-6 py-5">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 items-start">
-                <div>
-                    <p className="text-[10px] font-bold tracking-[0.28em] uppercase text-gray-400 mb-2">
-                        Application Name
-                    </p>
-                    <p className="text-lg font-semibold text-[#282728] tracking-tight leading-snug">
-                        {fullName}
-                    </p>
-                    <p className="text-[12px] text-gray-500 mt-1">
-                        {visaName ? `${visaName} · ` : ''}
-                        <span className="font-mono">{trackingCode}</span>
-                    </p>
-                </div>
-                <div className="sm:text-right">
-                    <p className="text-[10px] font-bold tracking-[0.28em] uppercase text-gray-400 mb-2">
-                        Application Status
-                    </p>
-                    <span className={`inline-flex items-center px-3 py-1 text-[11px] font-bold tracking-wide border ${badgeTone}`}>
-                        {statusLabel}
-                    </span>
-                    {stepLabel && (
-                        <p className="text-[12px] text-gray-500 mt-1">{stepLabel}</p>
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+            {/* BANNER — deep gray gradient with faint decorative arcs.
+                Fixed 128px on mobile / 144px desktop so the avatar has
+                room to overlap by half its height without clipping. */}
+            <div
+                className="h-32 sm:h-36 relative overflow-hidden"
+                style={{
+                    background:
+                        'linear-gradient(120deg, #1f2937 0%, #111827 55%, #0c1611 100%)',
+                }}
+            >
+                <svg
+                    aria-hidden
+                    className="absolute right-6 -top-12 opacity-15"
+                    width="280" height="220" viewBox="0 0 280 220" fill="none"
+                >
+                    <circle cx="160" cy="130" r="100" stroke="#ffffff" strokeWidth="1.5" strokeOpacity="0.6" />
+                    <circle cx="220" cy="60"  r="70"  stroke="#ffffff" strokeWidth="1"   strokeOpacity="0.5" />
+                    <circle cx="90"  cy="170" r="50"  stroke="#ffffff" strokeWidth="1"   strokeOpacity="0.4" />
+                </svg>
+                <div
+                    aria-hidden
+                    className="absolute inset-0 opacity-[0.08] mix-blend-overlay pointer-events-none"
+                    style={{
+                        backgroundImage:
+                            "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>\")",
+                    }}
+                />
+            </div>
+
+            {/* IDENTITY — avatar overlaps the banner on its own line; the
+                name + status sit cleanly below it in the white area. */}
+            <div className="px-4 sm:px-6 pb-5">
+                {/* Avatar overlaps the banner by ~half its height. Shows the
+                    client's uploaded Face image when present; the camera
+                    button lets them add / change / remove it. */}
+                <div className="-mt-12 mb-3 relative inline-block">
+                    <div className="w-24 h-24 rounded-full overflow-hidden ring-4 ring-white shadow-lg bg-gray-100 text-gray-400 flex items-center justify-center font-black text-2xl">
+                        {avatar?.url
+                            ? <img src={avatar.url} alt={fullName} className="w-full h-full object-cover" />
+                            : (initials || <UserIcon size={32} />)}
+                    </div>
+                    <button
+                        type="button"
+                        onClick={() => setPhotoMenu((v) => ! v)}
+                        disabled={photoBusy}
+                        title="Change profile photo"
+                        className="absolute bottom-0 right-0 w-8 h-8 rounded-full bg-[#282728] text-white flex items-center justify-center ring-2 ring-white hover:bg-black transition-colors disabled:opacity-50"
+                    >
+                        <Camera size={14} />
+                    </button>
+
+                    {photoMenu && (
+                        <div className="absolute z-20 left-0 top-[104px] w-48 bg-white border border-gray-200 shadow-lg rounded-lg py-1" onMouseLeave={() => setPhotoMenu(false)}>
+                            <button
+                                type="button"
+                                onClick={() => photoInputRef.current?.click()}
+                                className="w-full text-left px-3 py-2 text-[13px] text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                            >
+                                <Upload size={13} /> {avatar?.url ? 'Change photo' : 'Add photo'}
+                            </button>
+                            {avatar?.url && (
+                                <button
+                                    type="button"
+                                    onClick={removePhoto}
+                                    className="w-full text-left px-3 py-2 text-[13px] text-rose-600 hover:bg-rose-50 flex items-center gap-2"
+                                >
+                                    <Trash2 size={13} /> Remove photo
+                                </button>
+                            )}
+                        </div>
                     )}
+                    <input
+                        ref={photoInputRef}
+                        type="file"
+                        accept="image/jpeg,image/jpg"
+                        className="hidden"
+                        onChange={uploadPhoto}
+                    />
+                </div>
+
+                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                    <div className="min-w-0">
+                        <div className="flex items-center gap-2 min-w-0">
+                            <h1 className="text-xl sm:text-2xl font-bold text-[#282728] tracking-tight leading-tight truncate">
+                                {fullName}
+                            </h1>
+                            {isComplete && (
+                                <span
+                                    title="Visa issued"
+                                    className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-[#282728] text-white shrink-0"
+                                >
+                                    <Check size={12} strokeWidth={3} />
+                                </span>
+                            )}
+                        </div>
+                        <p className="text-[13px] text-gray-500 mt-0.5 truncate">
+                            {trackingCode && <span className="font-mono">{trackingCode}</span>}
+                            {trackingCode && visaName && <span className="mx-1.5 text-gray-300">·</span>}
+                            {visaName || 'Application'}
+                        </p>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0">
+                        {visaName && (
+                            <span className="inline-flex items-center px-3 py-1.5 rounded-md text-[11px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                                {visaName}
+                            </span>
+                        )}
+                        <span className="text-[11px] font-medium text-gray-500">
+                            {department}
+                        </span>
+                    </div>
+                </div>
+
+                {/* PILL FIELDS — Visa / Application / Email / Tracking Code.
+                    Email cell hides when the lead has no address on file so
+                    we're not surfacing a dangling em-dash. */}
+                <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                    <PillField
+                        icon={<Award size={12} />}
+                        label="Type of Visa"
+                        value={visaName || '—'}
+                    />
+                    <PillField
+                        icon={<Mail size={12} />}
+                        label="Contact Email"
+                        value={hasEmail ? lead.email : '—'}
+                        truncate
+                    />
+                    <PillField
+                        icon={<UserIcon size={12} />}
+                        label="Contact Number"
+                        value={hasPhone ? lead.phone : '—'}
+                    />
+                    <PillField
+                        icon={<CalendarIcon size={12} />}
+                        label="Tracking Code"
+                        value={trackingCode || '—'}
+                        mono
+                    />
                 </div>
             </div>
+        </div>
+    );
+}
+
+// Reference-style pill field: icon + tiny uppercase label + value.
+// Dark-gray theme throughout — no dots, no accents. The reference's
+// coloured dots were noisy and don't earn their weight on 4 fields.
+function PillField({ icon, label, value, truncate = false, mono = false }) {
+    return (
+        <div className="rounded-xl border border-gray-100 bg-gray-50/60 px-4 py-3">
+            <p className="text-[11.5px] font-semibold text-gray-500 mb-1 flex items-center gap-1.5">
+                <span className="text-gray-400">{icon}</span>
+                {label}
+            </p>
+            <p
+                className={`text-[13.5px] font-semibold text-[#282728] ${truncate ? 'truncate' : ''} ${mono ? 'font-mono' : ''}`}
+                title={truncate ? value : undefined}
+            >
+                {value}
+            </p>
         </div>
     );
 }
@@ -550,23 +758,26 @@ function JourneySnapshot({ timeline = [], onSeeFull }) {
     }, [timeline]);
 
     return (
-        <div className="bg-white border border-gray-200 px-6 py-6">
-            <div className="flex items-center justify-between mb-6">
-                <h2 className="text-sm font-semibold text-[#282728] tracking-tight">
-                    Your journey
-                </h2>
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm px-6 py-5">
+            <div className="flex items-center justify-between mb-5">
+                <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-lg bg-gray-100 text-gray-800 flex items-center justify-center">
+                        <ArrowRight size={14} />
+                    </div>
+                    <h2 className="text-sm font-bold text-gray-900 tracking-tight">Your journey</h2>
+                </div>
                 <button
                     type="button"
                     onClick={onSeeFull}
-                    className="text-[11px] font-semibold text-[#282728] hover:underline inline-flex items-center gap-1"
+                    className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-[11px] font-semibold text-gray-700 hover:text-gray-900 hover:bg-gray-100 transition-colors"
                 >
                     See full journey <ArrowRight size={12} />
                 </button>
             </div>
 
             {declined ? (
-                <div className="border-l-4 border-red-500 bg-red-50 px-4 py-3">
-                    <p className="text-[10px] font-bold tracking-[0.22em] uppercase text-red-600 mb-1">
+                <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3">
+                    <p className="text-[10px] font-bold tracking-[0.2em] uppercase text-red-600 mb-1">
                         Outcome
                     </p>
                     <p className="text-sm font-semibold text-red-900">{declined.label}</p>
@@ -575,11 +786,11 @@ function JourneySnapshot({ timeline = [], onSeeFull }) {
                     )}
                 </div>
             ) : allCompleted ? (
-                <div className="border-l-4 border-emerald-500 bg-emerald-50 px-4 py-3">
-                    <p className="text-[10px] font-bold tracking-[0.22em] uppercase text-emerald-700 mb-1">
+                <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
+                    <p className="text-[10px] font-bold tracking-[0.2em] uppercase text-gray-700 mb-1">
                         Complete
                     </p>
-                    <p className="text-sm font-semibold text-emerald-900">All journey steps complete.</p>
+                    <p className="text-sm font-semibold text-gray-900">All journey steps complete.</p>
                 </div>
             ) : visibleSteps.length > 0 ? (
                 <HorizontalStepper steps={visibleSteps} />
@@ -617,7 +828,7 @@ function HorizontalStepper({ steps }) {
             {filledCols > 0 && (
                 <div
                     aria-hidden
-                    className="absolute top-[20px] left-[16.667%] h-[2px] bg-[#282728]"
+                    className="absolute top-[20px] left-[16.667%] h-[2px] bg-gray-900"
                     style={{ width: `${filledCols * (100 / 3)}%` }}
                 />
             )}
@@ -644,13 +855,13 @@ function StepNode({ step }) {
                 Step {globalIndex}
             </p>
             <p className={`mt-1 text-[14px] font-semibold leading-snug ${
-                status === 'pending' ? 'text-gray-400' : 'text-[#282728]'
+                status === 'pending' ? 'text-gray-400' : 'text-gray-900'
             }`}>
                 {label}
             </p>
             <p className={`mt-1 text-[11px] italic ${
-                status === 'completed' ? 'text-emerald-600' :
-                status === 'current'   ? 'text-[#282728]' :
+                status === 'completed' ? 'text-gray-700' :
+                status === 'current'   ? 'text-gray-900' :
                 'text-gray-400'
             }`}>
                 {statusWord}
@@ -666,25 +877,22 @@ function StepNode({ step }) {
 
 function StepCircle({ status }) {
     if (status === 'completed') {
-        // Filled dark circle with white check — same family as the
-        // "current" treatment so completed nodes read as "this happened"
-        // not "this is happening".
+        // Dark filled — "this happened, no longer active".
         return (
-            <span className="relative z-10 inline-flex w-10 h-10 rounded-full bg-[#282728] items-center justify-center flex-shrink-0">
+            <span className="relative z-10 inline-flex w-10 h-10 rounded-full bg-gray-900 items-center justify-center flex-shrink-0 shadow-sm">
                 <Check size={16} className="text-white" strokeWidth={3} />
             </span>
         );
     }
     if (status === 'current') {
-        // Dark filled circle with inner white dot — the "active" marker
-        // from the reference. Ringed with a soft halo to emphasise focus.
+        // White circle with dark ring + dark dot — active-focus.
         return (
-            <span className="relative z-10 inline-flex w-10 h-10 rounded-full bg-[#282728] items-center justify-center flex-shrink-0 ring-4 ring-[#282728]/10">
-                <span className="block w-2 h-2 rounded-full bg-white" />
+            <span className="relative z-10 inline-flex w-10 h-10 rounded-full bg-white border-2 border-gray-900 items-center justify-center flex-shrink-0 ring-4 ring-gray-200 shadow-sm">
+                <span className="block w-2.5 h-2.5 rounded-full bg-gray-900" />
             </span>
         );
     }
-    // Pending — hollow gray ring with a soft inner dot.
+    // Pending — soft gray ring, no fill.
     return (
         <span className="relative z-10 inline-flex w-10 h-10 rounded-full bg-white border-2 border-gray-200 items-center justify-center flex-shrink-0">
             <span className="block w-2 h-2 rounded-full bg-gray-300" />
@@ -741,13 +949,13 @@ function TabStrip({ active, onChange, counts = {} }) {
     // a single 'documents' tab that surfaces uploads first, then the
     // outstanding requirements, then the agreement pack.
     const items = [
-        { key: 'documents',   label: 'Documents',   Icon: FolderIcon,    badge: counts.documents },
-        { key: 'information', label: 'Information', Icon: UserIcon,      badge: null },
-        { key: 'messages',    label: 'Messages',    Icon: MessageSquare, badge: null },
+        { key: 'overview', label: 'Overview',          Icon: Sparkles,   badge: counts.attention },
+        { key: 'visa',     label: 'Requirements',      Icon: FolderIcon, badge: counts.visa },
+        { key: 'profile',  label: 'My profile',        Icon: UserIcon,   badge: null },
     ];
     return (
-        <div className="bg-white border-x border-t border-gray-200">
-            <div className="flex overflow-x-auto">
+        <div className="bg-white rounded-t-2xl border border-b-0 border-gray-100 shadow-sm">
+            <div className="flex overflow-x-auto px-4 border-b border-gray-100">
                 {items.map((it) => {
                     const isActive = active === it.key;
                     return (
@@ -755,18 +963,18 @@ function TabStrip({ active, onChange, counts = {} }) {
                             key={it.key}
                             type="button"
                             onClick={() => onChange(it.key)}
-                            className={`flex items-center gap-2 px-5 py-3 text-[13px] font-semibold tracking-tight whitespace-nowrap transition-colors border-b-2 ${
+                            className={`inline-flex items-center gap-2 px-4 py-3 text-[13px] font-semibold whitespace-nowrap transition-colors border-b-2 -mb-px ${
                                 isActive
-                                    ? 'text-[#282728] border-[#282728]'
-                                    : 'text-gray-500 border-transparent hover:text-[#282728]'
+                                    ? 'text-gray-900 border-gray-900'
+                                    : 'text-gray-500 border-transparent hover:text-gray-800'
                             }`}
                             aria-current={isActive ? 'page' : undefined}
                         >
                             <it.Icon size={14} strokeWidth={2} />
                             <span>{it.label}</span>
                             {typeof it.badge === 'number' && it.badge > 0 && (
-                                <span className={`text-[10px] font-bold tracking-wide px-1.5 py-0.5 ${
-                                    isActive ? 'bg-[#282728] text-white' : 'bg-gray-100 text-gray-600'
+                                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
+                                    isActive ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600'
                                 }`}>
                                     {it.badge}
                                 </span>
@@ -782,9 +990,9 @@ function TabStrip({ active, onChange, counts = {} }) {
 
 function MessagesTabStub() {
     return (
-        <div className="bg-white border-x border-b border-gray-200 px-6 py-16 text-center">
+        <div className="bg-white rounded-b-2xl border border-t-0 border-gray-100 shadow-sm px-6 py-16 text-center">
             <MessageSquare size={28} className="mx-auto text-gray-300 mb-3" strokeWidth={1.5} />
-            <p className="text-[13px] font-semibold text-[#282728] mb-1">
+            <p className="text-[13px] font-semibold text-gray-900 mb-1">
                 Messages from your adviser will appear here
             </p>
             <p className="text-[12px] text-gray-500 max-w-sm mx-auto leading-relaxed">
@@ -811,10 +1019,223 @@ function MessagesTabStub() {
  * The lifted upload / replace / delete modal state lives on the page; this
  * component just calls the callbacks it's given.
  */
+/** Count of "needs attention" items — drives the Overview tab badge. */
+function attentionCount({ documents = [], sharedDocuments = [], visa = null }) {
+    const checklist = visa?.checklist || [];
+    const byKey = new Map();
+    for (const d of documents) {
+        if (! d.checklist_key) continue;
+        const p = byKey.get(d.checklist_key);
+        if (! p || new Date(d.created_at) > new Date(p.created_at)) byKey.set(d.checklist_key, d);
+    }
+    const outstanding = checklist.filter((it) => {
+        if (it.required === false) return false;
+        const doc = byKey.get(it.key);
+        return ! doc || doc.status === 'Rejected';
+    }).length;
+    const unsigned = sharedDocuments.filter((d) => d.signable && ! d.signed).length;
+    const rejected = documents.filter((d) => d.status === 'Rejected').length;
+    return outstanding + unsigned + rejected;
+}
+
+/**
+ * Overview tab — a one-glance summary: what needs the client's attention
+ * (sign the agreement, upload outstanding docs), document stats, the
+ * journey, and the adviser's shared documents (with e-sign).
+ */
+function OverviewTab({ visa, documents = [], sharedDocuments = [], agreements = [], timeline = [], onSeeFull, onGoToVisa }) {
+    const checklist = visa?.checklist || [];
+
+    const docsByKey = useMemo(() => {
+        const m = new Map();
+        for (const d of documents) {
+            if (! d.checklist_key) continue;
+            const p = m.get(d.checklist_key);
+            if (! p || new Date(d.created_at) > new Date(p.created_at)) m.set(d.checklist_key, d);
+        }
+        return m;
+    }, [documents]);
+
+    const outstanding = useMemo(() => checklist.filter((it) => {
+        if (it.required === false) return false;
+        const doc = docsByKey.get(it.key);
+        return ! doc || doc.status === 'Rejected';
+    }).length, [checklist, docsByKey]);
+
+    const unsignedAgreements = sharedDocuments.filter((d) => d.signable && ! d.signed);
+    const rejectedCount = documents.filter((d) => d.status === 'Rejected').length;
+    const approved = documents.filter((d) => d.status === 'Approved').length;
+    const review = documents.filter((d) => d.status === 'UnderReview').length;
+    const submitted = documents.filter((d) => d.status === 'Submitted').length;
+
+    // Uploaded vs not-uploaded across the requirement checklist — drives the
+    // documents progress donut on the left.
+    const haveCount = useMemo(
+        () => checklist.filter((it) => {
+            const doc = docsByKey.get(it.key);
+            return doc && doc.status !== 'Rejected';
+        }).length,
+        [checklist, docsByKey],
+    );
+    const missingCount = Math.max(0, checklist.length - haveCount);
+
+    const alerts = [];
+    unsignedAgreements.forEach((d) => alerts.push({
+        tone: 'amber', icon: <PenTool size={15} />,
+        title: `Sign your ${d.title}`,
+        text: 'Your adviser has prepared it below — review and add your signature.',
+    }));
+    if (outstanding > 0) alerts.push({
+        tone: 'blue', icon: <Upload size={15} />,
+        title: `${outstanding} document${outstanding === 1 ? '' : 's'} still needed`,
+        text: 'Upload the outstanding items so your adviser can proceed.',
+        action: onGoToVisa, actionLabel: 'Upload',
+    });
+    if (rejectedCount > 0) alerts.push({
+        tone: 'red', icon: <AlertCircle size={15} />,
+        title: `${rejectedCount} document${rejectedCount === 1 ? '' : 's'} to re-upload`,
+        text: 'One or more uploads were not accepted. Please replace them.',
+        action: onGoToVisa, actionLabel: 'Review',
+    });
+
+    const stats = [
+        { label: 'Approved', value: approved, tone: 'text-emerald-700' },
+        { label: 'In review', value: review, tone: 'text-blue-700' },
+        { label: 'Submitted', value: submitted, tone: 'text-gray-700' },
+        { label: 'Still needed', value: outstanding, tone: 'text-amber-700' },
+    ];
+
+    return (
+        <div className="bg-white rounded-b-2xl border border-t-0 border-gray-100 shadow-sm p-4 sm:p-6 space-y-6">
+            {/* Needs your attention (full width) */}
+            <div>
+                <p className="text-[10px] font-bold tracking-[0.22em] uppercase text-gray-500 mb-2">Needs your attention</p>
+                {alerts.length > 0 ? (
+                    <ul className="space-y-2">{alerts.map((a, i) => <AlertRow key={i} alert={a} />)}</ul>
+                ) : (
+                    <div className="flex items-center gap-2.5 px-4 py-3 rounded-xl bg-emerald-50 border border-emerald-100">
+                        <CheckCircle2 size={16} className="text-emerald-600 flex-shrink-0" />
+                        <p className="text-[13px] text-emerald-800 font-medium">You're all caught up — nothing needs your attention right now.</p>
+                    </div>
+                )}
+            </div>
+
+            {/* Summary row — documents graph (uploaded vs not) on the left,
+                document stats in a 2×2 grid on the right. */}
+            <div className="flex flex-col lg:flex-row gap-4 items-stretch">
+                <div className="lg:flex-1 min-w-0 flex flex-col">
+                    <p className="text-[10px] font-bold tracking-[0.22em] uppercase text-gray-500 mb-2">Documents progress</p>
+                    <DocsDonut uploaded={haveCount} notUploaded={missingCount} />
+                </div>
+
+                <div className="lg:w-[360px] flex-shrink-0 flex flex-col">
+                    <p className="text-[10px] font-bold tracking-[0.22em] uppercase text-gray-500 mb-2">Documents</p>
+                    <div className="grid grid-cols-2 grid-rows-2 gap-3 flex-1">
+                        {stats.map((s) => (
+                            <div key={s.label} className="rounded-xl border border-gray-100 bg-gray-50/60 px-4 py-3 flex flex-col justify-center">
+                                <p className={`text-2xl font-bold tabular-nums ${s.tone}`}>{s.value}</p>
+                                <p className="text-[11px] text-gray-500 mt-0.5">{s.label}</p>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            </div>
+
+            {/* Journey (self-contained card) — hidden for now.
+            <JourneySnapshot timeline={timeline} onSeeFull={onSeeFull} /> */}
+
+            {/* Agreements to sign */}
+            {agreements.length > 0 && (
+                <div>
+                    <p className="text-[10px] font-bold tracking-[0.22em] uppercase text-gray-500 mb-2">Agreements to sign</p>
+                    <ul className="space-y-2">{agreements.map((a) => <AgreementCardRow key={a.id} agreement={a} />)}</ul>
+                </div>
+            )}
+
+            {/* Documents from your adviser — download + e-sign */}
+            {sharedDocuments.length > 0 && (
+                <div>
+                    <p className="text-[10px] font-bold tracking-[0.22em] uppercase text-gray-500 mb-2">Documents from your adviser</p>
+                    <ul className="space-y-2">{sharedDocuments.map((d) => <SharedDocRow key={d.id} doc={d} />)}</ul>
+                </div>
+            )}
+        </div>
+    );
+}
+
+/** Donut of uploaded vs not-uploaded documents, with % complete centred. */
+function DocsDonut({ uploaded = 0, notUploaded = 0 }) {
+    const total = uploaded + notUploaded;
+    const pct = total ? Math.round((uploaded / total) * 100) : 0;
+    const r = 58;
+    const c = 2 * Math.PI * r;
+    const up = total ? c * (uploaded / total) : 0;
+
+    return (
+        <div className="rounded-xl border border-gray-100 bg-gray-50/60 p-5 flex-1 flex flex-col sm:flex-row items-center justify-center gap-6">
+            <div className="relative w-[150px] h-[150px] flex-shrink-0">
+                <svg width="150" height="150" viewBox="0 0 150 150">
+                    <circle cx="75" cy="75" r={r} fill="none" stroke="#e5e7eb" strokeWidth="16" />
+                    {up > 0 && (
+                        <circle
+                            cx="75" cy="75" r={r} fill="none" stroke="#059669" strokeWidth="16"
+                            strokeDasharray={`${up} ${c}`} strokeLinecap="round"
+                            transform="rotate(-90 75 75)"
+                        />
+                    )}
+                </svg>
+                <div className="absolute inset-0 flex flex-col items-center justify-center">
+                    <span className="text-3xl font-bold text-gray-900 tabular-nums">{pct}%</span>
+                    <span className="text-[11px] text-gray-500">complete</span>
+                </div>
+            </div>
+            <div className="space-y-2">
+                <div className="flex items-center gap-2 text-[13px]">
+                    <span className="w-3 h-3 rounded-full bg-emerald-600" />
+                    <span className="text-gray-700 font-semibold tabular-nums">{uploaded}</span>
+                    <span className="text-gray-500">uploaded</span>
+                </div>
+                <div className="flex items-center gap-2 text-[13px]">
+                    <span className="w-3 h-3 rounded-full bg-gray-300" />
+                    <span className="text-gray-700 font-semibold tabular-nums">{notUploaded}</span>
+                    <span className="text-gray-500">not uploaded</span>
+                </div>
+                <div className="pt-1 text-[11px] text-gray-400">
+                    {total} document{total === 1 ? '' : 's'} in total
+                </div>
+            </div>
+        </div>
+    );
+}
+
+function AlertRow({ alert: a }) {
+    const tones = {
+        amber: 'bg-amber-50 border-amber-200 text-amber-600',
+        blue: 'bg-blue-50 border-blue-200 text-blue-600',
+        red: 'bg-red-50 border-red-200 text-red-600',
+    };
+    return (
+        <li className={`flex items-start gap-3 px-4 py-3 rounded-xl border ${tones[a.tone] || tones.blue}`}>
+            <span className="mt-0.5 flex-shrink-0">{a.icon}</span>
+            <div className="min-w-0 flex-1">
+                <p className="text-[13px] font-semibold text-gray-900">{a.title}</p>
+                <p className="text-[12px] text-gray-600 mt-0.5">{a.text}</p>
+            </div>
+            {a.action && (
+                <button onClick={a.action} className="text-[11px] font-bold uppercase tracking-wide text-gray-900 hover:underline flex-shrink-0 mt-0.5 whitespace-nowrap">
+                    {a.actionLabel} →
+                </button>
+            )}
+        </li>
+    );
+}
+
 function DocumentsHubTab({
     visa,
     documents = [],
+    sharedDocuments = [],
     agreements = [],
+    showAdviserDocs = true,
     sectionFilter,
     onSectionFilter,
     statusFilter,
@@ -936,12 +1357,6 @@ function DocumentsHubTab({
         <div className="bg-white border-x border-b border-gray-200">
             <DocsTrustStrip />
 
-            <DocsProgressStrip
-                progressPct={progressPct}
-                counts={counts}
-                visaName={visa?.name}
-            />
-
             {/* SECTION 0 — universal top documents (SV Information Form),
                 pinned above everything else on every tracker. Only present
                 when staff haven't hidden it for this case. */}
@@ -963,7 +1378,7 @@ function DocumentsHubTab({
 
             {/* SECTION 1 — agreements (consultancy paperwork comes first,
                 ahead of any document collection) */}
-            {agreements.length > 0 && (
+            {showAdviserDocs && agreements.length > 0 && (
                 <DocsSection
                     title="Agreements to sign"
                     eyebrow="Consultancy"
@@ -977,23 +1392,28 @@ function DocumentsHubTab({
                 </DocsSection>
             )}
 
+            {/* SECTION 1.5 — documents the adviser shared for the client to
+                download (engagement pack: written agreement + IAA standards). */}
+            {showAdviserDocs && sharedDocuments.length > 0 && (
+                <DocsSection
+                    title="Documents from your adviser"
+                    eyebrow="For you"
+                    subtitle={`${sharedDocuments.length} document${sharedDocuments.length === 1 ? '' : 's'} to download`}
+                >
+                    <ul className="space-y-2">
+                        {sharedDocuments.map((d) => (
+                            <SharedDocRow key={d.id} doc={d} />
+                        ))}
+                    </ul>
+                </DocsSection>
+            )}
+
             {/* SECTION 2 — the document checklist. EVERY item stays under its
                 section; once a file is uploaded the row shows it inline (View +
                 status) instead of disappearing. Items are only removed when a
                 staff member unchecks them (hidden_track_documents, filtered
                 server-side). */}
-            <DocsSection
-                title="Documents"
-                eyebrow="Checklist"
-                subtitle={
-                    counts.requirementsTotal === 0
-                        ? null
-                        : counts.outstanding === 0
-                            ? 'Everything we need has been received.'
-                            : `${counts.outstanding} of ${counts.requirementsTotal} still needed`
-                }
-                last={counts.other === 0}
-            >
+            <DocsSection hideHeader last={counts.other === 0}>
                 {counts.requirementsTotal === 0 ? (
                     <DocsEmptyRequirements />
                 ) : (
@@ -1086,21 +1506,23 @@ function DocsProgressStrip({ progressPct, counts, visaName }) {
 
 // ── Section shell + empty states ───────────────────────────────────────────
 
-function DocsSection({ title, eyebrow, subtitle, action, children, last = false }) {
+function DocsSection({ title, eyebrow, subtitle, action, children, last = false, hideHeader = false }) {
     return (
         <section className={`px-4 sm:px-6 py-5 ${last ? '' : 'border-b border-gray-100'}`}>
-            <div className="flex items-end justify-between gap-3 mb-4 flex-wrap">
-                <div>
-                    {eyebrow && (
-                        <p className="text-[10px] font-bold tracking-[0.22em] uppercase text-gray-500 mb-1">
-                            {eyebrow}
-                        </p>
-                    )}
-                    <h2 className="text-[15px] font-bold text-[#282728]">{title}</h2>
-                    {subtitle && <p className="text-[12px] text-gray-500 mt-0.5">{subtitle}</p>}
+            {! hideHeader && (
+                <div className="flex items-end justify-between gap-3 mb-4 flex-wrap">
+                    <div>
+                        {eyebrow && (
+                            <p className="text-[10px] font-bold tracking-[0.22em] uppercase text-gray-500 mb-1">
+                                {eyebrow}
+                            </p>
+                        )}
+                        <h2 className="text-[15px] font-bold text-[#282728]">{title}</h2>
+                        {subtitle && <p className="text-[12px] text-gray-500 mt-0.5">{subtitle}</p>}
+                    </div>
+                    {action}
                 </div>
-                {action}
-            </div>
+            )}
             {children}
         </section>
     );
@@ -1203,7 +1625,7 @@ function UploadsTable({ documents, onOpenReplace, onDelete }) {
                         <col />
                     </colgroup>
                     <thead>
-                        <tr className="bg-gray-50/60 border-b border-gray-100 text-[10px] font-bold tracking-[0.18em] uppercase text-gray-500">
+                        <tr className="bg-gray-100 border-b border-gray-200 text-[10px] font-bold tracking-[0.18em] uppercase text-gray-500">
                             <th className="text-left px-4 py-2.5">File</th>
                             <th className="text-left px-4 py-2.5">Attachment</th>
                             <th className="text-left px-4 py-2.5">Status</th>
@@ -1395,7 +1817,7 @@ function ChecklistTable({ rows, onOpenUpload, onOpenReplace, onDelete }) {
                     <col />
                 </colgroup>
                 <thead>
-                    <tr className="bg-gray-50/60 border-b border-gray-100 text-[10px] font-bold tracking-[0.16em] uppercase text-gray-500">
+                    <tr className="bg-gray-100 border-b border-gray-200 text-[10px] font-bold tracking-[0.16em] uppercase text-gray-500">
                         <th className="text-left px-4 py-2.5">File name</th>
                         <th className="text-left px-4 py-2.5">Attachment</th>
                         <th className="text-left px-4 py-2.5">Status</th>
@@ -1662,6 +2084,262 @@ function AgreementCardRow({ agreement: a }) {
         </li>
     );
 }
+/**
+ * A staff-shared / generated document the client can view / download —
+ * and, for the Written Agreement, e-sign. Streams through the code-gated
+ * tracker routes.
+ */
+function SharedDocRow({ doc: d }) {
+    const [signing, setSigning] = useState(false);
+    const kb = d.size ? (d.size < 1024 * 1024
+        ? `${Math.max(1, Math.round(d.size / 1024))} KB`
+        : `${(d.size / (1024 * 1024)).toFixed(1)} MB`) : null;
+
+    return (
+        <li className="px-4 py-3 border border-gray-200 bg-white">
+            <div className="flex items-center justify-between gap-3">
+                <div className="flex items-start gap-3 min-w-0">
+                    <div className="w-9 h-9 bg-gray-50 border border-gray-100 flex items-center justify-center flex-shrink-0">
+                        <FileText size={15} className={d.signed ? 'text-emerald-600' : 'text-gray-400'} strokeWidth={2} />
+                    </div>
+                    <div className="min-w-0">
+                        <p className="text-[13px] font-semibold text-[#282728] truncate">{d.title}</p>
+                        <p className="text-[11px] text-gray-500 mt-0.5">
+                            {formatStamp(d.created_at)}{kb ? ` · ${kb}` : ''}
+                            {d.signable && (d.signed
+                                ? <span className="text-emerald-600 font-semibold"> · Signed {formatStamp(d.signed_at)}</span>
+                                : <span className="text-amber-600 font-semibold"> · Awaiting your signature</span>)}
+                        </p>
+                    </div>
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                    {d.view_url && (
+                        <a
+                            href={d.view_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-[11px] font-semibold text-[#282728] inline-flex items-center gap-1 hover:underline"
+                        >
+                            <Eye size={12} strokeWidth={2} /> View
+                        </a>
+                    )}
+                    <a
+                        href={d.download_url}
+                        className="text-[11px] font-semibold text-[#282728] inline-flex items-center gap-1 hover:underline"
+                    >
+                        <Download size={12} strokeWidth={2} /> Download
+                    </a>
+                    {d.signable && ! d.signed && (
+                        <button
+                            onClick={() => setSigning(true)}
+                            className="text-[10px] font-bold uppercase tracking-wide inline-flex items-center gap-1.5 bg-[#282728] text-white px-3 py-1.5 hover:bg-black transition-colors"
+                        >
+                            <PenTool size={11} strokeWidth={2.2} /> Sign
+                        </button>
+                    )}
+                    {d.signable && d.signed && (
+                        <span className="text-[10px] font-bold uppercase tracking-wide inline-flex items-center gap-1.5 text-emerald-700 bg-emerald-50 border border-emerald-200 px-3 py-1.5">
+                            <Check size={11} strokeWidth={2.5} /> Signed
+                        </span>
+                    )}
+                </div>
+            </div>
+
+            {signing && (
+                <ClientSignModal doc={d} onClose={() => setSigning(false)} />
+            )}
+        </li>
+    );
+}
+
+/**
+ * Client signing modal for the Written Agreement — draw a signature on the
+ * canvas, watch it land on the document live, then submit.
+ */
+function ClientSignModal({ doc: d, onClose }) {
+    const [submitting, setSubmitting] = useState(false);
+    const [hasDrawing, setHasDrawing] = useState(false);
+    // Terms acknowledgment lives in the sign panel now — the checkbox
+    // in the PDF body is a mirror only. Client must tick this before
+    // the Sign button unlocks.
+    const [acknowledged, setAcknowledged] = useState(false);
+
+    const canvasRef = useRef(null);
+    const iframeRef = useRef(null);
+    const drawing = useRef(false);
+    const last = useRef({ x: 0, y: 0 });
+
+    useEffect(() => {
+        const c = canvasRef.current;
+        if (! c) return;
+        const ctx = c.getContext('2d');
+        ctx.lineWidth = 2.2; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = '#111827';
+    }, []);
+
+    // Push the current signature into the live document preview so it
+    // appears on the agreement's signature line in real time.
+    const pushSignature = (dataUrl) => {
+        iframeRef.current?.contentWindow?.postMessage(
+            { type: 'applicant-signature', value: dataUrl || '' },
+            '*'
+        );
+    };
+    // Mirror the ack tick into the preview's checkbox glyph so the client
+    // sees the doc update as they toggle.
+    const pushAck = (value) => {
+        iframeRef.current?.contentWindow?.postMessage(
+            { type: 'acknowledged', value: !! value },
+            '*'
+        );
+    };
+    // Re-push signature + ack when the iframe finishes loading so the
+    // preview reflects current UI state (matters after a src swap).
+    const onIframeLoad = () => {
+        // Give the iframe's inline script a tick to attach its listener.
+        setTimeout(() => {
+            if (hasDrawing) pushSignature(canvasRef.current?.toDataURL('image/png'));
+            pushAck(acknowledged);
+        }, 60);
+    };
+
+    const pos = (e) => {
+        const r = canvasRef.current.getBoundingClientRect();
+        const cx = (e.touches ? e.touches[0].clientX : e.clientX) - r.left;
+        const cy = (e.touches ? e.touches[0].clientY : e.clientY) - r.top;
+        return { x: cx * (canvasRef.current.width / r.width), y: cy * (canvasRef.current.height / r.height) };
+    };
+    const start = (e) => { e.preventDefault(); drawing.current = true; last.current = pos(e); };
+    const move = (e) => {
+        if (! drawing.current) return;
+        e.preventDefault();
+        const ctx = canvasRef.current.getContext('2d');
+        const p = pos(e);
+        ctx.beginPath(); ctx.moveTo(last.current.x, last.current.y); ctx.lineTo(p.x, p.y); ctx.stroke();
+        last.current = p; setHasDrawing(true);
+    };
+    const end = () => {
+        if (! drawing.current) return;
+        drawing.current = false;
+        // Mirror the just-drawn stroke onto the live document preview.
+        pushSignature(canvasRef.current.toDataURL('image/png'));
+    };
+    const clear = () => {
+        const c = canvasRef.current;
+        c.getContext('2d').clearRect(0, 0, c.width, c.height);
+        setHasDrawing(false);
+        pushSignature('');
+    };
+
+    const submit = () => {
+        setSubmitting(true);
+        router.post(d.sign_url, {
+            signature_data: canvasRef.current.toDataURL('image/png'),
+            acknowledged: acknowledged ? 1 : 0,
+        }, {
+            preserveScroll: true,
+            onSuccess: () => onClose(),
+            onError: () => setSubmitting(false),
+            onFinish: () => setSubmitting(false),
+        });
+    };
+
+    const canSubmit = hasDrawing && acknowledged;
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/50" onClick={onClose}>
+            <div className="bg-white w-full max-w-[1400px] h-[94vh] shadow-xl flex flex-col overflow-hidden rounded-lg" onClick={(e) => e.stopPropagation()}>
+                <div className="px-5 py-3.5 border-b border-gray-100 flex items-center justify-between flex-shrink-0">
+                    <h3 className="text-sm font-bold text-[#282728] flex items-center gap-2">
+                        <PenTool size={15} /> Sign {d.title}
+                    </h3>
+                    <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
+                </div>
+
+                <div className="flex-1 flex flex-col sm:flex-row min-h-0">
+                    {/* Live document preview (left column) */}
+                    <div className="flex-1 min-w-0 min-h-[240px] bg-gray-100 border-b sm:border-b-0 sm:border-r border-gray-100">
+                        {(d.preview_url || d.view_url) ? (
+                            <iframe
+                                ref={iframeRef}
+                                src={d.preview_url || `${d.view_url}#toolbar=1&view=FitH`}
+                                title="Document preview"
+                                className="w-full h-full bg-white"
+                                onLoad={onIframeLoad}
+                            />
+                        ) : (
+                            <div className="w-full h-full flex items-center justify-center text-xs text-gray-400">
+                                Preview unavailable
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Signature capture (right column) */}
+                    <div className="sm:w-[480px] sm:flex-none p-4 sm:p-6 overflow-y-auto">
+                        <p className="text-[12px] text-gray-500 mb-3">
+                            Review the agreement on the left, then draw your signature below. By signing you confirm you have read and agree to its terms.
+                        </p>
+                        <p className="text-[10px] font-bold tracking-[0.14em] uppercase text-gray-400 mb-2 flex items-center gap-1.5">
+                            <PenTool size={12} /> Draw your signature
+                        </p>
+                        <div className="border-2 border-dashed border-gray-200 bg-white">
+                            <canvas
+                                ref={canvasRef}
+                                width={430} height={300}
+                                className="w-full h-[300px] touch-none cursor-crosshair block"
+                                onMouseDown={start} onMouseMove={move} onMouseUp={end} onMouseLeave={end}
+                                onTouchStart={start} onTouchMove={move} onTouchEnd={end}
+                            />
+                        </div>
+                        <button onClick={clear} className="mt-2 text-[12px] font-semibold text-gray-500 hover:text-gray-700 inline-flex items-center gap-1.5">
+                            <Eraser size={13} /> Clear
+                        </button>
+
+                        {/* Terms acknowledgment — moved here from the
+                            static PDF checkbox. Ticking mirrors into
+                            the preview's ack box in real time. */}
+                        <label
+                            className={`mt-5 flex items-start gap-2.5 p-3 rounded-lg border transition-colors cursor-pointer ${
+                                acknowledged
+                                    ? 'border-emerald-300 bg-emerald-50'
+                                    : 'border-gray-200 bg-white hover:border-gray-300'
+                            }`}
+                        >
+                            <button
+                                type="button"
+                                onClick={() => { const v = ! acknowledged; setAcknowledged(v); pushAck(v); }}
+                                className={`mt-0.5 w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 transition-colors ${
+                                    acknowledged ? 'bg-emerald-600 border-emerald-600' : 'bg-white border-gray-400'
+                                }`}
+                                aria-checked={acknowledged}
+                                role="checkbox"
+                            >
+                                {acknowledged && <Check size={11} className="text-white" strokeWidth={3} />}
+                            </button>
+                            <span
+                                className="text-[12px] text-gray-700 leading-snug select-none"
+                                onClick={(e) => { e.preventDefault(); const v = ! acknowledged; setAcknowledged(v); pushAck(v); }}
+                            >
+                                I have read and agreed to the <span className="font-semibold">{d.title}</span> terms.
+                            </span>
+                        </label>
+                    </div>
+                </div>
+
+                <div className="px-5 py-3 border-t border-gray-100 flex items-center justify-end gap-2 flex-shrink-0">
+                    <button onClick={onClose} className="px-4 py-2 text-sm font-semibold text-gray-600 hover:text-gray-800">Cancel</button>
+                    <button
+                        onClick={submit}
+                        disabled={! canSubmit || submitting}
+                        className="px-4 py-2 bg-[#282728] text-white text-sm font-semibold hover:bg-black disabled:opacity-40 inline-flex items-center gap-2"
+                    >
+                        {submitting ? 'Signing…' : 'Sign agreement'}
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
 /**
  * Parse a "Section · Item Name" checklist label into its two halves. The
  * seeder embeds the section in the label this way because the underlying
@@ -2140,22 +2818,6 @@ function DocEditModal({ code, doc, onClose }) {
                 <form onSubmit={submit} className="px-6 py-5 space-y-4">
                     <div>
                         <label className="block text-[11px] font-semibold text-gray-700 mb-1.5">
-                            Document type
-                        </label>
-                        <select
-                            value={data.checklist_key}
-                            onChange={(e) => setData('checklist_key', e.target.value)}
-                            className="w-full bg-transparent border-b border-gray-200 py-2 text-sm text-[#282728] focus:outline-none focus:border-[#282728]"
-                        >
-                            <option value="">— pick a type —</option>
-                            {DOC_TYPES.map((t) => (
-                                <option key={t.key} value={t.key}>{t.label}</option>
-                            ))}
-                        </select>
-                    </div>
-
-                    <div>
-                        <label className="block text-[11px] font-semibold text-gray-700 mb-1.5">
                             Replace file <span className="text-gray-400 font-normal">(leave blank to keep the existing one)</span>
                         </label>
                         <label className="cursor-pointer block">
@@ -2454,6 +3116,156 @@ function StatusLabel({ status, alternative = false }) {
         <span className="text-[11px] font-medium text-gray-400">
             Pending
         </span>
+    );
+}
+
+// ── Proposal Shortlist ──────────────────────────────────────────────────
+// Staff has picked up to 3 programs on the internal Proposal & Agreements
+// page. The lead sees them here as cards and can pick one — the pick is
+// saved via POST /track/{code}/choose-program and flows back through the
+// preferred_program_id column on leads.
+//
+// The card whose id matches `preferred_program_id` gets the "Your choice"
+// badge + darker treatment; "Change" clears the pick server-side so the
+// lead can re-choose without any confirm modal (it's their preference,
+// low stakes).
+function ProposalShortlist({ proposal, code }) {
+    const [savingId, setSavingId] = useState(null);
+    const chosenId = proposal.preferred_program_id;
+
+    const submit = (programId) => {
+        setSavingId(programId ?? -1);
+        router.post(`/track/${code}/choose-program`, { program_id: programId }, {
+            preserveScroll: true,
+            onFinish: () => setSavingId(null),
+        });
+    };
+
+    return (
+        <section className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+            <div className="px-6 py-5 border-b border-gray-100 flex items-start justify-between gap-4 bg-gradient-to-br from-gray-50 to-white">
+                <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-9 h-9 rounded-lg bg-gray-100 text-gray-800 flex items-center justify-center shrink-0">
+                        <Sparkles size={16} strokeWidth={2.25} />
+                    </div>
+                    <div className="min-w-0">
+                        <div className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-[0.18em] text-gray-500 mb-0.5">
+                            Suggested for you
+                        </div>
+                        <h2 className="text-base font-bold text-gray-900 tracking-tight">
+                            {chosenId ? 'Your chosen study path' : 'Programs your adviser prepared'}
+                        </h2>
+                        <p className="text-[12px] text-gray-500 mt-0.5 leading-relaxed">
+                            {chosenId
+                                ? 'You can switch to another option at any time — your adviser follows up on the one you\'ve chosen.'
+                                : 'Pick the one you\'d like to pursue. Your adviser will move ahead with your choice.'}
+                        </p>
+                    </div>
+                </div>
+                <div className="text-right shrink-0 hidden sm:block">
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold tabular-nums bg-gray-100 text-gray-700">
+                        {proposal.programs.length} option{proposal.programs.length === 1 ? '' : 's'}
+                    </span>
+                </div>
+            </div>
+
+            <div className="p-4 sm:p-5 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {proposal.programs.map((p) => {
+                    const isChosen = chosenId === p.id;
+                    const isSaving = savingId === p.id;
+                    return (
+                        <article
+                            key={p.id}
+                            className={`relative flex flex-col rounded-xl border shadow-sm transition-all overflow-hidden ${
+                                isChosen
+                                    ? 'border-gray-900 ring-2 ring-gray-900/15 bg-gray-50'
+                                    : 'border-gray-100 bg-white hover:border-gray-300 hover:shadow-md'
+                            }`}
+                        >
+                            {isChosen && (
+                                <span className="absolute top-3 right-3 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-gray-900 text-white text-[9px] font-bold uppercase tracking-[0.14em] shadow-sm">
+                                    <Check size={10} strokeWidth={3} /> Chosen
+                                </span>
+                            )}
+                            {p.image_url ? (
+                                <div className="h-28 w-full overflow-hidden bg-gray-100">
+                                    <img src={p.image_url} alt="" className="w-full h-full object-cover" />
+                                </div>
+                            ) : (
+                                <div className="h-28 w-full bg-gradient-to-br from-gray-100 via-gray-50 to-white flex items-center justify-center">
+                                    <GraduationCap size={30} className="text-gray-400" />
+                                </div>
+                            )}
+                            <div className="p-4 flex-1 flex flex-col">
+                                <div className="flex items-center gap-1.5 mb-2">
+                                    {p.level != null && (
+                                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-gray-100 text-gray-800 border border-gray-200">
+                                            Level {p.level}
+                                        </span>
+                                    )}
+                                    {p.category && (
+                                        <span className="text-[10px] font-medium text-gray-500 capitalize">{p.category}</span>
+                                    )}
+                                </div>
+                                <h3 className="text-[14px] font-bold text-gray-900 leading-snug mb-2">{p.title}</h3>
+                                <ul className="text-[12px] text-gray-600 space-y-1 mb-3">
+                                    {p.location && (
+                                        <li className="inline-flex items-center gap-1.5">
+                                            <MapPin size={11} className="text-gray-400" /> {p.location}
+                                        </li>
+                                    )}
+                                    {p.duration_months && (
+                                        <li className="inline-flex items-center gap-1.5">
+                                            <Clock size={11} className="text-gray-400" /> {p.duration_months} months
+                                        </li>
+                                    )}
+                                    {p.intake_months && (
+                                        <li className="inline-flex items-center gap-1.5">
+                                            <Award size={11} className="text-gray-400" /> Intake: {p.intake_months}
+                                        </li>
+                                    )}
+                                </ul>
+                                {p.price_text && (
+                                    <p className="text-[11px] font-semibold text-gray-700 mb-3">{p.price_text}</p>
+                                )}
+                                <div className="mt-auto flex items-center gap-2">
+                                    {isChosen ? (
+                                        <button
+                                            type="button"
+                                            onClick={() => submit(null)}
+                                            disabled={isSaving || savingId === -1}
+                                            className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-gray-200 bg-white text-[11px] font-bold text-gray-700 hover:border-gray-400 hover:text-gray-900 hover:bg-gray-50 transition-colors disabled:opacity-50"
+                                        >
+                                            {savingId === -1 ? 'Clearing…' : 'Change'}
+                                        </button>
+                                    ) : (
+                                        <button
+                                            type="button"
+                                            onClick={() => submit(p.id)}
+                                            disabled={isSaving}
+                                            className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-gray-900 text-white text-[11px] font-bold hover:bg-black transition-colors disabled:opacity-60 shadow-sm"
+                                        >
+                                            {isSaving ? 'Saving…' : (<>Choose this <ArrowRight size={11} strokeWidth={2.5} /></>)}
+                                        </button>
+                                    )}
+                                    {p.public_url && (
+                                        <a
+                                            href={p.public_url}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="inline-flex items-center justify-center w-8 h-8 rounded-lg border border-gray-200 text-gray-500 hover:text-gray-900 hover:border-gray-400 hover:bg-gray-50 transition-colors"
+                                            title="See full details"
+                                        >
+                                            <Eye size={12} />
+                                        </a>
+                                    )}
+                                </div>
+                            </div>
+                        </article>
+                    );
+                })}
+            </div>
+        </section>
     );
 }
 
