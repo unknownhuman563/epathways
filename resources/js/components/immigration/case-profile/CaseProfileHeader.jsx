@@ -57,8 +57,12 @@ export default function CaseProfileHeader({ lead = {}, intake = null }) {
                 <div className="px-6 pb-5 -mt-12">
                     <div className="flex items-end justify-between gap-4 flex-wrap">
                         <div className="flex items-end gap-4">
-                            <div className="w-24 h-24 rounded-2xl bg-gradient-to-br from-gray-700 to-gray-900 text-white flex items-center justify-center font-black text-3xl ring-4 ring-white shadow-lg">
-                                {initials(fullName)}
+                            {/* Applicant's uploaded Face image when present,
+                                otherwise the initials tile. */}
+                            <div className="w-24 h-24 rounded-2xl overflow-hidden bg-gradient-to-br from-gray-700 to-gray-900 text-white flex items-center justify-center font-black text-3xl ring-4 ring-white shadow-lg">
+                                {lead.avatar_url
+                                    ? <img src={lead.avatar_url} alt={fullName} className="w-full h-full object-cover" />
+                                    : initials(fullName)}
                             </div>
                             <div className="pb-2">
                                 <h1 className="text-2xl font-bold text-gray-900 tracking-tight leading-tight">

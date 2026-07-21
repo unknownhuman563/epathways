@@ -239,11 +239,14 @@ class CaseProfileController extends Controller
 
     private function serializeLead(Lead $lead): array
     {
-        $lead->loadMissing(['assignee:id,name,email,role']);
+        $lead->loadMissing(['assignee:id,name,email,role', 'faceImage']);
 
         return [
             'id' => $lead->id,
             'lead_id' => $lead->lead_id,
+            // Applicant's uploaded Face image — same profile picture the
+            // cases list and the client's tracker show.
+            'avatar_url' => $lead->faceImageUrl(),
             'first_name' => $lead->first_name,
             'middle_name' => $lead->middle_name,
             'last_name' => $lead->last_name,
