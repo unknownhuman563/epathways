@@ -67,8 +67,26 @@ class VisaTypeController extends Controller
         $this->authorize('create', VisaType::class);
 
         $payload = $request->validate([
-            'code' => 'required|string|max:32|regex:/^[A-Z0-9_-]+$/|unique:visa_types,code',
-            'name' => 'required|string|max:100',
+            // A code must not duplicate another visa's NAME (and vice versa)
+            // — leads store their visa as free text, so an ambiguous value
+            // can't be resolved to one catalogue row and the applicant's
+            // tracker could render the wrong checklist.
+            'code' => [
+                'required', 'string', 'max:32', 'regex:/^[A-Z0-9_-]+$/', 'unique:visa_types,code',
+                function ($attr, $value, $fail) {
+                    if ($clash = VisaType::otherNamed($value)) {
+                        $fail("This code is already used as the name of the visa \"{$clash->name}\". Codes and names must not overlap.");
+                    }
+                },
+            ],
+            'name' => [
+                'required', 'string', 'max:100',
+                function ($attr, $value, $fail) {
+                    if ($clash = VisaType::otherCoded($value)) {
+                        $fail("This name is already used as the code of the visa \"{$clash->name}\". Codes and names must not overlap.");
+                    }
+                },
+            ],
             'short_description' => 'nullable|string|max:200',
             'category' => 'nullable|string|max:50',
             'visa_type' => 'nullable|string|max:60',

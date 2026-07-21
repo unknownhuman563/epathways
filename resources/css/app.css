@@ -12,6 +12,24 @@ body {
     font-family: var(--font-urbanist), sans-serif;
 }
 
+/* Flowbite ships its own compiled Tailwind utilities, and its `.max-w-2xl` /
+   `.max-w-8xl` resolve against the `--spacing-*` namespace instead of
+   `--container-*`. Because flowbite is imported after tailwindcss, those
+   broken rules win — `max-w-2xl` collapses from 42rem (672px) to
+   --spacing-2xl (16rem / 256px), squashing every container using it, and
+   `max-w-8xl` resolves to an undefined token (no max-width at all).
+   Every other named size (md/lg/3xl…7xl) is unaffected.
+   Restore the intended values. Do NOT "fix" this by unsetting
+   --spacing-2xl: flowbite's own rule reads it, and clearing the token would
+   turn its max-width into `none` (unbounded) rather than the correct width. */
+.max-w-2xl {
+    max-width: var(--container-2xl);
+}
+
+.max-w-8xl {
+    max-width: 90rem;
+}
+
 @source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
 
 @source '../../storage/framework/views/*.php';

@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AccommodationController as PublicAccommodationController;
 use App\Http\Controllers\ActivityLogController;
+use App\Http\Controllers\Admin\MaintenanceController;
 use App\Http\Controllers\Admin\SuperAdminDashboardController;
 use App\Http\Controllers\AssessmentController;
 use App\Http\Controllers\AuthController;
@@ -384,6 +385,18 @@ Route::middleware(['auth'])->group(function () {
     Route::middleware('portal:super_admin')->group(function () {
         Route::get('/admin/super-dashboard', [SuperAdminDashboardController::class, 'dashboard'])
             ->name('admin.super-dashboard');
+
+        // Public-site maintenance window. These routes are inside the
+        // middleware's always-allow list, so they stay reachable while
+        // maintenance is active — that's what prevents a lockout.
+        Route::get('/admin/maintenance', [MaintenanceController::class, 'index'])
+            ->name('admin.maintenance');
+        Route::post('/admin/maintenance', [MaintenanceController::class, 'update'])
+            ->name('admin.maintenance.update');
+        Route::post('/admin/maintenance/bypass', [MaintenanceController::class, 'regenerateBypass'])
+            ->name('admin.maintenance.bypass');
+        Route::get('/admin/maintenance/preview', [MaintenanceController::class, 'preview'])
+            ->name('admin.maintenance.preview');
     });
 
     // Admin area — admin role only; department-portal staff are kept out by 'portal:admin'.

@@ -33,6 +33,39 @@ class VisaType extends Model
         'checklist_items' => 'array',
     ];
 
+    /**
+     * Another visa whose `name` equals the given value, or null.
+     *
+     * A visa's code must never duplicate a different visa's name (and vice
+     * versa): leads store their visa as a free-text string, so an ambiguous
+     * value can no longer be resolved to a single catalogue row and the
+     * applicant's tracker could show the wrong checklist. See
+     * CaseChecklistService::resolveVisaType().
+     */
+    public static function otherNamed(?string $value, ?int $ignoreId = null): ?self
+    {
+        return self::collisionQuery('name', $value, $ignoreId);
+    }
+
+    /** Another visa whose `code` equals the given value, or null. */
+    public static function otherCoded(?string $value, ?int $ignoreId = null): ?self
+    {
+        return self::collisionQuery('code', $value, $ignoreId);
+    }
+
+    private static function collisionQuery(string $column, ?string $value, ?int $ignoreId): ?self
+    {
+        $value = trim((string) $value);
+        if ($value === '') {
+            return null;
+        }
+
+        return self::query()
+            ->whereRaw("LOWER({$column}) = ?", [mb_strtolower($value)])
+            ->when($ignoreId, fn ($q) => $q->where('id', '!=', $ignoreId))
+            ->first();
+    }
+
     public function priceHistory(): HasMany
     {
         return $this->hasMany(VisaTypePriceHistory::class)->orderByDesc('changed_at');

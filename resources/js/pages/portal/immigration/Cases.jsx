@@ -62,6 +62,26 @@ const STAGE_CHIP = {
 const stageChipClass = (stage) =>
     STAGE_CHIP[stage] || 'bg-gray-100 text-gray-500 border-gray-200 border-dashed';
 
+/**
+ * The Cases list is split into four tabs that follow the case through the
+ * pipeline. Between them they cover every immigration stage, so a case
+ * always lives in exactly one tab — nothing is hidden.
+ */
+const CASE_TABS = [
+    { key: 'applications', label: 'Applications', hint: 'Assessment & RFI',  stages: ['For Assessment', 'Request for Information'] },
+    { key: 'advisers',     label: 'Advisers',     hint: 'Endorsed → Invoice', stages: ['Endorsed', 'Agreement Sent', 'Agreement Signed', 'For Agreement & Invoice'] },
+    { key: 'invoice',      label: 'Invoice',      hint: 'Invoice paid',       stages: ['Invoice Paid'] },
+    { key: 'visa',         label: 'Visa',         hint: 'Lodged → outcome',   stages: ['Visa Lodged', 'Approved in Principle', 'Approved Visa', 'Decline Visa'] },
+];
+
+// Which tab a stage belongs to. Cases with no stage yet fall into
+// Applications — that's where the journey starts.
+const tabKeyForStage = (stage) => {
+    if (! stage) return 'applications';
+    const hit = CASE_TABS.find((t) => t.stages.includes(stage));
+    return hit ? hit.key : 'applications';
+};
+
 export default function ImmigrationCases({ cases = [], distribution = [], priorities = {}, stages = [], visaTypes = [] }) {
     const [search, setSearch] = useState("");
     const [stageFilter, setStageFilter] = useState(null); // click a bar/legend → filter
@@ -71,11 +91,20 @@ export default function ImmigrationCases({ cases = [], distribution = [], priori
     const [expandedId, setExpandedId] = useState(null);
     const [creating, setCreating] = useState(false);
     const [editingCase, setEditingCase] = useState(null); // case row being edited
+    const [tab, setTab] = useState('applications');
+
+    const tabCounts = useMemo(() => {
+        const counts = {};
+        for (const t of CASE_TABS) counts[t.key] = 0;
+        for (const c of cases) counts[tabKeyForStage(c.immigration_stage)] += 1;
+        return counts;
+    }, [cases]);
 
     // Filtered + sorted slice the table actually renders.
     const filtered = useMemo(() => {
         const q = search.trim().toLowerCase();
         return cases.filter((c) => {
+            if (tabKeyForStage(c.immigration_stage) !== tab) return false;
             if (stageFilter) {
                 const s = c.immigration_stage || 'Unassigned';
                 if (s !== stageFilter) return false;
@@ -85,7 +114,7 @@ export default function ImmigrationCases({ cases = [], distribution = [], priori
                 c.name, c.lead_id, c.email, c.phone, c.country, c.inz_visa_type, c.inz_reference,
             ].some((v) => (v || '').toString().toLowerCase().includes(q));
         });
-    }, [cases, search, stageFilter]);
+    }, [cases, search, stageFilter, tab]);
 
     const sorted = useMemo(() => {
         const arr = [...filtered];
@@ -154,6 +183,36 @@ export default function ImmigrationCases({ cases = [], distribution = [], priori
 
             {/* Toolbar */}
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm">
+                {/* Tabs — follow the case through the stage pipeline */}
+                <div className="flex px-4 sm:px-5 border-b border-gray-100 overflow-x-auto">
+                    {CASE_TABS.map((t) => {
+                        const active = tab === t.key;
+                        return (
+                            <button
+                                key={t.key}
+                                type="button"
+                                onClick={() => { setTab(t.key); setStageFilter(null); }}
+                                className={`inline-flex items-center gap-2 px-4 py-3 text-[13px] font-semibold whitespace-nowrap transition-colors border-b-2 -mb-px ${
+                                    active
+                                        ? 'text-gray-900 border-gray-900'
+                                        : 'text-gray-500 border-transparent hover:text-gray-800'
+                                }`}
+                                aria-current={active ? 'page' : undefined}
+                            >
+                                <span>{t.label}</span>
+                                {t.hint && (
+                                    <span className="text-[10.5px] font-medium text-gray-400 hidden lg:inline">({t.hint})</span>
+                                )}
+                                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
+                                    active ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600'
+                                }`}>
+                                    {tabCounts[t.key] ?? 0}
+                                </span>
+                            </button>
+                        );
+                    })}
+                </div>
+
                 <div className="px-4 sm:px-5 py-3 flex items-center gap-3 border-b border-gray-100">
                     <div className="relative flex-1 max-w-md">
                         <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />

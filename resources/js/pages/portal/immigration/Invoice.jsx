@@ -112,20 +112,10 @@ export default function Invoice({ cases = [], generated = [], nextNumber = null 
                                         <td className="px-3 py-3">
                                             <div className="flex flex-col gap-2">
                                                 {c.invoices.map((iv) => (
-                                                    <div key={iv.id} className="flex items-center gap-2 flex-wrap">
+                                                    <div key={iv.id} className="flex items-center gap-2 h-5">
                                                         <FileText size={13} className="text-gray-400 shrink-0" />
                                                         <span className="text-[12px] font-semibold text-gray-800 font-mono">{iv.number || "Invoice"}</span>
                                                         <span className="text-[10px] text-gray-400">{fmtSize(iv.size)}</span>
-                                                        <span className="inline-flex items-center gap-2 ml-1">
-                                                            <a href={iv.view_url} target="_blank" rel="noopener noreferrer"
-                                                               className="text-[11px] font-semibold text-gray-600 hover:text-gray-900 inline-flex items-center gap-1">
-                                                                <Eye size={12} /> View
-                                                            </a>
-                                                            <a href={iv.download_url}
-                                                               className="text-[11px] font-semibold text-gray-600 hover:text-gray-900 inline-flex items-center gap-1">
-                                                                <Download size={12} /> Download
-                                                            </a>
-                                                        </span>
                                                     </div>
                                                 ))}
                                             </div>
@@ -138,8 +128,26 @@ export default function Invoice({ cases = [], generated = [], nextNumber = null 
                                                 </div>
                                             )}
                                         </td>
-                                        <td className="px-3 py-3 pr-4 text-right whitespace-nowrap">
-                                            <DeleteInvoicesButton caseId={c.case_id} caseName={c.case_name} count={c.invoices.length} />
+                                        {/* Actions — View/Download per invoice (aligned to the
+                                            Invoices column), then the row-level delete. */}
+                                        <td className="px-3 py-3 pr-4 whitespace-nowrap">
+                                            <div className="flex flex-col gap-2 items-end">
+                                                {c.invoices.map((iv) => (
+                                                    <div key={iv.id} className="flex items-center justify-end gap-3 h-5">
+                                                        <a href={iv.view_url} target="_blank" rel="noopener noreferrer"
+                                                           className="text-[11px] font-semibold text-gray-600 hover:text-gray-900 inline-flex items-center gap-1">
+                                                            <Eye size={12} /> View
+                                                        </a>
+                                                        <a href={iv.download_url}
+                                                           className="text-[11px] font-semibold text-gray-600 hover:text-gray-900 inline-flex items-center gap-1">
+                                                            <Download size={12} /> Download
+                                                        </a>
+                                                    </div>
+                                                ))}
+                                                <div className="pt-1 mt-0.5 border-t border-gray-100 w-full flex justify-end">
+                                                    <DeleteInvoicesButton caseId={c.case_id} caseName={c.case_name} count={c.invoices.length} />
+                                                </div>
+                                            </div>
                                         </td>
                                     </tr>
                                 ))}

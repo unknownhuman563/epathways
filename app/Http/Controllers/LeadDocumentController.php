@@ -1101,9 +1101,20 @@ class LeadDocumentController extends Controller
             return back()->withErrors(['error' => 'ZIP support is not available on the server.']);
         }
 
-        $docs = $lead->documents()->orderBy('created_at')->get();
+        // Rejected files are excluded — a bulk download is used to assemble
+        // the case file for lodgement, and a rejected upload must never end
+        // up in that bundle. Submitted / UnderReview / Approved all come
+        // through (staff still need to see what's pending review).
+        $docs = $lead->documents()
+            ->where(function ($q) {
+                $q->whereNull('status')
+                    ->orWhere('status', '!=', LeadDocument::STATUS_REJECTED);
+            })
+            ->orderBy('created_at')
+            ->get();
+
         if ($docs->isEmpty()) {
-            return back()->withErrors(['error' => 'This case has no documents to download.']);
+            return back()->withErrors(['error' => 'This case has no downloadable documents (rejected files are excluded).']);
         }
 
         $tmp = tempnam(sys_get_temp_dir(), 'leaddocs_');

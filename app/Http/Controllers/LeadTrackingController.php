@@ -1102,10 +1102,11 @@ class LeadTrackingController extends Controller
             return null;
         }
 
-        $visa = VisaType::query()
-            ->where('name', $lead->inz_visa_type)
-            ->orWhere('code', $lead->inz_visa_type)
-            ->first();
+        // Shared resolver — the tracker MUST land on the same VisaType the
+        // staff dashboard does, or the applicant sees a different checklist
+        // for the same visa. (A plain "name OR code" query could match a
+        // different row once any visa's code equalled another's name.)
+        $visa = app(\App\Services\Immigration\CaseChecklistService::class)->resolveVisaType($lead);
 
         if (! $visa) {
             // Surface the bare visa name so the panel can still render

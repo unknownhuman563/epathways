@@ -21,11 +21,28 @@ class UpdateVisaTypeRequest extends FormRequest
         /** @var VisaType $visaType */
         $visaType = $this->route('visa_type');
 
+        $ignoreId = $visaType?->id;
+
         return [
-            'name' => 'required|string|max:100',
+            // A name must not duplicate another visa's CODE (and vice versa)
+            // — an ambiguous value can't be resolved to a single catalogue
+            // row, which is what made the tracker show the wrong checklist.
+            'name' => [
+                'required', 'string', 'max:100',
+                function ($attr, $value, $fail) use ($ignoreId) {
+                    if ($clash = VisaType::otherCoded($value, $ignoreId)) {
+                        $fail("This name is already used as the code of the visa \"{$clash->name}\". Codes and names must not overlap.");
+                    }
+                },
+            ],
             'code' => [
                 'required', 'string', 'max:32', 'regex:/^[A-Z0-9_-]+$/',
-                Rule::unique('visa_types', 'code')->ignore($visaType?->id),
+                Rule::unique('visa_types', 'code')->ignore($ignoreId),
+                function ($attr, $value, $fail) use ($ignoreId) {
+                    if ($clash = VisaType::otherNamed($value, $ignoreId)) {
+                        $fail("This code is already used as the name of the visa \"{$clash->name}\". Codes and names must not overlap.");
+                    }
+                },
             ],
             'short_description' => 'nullable|string|max:200',
             'visa_type' => 'nullable|string|max:60',
