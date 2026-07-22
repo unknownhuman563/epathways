@@ -1155,6 +1155,10 @@ class LeadTrackingController extends Controller
             return [
                 'key' => $key,
                 'label' => $item['label'] ?? '',
+                // Section heading. Null for visas saved before Section became
+                // its own field — the tracker then falls back to splitting a
+                // legacy "Section · Name" label.
+                'category' => $item['category'] ?? null,
                 'hint' => $item['hint'] ?? null,
                 'required' => ($item['required'] ?? true) ? true : false,
                 'status' => $status,
