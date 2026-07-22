@@ -4,8 +4,9 @@ import { router } from "@inertiajs/react";
 import { toast } from "sonner";
 import {
     FileText, Download, Upload, Eye, Check, Loader2,
-    Send, X as XIcon, AlertCircle,
+    Send, X as XIcon, AlertCircle, Paperclip,
 } from "lucide-react";
+import CaseFilesModal from "@/components/immigration/CaseFilesModal";
 
 // Documents tab — table view that joins the visa-type checklist with
 // uploaded LeadDocuments by checklist_key. Each row is a required (or
@@ -41,6 +42,10 @@ export default function DocumentsTab({
     checklist = { items: [] },
     checklistProgress = { required_total: 0, required_approved: 0, total: 0, approved: 0 },
 }) {
+    // "File history" modal — every file on the case with its status, kept
+    // separate from the checklist table below.
+    const [filesOpen, setFilesOpen] = useState(false);
+
     // Build a checklist-keyed map of uploaded documents (latest wins per key).
     // Orphans (no matching checklist entry) get collected separately.
     const items = checklist.items || [];
@@ -162,13 +167,23 @@ export default function DocumentsTab({
                     </p>
                 </div>
                 <div className="flex items-center gap-3">
+                    {/* Separate from the checklist below: what has actually
+                        come in, with each file's status. */}
+                    <button
+                        type="button"
+                        onClick={() => setFilesOpen(true)}
+                        title="Every file on this case with its review status"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold uppercase tracking-wider border border-gray-200 text-gray-600 hover:border-gray-900 hover:text-gray-900 transition-colors"
+                    >
+                        <Paperclip size={12} /> File history ({documents.length})
+                    </button>
                     {documents.length > 0 && (
                         <a
                             href={`/admin/leads/${lead.id}/documents/download-all`}
-                            title="Download every uploaded document as a single ZIP"
+                            title="Download the approved documents as a single ZIP — the lodgement bundle"
                             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold uppercase tracking-wider bg-gray-900 text-white hover:bg-black transition-colors"
                         >
-                            <Download size={12} /> Download all (ZIP)
+                            <Download size={12} /> Download approved (ZIP)
                         </a>
                     )}
                     <p className="text-[10.5px] text-gray-400">
@@ -228,6 +243,14 @@ export default function DocumentsTab({
                     </table>
                 </div>
             </div>
+
+            {filesOpen && (
+                <CaseFilesModal
+                    leadId={lead.id}
+                    leadName={lead.name || [lead.first_name, lead.last_name].filter(Boolean).join(' ')}
+                    onClose={() => setFilesOpen(false)}
+                />
+            )}
         </div>
     );
 }

@@ -742,6 +742,10 @@ Route::middleware(['auth'])->group(function () {
             ->name('admin.leads.notify-document-ready');
         Route::delete('/admin/leads/{leadId}/documents/{docId}', [LeadDocumentController::class, 'destroyDocument'])
             ->name('admin.leads.documents.destroy');
+        // JSON file list (with review statuses) for the Cases table's Files
+        // popover — fetched on demand rather than shipped in the page props.
+        Route::get('/admin/leads/{leadId}/documents/json', [LeadDocumentController::class, 'documentsJson'])
+            ->name('admin.leads.documents.json');
         // Staff download — same controller, role-gated inside.
         Route::get('/admin/documents/{docId}/download', [LeadDocumentController::class, 'download'])
             ->name('admin.documents.download');

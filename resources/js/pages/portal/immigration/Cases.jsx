@@ -6,8 +6,9 @@ import {
     Globe, ChevronRight, ChevronDown, AlertTriangle, Search,
     FileText, ExternalLink, Users, Calendar, ArrowUpDown,
     ArrowUp, ArrowDown, Plus, X, TrendingUp, Copy, MoreHorizontal,
-    Archive, Pencil, Mail, Phone,
+    Archive, Pencil, Mail, Phone, Paperclip,
 } from "lucide-react";
+import CaseFilesModal from "@/components/immigration/CaseFilesModal";
 
 /**
  * Distribution palette — colour per immigration stage. Kept distinct from
@@ -91,6 +92,7 @@ export default function ImmigrationCases({ cases = [], distribution = [], priori
     const [expandedId, setExpandedId] = useState(null);
     const [creating, setCreating] = useState(false);
     const [editingCase, setEditingCase] = useState(null); // case row being edited
+    const [filesCase, setFilesCase] = useState(null);     // case whose files are open
     const [tab, setTab] = useState('applications');
 
     const tabCounts = useMemo(() => {
@@ -281,6 +283,7 @@ export default function ImmigrationCases({ cases = [], distribution = [], priori
                                     onStageMenuToggle={() => setOpenStageMenuId(openStageMenuId === c.id ? null : c.id)}
                                     onStageMenuClose={() => setOpenStageMenuId(null)}
                                     onEdit={() => setEditingCase(c)}
+                                    onViewFiles={() => setFilesCase(c)}
                                 />
                             ))}
                         </tbody>
@@ -295,6 +298,14 @@ export default function ImmigrationCases({ cases = [], distribution = [], priori
                     stages={stages}
                     visaTypes={visaTypes}
                     onClose={() => { setCreating(false); setEditingCase(null); }}
+                />
+            )}
+
+            {filesCase && (
+                <CaseFilesModal
+                    leadId={filesCase.id}
+                    leadName={filesCase.name}
+                    onClose={() => setFilesCase(null)}
                 />
             )}
         </div>
@@ -825,7 +836,7 @@ function DistributionGraph({ distribution = [], total = 0, activeStage = null, o
 
 // ─── Table row ──────────────────────────────────────────────────────────
 
-function CaseRow({ c, stages, visaTypes = [], isExpanded, onExpand, stageMenuOpen, onStageMenuToggle, onStageMenuClose, onEdit }) {
+function CaseRow({ c, stages, visaTypes = [], isExpanded, onExpand, stageMenuOpen, onStageMenuToggle, onStageMenuClose, onEdit, onViewFiles }) {
     // DOCS progress reflects the visa checklist: how many required items
     // the case has submitted, out of the total required.
     const chkTotal = c.checklist_total || 0;
@@ -905,7 +916,9 @@ function CaseRow({ c, stages, visaTypes = [], isExpanded, onExpand, stageMenuOpe
                         : <span className="text-gray-300">—</span>}
                 </td>
 
-                {/* Docs */}
+                {/* Docs — checklist progress only. File history lives in the
+                    row menu / the case's Documents tab so the two aren't
+                    conflated. */}
                 <td className="px-3 py-2.5">
                     {hasDocs ? (
                         <div className="flex items-center gap-2 min-w-[100px]">
@@ -922,16 +935,23 @@ function CaseRow({ c, stages, visaTypes = [], isExpanded, onExpand, stageMenuOpe
                     )}
                 </td>
 
-                {/* Updated — datetime + staff who last moved the case */}
+                {/* Updated — the last staff activity on this case: when, who,
+                    and what they changed. `updated_at` already carries the
+                    last-activity stamp from the server. */}
                 <td className="px-3 py-2.5 whitespace-nowrap">
-                    {(c.stage_updated_at || c.updated_at) ? (
+                    {c.updated_at ? (
                         <div className="flex flex-col">
                             <span className="text-xs text-gray-700 tabular-nums">
-                                {fmtDateTime(c.stage_updated_at || c.updated_at)}
+                                {fmtDateTime(c.updated_at)}
                             </span>
                             {c.updated_by && (
                                 <span className="text-[11px] text-gray-400 truncate max-w-[180px]">
                                     by {c.updated_by}
+                                </span>
+                            )}
+                            {c.updated_desc && (
+                                <span className="text-[11px] text-gray-500 truncate max-w-[180px]" title={c.updated_desc}>
+                                    {c.updated_desc}
                                 </span>
                             )}
                         </div>
@@ -956,6 +976,12 @@ function CaseRow({ c, stages, visaTypes = [], isExpanded, onExpand, stageMenuOpe
                                 label: 'Open documents',
                                 icon: FileText,
                                 href: `/portal/immigration/cases/${c.id}/profile?tab=documents`,
+                            },
+                            {
+                                key: 'files',
+                                label: `File history (${c.docs_total || 0})`,
+                                icon: Paperclip,
+                                onClick: () => onViewFiles?.(),
                             },
                             {
                                 key: 'open',

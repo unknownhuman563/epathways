@@ -125,7 +125,7 @@ class SalesController extends Controller
                     'event',
                     'tags:id,name',
                     'portalUser:id,lead_id,last_login_at',
-                    'stageUpdater:id,name',
+                    'stageUpdater:id,name', 'lastActivityUser:id,name',
                     'agent:id,name,avatar_path',
                     'notes' => fn ($q) => $q->latest(),
                     // Doc rows drive the "Docs progress" column in the
@@ -250,7 +250,7 @@ class SalesController extends Controller
                 'event',
                 'tags:id,name',
                 'portalUser:id,lead_id,last_login_at',
-                'stageUpdater:id,name',
+                'stageUpdater:id,name', 'lastActivityUser:id,name',
                 'notes' => fn ($q) => $q->latest(),
                 'documents:id,lead_id,checklist_key,status',
             ])
@@ -299,7 +299,7 @@ class SalesController extends Controller
         $registrations = $event->leads()
             ->with([
                 'studyPlans', 'tags:id,name', 'portalUser:id,lead_id,last_login_at',
-                'stageUpdater:id,name', 'eventNotesEditor:id,name',
+                'stageUpdater:id,name', 'lastActivityUser:id,name', 'eventNotesEditor:id,name',
                 'notes' => fn ($q) => $q->latest(),
             ])
             ->withCount(['notes', 'documents'])

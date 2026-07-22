@@ -79,10 +79,13 @@ trait BuildsLeadRow
             'ai_pathway' => $ai['recommended_pathway'] ?? null,
             'ai_department' => $ai['recommended_department'] ?? null,
             'created_at' => $l->created_at,
-            // "Updated" column — datetime + the staff member who last moved
-            // the lead's stage (the tracked "who touched this" signal).
-            'updated_at' => $l->updated_at,
-            'updated_by' => optional($l->stageUpdater)->name,
+            // "Updated" column — the last *staff* edit (any field), stamped
+            // by Lead::stampLastActivity(). Falls back to the raw timestamp
+            // and the last stage-mover for rows that predate the stamp.
+            'updated_at' => $l->last_activity_at ?: $l->updated_at,
+            'updated_by' => optional($l->lastActivityUser)->name
+                                ?? optional($l->stageUpdater)->name,
+            'updated_desc' => $l->last_activity_desc,
             // When staff last moved this lead through the pipeline. Drives
             // the default "actively-being-worked-on" sort on the Sales
             // Leads table so recently-advanced leads bubble to the top.
@@ -97,8 +100,8 @@ trait BuildsLeadRow
             // Most-recent internal note (any kind) for the "Note" column.
             'latest_note' => $latestNote ? [
                 'author' => $latestNote->author_name ?: 'Unknown',
-                'body'   => $latestNote->body,
-                'when'   => optional($latestNote->created_at)->toIso8601String(),
+                'body' => $latestNote->body,
+                'when' => optional($latestNote->created_at)->toIso8601String(),
             ] : null,
             'portal_invitation_status' => $l->portal_invitation_status ?: 'none',
             'portal_last_login_at' => optional($l->portalUser)->last_login_at,
@@ -214,32 +217,32 @@ trait BuildsLeadRow
         $registrations = $event->leads()
             ->with([
                 'studyPlans', 'tags:id,name', 'portalUser:id,lead_id,last_login_at',
-                'stageUpdater:id,name', 'eventNotesEditor:id,name',
+                'stageUpdater:id,name', 'lastActivityUser:id,name', 'eventNotesEditor:id,name',
                 'notes' => fn ($q) => $q->latest(),
             ])
             ->withCount(['notes', 'documents'])
             ->latest()
             ->get()
             ->map(fn (Lead $l) => array_merge($this->leadRow($l), [
-                'event_notes'            => $l->event_notes,
+                'event_notes' => $l->event_notes,
                 'event_notes_updated_at' => optional($l->event_notes_updated_at)->toIso8601String(),
-                'event_notes_editor'     => $l->eventNotesEditor
+                'event_notes_editor' => $l->eventNotesEditor
                     ? ['id' => $l->eventNotesEditor->id, 'name' => $l->eventNotesEditor->name]
                     : null,
             ]));
 
         return [
             'event' => [
-                'id'         => $event->id,
-                'name'       => $event->name,
+                'id' => $event->id,
+                'name' => $event->name,
                 'event_code' => $event->event_code,
-                'type'       => $event->type,
-                'date_from'  => optional($event->date_from)->toIso8601String(),
-                'location'   => $event->location,
-                'mode'       => $event->mode,
+                'type' => $event->type,
+                'date_from' => optional($event->date_from)->toIso8601String(),
+                'location' => $event->location,
+                'mode' => $event->mode,
             ],
             'registrations' => $registrations,
-            'statuses'      => Lead::STAGES,
+            'statuses' => Lead::STAGES,
         ];
     }
 

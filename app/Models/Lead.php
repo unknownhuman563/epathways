@@ -256,6 +256,9 @@ class Lead extends Model
         // stage-update + creation flows so the timestamp is a reliable
         // signal of actual pipeline movement.
         'stage_updated_at', 'stage_updated_by',
+        // Last *staff* touch of any kind — see the `updating` hook in
+        // booted(). Drives the Updated column on the portal case tables.
+        'last_activity_at', 'last_activity_by', 'last_activity_desc',
         // English / Immigration sub-stage tracks (see ENGLISH_STAGES,
         // IMMIGRATION_STAGES). Each carries an optional named assignee.
         'english_stage', 'english_assignee',
@@ -344,6 +347,7 @@ class Lead extends Model
         'section_verifications' => 'array',
         'agreements_acknowledged_at' => 'datetime',
         'stage_updated_at' => 'datetime',
+        'last_activity_at' => 'datetime',
         'stage_history' => 'array',
         'last_seen_at' => 'datetime',
         'is_student' => 'boolean',
@@ -435,6 +439,12 @@ class Lead extends Model
     public function stageUpdater()
     {
         return $this->belongsTo(User::class, 'stage_updated_by');
+    }
+
+    /** Staff member behind the most recent meaningful edit (or null). */
+    public function lastActivityUser()
+    {
+        return $this->belongsTo(User::class, 'last_activity_by');
     }
 
     /** Staff member this lead is currently assigned to (or null). */
@@ -550,6 +560,113 @@ class Lead extends Model
                 $lead->tracking_code = static::generateTrackingCode();
             }
         });
+
+        // Stamp who last touched the record, and with what, before the row
+        // is written — this is what the portals' Updated column reports.
+        static::updating(fn (Lead $lead) => $lead->stampLastActivity());
+    }
+
+    /**
+     * Changes that aren't staff "activity": system bookkeeping, background
+     * analysis output, and the stamp fields themselves.
+     */
+    private const ACTIVITY_NOISE = [
+        'created_at', 'updated_at', 'deleted_at',
+        'ai_analysis', 'ai_analysis_status',
+        'last_seen_at', 'stage_history',
+        'last_activity_at', 'last_activity_by', 'last_activity_desc',
+    ];
+
+    /** Friendlier names for the columns staff change most often. */
+    private const ACTIVITY_LABELS = [
+        'immigration_stage' => 'Stage',
+        'education_stage' => 'Stage',
+        'english_stage' => 'Stage',
+        'status' => 'Status',
+        'immigration_priority' => 'Priority',
+        'immigration_assignee' => 'Assignee',
+        'assigned_to' => 'Assignee',
+        'inz_visa_type' => 'Visa',
+        'inz_status' => 'INZ status',
+        'inz_reference' => 'INZ reference',
+        'inz_lodged_at' => 'Lodged date',
+        'inz_decision_at' => 'Decision date',
+        'hidden_track_documents' => 'Tracker visibility',
+        'section_verifications' => 'Section verification',
+        'residence_country' => 'Country',
+    ];
+
+    /**
+     * Record the current staff user as the author of this edit. Only real
+     * staff count — queued jobs (no auth) and the client's own tracker
+     * actions must not claim the Updated column.
+     */
+    protected function stampLastActivity(): void
+    {
+        $user = auth()->user();
+
+        if (! $user || $user->isLead()) {
+            return;
+        }
+
+        $changed = array_values(array_diff(array_keys($this->getDirty()), self::ACTIVITY_NOISE));
+
+        if (empty($changed)) {
+            return;
+        }
+
+        $this->last_activity_at = now();
+        $this->last_activity_by = $user->id;
+        $this->last_activity_desc = $this->describeActivity($changed);
+    }
+
+    /**
+     * Stamp an action that isn't a column change on the lead itself — a
+     * document review, a file deletion — so it still shows in the portals'
+     * Updated column. Written quietly: no extra activity-log noise.
+     */
+    public function recordStaffActivity(string $description): void
+    {
+        $user = auth()->user();
+
+        if (! $user || $user->isLead()) {
+            return;
+        }
+
+        $this->forceFill([
+            'last_activity_at' => now(),
+            'last_activity_by' => $user->id,
+            'last_activity_desc' => mb_substr($description, 0, 160),
+        ])->saveQuietly();
+    }
+
+    /**
+     * One-line summary of an edit, e.g. "Stage → Endorsed" or
+     * "Updated Visa, Phone +2 more".
+     *
+     * @param  array<int, string>  $changed
+     */
+    protected function describeActivity(array $changed): string
+    {
+        foreach (['immigration_stage', 'education_stage', 'english_stage'] as $stageColumn) {
+            if (in_array($stageColumn, $changed, true) && ! empty($this->{$stageColumn})) {
+                return mb_substr('Stage → '.$this->{$stageColumn}, 0, 160);
+            }
+        }
+
+        $shown = array_slice($changed, 0, 3);
+        $labels = array_map(
+            fn ($column) => self::ACTIVITY_LABELS[$column] ?? ucfirst(str_replace('_', ' ', $column)),
+            $shown
+        );
+
+        $extra = count($changed) - count($shown);
+
+        return mb_substr(
+            'Updated '.implode(', ', $labels).($extra > 0 ? " +{$extra} more" : ''),
+            0,
+            160
+        );
     }
 
     public function documentRequests()
