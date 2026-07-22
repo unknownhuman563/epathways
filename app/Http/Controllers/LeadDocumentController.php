@@ -184,6 +184,55 @@ class LeadDocumentController extends Controller
         return back()->with('success', 'Request removed.');
     }
 
+    /**
+     * Flat JSON list of every file on a case, with its review status.
+     *
+     * Feeds the "Files" popover on the immigration Cases table so staff can
+     * see what has been submitted / reviewed / rejected without opening the
+     * case profile. Fetched on demand — the Cases props stay light.
+     */
+    public function documentsJson(Request $request, $leadId)
+    {
+        $lead = Lead::findOrFail($leadId);
+
+        // checklist_key → human label, so the history reads "Passport
+        // biographical page" rather than "passport_bio_page".
+        $labels = collect(app(\App\Services\Immigration\CaseChecklistService::class)->forCase($lead))
+            ->filter(fn ($i) => ! empty($i['key']))
+            ->mapWithKeys(fn ($i) => [$i['key'] => $i['label'] ?? $i['key']]);
+
+        $docs = $lead->documents()
+            ->with(['uploader:id,name', 'reviewer:id,name'])
+            ->orderByDesc('created_at')
+            ->get()
+            ->map(fn (LeadDocument $d) => [
+                'id' => $d->id,
+                'name' => $d->original_name ?: basename((string) $d->file_path),
+                'checklist_key' => $d->checklist_key,
+                // Which checklist requirement this file answers (null for
+                // ad-hoc uploads that don't map to one).
+                'checklist_label' => $d->checklist_key ? ($labels[$d->checklist_key] ?? null) : null,
+                'mime' => $d->mime,
+                'size' => $d->size,
+                // Files staff generated (agreements, invoices) never carry a
+                // review status — label them so they don't look "pending".
+                'status' => $d->source === LeadDocument::SOURCE_GENERATED
+                    ? null
+                    : ($d->status ?: LeadDocument::STATUS_SUBMITTED),
+                'source' => $d->source,
+                'note' => $d->note,
+                'uploaded_by' => optional($d->uploader)->name,
+                'reviewed_by' => optional($d->reviewer)->name,
+                'created_at' => optional($d->created_at)?->toIso8601String(),
+            ]);
+
+        return response()->json([
+            'lead_id' => $lead->id,
+            'name' => trim("{$lead->first_name} {$lead->last_name}"),
+            'documents' => $docs,
+        ]);
+    }
+
     public function updateStatus(Request $request, $leadId, $docId)
     {
         $doc = LeadDocument::where('lead_id', $leadId)->findOrFail($docId);
@@ -208,6 +257,12 @@ class LeadDocumentController extends Controller
         // Tell the lead their document was approved / rejected. Prefer the
         // doc_approved / doc_rejected templates; fall back to the Mailable.
         $lead = $doc->lead;
+
+        // Reviewing a file is staff activity on the case — show it in the
+        // portals' Updated column.
+        $lead?->recordStaffActivity(
+            $validated['status'].' '.($doc->original_name ?: 'file')
+        );
         if (in_array($validated['status'], [LeadDocument::STATUS_APPROVED, LeadDocument::STATUS_REJECTED], true)
             && $lead && ! empty($lead->email)) {
             try {
@@ -814,7 +869,12 @@ class LeadDocumentController extends Controller
             Storage::disk(self::DISK)->exists($doc->file_path)
                 ? Storage::disk(self::DISK)->delete($doc->file_path)
                 : null;
+            $name = $doc->original_name ?: 'file';
             $doc->delete();
+
+            // Surfaces in the portals' Updated column — deleting a client's
+            // file is exactly the kind of action that column exists to show.
+            $doc->lead?->recordStaffActivity('Deleted file '.$name);
 
             return back()->with('success', 'File removed.');
         } catch (\Throwable $e) {
@@ -1101,20 +1161,33 @@ class LeadDocumentController extends Controller
             return back()->withErrors(['error' => 'ZIP support is not available on the server.']);
         }
 
-        // Rejected files are excluded — a bulk download is used to assemble
-        // the case file for lodgement, and a rejected upload must never end
-        // up in that bundle. Submitted / UnderReview / Approved all come
-        // through (staff still need to see what's pending review).
+        // A bulk download assembles the case file for lodgement, so it ships
+        // APPROVED documents only by default — nothing unreviewed, pending or
+        // rejected belongs in that bundle. `?status=Submitted` (etc.) narrows
+        // to another single state for the File history's filtered download.
+        $status = $request->query('status', LeadDocument::STATUS_APPROVED);
+
+        $allowed = [
+            LeadDocument::STATUS_SUBMITTED,
+            LeadDocument::STATUS_UNDER_REVIEW,
+            LeadDocument::STATUS_APPROVED,
+            LeadDocument::STATUS_REJECTED,
+            LeadDocument::STATUS_STAFF_SHARED,
+        ];
+
+        if (! in_array($status, $allowed, true)) {
+            $status = LeadDocument::STATUS_APPROVED;
+        }
+
         $docs = $lead->documents()
-            ->where(function ($q) {
-                $q->whereNull('status')
-                    ->orWhere('status', '!=', LeadDocument::STATUS_REJECTED);
-            })
+            ->where('status', $status)
             ->orderBy('created_at')
             ->get();
 
         if ($docs->isEmpty()) {
-            return back()->withErrors(['error' => 'This case has no downloadable documents (rejected files are excluded).']);
+            return back()->withErrors([
+                'error' => "This case has no {$status} documents to download.",
+            ]);
         }
 
         $tmp = tempnam(sys_get_temp_dir(), 'leaddocs_');
@@ -1151,7 +1224,11 @@ class LeadDocumentController extends Controller
 
         $slug = Str::slug(trim("{$lead->first_name} {$lead->last_name}")) ?: ('case-'.$lead->id);
 
-        return response()->download($tmp, "{$slug}-documents.zip", [
+        // Name the bundle after what's in it — an "approved" ZIP and a
+        // "submitted" ZIP must not be mistaken for each other on disk.
+        $tag = Str::slug($status);
+
+        return response()->download($tmp, "{$slug}-{$tag}-documents.zip", [
             'Content-Type' => 'application/zip',
         ])->deleteFileAfterSend(true);
     }

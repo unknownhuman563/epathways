@@ -306,9 +306,12 @@ class ImmigrationController extends Controller
                 'immigrationConverter:id,name',
                 'studentConverter:id,name',
                 'stageUpdater:id,name',
+                'lastActivityUser:id,name',
             ])
                 ->immigrationCase()
-                ->orderByDesc('updated_at')
+                // Newest staff activity first, falling back to the raw
+                // timestamp for rows stamped before the column existed.
+                ->orderByRaw('COALESCE(last_activity_at, updated_at) DESC')
                 ->limit(200)
                 ->get()
                 ->map(function ($l) use ($visaChecklists) {
@@ -371,11 +374,18 @@ class ImmigrationController extends Controller
                         // full checklist).
                         'checklist_total' => $checklistKeys->count(),
                         'checklist_submitted' => $checklistKeys->intersect($submittedKeys)->count(),
-                        'updated_at' => optional($l->updated_at)?->toIso8601String(),
-                        // Who last moved the case + when — drives the Updated column.
-                        'updated_by' => optional($l->stageUpdater)->name
+                        // Updated column — the last *staff* edit of any kind
+                        // (stage moves, profile fields, visa details…),
+                        // stamped by Lead::stampLastActivity(). Older rows
+                        // predate the stamp, so fall back to the raw
+                        // timestamp and the last known handler.
+                        'updated_at' => optional($l->last_activity_at ?: $l->updated_at)?->toIso8601String(),
+                        'updated_by' => optional($l->lastActivityUser)->name
+                                                ?? optional($l->stageUpdater)->name
                                                 ?? optional($l->immigrationConverter)->name
                                                 ?? optional($l->studentConverter)->name,
+                        // Short summary of what that edit changed.
+                        'updated_desc' => $l->last_activity_desc,
                     ];
                 });
 

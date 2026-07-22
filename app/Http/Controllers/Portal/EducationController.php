@@ -92,7 +92,7 @@ class EducationController extends Controller
                     'event',
                     'tags:id,name',
                     'portalUser:id,lead_id,last_login_at',
-                    'stageUpdater:id,name',
+                    'stageUpdater:id,name', 'lastActivityUser:id,name',
                     'agent:id,name,avatar_path',
                     'notes' => fn ($q) => $q->latest(),
                     // Doc rows drive the "Docs progress" column in the
@@ -272,7 +272,7 @@ class EducationController extends Controller
                 'school',
                 'studentConverter:id,name',
                 'immigrationConverter:id,name',
-                'stageUpdater:id,name',
+                'stageUpdater:id,name', 'lastActivityUser:id,name',
             ])
                 ->where(function ($q) {
                     $q->where('is_student', true)

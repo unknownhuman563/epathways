@@ -45,7 +45,7 @@ class LeadController extends Controller
                     'event',
                     'tags:id,name',
                     'portalUser:id,lead_id,last_login_at',
-                    'stageUpdater:id,name',
+                    'stageUpdater:id,name', 'lastActivityUser:id,name',
                     'agent:id,name,avatar_path',
                     'notes' => fn ($q) => $q->latest(),
                     'documents:id,lead_id,checklist_key,status',
@@ -1889,7 +1889,7 @@ class LeadController extends Controller
             'documents:id,lead_id,checklist_key,original_name,status,created_at',
             'notes' => fn ($q) => $q->latest()->limit(10),
             'agent:id,name',
-            'stageUpdater:id,name',
+            'stageUpdater:id,name', 'lastActivityUser:id,name',
         ])->findOrFail($id);
 
         return response()->json([
