@@ -1269,7 +1269,11 @@ function DocumentsHubTab({
     // State: missing | submitted | review | approved | rejected.
     const buildRow = (it) => {
         const doc = docsByKey.get(it.key) || null;
-        const parsed = parseChecklistLabel(it.label || it.key);
+        // Prefer the explicit Section field; fall back to splitting a legacy
+        // "Section · Name" label for visas saved before the split.
+        const parsed = it.category
+            ? { section: it.category, name: it.label || it.key }
+            : parseChecklistLabel(it.label || it.key);
         const state = ! doc ? 'missing'
             : doc.status === 'Rejected' ? 'rejected'
                 : doc.status === 'Approved' ? 'approved'

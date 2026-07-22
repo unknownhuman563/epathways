@@ -49,7 +49,11 @@ class VisaChecklistSeeder extends Seeder
     {
         $entry = [
             'key' => $key,
-            'label' => $section.' · '.$label,
+            // Section is its own field so staff can edit it independently of
+            // the document name. The legacy "Section · Name" label format is
+            // still understood downstream for visas saved before this split.
+            'category' => $section,
+            'label' => $label,
             'hint' => $hint,
             'required' => $required,
         ];
