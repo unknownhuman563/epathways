@@ -16,6 +16,13 @@ const fmtSize = (bytes) => {
         : `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
 };
 
+const fmtFee = (n) =>
+    Number(n).toLocaleString("en-NZ", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+// NZ GST. Mirrors VisaType::GST_RATE — fees are stored exclusive of GST.
+const GST_RATE = 0.15;
+const GST_PCT = Math.round(GST_RATE * 100);
+
 const fmtDate = (iso) => {
     if (! iso) return "—";
     return new Date(iso).toLocaleString(undefined, {
@@ -71,7 +78,7 @@ export default function Invoice({ cases = [], generated = [], nextNumber = null 
                     <div className="overflow-x-auto">
                         <table className="w-full text-left text-xs">
                             <thead>
-                                <tr className="bg-gray-100 border-b border-gray-200 text-[10px] font-bold text-gray-500 uppercase tracking-wider">
+                                <tr className="bg-slate-800 text-[10px] font-bold text-white uppercase tracking-wider">
                                     <th className="px-4 py-3">Profile</th>
                                     <th className="px-3 py-3">Name</th>
                                     <th className="px-3 py-3">Contacts</th>
@@ -199,6 +206,12 @@ function NewInvoiceModal({ cases, nextNumber, onClose }) {
         invoice_date: today,
         due_date: plus7,
     });
+    // Which price the invoice quotes for the service fee — "normal" (payment
+    // plan) or "discounted" (pay now).
+    const [feeTier, setFeeTier] = useState("normal");
+    // Fees are stored excluding GST; this decides whether the service-fee
+    // line is seeded ex-GST or as the GST-inclusive RRP.
+    const [includeGst, setIncludeGst] = useState(false);
     // Fully editable line items — starts from the visa's fees, staff can
     // edit any row or add their own.
     const [items, setItems] = useState([]);
@@ -209,16 +222,40 @@ function NewInvoiceModal({ cases, nextNumber, onClose }) {
     const addItem = () => setItems((list) => [...list, { description: "", quantity: 1, unit_price: "" }]);
     const removeItem = (i) => setItems((list) => list.filter((_, idx) => idx !== i));
 
-    // Pre-fill the standard lines from the picked case's visa fees.
+    // Offered whenever the visa has a discounted fee explicitly set — even if
+    // it happens to equal the normal price.
+    const hasDiscounted = selectedCase?.professional_fees_discounted != null;
+
+    // The ex-GST fee for the selected tier — what the GST dropdown uplifts.
+    const quotedFee = !selectedCase
+        ? null
+        : (feeTier === "discounted" && selectedCase.professional_fees_discounted != null
+            ? selectedCase.professional_fees_discounted
+            : selectedCase.professional_fees);
+    useEffect(() => {
+        if (!hasDiscounted && feeTier === "discounted") setFeeTier("normal");
+    }, [hasDiscounted, feeTier]);
+
+    // Pre-fill the standard lines from the picked case's visa fees, at the
+    // chosen tier. Re-seeds when the tier changes so the service-fee line
+    // follows pay-now vs payment-plan.
     useEffect(() => {
         if (! selectedCase) return;
         const visa = selectedCase.inz_visa_type || "Visa";
+        const baseFee = feeTier === "discounted" && selectedCase.professional_fees_discounted != null
+            ? selectedCase.professional_fees_discounted
+            : selectedCase.professional_fees;
+        // GST applies to our service fee only — the INZ disbursement below is
+        // a government charge and is never uplifted.
+        const serviceFee = baseFee && includeGst
+            ? Math.round(baseFee * (1 + GST_RATE) * 100) / 100
+            : baseFee;
         const seed = [];
-        if (selectedCase.professional_fees) {
+        if (serviceFee) {
             seed.push({
                 description: `Consulting and Service Fee - [${visa} Application] (assessing client's eligibility, documents review, providing advice and lodging the above visa application on behalf of client) - pay in advance`,
                 quantity: 1,
-                unit_price: selectedCase.professional_fees,
+                unit_price: serviceFee,
             });
         }
         if (selectedCase.inz_application_fee) {
@@ -229,7 +266,7 @@ function NewInvoiceModal({ cases, nextNumber, onClose }) {
             });
         }
         setItems(seed.length ? seed : [{ description: "", quantity: 1, unit_price: "" }]);
-    }, [selectedCase]);
+    }, [selectedCase, feeTier, includeGst]);
 
     const filteredCases = useMemo(() => {
         const q = caseSearch.trim().toLowerCase();
@@ -250,10 +287,12 @@ function NewInvoiceModal({ cases, nextNumber, onClose }) {
             invoice_number: form.invoice_number || "",
             invoice_date: form.invoice_date || "",
             due_date: form.due_date || "",
+            fee_tier: feeTier,
+            include_gst: includeGst ? 1 : 0,
             items: JSON.stringify(items),
         });
         return `/admin/leads/${selectedCase.id}/invoice/preview?${p.toString()}`;
-    }, [selectedCase, form, items]);
+    }, [selectedCase, form, items, feeTier, includeGst]);
 
     // Debounce preview reloads while typing amounts.
     const [debouncedUrl, setDebouncedUrl] = useState(null);
@@ -267,7 +306,7 @@ function NewInvoiceModal({ cases, nextNumber, onClose }) {
     const generate = () => {
         if (! selectedCase) return;
         setSubmitting(true);
-        router.post(`/admin/leads/${selectedCase.id}/invoice/generate`, { ...form, items }, {
+        router.post(`/admin/leads/${selectedCase.id}/invoice/generate`, { ...form, fee_tier: feeTier, include_gst: includeGst, items }, {
             preserveScroll: true,
             onSuccess: () => onClose(),
             onError: () => toast.error("Could not generate the invoice."),
@@ -341,6 +380,36 @@ function NewInvoiceModal({ cases, nextNumber, onClose }) {
                                 <div>
                                     <span className="block text-[11px] font-semibold text-gray-600 mb-1">Due date</span>
                                     <input type="date" value={form.due_date} onChange={(e) => set("due_date", e.target.value)} className={inputCls} />
+                                </div>
+                            </div>
+                            {/* Which price the service-fee line quotes. Changing
+                                either re-seeds that line; edits made after stay. */}
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <span className="block text-[11px] font-semibold text-gray-600 mb-1">Payment basis</span>
+                                    <select value={feeTier} onChange={(e) => setFeeTier(e.target.value)} className={inputCls}>
+                                        <option value="normal">
+                                            Normal price (payment plan){selectedCase?.professional_fees != null ? ` · $${fmtFee(selectedCase.professional_fees)}` : ""}
+                                        </option>
+                                        <option value="discounted" disabled={!hasDiscounted}>
+                                            Discounted price (pay now){hasDiscounted ? ` · $${fmtFee(selectedCase.professional_fees_discounted)}` : " — none set"}
+                                        </option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <span className="block text-[11px] font-semibold text-gray-600 mb-1">GST</span>
+                                    <select
+                                        value={includeGst ? "incl" : "excl"}
+                                        onChange={(e) => setIncludeGst(e.target.value === "incl")}
+                                        className={inputCls}
+                                    >
+                                        <option value="excl">
+                                            Excluding GST{quotedFee != null ? ` · $${fmtFee(quotedFee)}` : ""}
+                                        </option>
+                                        <option value="incl">
+                                            Including GST ({GST_PCT}%){quotedFee != null ? ` · $${fmtFee(quotedFee * (1 + GST_RATE))}` : ""}
+                                        </option>
+                                    </select>
                                 </div>
                             </div>
                         </div>

@@ -15,8 +15,10 @@ import {
     Filter, ArrowUpDown, ArrowUp, ArrowDown, ChevronLeft, ChevronRight,
     MoreHorizontal, ChevronDown, ChevronRight as ChevronRightIcon, ExternalLink, UserCheck,
     Upload, Loader, Plus, X, CalendarClock, Link2, FileText as FileTextIcon,
-    Pencil, StickyNote, Calendar, MapPin, Users, Eye, Trash2,
+    Pencil, StickyNote, Calendar, MapPin, Users, Eye, Trash2, Paperclip,
 } from "lucide-react";
+import CaseFilesModal from "@/components/immigration/CaseFilesModal";
+import { priorityRing, priorityRank } from "@/utils/priority";
 
 // ── Stage colour map ───────────────────────────────────────────────────────
 // One palette entry per pipeline stage. Tones intentionally match the colour
@@ -142,15 +144,10 @@ const PRIORITY_OPTIONS = [
 export const priorityMeta = (p) => PRIORITY_OPTIONS.find((o) => o.value === p) || null;
 // Coloured dot per priority; unset shows light gray.
 export const priorityDot = (p) => priorityMeta(p)?.dot || "bg-gray-300";
-// Ring colour for the profile-photo avatar (literal classes for Tailwind).
-export const priorityRing = (p) => ({
-    urgent: "ring-red-500",
-    medium: "ring-amber-500",
-    low: "ring-emerald-500",
-}[p] || "ring-gray-300");
-// Sort weight so urgent floats to the top, then medium, low, then leads
-// with no priority set.
-export const priorityRank = (p) => ({ urgent: 0, medium: 1, low: 2 }[p] ?? 3);
+// Avatar ring + sort weight live in @/utils/priority so Leads, Students and
+// Cases can't drift apart. Re-exported because AgentLeads / EventRegistrants
+// already import them from here.
+export { priorityRing, priorityRank };
 
 const PAGE_SIZE = 20;
 
@@ -240,6 +237,7 @@ export default function SalesLeads({ leads = [], statuses = [], programs = [], s
     const [openStageMenuId, setOpenStageMenuId] = useState(null);
     const [openRowMenuId, setOpenRowMenuId] = useState(null);
     const [editingLead, setEditingLead] = useState(null);
+    const [filesLead, setFilesLead] = useState(null);   // lead whose file history is open
     const [expandedId, setExpandedId] = useState(null);
     const [showFilters, setShowFilters] = useState(false);
     const EMPTY_ADV = { goal_status: "", pre_screened_by: "", program: "", portal: "", tag: "" };
@@ -724,8 +722,8 @@ export default function SalesLeads({ leads = [], statuses = [], programs = [], s
                                             )}
                                         </td>
 
-                                        {/* UPDATED — line 1: date + time,
-                                            line 2: staff who last moved the stage. */}
+                                        {/* UPDATED — the last staff activity on this lead:
+                                            when, who, and what they changed. */}
                                         <td className="px-3 py-2.5 whitespace-nowrap">
                                             <div className="text-gray-600">
                                                 {fmtDateShort(l.updated_at)}
@@ -733,6 +731,11 @@ export default function SalesLeads({ leads = [], statuses = [], programs = [], s
                                             </div>
                                             {l.updated_by && (
                                                 <div className="text-[10px] text-gray-400">{l.updated_by}</div>
+                                            )}
+                                            {l.updated_desc && (
+                                                <div className="text-[10px] text-gray-500 truncate max-w-[170px]" title={l.updated_desc}>
+                                                    {l.updated_desc}
+                                                </div>
                                             )}
                                         </td>
 
@@ -756,6 +759,7 @@ export default function SalesLeads({ leads = [], statuses = [], programs = [], s
                                                     onClose={() => setOpenRowMenuId(null)}
                                                     onEdit={() => { setOpenRowMenuId(null); setEditingLead(l); }}
                                                     onRequestPortal={() => { setOpenRowMenuId(null); requestPortal(l); }}
+                                                    onViewFiles={() => { setOpenRowMenuId(null); setFilesLead(l); }}
                                                     isSaving={isSaving}
                                                     portalBase={portalBase}
                                                     canRequestInvite={canRequestInvite}
@@ -860,6 +864,14 @@ export default function SalesLeads({ leads = [], statuses = [], programs = [], s
                     staffOptions={staffOptions}
                     agents={agents}
                     onClose={() => setEditingLead(null)}
+                />
+            )}
+
+            {filesLead && (
+                <CaseFilesModal
+                    leadId={filesLead.id}
+                    leadName={filesLead.name}
+                    onClose={() => setFilesLead(null)}
                 />
             )}
         </div>
@@ -1653,7 +1665,7 @@ function ImportLeadsButton() {
 
 // ── Row "More" menu — portal invitation actions live here ────────────────
 
-function RowMenu({ lead, open, onToggle, onClose, onEdit, onRequestPortal, isSaving, portalBase = "/portal/sales", canRequestInvite = true }) {
+function RowMenu({ lead, open, onToggle, onClose, onEdit, onRequestPortal, onViewFiles, isSaving, portalBase = "/portal/sales", canRequestInvite = true }) {
     const menuRef = useRef(null);
     const triggerRef = useRef(null);
     const [menuStyle, setMenuStyle] = useState(null);
@@ -1743,13 +1755,24 @@ function RowMenu({ lead, open, onToggle, onClose, onEdit, onRequestPortal, isSav
                         <Pencil size={12} className="text-gray-400" />
                         Edit lead
                     </button>
-                    <a
-                        href={`${portalBase}/leads/${lead.id}/documents`}
+                    <Link
+                        href={`${portalBase}/leads/${lead.id}?tab=documents`}
                         className="flex items-center gap-2.5 px-3 py-2 text-xs text-gray-700 hover:bg-gray-50"
                     >
                         <FileText size={12} className="text-gray-400" />
                         Documents
-                    </a>
+                    </Link>
+                    {/* Every file on the lead with its review status —
+                        separate from the checklist on the detail page. */}
+                    <button
+                        type="button"
+                        role="menuitem"
+                        onClick={() => { onClose?.(); onViewFiles?.(); }}
+                        className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 text-left"
+                    >
+                        <Paperclip size={12} className="text-gray-400" />
+                        File history{lead.documents_count ? ` (${lead.documents_count})` : ''}
+                    </button>
                     {/* Copy the public /track URL to the clipboard so staff
                         can paste it straight into WhatsApp / email — the
                         client opens it to see info, documents, timeline,

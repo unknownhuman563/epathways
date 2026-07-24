@@ -9,6 +9,7 @@ import {
     Archive, Pencil, Mail, Phone, Paperclip,
 } from "lucide-react";
 import CaseFilesModal from "@/components/immigration/CaseFilesModal";
+import { priorityRing, priorityRank } from "@/utils/priority";
 
 /**
  * Distribution palette — colour per immigration stage. Kept distinct from
@@ -1397,31 +1398,9 @@ function priorityColor(priority) {
     }
 }
 
-// Ring colour for the profile-photo avatar so the priority is still
-// signalled once a face image replaces the coloured initials circle.
-// Literal class strings so Tailwind's JIT generates them.
-function priorityRing(priority) {
-    switch (priority) {
-        case 'urgent': return 'ring-red-500';
-        case 'high':   return 'ring-orange-500';
-        case 'medium': return 'ring-yellow-400';
-        case 'low':    return 'ring-emerald-500';
-        case 'done':   return 'ring-emerald-600';
-        default:       return 'ring-gray-300';
-    }
-}
-
-// Sort weight: urgent → high → medium → low → done → no priority.
-function priorityRank(priority) {
-    switch (priority) {
-        case 'urgent': return 0;
-        case 'high':   return 1;
-        case 'medium': return 2;
-        case 'low':    return 3;
-        case 'done':   return 4;
-        default:       return 5;
-    }
-}
+// priorityRing / priorityRank now live in @/utils/priority — see the import
+// at the top of this file. Shared with Leads and Students so the avatar ring
+// means the same thing on every staff table.
 
 function fmtDate(d) {
     if (!d) return '—';

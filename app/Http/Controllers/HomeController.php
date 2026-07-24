@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Event;
 use App\Models\Program;
+use App\Models\VisaApproval;
 use App\Services\PromoFeed;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
@@ -21,6 +22,17 @@ class HomeController extends Controller
             'activePromos' => PromoFeed::active(),
             'reviews' => $allReviews['reviews'],
             'reviewStats' => $allReviews['stats'],
+            // Featured approval first, then latest 11 for the home showcase
+            // (Sheree-style card + a horizontal strip of thumbnails). The
+            // full gallery on /visa-approved fetches the whole published set.
+            'visaApprovals' => VisaApproval::published()
+                ->orderByDesc('is_featured')
+                ->orderByDesc('approved_at')
+                ->orderByDesc('id')
+                ->limit(12)
+                ->get()
+                ->map(fn (VisaApproval $v) => $v->toPublicArray())
+                ->all(),
         ]);
     }
 

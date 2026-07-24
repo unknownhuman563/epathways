@@ -457,9 +457,20 @@ class LeadDocumentController extends Controller
             'types.*' => ['string', Rule::in(array_keys(EngagementDocumentGenerator::DOCS))],
             'notify' => 'sometimes|boolean',
             'signer_id' => 'nullable|integer|exists:users,id',
+            'fee_tier' => ['nullable', Rule::in(\App\Models\VisaType::FEE_TIERS)],
+            'include_gst' => 'sometimes|boolean',
         ]);
 
-        $overrides = ! empty($data['signer_id']) ? ['signer_id' => $data['signer_id']] : [];
+        $overrides = [];
+        if (! empty($data['signer_id'])) {
+            $overrides['signer_id'] = $data['signer_id'];
+        }
+        if (! empty($data['fee_tier'])) {
+            $overrides['fee_tier'] = $data['fee_tier'];
+        }
+        if (! empty($data['include_gst'])) {
+            $overrides['include_gst'] = true;
+        }
 
         try {
             // Keep the created document id per type so the notification can
@@ -505,6 +516,14 @@ class LeadDocumentController extends Controller
             if ($request->filled($k)) {
                 $out[$k] = $request->input($k);
             }
+        }
+        // Pricing tier — drives the default service fee (discounted vs normal).
+        if (in_array($request->input('fee_tier'), \App\Models\VisaType::FEE_TIERS, true)) {
+            $out['fee_tier'] = $request->input('fee_tier');
+        }
+        // Whether the service fee is quoted GST-inclusive.
+        if ($request->has('include_gst')) {
+            $out['include_gst'] = filter_var($request->input('include_gst'), FILTER_VALIDATE_BOOLEAN);
         }
         foreach (['service_fee', 'inz_fee'] as $k) {
             $v = $request->input($k);
@@ -693,8 +712,18 @@ class LeadDocumentController extends Controller
         $engageType = $this->engagementTypeFor($type);
         if ($engageType !== null) {
             $signer = $request->query('signer');
-            $html = app(EngagementDocumentGenerator::class)
-                ->renderHtml($lead, $engageType, $signer ? ['signer_id' => (int) $signer] : []);
+            $tier = $request->query('fee_tier');
+            $opts = [];
+            if ($signer) {
+                $opts['signer_id'] = (int) $signer;
+            }
+            if (in_array($tier, \App\Models\VisaType::FEE_TIERS, true)) {
+                $opts['fee_tier'] = $tier;
+            }
+            if (filter_var($request->query('include_gst'), FILTER_VALIDATE_BOOLEAN)) {
+                $opts['include_gst'] = true;
+            }
+            $html = app(EngagementDocumentGenerator::class)->renderHtml($lead, $engageType, $opts);
 
             return response($html)->header('Content-Type', 'text/html; charset=utf-8');
         }
@@ -749,7 +778,7 @@ class LeadDocumentController extends Controller
     public function saveProposal(Request $request, $leadId)
     {
         $validated = $request->validate([
-            'program_ids' => 'nullable|array|max:3',
+            'program_ids' => 'nullable|array|max:5',
             'program_ids.*' => 'integer|exists:programs,id',
         ]);
 

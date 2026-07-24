@@ -98,6 +98,18 @@ class User extends Authenticatable
     }
 
     /**
+     * Whether this user has a usable signature — the column AND the file it
+     * points at. A path alone isn't enough: if the file has since been
+     * removed the signature block renders blank, so anything that warns
+     * about a missing signature has to check the file too.
+     */
+    public function hasSignature(): bool
+    {
+        return $this->signature_path
+            && \Illuminate\Support\Facades\Storage::disk('local')->exists($this->signature_path);
+    }
+
+    /**
      * The staff signature as a base64 data URI, or null when none is set.
      * Signatures live on the private disk (never a public URL) and are
      * embedded straight into generated PDFs / previews.
@@ -173,15 +185,24 @@ class User extends Authenticatable
                 if (! $isInk) {
                     continue;
                 }
-                if ($x < $left)   $left = $x;
-                if ($x > $right)  $right = $x;
-                if ($y < $top)    $top = $y;
-                if ($y > $bottom) $bottom = $y;
+                if ($x < $left) {
+                    $left = $x;
+                }
+                if ($x > $right) {
+                    $right = $x;
+                }
+                if ($y < $top) {
+                    $top = $y;
+                }
+                if ($y > $bottom) {
+                    $bottom = $y;
+                }
             }
         }
 
         if ($right < $left || $bottom < $top) {
             imagedestroy($img);
+
             return $this->signatureDataUri();
         }
 

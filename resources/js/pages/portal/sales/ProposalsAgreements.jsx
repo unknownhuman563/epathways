@@ -162,7 +162,7 @@ export default function ProposalsAgreements({
                             {tab === 'suggestions'
                                 ? 'Leads at Consultation Done, Proposal Sent, or Consultancy Agreement without a matching document will appear here.'
                                 : tab === 'proposals'
-                                    ? <>Click <span className="font-semibold text-gray-600">+ New</span> and pick up to 3 programs to shortlist for a lead.</>
+                                    ? <>Click <span className="font-semibold text-gray-600">+ New</span> and pick up to 5 programs to shortlist for a lead.</>
                                     : <>Click <span className="font-semibold text-gray-600">+ New</span> to generate one for a lead.</>}
                         </p>
                     </div>
@@ -965,7 +965,7 @@ function NotifyLeadModal({ target, onClose }) {
 // swaps the applicant line + cost breakdown. `defaultSchoolFee` is
 // the fee that pre-fills the Settings panel — staff can override.
 const DOC_TYPES = [
-    { value: 'proposal',                          label: 'Study Proposal',                                 hint: 'Suggest up to 3 programs — the lead picks one on their tracker.' },
+    { value: 'proposal',                          label: 'Study Proposal',                                 hint: 'Suggest up to 5 programs — the lead picks one on their tracker.' },
 
     { value: 'consultancy_std_single_100',        label: 'Standard · Single · 100,000',                    hint: 'Sole applicant. School Enrolment + Documentation Fee.',                                       backendType: 'consultancy_std_100',     applicantMode: 'single', defaultSchoolFee: 100000 },
     { value: 'consultancy_std_single_150',        label: 'Standard · Single · 150,000',                    hint: 'Sole applicant. School Enrolment + INZ visa application fee.',                                backendType: 'consultancy_std_150',     applicantMode: 'single', defaultSchoolFee: 150000 },
@@ -977,7 +977,7 @@ const DOC_TYPES = [
     { value: 'english_engagement',                label: 'English Engagement Agreement',                   hint: 'PTE preparation services (separate document).' },
 ];
 const CONSULTANCY_TYPES = new Set(DOC_TYPES.filter((t) => t.backendType).map((t) => t.value));
-const MAX_PROPOSED_PROGRAMS = 3;
+const MAX_PROPOSED_PROGRAMS = 5;
 const DEFAULT_ENGLISH_FEE = 14500;
 
 function NewDocumentModal({ open, onClose, picker, programs = [], prefill = null }) {
@@ -1177,7 +1177,7 @@ function NewDocumentModal({ open, onClose, picker, programs = [], prefill = null
                             <h3 className="text-[15px] font-bold text-gray-900 leading-tight">New proposal or agreement</h3>
                             <p className="text-[11px] text-gray-500 mt-0.5">
                                 {isProposalType
-                                    ? 'Pick up to 3 programs; the lead chooses one on their tracker.'
+                                    ? 'Pick up to 5 programs; the lead chooses one on their tracker.'
                                     : 'Preview updates as you change lead or type. Generate attaches a PDF to the lead\'s documents.'}
                             </p>
                         </div>

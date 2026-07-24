@@ -25,7 +25,7 @@ import ReviewsSection from "@/components/ui/ReviewsSection";
 
 import HeroVideo from "@assets/Hero/02 - client epathway intro (1).mp4";
 
-export default function Home({ events = [], programGroups = [], activePromos = [], reviews = [], reviewStats = { count: 0, average: 0 } }) {
+export default function Home({ events = [], programGroups = [], activePromos = [], reviews = [], reviewStats = { count: 0, average: 0 }, visaApprovals = [] }) {
   return (
     <>
       <div className="bg-white" style={{ overflowX: 'clip' }}>
@@ -68,7 +68,7 @@ export default function Home({ events = [], programGroups = [], activePromos = [
             the journey timeline frames the approval stories. */}
         <StudentVisaTimeline />
 
-        <VisaApprovedShowcase />
+        <VisaApprovedShowcase visaApprovals={visaApprovals} />
 
         {/* In-Demand Programs Section */}
         <InDemandPrograms programGroups={programGroups} />

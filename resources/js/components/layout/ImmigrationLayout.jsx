@@ -5,7 +5,7 @@ import {
     Calendar, FileBadge, CalendarDays, FileText, ListChecks, LineChart,
     User, Bell, CheckSquare, Ticket, Mail,
     PenLine, Megaphone, Smartphone, MessageSquare,
-    FileSignature, ReceiptText,
+    FileSignature, ReceiptText, GraduationCap, Award,
 } from "lucide-react";
 
 export default function ImmigrationLayout({ children }) {
@@ -38,6 +38,8 @@ export default function ImmigrationLayout({ children }) {
                 { name: "Invoice",       href: "/portal/immigration/cases/invoice",    icon: <ReceiptText size={16} /> },
             ],
         },
+        // Shared with Education + Sales — same screen, this portal's layout.
+        { name: "Students",     href: "/portal/immigration/students",     icon: <GraduationCap size={20} /> },
         { name: "Documents",    href: "/portal/immigration/documents",    icon: <FolderOpen size={20} />,     badge: badges.docs_pending_review, badgeTone: "warning" },
         { name: "Task Board",   href: "/portal/immigration/tasks",        icon: <CheckSquare size={20} /> },
         { name: "Appointments", href: "/portal/immigration/appointments", icon: <Calendar size={20} /> },
@@ -59,7 +61,8 @@ export default function ImmigrationLayout({ children }) {
             ],
         },
 
-        { name: "Reports", href: "/portal/immigration/reports", icon: <LineChart size={20} /> },
+        { name: "Reports",       href: "/portal/immigration/reports",         icon: <LineChart size={20} /> },
+        { name: "Visa Approved", href: "/admin/visa-approvals",               icon: <Award size={20} /> },
 
         { name: "Account", section: true },
         { name: "My Profile",    href: "/portal/immigration/profile",       icon: <User size={20} /> },

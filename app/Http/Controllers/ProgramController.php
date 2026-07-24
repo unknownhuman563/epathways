@@ -111,7 +111,15 @@ class ProgramController extends Controller
             unset($validated['image']);
         }
 
-        $program->update($validated);
+        // Partial-payload model: only write keys the request actually sent, so
+        // a caller that posts a subset of the form can never blank out the
+        // columns it didn't include. Explicitly-cleared fields still come
+        // through (the key is present with a null/empty value).
+        $patch = collect($validated)
+            ->filter(fn ($v, $k) => $k === 'image' || $request->has($k))
+            ->all();
+
+        $program->update($patch);
 
         return redirect()->back()->with('success', 'Program updated successfully.');
     }

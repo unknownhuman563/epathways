@@ -6,7 +6,7 @@ import {
     Briefcase, Languages, Building2, KeyRound, Sparkles, Tag,
     Radio, PenLine, CalendarDays, Inbox, Megaphone, BarChart3,
     CheckSquare, Clock, Crown, LifeBuoy, Mail, MessageSquare, Smartphone,
-    Wallet, UserCheck, Wrench,
+    Wallet, UserCheck, Wrench, Award,
 } from "lucide-react";
 
 // Super-admin-only entry — only injected when the current user holds
@@ -46,6 +46,7 @@ const ADMIN_NAV = [
     { name: "Schools",  href: "/admin/schools",  icon: <Building2 size={20} /> },
     { name: "Promotions", href: "/admin/promos", icon: <Tag size={20} /> },
     { name: "Facebook Live", href: "/admin/facebook-live", icon: <Video size={20} /> },
+    { name: "Visa Approved", href: "/admin/visa-approvals", icon: <Award size={20} /> },
     {
         name: "Social",
         icon: <Radio size={20} />,

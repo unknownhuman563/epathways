@@ -178,7 +178,20 @@ class EngagementDocumentGenerator
             ? VisaType::where('name', $lead->inz_visa_type)->first()
             : null;
 
-        $professionalFee = $overrides['professional_fee'] ?? ($visa?->professional_fees);
+        // Which price the client is being engaged at — discounted (pay now)
+        // or normal (payment plan). Defaults to normal.
+        $tier = ($overrides['fee_tier'] ?? 'normal') === 'discounted' ? 'discounted' : 'normal';
+
+        $professionalFee = $overrides['professional_fee'] ?? $visa?->professionalFeeFor($tier);
+
+        // Fees are stored exclusive of GST. Staff choose per document whether
+        // the agreement quotes the ex-GST fee or the GST-inclusive RRP.
+        if (! empty($overrides['include_gst']) && $professionalFee !== null) {
+            $professionalFee = round((float) $professionalFee * (1 + VisaType::GST_RATE), 2);
+        }
+
+        // The INZ fee is a government charge with no GST on it, so it is
+        // never uplifted.
         $inzFee = $overrides['inz_application_fee'] ?? ($visa?->inz_application_fee);
 
         return [
