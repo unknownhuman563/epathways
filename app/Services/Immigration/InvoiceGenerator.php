@@ -67,16 +67,29 @@ class InvoiceGenerator
      * Default settings for the New-invoice modal — visa-derived fees, the
      * next invoice number, and today / +7 days dates.
      */
-    public function defaultsFor(Lead $lead): array
+    public function defaultsFor(Lead $lead, string $tier = 'normal', bool $includeGst = false): array
     {
         $visa = $lead->inz_visa_type ? VisaType::where('name', $lead->inz_visa_type)->first() : null;
+        $tier = $tier === 'discounted' ? 'discounted' : 'normal';
+
+        // Fees are stored exclusive of GST; staff choose per invoice whether
+        // the service fee is quoted ex-GST or as the GST-inclusive RRP. The
+        // INZ fee is a government charge and is never uplifted.
+        $serviceFee = $visa?->professionalFeeFor($tier);
+        if ($includeGst && $serviceFee !== null) {
+            $serviceFee = round($serviceFee * (1 + VisaType::GST_RATE), 2);
+        }
 
         return [
             'invoice_number' => $this->nextInvoiceNumber(),
             'invoice_date' => now()->toDateString(),
             'due_date' => now()->addDays(7)->toDateString(),
             'visa_label' => $lead->inz_visa_type ?: 'Visa',
-            'service_fee' => $visa?->professional_fees !== null ? (float) $visa->professional_fees : null,
+            // Service fee follows the chosen pricing tier — discounted (pay
+            // now) or normal (payment plan).
+            'fee_tier' => $tier,
+            'include_gst' => $includeGst,
+            'service_fee' => $serviceFee,
             'inz_fee' => $visa?->inz_application_fee !== null ? (float) $visa->inz_application_fee : null,
             'include_disbursement' => true,
         ];
@@ -96,7 +109,7 @@ class InvoiceGenerator
         if ($serviceFee > 0) {
             $items[] = [
                 'description' => "Consulting and Service Fee - [{$visaLabel} Application] (assessing client's eligibility, "
-                    ."documents review, providing advice and lodging the above visa application on behalf of client) - pay in advance",
+                    .'documents review, providing advice and lodging the above visa application on behalf of client) - pay in advance',
                 'quantity' => 1,
                 'unit_price' => $serviceFee,
                 'amount' => $serviceFee,
@@ -118,7 +131,13 @@ class InvoiceGenerator
     /** Build the Blade payload for an invoice. */
     public function payload(Lead $lead, array $o = []): array
     {
-        $defaults = $this->defaultsFor($lead);
+        // Defaults follow the chosen tier + GST setting, so an unedited
+        // service_fee picks the right price for the quote.
+        $defaults = $this->defaultsFor(
+            $lead,
+            $o['fee_tier'] ?? 'normal',
+            ! empty($o['include_gst'])
+        );
         $visaLabel = $o['visa_label'] ?? $defaults['visa_label'];
 
         $serviceFee = (float) ($o['service_fee'] ?? $defaults['service_fee'] ?? 0);

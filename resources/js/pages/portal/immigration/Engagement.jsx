@@ -2,13 +2,44 @@ import React, { useState, useMemo, useEffect } from "react";
 import { Head, router, Link } from "@inertiajs/react";
 import { toast } from "sonner";
 import {
-    FileSignature, Search, Plus, X, Download, Check, AlertTriangle,
+    FileSignature, Search, Plus, X, Download, Check,
     FileText, Loader2, Mail, Eye, Trash2,
 } from "lucide-react";
 
 // Initials fallback for the profile avatar when there's no face image.
 const rowInitials = (name = "") =>
     (name || "?").split(/\s+/).filter(Boolean).slice(0, 2).map((s) => s[0].toUpperCase()).join("") || "?";
+
+const fmtFee = (n) =>
+    Number(n).toLocaleString("en-NZ", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+// NZ GST. Mirrors VisaType::GST_RATE — fees are stored exclusive of GST.
+const GST_RATE = 0.15;
+const GST_PCT = Math.round(GST_RATE * 100);
+
+// One control style for every input/select in the settings panel, so the
+// column reads as a single stack rather than a pile of one-off styles.
+const ctrlCls = "w-full px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs text-gray-800 focus:outline-none focus:bg-white focus:border-gray-400";
+
+const FieldLabel = ({ children }) => (
+    <label className="text-[11px] font-semibold text-gray-500">{children}</label>
+);
+
+// The engagement documents' brand teal — see the .cover / table.head rules in
+// agreements/engagement/layout.blade.php. Used here so the fee shown in the
+// settings matches the fee tables in the document being previewed.
+const BRAND_TEAL = "#2f7d84";
+
+/** Inline hint / warning under a setting. */
+const Note = ({ tone = "gray", children }) => (
+    <p className={`text-[10.5px] leading-snug rounded-lg px-2.5 py-1.5 ${
+        tone === "amber"
+            ? "text-amber-700 bg-amber-50 border border-amber-200"
+            : "text-gray-500 bg-gray-50 border border-gray-100"
+    }`}>
+        {children}
+    </p>
+);
 
 const fmtSize = (bytes) => {
     if (! bytes) return "—";
@@ -103,7 +134,7 @@ export default function Engagement({ cases = [], documents = [], generated = [],
                     <div className="overflow-x-auto">
                         <table className="w-full text-left text-xs">
                             <thead>
-                                <tr className="bg-gray-50/60 border-b border-gray-200 text-[10px] font-bold text-gray-500 uppercase tracking-wider">
+                                <tr className="bg-slate-800 text-[10px] font-bold text-white uppercase tracking-wider">
                                     <th className="px-4 py-3">Profile</th>
                                     <th className="px-3 py-3">Name</th>
                                     <th className="px-3 py-3">Contacts</th>
@@ -226,6 +257,12 @@ function NewEngagementModal({ cases, documents, signers = [], meId, onClose }) {
     const [submitting, setSubmitting] = useState(false);
     const [previewLoading, setPreviewLoading] = useState(false);
     const [notify, setNotify] = useState(true);
+    // Which price the client is engaged at — "normal" (payment plan) or
+    // "discounted" (pay now). Drives the professional fee on the agreement.
+    const [feeTier, setFeeTier] = useState("normal");
+    // Fees are stored excluding GST; this decides whether the agreement
+    // quotes that figure or the GST-inclusive RRP.
+    const [includeGst, setIncludeGst] = useState(false);
     // Default the signing adviser to the current user when they're eligible.
     const [signerId, setSignerId] = useState(() => {
         if (meId && signers.some((s) => s.id === meId)) return meId;
@@ -257,10 +294,25 @@ function NewEngagementModal({ cases, documents, signers = [], meId, onClose }) {
         }
     }, [selectedTypes, previewType]);
 
-    // Reset the loading spinner whenever the previewed doc / case / signer changes.
+    // Reset the loading spinner whenever the previewed doc / case / signer /
+    // pricing tier changes — each re-renders the document.
     useEffect(() => {
         if (selectedCase && previewType) setPreviewLoading(true);
-    }, [selectedCase, previewType, signerId]);
+    }, [selectedCase, previewType, signerId, feeTier, includeGst]);
+
+    // Offered whenever the visa has a discounted fee explicitly set — even if
+    // it happens to equal the normal price. Snaps back to normal otherwise.
+    const hasDiscounted = selectedCase?.professional_fees_discounted != null;
+
+    // The ex-GST fee for the selected tier — what the GST dropdown uplifts.
+    const quotedFee = !selectedCase
+        ? null
+        : (feeTier === "discounted" && selectedCase.professional_fees_discounted != null
+            ? selectedCase.professional_fees_discounted
+            : selectedCase.professional_fees);
+    useEffect(() => {
+        if (!hasDiscounted && feeTier === "discounted") setFeeTier("normal");
+    }, [hasDiscounted, feeTier]);
 
     const writtenSelected = selectedTypes.includes("written_agreement");
     const missingFees = selectedCase && writtenSelected &&
@@ -268,7 +320,7 @@ function NewEngagementModal({ cases, documents, signers = [], meId, onClose }) {
     const missingSignature = writtenSelected && selectedSigner && !selectedSigner.has_signature;
 
     const previewUrl = selectedCase && previewType
-        ? `/admin/leads/${selectedCase.id}/generate/engage_${previewType}/preview${signerId ? `?signer=${signerId}` : ""}`
+        ? `/admin/leads/${selectedCase.id}/generate/engage_${previewType}/preview?fee_tier=${feeTier}&include_gst=${includeGst ? 1 : 0}${signerId ? `&signer=${signerId}` : ""}`
         : null;
 
     const generate = () => {
@@ -276,7 +328,13 @@ function NewEngagementModal({ cases, documents, signers = [], meId, onClose }) {
         setSubmitting(true);
         router.post(
             `/admin/leads/${selectedCase.id}/engagement/generate`,
-            { types: selectedTypes, notify: notify && !!selectedCase.email, signer_id: signerId },
+            {
+                types: selectedTypes,
+                notify: notify && !!selectedCase.email,
+                signer_id: signerId,
+                fee_tier: feeTier,
+                include_gst: includeGst,
+            },
             {
                 preserveScroll: true,
                 onSuccess: () => { onClose(); },
@@ -301,32 +359,34 @@ function NewEngagementModal({ cases, documents, signers = [], meId, onClose }) {
                 </div>
 
                 <div className="flex-1 flex min-h-0">
-                    {/* Left: controls */}
-                    <div className="w-[380px] border-r border-gray-100 flex flex-col min-h-0 flex-shrink-0">
+                    {/* Left: controls. Case + settings are fixed at the top;
+                        only the document list scrolls, so picking documents
+                        never squeezes the settings and vice versa. */}
+                    <div className="w-[360px] border-r border-gray-100 flex flex-col min-h-0 flex-shrink-0">
                         {/* Case picker */}
-                        <div className="p-4 border-b border-gray-100">
-                            <label className="text-[11px] font-bold uppercase tracking-[0.1em] text-gray-400">Case</label>
+                        <div className="px-4 pt-3 pb-3 border-b border-gray-100">
+                            <FieldLabel>Case</FieldLabel>
                             {selectedCase ? (
-                                <div className="mt-2 flex items-center gap-2 bg-gray-900 border border-gray-900 rounded-lg px-3 py-2.5">
+                                <div className="mt-1.5 flex items-center gap-2 bg-gray-900 rounded-lg px-3 py-2">
                                     <div className="min-w-0 flex-1">
-                                        <p className="text-sm font-semibold text-white truncate">{selectedCase.name}</p>
-                                        <p className="text-[11px] text-gray-300 truncate">{selectedCase.inz_visa_type || "No visa set"}</p>
+                                        <p className="text-xs font-semibold text-white truncate">{selectedCase.name}</p>
+                                        <p className="text-[10.5px] text-gray-400 truncate">{selectedCase.inz_visa_type || "No visa set"}</p>
                                     </div>
-                                    <button onClick={() => setSelectedCase(null)} className="text-gray-400 hover:text-white"><X size={15} /></button>
+                                    <button onClick={() => setSelectedCase(null)} className="text-gray-400 hover:text-white"><X size={14} /></button>
                                 </div>
                             ) : (
                                 <>
-                                    <div className="relative mt-2">
-                                        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                                    <div className="relative mt-1.5">
+                                        <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
                                         <input
                                             autoFocus
                                             value={caseSearch}
                                             onChange={(e) => setCaseSearch(e.target.value)}
                                             placeholder="Search a case…"
-                                            className="w-full pl-9 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs focus:outline-none focus:bg-white focus:border-gray-300"
+                                            className={`${ctrlCls} !pl-8`}
                                         />
                                     </div>
-                                    <div className="mt-2 max-h-52 overflow-y-auto rounded-lg border border-gray-100 divide-y divide-gray-50">
+                                    <div className="mt-1.5 max-h-44 overflow-y-auto rounded-lg border border-gray-100 divide-y divide-gray-50">
                                         {filteredCases.length === 0 && (
                                             <div className="px-3 py-4 text-center text-xs text-gray-400">No cases found.</div>
                                         )}
@@ -334,7 +394,7 @@ function NewEngagementModal({ cases, documents, signers = [], meId, onClose }) {
                                             <button
                                                 key={c.id}
                                                 onClick={() => setSelectedCase(c)}
-                                                className="w-full text-left px-3 py-2 hover:bg-gray-50 transition-colors"
+                                                className="w-full text-left px-3 py-1.5 hover:bg-gray-50 transition-colors"
                                             >
                                                 <p className="text-xs font-semibold text-gray-900 truncate">{c.name}</p>
                                                 <p className="text-[10.5px] text-gray-400 truncate">{c.lead_id} · {c.inz_visa_type || "No visa"}</p>
@@ -345,59 +405,107 @@ function NewEngagementModal({ cases, documents, signers = [], meId, onClose }) {
                             )}
                         </div>
 
-                        {/* Signing adviser */}
-                        <div className="p-4 border-b border-gray-100">
-                            <label className="text-[11px] font-bold uppercase tracking-[0.1em] text-gray-400">Signing adviser</label>
-                            <select
-                                value={signerId ?? ""}
-                                onChange={(e) => setSignerId(e.target.value ? Number(e.target.value) : null)}
-                                className="mt-2 w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs text-gray-800 focus:outline-none focus:bg-white focus:border-gray-300"
-                            >
-                                {signers.length === 0 && <option value="">No licensed advisers</option>}
-                                {signers.map((s) => (
-                                    <option key={s.id} value={s.id}>
-                                        {s.name}{s.licence ? ` · ${s.licence}` : ""}{s.has_signature ? "" : " (no signature)"}
-                                    </option>
-                                ))}
-                            </select>
+                        {/* Settings — adviser, then the two fee controls side
+                            by side. Warnings only render when they apply, so
+                            the block stays short in the normal case. */}
+                        <div className="px-4 pt-3 pb-3 border-b border-gray-100 space-y-2.5">
+                            <div>
+                                <FieldLabel>Signing adviser</FieldLabel>
+                                <select
+                                    value={signerId ?? ""}
+                                    onChange={(e) => setSignerId(e.target.value ? Number(e.target.value) : null)}
+                                    className={`${ctrlCls} mt-1.5`}
+                                >
+                                    {signers.length === 0 && <option value="">No licensed advisers</option>}
+                                    {signers.map((s) => (
+                                        <option key={s.id} value={s.id}>
+                                            {s.name}{s.licence ? ` · ${s.licence}` : ""}{s.has_signature ? "" : " (no signature)"}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-2">
+                                <div className="min-w-0">
+                                    <FieldLabel>Payment basis</FieldLabel>
+                                    <select
+                                        value={feeTier}
+                                        onChange={(e) => setFeeTier(e.target.value)}
+                                        className={`${ctrlCls} mt-1.5`}
+                                    >
+                                        <option value="normal">Normal (payment plan)</option>
+                                        <option value="discounted" disabled={!hasDiscounted}>
+                                            Discounted (pay now){hasDiscounted ? "" : " — none set"}
+                                        </option>
+                                    </select>
+                                </div>
+                                <div className="min-w-0">
+                                    <FieldLabel>GST</FieldLabel>
+                                    <select
+                                        value={includeGst ? "incl" : "excl"}
+                                        onChange={(e) => setIncludeGst(e.target.value === "incl")}
+                                        className={`${ctrlCls} mt-1.5`}
+                                    >
+                                        <option value="excl">Excluding GST</option>
+                                        <option value="incl">Including GST ({GST_PCT}%)</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            {/* The resulting fee, so the two dropdowns above
+                                can stay short without hiding what they do. */}
+                            {quotedFee != null && (
+                                <div
+                                    className="flex items-baseline justify-between rounded-lg px-3 py-2 text-white"
+                                    style={{ backgroundColor: BRAND_TEAL }}
+                                >
+                                    <span className="text-[11px] text-white/80">Agreement fee</span>
+                                    <span className="text-sm font-bold tabular-nums">
+                                        ${fmtFee(includeGst ? quotedFee * (1 + GST_RATE) : quotedFee)}
+                                    </span>
+                                </div>
+                            )}
+
                             {signers.length === 0 && (
-                                <p className="mt-2 text-[11px] text-gray-400 leading-snug">
+                                <Note>
                                     Only licensed advisers can sign. Add an <span className="font-semibold">IAA licence number</span> on My Profile to appear here.
-                                </p>
+                                </Note>
                             )}
                             {missingSignature && (
-                                <div className="mt-2 flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-                                    <AlertTriangle size={13} className="text-amber-500 mt-0.5 flex-shrink-0" />
-                                    <p className="text-[11px] text-amber-700 leading-snug">
-                                        This adviser has no signature yet — the agreement will show a blank signature line. Add one on <span className="font-semibold">My Profile</span>.
-                                    </p>
-                                </div>
+                                <Note tone="amber">
+                                    This adviser has no signature yet — the agreement will show a blank signature line.
+                                </Note>
+                            )}
+                            {missingFees && (
+                                <Note tone="amber">
+                                    This visa has no fees set on the <span className="font-semibold">Visas</span> page — the Written Agreement will show placeholders.
+                                </Note>
                             )}
                         </div>
 
-                        {/* Document checklist */}
-                        <div className="p-4 flex-1 overflow-y-auto">
+                        {/* Document checklist — the only scrolling region. */}
+                        <div className="px-4 pt-3 pb-4 flex-1 overflow-y-auto min-h-0">
                             <div className="flex items-center justify-between">
-                                <label className="text-[11px] font-bold uppercase tracking-[0.1em] text-gray-400">Documents</label>
+                                <FieldLabel>Documents</FieldLabel>
                                 <button
                                     onClick={() => setSelectedTypes(
                                         selectedTypes.length === documents.length ? [] : documents.map((d) => d.key)
                                     )}
-                                    className="text-[11px] font-semibold text-gray-800 hover:text-black"
+                                    className="text-[10.5px] font-semibold text-gray-500 hover:text-gray-900"
                                 >
                                     {selectedTypes.length === documents.length ? "Clear all" : "Select all"}
                                 </button>
                             </div>
-                            <div className="mt-2 space-y-1.5">
+                            <div className="mt-1.5 space-y-1">
                                 {documents.map((d) => {
                                     const checked = selectedTypes.includes(d.key);
                                     const isPreview = previewType === d.key;
                                     return (
                                         <div
                                             key={d.key}
-                                            className={`rounded-lg border px-3 py-2.5 transition-colors ${isPreview ? "border-gray-400 bg-gray-50" : "border-gray-100 bg-white"}`}
+                                            className={`rounded-lg border px-2.5 py-2 transition-colors ${isPreview ? "border-gray-400 bg-gray-50" : "border-gray-100 bg-white hover:border-gray-200"}`}
                                         >
-                                            <div className="flex items-start gap-2.5">
+                                            <div className="flex items-start gap-2">
                                                 <button
                                                     onClick={() => toggleType(d.key)}
                                                     className={`mt-0.5 w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 ${checked ? "bg-gray-900 border-gray-900" : "bg-white border-gray-300"}`}
@@ -407,24 +515,15 @@ function NewEngagementModal({ cases, documents, signers = [], meId, onClose }) {
                                                 <button onClick={() => setPreviewType(d.key)} className="min-w-0 flex-1 text-left">
                                                     <p className="text-xs font-semibold text-gray-900 flex items-center gap-1.5">
                                                         {d.label}
-                                                        {d.dynamic && <span className="text-[9px] font-bold uppercase tracking-wide text-gray-700 bg-gray-200 rounded px-1 py-0.5">Auto-filled</span>}
+                                                        {d.dynamic && <span className="text-[9px] font-bold uppercase tracking-wide text-gray-700 bg-gray-200 rounded px-1">Auto</span>}
                                                     </p>
-                                                    <p className="text-[10.5px] text-gray-400 mt-0.5">{d.description}</p>
+                                                    <p className="text-[10.5px] text-gray-400 mt-0.5 leading-snug">{d.description}</p>
                                                 </button>
                                             </div>
                                         </div>
                                     );
                                 })}
                             </div>
-
-                            {missingFees && (
-                                <div className="mt-3 flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5">
-                                    <AlertTriangle size={14} className="text-amber-500 mt-0.5 flex-shrink-0" />
-                                    <p className="text-[11px] text-amber-700 leading-snug">
-                                        This visa has no fees set on the <span className="font-semibold">Visas</span> page — the Written Agreement will show fee placeholders.
-                                    </p>
-                                </div>
-                            )}
                         </div>
                     </div>
 

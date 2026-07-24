@@ -3,26 +3,45 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronDown } from 'lucide-react';
 import { Link } from '@inertiajs/react';
 
-// Dynamically import all images from the visa_approved folder
+// Legacy image scan — kept as fallback so a fresh install with no DB
+// entries still shows *something* on the home page. The admin-managed
+// visa_approvals table (populated via /admin/visa-approvals) always
+// wins when it has rows.
 const imageFiles = import.meta.glob("/resources/assets/visa_approved/*.jpg", { eager: true, import: "default" });
 
-// Process and sort images numerically
-const approvedImages = Object.keys(imageFiles).map((path) => {
+const legacyImages = Object.keys(imageFiles).map((path) => {
     const filename = path.split('/').pop();
     const idNum = parseInt(filename.split('.')[0]);
     return {
-        id: idNum,
+        id: `legacy-${idNum}`,
         src: imageFiles[path],
         name: "Visa Approved",
         country: idNum === 2 ? "India" : "Philippines",
-        batch: idNum <= 5 ? "2026 Batch" : "2025 Batch"
+        batch: idNum <= 5 ? "2026 Batch" : "2025 Batch",
     };
-}).sort((a, b) => a.id - b.id);
+}).sort((a, b) => (a.id > b.id ? 1 : -1));
 
-export default function VisaApprovedShowcase() {
-    const initialItems = 4; // Show 1 row of 4 on desktop
-    
-    const displayedImages = approvedImages.slice(0, initialItems);
+/**
+ * Home-page Success Stories carousel.
+ *
+ * Prefers admin-managed approvals (from the DB via HomeController's
+ * `visaApprovals` prop). Falls back to the legacy bundled images if
+ * no DB rows exist yet.
+ */
+export default function VisaApprovedShowcase({ visaApprovals = [] }) {
+    const initialItems = 4; // 1 row of 4 on desktop
+
+    // Adapter — DB approvals → shape the card expects.
+    const fromDb = (visaApprovals || []).map((v) => ({
+        id:      v.id,
+        src:     v.image_url,
+        name:    v.display_name,
+        country: v.country || 'New Zealand',
+        batch:   v.batch_label || 'Approved',
+    })).filter((v) => v.src); // only render entries with a photo
+
+    const source = fromDb.length > 0 ? fromDb : legacyImages;
+    const displayedImages = source.slice(0, initialItems);
 
     return (
         <section className="py-16 sm:py-20 md:py-24 bg-white font-urbanist overflow-hidden">
@@ -96,7 +115,7 @@ export default function VisaApprovedShowcase() {
                 </div>
 
                 {/* View More Button */}
-                {approvedImages.length > initialItems && (
+                {source.length > initialItems && (
                     <div className="flex justify-center">
                         <Link 
                             href="/visa-approved"

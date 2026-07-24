@@ -5,41 +5,55 @@ import Footer from "@/components/layout/Footer";
 import ScrollToTop from "@/components/ui/ScrollToTop";
 import LogoBackdrop from "@assets/newlogosite.png";
 
-// Dynamically import all images from the visa_approved folder
+// Legacy bundled-image scan — kept as fallback so this page still shows
+// something on a fresh install. Admin-managed rows (from
+// /admin/visa-approvals → passed in as `visaApprovals` prop) win when
+// present.
 const imageFiles = import.meta.glob("/resources/assets/visa_approved/*.jpg", { eager: true, import: "default" });
 
-// Process and sort images numerically
-const approvedImages = Object.keys(imageFiles).map((path) => {
+const legacyImages = Object.keys(imageFiles).map((path) => {
     const filename = path.split('/').pop();
     const idNum = parseInt(filename.split('.')[0]);
     return {
-        id: idNum,
+        id: `legacy-${idNum}`,
         src: imageFiles[path],
         name: "Visa Approved",
         country: idNum === 2 ? "India" : "Philippines",
-        batch: idNum <= 5 ? "2026 Batch" : "2025 Batch"
+        batch: idNum <= 5 ? "2026 Batch" : "2025 Batch",
     };
-}).sort((a, b) => a.id - b.id);
+}).sort((a, b) => (a.id > b.id ? 1 : -1));
 
-// Filters that the underlying data actually supports — country + batch.
-// Previously buttons claimed "Student Visa / Work Visa / Immigration" which
-// the per-image metadata couldn't satisfy, so clicks did nothing.
-const FILTERS = [
-    { key: 'all', label: 'All' },
-    { key: 'country:Philippines', label: 'Philippines' },
-    { key: 'country:India', label: 'India' },
-    { key: 'batch:2026 Batch', label: '2026 Batch' },
-    { key: 'batch:2025 Batch', label: '2025 Batch' },
-];
-
-export default function VisaApproved() {
+export default function VisaApproved({ visaApprovals = [] }) {
     const [filter, setFilter] = useState('all');
+
+    // DB adapter — only rows with an actual image render.
+    const fromDb = (visaApprovals || []).map((v) => ({
+        id:      v.id,
+        src:     v.image_url,
+        name:    v.display_name,
+        country: v.country || 'New Zealand',
+        batch:   v.batch_label || 'Approved',
+    })).filter((v) => v.src);
+
+    const approvedImages = fromDb.length > 0 ? fromDb : legacyImages;
+
+    // Build filter chips dynamically from the actual data so we never
+    // show a chip that would filter to an empty set.
+    const FILTERS = useMemo(() => {
+        const countries = [...new Set(approvedImages.map((i) => i.country).filter(Boolean))];
+        const batches   = [...new Set(approvedImages.map((i) => i.batch).filter(Boolean))];
+        return [
+            { key: 'all', label: 'All' },
+            ...countries.map((c) => ({ key: `country:${c}`, label: c })),
+            ...batches.map((b)   => ({ key: `batch:${b}`,   label: b })),
+        ];
+    }, [approvedImages]);
 
     const filteredImages = useMemo(() => {
         if (filter === 'all') return approvedImages;
         const [field, value] = filter.split(':');
         return approvedImages.filter(img => img[field] === value);
-    }, [filter]);
+    }, [filter, approvedImages]);
 
     return (
         <div className="min-h-screen bg-white font-urbanist overflow-x-hidden">

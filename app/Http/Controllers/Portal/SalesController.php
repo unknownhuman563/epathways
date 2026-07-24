@@ -456,23 +456,13 @@ class SalesController extends Controller
      *  + ProgramController CRUD that education uses. */
     public function programs()
     {
-        $programs = Program::orderBy('title')->get()->map(fn (Program $p) => [
-            'id' => $p->id,
-            'title' => $p->title,
-            'slug' => $p->slug,
-            'institution' => $p->institution,
-            'location' => $p->location,
-            'level' => $p->level,
-            'category' => $p->category,
-            'industry' => $p->industry,
-            'status' => $p->status,
-            'duration_months' => $p->duration_months,
-            'intake_months' => $p->intake_months,
-            'price_text' => $p->price_text,
-            'description' => $p->description,
-            'school_id' => $p->school_id,
-            'enrolled' => Lead::whereHas('studyPlans', fn ($q) => $q->where('preferred_course', $p->title))->count(),
-        ]);
+        // Return the FULL program attributes — the shared ProgramModal seeds
+        // its edit form from this row, so any omitted field would render
+        // blank and be wiped on save. Only `enrolled` is extra.
+        $programs = Program::orderBy('title')->get()->map(fn (Program $p) => array_merge(
+            $p->attributesToArray(),
+            ['enrolled' => Lead::whereHas('studyPlans', fn ($q) => $q->where('preferred_course', $p->title))->count()]
+        ));
 
         // Picker options for the "School" dropdown in the New/Edit
         // Program modal — same shape the admin Programs page ships.

@@ -8,9 +8,11 @@ import {
     CreditCard, FileText, ExternalLink, Languages, ClipboardList,
     Save, Edit2, ArrowUpDown, ArrowUp, ArrowDown,
     ChevronDown, Check, TrendingUp, Globe,
-    UserPlus, Pencil, Trash2, Copy, MoreHorizontal,
+    UserPlus, Pencil, Trash2, Copy, MoreHorizontal, Paperclip,
 } from "lucide-react";
 import AddEditStudentModal from "./AddEditStudentModal";
+import CaseFilesModal from "@/components/immigration/CaseFilesModal";
+import { priorityRing } from "@/utils/priority";
 
 const PAGE_SIZE = 25;
 
@@ -311,12 +313,18 @@ const PRIORITY_OPTIONS = [
     { value: "low", label: "Low", dot: "bg-emerald-500" },
 ];
 const priorityDot = (p) => PRIORITY_OPTIONS.find((o) => o.value === p)?.dot || "bg-gray-300";
-// Ring colour for the profile-photo avatar (literal classes for Tailwind).
-const priorityRing = (p) => ({
-    urgent: "ring-red-500",
-    medium: "ring-amber-500",
-    low: "ring-emerald-500",
-}[p] || "ring-gray-300");
+
+/**
+ * Education owns this screen, but Sales and Immigration render it too. Every
+ * link and POST has to stay inside the portal the staffer is actually in —
+ * each portal's routes are gated to its own roles, so a hardcoded
+ * /portal/education/… URL would 403 for a sales user.
+ */
+const portalBase = () => {
+    const path = typeof window === "undefined" ? "" : window.location.pathname;
+    const match = path.match(/^\/portal\/(sales|education|immigration)\b/);
+    return match ? `/portal/${match[1]}` : "/portal/education";
+};
 
 function StudentPriority({ student }) {
     const [saving, setSaving] = useState(false);
@@ -358,6 +366,7 @@ export default function EducationStudents({ students = [], schoolOptions = [], p
     // Add / edit student modal — null = closed, {} = new, object = edit.
     const [editingStudent, setEditingStudent] = useState(null);
     const [studentModalOpen, setStudentModalOpen] = useState(false);
+    const [filesStudent, setFilesStudent] = useState(null); // student whose file history is open
 
     const openNewStudent = () => { setEditingStudent(null); setStudentModalOpen(true); };
     const openEditStudent = (s) => { setEditingStudent(s); setStudentModalOpen(true); };
@@ -365,7 +374,7 @@ export default function EducationStudents({ students = [], schoolOptions = [], p
 
     const deleteStudent = (s) => {
         if (! window.confirm(`Delete "${s.name}"? This archives the record — it drops off every list but notes, documents and history are kept and can be restored.`)) return;
-        router.post(`/portal/education/students/${s.id}/destroy`, {}, { preserveScroll: true, preserveState: true });
+        router.post(`${portalBase()}/students/${s.id}/destroy`, {}, { preserveScroll: true, preserveState: true });
     };
 
     const [search, setSearch] = useState("");
@@ -625,13 +634,14 @@ export default function EducationStudents({ students = [], schoolOptions = [], p
                                 <SortableTh label="Intake"    sortKey="intake"       current={sortKey} dir={sortDir} onSort={toggleSort} />
                                 <SortableTh label="Engaged"   sortKey="date_engaged" current={sortKey} dir={sortDir} onSort={toggleSort} />
                                 <th className="px-3 py-3">Docs</th>
+                                <SortableTh label="Updated"   sortKey="updated_at"   current={sortKey} dir={sortDir} onSort={toggleSort} />
                                 <th className="px-3 py-3 text-right pr-4">Actions</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
                             {paged.length === 0 ? (
                                 <tr>
-                                    <td colSpan={11} className="px-6 py-20 text-center">
+                                    <td colSpan={12} className="px-6 py-20 text-center">
                                         <div className="flex flex-col items-center gap-2 text-gray-400">
                                             <Users size={22} />
                                             <p className="text-sm font-medium">
@@ -688,7 +698,7 @@ export default function EducationStudents({ students = [], schoolOptions = [], p
                                             <td className="px-3 py-2.5">
                                                 <div className="min-w-[180px]">
                                                 <Link
-                                                    href={`/portal/education/leads/${s.id}`}
+                                                    href={`${portalBase()}/leads/${s.id}`}
                                                     className="flex items-center gap-2.5 group/student"
                                                 >
                                                     <div className={`w-7 h-7 rounded-full flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0 overflow-hidden ${s.avatar_url ? `ring-2 ring-offset-1 ${priorityRing(s.priority)}` : (s.priority ? priorityDot(s.priority) : avatarColor(s.id))}`}>
@@ -797,6 +807,30 @@ export default function EducationStudents({ students = [], schoolOptions = [], p
                                                 )}
                                             </td>
 
+                                            {/* Updated — last staff activity on this record:
+                                                when, who, and what they changed. */}
+                                            <td className="px-3 py-2.5 whitespace-nowrap">
+                                                {s.updated_at ? (
+                                                    <div className="flex flex-col">
+                                                        <span className="text-xs text-gray-700 tabular-nums">
+                                                            {fmtDate(s.updated_at)}
+                                                        </span>
+                                                        {s.updated_by && (
+                                                            <span className="text-[10px] text-gray-400 truncate max-w-[160px]">
+                                                                by {s.updated_by}
+                                                            </span>
+                                                        )}
+                                                        {s.updated_desc && (
+                                                            <span className="text-[10px] text-gray-500 truncate max-w-[160px]" title={s.updated_desc}>
+                                                                {s.updated_desc}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                ) : (
+                                                    <span className="text-gray-300">—</span>
+                                                )}
+                                            </td>
+
                                             {/* Actions — collapsed into a three-dot menu */}
                                             <td className="px-3 py-2.5 pr-4 text-right">
                                                 <RowMenu
@@ -811,7 +845,16 @@ export default function EducationStudents({ students = [], schoolOptions = [], p
                                                             key: 'docs',
                                                             label: 'Open documents',
                                                             icon: FileText,
-                                                            href: `/portal/education/leads/${s.id}/documents`,
+                                                            // No /leads/{id}/documents route exists in any
+                                                            // portal — the profile's Documents tab is the
+                                                            // real destination.
+                                                            href: `${portalBase()}/leads/${s.id}?tab=documents`,
+                                                        },
+                                                        {
+                                                            key: 'files',
+                                                            label: `File history${s.docs_total ? ` (${s.docs_total})` : ''}`,
+                                                            icon: Paperclip,
+                                                            onClick: () => setFilesStudent(s),
                                                         },
                                                         s.gdrive_link && {
                                                             key: 'gdrive',
@@ -841,7 +884,7 @@ export default function EducationStudents({ students = [], schoolOptions = [], p
                                         {/* Expander — full Students-Dashboard schema */}
                                         {isExpanded && (
                                             <tr className="bg-indigo-50/20 border-t border-indigo-100/60">
-                                                <td colSpan={11} className="px-6 py-4">
+                                                <td colSpan={12} className="px-6 py-4">
                                                     <StudentDashboardPanel student={s} />
                                                 </td>
                                             </tr>
@@ -891,6 +934,14 @@ export default function EducationStudents({ students = [], schoolOptions = [], p
                 schoolOptions={schoolOptions}
                 programOptions={programOptions}
             />
+
+            {filesStudent && (
+                <CaseFilesModal
+                    leadId={filesStudent.id}
+                    leadName={filesStudent.name}
+                    onClose={() => setFilesStudent(null)}
+                />
+            )}
         </div>
     );
 }
@@ -1023,13 +1074,13 @@ function StudentDashboardPanel({ student: s }) {
             {/* 6 — Quick actions */}
             <section className="flex flex-wrap gap-2">
                 <Link
-                    href={`/portal/education/leads/${s.id}?tab=documents`}
+                    href={`${portalBase()}/leads/${s.id}?tab=documents`}
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-gray-900 text-white hover:bg-gray-800 transition-colors"
                 >
                     <FolderOpen size={12} /> Open profile
                 </Link>
                 <Link
-                    href={`/portal/education/leads/${s.id}`}
+                    href={`${portalBase()}/leads/${s.id}`}
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors"
                 >
                     <FileText size={12} /> Lead detail
@@ -1609,7 +1660,7 @@ function StagePicker({ leadId, field, stages, styler, heading, value, fallbackLa
         setSaving(true);
         onClose();
         router.post(
-            `/portal/education/students/${leadId}/dashboard-field`,
+            `${portalBase()}/students/${leadId}/dashboard-field`,
             { [field]: stage },
             {
                 preserveScroll: true,
@@ -1689,7 +1740,7 @@ function EditableField({ leadId, fieldKey, icon: Icon, label, value, placeholder
     const save = () => {
         setSaving(true);
         router.post(
-            `/portal/education/students/${leadId}/dashboard-field`,
+            `${portalBase()}/students/${leadId}/dashboard-field`,
             { [fieldKey]: draft || null },
             {
                 preserveScroll: true,

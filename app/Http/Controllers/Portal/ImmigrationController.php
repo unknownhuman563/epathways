@@ -480,9 +480,12 @@ class ImmigrationController extends Controller
             // Visa fee lookup so the picker can flag cases whose visa has
             // no fees set (the Written Agreement would render placeholders).
             $visaFees = \App\Models\VisaType::query()
-                ->get(['name', 'professional_fees', 'inz_application_fee'])
+                ->get(['name', 'professional_fees', 'professional_fees_discounted', 'inz_application_fee'])
                 ->mapWithKeys(fn ($v) => [$v->name => [
                     'professional_fees' => $v->professional_fees !== null ? (float) $v->professional_fees : null,
+                    // Raw value — null when genuinely unset, so the UI can
+                    // tell "no discount" from "discounted == normal".
+                    'professional_fees_discounted' => $v->professional_fees_discounted !== null ? (float) $v->professional_fees_discounted : null,
                     'inz_application_fee' => $v->inz_application_fee !== null ? (float) $v->inz_application_fee : null,
                 ]]);
 
@@ -503,6 +506,7 @@ class ImmigrationController extends Controller
                         'inz_visa_type' => $l->inz_visa_type,
                         'immigration_stage' => $l->immigration_stage,
                         'professional_fees' => $fees['professional_fees'] ?? null,
+                        'professional_fees_discounted' => $fees['professional_fees_discounted'] ?? null,
                         'inz_application_fee' => $fees['inz_application_fee'] ?? null,
                     ];
                 })
@@ -589,7 +593,10 @@ class ImmigrationController extends Controller
                 'id' => $u->id,
                 'name' => $u->name,
                 'licence' => $u->iaa_licence_number,
-                'has_signature' => (bool) $u->signature_path,
+                // Checks the file, not just the column — a stale path would
+                // otherwise suppress the "no signature" warning while the
+                // agreement still renders a blank signature line.
+                'has_signature' => $u->hasSignature(),
             ])
             ->values();
     }
@@ -603,9 +610,12 @@ class ImmigrationController extends Controller
             // Visa fees drive the invoice's default line items, so the
             // picker can pre-fill amounts (and flag visas with none set).
             $visaFees = \App\Models\VisaType::query()
-                ->get(['name', 'professional_fees', 'inz_application_fee'])
+                ->get(['name', 'professional_fees', 'professional_fees_discounted', 'inz_application_fee'])
                 ->mapWithKeys(fn ($v) => [$v->name => [
                     'professional_fees' => $v->professional_fees !== null ? (float) $v->professional_fees : null,
+                    // Raw value — null when genuinely unset, so the UI can
+                    // tell "no discount" from "discounted == normal".
+                    'professional_fees_discounted' => $v->professional_fees_discounted !== null ? (float) $v->professional_fees_discounted : null,
                     'inz_application_fee' => $v->inz_application_fee !== null ? (float) $v->inz_application_fee : null,
                 ]]);
 
@@ -626,6 +636,7 @@ class ImmigrationController extends Controller
                         'inz_visa_type' => $l->inz_visa_type,
                         'immigration_stage' => $l->immigration_stage,
                         'professional_fees' => $fees['professional_fees'] ?? null,
+                        'professional_fees_discounted' => $fees['professional_fees_discounted'] ?? null,
                         'inz_application_fee' => $fees['inz_application_fee'] ?? null,
                     ];
                 })

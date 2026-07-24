@@ -309,6 +309,13 @@ class EducationController extends Controller
                                             ?? optional($l->studentConverter)->name
                                             ?? optional($l->immigrationConverter)->name,
                         'stage_updated_at' => optional($l->stage_updated_at)?->toIso8601String(),
+                        // Updated column — last *staff* activity of any kind
+                        // (stamped by Lead::stampLastActivity), with a
+                        // fallback for rows that predate the stamp.
+                        'updated_at' => optional($l->last_activity_at ?: $l->updated_at)?->toIso8601String(),
+                        'updated_by' => optional($l->lastActivityUser)->name
+                                            ?? optional($l->stageUpdater)->name,
+                        'updated_desc' => $l->last_activity_desc,
                         'name' => trim("{$l->first_name} {$l->last_name}") ?: 'Unknown',
                         'avatar_url' => $l->faceImageUrl(),
                         'email' => $l->email,
@@ -367,8 +374,10 @@ class EducationController extends Controller
             $programOptions = \App\Models\Program::orderBy('title')
                 ->get(['id', 'title', 'level']);
 
-            return inertia('portal/education/Students', [
-                'portal' => 'education',
+            [$component, $portal] = $this->studentsComponent();
+
+            return inertia($component, [
+                'portal' => $portal,
                 'students' => $students,
                 'schoolOptions' => $schoolOptions,
                 'programOptions' => $programOptions,
@@ -376,8 +385,27 @@ class EducationController extends Controller
         } catch (\Throwable $e) {
             Log::error('Education students list failed', ['error' => $e->getMessage()]);
 
-            return inertia('portal/education/Students', ['portal' => 'education', 'students' => collect()]);
+            [$component, $portal] = $this->studentsComponent();
+
+            return inertia($component, ['portal' => $portal, 'students' => collect()]);
         }
+    }
+
+    /**
+     * The Students screen is shared by three portals — Education owns it,
+     * Sales and Immigration read the same list. Each portal resolves its own
+     * page component (a re-export of Education's) so app.jsx wraps it in
+     * that portal's layout instead of always using EducationLayout.
+     *
+     * @return array{0: string, 1: string} [component, portal]
+     */
+    private function studentsComponent(): array
+    {
+        return match (true) {
+            request()->is('portal/sales/*') => ['portal/sales/Students', 'sales'],
+            request()->is('portal/immigration/*') => ['portal/immigration/Students', 'immigration'],
+            default => ['portal/education/Students', 'education'],
+        };
     }
 
     /**
@@ -858,23 +886,13 @@ class EducationController extends Controller
     public function programs()
     {
         try {
-            $programs = Program::orderBy('title')->get()->map(fn ($p) => [
-                'id' => $p->id,
-                'title' => $p->title,
-                'slug' => $p->slug,
-                'institution' => $p->institution,
-                'location' => $p->location,
-                'level' => $p->level,
-                'category' => $p->category,
-                'industry' => $p->industry,
-                'status' => $p->status,
-                'duration_months' => $p->duration_months,
-                'intake_months' => $p->intake_months,
-                'price_text' => $p->price_text,
-                'description' => $p->description,
-                'school_id' => $p->school_id,
-                'enrolled' => Lead::whereHas('studyPlans', fn ($q) => $q->where('preferred_course', $p->title))->count(),
-            ]);
+            // Return the FULL program attributes — the shared ProgramModal
+            // seeds its edit form from this row, so any omitted field would
+            // render blank and be wiped on save. Only `enrolled` is extra.
+            $programs = Program::orderBy('title')->get()->map(fn ($p) => array_merge(
+                $p->attributesToArray(),
+                ['enrolled' => Lead::whereHas('studyPlans', fn ($q) => $q->where('preferred_course', $p->title))->count()]
+            ));
 
             $schools = \App\Models\School::orderBy('name')->get(['id', 'name']);
 

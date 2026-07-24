@@ -48,6 +48,7 @@ class UpdateVisaTypeRequest extends FormRequest
             'visa_type' => 'nullable|string|max:60',
             'consultation_price_nzd' => 'required|numeric|min:0|max:5000',
             'professional_fees' => 'nullable|numeric|min:0|max:1000000',
+            'professional_fees_discounted' => 'nullable|numeric|min:0|max:1000000',
             'inz_application_fee' => 'nullable|numeric|min:0|max:1000000',
             'consultation_duration_minutes' => 'required|integer|min:15|max:180',
             'estimated_minutes' => 'required|integer|min:5|max:60',

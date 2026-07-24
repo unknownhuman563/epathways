@@ -239,7 +239,16 @@ Route::get('/leave-review', function () {
 Route::get('/activities', [EventController::class, 'activities']);
 
 Route::get('/visa-approved', function () {
-    return inertia('visa/VisaApproved');
+    // Full published gallery — the admin CRUD lives at /admin/visa-approvals.
+    return inertia('visa/VisaApproved', [
+        'visaApprovals' => \App\Models\VisaApproval::published()
+            ->orderByDesc('is_featured')
+            ->orderByDesc('approved_at')
+            ->orderByDesc('id')
+            ->get()
+            ->map(fn (\App\Models\VisaApproval $v) => $v->toPublicArray())
+            ->all(),
+    ]);
 });
 
 // Public application tracking — Ninja-Van-style lookup the department
@@ -580,6 +589,16 @@ Route::middleware(['auth'])->group(function () {
     // department portal) can view a lead and advance its pipeline stage.
     // Every change is audited via the LogsActivity trait on the Lead model.
     Route::middleware('portal:admin,sales,education,english,immigration,accommodation')->group(function () {
+        // Visa Approved CRUD — marketing showcase managed by every staff
+        // role that can log into an admin sidebar. Public read is via
+        // HomeController::index + the /visa-approved route (both pass
+        // published approvals into the same VisaApprovedShowcase view).
+        Route::get   ('/admin/visa-approvals',                    [\App\Http\Controllers\VisaApprovalController::class, 'index'])->name('admin.visa-approvals');
+        Route::get   ('/admin/visa-approvals/people-search',      [\App\Http\Controllers\VisaApprovalController::class, 'peopleSearch'])->name('admin.visa-approvals.people-search');
+        Route::post  ('/admin/visa-approvals',                    [\App\Http\Controllers\VisaApprovalController::class, 'store'])->name('admin.visa-approvals.store');
+        Route::post  ('/admin/visa-approvals/{id}',               [\App\Http\Controllers\VisaApprovalController::class, 'update'])->name('admin.visa-approvals.update');
+        Route::delete('/admin/visa-approvals/{id}',               [\App\Http\Controllers\VisaApprovalController::class, 'destroy'])->name('admin.visa-approvals.destroy');
+
         // Per-registrant view: renders JUST the form the lead filled at
         // registration, plus an editable notes area. Any department that
         // owns leads may open it (sales sees registrants on the Leads
@@ -902,6 +921,16 @@ Route::middleware(['auth'])->group(function () {
             // Tasks & Follow-ups — central inbox of every open task across leads.
             Route::get('/tasks', [SalesController::class, 'tasks'])->name('tasks');
 
+            // Students — the same screen Education owns, rendered under this
+            // portal's layout (see EducationController::studentsComponent).
+            // Read + the inline row edits, so the page is usable, not just
+            // visible.
+            Route::get('/students', [EducationController::class, 'students'])->name('students');
+            Route::post('/students/{id}/dashboard-field', [EducationController::class, 'updateStudentField'])->name('students.dashboard-field');
+            Route::post('/students', [EducationController::class, 'storeStudent'])->name('students.store');
+            Route::post('/students/{id}/update', [EducationController::class, 'updateStudent'])->name('students.update');
+            Route::post('/students/{id}/destroy', [EducationController::class, 'destroyStudent'])->name('students.destroy');
+
             // Sales Weekly Report — 11 sections; ?week_start=YYYY-MM-DD steps weeks.
             Route::get('/reports', [SalesController::class, 'report'])->name('reports');
 
@@ -1153,6 +1182,14 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/intakes', [ImmigrationController::class, 'intakes'])->name('intakes');
             Route::get('/inz-forms', [ImmigrationController::class, 'inzForms'])->name('inz-forms');
             Route::get('/checklist-templates', [ImmigrationController::class, 'checklistTemplates'])->name('checklist-templates');
+
+            // Students — the same screen Education owns, rendered under this
+            // portal's layout (see EducationController::studentsComponent).
+            Route::get('/students', [EducationController::class, 'students'])->name('students');
+            Route::post('/students/{id}/dashboard-field', [EducationController::class, 'updateStudentField'])->name('students.dashboard-field');
+            Route::post('/students', [EducationController::class, 'storeStudent'])->name('students.store');
+            Route::post('/students/{id}/update', [EducationController::class, 'updateStudent'])->name('students.update');
+            Route::post('/students/{id}/destroy', [EducationController::class, 'destroyStudent'])->name('students.destroy');
 
             // Task Board — shared TaskBoardPage component (see resources/js/
             // components/task-board/TaskBoardPage.jsx).

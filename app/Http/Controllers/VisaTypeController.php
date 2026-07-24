@@ -92,6 +92,7 @@ class VisaTypeController extends Controller
             'visa_type' => 'nullable|string|max:60',
             'consultation_price_nzd' => 'required|numeric|min:0|max:5000',
             'professional_fees' => 'nullable|numeric|min:0|max:1000000',
+            'professional_fees_discounted' => 'nullable|numeric|min:0|max:1000000',
             'inz_application_fee' => 'nullable|numeric|min:0|max:1000000',
             'consultation_duration_minutes' => 'required|integer|min:15|max:180',
             'estimated_minutes' => 'required|integer|min:5|max:60',
@@ -152,7 +153,8 @@ class VisaTypeController extends Controller
         $diff = [];
         foreach ([
             'name', 'code', 'short_description', 'visa_type',
-            'consultation_price_nzd', 'professional_fees', 'inz_application_fee',
+            'consultation_price_nzd', 'professional_fees', 'professional_fees_discounted',
+            'inz_application_fee',
             'consultation_duration_minutes',
             'estimated_minutes', 'icon', 'inz_form_refs', 'active',
         ] as $field) {
@@ -202,6 +204,7 @@ class VisaTypeController extends Controller
                 'visa_type' => $payload['visa_type'] ?? null,
                 'consultation_price_nzd' => $newPrice,
                 'professional_fees' => $payload['professional_fees'] ?? null,
+                'professional_fees_discounted' => $payload['professional_fees_discounted'] ?? null,
                 'inz_application_fee' => $payload['inz_application_fee'] ?? null,
                 'consultation_duration_minutes' => $payload['consultation_duration_minutes'],
                 'estimated_minutes' => $payload['estimated_minutes'],
@@ -323,7 +326,11 @@ class VisaTypeController extends Controller
             'visa_type' => $v->visa_type,
             'consultation_price_nzd' => (float) $v->consultation_price_nzd,
             'professional_fees' => $v->professional_fees === null ? null : (float) $v->professional_fees,
+            'professional_fees_discounted' => $v->professional_fees_discounted === null ? null : (float) $v->professional_fees_discounted,
             'inz_application_fee' => $v->inz_application_fee === null ? null : (float) $v->inz_application_fee,
+            // Both tiers with GST-inclusive RRP + total computed server-side,
+            // so the list and the modal can't disagree on the arithmetic.
+            'fee_breakdown' => $v->feeBreakdown(),
             'consultation_duration_minutes' => (int) $v->consultation_duration_minutes,
             'estimated_minutes' => (int) $v->estimated_minutes,
             'icon' => $v->icon ?? 'Globe',

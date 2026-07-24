@@ -4,7 +4,7 @@ import {
     LayoutDashboard, UserSquare2, Users, FolderOpen, GraduationCap,
     ListChecks, LineChart, User, Bell, Tag, Star, CheckSquare, ClipboardCheck,
     Building2, Ticket, Mail,
-    PenLine, Megaphone, Smartphone, MessageSquare, FileText,
+    PenLine, Megaphone, Smartphone, MessageSquare, FileText, Award,
 } from "lucide-react";
 
 export default function EducationLayout({ children }) {
@@ -48,7 +48,8 @@ export default function EducationLayout({ children }) {
             ],
         },
 
-        { name: "Reports", href: "/portal/education/reports", icon: <LineChart size={20} /> },
+        { name: "Reports",       href: "/portal/education/reports", icon: <LineChart size={20} /> },
+        { name: "Visa Approved", href: "/admin/visa-approvals",     icon: <Award size={20} /> },
 
         { name: "Account", section: true },
         { name: "My Profile",    href: "/portal/education/profile",       icon: <User size={20} /> },
