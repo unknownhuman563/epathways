@@ -21,12 +21,16 @@ export default function TemplateEditorView({
     departmentOptions = null,
     fixedDepartment = null,
     defaultChannel = null,
+    defaultFolderId = null,
 }) {
     const editing = !!template;
     const initialChannels = template?.channels ?? (defaultChannel ? [defaultChannel] : ["email"]);
     const form = useForm({
         key: template?.key ?? "",
         department: template?.department ?? fixedDepartment ?? "",
+        // Only meaningful on create (store validates it); the update endpoint
+        // ignores it — folder moves go through the list's Move action instead.
+        folder_id: template?.folder_id ?? defaultFolderId ?? null,
         name: template?.name ?? "",
         description: template?.description ?? "",
         channels: initialChannels,

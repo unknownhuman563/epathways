@@ -20,6 +20,7 @@ class MessageTemplate extends Model
     protected $fillable = [
         'key',
         'department',
+        'folder_id',
         'name',
         'description',
         'channels',
@@ -44,6 +45,11 @@ class MessageTemplate extends Model
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function folder(): BelongsTo
+    {
+        return $this->belongsTo(TemplateFolder::class, 'folder_id');
     }
 
     public function scopeActive(Builder $query): Builder

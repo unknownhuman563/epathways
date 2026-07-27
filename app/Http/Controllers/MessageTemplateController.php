@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Lead;
 use App\Models\MessageTemplate;
+use App\Models\TemplateFolder;
 use App\Models\User;
 use App\Services\CommunicationService;
 use Illuminate\Http\Request;
@@ -44,13 +45,16 @@ class MessageTemplateController extends Controller
 
         // Templates are a shared library — every portal (admin + each
         // department) sees the full set and may use/edit any of them.
+        // Folders (also shared) let staff group them; grouping happens
+        // client-side off each template's folder_id.
         return inertia($ctx['listComponent'], [
             'templates' => MessageTemplate::query()->orderBy('name')->get()->map(fn (MessageTemplate $t) => [
                 'id' => $t->id, 'key' => $t->key, 'name' => $t->name,
                 'department' => $t->department, 'channels' => $t->channels ?? [],
-                'is_active' => $t->is_active,
+                'is_active' => $t->is_active, 'folder_id' => $t->folder_id,
                 'updated_at' => optional($t->updated_at)?->toIso8601String(),
             ]),
+            'folders' => TemplateFolder::orderBy('name')->get(['id', 'name']),
             'basePath' => $ctx['basePath'],
             'scopeLabel' => $ctx['scopeLabel'],
         ]);
@@ -67,6 +71,9 @@ class MessageTemplateController extends Controller
             'departmentOptions' => $ctx['departmentOptions'],
             'fixedDepartment' => $ctx['department'],
             'defaultChannel' => $request->query('channel'),
+            // Carried through the New-template form so a template created from
+            // inside a folder is saved into that folder.
+            'defaultFolderId' => $request->query('folder_id'),
         ]);
     }
 
@@ -108,6 +115,7 @@ class MessageTemplateController extends Controller
                 'required', 'string', 'max:80', 'regex:/^[a-z0-9_]+$/',
                 Rule::unique('message_templates', 'key')->where(fn ($q) => $q->where('department', $department)),
             ],
+            'folder_id' => ['nullable', 'integer', 'exists:template_folders,id'],
             ...$this->bodyRules(),
             ...$this->imageRules(),
         ], ['key.regex' => 'Key must be lowercase letters, numbers and underscores only.']);
@@ -144,6 +152,76 @@ class MessageTemplateController extends Controller
         $template->delete();
 
         return redirect()->to($ctx['basePath'])->with('success', 'Template removed.');
+    }
+
+    /**
+     * Create a folder. Optionally move a set of templates into it in the same
+     * step — the "select templates → group into a new folder" flow. Folders
+     * are shared/global, so no department scoping here.
+     */
+    public function storeFolder(Request $request)
+    {
+        $this->context($request); // gates access via the route's portal:* middleware
+
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:120'],
+            'template_ids' => ['array'],
+            'template_ids.*' => ['integer', 'exists:message_templates,id'],
+        ]);
+
+        $folder = TemplateFolder::create([
+            'name' => $data['name'],
+            'created_by' => $request->user()->id,
+        ]);
+
+        if (! empty($data['template_ids'])) {
+            MessageTemplate::whereIn('id', $data['template_ids'])->update(['folder_id' => $folder->id]);
+        }
+
+        return back()->with('success', 'Folder created.');
+    }
+
+    public function updateFolder(Request $request, $id)
+    {
+        $this->context($request);
+        $folder = TemplateFolder::findOrFail($id);
+
+        $folder->update($request->validate([
+            'name' => ['required', 'string', 'max:120'],
+        ]));
+
+        return back()->with('success', 'Folder renamed.');
+    }
+
+    /**
+     * Delete a folder. Its templates are kept — folder_id is nulled by the
+     * FK's nullOnDelete, so they return to the ungrouped root.
+     */
+    public function destroyFolder(Request $request, $id)
+    {
+        $this->context($request);
+        TemplateFolder::findOrFail($id)->delete();
+
+        return back()->with('success', 'Folder deleted. Its templates moved to the root.');
+    }
+
+    /**
+     * Move templates into a folder, or out to the root when folder_id is null.
+     * Backs the checkbox "Move to folder" action and per-row remove.
+     */
+    public function moveTemplates(Request $request)
+    {
+        $this->context($request);
+
+        $data = $request->validate([
+            'ids' => ['required', 'array'],
+            'ids.*' => ['integer', 'exists:message_templates,id'],
+            'folder_id' => ['nullable', 'integer', 'exists:template_folders,id'],
+        ]);
+
+        MessageTemplate::whereIn('id', $data['ids'])->update(['folder_id' => $data['folder_id'] ?? null]);
+
+        return back()->with('success', 'Templates moved.');
     }
 
     /**

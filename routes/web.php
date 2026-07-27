@@ -458,6 +458,11 @@ Route::middleware(['auth'])->group(function () {
         // Message templates — staff-editable email/SMS templates.
         Route::get('/admin/message-templates', [\App\Http\Controllers\MessageTemplateController::class, 'index'])->name('admin.message-templates');
         Route::get('/admin/message-templates/create', [\App\Http\Controllers\MessageTemplateController::class, 'create'])->name('admin.message-templates.create');
+        // Folder grouping (shared/global) — registered before the {id} show route.
+        Route::post('/admin/message-templates/folders', [\App\Http\Controllers\MessageTemplateController::class, 'storeFolder'])->name('admin.message-templates.folders.store');
+        Route::put('/admin/message-templates/folders/{id}', [\App\Http\Controllers\MessageTemplateController::class, 'updateFolder'])->name('admin.message-templates.folders.update');
+        Route::delete('/admin/message-templates/folders/{id}', [\App\Http\Controllers\MessageTemplateController::class, 'destroyFolder'])->name('admin.message-templates.folders.destroy');
+        Route::post('/admin/message-templates/move', [\App\Http\Controllers\MessageTemplateController::class, 'moveTemplates'])->name('admin.message-templates.move');
         Route::post('/admin/message-templates', [\App\Http\Controllers\MessageTemplateController::class, 'store'])->name('admin.message-templates.store');
         Route::get('/admin/message-templates/{id}', [\App\Http\Controllers\MessageTemplateController::class, 'show'])->name('admin.message-templates.show');
         Route::put('/admin/message-templates/{id}', [\App\Http\Controllers\MessageTemplateController::class, 'update'])->name('admin.message-templates.update');
@@ -802,6 +807,11 @@ Route::middleware(['auth'])->group(function () {
                 $c = \App\Http\Controllers\MessageTemplateController::class;
                 Route::get('/email-templates', [$c, 'index'])->name('email-templates');
                 Route::get('/email-templates/create', [$c, 'create'])->name('email-templates.create');
+                // Folder grouping (shared/global) — before the {id} show route.
+                Route::post('/email-templates/folders', [$c, 'storeFolder'])->name('email-templates.folders.store');
+                Route::put('/email-templates/folders/{id}', [$c, 'updateFolder'])->name('email-templates.folders.update');
+                Route::delete('/email-templates/folders/{id}', [$c, 'destroyFolder'])->name('email-templates.folders.destroy');
+                Route::post('/email-templates/move', [$c, 'moveTemplates'])->name('email-templates.move');
                 Route::post('/email-templates', [$c, 'store'])->name('email-templates.store');
                 Route::get('/email-templates/{id}', [$c, 'show'])->name('email-templates.show');
                 Route::put('/email-templates/{id}', [$c, 'update'])->name('email-templates.update');
