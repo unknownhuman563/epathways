@@ -1,3 +1,5 @@
+import { useState, useEffect } from 'react';
+
 // Reusable staff / user avatar. Shows the uploaded profile photo when an
 // `src` (User.avatar_url) is provided, otherwise falls back to colored
 // initials derived from the name. Use this everywhere a staff avatar shows so
@@ -26,6 +28,31 @@ const colorFor = (key = '') => {
 };
 
 /**
+ * Photo that silently falls back to `children` when the image can't load.
+ *
+ * For the many screens that render their own avatar wrapper (priority rings,
+ * bespoke sizes, initials styling) and only need the img-with-fallback part.
+ * Without this a deleted or mis-pathed file shows the browser's broken-image
+ * icon with the alt text spilling out of the circle.
+ */
+export function AvatarPhoto({ src, children, className = 'w-full h-full object-cover', title }) {
+    const [failed, setFailed] = useState(false);
+    useEffect(() => { setFailed(false); }, [src]);
+
+    if (!src || failed) return children;
+
+    return (
+        <img
+            src={src}
+            alt=""
+            title={title}
+            onError={() => setFailed(true)}
+            className={className}
+        />
+    );
+}
+
+/**
  * @param {string}  name      - display name (for initials + alt/title)
  * @param {string}  src       - image URL (avatar_url); when set, shows the photo
  * @param {any}     colorKey  - stable key for the fallback colour (e.g. user id)
@@ -36,12 +63,22 @@ export default function Avatar({ name = '', src = null, colorKey, size = 28, cla
     const px = typeof size === 'number' ? `${size}px` : size;
     const ringCls = ring ? 'ring-2 ring-white' : '';
 
-    if (src) {
+    // A src that fails to load (deleted file, bad path) would otherwise render
+    // the browser's broken-image icon plus the alt text spilling out of the
+    // circle — fall back to initials instead. Reset when the src changes so a
+    // later valid URL is retried.
+    const [failed, setFailed] = useState(false);
+    useEffect(() => { setFailed(false); }, [src]);
+
+    if (src && !failed) {
         return (
             <img
                 src={src}
-                alt={name || ''}
+                // Empty alt: this is decorative next to the name it depicts,
+                // and a non-empty alt is what leaks on a broken image.
+                alt=""
                 title={title ?? name}
+                onError={() => setFailed(true)}
                 style={{ width: px, height: px }}
                 className={`rounded-full object-cover bg-gray-100 ${ringCls} ${className}`}
             />

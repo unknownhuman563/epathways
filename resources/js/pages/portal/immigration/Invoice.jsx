@@ -3,8 +3,15 @@ import { Head, router, Link } from "@inertiajs/react";
 import { toast } from "sonner";
 import {
     ReceiptText, Search, Plus, X, Download, Eye, Trash2,
-    FileText, Loader2, AlertTriangle,
+    FileText, Loader2, AlertTriangle, ExternalLink,
+    FileSignature, ArrowRight,
 } from "lucide-react";
+
+// Shared shape for the icon-only row actions — no text labels, the
+// intent lives in the tooltip.
+const iconBtnCls =
+    "w-7 h-7 rounded-lg border border-gray-200 flex items-center justify-center text-gray-500 hover:border-gray-900 hover:text-gray-900 transition-colors";
+import { AvatarPhoto } from "@/components/ui/Avatar";
 
 const rowInitials = (name = "") =>
     (name || "?").split(/\s+/).filter(Boolean).slice(0, 2).map((s) => s[0].toUpperCase()).join("") || "?";
@@ -38,8 +45,20 @@ const money = (n) => (n === null || n === undefined || n === "" ? "—" : `$${Nu
  * left (case, number, dates, fee lines) and a live preview of the tax
  * invoice on the right. Amounts default from the case's visa fees.
  */
-export default function Invoice({ cases = [], generated = [], nextNumber = null }) {
+export default function Invoice({ cases = [], generated = [], suggestions = [], nextNumber = null }) {
     const [modalOpen, setModalOpen] = useState(false);
+    // When set, the New-invoice modal opens with this case pre-selected —
+    // used by the "generate invoice" suggestion cards.
+    const [preselectId, setPreselectId] = useState(null);
+
+    const openNew = (caseId = null) => {
+        setPreselectId(caseId);
+        setModalOpen(true);
+    };
+    const closeModal = () => {
+        setModalOpen(false);
+        setPreselectId(null);
+    };
 
     return (
         <div className="space-y-5 max-w-[1400px] mx-auto pb-12">
@@ -57,12 +76,16 @@ export default function Invoice({ cases = [], generated = [], nextNumber = null 
                 </div>
                 <button
                     type="button"
-                    onClick={() => setModalOpen(true)}
+                    onClick={() => openNew()}
                     className="px-4 py-2 bg-gray-900 text-white text-sm font-semibold rounded-xl hover:bg-black transition-colors flex items-center gap-2 flex-shrink-0"
                 >
                     <Plus size={14} strokeWidth={2.5} /> New
                 </button>
             </div>
+
+            {suggestions.length > 0 && (
+                <SuggestionStrip suggestions={suggestions} onGenerate={openNew} />
+            )}
 
             {/* Generated invoices — one row per case */}
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
@@ -93,9 +116,9 @@ export default function Invoice({ cases = [], generated = [], nextNumber = null 
                                         <td className="px-4 py-3">
                                             <Link href={`/portal/immigration/cases/${c.case_id}/profile`} className="inline-block">
                                                 <div className="w-9 h-9 rounded-full overflow-hidden flex items-center justify-center bg-gray-100 text-gray-500 text-[11px] font-bold ring-1 ring-gray-200">
-                                                    {c.avatar_url
-                                                        ? <img src={c.avatar_url} alt={c.case_name} className="w-full h-full object-cover" />
-                                                        : rowInitials(c.case_name)}
+                                                    <AvatarPhoto src={c.avatar_url} title={c.case_name}>
+                                                        {rowInitials(c.case_name)}
+                                                    </AvatarPhoto>
                                                 </div>
                                             </Link>
                                         </td>
@@ -135,23 +158,44 @@ export default function Invoice({ cases = [], generated = [], nextNumber = null 
                                                 </div>
                                             )}
                                         </td>
-                                        {/* Actions — View/Download per invoice (aligned to the
-                                            Invoices column), then the row-level delete. */}
+                                        {/* Actions — icon-only View/Download per invoice (aligned
+                                            to the Invoices column), then the row-level tracker
+                                            link and delete. */}
                                         <td className="px-3 py-3 pr-4 whitespace-nowrap">
                                             <div className="flex flex-col gap-2 items-end">
                                                 {c.invoices.map((iv) => (
-                                                    <div key={iv.id} className="flex items-center justify-end gap-3 h-5">
+                                                    <div key={iv.id} className="flex items-center justify-end gap-1 h-5">
                                                         <a href={iv.view_url} target="_blank" rel="noopener noreferrer"
-                                                           className="text-[11px] font-semibold text-gray-600 hover:text-gray-900 inline-flex items-center gap-1">
-                                                            <Eye size={12} /> View
+                                                           title={`View ${iv.number || "invoice"}`}
+                                                           className="w-6 h-6 rounded-md flex items-center justify-center text-gray-400 hover:bg-gray-100 hover:text-gray-900 transition-colors">
+                                                            <Eye size={13} />
                                                         </a>
                                                         <a href={iv.download_url}
-                                                           className="text-[11px] font-semibold text-gray-600 hover:text-gray-900 inline-flex items-center gap-1">
-                                                            <Download size={12} /> Download
+                                                           title={`Download ${iv.number || "invoice"}`}
+                                                           className="w-6 h-6 rounded-md flex items-center justify-center text-gray-400 hover:bg-gray-100 hover:text-gray-900 transition-colors">
+                                                            <Download size={13} />
                                                         </a>
                                                     </div>
                                                 ))}
-                                                <div className="pt-1 mt-0.5 border-t border-gray-100 w-full flex justify-end">
+                                                <div className="pt-2 mt-0.5 border-t border-gray-100 w-full flex items-center justify-end gap-1">
+                                                    {c.tracking_code ? (
+                                                        <a
+                                                            href={`/track/${c.tracking_code}`}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            title="Open the client's application tracker"
+                                                            className={iconBtnCls}
+                                                        >
+                                                            <ExternalLink size={13} />
+                                                        </a>
+                                                    ) : (
+                                                        <span
+                                                            title="No tracking code on this case yet"
+                                                            className="w-7 h-7 rounded-lg border border-gray-100 flex items-center justify-center text-gray-300"
+                                                        >
+                                                            <ExternalLink size={13} />
+                                                        </span>
+                                                    )}
                                                     <DeleteInvoicesButton caseId={c.case_id} caseName={c.case_name} count={c.invoices.length} />
                                                 </div>
                                             </div>
@@ -165,8 +209,73 @@ export default function Invoice({ cases = [], generated = [], nextNumber = null 
             </div>
 
             {modalOpen && (
-                <NewInvoiceModal cases={cases} nextNumber={nextNumber} onClose={() => setModalOpen(false)} />
+                <NewInvoiceModal cases={cases} nextNumber={nextNumber} preselectId={preselectId} onClose={closeModal} />
             )}
+        </div>
+    );
+}
+
+// Prompts staff to bill cases that have a generated engagement pack but no
+// invoice yet. Reads as a normal section card (matching "Generated invoices")
+// rather than a warning banner; each row opens the New-invoice modal
+// pre-selected to that case, so it's one click from engagement → invoice.
+function SuggestionStrip({ suggestions, onGenerate }) {
+    return (
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+            <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5">
+                    <span className="relative flex h-2 w-2">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-teal-400 opacity-60" />
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-teal-500" />
+                    </span>
+                    <h2 className="text-[12px] font-bold uppercase tracking-[0.12em] text-gray-500">
+                        Ready to invoice
+                    </h2>
+                    <span className="text-[10px] font-bold text-teal-700 bg-teal-50 border border-teal-100 rounded-full px-2 py-0.5">
+                        {suggestions.length}
+                    </span>
+                </div>
+                <p className="text-[11px] text-gray-400 hidden sm:block">
+                    Engagement generated · not yet invoiced
+                </p>
+            </div>
+
+            {/* Capped, scrollable list — stays a tidy fixed height whether one
+                case is waiting or fifty. ~4.5 rows peek so it's obviously
+                scrollable when full. */}
+            <div className="divide-y divide-gray-50 max-h-[248px] overflow-y-auto">
+                {suggestions.map((s) => (
+                    <div
+                        key={s.case_id}
+                        className="group flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50/70 transition-colors"
+                    >
+                        <div className="w-8 h-8 rounded-lg overflow-hidden flex items-center justify-center bg-gray-100 text-gray-500 text-[10px] font-bold ring-1 ring-gray-200 shrink-0">
+                            <AvatarPhoto src={s.avatar_url} title={s.case_name}>
+                                {rowInitials(s.case_name)}
+                            </AvatarPhoto>
+                        </div>
+                        <div className="min-w-0 flex-1">
+                            <div className="text-[13px] font-semibold text-gray-900 truncate leading-tight">
+                                {s.case_name}
+                            </div>
+                            <div className="text-[10.5px] text-gray-400 truncate mt-0.5 flex items-center gap-1.5">
+                                <FileSignature size={11} className="text-gray-300 shrink-0" />
+                                {s.inz_visa_type || "Visa not set"}
+                                {s.engagement_at && <span className="text-gray-300">·&nbsp;{fmtDate(s.engagement_at)}</span>}
+                            </div>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => onGenerate(s.case_id)}
+                            title={`Generate an invoice for ${s.case_name}`}
+                            className="shrink-0 inline-flex items-center gap-1.5 pl-3 pr-2.5 py-1.5 rounded-lg border border-gray-200 text-gray-600 text-[11px] font-semibold hover:bg-gray-900 hover:text-white hover:border-gray-900 transition-colors"
+                        >
+                            Create invoice
+                            <ArrowRight size={12} className="transition-transform group-hover:translate-x-0.5" />
+                        </button>
+                    </div>
+                ))}
+            </div>
         </div>
     );
 }
@@ -185,16 +294,20 @@ function DeleteInvoicesButton({ caseId, caseName, count }) {
     return (
         <button
             type="button" onClick={remove} disabled={busy}
-            className="text-[11px] font-semibold text-rose-600 hover:text-rose-700 inline-flex items-center gap-1 disabled:opacity-40"
+            title={`Delete all ${count} invoice${count === 1 ? "" : "s"} for ${caseName}`}
+            className="w-7 h-7 rounded-lg border border-gray-200 flex items-center justify-center text-rose-500 hover:border-rose-300 hover:bg-rose-50 hover:text-rose-700 transition-colors disabled:opacity-40"
         >
-            {busy ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />} Delete
+            {busy ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
         </button>
     );
 }
 
-function NewInvoiceModal({ cases, nextNumber, onClose }) {
+function NewInvoiceModal({ cases, nextNumber, preselectId = null, onClose }) {
     const [caseSearch, setCaseSearch] = useState("");
-    const [selectedCase, setSelectedCase] = useState(null);
+    // Pre-select the case when the modal was opened from a suggestion card.
+    const [selectedCase, setSelectedCase] = useState(
+        () => (preselectId != null ? cases.find((c) => c.id === preselectId) ?? null : null)
+    );
     const [submitting, setSubmitting] = useState(false);
     const [previewLoading, setPreviewLoading] = useState(false);
 
@@ -432,43 +545,47 @@ function NewInvoiceModal({ cases, nextNumber, onClose }) {
                             )}
 
                             {items.map((it, i) => (
-                                <div key={i} className="rounded-lg border border-gray-200 p-3 space-y-2 bg-gray-50/50">
-                                    <div className="flex items-start justify-between gap-2">
-                                        <span className="text-[10px] font-bold uppercase tracking-wide text-gray-400">Item {i + 1}</span>
+                                <div key={i} className="rounded-lg border border-gray-200 overflow-hidden bg-white">
+                                    {/* Item header strip — the only tinted band; the fields
+                                        below stay on white so they read cleanly. */}
+                                    <div className="flex items-center justify-between gap-2 px-3 py-1.5 bg-slate-800">
+                                        <span className="text-[10px] font-bold uppercase tracking-wide text-white">Item {i + 1}</span>
                                         <button
                                             type="button"
                                             onClick={() => removeItem(i)}
                                             title="Remove item"
-                                            className="text-rose-600 hover:text-rose-700"
+                                            className="text-rose-300 hover:text-rose-100 transition-colors"
                                         >
                                             <Trash2 size={13} />
                                         </button>
                                     </div>
 
-                                    <textarea
-                                        rows={3}
-                                        value={it.description}
-                                        onChange={(e) => setItem(i, "description", e.target.value)}
-                                        placeholder="Description"
-                                        className={`${inputCls} resize-y leading-snug`}
-                                    />
+                                    <div className="p-3 space-y-2">
+                                        <textarea
+                                            rows={3}
+                                            value={it.description}
+                                            onChange={(e) => setItem(i, "description", e.target.value)}
+                                            placeholder="Description"
+                                            className={`${inputCls} resize-y leading-snug`}
+                                        />
 
-                                    <div className="grid grid-cols-3 gap-2 items-end">
-                                        <div>
-                                            <span className="block text-[10px] font-semibold text-gray-500 mb-1">Qty</span>
-                                            <input type="number" step="0.01" min="0" value={it.quantity}
-                                                   onChange={(e) => setItem(i, "quantity", e.target.value)} className={inputCls} />
-                                        </div>
-                                        <div>
-                                            <span className="block text-[10px] font-semibold text-gray-500 mb-1">Unit price</span>
-                                            <input type="number" step="0.01" min="0" value={it.unit_price}
-                                                   onChange={(e) => setItem(i, "unit_price", e.target.value)} className={inputCls} placeholder="0.00" />
-                                        </div>
-                                        <div className="text-right">
-                                            <span className="block text-[10px] font-semibold text-gray-500 mb-1">Amount</span>
-                                            <span className="block text-[13px] font-bold text-gray-900 tabular-nums py-2">
-                                                {money(lineAmount(it))}
-                                            </span>
+                                        <div className="grid grid-cols-3 gap-2 items-end">
+                                            <div>
+                                                <span className="block text-[10px] font-semibold text-gray-500 mb-1">Qty</span>
+                                                <input type="number" step="0.01" min="0" value={it.quantity}
+                                                       onChange={(e) => setItem(i, "quantity", e.target.value)} className={inputCls} />
+                                            </div>
+                                            <div>
+                                                <span className="block text-[10px] font-semibold text-gray-500 mb-1">Unit price</span>
+                                                <input type="number" step="0.01" min="0" value={it.unit_price}
+                                                       onChange={(e) => setItem(i, "unit_price", e.target.value)} className={inputCls} placeholder="0.00" />
+                                            </div>
+                                            <div className="text-right">
+                                                <span className="block text-[10px] font-semibold text-gray-500 mb-1">Amount</span>
+                                                <span className="block text-[13px] font-bold text-gray-900 tabular-nums py-2">
+                                                    {money(lineAmount(it))}
+                                                </span>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>

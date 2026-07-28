@@ -8,6 +8,7 @@ import {
     ArrowUp, ArrowDown, Plus, X, TrendingUp, Copy, MoreHorizontal,
     Archive, Pencil, Mail, Phone, Paperclip,
 } from "lucide-react";
+import { AvatarPhoto } from "@/components/ui/Avatar";
 import CaseFilesModal from "@/components/immigration/CaseFilesModal";
 import { priorityRing, priorityRank } from "@/utils/priority";
 
@@ -872,9 +873,9 @@ function CaseRow({ c, stages, visaTypes = [], isExpanded, onExpand, stageMenuOpe
                             className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-[11px] font-bold flex-shrink-0 overflow-hidden ${c.avatar_url ? `ring-2 ring-offset-1 ${priorityRing(c.immigration_priority)}` : priorityColor(c.immigration_priority)}`}
                             title={c.immigration_priority ? `Priority: ${c.immigration_priority}` : 'No priority set'}
                         >
-                            {c.avatar_url
-                                ? <img src={c.avatar_url} alt={c.name} className="w-full h-full object-cover" />
-                                : initials(c.name)}
+                            <AvatarPhoto src={c.avatar_url} title={c.name}>
+                                {initials(c.name)}
+                            </AvatarPhoto>
                         </div>
                         <div className="min-w-0">
                             <div className="font-semibold text-gray-900 text-sm truncate group-hover/case:text-amber-700 transition-colors">
