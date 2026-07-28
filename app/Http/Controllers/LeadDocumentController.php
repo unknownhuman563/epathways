@@ -1148,11 +1148,10 @@ class LeadDocumentController extends Controller
             abort_unless($user->lead_id === $doc->lead_id, 403);
         }
 
-        // Disk inconsistency: tracker-side uploads (LeadTrackingController::uploadDoc)
-        // land on the 'public' disk; staff-side uploads (staffChecklistUpload, leadUpload)
-        // land on the 'local' (private) disk. The download controller has to handle
-        // both so a file uploaded via either path is viewable. Local wins when present
-        // to keep private uploads from being accidentally moved to a public disk later.
+        // All uploads now land on the private ('local') disk. The 'public'
+        // fallback covers the pre-migration window on production where a few
+        // older tracker uploads still sit in public until
+        // `documents:privatize --purge` relocates them. Local wins when present.
         $disk = Storage::disk(self::DISK)->exists($doc->file_path)
             ? self::DISK
             : (Storage::disk('public')->exists($doc->file_path) ? 'public' : null);

@@ -719,8 +719,11 @@ class Lead extends Model
     {
         $doc = $this->relationLoaded('faceImage') ? $this->faceImage : $this->faceImage()->first();
 
+        // Client uploads live on the private disk (Privacy-Act fix), so serve
+        // the avatar through the access-checked staff download route rather
+        // than a public URL. Every staff role can reach admin.documents.download.
         return $doc && $doc->file_path
-            ? \Illuminate\Support\Facades\Storage::disk('public')->url($doc->file_path)
+            ? route('admin.documents.download', ['docId' => $doc->id]).'?inline=1'
             : null;
     }
 

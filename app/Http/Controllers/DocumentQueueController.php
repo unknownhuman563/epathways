@@ -8,7 +8,6 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 
 /**
@@ -20,9 +19,9 @@ class DocumentQueueController extends Controller
 {
     public function index(Request $request)
     {
-        $status  = in_array($request->query('status'), ['pending', 'approved', 'rejected', 'all'], true)
+        $status = in_array($request->query('status'), ['pending', 'approved', 'rejected', 'all'], true)
             ? $request->query('status') : 'pending';
-        $search  = trim((string) $request->query('search', ''));
+        $search = trim((string) $request->query('search', ''));
         $docType = $request->query('doc_type');
 
         $base = LeadDocument::query()
@@ -42,24 +41,26 @@ class DocumentQueueController extends Controller
             ->paginate(25)
             ->withQueryString()
             ->through(fn (LeadDocument $d) => [
-                'id'            => $d->id,
-                'lead_id'       => $d->lead_id,
-                'lead_name'     => $d->lead ? trim("{$d->lead->first_name} {$d->lead->last_name}") : 'Unknown',
+                'id' => $d->id,
+                'lead_id' => $d->lead_id,
+                'lead_name' => $d->lead ? trim("{$d->lead->first_name} {$d->lead->last_name}") : 'Unknown',
                 'tracking_code' => optional($d->lead)->tracking_code,
-                'visa_type'     => optional($d->lead)->inz_visa_type,
+                'visa_type' => optional($d->lead)->inz_visa_type,
                 'original_name' => $d->original_name,
                 'checklist_key' => $d->checklist_key,
-                'status'        => $d->status,
-                'created_at'    => optional($d->created_at)?->toIso8601String(),
-                'url'           => $d->file_path ? Storage::disk('public')->url($d->file_path) : null,
-                'is_image'      => str_starts_with((string) $d->mime, 'image/'),
+                'status' => $d->status,
+                'created_at' => optional($d->created_at)?->toIso8601String(),
+                // Access-checked staff stream, not a public URL — client
+                // uploads live on the private disk (Privacy-Act fix).
+                'url' => $d->file_path ? route('admin.documents.download', ['docId' => $d->id]).'?inline=1' : null,
+                'is_image' => str_starts_with((string) $d->mime, 'image/'),
             ]);
 
         return inertia('admin/DocumentQueue', [
             'documents' => $documents,
-            'filters'   => ['status' => $status, 'search' => $search, 'doc_type' => $docType],
-            'counts'    => [
-                'pending'  => (clone $base)->whereIn('status', [LeadDocument::STATUS_SUBMITTED, LeadDocument::STATUS_UNDER_REVIEW])->count(),
+            'filters' => ['status' => $status, 'search' => $search, 'doc_type' => $docType],
+            'counts' => [
+                'pending' => (clone $base)->whereIn('status', [LeadDocument::STATUS_SUBMITTED, LeadDocument::STATUS_UNDER_REVIEW])->count(),
             ],
         ]);
     }
@@ -71,8 +72,8 @@ class DocumentQueueController extends Controller
     public function bulk(Request $request)
     {
         $data = $request->validate([
-            'ids'    => 'required|array|min:1|max:100',
-            'ids.*'  => 'integer',
+            'ids' => 'required|array|min:1|max:100',
+            'ids.*' => 'integer',
             'action' => ['required', Rule::in(['approve', 'reject'])],
             'reason' => 'nullable|string|max:500',
         ]);
@@ -86,8 +87,8 @@ class DocumentQueueController extends Controller
         DB::transaction(function () use ($docs, $status, $data) {
             foreach ($docs as $doc) {
                 $doc->update([
-                    'status'      => $status,
-                    'note'        => $data['reason'] ?? $doc->note,
+                    'status' => $status,
+                    'note' => $data['reason'] ?? $doc->note,
                     'reviewed_by' => Auth::id(),
                     'reviewed_at' => now(),
                 ]);
@@ -102,7 +103,7 @@ class DocumentQueueController extends Controller
                 try {
                     $res = app(\App\Services\CommunicationService::class)->sendTemplated($key, $doc->lead, [
                         'document_name' => $doc->original_name,
-                        'reason'        => $data['reason'] ?? '',
+                        'reason' => $data['reason'] ?? '',
                     ]);
                     if (! $res['email']) {
                         Mail::to($doc->lead->email)->send(new DocumentStatusChanged($doc->lead, $doc->fresh(), $data['reason'] ?? null));
@@ -115,6 +116,6 @@ class DocumentQueueController extends Controller
 
         $verb = $data['action'] === 'approve' ? 'approved' : 'rejected';
 
-        return back()->with('success', $docs->count() . " document(s) {$verb}.");
+        return back()->with('success', $docs->count()." document(s) {$verb}.");
     }
 }
