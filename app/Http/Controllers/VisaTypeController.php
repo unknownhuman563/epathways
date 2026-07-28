@@ -93,7 +93,10 @@ class VisaTypeController extends Controller
             'consultation_price_nzd' => 'required|numeric|min:0|max:5000',
             'professional_fees' => 'nullable|numeric|min:0|max:1000000',
             'professional_fees_discounted' => 'nullable|numeric|min:0|max:1000000',
+            'professional_fees_offshore' => 'nullable|numeric|min:0|max:1000000',
+            'professional_fees_discounted_offshore' => 'nullable|numeric|min:0|max:1000000',
             'inz_application_fee' => 'nullable|numeric|min:0|max:1000000',
+            'inz_application_fee_offshore' => 'nullable|numeric|min:0|max:1000000',
             'consultation_duration_minutes' => 'required|integer|min:15|max:180',
             'estimated_minutes' => 'required|integer|min:5|max:60',
             'inz_form_refs' => 'nullable|string|max:120',
@@ -154,7 +157,8 @@ class VisaTypeController extends Controller
         foreach ([
             'name', 'code', 'short_description', 'visa_type',
             'consultation_price_nzd', 'professional_fees', 'professional_fees_discounted',
-            'inz_application_fee',
+            'professional_fees_offshore', 'professional_fees_discounted_offshore',
+            'inz_application_fee', 'inz_application_fee_offshore',
             'consultation_duration_minutes',
             'estimated_minutes', 'icon', 'inz_form_refs', 'active',
         ] as $field) {
@@ -205,7 +209,10 @@ class VisaTypeController extends Controller
                 'consultation_price_nzd' => $newPrice,
                 'professional_fees' => $payload['professional_fees'] ?? null,
                 'professional_fees_discounted' => $payload['professional_fees_discounted'] ?? null,
+                'professional_fees_offshore' => $payload['professional_fees_offshore'] ?? null,
+                'professional_fees_discounted_offshore' => $payload['professional_fees_discounted_offshore'] ?? null,
                 'inz_application_fee' => $payload['inz_application_fee'] ?? null,
+                'inz_application_fee_offshore' => $payload['inz_application_fee_offshore'] ?? null,
                 'consultation_duration_minutes' => $payload['consultation_duration_minutes'],
                 'estimated_minutes' => $payload['estimated_minutes'],
                 'icon' => $payload['icon'],
@@ -327,10 +334,15 @@ class VisaTypeController extends Controller
             'consultation_price_nzd' => (float) $v->consultation_price_nzd,
             'professional_fees' => $v->professional_fees === null ? null : (float) $v->professional_fees,
             'professional_fees_discounted' => $v->professional_fees_discounted === null ? null : (float) $v->professional_fees_discounted,
+            'professional_fees_offshore' => $v->professional_fees_offshore === null ? null : (float) $v->professional_fees_offshore,
+            'professional_fees_discounted_offshore' => $v->professional_fees_discounted_offshore === null ? null : (float) $v->professional_fees_discounted_offshore,
             'inz_application_fee' => $v->inz_application_fee === null ? null : (float) $v->inz_application_fee,
-            // Both tiers with GST-inclusive RRP + total computed server-side,
-            // so the list and the modal can't disagree on the arithmetic.
-            'fee_breakdown' => $v->feeBreakdown(),
+            'inz_application_fee_offshore' => $v->inz_application_fee_offshore === null ? null : (float) $v->inz_application_fee_offshore,
+            // Both tiers per location, with GST-inclusive RRP + total computed
+            // server-side, so the list and the modal can't disagree on the
+            // arithmetic.
+            'fee_breakdown' => $v->feeBreakdown('onshore'),
+            'fee_breakdown_offshore' => $v->feeBreakdown('offshore'),
             'consultation_duration_minutes' => (int) $v->consultation_duration_minutes,
             'estimated_minutes' => (int) $v->estimated_minutes,
             'icon' => $v->icon ?? 'Globe',
