@@ -89,14 +89,14 @@ class LeadController extends Controller
             ->latest()
             ->get()
             ->map(fn (Event $e) => [
-                'id'                  => $e->id,
-                'name'                => $e->name,
-                'event_code'          => $e->event_code,
-                'type'                => $e->type,
-                'mode'                => $e->mode,
-                'location'            => $e->location,
-                'date_from'           => optional($e->date_from)->toIso8601String(),
-                'status'              => $e->status,
+                'id' => $e->id,
+                'name' => $e->name,
+                'event_code' => $e->event_code,
+                'type' => $e->type,
+                'mode' => $e->mode,
+                'location' => $e->location,
+                'date_from' => optional($e->date_from)->toIso8601String(),
+                'status' => $e->status,
                 'registrations_count' => $e->leads_count,
             ]);
     }
@@ -113,12 +113,12 @@ class LeadController extends Controller
             ->orderBy('name')
             ->get(['id', 'name', 'email', 'phone', 'location', 'avatar_path'])
             ->map(fn ($a) => [
-                'id'          => $a->id,
-                'name'        => $a->name,
-                'email'       => $a->email,
-                'phone'       => $a->phone,
-                'location'    => $a->location,
-                'avatar_url'  => $a->avatar_url,
+                'id' => $a->id,
+                'name' => $a->name,
+                'email' => $a->email,
+                'phone' => $a->phone,
+                'location' => $a->location,
+                'avatar_url' => $a->avatar_url,
                 'leads_count' => (int) $a->agent_leads_count,
             ]);
     }
@@ -152,7 +152,7 @@ class LeadController extends Controller
     {
         $validated = $request->validate([
             'status' => ['required', Rule::in(Lead::STAGES)],
-            'stage'  => 'nullable|string|max:120',
+            'stage' => 'nullable|string|max:120',
         ]);
 
         try {
@@ -580,7 +580,7 @@ class LeadController extends Controller
 
             // 2. Handle Passport Upload Securely
             $passportPath = $request->hasFile('passport_pdf')
-                ? $request->file('passport_pdf')->store('passports', 'public')
+                ? $request->file('passport_pdf')->store('passports', 'local')
                 : null;
 
             // 3. Dedup-by-email: if this person already exists, enrich the
@@ -673,9 +673,10 @@ class LeadController extends Controller
             $lead = $existing->fresh();
 
             // 3b. Store Education Enrolment document uploads (CV / Passport /
-            // Diploma / Transcript). Each lead gets its own folder under the
-            // public disk; the stored paths are merged into education_notes
-            // so the existing JSON column carries them — no migration needed.
+            // Diploma / Transcript). Each lead gets its own folder on the
+            // private disk (client documents — never world-readable); the
+            // stored paths are merged into education_notes so the existing
+            // JSON column carries them — no migration needed.
             $docMap = [
                 'cv_files' => 'cv',
                 'passport_files' => 'passport',
@@ -693,7 +694,7 @@ class LeadController extends Controller
                     }
                     $uploaded[$folder][] = $uploadedFile->store(
                         "enrolment-docs/{$lead->lead_id}/{$folder}",
-                        'public'
+                        'local'
                     );
                 }
             }
@@ -908,7 +909,7 @@ class LeadController extends Controller
             $data = $request->all();
 
             $passportPath = $request->hasFile('passport_pdf')
-                ? $request->file('passport_pdf')->store('passports', 'public')
+                ? $request->file('passport_pdf')->store('passports', 'local')
                 : null;
 
             $intake = app(\App\Services\LeadIntakeService::class);
@@ -1024,7 +1025,7 @@ class LeadController extends Controller
                     if (! $uploadedFile) {
                         continue;
                     }
-                    $uploaded[$folder][] = $uploadedFile->store("enrolment-docs/{$lead->lead_id}/{$folder}", 'public');
+                    $uploaded[$folder][] = $uploadedFile->store("enrolment-docs/{$lead->lead_id}/{$folder}", 'local');
                 }
             }
             if (! empty($uploaded)) {
@@ -1893,43 +1894,43 @@ class LeadController extends Controller
         ])->findOrFail($id);
 
         return response()->json([
-            'id'        => $lead->id,
-            'lead_id'   => $lead->lead_id,
-            'name'      => trim("{$lead->first_name} {$lead->last_name}") ?: 'Unknown',
-            'status'    => $lead->status,
-            'stage'     => $lead->stage,
-            'priority'  => $lead->priority,
-            'agent'     => $lead->agent ? ['id' => $lead->agent->id, 'name' => $lead->agent->name] : null,
-            'personal'  => [
-                'first_name'        => $lead->first_name,
-                'last_name'         => $lead->last_name,
-                'middle_name'       => $lead->middle_name,
-                'email'             => $lead->email,
-                'phone'             => $lead->phone,
-                'gender'            => $lead->gender,
-                'marital_status'    => $lead->marital_status,
-                'dob'               => optional($lead->dob)->toDateString(),
-                'country_of_birth'  => $lead->country_of_birth,
-                'citizenship'       => $lead->citizenship,
-                'residence_city'    => $lead->residence_city,
+            'id' => $lead->id,
+            'lead_id' => $lead->lead_id,
+            'name' => trim("{$lead->first_name} {$lead->last_name}") ?: 'Unknown',
+            'status' => $lead->status,
+            'stage' => $lead->stage,
+            'priority' => $lead->priority,
+            'agent' => $lead->agent ? ['id' => $lead->agent->id, 'name' => $lead->agent->name] : null,
+            'personal' => [
+                'first_name' => $lead->first_name,
+                'last_name' => $lead->last_name,
+                'middle_name' => $lead->middle_name,
+                'email' => $lead->email,
+                'phone' => $lead->phone,
+                'gender' => $lead->gender,
+                'marital_status' => $lead->marital_status,
+                'dob' => optional($lead->dob)->toDateString(),
+                'country_of_birth' => $lead->country_of_birth,
+                'citizenship' => $lead->citizenship,
+                'residence_city' => $lead->residence_city,
                 'residence_country' => $lead->residence_country,
-                'passport_number'   => $lead->passport_number,
-                'passport_expiry'   => optional($lead->passport_expiry)->toDateString(),
+                'passport_number' => $lead->passport_number,
+                'passport_expiry' => optional($lead->passport_expiry)->toDateString(),
             ],
-            'tags'      => $lead->tags->pluck('name')->values(),
+            'tags' => $lead->tags->pluck('name')->values(),
             'documents' => $lead->documents->map(fn ($d) => [
-                'id'            => $d->id,
-                'name'          => $d->original_name ?: ($d->checklist_key ?: 'Document'),
+                'id' => $d->id,
+                'name' => $d->original_name ?: ($d->checklist_key ?: 'Document'),
                 'checklist_key' => $d->checklist_key,
-                'status'        => $d->status,
-                'created_at'    => optional($d->created_at)->toIso8601String(),
+                'status' => $d->status,
+                'created_at' => optional($d->created_at)->toIso8601String(),
             ])->values(),
             'notes' => $lead->notes->map(fn ($n) => [
-                'id'          => $n->id,
-                'body'        => $n->body,
+                'id' => $n->id,
+                'body' => $n->body,
                 'author_name' => $n->author_name ?: 'Unknown',
-                'kind'        => $n->kind ?: 'general',
-                'created_at'  => optional($n->created_at)->toIso8601String(),
+                'kind' => $n->kind ?: 'general',
+                'created_at' => optional($n->created_at)->toIso8601String(),
             ])->values(),
         ]);
     }
