@@ -6,7 +6,7 @@ import {
     Globe, ChevronRight, ChevronDown, AlertTriangle, Search,
     FileText, ExternalLink, Users, Calendar, ArrowUpDown,
     ArrowUp, ArrowDown, Plus, X, TrendingUp, Copy, MoreHorizontal,
-    Archive, Pencil, Mail, Phone, Paperclip,
+    Archive, Pencil, Mail, Phone, Paperclip, KeyRound,
 } from "lucide-react";
 import { AvatarPhoto } from "@/components/ui/Avatar";
 import CaseFilesModal from "@/components/immigration/CaseFilesModal";
@@ -991,6 +991,7 @@ function CaseRow({ c, stages, visaTypes = [], isExpanded, onExpand, stageMenuOpe
                                 icon: ExternalLink,
                                 href: `/portal/immigration/cases/${c.id}/profile`,
                             },
+                            portalRequestItem(c, requestCasePortal),
                             {
                                 key: 'edit',
                                 label: 'Edit case',
@@ -1514,6 +1515,14 @@ function RowMenu({ items = [] }) {
                 >
                     {items.map((it, idx) => {
                         const Icon = it.icon;
+                        if (it.disabled) {
+                            return (
+                                <div key={it.key} className="flex items-center gap-2.5 px-3 py-2 text-xs text-gray-400 cursor-default select-none">
+                                    {Icon && <Icon size={13} className="text-gray-300" />}
+                                    {it.label}
+                                </div>
+                            );
+                        }
                         // Destructive items (Archive, Delete) sit at the
                         // bottom of the menu separated by a divider.
                         const showDivider = it.danger && items[idx - 1] && ! items[idx - 1].danger;
@@ -1563,6 +1572,35 @@ function copyTrackingLink(code) {
         () => toast.success('Tracking link copied', { description: url }),
         () => toast.error('Could not copy — your browser blocked clipboard access')
     );
+}
+
+// Request Lead Portal access for a case (same flow as the Sales Leads page).
+// A case is a lead, so this posts to the immigration portal's own request
+// route; admin then reviews and approves from Portal Invitations.
+const PORTAL_STATUS_LABEL = {
+    requested: "Portal access requested",
+    sent: "Portal invitation sent",
+    active: "Portal account active",
+    rejected: "Portal request rejected",
+};
+const portalRequestItem = (row, onRequest) => {
+    const st = row.portal_invitation_status || "none";
+    const canRequest = st === "none" || st === "revoked";
+    return {
+        key: "portal",
+        label: canRequest ? "Request portal access" : (PORTAL_STATUS_LABEL[st] || "Portal access"),
+        icon: KeyRound,
+        ...(canRequest ? { onClick: () => onRequest(row) } : { disabled: true }),
+    };
+};
+function requestCasePortal(c) {
+    if (! window.confirm(`Request Lead Portal access for ${c.name || "this client"}? Admin will review and approve.`)) return;
+    router.post(`/portal/immigration/leads/${c.id}/portal-invitation/request`, {}, {
+        preserveScroll: true,
+        preserveState: true,
+        onSuccess: () => toast.success("Portal access requested."),
+        onError: () => toast.error("Could not request portal access."),
+    });
 }
 
 // Soft-delete (archive) a case. The Lead row is soft-deleted via the

@@ -8,7 +8,7 @@ import {
     CreditCard, FileText, ExternalLink, Languages, ClipboardList,
     Save, Edit2, ArrowUpDown, ArrowUp, ArrowDown,
     ChevronDown, Check, TrendingUp, Globe,
-    UserPlus, Pencil, Trash2, Copy, MoreHorizontal, Paperclip,
+    UserPlus, Pencil, Trash2, Copy, MoreHorizontal, Paperclip, KeyRound,
 } from "lucide-react";
 import { AvatarPhoto } from "@/components/ui/Avatar";
 import AddEditStudentModal from "./AddEditStudentModal";
@@ -118,6 +118,14 @@ function RowMenu({ items = [] }) {
                 >
                     {items.map((it) => {
                         const Icon = it.icon;
+                        if (it.disabled) {
+                            return (
+                                <div key={it.key} className="flex items-center gap-2.5 px-3 py-2 text-xs text-gray-400 cursor-default select-none">
+                                    {Icon && <Icon size={13} className="text-gray-300" />}
+                                    {it.label}
+                                </div>
+                            );
+                        }
                         const tone = it.danger
                             ? "text-red-600 hover:bg-red-50"
                             : "text-gray-700 hover:bg-gray-50";
@@ -327,6 +335,26 @@ const portalBase = () => {
     return match ? `/portal/${match[1]}` : "/portal/education";
 };
 
+// Shared "Request portal access" row-menu item (same flow as the Sales Leads
+// page). Shows the request action while the client has no active invitation;
+// otherwise shows the current status as a disabled line.
+const PORTAL_STATUS_LABEL = {
+    requested: "Portal access requested",
+    sent: "Portal invitation sent",
+    active: "Portal account active",
+    rejected: "Portal request rejected",
+};
+const portalRequestItem = (row, onRequest) => {
+    const st = row.portal_invitation_status || "none";
+    const canRequest = st === "none" || st === "revoked";
+    return {
+        key: "portal",
+        label: canRequest ? "Request portal access" : (PORTAL_STATUS_LABEL[st] || "Portal access"),
+        icon: KeyRound,
+        ...(canRequest ? { onClick: () => onRequest(row) } : { disabled: true }),
+    };
+};
+
 function StudentPriority({ student }) {
     const [saving, setSaving] = useState(false);
     const value = student.priority || "";
@@ -376,6 +404,18 @@ export default function EducationStudents({ students = [], schoolOptions = [], p
     const deleteStudent = (s) => {
         if (! window.confirm(`Delete "${s.name}"? This archives the record — it drops off every list but notes, documents and history are kept and can be restored.`)) return;
         router.post(`${portalBase()}/students/${s.id}/destroy`, {}, { preserveScroll: true, preserveState: true });
+    };
+
+    // Request Lead Portal access for a student — routed through whichever
+    // portal the staffer is in (each portal gates its own request route).
+    const requestPortal = (s) => {
+        if (! window.confirm(`Request Lead Portal access for ${s.name || "this client"}? Admin will review and approve.`)) return;
+        router.post(`${portalBase()}/leads/${s.id}/portal-invitation/request`, {}, {
+            preserveScroll: true,
+            preserveState: true,
+            onSuccess: () => toast.success("Portal access requested."),
+            onError: () => toast.error("Could not request portal access."),
+        });
     };
 
     const [search, setSearch] = useState("");
@@ -864,6 +904,7 @@ export default function EducationStudents({ students = [], schoolOptions = [], p
                                                             href: s.gdrive_link,
                                                             external: true,
                                                         },
+                                                        portalRequestItem(s, requestPortal),
                                                         {
                                                             key: 'edit',
                                                             label: 'Edit student',
