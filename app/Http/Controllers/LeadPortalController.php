@@ -208,6 +208,47 @@ class LeadPortalController extends Controller
         return inertia('portal/lead/Settings', ['lead' => $this->leadPayload($lead)]);
     }
 
+    /**
+     * Authenticated "Application Tracker" — the same content the public
+     * /track/{code} page shows, but resolved from the logged-in lead's own
+     * record (no code to type). Reuses LeadTrackingController's payload
+     * builder so the two surfaces can never drift.
+     */
+    public function tracker()
+    {
+        $lead = $this->resolveLeadOrLogout();
+        if (! $lead instanceof Lead) return $lead;
+
+        $payload = app(LeadTrackingController::class)->buildTrackerPayload($lead, $lead->tracking_code);
+        $payload['embedded'] = true;
+
+        return inertia('portal/lead/Tracker', $payload);
+    }
+
+    /**
+     * Let a signed-in lead change their own portal password. Verifies the
+     * current password (via the `current_password` rule against the active
+     * guard) before applying the new one.
+     */
+    public function updatePassword(\Illuminate\Http\Request $request)
+    {
+        $lead = $this->resolveLeadOrLogout();
+        if (! $lead instanceof Lead) return $lead;
+
+        $data = $request->validate([
+            'current_password' => ['required', 'current_password'],
+            'password' => ['required', 'confirmed', \Illuminate\Validation\Rules\Password::min(8)],
+        ], [
+            'current_password.current_password' => 'Your current password is incorrect.',
+        ]);
+
+        $request->user()->update([
+            'password' => \Illuminate\Support\Facades\Hash::make($data['password']),
+        ]);
+
+        return back()->with('success', 'Your password has been updated.');
+    }
+
     private function bookingRow(Booking $b): array
     {
         return [
