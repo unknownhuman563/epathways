@@ -65,7 +65,8 @@ const categories = [
         price: 'NZD $200',
         icon: Globe,
         label: 'IMMIGRATION',
-        image: visaImg
+        image: visaImg,
+        comingSoon: true
     },
     {
         id: 'accommodation',
