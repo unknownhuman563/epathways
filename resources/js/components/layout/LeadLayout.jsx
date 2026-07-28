@@ -2,7 +2,7 @@ import DashboardLayout from "./DashboardLayout";
 import {
     LayoutDashboard, Route, FileText, ListChecks, FileSpreadsheet,
     Calendar, FileCheck, FileSignature, CreditCard, MessageSquare,
-    Megaphone, CalendarDays, User,
+    Megaphone, CalendarDays, User, Radar,
 } from "lucide-react";
 
 // Lead Portal sidebar — same clean grouped style as Sales. Plain text
@@ -11,6 +11,7 @@ const LEAD_NAV = [
     { name: "Dashboard",  href: "/portal/lead/dashboard", icon: <LayoutDashboard size={20} /> },
 
     { name: "Work", section: true },
+    { name: "Application Tracker", href: "/portal/lead/tracker", icon: <Radar size={20} /> },
     { name: "My Journey", href: "/portal/lead/journey",   icon: <Route size={20} /> },
 
     { name: "Submit", section: true },

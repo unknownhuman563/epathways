@@ -1321,6 +1321,7 @@ Route::middleware(['auth'])->group(function () {
 
             // New sidebar sections — most are placeholders while the full
             // workflow ships incrementally.
+            Route::get('/tracker', [App\Http\Controllers\LeadPortalController::class, 'tracker'])->name('tracker');
             Route::get('/journey', [App\Http\Controllers\LeadPortalController::class, 'journey'])->name('journey');
             Route::get('/checklist', [App\Http\Controllers\LeadPortalController::class, 'checklist'])->name('checklist');
             Route::get('/visa-forms', [App\Http\Controllers\LeadPortalController::class, 'visaForms'])->name('visa-forms');
@@ -1330,6 +1331,7 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/payments', [App\Http\Controllers\LeadPortalController::class, 'payments'])->name('payments');
             Route::get('/messages', [App\Http\Controllers\LeadPortalController::class, 'messages'])->name('messages');
             Route::get('/profile', [App\Http\Controllers\LeadPortalController::class, 'profile'])->name('profile');
+            Route::post('/password', [App\Http\Controllers\LeadPortalController::class, 'updatePassword'])->name('password.update');
             Route::get('/settings', [App\Http\Controllers\LeadPortalController::class, 'settings'])->name('settings');
             Route::get('/documents', [LeadDocumentController::class, 'leadIndex'])->name('documents');
             Route::post('/documents/upload', [LeadDocumentController::class, 'leadUpload'])->name('documents.upload');
