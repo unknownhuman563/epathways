@@ -230,7 +230,10 @@ class EngagementDocumentGenerator
         return [
             'name' => $user->name,
             'licence' => $user->iaa_licence_number,
-            'signature' => $user->signatureDataUri(),
+            // Trimmed, like every other generator: signature-pad exports are
+            // mostly blank canvas, so the raw image sizes the canvas rather
+            // than the ink and the visible signature comes out tiny.
+            'signature' => $user->signatureDataUriTrimmed(),
         ];
     }
 

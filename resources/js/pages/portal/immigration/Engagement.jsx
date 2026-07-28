@@ -3,8 +3,9 @@ import { Head, router, Link } from "@inertiajs/react";
 import { toast } from "sonner";
 import {
     FileSignature, Search, Plus, X, Download, Check,
-    FileText, Loader2, Mail, Eye, Trash2,
+    FileText, Loader2, Mail, Eye, Trash2, ExternalLink,
 } from "lucide-react";
+import { AvatarPhoto } from "@/components/ui/Avatar";
 
 // Initials fallback for the profile avatar when there's no face image.
 const rowInitials = (name = "") =>
@@ -80,10 +81,10 @@ function DeleteCaseDocsButton({ caseId, caseName, count }) {
             type="button"
             onClick={remove}
             disabled={busy}
-            title={`Delete all engagement documents for ${caseName}`}
-            className="text-[11px] font-semibold text-rose-600 hover:text-rose-700 inline-flex items-center gap-1 disabled:opacity-40"
+            title={`Delete all ${count} engagement document(s) for ${caseName}`}
+            className="w-7 h-7 rounded-lg border border-gray-200 flex items-center justify-center text-rose-500 hover:border-rose-300 hover:bg-rose-50 transition-colors disabled:opacity-40"
         >
-            {busy ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />} Delete
+            {busy ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={13} />}
         </button>
     );
 }
@@ -132,15 +133,25 @@ export default function Engagement({ cases = [], documents = [], generated = [],
                     </div>
                 ) : (
                     <div className="overflow-x-auto">
-                        <table className="w-full text-left text-xs">
+                        <table className="w-full text-left text-xs min-w-[900px]">
+                            {/* Fixed widths so the documents column takes the
+                                slack instead of leaving a gap before Created. */}
+                            <colgroup>
+                                <col className="w-[56px]" />
+                                <col className="w-[190px]" />
+                                <col className="w-[180px]" />
+                                <col />
+                                <col className="w-[150px]" />
+                                <col className="w-[90px]" />
+                            </colgroup>
                             <thead>
                                 <tr className="bg-slate-800 text-[10px] font-bold text-white uppercase tracking-wider">
-                                    <th className="px-4 py-3">Profile</th>
-                                    <th className="px-3 py-3">Name</th>
-                                    <th className="px-3 py-3">Contacts</th>
-                                    <th className="px-3 py-3">Documents</th>
-                                    <th className="px-3 py-3">Created</th>
-                                    <th className="px-3 py-3 text-right pr-4">Actions</th>
+                                    <th className="px-4 py-2.5">Profile</th>
+                                    <th className="px-3 py-2.5">Name</th>
+                                    <th className="px-3 py-2.5">Contacts</th>
+                                    <th className="px-3 py-2.5">Documents</th>
+                                    <th className="px-3 py-2.5">Created</th>
+                                    <th className="px-3 py-2.5 text-right pr-4">Actions</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100">
@@ -151,9 +162,9 @@ export default function Engagement({ cases = [], documents = [], generated = [],
                                         <td className="px-4 py-3">
                                             <Link href={`/portal/immigration/cases/${c.case_id}/profile`} className="inline-block">
                                                 <div className="w-9 h-9 rounded-full overflow-hidden flex items-center justify-center bg-gray-100 text-gray-500 text-[11px] font-bold ring-1 ring-gray-200">
-                                                    {c.avatar_url
-                                                        ? <img src={c.avatar_url} alt={c.case_name} className="w-full h-full object-cover" />
-                                                        : rowInitials(c.case_name)}
+                                                    <AvatarPhoto src={c.avatar_url} title={c.case_name}>
+                                                        {rowInitials(c.case_name)}
+                                                    </AvatarPhoto>
                                                 </div>
                                             </Link>
                                         </td>
@@ -178,36 +189,42 @@ export default function Engagement({ cases = [], documents = [], generated = [],
                                             {c.phone && <div className="text-[11px] text-gray-500 truncate max-w-[220px] mt-0.5">{c.phone}</div>}
                                             {! c.email && ! c.phone && <span className="text-[11px] text-gray-300">—</span>}
                                         </td>
-                                        {/* Documents — one line each, with its own actions */}
+                                        {/* Documents — pills sized to their content
+                                            and wrapped inline, so a five-document
+                                            pack is a couple of lines rather than
+                                            five full-width rows. */}
                                         <td className="px-3 py-3">
-                                            <div className="flex flex-col gap-2">
+                                            <div className="flex flex-wrap gap-1">
                                                 {c.documents.map((d) => (
-                                                    <div key={d.id} className="flex items-center gap-2 flex-wrap">
-                                                        <FileText size={13} className="text-gray-400 shrink-0" />
-                                                        <span className="text-[12px] font-semibold text-gray-800">{d.type_label}</span>
-                                                        {d.signed && (
-                                                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-100">
-                                                                Signed
-                                                            </span>
-                                                        )}
-                                                        <span className="text-[10px] text-gray-400">{fmtSize(d.size)}</span>
-                                                        <span className="inline-flex items-center gap-2 ml-1">
-                                                            <a
-                                                                href={d.view_url}
-                                                                target="_blank"
-                                                                rel="noopener noreferrer"
-                                                                className="text-[11px] font-semibold text-gray-600 hover:text-gray-900 inline-flex items-center gap-1"
-                                                            >
-                                                                <Eye size={12} /> View
-                                                            </a>
-                                                            <a
-                                                                href={d.download_url}
-                                                                className="text-[11px] font-semibold text-gray-600 hover:text-gray-900 inline-flex items-center gap-1"
-                                                            >
-                                                                <Download size={12} /> Download
-                                                            </a>
+                                                    <span
+                                                        key={d.id}
+                                                        className="inline-flex items-center gap-1 rounded-md border border-gray-200 bg-gray-50 pl-1.5 pr-0.5 py-0.5"
+                                                    >
+                                                        <FileText size={11} className="text-gray-400 shrink-0" />
+                                                        <span className="text-[11px] font-semibold text-gray-800 whitespace-nowrap">
+                                                            {d.type_label}
                                                         </span>
-                                                    </div>
+                                                        {d.signed && (
+                                                            <Check size={11} className="text-emerald-600 shrink-0" title="Signed by the client" />
+                                                        )}
+                                                        <span className="text-[10px] text-gray-400 tabular-nums whitespace-nowrap">{fmtSize(d.size)}</span>
+                                                        <a
+                                                            href={d.view_url}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            title="View"
+                                                            className="w-5 h-5 rounded flex items-center justify-center text-gray-500 hover:text-gray-900 hover:bg-gray-200 transition-colors"
+                                                        >
+                                                            <Eye size={11} />
+                                                        </a>
+                                                        <a
+                                                            href={d.download_url}
+                                                            title="Download"
+                                                            className="w-5 h-5 rounded flex items-center justify-center text-gray-500 hover:text-gray-900 hover:bg-gray-200 transition-colors"
+                                                        >
+                                                            <Download size={11} />
+                                                        </a>
+                                                    </span>
                                                 ))}
                                             </div>
                                         </td>
@@ -220,13 +237,34 @@ export default function Engagement({ cases = [], documents = [], generated = [],
                                                 </div>
                                             )}
                                         </td>
-                                        {/* Actions — a single delete for the case's whole pack */}
-                                        <td className="px-3 py-3 pr-4 text-right whitespace-nowrap">
-                                            <DeleteCaseDocsButton
-                                                caseId={c.case_id}
-                                                caseName={c.case_name}
-                                                count={c.documents.length}
-                                            />
+                                        {/* Actions — open the client's tracker, or
+                                            delete the case's whole pack. */}
+                                        <td className="px-3 py-3 pr-4 whitespace-nowrap">
+                                            <div className="flex items-center justify-end gap-1">
+                                                {c.tracking_code ? (
+                                                    <a
+                                                        href={`/track/${c.tracking_code}`}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        title="Open the client's application tracker"
+                                                        className="w-7 h-7 rounded-lg border border-gray-200 flex items-center justify-center text-gray-500 hover:border-gray-900 hover:text-gray-900 transition-colors"
+                                                    >
+                                                        <ExternalLink size={13} />
+                                                    </a>
+                                                ) : (
+                                                    <span
+                                                        title="No tracking code on this case"
+                                                        className="w-7 h-7 rounded-lg border border-gray-100 flex items-center justify-center text-gray-300"
+                                                    >
+                                                        <ExternalLink size={13} />
+                                                    </span>
+                                                )}
+                                                <DeleteCaseDocsButton
+                                                    caseId={c.case_id}
+                                                    caseName={c.case_name}
+                                                    count={c.documents.length}
+                                                />
+                                            </div>
                                         </td>
                                     </tr>
                                 ))}

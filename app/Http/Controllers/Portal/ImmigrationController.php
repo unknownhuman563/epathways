@@ -513,7 +513,7 @@ class ImmigrationController extends Controller
                 ->values();
 
             $generated = LeadDocument::with([
-                'lead:id,first_name,last_name,lead_id,email,phone',
+                'lead:id,first_name,last_name,lead_id,tracking_code,email,phone',
                 'lead.faceImage',
                 'uploader:id,name',
             ])
@@ -533,6 +533,9 @@ class ImmigrationController extends Controller
                         'case_id' => $first->lead_id,
                         'case_name' => $lead ? trim("{$lead->first_name} {$lead->last_name}") : '—',
                         'case_ref' => $lead?->lead_id,
+                        // Drives the "Open application tracker" row action —
+                        // the client-facing /track/{code} page.
+                        'tracking_code' => $lead?->tracking_code,
                         'avatar_url' => $lead?->faceImageUrl(),
                         'email' => $lead?->email,
                         'phone' => $lead?->phone,
@@ -644,7 +647,7 @@ class ImmigrationController extends Controller
 
             // Generated invoices — one row per case, invoices nested.
             $generated = LeadDocument::with([
-                'lead:id,first_name,last_name,lead_id,email,phone',
+                'lead:id,first_name,last_name,lead_id,tracking_code,email,phone',
                 'lead.faceImage',
                 'uploader:id,name',
             ])
@@ -661,6 +664,9 @@ class ImmigrationController extends Controller
                         'case_id' => $first->lead_id,
                         'case_name' => $lead ? trim("{$lead->first_name} {$lead->last_name}") : '—',
                         'case_ref' => $lead?->lead_id,
+                        // Drives the "Open application tracker" row action —
+                        // the client-facing /track/{code} page.
+                        'tracking_code' => $lead?->tracking_code,
                         'avatar_url' => $lead?->faceImageUrl(),
                         'email' => $lead?->email,
                         'phone' => $lead?->phone,
@@ -678,15 +684,50 @@ class ImmigrationController extends Controller
                 })
                 ->values();
 
+            // Cases that already have an engagement pack generated but no
+            // invoice yet — surfaced as one-click "generate invoice"
+            // suggestions so staff don't have to hunt the case in the picker.
+            // Signing an engagement is the trigger to bill; this closes the gap.
+            $invoicedLeadIds = LeadDocument::where('source_variant', 'invoice')
+                ->distinct()
+                ->pluck('lead_id');
+
+            $suggestions = LeadDocument::with([
+                'lead:id,first_name,last_name,lead_id,inz_visa_type',
+                'lead.faceImage',
+            ])
+                ->where('source_variant', 'like', 'engagement:%')
+                ->whereNotIn('lead_id', $invoicedLeadIds)
+                ->orderByDesc('created_at')
+                ->limit(300)
+                ->get()
+                ->groupBy('lead_id')
+                ->map(function ($docs) {
+                    $first = $docs->first();
+                    $lead = $first->lead;
+
+                    return [
+                        'case_id' => $first->lead_id,
+                        'case_name' => $lead ? trim("{$lead->first_name} {$lead->last_name}") : '—',
+                        'case_ref' => $lead?->lead_id,
+                        'avatar_url' => $lead?->faceImageUrl(),
+                        'inz_visa_type' => $lead?->inz_visa_type,
+                        'engagement_at' => optional($first->created_at)?->toIso8601String(),
+                        'engagement_count' => $docs->count(),
+                    ];
+                })
+                ->values();
+
             return inertia('portal/immigration/Invoice', [
                 'cases' => $cases,
                 'generated' => $generated,
+                'suggestions' => $suggestions,
                 'nextNumber' => app(\App\Services\Immigration\InvoiceGenerator::class)->nextInvoiceNumber(),
             ]);
         } catch (\Throwable $e) {
             Log::error('Immigration invoice page failed', ['error' => $e->getMessage()]);
 
-            return inertia('portal/immigration/Invoice', ['cases' => [], 'generated' => [], 'nextNumber' => null]);
+            return inertia('portal/immigration/Invoice', ['cases' => [], 'generated' => [], 'suggestions' => [], 'nextNumber' => null]);
         }
     }
 

@@ -10,6 +10,7 @@ import {
     ChevronDown, Check, TrendingUp, Globe,
     UserPlus, Pencil, Trash2, Copy, MoreHorizontal, Paperclip,
 } from "lucide-react";
+import { AvatarPhoto } from "@/components/ui/Avatar";
 import AddEditStudentModal from "./AddEditStudentModal";
 import CaseFilesModal from "@/components/immigration/CaseFilesModal";
 import { priorityRing } from "@/utils/priority";
@@ -702,9 +703,9 @@ export default function EducationStudents({ students = [], schoolOptions = [], p
                                                     className="flex items-center gap-2.5 group/student"
                                                 >
                                                     <div className={`w-7 h-7 rounded-full flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0 overflow-hidden ${s.avatar_url ? `ring-2 ring-offset-1 ${priorityRing(s.priority)}` : (s.priority ? priorityDot(s.priority) : avatarColor(s.id))}`}>
-                                                        {s.avatar_url
-                                                            ? <img src={s.avatar_url} alt={s.name} className="w-full h-full object-cover" />
-                                                            : initials(s.name)}
+                                                        <AvatarPhoto src={s.avatar_url} title={s.name}>
+                                                            {initials(s.name)}
+                                                        </AvatarPhoto>
                                                     </div>
                                                     <div className="min-w-0">
                                                         <div className="font-semibold text-gray-900 text-xs truncate group-hover/student:text-indigo-600 transition-colors">
