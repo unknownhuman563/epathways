@@ -90,3 +90,42 @@ Read external creds via `config('services.*')`, **never `env()` in app code** (c
 Pushes to `staging` → `staging.epathways.co.nz`, pushes to `main` → `epathways.co.nz`, via GitHub Actions (`.github/workflows/deploy-*.yml`) which build on the runner and rsync to a single Hostinger VPS. **`docs/deployment.md` is the authoritative ops/troubleshooting reference** — read it before touching deploy workflows, server config, file-upload/permissions code, or the Cerebras integration. Key gotchas it documents: rsync `--delete` will eat `storage/app/{public,private}` user uploads if not excluded; rsync `-p` wipes `storage` setgid perms each deploy (post-deploy step re-chmods + re-`storage:link`); `env()` returns null after `config:cache`.
 
 Workflow: feature branch → merge to `staging` (verify) → merge to `main` (production).
+
+## AI Agent layer — standing constraints
+
+Specification: `docs/ai-agent/` — overview, guardrails, tool registry, capability list, phase 0.
+Read `docs/ai-agent/01-guardrails.md` and `docs/ai-agent/04-phase-0.md` before working on anything
+in this layer.
+
+**Non-negotiable:**
+
+1. **No AI surface gives immigration advice.** Only the Licensed Immigration Adviser does, under the
+   Immigration Advisers Licensing Act 2007. Agent output on immigration matters is internal,
+   indicative, and drafted for the LIA to review, adopt and sign. Client-facing surfaces state status
+   and process only and escalate anything advisory.
+2. **Scope before retrieval.** The caller resolves to a row-level filter applied before the model
+   sees any data. Agents and Leads see only their own records. Treat this as a security control.
+   **`EnsurePortalAccess` does not provide this** — it is role-level, not row-level. The scope broker
+   injects the ownership/department predicate itself and does not delegate scoping to endpoints;
+   several controllers were audited and found to have no record-level check.
+3. **No privileged bypass.** Agent tools call the same server-side policied endpoints as the UI.
+   `immigration_adviser` is read-only and the agent must not become a write path around that.
+4. **Autonomy levels are binding.** Each capability ships at the level in `03-capabilities.md`.
+   L3 = blocks on human approval. L4 = only where the scope is narrow, logged and reversible, and
+   never where advice, money or immigration outcomes are involved. Do not raise a level to simplify
+   an implementation.
+5. **No generated numbers.** Fees, balances and dates come from a tool call against live data, or the
+   agent says it does not know.
+6. **No fabricated facts.** Assert only what is in the record or a cited source. An empty field is
+   "unknown", never a plausible guess.
+7. **Audit everything.** One log entry per prompt, retrieval, tool call, approval and override,
+   attributable to a user.
+8. **Writes are idempotent and reversible**, and carry a `source_ref` where they originate from an
+   extracted document value.
+9. **Do not build anything marked BLOCKED** in `03-capabilities.md` until its prerequisite lands.
+   Treat a RE-SCORE marker as "the Effort estimate is not meaningful", not as a small number.
+
+**Build order:** row-level authorization (+ leaky-controller retrofit) → tool layer + agent-event
+audit store → approval queue → eval harness → escalation classifier → consent register and legal
+entity model → first capability (`AI-002`). Do not ship an L3 capability before the eval harness and
+audit trail exist, and nothing client-facing ships before the escalation classifier.

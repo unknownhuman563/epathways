@@ -257,7 +257,7 @@ Route::get('/visa-approved', function () {
 // auth: the tracking_code itself is the bearer credential. The same code
 // authorises the lead to edit a tightly-scoped allow-list of fields and
 // upload supporting documents (POST endpoints below).
-Route::middleware('throttle:tracker')->group(function () {
+Route::middleware(['throttle:tracker', 'tracker.enabled'])->group(function () {
     Route::get('/track', [LeadTrackingController::class, 'show'])->name('track');
     Route::get('/track/{code}', [LeadTrackingController::class, 'show'])->name('track.lookup');
     Route::post('/track/{code}/info', [LeadTrackingController::class, 'update'])->name('track.update');
@@ -406,6 +406,8 @@ Route::middleware(['auth'])->group(function () {
             ->name('admin.maintenance.bypass');
         Route::get('/admin/maintenance/preview', [MaintenanceController::class, 'preview'])
             ->name('admin.maintenance.preview');
+        Route::post('/admin/maintenance/tracker', [MaintenanceController::class, 'updateTracker'])
+            ->name('admin.maintenance.tracker');
     });
 
     // Admin area — admin role only; department-portal staff are kept out by 'portal:admin'.

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Http\Middleware\EnsureTrackerEnabled;
 use App\Models\Setting;
 use App\Services\MaintenanceMode;
 use Illuminate\Http\Request;
@@ -28,8 +29,32 @@ class MaintenanceController extends Controller
                 'endsAt' => optional($endsAt)->format('Y-m-d\TH:i'),
                 'bypassUrl' => MaintenanceMode::bypassUrl(),
                 'defaultMessage' => MaintenanceMode::DEFAULT_MESSAGE,
+                // Independent of maintenance mode — takes only /track offline.
+                'trackerEnabled' => (bool) Setting::get(EnsureTrackerEnabled::SETTING_KEY, true),
             ],
         ]);
+    }
+
+    /**
+     * Toggle the public application tracker on/off, independent of full
+     * maintenance mode. Used to freeze the tracker (no new client uploads)
+     * while migrating its documents off the public disk.
+     */
+    public function updateTracker(Request $request)
+    {
+        $data = $request->validate(['enabled' => 'required|boolean']);
+
+        Setting::set(
+            EnsureTrackerEnabled::SETTING_KEY,
+            $data['enabled'] ? '1' : '0',
+            'bool',
+            'Application tracker available',
+            'maintenance',
+        );
+
+        return back()->with('success', $data['enabled']
+            ? 'Application tracker is back online.'
+            : 'Application tracker is now offline.');
     }
 
     public function update(Request $request)
