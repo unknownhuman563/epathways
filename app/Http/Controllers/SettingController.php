@@ -8,11 +8,12 @@ use Illuminate\Http\Request;
 class SettingController extends Controller
 {
     /**
-     * Keys owned by a dedicated admin screen. They're deliberately hidden
-     * from this generic editor — hand-editing `maintenance.enabled` here
-     * would take the public site down with no confirmation or context.
+     * Key prefixes owned by a dedicated admin screen. They're deliberately
+     * hidden from this generic editor — hand-editing `maintenance.enabled`
+     * or `tracker.enabled` here would take a public surface down with no
+     * confirmation or context. Both live on the super-admin Maintenance page.
      */
-    private const MANAGED_ELSEWHERE = 'maintenance.%';
+    private const MANAGED_ELSEWHERE = ['maintenance.', 'tracker.'];
 
     /**
      * Admin index — lists every settings row grouped by `group`.
@@ -20,7 +21,11 @@ class SettingController extends Controller
     public function index()
     {
         $settings = Setting::query()
-            ->where('key', 'not like', self::MANAGED_ELSEWHERE)
+            ->where(function ($q) {
+                foreach (self::MANAGED_ELSEWHERE as $prefix) {
+                    $q->where('key', 'not like', $prefix.'%');
+                }
+            })
             ->orderBy('group')
             ->orderBy('key')
             ->get();
@@ -43,7 +48,7 @@ class SettingController extends Controller
 
         foreach ($payload['values'] as $key => $value) {
             // Never writable from here — see MANAGED_ELSEWHERE.
-            if (str_starts_with($key, 'maintenance.')) {
+            if (array_filter(self::MANAGED_ELSEWHERE, fn ($p) => str_starts_with($key, $p))) {
                 continue;
             }
 

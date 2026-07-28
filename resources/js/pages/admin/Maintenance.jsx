@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Head, useForm, usePage, router } from '@inertiajs/react';
 import {
     Wrench, Save, Link2, Copy, Check, RefreshCw, AlertTriangle,
-    CalendarClock, Eye, Monitor, Smartphone,
+    CalendarClock, Eye, Monitor, Smartphone, ScanLine,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -64,7 +64,15 @@ export default function Maintenance({ state }) {
         router.post('/admin/maintenance/bypass', {}, { preserveScroll: true });
     };
 
+    const setTracker = (enabled) => {
+        if (!enabled && !confirm(
+            'Take the public application tracker offline?\n\nClients who open their tracking link will see an "unavailable" page and cannot upload documents until you turn it back on. The rest of the site stays up.'
+        )) return;
+        router.post('/admin/maintenance/tracker', { enabled }, { preserveScroll: true });
+    };
+
     const live = state.isActive;
+    const trackerOn = state.trackerEnabled;
 
     return (
         <>
@@ -81,6 +89,47 @@ export default function Maintenance({ state }) {
                         </p>
                     </div>
                 </header>
+
+                {/* Application Tracker — independent of maintenance mode.
+                    Takes only /track offline (e.g. while migrating documents). */}
+                <section className="mb-6 bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+                    <div className="flex items-start justify-between gap-4">
+                        <div className="flex items-start gap-3">
+                            <div className="w-9 h-9 rounded-lg bg-gray-100 flex items-center justify-center shrink-0">
+                                <ScanLine size={18} className="text-gray-700" />
+                            </div>
+                            <div>
+                                <p className="font-semibold text-gray-900">Application Tracker</p>
+                                <p className="text-sm text-gray-500 mt-0.5">
+                                    Take just the public tracker (<code className="bg-gray-100 px-1 py-0.5 rounded text-xs">/track</code>) offline —
+                                    e.g. while migrating documents — without affecting the rest of the site.
+                                </p>
+                                <p className={`text-sm font-medium mt-2 ${trackerOn ? 'text-emerald-600' : 'text-amber-600'}`}>
+                                    {trackerOn
+                                        ? 'Online — clients can track and upload.'
+                                        : 'Offline — clients see an "unavailable" page.'}
+                                </p>
+                            </div>
+                        </div>
+
+                        {/* Toggle */}
+                        <button
+                            type="button"
+                            role="switch"
+                            aria-checked={trackerOn}
+                            onClick={() => setTracker(!trackerOn)}
+                            className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
+                                trackerOn ? 'bg-emerald-500' : 'bg-gray-300'
+                            }`}
+                        >
+                            <span
+                                className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${
+                                    trackerOn ? 'translate-x-5' : 'translate-x-0.5'
+                                }`}
+                            />
+                        </button>
+                    </div>
+                </section>
 
                 {/* Live status banner */}
                 <div
