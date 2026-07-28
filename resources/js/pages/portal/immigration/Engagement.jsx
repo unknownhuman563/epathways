@@ -298,6 +298,9 @@ function NewEngagementModal({ cases, documents, signers = [], meId, onClose }) {
     // Which price the client is engaged at — "normal" (payment plan) or
     // "discounted" (pay now). Drives the professional fee on the agreement.
     const [feeTier, setFeeTier] = useState("normal");
+    // Applicant location — "onshore" (in NZ) or "offshore" (abroad). Picks
+    // which of the visa's two fee schedules the agreement quotes.
+    const [feeLocation, setFeeLocation] = useState("onshore");
     // Fees are stored excluding GST; this decides whether the agreement
     // quotes that figure or the GST-inclusive RRP.
     const [includeGst, setIncludeGst] = useState(false);
@@ -336,29 +339,50 @@ function NewEngagementModal({ cases, documents, signers = [], meId, onClose }) {
     // pricing tier changes — each re-renders the document.
     useEffect(() => {
         if (selectedCase && previewType) setPreviewLoading(true);
-    }, [selectedCase, previewType, signerId, feeTier, includeGst]);
+    }, [selectedCase, previewType, signerId, feeTier, feeLocation, includeGst]);
 
-    // Offered whenever the visa has a discounted fee explicitly set — even if
-    // it happens to equal the normal price. Snaps back to normal otherwise.
-    const hasDiscounted = selectedCase?.professional_fees_discounted != null;
+    // Which fee columns the chosen location reads from. Mirrors
+    // VisaType::FEE_FIELDS on the server.
+    const feeFields = feeLocation === "offshore"
+        ? { normal: "professional_fees_offshore", discounted: "professional_fees_discounted_offshore", inz: "inz_application_fee_offshore" }
+        : { normal: "professional_fees", discounted: "professional_fees_discounted", inz: "inz_application_fee" };
 
-    // The ex-GST fee for the selected tier — what the GST dropdown uplifts.
+    // Offered whenever the visa has a discounted fee explicitly set for this
+    // location — even if it equals the normal price. Snaps back otherwise.
+    const hasDiscounted = selectedCase?.[feeFields.discounted] != null;
+
+    // The ex-GST fee for the selected tier + location — what GST uplifts.
     const quotedFee = !selectedCase
         ? null
-        : (feeTier === "discounted" && selectedCase.professional_fees_discounted != null
-            ? selectedCase.professional_fees_discounted
-            : selectedCase.professional_fees);
+        : (feeTier === "discounted" && selectedCase[feeFields.discounted] != null
+            ? selectedCase[feeFields.discounted]
+            : selectedCase[feeFields.normal]);
     useEffect(() => {
         if (!hasDiscounted && feeTier === "discounted") setFeeTier("normal");
     }, [hasDiscounted, feeTier]);
 
+    // The fee a location would quote at the current tier + GST setting — shown
+    // in the location dropdown so onshore vs offshore prices are both visible
+    // before switching.
+    const feeForLocation = (loc) => {
+        if (!selectedCase) return null;
+        const f = loc === "offshore"
+            ? { normal: "professional_fees_offshore", discounted: "professional_fees_discounted_offshore" }
+            : { normal: "professional_fees", discounted: "professional_fees_discounted" };
+        const base = feeTier === "discounted" && selectedCase[f.discounted] != null
+            ? selectedCase[f.discounted]
+            : selectedCase[f.normal];
+        if (base == null) return null;
+        return includeGst ? base * (1 + GST_RATE) : base;
+    };
+
     const writtenSelected = selectedTypes.includes("written_agreement");
     const missingFees = selectedCase && writtenSelected &&
-        (!selectedCase.professional_fees || !selectedCase.inz_application_fee);
+        (!selectedCase[feeFields.normal] || !selectedCase[feeFields.inz]);
     const missingSignature = writtenSelected && selectedSigner && !selectedSigner.has_signature;
 
     const previewUrl = selectedCase && previewType
-        ? `/admin/leads/${selectedCase.id}/generate/engage_${previewType}/preview?fee_tier=${feeTier}&include_gst=${includeGst ? 1 : 0}${signerId ? `&signer=${signerId}` : ""}`
+        ? `/admin/leads/${selectedCase.id}/generate/engage_${previewType}/preview?fee_tier=${feeTier}&fee_location=${feeLocation}&include_gst=${includeGst ? 1 : 0}${signerId ? `&signer=${signerId}` : ""}`
         : null;
 
     const generate = () => {
@@ -371,6 +395,7 @@ function NewEngagementModal({ cases, documents, signers = [], meId, onClose }) {
                 notify: notify && !!selectedCase.email,
                 signer_id: signerId,
                 fee_tier: feeTier,
+                fee_location: feeLocation,
                 include_gst: includeGst,
             },
             {
@@ -460,6 +485,22 @@ function NewEngagementModal({ cases, documents, signers = [], meId, onClose }) {
                                             {s.name}{s.licence ? ` · ${s.licence}` : ""}{s.has_signature ? "" : " (no signature)"}
                                         </option>
                                     ))}
+                                </select>
+                            </div>
+
+                            <div className="min-w-0">
+                                <FieldLabel>Applicant location</FieldLabel>
+                                <select
+                                    value={feeLocation}
+                                    onChange={(e) => setFeeLocation(e.target.value)}
+                                    className={`${ctrlCls} mt-1.5`}
+                                >
+                                    <option value="onshore">
+                                        Onshore{feeForLocation("onshore") != null ? ` · $${fmtFee(feeForLocation("onshore"))}` : ""}
+                                    </option>
+                                    <option value="offshore">
+                                        Offshore{feeForLocation("offshore") != null ? ` · $${fmtFee(feeForLocation("offshore"))}` : ""}
+                                    </option>
                                 </select>
                             </div>
 

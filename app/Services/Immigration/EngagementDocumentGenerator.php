@@ -181,8 +181,11 @@ class EngagementDocumentGenerator
         // Which price the client is being engaged at — discounted (pay now)
         // or normal (payment plan). Defaults to normal.
         $tier = ($overrides['fee_tier'] ?? 'normal') === 'discounted' ? 'discounted' : 'normal';
+        // Applicant location — onshore (in NZ) or offshore (abroad). Defaults
+        // to onshore.
+        $location = ($overrides['fee_location'] ?? 'onshore') === 'offshore' ? 'offshore' : 'onshore';
 
-        $professionalFee = $overrides['professional_fee'] ?? $visa?->professionalFeeFor($tier);
+        $professionalFee = $overrides['professional_fee'] ?? $visa?->professionalFeeFor($tier, $location);
 
         // Fees are stored exclusive of GST. Staff choose per document whether
         // the agreement quotes the ex-GST fee or the GST-inclusive RRP.
@@ -191,8 +194,9 @@ class EngagementDocumentGenerator
         }
 
         // The INZ fee is a government charge with no GST on it, so it is
-        // never uplifted.
-        $inzFee = $overrides['inz_application_fee'] ?? ($visa?->inz_application_fee);
+        // never uplifted. It differs by location, so read the offshore /
+        // onshore fee to match the chosen schedule.
+        $inzFee = $overrides['inz_application_fee'] ?? $visa?->inzFeeFor($location);
 
         return [
             'client' => [

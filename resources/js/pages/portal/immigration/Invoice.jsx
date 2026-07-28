@@ -322,6 +322,9 @@ function NewInvoiceModal({ cases, nextNumber, preselectId = null, onClose }) {
     // Which price the invoice quotes for the service fee — "normal" (payment
     // plan) or "discounted" (pay now).
     const [feeTier, setFeeTier] = useState("normal");
+    // Applicant location — "onshore" (in NZ) or "offshore" (abroad). Picks
+    // which of the visa's two fee schedules the service fee is seeded from.
+    const [feeLocation, setFeeLocation] = useState("onshore");
     // Fees are stored excluding GST; this decides whether the service-fee
     // line is seeded ex-GST or as the GST-inclusive RRP.
     const [includeGst, setIncludeGst] = useState(false);
@@ -335,16 +338,23 @@ function NewInvoiceModal({ cases, nextNumber, preselectId = null, onClose }) {
     const addItem = () => setItems((list) => [...list, { description: "", quantity: 1, unit_price: "" }]);
     const removeItem = (i) => setItems((list) => list.filter((_, idx) => idx !== i));
 
-    // Offered whenever the visa has a discounted fee explicitly set — even if
-    // it happens to equal the normal price.
-    const hasDiscounted = selectedCase?.professional_fees_discounted != null;
+    // Which fee columns the chosen location reads from. Mirrors
+    // VisaType::FEE_FIELDS on the server.
+    const feeFields = feeLocation === "offshore"
+        ? { normal: "professional_fees_offshore", discounted: "professional_fees_discounted_offshore", inz: "inz_application_fee_offshore" }
+        : { normal: "professional_fees", discounted: "professional_fees_discounted", inz: "inz_application_fee" };
+    const normalFee = selectedCase?.[feeFields.normal] ?? null;
+    const discountedFee = selectedCase?.[feeFields.discounted] ?? null;
+    const inzFee = selectedCase?.[feeFields.inz] ?? null;
 
-    // The ex-GST fee for the selected tier — what the GST dropdown uplifts.
+    // Offered whenever the visa has a discounted fee explicitly set for this
+    // location — even if it happens to equal the normal price.
+    const hasDiscounted = discountedFee != null;
+
+    // The ex-GST fee for the selected tier + location — what GST uplifts.
     const quotedFee = !selectedCase
         ? null
-        : (feeTier === "discounted" && selectedCase.professional_fees_discounted != null
-            ? selectedCase.professional_fees_discounted
-            : selectedCase.professional_fees);
+        : (feeTier === "discounted" && discountedFee != null ? discountedFee : normalFee);
     useEffect(() => {
         if (!hasDiscounted && feeTier === "discounted") setFeeTier("normal");
     }, [hasDiscounted, feeTier]);
@@ -355,9 +365,9 @@ function NewInvoiceModal({ cases, nextNumber, preselectId = null, onClose }) {
     useEffect(() => {
         if (! selectedCase) return;
         const visa = selectedCase.inz_visa_type || "Visa";
-        const baseFee = feeTier === "discounted" && selectedCase.professional_fees_discounted != null
-            ? selectedCase.professional_fees_discounted
-            : selectedCase.professional_fees;
+        const baseFee = feeTier === "discounted" && discountedFee != null
+            ? discountedFee
+            : normalFee;
         // GST applies to our service fee only — the INZ disbursement below is
         // a government charge and is never uplifted.
         const serviceFee = baseFee && includeGst
@@ -371,15 +381,15 @@ function NewInvoiceModal({ cases, nextNumber, preselectId = null, onClose }) {
                 unit_price: serviceFee,
             });
         }
-        if (selectedCase.inz_application_fee) {
+        if (inzFee) {
             seed.push({
                 description: `Disbursement - INZ [${visa}] application fee - pay in advance`,
                 quantity: 1,
-                unit_price: selectedCase.inz_application_fee,
+                unit_price: inzFee,
             });
         }
         setItems(seed.length ? seed : [{ description: "", quantity: 1, unit_price: "" }]);
-    }, [selectedCase, feeTier, includeGst]);
+    }, [selectedCase, feeTier, feeLocation, includeGst]);
 
     const filteredCases = useMemo(() => {
         const q = caseSearch.trim().toLowerCase();
@@ -392,7 +402,7 @@ function NewInvoiceModal({ cases, nextNumber, preselectId = null, onClose }) {
 
     const lineAmount = (it) => (Number(it.quantity) || 0) * (Number(it.unit_price) || 0);
     const total = items.reduce((sum, it) => sum + lineAmount(it), 0);
-    const missingFees = selectedCase && ! selectedCase.professional_fees && ! selectedCase.inz_application_fee;
+    const missingFees = selectedCase && ! normalFee && ! inzFee;
 
     const previewUrl = useMemo(() => {
         if (! selectedCase) return null;
@@ -401,11 +411,12 @@ function NewInvoiceModal({ cases, nextNumber, preselectId = null, onClose }) {
             invoice_date: form.invoice_date || "",
             due_date: form.due_date || "",
             fee_tier: feeTier,
+            fee_location: feeLocation,
             include_gst: includeGst ? 1 : 0,
             items: JSON.stringify(items),
         });
         return `/admin/leads/${selectedCase.id}/invoice/preview?${p.toString()}`;
-    }, [selectedCase, form, items, feeTier, includeGst]);
+    }, [selectedCase, form, items, feeTier, feeLocation, includeGst]);
 
     // Debounce preview reloads while typing amounts.
     const [debouncedUrl, setDebouncedUrl] = useState(null);
@@ -419,7 +430,7 @@ function NewInvoiceModal({ cases, nextNumber, preselectId = null, onClose }) {
     const generate = () => {
         if (! selectedCase) return;
         setSubmitting(true);
-        router.post(`/admin/leads/${selectedCase.id}/invoice/generate`, { ...form, fee_tier: feeTier, include_gst: includeGst, items }, {
+        router.post(`/admin/leads/${selectedCase.id}/invoice/generate`, { ...form, fee_tier: feeTier, fee_location: feeLocation, include_gst: includeGst, items }, {
             preserveScroll: true,
             onSuccess: () => onClose(),
             onError: () => toast.error("Could not generate the invoice."),
@@ -495,6 +506,16 @@ function NewInvoiceModal({ cases, nextNumber, preselectId = null, onClose }) {
                                     <input type="date" value={form.due_date} onChange={(e) => set("due_date", e.target.value)} className={inputCls} />
                                 </div>
                             </div>
+                            {/* Applicant location — onshore vs offshore fee
+                                schedule. Changing it re-seeds the service-fee
+                                line; edits made afterwards stay. */}
+                            <div>
+                                <span className="block text-[11px] font-semibold text-gray-600 mb-1">Applicant location</span>
+                                <select value={feeLocation} onChange={(e) => setFeeLocation(e.target.value)} className={inputCls}>
+                                    <option value="onshore">Onshore (in New Zealand)</option>
+                                    <option value="offshore">Offshore (applying from abroad)</option>
+                                </select>
+                            </div>
                             {/* Which price the service-fee line quotes. Changing
                                 either re-seeds that line; edits made after stay. */}
                             <div className="grid grid-cols-2 gap-3">
@@ -502,10 +523,10 @@ function NewInvoiceModal({ cases, nextNumber, preselectId = null, onClose }) {
                                     <span className="block text-[11px] font-semibold text-gray-600 mb-1">Payment basis</span>
                                     <select value={feeTier} onChange={(e) => setFeeTier(e.target.value)} className={inputCls}>
                                         <option value="normal">
-                                            Normal price (payment plan){selectedCase?.professional_fees != null ? ` · $${fmtFee(selectedCase.professional_fees)}` : ""}
+                                            Normal price (payment plan){normalFee != null ? ` · $${fmtFee(normalFee)}` : ""}
                                         </option>
                                         <option value="discounted" disabled={!hasDiscounted}>
-                                            Discounted price (pay now){hasDiscounted ? ` · $${fmtFee(selectedCase.professional_fees_discounted)}` : " — none set"}
+                                            Discounted price (pay now){hasDiscounted ? ` · $${fmtFee(discountedFee)}` : " — none set"}
                                         </option>
                                     </select>
                                 </div>

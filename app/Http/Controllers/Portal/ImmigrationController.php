@@ -480,13 +480,17 @@ class ImmigrationController extends Controller
             // Visa fee lookup so the picker can flag cases whose visa has
             // no fees set (the Written Agreement would render placeholders).
             $visaFees = \App\Models\VisaType::query()
-                ->get(['name', 'professional_fees', 'professional_fees_discounted', 'inz_application_fee'])
+                ->get(['name', 'professional_fees', 'professional_fees_discounted', 'professional_fees_offshore', 'professional_fees_discounted_offshore', 'inz_application_fee', 'inz_application_fee_offshore'])
                 ->mapWithKeys(fn ($v) => [$v->name => [
                     'professional_fees' => $v->professional_fees !== null ? (float) $v->professional_fees : null,
                     // Raw value — null when genuinely unset, so the UI can
                     // tell "no discount" from "discounted == normal".
                     'professional_fees_discounted' => $v->professional_fees_discounted !== null ? (float) $v->professional_fees_discounted : null,
+                    // Offshore counterparts — same "raw when unset" rule.
+                    'professional_fees_offshore' => $v->professional_fees_offshore !== null ? (float) $v->professional_fees_offshore : null,
+                    'professional_fees_discounted_offshore' => $v->professional_fees_discounted_offshore !== null ? (float) $v->professional_fees_discounted_offshore : null,
                     'inz_application_fee' => $v->inz_application_fee !== null ? (float) $v->inz_application_fee : null,
+                    'inz_application_fee_offshore' => $v->inz_application_fee_offshore !== null ? (float) $v->inz_application_fee_offshore : null,
                 ]]);
 
             $cases = Lead::immigrationCase()
@@ -507,7 +511,10 @@ class ImmigrationController extends Controller
                         'immigration_stage' => $l->immigration_stage,
                         'professional_fees' => $fees['professional_fees'] ?? null,
                         'professional_fees_discounted' => $fees['professional_fees_discounted'] ?? null,
+                        'professional_fees_offshore' => $fees['professional_fees_offshore'] ?? null,
+                        'professional_fees_discounted_offshore' => $fees['professional_fees_discounted_offshore'] ?? null,
                         'inz_application_fee' => $fees['inz_application_fee'] ?? null,
+                        'inz_application_fee_offshore' => $fees['inz_application_fee_offshore'] ?? null,
                     ];
                 })
                 ->values();
@@ -613,13 +620,17 @@ class ImmigrationController extends Controller
             // Visa fees drive the invoice's default line items, so the
             // picker can pre-fill amounts (and flag visas with none set).
             $visaFees = \App\Models\VisaType::query()
-                ->get(['name', 'professional_fees', 'professional_fees_discounted', 'inz_application_fee'])
+                ->get(['name', 'professional_fees', 'professional_fees_discounted', 'professional_fees_offshore', 'professional_fees_discounted_offshore', 'inz_application_fee', 'inz_application_fee_offshore'])
                 ->mapWithKeys(fn ($v) => [$v->name => [
                     'professional_fees' => $v->professional_fees !== null ? (float) $v->professional_fees : null,
                     // Raw value — null when genuinely unset, so the UI can
                     // tell "no discount" from "discounted == normal".
                     'professional_fees_discounted' => $v->professional_fees_discounted !== null ? (float) $v->professional_fees_discounted : null,
+                    // Offshore counterparts — same "raw when unset" rule.
+                    'professional_fees_offshore' => $v->professional_fees_offshore !== null ? (float) $v->professional_fees_offshore : null,
+                    'professional_fees_discounted_offshore' => $v->professional_fees_discounted_offshore !== null ? (float) $v->professional_fees_discounted_offshore : null,
                     'inz_application_fee' => $v->inz_application_fee !== null ? (float) $v->inz_application_fee : null,
+                    'inz_application_fee_offshore' => $v->inz_application_fee_offshore !== null ? (float) $v->inz_application_fee_offshore : null,
                 ]]);
 
             $cases = Lead::immigrationCase()
@@ -640,7 +651,10 @@ class ImmigrationController extends Controller
                         'immigration_stage' => $l->immigration_stage,
                         'professional_fees' => $fees['professional_fees'] ?? null,
                         'professional_fees_discounted' => $fees['professional_fees_discounted'] ?? null,
+                        'professional_fees_offshore' => $fees['professional_fees_offshore'] ?? null,
+                        'professional_fees_discounted_offshore' => $fees['professional_fees_discounted_offshore'] ?? null,
                         'inz_application_fee' => $fees['inz_application_fee'] ?? null,
+                        'inz_application_fee_offshore' => $fees['inz_application_fee_offshore'] ?? null,
                     ];
                 })
                 ->values();

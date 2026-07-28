@@ -458,6 +458,7 @@ class LeadDocumentController extends Controller
             'notify' => 'sometimes|boolean',
             'signer_id' => 'nullable|integer|exists:users,id',
             'fee_tier' => ['nullable', Rule::in(\App\Models\VisaType::FEE_TIERS)],
+            'fee_location' => ['nullable', Rule::in(\App\Models\VisaType::FEE_LOCATIONS)],
             'include_gst' => 'sometimes|boolean',
         ]);
 
@@ -467,6 +468,9 @@ class LeadDocumentController extends Controller
         }
         if (! empty($data['fee_tier'])) {
             $overrides['fee_tier'] = $data['fee_tier'];
+        }
+        if (! empty($data['fee_location'])) {
+            $overrides['fee_location'] = $data['fee_location'];
         }
         if (! empty($data['include_gst'])) {
             $overrides['include_gst'] = true;
@@ -520,6 +524,10 @@ class LeadDocumentController extends Controller
         // Pricing tier — drives the default service fee (discounted vs normal).
         if (in_array($request->input('fee_tier'), \App\Models\VisaType::FEE_TIERS, true)) {
             $out['fee_tier'] = $request->input('fee_tier');
+        }
+        // Applicant location — onshore vs offshore fee schedule.
+        if (in_array($request->input('fee_location'), \App\Models\VisaType::FEE_LOCATIONS, true)) {
+            $out['fee_location'] = $request->input('fee_location');
         }
         // Whether the service fee is quoted GST-inclusive.
         if ($request->has('include_gst')) {
@@ -713,12 +721,16 @@ class LeadDocumentController extends Controller
         if ($engageType !== null) {
             $signer = $request->query('signer');
             $tier = $request->query('fee_tier');
+            $location = $request->query('fee_location');
             $opts = [];
             if ($signer) {
                 $opts['signer_id'] = (int) $signer;
             }
             if (in_array($tier, \App\Models\VisaType::FEE_TIERS, true)) {
                 $opts['fee_tier'] = $tier;
+            }
+            if (in_array($location, \App\Models\VisaType::FEE_LOCATIONS, true)) {
+                $opts['fee_location'] = $location;
             }
             if (filter_var($request->query('include_gst'), FILTER_VALIDATE_BOOLEAN)) {
                 $opts['include_gst'] = true;
