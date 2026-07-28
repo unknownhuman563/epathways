@@ -224,22 +224,12 @@ export default function PortalInvitations({ invitations = [] }) {
                                                         <button
                                                             type="button"
                                                             disabled={isSaving}
-                                                            onClick={() => post(`/admin/leads/${inv.id}/portal-invitation/approve`, inv.id)}
-                                                            title="Send invitation email — lead clicks the link to set their own password"
-                                                            className="inline-flex items-center gap-1.5 px-3 py-2 bg-emerald-500 text-white rounded-lg text-xs font-bold hover:bg-emerald-600 transition-colors disabled:opacity-50"
-                                                        >
-                                                            <UserCheck size={13} />
-                                                            Approve
-                                                        </button>
-                                                        <button
-                                                            type="button"
-                                                            disabled={isSaving}
                                                             onClick={() => {
-                                                                if (confirm(`Generate login credentials for ${inv.name}? You'll share email + password with them directly. The password will be shown ONCE.`)) {
+                                                                if (confirm(`Generate login credentials for ${inv.name} and email them to ${inv.email}? The email includes their password and how to reset it. The password is also shown here once.`)) {
                                                                     post(`/admin/leads/${inv.id}/portal-invitation/generate-credentials`, inv.id);
                                                                 }
                                                             }}
-                                                            title="Generate email + password directly — skip the email-link setup flow"
+                                                            title="Create the account and email the client their login details + password reset info"
                                                             className="inline-flex items-center gap-1.5 px-3 py-2 bg-gray-900 text-white rounded-lg text-xs font-bold hover:bg-gray-800 transition-colors disabled:opacity-50"
                                                         >
                                                             <KeyRound size={13} />

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Mail\LeadPortalCredentials;
 use App\Mail\LeadPortalInvitation;
 use App\Models\Lead;
 use App\Models\User;
@@ -281,13 +282,28 @@ class LeadPortalInvitationController extends Controller
             return back()->withErrors(['error' => 'Could not generate credentials. Please try again.']);
         }
 
+        // Email the client their login details directly. Best-effort: the
+        // account is already created, and the password is still shown once in
+        // the admin modal below, so a mail failure never loses the credential —
+        // the admin can copy it and send it by hand.
+        $emailSent = false;
+        try {
+            Mail::to($lead->email)->send(new LeadPortalCredentials($lead, $plainPassword));
+            $emailSent = true;
+        } catch (\Throwable $e) {
+            Log::warning('Lead portal credentials email failed', ['lead_id' => $lead->id, 'error' => $e->getMessage()]);
+        }
+
         return back()->with([
-            'success'                    => "Credentials generated for {$lead->email}. Copy now — the password will not be shown again.",
+            'success' => $emailSent
+                ? "Login details emailed to {$lead->email}. Copy the password below too — it won't be shown again."
+                : "Account created for {$lead->email}, but the email could not be sent. Copy the password below and send it to the client manually.",
             'generated_credentials'      => [
                 'email'    => $lead->email,
                 'password' => $plainPassword,
                 'lead_id'  => $lead->lead_id,
                 'name'     => trim("{$lead->first_name} {$lead->last_name}"),
+                'email_sent' => $emailSent,
             ],
         ]);
     }
