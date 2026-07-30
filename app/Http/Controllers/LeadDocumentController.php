@@ -254,6 +254,13 @@ class LeadDocumentController extends Controller
             'reviewed_at' => now(),
         ]);
 
+        // Push approved documents to the client's Google Drive folder — a
+        // best-effort background job, dormant unless Drive is configured.
+        if ($validated['status'] === LeadDocument::STATUS_APPROVED
+            && \App\Services\GoogleDriveService::isConfigured()) {
+            \App\Jobs\PushApprovedDocumentToDrive::dispatch($doc->id);
+        }
+
         // Tell the lead their document was approved / rejected. Prefer the
         // doc_approved / doc_rejected templates; fall back to the Mailable.
         $lead = $doc->lead;
