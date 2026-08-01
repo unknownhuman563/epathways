@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import { toast } from 'sonner';
+import AiRecordAssistant from '@/components/ai/AiRecordAssistant';
 import {
     ArrowLeft, User, BookOpen, DollarSign, GraduationCap,
     FileText, Download, Edit, Phone, Mail, MapPin,
@@ -343,6 +344,11 @@ export default function LeadDetails({ lead: backendLead, activity = [], stageTim
     return (
         <div className="space-y-6 max-w-[1200px] mx-auto pb-12">
             <Head title={`Lead Details - ${lead.personal.firstName} ${lead.personal.surname}`} />
+            <AiRecordAssistant
+                subjectId={backendLead.id}
+                label={`${backendLead.first_name ?? ''} ${backendLead.last_name ?? ''}`.trim() || backendLead.lead_id}
+                immigration={!!backendLead.is_immigration_case}
+            />
 
             {/* Header / Navigation */}
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">

@@ -352,6 +352,10 @@ Route::middleware(['auth'])->group(function () {
         );
     })->name('api.message-templates');
 
+    // Dedicated AI Assistant page — one context-aware surface. General by
+    // default; ?subject_id scopes it to a record (authorised in the controller).
+    Route::get('/assistant', [\App\Http\Controllers\AiAssistantController::class, 'show'])->name('assistant');
+
     // AI Foundation (Build 9) — JSON endpoints for the topbar chat panel and
     // the lead health badge. Session-auth (CSRF via X-XSRF-TOKEN from JS);
     // each handler re-checks the AI kill switch + per-user/role scoping.

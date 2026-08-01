@@ -8,6 +8,7 @@ import AgreementTab from "@/components/immigration/case-profile/tabs/AgreementTa
 import CommunicationsTab from "@/components/immigration/case-profile/tabs/CommunicationsTab";
 import AIHealthTab from "@/components/immigration/case-profile/tabs/AIHealthTab";
 import NotesTab from "@/components/immigration/case-profile/tabs/NotesTab";
+import AiRecordAssistant from "@/components/ai/AiRecordAssistant";
 import {
     ClipboardList, FileText, FileSignature, MessageSquare, Sparkles, StickyNote, User,
 } from "lucide-react";
@@ -96,6 +97,8 @@ export default function CaseProfile() {
                     <ActiveTab {...tabProps} />
                 </div>
             </div>
+
+            <AiRecordAssistant subjectId={lead.id} label={`${fullName} · immigration case`} immigration />
         </div>
     );
 }

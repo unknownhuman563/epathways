@@ -355,6 +355,10 @@ class ImmigrationController extends Controller
                         'phone' => $l->phone,
                         'country' => $l->residence_country,
                         'status' => $l->status,
+                        // Lead Portal access state — drives the "Request portal
+                        // access" row action so it reflects requested/sent/
+                        // accepted instead of always reading as a fresh request.
+                        'portal_invitation_status' => $l->portal_invitation_status ?: 'none',
                         'inz_status' => $l->inz_status,
                         'inz_visa_type' => $l->inz_visa_type,
                         'inz_reference' => $l->inz_reference,
