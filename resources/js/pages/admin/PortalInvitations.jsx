@@ -20,6 +20,7 @@ export default function PortalInvitations({ invitations = [] }) {
     const { flash } = usePage().props;
     const [query, setQuery] = useState("");
     const [statusFilter, setStatusFilter] = useState("All");
+    const [typeFilter, setTypeFilter] = useState("all");
     const [savingId, setSavingId] = useState(null);
     const [copiedFor, setCopiedFor] = useState(null);
 
@@ -40,14 +41,28 @@ export default function PortalInvitations({ invitations = [] }) {
     const filtered = useMemo(() => {
         const q = query.trim().toLowerCase();
         return invitations.filter((inv) => {
+            if (typeFilter !== "all" && (inv.type || "lead") !== typeFilter) return false;
             if (statusFilter !== "All" && inv.status !== statusFilter) return false;
             if (!q) return true;
             return [inv.name, inv.email, inv.lead_id].filter(Boolean).join(" ").toLowerCase().includes(q);
         });
-    }, [invitations, query, statusFilter]);
+    }, [invitations, query, statusFilter, typeFilter]);
 
+    // Status counts respect the active type tab so the stat cards match the table.
     const counts = useMemo(() => {
-        return invitations.reduce((acc, inv) => { acc[inv.status] = (acc[inv.status] || 0) + 1; return acc; }, {});
+        return invitations
+            .filter((inv) => typeFilter === "all" || (inv.type || "lead") === typeFilter)
+            .reduce((acc, inv) => { acc[inv.status] = (acc[inv.status] || 0) + 1; return acc; }, {});
+    }, [invitations, typeFilter]);
+
+    // Per-type totals for the tab badges (independent of the type tab itself).
+    const typeCounts = useMemo(() => {
+        return invitations.reduce((acc, inv) => {
+            const t = inv.type || "lead";
+            acc[t] = (acc[t] || 0) + 1;
+            acc.all += 1;
+            return acc;
+        }, { all: 0, lead: 0, student: 0, case: 0 });
     }, [invitations]);
 
     const post = (url, leadId) => {
@@ -75,6 +90,39 @@ export default function PortalInvitations({ invitations = [] }) {
                 <p className="text-sm text-gray-600 mt-1.5 max-w-2xl">
                     Sales agents request portal access; you approve so the invitation email is sent. Active accounts can be revoked any time.
                 </p>
+            </div>
+
+            {/* Type tabs — split the list by pipeline. A person converted to an
+                immigration case shows under Cases, one converted to a student
+                under Students, everyone else under Leads. */}
+            <div className="flex flex-wrap gap-1 border-b border-gray-200">
+                {[
+                    { key: "all",     label: "All" },
+                    { key: "lead",    label: "Leads" },
+                    { key: "student", label: "Students" },
+                    { key: "case",    label: "Cases" },
+                ].map((t) => {
+                    const active = typeFilter === t.key;
+                    return (
+                        <button
+                            key={t.key}
+                            type="button"
+                            onClick={() => setTypeFilter(t.key)}
+                            className={`relative px-4 py-2.5 text-sm font-semibold transition-colors -mb-px border-b-2 ${
+                                active
+                                    ? "border-gray-900 text-gray-900"
+                                    : "border-transparent text-gray-500 hover:text-gray-800"
+                            }`}
+                        >
+                            {t.label}
+                            <span className={`ml-2 inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-[11px] font-bold ${
+                                active ? "bg-gray-900 text-white" : "bg-gray-100 text-gray-500"
+                            }`}>
+                                {typeCounts[t.key] || 0}
+                            </span>
+                        </button>
+                    );
+                })}
             </div>
 
             {/* Flash banner — shows the setup link after approval so admin
@@ -191,7 +239,10 @@ export default function PortalInvitations({ invitations = [] }) {
                                 return (
                                     <tr key={inv.id} className="hover:bg-gray-50/60 transition-colors">
                                         <td className="px-6 py-4">
-                                            <div className="font-semibold text-gray-900">{inv.name}</div>
+                                            <div className="flex items-center gap-2">
+                                                <span className="font-semibold text-gray-900">{inv.name}</span>
+                                                <TypeBadge type={inv.type} />
+                                            </div>
                                             <div className="text-xs text-gray-500 mt-0.5">{inv.email}</div>
                                             <div className="text-[11px] text-gray-300 font-mono mt-0.5">{inv.lead_id}</div>
                                         </td>
@@ -536,6 +587,22 @@ function CredentialsModal({ credentials, onClose }) {
                 </div>
             </div>
         </div>
+    );
+}
+
+// Small pill showing which pipeline the person belongs to.
+const TYPE_BADGE = {
+    student: { label: "Student", cls: "bg-indigo-50 text-indigo-700 border-indigo-200" },
+    case:    { label: "Case",    cls: "bg-violet-50 text-violet-700 border-violet-200" },
+    lead:    { label: "Lead",    cls: "bg-gray-50 text-gray-500 border-gray-200" },
+};
+
+function TypeBadge({ type }) {
+    const t = TYPE_BADGE[type] || TYPE_BADGE.lead;
+    return (
+        <span className={`inline-flex px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide border ${t.cls}`}>
+            {t.label}
+        </span>
     );
 }
 

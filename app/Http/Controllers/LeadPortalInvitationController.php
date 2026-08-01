@@ -49,6 +49,10 @@ class LeadPortalInvitationController extends Controller
                 'accepted_at'  => $l->portal_invitation_accepted_at,
                 'expires_at'   => $l->portal_invitation_expires_at,
                 'has_account'  => (bool) $l->portalUser,
+                // Which pipeline the person belongs to, for the page tabs. A
+                // converted immigration case takes priority over a student
+                // conversion; otherwise it's still a plain lead.
+                'type'         => $l->is_immigration_case ? 'case' : ($l->is_student ? 'student' : 'lead'),
             ]);
 
         return inertia('admin/PortalInvitations', [
