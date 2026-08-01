@@ -113,6 +113,15 @@ class DocumentQueueController extends Controller
             }
         }
 
+        // Push the newly-approved documents to each client's Google Drive
+        // folder — best-effort background jobs, dormant unless configured.
+        if ($status === LeadDocument::STATUS_APPROVED
+            && \App\Services\GoogleDriveService::isConfigured()) {
+            foreach ($docs as $doc) {
+                \App\Jobs\PushApprovedDocumentToDrive::dispatch($doc->id);
+            }
+        }
+
         $verb = $data['action'] === 'approve' ? 'approved' : 'rejected';
 
         return back()->with('success', $docs->count() . " document(s) {$verb}.");
