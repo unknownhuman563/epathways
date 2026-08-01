@@ -321,7 +321,10 @@ class LeadPortalInvitationController extends Controller
             return back()->withErrors(['error' => 'No portal account exists for this lead yet.']);
         }
 
-        $plainPassword = $this->generateReadablePassword();
+        // Reset to the same easy-to-relay format as Generate (full name + "@" +
+        // last 4 of the reference). Shown once in the admin modal; the client
+        // is prompted to change it after logging back in.
+        $plainPassword = $this->credentialPassword($lead);
 
         try {
             $lead->portalUser->update([
@@ -353,12 +356,6 @@ class LeadPortalInvitationController extends Controller
         ]);
     }
 
-    /**
-     * Random 12-char password that's strong but readable when read aloud.
-     * Avoids visually-confusing chars (0/O, 1/l/I) and uses lowercase +
-     * uppercase + digits. Roughly 64 bits of entropy — fine for one-shot
-     * credentials the lead will likely change after first login.
-     */
     /**
      * Deterministic login password that always satisfies the standard
      * complexity rules — at least 8 characters with an uppercase letter, a
@@ -401,6 +398,13 @@ class LeadPortalInvitationController extends Controller
         return $password;
     }
 
+    /**
+     * Random 12-char password that's strong but readable when read aloud.
+     * Avoids visually-confusing chars (0/O, 1/l/I) and uses lowercase +
+     * uppercase + digits. Roughly 64 bits of entropy. Currently unused by the
+     * generate/reset flows (both use credentialPassword) — kept for callers
+     * that want a non-guessable one-shot secret.
+     */
     private function generateReadablePassword(): string
     {
         $upper  = 'ABCDEFGHJKLMNPQRSTUVWXYZ'; // no I, O

@@ -1,8 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
-import { Head, router, usePage } from "@inertiajs/react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { Head, Link, router, usePage } from "@inertiajs/react";
 import {
     Search, UserCheck, UserX, Mail, Clock, Copy, Check, ExternalLink,
     KeyRound, ShieldOff, X, Eye, EyeOff, RefreshCw, AlertTriangle,
+    MoreHorizontal,
 } from "lucide-react";
 
 const STATUS_STYLES = {
@@ -186,7 +188,6 @@ export default function PortalInvitations({ invitations = [] }) {
                             )}
                             {filtered.map((inv) => {
                                 const style = STATUS_STYLES[inv.status] || STATUS_STYLES.pending;
-                                const isSaving = savingId === inv.id;
                                 return (
                                     <tr key={inv.id} className="hover:bg-gray-50/60 transition-colors">
                                         <td className="px-6 py-4">
@@ -218,89 +219,8 @@ export default function PortalInvitations({ invitations = [] }) {
                                             <div className="text-gray-400 mt-0.5">{fmt(inv.approved_at)}</div>
                                         </td>
                                         <td className="px-6 py-4 text-right">
-                                            <div className="inline-flex items-center gap-2 justify-end">
-                                                {inv.status === "pending" && (
-                                                    <>
-                                                        <button
-                                                            type="button"
-                                                            disabled={isSaving}
-                                                            onClick={() => {
-                                                                if (confirm(`Generate login credentials for ${inv.name} and email them to ${inv.email}? The email includes their password and how to reset it. The password is also shown here once.`)) {
-                                                                    post(`/admin/leads/${inv.id}/portal-invitation/generate-credentials`, inv.id);
-                                                                }
-                                                            }}
-                                                            title="Create the account and email the client their login details + password reset info"
-                                                            className="inline-flex items-center gap-1.5 px-3 py-2 bg-gray-900 text-white rounded-lg text-xs font-bold hover:bg-gray-800 transition-colors disabled:opacity-50"
-                                                        >
-                                                            <KeyRound size={13} />
-                                                            Generate
-                                                        </button>
-                                                        <button
-                                                            type="button"
-                                                            disabled={isSaving}
-                                                            onClick={() => post(`/admin/leads/${inv.id}/portal-invitation/reject`, inv.id)}
-                                                            className="inline-flex items-center gap-1.5 px-3 py-2 bg-white border border-gray-200 text-gray-600 rounded-lg text-xs font-semibold hover:bg-gray-50 transition-colors disabled:opacity-50"
-                                                        >
-                                                            <UserX size={13} />
-                                                            Reject
-                                                        </button>
-                                                    </>
-                                                )}
-                                                {(inv.status === "sent" || inv.status === "accepted") && (
-                                                    <>
-                                                        {inv.has_account && (
-                                                            <button
-                                                                type="button"
-                                                                disabled={isSaving}
-                                                                onClick={() => {
-                                                                    if (confirm(`Reset password for ${inv.name}? A new password will be generated and shown ONCE. Their old password will stop working immediately.`)) {
-                                                                        post(`/admin/leads/${inv.id}/portal-invitation/reset-password`, inv.id);
-                                                                    }
-                                                                }}
-                                                                title="Generate a new password — old one stops working"
-                                                                className="inline-flex items-center gap-1.5 px-3 py-2 bg-white border border-gray-200 text-gray-600 rounded-lg text-xs font-semibold hover:border-amber-300 hover:text-amber-700 transition-colors disabled:opacity-50"
-                                                            >
-                                                                <RefreshCw size={13} />
-                                                                Reset
-                                                            </button>
-                                                        )}
-                                                        <button
-                                                            type="button"
-                                                            disabled={isSaving}
-                                                            onClick={() => {
-                                                                if (confirm(`Revoke portal access for ${inv.name}? They won't be able to log in.`)) {
-                                                                    post(`/admin/leads/${inv.id}/portal-invitation/revoke`, inv.id);
-                                                                }
-                                                            }}
-                                                            className="inline-flex items-center gap-1.5 px-3 py-2 bg-white border border-gray-200 text-gray-600 rounded-lg text-xs font-semibold hover:border-red-300 hover:text-red-700 transition-colors disabled:opacity-50"
-                                                        >
-                                                            <ShieldOff size={13} />
-                                                            Revoke
-                                                        </button>
-                                                    </>
-                                                )}
-                                                {inv.status === "revoked" && (
-                                                    <button
-                                                        type="button"
-                                                        disabled={isSaving}
-                                                        onClick={() => {
-                                                            if (confirm(`Reactivate ${inv.name}'s account by generating a new password? They can use it to log in again.`)) {
-                                                                post(`/admin/leads/${inv.id}/portal-invitation/reset-password`, inv.id);
-                                                            }
-                                                        }}
-                                                        className="inline-flex items-center gap-1.5 px-3 py-2 bg-white border border-gray-200 text-gray-600 rounded-lg text-xs font-semibold hover:border-emerald-300 hover:text-emerald-700 transition-colors disabled:opacity-50"
-                                                    >
-                                                        <RefreshCw size={13} />
-                                                        Reactivate
-                                                    </button>
-                                                )}
-                                                <a
-                                                    href={`/admin/leads/${inv.id}`}
-                                                    className="inline-flex items-center gap-1.5 px-3 py-2 bg-gray-900 text-white rounded-lg text-xs font-semibold hover:bg-gray-800 transition-colors"
-                                                >
-                                                    <ExternalLink size={13} />
-                                                    Lead
-                                                </a>
+                                            <div className="inline-flex justify-end">
+                                                <RowMenu items={rowActions(inv, post)} />
                                             </div>
                                         </td>
                                     </tr>
@@ -311,6 +231,188 @@ export default function PortalInvitations({ invitations = [] }) {
                 </div>
             </div>
         </div>
+    );
+}
+
+// ── Row actions ──────────────────────────────────────────────────────────
+// Builds the kebab-menu items for one invitation row. Same behaviour as the
+// old inline buttons (confirm dialogs included) — just collapsed into the
+// 3-dots menu. `post` is the page's inertia POST helper.
+function rowActions(inv, post) {
+    const url = (path) => `/admin/leads/${inv.id}/portal-invitation/${path}`;
+    const items = [];
+
+    if (inv.status === "pending") {
+        items.push({
+            key: "generate", label: "Generate credentials", icon: KeyRound,
+            onClick: () => {
+                if (confirm(`Generate login credentials for ${inv.name} and email them to ${inv.email}? The email includes their password and how to reset it. The password is also shown here once.`)) {
+                    post(url("generate-credentials"), inv.id);
+                }
+            },
+        });
+        items.push({
+            key: "reject", label: "Reject request", icon: UserX, danger: true,
+            onClick: () => post(url("reject"), inv.id),
+        });
+    }
+
+    if (inv.status === "sent" || inv.status === "accepted") {
+        if (inv.has_account) {
+            items.push({
+                key: "reset", label: "Reset password", icon: RefreshCw,
+                onClick: () => {
+                    if (confirm(`Reset password for ${inv.name}? A new password will be generated and shown ONCE. Their old password will stop working immediately.`)) {
+                        post(url("reset-password"), inv.id);
+                    }
+                },
+            });
+        }
+        items.push({
+            key: "revoke", label: "Revoke access", icon: ShieldOff, danger: true,
+            onClick: () => {
+                if (confirm(`Revoke portal access for ${inv.name}? They won't be able to log in.`)) {
+                    post(url("revoke"), inv.id);
+                }
+            },
+        });
+    }
+
+    if (inv.status === "revoked") {
+        items.push({
+            key: "reactivate", label: "Reactivate account", icon: RefreshCw,
+            onClick: () => {
+                if (confirm(`Reactivate ${inv.name}'s account by generating a new password? They can use it to log in again.`)) {
+                    post(url("reset-password"), inv.id);
+                }
+            },
+        });
+    }
+
+    items.push({ key: "lead", label: "Open lead", icon: ExternalLink, href: `/admin/leads/${inv.id}` });
+
+    return items;
+}
+
+// ── Kebab (3-dots) row menu ──────────────────────────────────────────────
+// Portalled to <body> so it's never clipped by the table's overflow. Mirrors
+// the RowMenu used across the sales/education/immigration portal tables.
+function RowMenu({ items = [] }) {
+    const [open, setOpen] = useState(false);
+    const [coords, setCoords] = useState({ top: 0, left: 0, openUp: false });
+    const triggerRef = useRef(null);
+    const menuRef = useRef(null);
+    const MENU_W = 220;
+
+    useEffect(() => {
+        if (!open || !triggerRef.current) return;
+        const place = () => {
+            const r = triggerRef.current.getBoundingClientRect();
+            const menuH = Math.min(360, items.length * 38 + 16);
+            const spaceBelow = window.innerHeight - r.bottom;
+            const openUp = spaceBelow < menuH + 12 && r.top > spaceBelow;
+            setCoords({
+                top:  openUp ? r.top - 6 : r.bottom + 6,
+                left: Math.min(r.right - MENU_W, window.innerWidth - MENU_W - 8),
+                openUp,
+            });
+        };
+        place();
+        const onScroll = () => place();
+        window.addEventListener('scroll', onScroll, true);
+        window.addEventListener('resize', onScroll);
+        return () => {
+            window.removeEventListener('scroll', onScroll, true);
+            window.removeEventListener('resize', onScroll);
+        };
+    }, [open]);
+
+    useEffect(() => {
+        if (!open) return;
+        const onDocClick = (e) => {
+            if (menuRef.current?.contains(e.target) || triggerRef.current?.contains(e.target)) return;
+            setOpen(false);
+        };
+        const onKey = (e) => { if (e.key === 'Escape') setOpen(false); };
+        document.addEventListener('mousedown', onDocClick);
+        document.addEventListener('keydown', onKey);
+        return () => {
+            document.removeEventListener('mousedown', onDocClick);
+            document.removeEventListener('keydown', onKey);
+        };
+    }, [open]);
+
+    const handleClick = (item) => {
+        setOpen(false);
+        item.onClick?.();
+    };
+
+    if (items.length === 0) return null;
+
+    return (
+        <>
+            <button
+                ref={triggerRef}
+                type="button"
+                onClick={() => setOpen(!open)}
+                title="More actions"
+                className={`inline-flex items-center justify-center w-8 h-8 rounded-md transition-colors ${open ? 'bg-gray-100 text-gray-900' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'}`}
+            >
+                <MoreHorizontal size={16} />
+            </button>
+
+            {open && typeof document !== 'undefined' && createPortal(
+                <div
+                    ref={menuRef}
+                    role="menu"
+                    style={{
+                        position: 'fixed',
+                        top:    coords.openUp ? 'auto' : coords.top,
+                        bottom: coords.openUp ? (window.innerHeight - coords.top) : 'auto',
+                        left:   Math.max(8, coords.left),
+                        width:  MENU_W,
+                        maxHeight: 360,
+                        overflowY: 'auto',
+                    }}
+                    className="z-[60] bg-white rounded-xl shadow-2xl border border-gray-100 py-1.5"
+                >
+                    {items.map((it, idx) => {
+                        const Icon = it.icon;
+                        // Destructive items sit at the bottom, separated by a divider.
+                        const showDivider = it.danger && items[idx - 1] && ! items[idx - 1].danger;
+                        const itemTone = it.danger
+                            ? 'text-red-700 hover:bg-red-50'
+                            : 'text-gray-700 hover:bg-gray-50';
+                        const iconTone = it.danger ? 'text-red-400' : 'text-gray-400';
+                        const inner = (
+                            <span className={`flex items-center gap-2.5 px-3 py-2 text-xs cursor-pointer ${itemTone}`}>
+                                {Icon && <Icon size={13} className={iconTone} />}
+                                {it.label}
+                            </span>
+                        );
+                        return (
+                            <Fragment key={it.key}>
+                                {showDivider && <div className="my-1 border-t border-gray-100" />}
+                                {it.href ? (
+                                    <Link href={it.href} onClick={() => setOpen(false)} className="block">
+                                        {inner}
+                                    </Link>
+                                ) : (
+                                    <button
+                                        type="button"
+                                        onClick={() => handleClick(it)}
+                                        className="w-full text-left block"
+                                    >
+                                        {inner}
+                                    </button>
+                                )}
+                            </Fragment>
+                        );
+                    })}
+                </div>,
+                document.body
+            )}
+        </>
     );
 }
 
