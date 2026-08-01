@@ -181,16 +181,16 @@
                  the rule as its bottom border, and text-align centres the
                  inline <img> (dompdf-safe — no transforms). --}}
             <td>
-                <div style="height:46px; text-align:center; border-bottom:1px solid #374151;">
+                <div style="height:74px; text-align:center; border-bottom:1px solid #374151;">
                     <img id="applicant-signature" src="{{ $client['signature'] ?? '' }}" alt="Signature"
-                         style="max-height:42px; max-width:220px; margin-top:3px; display:{{ !empty($client['signature']) ? 'inline' : 'none' }};">
+                         style="max-height:70px; max-width:300px; margin-top:2px; display:{{ !empty($client['signature']) ? 'inline' : 'none' }};">
                 </div>
                 <div class="sign-cap" style="text-align:center;">(Applicant's Signature or Representative's)</div>
             </td>
             <td>
-                <div style="height:46px; text-align:center; border-bottom:1px solid #374151;">
+                <div style="height:74px; text-align:center; border-bottom:1px solid #374151;">
                     @if(!empty($adviser['signature']))
-                        <img src="{{ $adviser['signature'] }}" alt="Signature" style="max-height:42px; max-width:220px; margin-top:3px;">
+                        <img src="{{ $adviser['signature'] }}" alt="Signature" style="max-height:70px; max-width:300px; margin-top:2px;">
                     @endif
                 </div>
                 <div class="sign-cap" style="text-align:center;">(Immigration Adviser's Signature)</div>

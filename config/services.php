@@ -104,6 +104,20 @@ return [
         'workspace_id' => env('PLAI_WORKSPACE_ID'),
     ],
 
+    // Google Drive — approved client documents are pushed to a per-client
+    // folder inside a Workspace Shared Drive (via a service account). Dormant
+    // until BOTH key_file and shared_drive_id are set, so the app runs fine
+    // without it. `key_file` is a path to the service-account JSON (kept out
+    // of git); `shared_drive_id` is the Shared Drive's ID from its URL;
+    // `share_with` optionally auto-shares every client folder (read) with one
+    // recipient email; `folder_prefix` optionally prefixes folder names.
+    'google_drive' => [
+        'key_file' => env('GOOGLE_DRIVE_KEY_FILE'),
+        'shared_drive_id' => env('GOOGLE_DRIVE_SHARED_DRIVE_ID'),
+        'share_with' => env('GOOGLE_DRIVE_SHARE_WITH'),
+        'folder_prefix' => env('GOOGLE_DRIVE_FOLDER_PREFIX', ''),
+    ],
+
     // n8n workflow that powers the Social MVP (stats, variant generation,
     // approve / reject / schedule, accounts, quick posts). Proxied
     // server-side by AiAdsWebhookController so OpenRouter / Zernio keys

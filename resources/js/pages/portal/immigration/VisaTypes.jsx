@@ -101,6 +101,9 @@ export default function VisaTypes({ visaTypes = [], permissions = {} }) {
                                         const byTier = Object.fromEntries(
                                             (v.fee_breakdown || []).map((f) => [f.tier, f])
                                         );
+                                        const byTierOff = Object.fromEntries(
+                                            (v.fee_breakdown_offshore || []).map((f) => [f.tier, f])
+                                        );
                                         return (
                                             <tr key={v.id} className="hover:bg-gray-50/40">
                                                 <td className="px-6 py-3">
@@ -132,12 +135,24 @@ export default function VisaTypes({ visaTypes = [], permissions = {} }) {
                                                     <span className="text-sm font-bold text-slate-800 tabular-nums">
                                                         ${fmt(byTier.discounted?.total)}
                                                     </span>
+                                                    {byTierOff.discounted?.total != null && (
+                                                        <span className="block text-[10px] text-gray-400 tabular-nums"
+                                                            title="Offshore price">
+                                                            off ${fmt(byTierOff.discounted?.total)}
+                                                        </span>
+                                                    )}
                                                 </td>
 
                                                 <td className="px-3 py-3 text-right whitespace-nowrap">
                                                     <span className="text-sm font-bold text-orange-700 tabular-nums">
                                                         ${fmt(byTier.normal?.total)}
                                                     </span>
+                                                    {byTierOff.normal?.total != null && (
+                                                        <span className="block text-[10px] text-gray-400 tabular-nums"
+                                                            title="Offshore price">
+                                                            off ${fmt(byTierOff.normal?.total)}
+                                                        </span>
+                                                    )}
                                                 </td>
 
                                                 <td className="px-3 py-3 text-center">
@@ -219,7 +234,10 @@ function CreateModal({ onClose }) {
         consultation_price_nzd: 250,
         professional_fees: '',
         professional_fees_discounted: '',
+        professional_fees_offshore: '',
+        professional_fees_discounted_offshore: '',
         inz_application_fee: '',
+        inz_application_fee_offshore: '',
         consultation_duration_minutes: 60,
         estimated_minutes: 15,
         inz_form_refs: '',
@@ -419,13 +437,22 @@ function CreateModal({ onClose }) {
                             </Card>
                         </div>
 
-                        {/* Full width — the schedule is eight columns wide. */}
-                        {/* No card heading — the table's own tier banners are
-                            the heading, and a second dark bar above them just
-                            doubled up. */}
-                        <Card bodyClass="!p-0">
-                            <FeeScheduleTable data={data} setData={setData} errors={errors} />
-                        </Card>
+                        {/* Two fee schedules — onshore (applicant in NZ) and
+                            offshore (applying from abroad). Each carries its own
+                            discounted/normal tiers AND its own INZ application
+                            fee, since the government charge differs by location. */}
+                        <div className="space-y-5">
+                            {LOCATIONS.map((loc) => (
+                                <Card key={loc.key} title={`${loc.label} fees`} hint={loc.sub} bodyClass="!p-0">
+                                    <FeeScheduleTable
+                                        data={data}
+                                        setData={setData}
+                                        errors={errors}
+                                        location={loc.key}
+                                    />
+                                </Card>
+                            ))}
+                        </div>
 
                         <Card title="Status">
                             <label className="flex items-start gap-2 cursor-pointer">
@@ -535,7 +562,10 @@ function EditModal({ visaType, onClose, canViewHistory }) {
         consultation_price_nzd: visaType.consultation_price_nzd,
         professional_fees: visaType.professional_fees ?? '',
         professional_fees_discounted: visaType.professional_fees_discounted ?? '',
+        professional_fees_offshore: visaType.professional_fees_offshore ?? '',
+        professional_fees_discounted_offshore: visaType.professional_fees_discounted_offshore ?? '',
         inz_application_fee: visaType.inz_application_fee ?? '',
+        inz_application_fee_offshore: visaType.inz_application_fee_offshore ?? '',
         consultation_duration_minutes: visaType.consultation_duration_minutes,
         estimated_minutes: visaType.estimated_minutes,
         inz_form_refs: visaType.inz_form_refs || '',
@@ -723,13 +753,22 @@ function EditModal({ visaType, onClose, canViewHistory }) {
                             </Card>
                         </div>
 
-                        {/* Full width — the schedule is eight columns wide. */}
-                        {/* No card heading — the table's own tier banners are
-                            the heading, and a second dark bar above them just
-                            doubled up. */}
-                        <Card bodyClass="!p-0">
-                            <FeeScheduleTable data={data} setData={setData} errors={errors} />
-                        </Card>
+                        {/* Two fee schedules — onshore (applicant in NZ) and
+                            offshore (applying from abroad). Each carries its own
+                            discounted/normal tiers AND its own INZ application
+                            fee, since the government charge differs by location. */}
+                        <div className="space-y-5">
+                            {LOCATIONS.map((loc) => (
+                                <Card key={loc.key} title={`${loc.label} fees`} hint={loc.sub} bodyClass="!p-0">
+                                    <FeeScheduleTable
+                                        data={data}
+                                        setData={setData}
+                                        errors={errors}
+                                        location={loc.key}
+                                    />
+                                </Card>
+                            ))}
+                        </div>
 
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
                             <Card title="Status">
@@ -919,14 +958,32 @@ const TIER_TONES = {
 };
 
 /**
- * The two quoted tiers, derived from the form state. Mirrors
+ * Which form field holds the {location, tier} professional fee. Mirrors
+ * VisaType::FEE_FIELDS on the server — onshore is the original pair, offshore
+ * the parallel one.
+ */
+const FEE_FIELDS = {
+    onshore:  { discounted: 'professional_fees_discounted', normal: 'professional_fees', inz: 'inz_application_fee' },
+    offshore: { discounted: 'professional_fees_discounted_offshore', normal: 'professional_fees_offshore', inz: 'inz_application_fee_offshore' },
+};
+
+const LOCATIONS = [
+    { key: 'onshore', label: 'Onshore', sub: 'Applicant in New Zealand' },
+    { key: 'offshore', label: 'Offshore', sub: 'Applicant applying from abroad' },
+];
+
+/**
+ * The two quoted tiers for a location, derived from the form state. Mirrors
  * VisaType::feeBreakdown() on the server — the header summary and the fee
  * table both read from here so they can never disagree.
  */
-function computeTiers(data) {
-    const inz = data.inz_application_fee === '' || data.inz_application_fee === null || data.inz_application_fee === undefined
+function computeTiers(data, location = 'onshore') {
+    const fields = FEE_FIELDS[location] || FEE_FIELDS.onshore;
+
+    const rawInz = data[fields.inz];
+    const inz = rawInz === '' || rawInz === null || rawInz === undefined
         ? null
-        : Number(data.inz_application_fee);
+        : Number(rawInz);
 
     const build = (key, title, note, field) => {
         const raw = data[field];
@@ -941,8 +998,8 @@ function computeTiers(data) {
     return {
         inz,
         tiers: [
-            build('discounted', 'Discounted price', 'Pay now basis', 'professional_fees_discounted'),
-            build('normal', 'Normal price', 'Payment plan', 'professional_fees'),
+            build('discounted', 'Discounted price', 'Pay now basis', fields.discounted),
+            build('normal', 'Normal price', 'Payment plan', fields.normal),
         ],
     };
 }
@@ -973,10 +1030,8 @@ function Card({ title, hint, children, className = '', bodyClass = '' }) {
  * totals in view while the fees below are being edited.
  */
 function VisaProfileHeader({ data }) {
-    const { tiers } = computeTiers(data);
-
     return (
-        <div className="rounded-xl border border-gray-200 bg-white shadow-sm px-5 py-4 flex flex-wrap items-center gap-x-5 gap-y-3">
+        <div className="rounded-xl border border-gray-200 bg-white shadow-sm px-5 py-4 flex flex-wrap items-center gap-x-6 gap-y-3">
             <div className="w-12 h-12 rounded-xl bg-gray-100 border border-gray-200 flex items-center justify-center flex-shrink-0">
                 <VisaIcon name={data.icon} size={22} className="text-gray-700" />
             </div>
@@ -1002,14 +1057,25 @@ function VisaProfileHeader({ data }) {
                 </p>
             </div>
 
-            {/* Live totals — what the applicant is actually quoted. */}
-            <div className="flex items-center gap-2 flex-shrink-0">
-                {tiers.map((t) => (
-                    <div key={t.key} className={`rounded-lg px-3 py-1.5 text-right ${t.tone.chip}`}>
-                        <p className="text-[9px] font-bold uppercase tracking-wider opacity-70">{t.note}</p>
-                        <p className="text-sm font-bold tabular-nums">${money(t.total)}</p>
-                    </div>
-                ))}
+            {/* Live totals — what the applicant is actually quoted, per
+                location so both schedules stay in view while editing. */}
+            <div className="flex flex-wrap items-start gap-x-5 gap-y-2 flex-shrink-0">
+                {LOCATIONS.map((loc) => {
+                    const { tiers } = computeTiers(data, loc.key);
+                    return (
+                        <div key={loc.key} className="flex flex-col gap-1">
+                            <p className="text-[9px] font-bold uppercase tracking-[0.15em] text-gray-400">{loc.label}</p>
+                            <div className="flex items-center gap-2">
+                                {tiers.map((t) => (
+                                    <div key={t.key} className={`rounded-lg px-3 py-1.5 text-right ${t.tone.chip}`}>
+                                        <p className="text-[9px] font-bold uppercase tracking-wider opacity-70">{t.note}</p>
+                                        <p className="text-sm font-bold tabular-nums">${money(t.total)}</p>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    );
+                })}
             </div>
         </div>
     );
@@ -1024,8 +1090,9 @@ function VisaProfileHeader({ data }) {
  * editable — the RRP and totals come from computeTiers(), so they can't be
  * entered wrong or drift out of step with the header summary.
  */
-function FeeScheduleTable({ data, setData, errors }) {
-    const { inz, tiers } = computeTiers(data);
+function FeeScheduleTable({ data, setData, errors, location = 'onshore' }) {
+    const { inz, tiers } = computeTiers(data, location);
+    const fields = FEE_FIELDS[location] || FEE_FIELDS.onshore;
 
     const priceInput = (field, error) => (
         <div className="relative">
@@ -1093,13 +1160,15 @@ function FeeScheduleTable({ data, setData, errors }) {
                         <tr className="align-middle divide-x divide-gray-100">
                             {tiers.map((t, i) => (
                                 <React.Fragment key={t.key}>
-                                    {/* One INZ fee serves both tiers — editable
-                                        under Discounted, echoed under Normal so
-                                        each side still totals up on its own. */}
+                                    {/* One INZ fee serves both tiers of THIS
+                                        location — editable under Discounted,
+                                        echoed under Normal so each side still
+                                        totals up on its own. Onshore/offshore
+                                        each carry their own INZ fee. */}
                                     <td className={`px-2 py-3 ${i === 0 ? '' : '!border-l-2 !border-gray-300'}`}>
-                                        {i === 0 ? priceInput('inz_application_fee', errors.inz_application_fee) : (
+                                        {i === 0 ? priceInput(fields.inz, errors[fields.inz]) : (
                                             <p className="text-xs font-bold tabular-nums text-center text-gray-400"
-                                                title="The same INZ fee applies to both tiers">
+                                                title="The same INZ fee applies to both tiers at this location">
                                                 {money(inz)}
                                             </p>
                                         )}
@@ -1119,12 +1188,14 @@ function FeeScheduleTable({ data, setData, errors }) {
                     </tbody>
                 </table>
             </div>
-            {/* The GST explanation lives on the card header now. */}
-            {(errors.professional_fees || errors.professional_fees_discounted || errors.inz_application_fee) && (
-                <p className="text-xs text-red-500 px-4 py-2 bg-red-50 border-t border-red-100">
-                    {errors.professional_fees || errors.professional_fees_discounted || errors.inz_application_fee}
-                </p>
-            )}
+            {/* The GST explanation lives on the card header now. Only this
+                location's field errors surface here. */}
+            {(() => {
+                const msg = errors[fields.normal] || errors[fields.discounted] || errors[fields.inz];
+                return msg ? (
+                    <p className="text-xs text-red-500 px-4 py-2 bg-red-50 border-t border-red-100">{msg}</p>
+                ) : null;
+            })()}
         </div>
     );
 }
@@ -1153,6 +1224,23 @@ function GrowCell({ value, onChange, className = '', breakAll = false, ...rest }
     useEffect(() => {
         const id = requestAnimationFrame(() => fit(ref.current));
         return () => cancelAnimationFrame(id);
+    }, []);
+
+    // The checklist pane is rendered but display:none while the "Visa and
+    // fees" tab is open, so the mount-time measure runs at zero height and the
+    // text ends up clipped once the tab is shown. Watch the box: when its
+    // WIDTH changes — which is what happens on hidden→visible — re-fit. Guarding
+    // on width means our own height changes never re-trigger the observer.
+    useEffect(() => {
+        const el = ref.current;
+        if (! el || typeof ResizeObserver === 'undefined') return;
+        let lastW = el.clientWidth;
+        const ro = new ResizeObserver(() => {
+            const w = el.clientWidth;
+            if (w !== lastW) { lastW = w; fit(el); }
+        });
+        ro.observe(el);
+        return () => ro.disconnect();
     }, []);
 
     return (

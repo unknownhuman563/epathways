@@ -79,32 +79,45 @@ class LeadTrackingController extends Controller
 
         $this->recordVisit($request, $lead);
 
-        $payload['lead'] = $this->publicLeadShape($lead);
-        $payload['avatar'] = $this->faceAvatar($lead);
-        $payload['info'] = $this->editableInfo($lead);
-        $payload['documents'] = $this->publicDocuments($lead);
-        // Documents the adviser has generated/shared for the client to
-        // download (engagement pack: agreement + IAA standards, etc.).
-        $payload['shared_documents'] = $this->sharedDocuments($lead, $code);
-        $payload['agreements'] = $this->publicAgreements($lead, $code);
-        // Immigration cases get the 12-step "My Visa Application Journey"
-        // roadmap; everyone else (general leads / education students)
-        // keeps the high-level 7-step pipeline view.
-        $payload['timeline'] = $lead->is_immigration_case
-            ? $this->buildImmigrationJourney($lead)
-            : $this->buildTimeline($lead);
-        // Immigration cases get the visa-type-specific checklist.
-        // General leads / students fall back to the shared documents
-        // checklist so their tracker actually shows "What we still need"
-        // instead of an empty state.
-        $payload['visa'] = $this->resolveVisa($lead) ?? $this->resolveGeneralChecklist($lead);
-        // Staff-suggested program shortlist (from the Proposals tab on
-        // the internal Proposal & Agreements page). Present here as
-        // resolved Program rows plus the lead's current pick (if any),
-        // driving the "Programs suggested for you" card on the tracker.
-        $payload['proposal'] = $this->publicProposal($lead);
+        return inertia('track/TrackingPage', $this->buildTrackerPayload($lead, $code));
+    }
 
-        return inertia('track/TrackingPage', $payload);
+    /**
+     * Assemble the full tracker payload for a resolved lead. Shared by the
+     * public tracker (show) and the authenticated lead portal's Application
+     * Tracker page, so both render identical content from one source.
+     *
+     * Deliberately does NOT record a visit — the caller decides whether a
+     * view counts as a public tracker visit (the portal does not).
+     */
+    public function buildTrackerPayload(Lead $lead, ?string $code): array
+    {
+        return [
+            'code' => $code,
+            'error' => null,
+            'lead' => $this->publicLeadShape($lead),
+            'avatar' => $this->faceAvatar($lead),
+            'info' => $this->editableInfo($lead),
+            'documents' => $this->publicDocuments($lead),
+            // Documents the adviser has generated/shared for the client to
+            // download (engagement pack: agreement + IAA standards, etc.).
+            'shared_documents' => $this->sharedDocuments($lead, $code),
+            'agreements' => $this->publicAgreements($lead, $code),
+            // Immigration cases get the 12-step "My Visa Application Journey"
+            // roadmap; everyone else (general leads / education students)
+            // keeps the high-level 7-step pipeline view.
+            'timeline' => $lead->is_immigration_case
+                ? $this->buildImmigrationJourney($lead)
+                : $this->buildTimeline($lead),
+            // Immigration cases get the visa-type-specific checklist.
+            // General leads / students fall back to the shared documents
+            // checklist so their tracker actually shows "What we still need"
+            // instead of an empty state.
+            'visa' => $this->resolveVisa($lead) ?? $this->resolveGeneralChecklist($lead),
+            // Staff-suggested program shortlist (from the Proposals tab on
+            // the internal Proposal & Agreements page).
+            'proposal' => $this->publicProposal($lead),
+        ];
     }
 
     /**

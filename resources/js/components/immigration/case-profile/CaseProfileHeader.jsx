@@ -5,6 +5,7 @@ import {
     ArrowLeft, Globe, FileSignature, MessageSquarePlus, FilePlus2,
     BadgeCheck, Briefcase, Archive,
 } from "lucide-react";
+import { AvatarPhoto } from "@/components/ui/Avatar";
 
 const fmtDate = (iso) =>
     iso ? new Date(iso).toLocaleDateString("en-NZ", { day: "numeric", month: "short", year: "numeric" }) : "—";
@@ -60,9 +61,9 @@ export default function CaseProfileHeader({ lead = {}, intake = null }) {
                             {/* Applicant's uploaded Face image when present,
                                 otherwise the initials tile. */}
                             <div className="w-24 h-24 rounded-2xl overflow-hidden bg-gradient-to-br from-gray-700 to-gray-900 text-white flex items-center justify-center font-black text-3xl ring-4 ring-white shadow-lg">
-                                {lead.avatar_url
-                                    ? <img src={lead.avatar_url} alt={fullName} className="w-full h-full object-cover" />
-                                    : initials(fullName)}
+                                <AvatarPhoto src={lead.avatar_url} title={fullName}>
+                                    {initials(fullName)}
+                                </AvatarPhoto>
                             </div>
                             <div className="pb-2">
                                 <h1 className="text-2xl font-bold text-gray-900 tracking-tight leading-tight">

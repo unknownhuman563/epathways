@@ -248,7 +248,7 @@ class Lead extends Model
         // Students Dashboard mirror (Education team's spreadsheet columns
         // that don't already live elsewhere on the lead row).
         'student_payment', 'student_school', 'student_coop', 'student_oop',
-        'student_gdrive_link', 'student_comments',
+        'student_gdrive_link', 'student_comments', 'gdrive_folder_id',
         // Education-team-specific lifecycle stage (see EDUCATION_STAGES).
         'education_stage',
         // Last stage movement — used by the Students / Cases tables'

@@ -257,7 +257,7 @@ Route::get('/visa-approved', function () {
 // auth: the tracking_code itself is the bearer credential. The same code
 // authorises the lead to edit a tightly-scoped allow-list of fields and
 // upload supporting documents (POST endpoints below).
-Route::middleware('throttle:tracker')->group(function () {
+Route::middleware(['throttle:tracker', 'tracker.enabled'])->group(function () {
     Route::get('/track', [LeadTrackingController::class, 'show'])->name('track');
     Route::get('/track/{code}', [LeadTrackingController::class, 'show'])->name('track.lookup');
     Route::post('/track/{code}/info', [LeadTrackingController::class, 'update'])->name('track.update');
@@ -406,6 +406,8 @@ Route::middleware(['auth'])->group(function () {
             ->name('admin.maintenance.bypass');
         Route::get('/admin/maintenance/preview', [MaintenanceController::class, 'preview'])
             ->name('admin.maintenance.preview');
+        Route::post('/admin/maintenance/tracker', [MaintenanceController::class, 'updateTracker'])
+            ->name('admin.maintenance.tracker');
     });
 
     // Admin area — admin role only; department-portal staff are kept out by 'portal:admin'.
@@ -1319,6 +1321,7 @@ Route::middleware(['auth'])->group(function () {
 
             // New sidebar sections — most are placeholders while the full
             // workflow ships incrementally.
+            Route::get('/tracker', [App\Http\Controllers\LeadPortalController::class, 'tracker'])->name('tracker');
             Route::get('/journey', [App\Http\Controllers\LeadPortalController::class, 'journey'])->name('journey');
             Route::get('/checklist', [App\Http\Controllers\LeadPortalController::class, 'checklist'])->name('checklist');
             Route::get('/visa-forms', [App\Http\Controllers\LeadPortalController::class, 'visaForms'])->name('visa-forms');
@@ -1328,6 +1331,7 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/payments', [App\Http\Controllers\LeadPortalController::class, 'payments'])->name('payments');
             Route::get('/messages', [App\Http\Controllers\LeadPortalController::class, 'messages'])->name('messages');
             Route::get('/profile', [App\Http\Controllers\LeadPortalController::class, 'profile'])->name('profile');
+            Route::post('/password', [App\Http\Controllers\LeadPortalController::class, 'updatePassword'])->name('password.update');
             Route::get('/settings', [App\Http\Controllers\LeadPortalController::class, 'settings'])->name('settings');
             Route::get('/documents', [LeadDocumentController::class, 'leadIndex'])->name('documents');
             Route::post('/documents/upload', [LeadDocumentController::class, 'leadUpload'])->name('documents.upload');

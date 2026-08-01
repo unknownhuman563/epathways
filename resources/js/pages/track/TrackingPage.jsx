@@ -41,6 +41,11 @@ export default function TrackingPage({
     visa = null,
     proposal = null,
     error = null,
+    // When true the page is rendered INSIDE the authenticated lead portal
+    // (LeadLayout already provides chrome), so we drop our own Navbar/Footer,
+    // the full-height wrapper and the code-lookup hero. The lead is always
+    // resolved in this mode, so those pieces would never render anyway.
+    embedded = false,
 }) {
     const [input, setInput] = useState(code || '');
     const flash = usePage().props.flash || {};
@@ -80,11 +85,11 @@ export default function TrackingPage({
     };
 
     return (
-        <div className="min-h-screen bg-white font-urbanist flex flex-col">
-            <Head title="Track Your Application — ePathways" />
-            <Navbar />
+        <div className={embedded ? 'font-urbanist' : 'min-h-screen bg-white font-urbanist flex flex-col'}>
+            <Head title={embedded ? 'Application Tracker — ePathways' : 'Track Your Application — ePathways'} />
+            {!embedded && <Navbar />}
 
-            <main className="flex-1 bg-gray-50">
+            <main className={embedded ? '' : 'flex-1 bg-gray-50'}>
                 {/* Hero — landing state before a code resolves. Clean white
                     card on a soft gray backdrop; matches the staff portal
                     dashboard look. */}
@@ -270,7 +275,7 @@ export default function TrackingPage({
                 />
             )}
 
-            <Footer />
+            {!embedded && <Footer />}
         </div>
     );
 }
