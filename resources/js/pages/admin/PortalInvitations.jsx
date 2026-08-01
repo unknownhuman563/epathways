@@ -293,6 +293,7 @@ function rowActions(inv, post) {
     const url = (path) => `/admin/leads/${inv.id}/portal-invitation/${path}`;
     const items = [];
 
+    // Generate credentials — only for a pending request (no account yet).
     if (inv.status === "pending") {
         items.push({
             key: "generate", label: "Generate credentials", icon: KeyRound,
@@ -302,23 +303,36 @@ function rowActions(inv, post) {
                 }
             },
         });
+    }
+
+    // Reset password — available for ANY account that exists, whatever its
+    // status. For a revoked account this also re-enables login, so label it
+    // accordingly.
+    if (inv.has_account) {
+        const reactivates = inv.status === "revoked";
+        items.push({
+            key: "reset",
+            label: reactivates ? "Reset password & reactivate" : "Reset password",
+            icon: RefreshCw,
+            onClick: () => {
+                const msg = reactivates
+                    ? `Reactivate ${inv.name}'s account with a new password? They'll be able to log in again, and the new password is shown ONCE.`
+                    : `Reset password for ${inv.name}? A new password will be generated and shown ONCE. Their old password will stop working immediately.`;
+                if (confirm(msg)) post(url("reset-password"), inv.id);
+            },
+        });
+    }
+
+    items.push({ key: "lead", label: "Open lead", icon: ExternalLink, href: `/admin/leads/${inv.id}` });
+
+    // ── Destructive actions (rendered at the bottom under a divider) ──
+    if (inv.status === "pending") {
         items.push({
             key: "reject", label: "Reject request", icon: UserX, danger: true,
             onClick: () => post(url("reject"), inv.id),
         });
     }
-
-    if (inv.status === "sent" || inv.status === "accepted") {
-        if (inv.has_account) {
-            items.push({
-                key: "reset", label: "Reset password", icon: RefreshCw,
-                onClick: () => {
-                    if (confirm(`Reset password for ${inv.name}? A new password will be generated and shown ONCE. Their old password will stop working immediately.`)) {
-                        post(url("reset-password"), inv.id);
-                    }
-                },
-            });
-        }
+    if ((inv.status === "sent" || inv.status === "accepted") && inv.has_account) {
         items.push({
             key: "revoke", label: "Revoke access", icon: ShieldOff, danger: true,
             onClick: () => {
@@ -328,19 +342,6 @@ function rowActions(inv, post) {
             },
         });
     }
-
-    if (inv.status === "revoked") {
-        items.push({
-            key: "reactivate", label: "Reactivate account", icon: RefreshCw,
-            onClick: () => {
-                if (confirm(`Reactivate ${inv.name}'s account by generating a new password? They can use it to log in again.`)) {
-                    post(url("reset-password"), inv.id);
-                }
-            },
-        });
-    }
-
-    items.push({ key: "lead", label: "Open lead", icon: ExternalLink, href: `/admin/leads/${inv.id}` });
 
     return items;
 }
