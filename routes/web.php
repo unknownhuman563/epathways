@@ -120,9 +120,21 @@ Route::get('/booking/payment/cancel/{booking}', [\App\Http\Controllers\PaymentCo
 Route::post('/stripe/webhook', [\App\Http\Controllers\PaymentController::class, 'webhook'])->name('stripe.webhook');
 
 Route::get('/education-journey', function () {
+    // Published programmes (title/slug/image) so the "Best 10 Green List"
+    // carousel can match its curated cards to real programme records and
+    // link + illustrate them. Matching is done client-side by title.
+    $programs = \App\Models\Program::where('status', 'published')
+        ->get(['title', 'slug', 'image'])
+        ->map(fn ($p) => [
+            'title' => $p->title,
+            'slug' => $p->slug,
+            'image_url' => $p->image ? \Illuminate\Support\Facades\Storage::disk('public')->url($p->image) : null,
+        ])
+        ->values();
+
     return inertia('education-journey/EducationJourneyPage', array_merge(
         UserReviewController::publicPayload(\App\Models\UserReview::DEPT_EDUCATION),
-        ['activePromos' => PromoFeed::active()]
+        ['activePromos' => PromoFeed::active(), 'programs' => $programs]
     ));
 });
 

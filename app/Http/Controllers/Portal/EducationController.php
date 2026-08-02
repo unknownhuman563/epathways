@@ -232,8 +232,13 @@ class EducationController extends Controller
 
         try {
             $lead = Lead::findOrFail($id);
+            $previousStatus = $lead->status;
             $lead->status = $validated['status'];
             $lead->save();
+
+            // Fire the stage's automatic client email on a real transition
+            // (self-filters to the config/stage_emails.php map + debounces).
+            \App\Jobs\SendStageTransitionEmail::maybeDispatch($lead, $previousStatus, $lead->status);
 
             return back()->with('success', "Lead {$lead->lead_id} updated.");
         } catch (\Throwable $e) {

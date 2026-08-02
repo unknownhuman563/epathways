@@ -11,6 +11,7 @@ import EducationCostCalculator from "@/components/ui/EducationCostCalculator";
 import PromoBanner from "@/components/ui/PromoBanner";
 import PromoModal from "@/components/ui/PromoModal";
 import ReviewsSection from "@/components/ui/ReviewsSection";
+import Top10GreenList from "@/components/ui/Top10GreenList";
 
 // Assets
 import heroBg from "@assets/Services/education.png";
@@ -42,7 +43,7 @@ import logoTawera from "@assets/Partners/tawera.png";
 import logoWhiteCliffe from "@assets/Partners/whitecligge.png";
 import logoWintec from "@assets/Partners/wintec.png";
 
-export default function EducationJourney({ activePromos = [], reviews = [], stats = { count: 0, average: 0 } }) {
+export default function EducationJourney({ activePromos = [], reviews = [], stats = { count: 0, average: 0 }, programs = [] }) {
     const [activeProgram, setActiveProgram] = useState(0);
 
     const demandPrograms = [
@@ -187,6 +188,9 @@ export default function EducationJourney({ activePromos = [], reviews = [], stat
                     </motion.div>
                 </div>
             </section>
+
+            {/* Best 10 Green List programmes — numbered card carousel */}
+            <Top10GreenList programs={programs} />
 
             {/* Services Section */}
             <section id="services" className="bg-white text-[#282728] py-32 font-urbanist overflow-hidden">

@@ -41,6 +41,19 @@ class EventController extends Controller
             'agents' => \App\Models\User::where('role', 'agent')
                 ->orderBy('name')
                 ->get(['id', 'name']),
+            // Active email templates the admin can bind as an event's
+            // registration confirmation email (email-channel only).
+            'emailTemplates' => \App\Models\MessageTemplate::active()
+                ->orderBy('name')
+                ->get(['id', 'name', 'key', 'department', 'channels'])
+                ->filter(fn ($t) => $t->hasChannel('email'))
+                ->map(fn ($t) => [
+                    'id' => $t->id,
+                    'name' => $t->name,
+                    'key' => $t->key,
+                    'department' => $t->department,
+                ])
+                ->values(),
         ]);
     }
 
@@ -234,6 +247,8 @@ class EventController extends Controller
             // attributed to them). Must be a user with the 'agent' role.
             'agent_id' => ['nullable', \Illuminate\Validation\Rule::exists('users', 'id')->where('role', 'agent')],
             'notes' => 'nullable|string',
+            // Optional per-event confirmation template; null = global default.
+            'registration_template_id' => 'nullable|integer|exists:message_templates,id',
             'banner_image' => 'nullable|image|mimes:jpeg,png,jpg,webp,gif|max:4096',
             // Custom registration-form schema. Null/missing = default fields.
             'form_fields' => 'nullable|array',
@@ -335,6 +350,8 @@ class EventController extends Controller
             // attributed to them). Must be a user with the 'agent' role.
             'agent_id' => ['nullable', \Illuminate\Validation\Rule::exists('users', 'id')->where('role', 'agent')],
             'notes' => 'nullable|string',
+            // Optional per-event confirmation template; null = global default.
+            'registration_template_id' => 'nullable|integer|exists:message_templates,id',
             'banner_image' => 'nullable|image|mimes:jpeg,png,jpg,webp,gif|max:4096',
             // Custom registration-form schema. Null/missing = default fields.
             'form_fields' => 'nullable|array',
@@ -616,11 +633,21 @@ class EventController extends Controller
                         ? $event->sessions()->find($validated['event_session_id'])
                         : null;
 
-                    $sent = app(\App\Services\CommunicationService::class)->sendTemplated(
-                        'event_registration',
-                        $lead,
-                        app(\App\Services\EventEmailSender::class)->context($event, $session),
-                    );
+                    $eventCtx = app(\App\Services\EventEmailSender::class)->context($event, $session);
+                    // Per-event template if the admin picked one; otherwise the
+                    // shared 'event_registration' template.
+                    // By ID (not key/department resolution) so a template's
+                    // department can change without breaking this. Only an
+                    // ACTIVE template is used — a deleted or deactivated one
+                    // falls back to the shared 'event_registration' default.
+                    $eventTemplate = $event->registration_template_id
+                        ? \App\Models\MessageTemplate::active()->find($event->registration_template_id)
+                        : null;
+
+                    $comms = app(\App\Services\CommunicationService::class);
+                    $sent = $eventTemplate
+                        ? $comms->sendTemplate($eventTemplate, $lead, $eventCtx)
+                        : $comms->sendTemplated('event_registration', $lead, $eventCtx);
 
                     if (! $sent['email']) {
                         \Illuminate\Support\Facades\Mail::to($lead->email)
