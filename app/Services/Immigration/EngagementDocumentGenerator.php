@@ -105,6 +105,7 @@ class EngagementDocumentGenerator
     /** Render a document to raw PDF bytes (no persistence). */
     public function pdfBinary(Lead $lead, string $type, array $overrides = []): string
     {
+        $this->assertSignerLicenceCurrent($overrides);
         [$view, $payload] = $this->resolve($lead, $type, $overrides);
 
         return Pdf::loadView($view, $payload)->setPaper('a4')->output();
@@ -113,6 +114,7 @@ class EngagementDocumentGenerator
     /** Render a document to a PDF and store it against the case. */
     public function generate(Lead $lead, string $type, array $overrides = []): LeadDocument
     {
+        $this->assertSignerLicenceCurrent($overrides);
         [$view, $payload, $meta] = $this->resolve($lead, $type, $overrides, withMeta: true);
 
         $binary = Pdf::loadView($view, $payload)->setPaper('a4')->output();
@@ -213,6 +215,27 @@ class EngagementDocumentGenerator
             'adviser' => $this->adviser($overrides['signer_id'] ?? null),
             'generated_date' => now()->format('d/m/Y'),
         ];
+    }
+
+    /**
+     * Refuse to produce a pack under a signing adviser whose IAA licence is
+     * not current (Build 12 fast-follow). The signer's number and signature
+     * print on a client-facing legal document, so a lapsed licence must block
+     * generation — the same holdsCurrentLicence() gate as approval, applied at
+     * generation time. No signer chosen (placeholder block) is allowed; only a
+     * *named, stale* signer is refused.
+     */
+    private function assertSignerLicenceCurrent(array $overrides): void
+    {
+        $signerId = $overrides['signer_id'] ?? null;
+        if (! $signerId) {
+            return;
+        }
+
+        $signer = \App\Models\User::find($signerId);
+        if ($signer && ! $signer->holdsCurrentLicence()) {
+            throw new \App\Exceptions\StaleSignerLicenceException($signer);
+        }
     }
 
     /**

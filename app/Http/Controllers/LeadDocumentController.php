@@ -509,6 +509,10 @@ class LeadDocumentController extends Controller
             }
 
             return back()->with('success', $message);
+        } catch (\App\Exceptions\StaleSignerLicenceException $e) {
+            // Expected refusal, not a fault — the chosen adviser's licence has
+            // lapsed. Surface the clear message; do not log as an error.
+            return back()->withErrors(['error' => $e->getMessage()]);
         } catch (\Throwable $e) {
             Log::error('Engagement bulk generation failed', ['lead_id' => $leadId, 'error' => $e->getMessage()]);
 

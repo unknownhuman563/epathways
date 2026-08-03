@@ -602,7 +602,7 @@ class ImmigrationController extends Controller
         return User::whereNotNull('iaa_licence_number')
             ->where('iaa_licence_number', '!=', '')
             ->orderBy('name')
-            ->get(['id', 'name', 'iaa_licence_number', 'signature_path'])
+            ->get(['id', 'name', 'iaa_licence_number', 'iaa_licence_expiry', 'signature_path'])
             ->map(fn ($u) => [
                 'id' => $u->id,
                 'name' => $u->name,
@@ -611,6 +611,11 @@ class ImmigrationController extends Controller
                 // otherwise suppress the "no signature" warning while the
                 // agreement still renders a blank signature line.
                 'has_signature' => $u->hasSignature(),
+                // A lapsed-licence adviser stays in the list but is flagged so
+                // the picker can warn/disable — generation is blocked server-
+                // side regardless (EngagementDocumentGenerator guard).
+                'licence_current' => $u->holdsCurrentLicence(),
+                'licence_expiry' => optional($u->iaa_licence_expiry)->toDateString(),
             ])
             ->values();
     }
@@ -1669,7 +1674,7 @@ class ImmigrationController extends Controller
         $me = auth()->user();
 
         return inertia('portal/immigration/Profile', [
-            'user' => $me->only(['id', 'name', 'email', 'role', 'iaa_licence_number', 'iaa_licence_type', 'iaa_licence_expiry']),
+            'user' => $me->only(['id', 'name', 'email', 'role', 'iaa_licence_number', 'iaa_licence_type', 'iaa_licence_expiry', 'iaa_licence_verified_at']),
             'signature' => [
                 'data_uri' => $me->signatureDataUri(),
                 'updated_at' => optional($me->signature_updated_at)?->toIso8601String(),
@@ -1679,20 +1684,13 @@ class ImmigrationController extends Controller
 
     public function updateProfile(Request $request)
     {
-        $validated = $request->validate([
-            'iaa_licence_number' => 'nullable|string|max:60',
-            'iaa_licence_type' => 'nullable|string|in:Full,Provisional,Limited',
-        ]);
-        try {
-            $me = auth()->user();
-            $me->fill($validated)->save();
-
-            return back()->with('success', 'Profile updated.');
-        } catch (\Throwable $e) {
-            Log::error('Immigration profile update failed', ['error' => $e->getMessage()]);
-
-            return back()->with('error', 'Could not update profile.');
-        }
+        // IAA licence details are a compliance record — admin-set + audited via
+        // the admin Users screen (Build 12 fast-follow). Self-service editing
+        // was removed so the advice gate cannot be self-certified: the licence
+        // that prints on a client's legal document is not something its holder
+        // edits. This endpoint no longer writes anything; the profile page
+        // shows the licence read-only and points staff at an administrator.
+        return back()->with('error', 'Licence details are managed by an administrator. Ask an admin to update your IAA licence record.');
     }
 
     /**

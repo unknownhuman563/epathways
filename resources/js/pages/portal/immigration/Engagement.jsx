@@ -482,11 +482,19 @@ function NewEngagementModal({ cases, documents, signers = [], meId, onClose }) {
                                     {signers.length === 0 && <option value="">No licensed advisers</option>}
                                     {signers.map((s) => (
                                         <option key={s.id} value={s.id}>
-                                            {s.name}{s.licence ? ` · ${s.licence}` : ""}{s.has_signature ? "" : " (no signature)"}
+                                            {s.name}{s.licence ? ` · ${s.licence}` : ""}{s.licence_current === false ? " — licence expired" : ""}{s.has_signature ? "" : " (no signature)"}
                                         </option>
                                     ))}
                                 </select>
                             </div>
+
+                            {selectedSigner && selectedSigner.licence_current === false && (
+                                <Note tone="amber">
+                                    <span className="font-semibold">{selectedSigner.name}'s IAA licence has expired</span>
+                                    {selectedSigner.licence_expiry ? ` (${selectedSigner.licence_expiry})` : ""}. A pack can't be
+                                    generated under a lapsed licence — choose a current adviser, or ask an admin to update the licence.
+                                </Note>
+                            )}
 
                             <div className="min-w-0">
                                 <FieldLabel>Applicant location</FieldLabel>
@@ -683,7 +691,8 @@ function NewEngagementModal({ cases, documents, signers = [], meId, onClose }) {
                         <button onClick={onClose} className="px-4 py-2 text-sm font-semibold text-gray-600 hover:text-gray-800">Cancel</button>
                         <button
                             onClick={generate}
-                            disabled={!selectedCase || selectedTypes.length === 0 || submitting}
+                            disabled={!selectedCase || selectedTypes.length === 0 || submitting
+                                || (selectedSigner && selectedSigner.licence_current === false)}
                             className="px-4 py-2 bg-gray-900 text-white text-sm font-semibold rounded-xl hover:bg-black transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             {submitting ? <Loader2 size={14} className="animate-spin" /> : <FileSignature size={14} />}

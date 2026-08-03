@@ -64,6 +64,7 @@ class User extends Authenticatable
         'iaa_licence_number',
         'iaa_licence_type',
         'iaa_licence_expiry',
+        'iaa_licence_verified_at',
         'avatar_path',
         'signature_path',
         'signature_updated_at',
@@ -98,6 +99,7 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'last_login_at' => 'datetime',
             'iaa_licence_expiry' => 'date',
+            'iaa_licence_verified_at' => 'date',
             'signature_updated_at' => 'datetime',
             'password' => 'hashed',
         ];
