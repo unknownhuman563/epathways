@@ -5,6 +5,7 @@ import NotificationBell from "@/components/NotificationBell";
 import GlobalSearchBar from "@/components/GlobalSearchBar";
 import RequestTicketButton from "@/components/RequestTicketButton";
 import AiChatButton from "@/components/ai/AiChatButton";
+import { AvatarPhoto } from "@/components/ui/Avatar";
 
 /**
  * The official ePathways dashboard shell — sidebar + topbar + content area.
@@ -280,11 +281,9 @@ export default function DashboardLayout({
                             <div
                                 className={`flex items-center justify-center w-9 h-9 rounded-full overflow-hidden ${accent} text-white font-bold text-sm shadow-md ring-2 ring-white`}
                             >
-                                {user?.avatar_url ? (
-                                    <img src={user.avatar_url} alt={user.name} className="w-full h-full object-cover" />
-                                ) : (
-                                    user?.name?.charAt(0)?.toUpperCase() || "U"
-                                )}
+                                <AvatarPhoto src={user?.avatar_url} title={user?.name}>
+                                    {user?.name?.charAt(0)?.toUpperCase() || "U"}
+                                </AvatarPhoto>
                             </div>
                         </div>
                     </div>

@@ -17,6 +17,7 @@ import {
     Upload, Loader, Plus, X, CalendarClock, Link2, FileText as FileTextIcon,
     Pencil, StickyNote, Calendar, MapPin, Users, Eye, Trash2, Paperclip,
 } from "lucide-react";
+import { AvatarPhoto } from "@/components/ui/Avatar";
 import CaseFilesModal from "@/components/immigration/CaseFilesModal";
 import { priorityRing, priorityRank } from "@/utils/priority";
 
@@ -611,9 +612,9 @@ export default function SalesLeads({ leads = [], statuses = [], programs = [], s
                                                         }`}
                                                         title={priorityMeta(l.priority) ? `Priority: ${priorityMeta(l.priority).label}` : "No priority set"}
                                                     >
-                                                        {l.avatar_url
-                                                            ? <img src={l.avatar_url} alt={l.name} className="w-full h-full object-cover" />
-                                                            : initials(l.name)}
+                                                        <AvatarPhoto src={l.avatar_url} title={l.name}>
+                                                            {initials(l.name)}
+                                                        </AvatarPhoto>
                                                     </div>
                                                     {/* Presence dot — green online, gray has-portal-offline,
                                                         blue invitation-sent. Nothing when lead has no portal. */}

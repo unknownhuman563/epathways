@@ -124,7 +124,7 @@ const consultants = {
             sessionFormat: 'Video Call or Phone',
             institutions: 'Nationwide Support',
             specialisesIn: ['Admissions', 'Course Matching', 'Pathway Planning', 'Student Support'],
-            bookingUrl: 'https://go.epathways.co.nz/widget/bookings/meet-with-bryll-emma'
+            bookingUrl: 'https://calendar.google.com/calendar/appointments/schedules/AcZssZ0fcF3-jYjPaw03K2J1Sg9CTRQa0OUprdG6hZ43DyUNFgcTGvhVCoZjbkyPdayO_L_OuYOLg-TF?gv=true'
         },
         {
             id: 6,

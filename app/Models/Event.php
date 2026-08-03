@@ -13,7 +13,7 @@ class Event extends Model
         'name', 'description', 'type', 'event_code', 'date_from', 'date_to',
         'time_start', 'time_end',
         'status', 'organizer_id', 'agent_id', 'registration_link', 'notes', 'mode', 'location', 'banner_image',
-        'form_fields',
+        'form_fields', 'registration_template_id',
     ];
 
     protected $casts = [

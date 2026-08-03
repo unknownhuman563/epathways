@@ -1,11 +1,22 @@
-import { Head, Link } from "@inertiajs/react";
-import { User, Mail, Phone, MapPin, Hash, ShieldCheck, Lock, MessageSquare } from "lucide-react";
+import { Head, Link, useForm } from "@inertiajs/react";
+import { useState } from "react";
+import { User, Mail, Phone, MapPin, Hash, ShieldCheck, Lock, MessageSquare, ChevronDown } from "lucide-react";
 import PortalPageHeader from "@/components/portal/PortalPageHeader";
 import AvatarUploader from "@/components/AvatarUploader";
 
 const fmtDate = (iso) => iso ? new Date(iso).toLocaleDateString("en-NZ", { day: "numeric", month: "long", year: "numeric" }) : "—";
 
 export default function LeadProfile({ lead }) {
+    const [pwOpen, setPwOpen] = useState(false);
+    const pw = useForm({ current_password: "", password: "", password_confirmation: "" });
+    const submitPw = (e) => {
+        e.preventDefault();
+        pw.post("/portal/lead/password", {
+            preserveScroll: true,
+            onSuccess: () => { pw.reset(); setPwOpen(false); },
+        });
+    };
+
     return (
         <div className="space-y-6 max-w-3xl mx-auto pb-12">
             <Head title="Profile" />
@@ -58,15 +69,38 @@ export default function LeadProfile({ lead }) {
                     <h2 className="text-sm font-bold uppercase tracking-[0.18em] text-[#282728]">Security</h2>
                 </div>
                 <ul className="space-y-3">
-                    <li className="flex items-center justify-between gap-3 p-3 rounded-xl border border-[#282728]/10">
-                        <div className="flex items-center gap-3">
-                            <Lock size={14} className="text-gray-400" />
-                            <div>
-                                <p className="text-sm font-medium text-[#282728]">Password</p>
-                                <p className="text-[11px] text-gray-500">Update your portal password</p>
+                    <li className="rounded-xl border border-[#282728]/10 overflow-hidden">
+                        <button
+                            type="button"
+                            onClick={() => setPwOpen((v) => !v)}
+                            className="w-full flex items-center justify-between gap-3 p-3 text-left hover:bg-gray-50 transition-colors"
+                        >
+                            <div className="flex items-center gap-3">
+                                <Lock size={14} className="text-gray-400" />
+                                <div>
+                                    <p className="text-sm font-medium text-[#282728]">Password</p>
+                                    <p className="text-[11px] text-gray-500">Update your portal password</p>
+                                </div>
                             </div>
-                        </div>
-                        <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Coming soon</span>
+                            <ChevronDown size={16} className={`text-gray-400 transition-transform ${pwOpen ? "rotate-180" : ""}`} />
+                        </button>
+
+                        {pwOpen && (
+                            <form onSubmit={submitPw} className="border-t border-[#282728]/10 p-4 space-y-3 bg-gray-50/60">
+                                <PwField label="Current password" value={pw.data.current_password}
+                                    onChange={(v) => pw.setData("current_password", v)} error={pw.errors.current_password} autoFocus />
+                                <PwField label="New password" value={pw.data.password}
+                                    onChange={(v) => pw.setData("password", v)} error={pw.errors.password} hint="At least 8 characters." />
+                                <PwField label="Confirm new password" value={pw.data.password_confirmation}
+                                    onChange={(v) => pw.setData("password_confirmation", v)} />
+                                <div className="flex justify-end pt-1">
+                                    <button type="submit" disabled={pw.processing}
+                                        className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#436235] text-white text-sm font-medium hover:bg-[#37502b] disabled:opacity-50">
+                                        {pw.processing ? "Saving…" : "Update password"}
+                                    </button>
+                                </div>
+                            </form>
+                        )}
                     </li>
                     <li className="flex items-center justify-between gap-3 p-3 rounded-xl border border-[#282728]/10">
                         <div className="flex items-center gap-3">
@@ -80,6 +114,23 @@ export default function LeadProfile({ lead }) {
                     </li>
                 </ul>
             </section>
+        </div>
+    );
+}
+
+function PwField({ label, value, onChange, error, hint, autoFocus }) {
+    return (
+        <div>
+            <label className="block text-[11px] font-bold uppercase tracking-[0.18em] text-gray-500 mb-1">{label}</label>
+            <input
+                type="password"
+                value={value}
+                autoFocus={autoFocus}
+                onChange={(e) => onChange(e.target.value)}
+                className="w-full rounded-xl border border-[#282728]/15 px-3.5 py-2 text-sm focus:ring-2 focus:ring-[#436235] focus:border-[#436235] outline-none"
+            />
+            {error && <p className="text-xs text-red-600 mt-1">{error}</p>}
+            {!error && hint && <p className="text-[11px] text-gray-400 mt-1">{hint}</p>}
         </div>
     );
 }

@@ -23,6 +23,7 @@ export default function Bookings({ bookings: backendBookings }) {
                 createdAt: new Date(booking.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
                 lead_id: booking.lead?.lead_id || null,
                 lead_internal_id: booking.lead?.id || null,
+                stage: booking.lead?.status || null,
                 currentCountry: booking.current_country || '—',
                 appointmentDate: booking.appointment_date ? new Date(booking.appointment_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : null,
                 appointmentTime: booking.appointment_time || null,
@@ -162,6 +163,7 @@ export default function Bookings({ bookings: backendBookings }) {
                                     />
                                 </th>
                                 <th className="px-6 py-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">Client</th>
+                                <th className="px-6 py-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">Stage</th>
                                 <th className="px-6 py-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">Service & Consultant</th>
                                 <th className="px-6 py-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">Platform</th>
                                 <th className="px-6 py-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">Requested On</th>
@@ -201,6 +203,16 @@ export default function Bookings({ bookings: backendBookings }) {
                                             </div>
                                             <span className="text-xs text-gray-600">{booking.email}</span>
                                         </div>
+                                    </td>
+
+                                    <td className="px-6 py-4">
+                                        {booking.stage ? (
+                                            <span className="inline-flex px-2.5 py-1 rounded-full text-xs font-bold border border-gray-200 bg-gray-50 text-gray-700 whitespace-nowrap">
+                                                {booking.stage}
+                                            </span>
+                                        ) : (
+                                            <span className="text-xs text-gray-400">—</span>
+                                        )}
                                     </td>
 
                                     <td className="px-6 py-4">
@@ -300,7 +312,7 @@ export default function Bookings({ bookings: backendBookings }) {
                             ))}
                             {bookings.length === 0 && (
                                 <tr>
-                                    <td colSpan="7" className="px-6 py-12 text-center text-gray-600">
+                                    <td colSpan="9" className="px-6 py-12 text-center text-gray-600">
                                         No bookings found.
                                     </td>
                                 </tr>

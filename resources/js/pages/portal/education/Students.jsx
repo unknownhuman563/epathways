@@ -8,8 +8,9 @@ import {
     CreditCard, FileText, ExternalLink, Languages, ClipboardList,
     Save, Edit2, ArrowUpDown, ArrowUp, ArrowDown,
     ChevronDown, Check, TrendingUp, Globe,
-    UserPlus, Pencil, Trash2, Copy, MoreHorizontal, Paperclip,
+    UserPlus, Pencil, Trash2, Copy, MoreHorizontal, Paperclip, KeyRound,
 } from "lucide-react";
+import { AvatarPhoto } from "@/components/ui/Avatar";
 import AddEditStudentModal from "./AddEditStudentModal";
 import CaseFilesModal from "@/components/immigration/CaseFilesModal";
 import { priorityRing } from "@/utils/priority";
@@ -117,6 +118,14 @@ function RowMenu({ items = [] }) {
                 >
                     {items.map((it) => {
                         const Icon = it.icon;
+                        if (it.disabled) {
+                            return (
+                                <div key={it.key} className="flex items-center gap-2.5 px-3 py-2 text-xs text-gray-400 cursor-default select-none">
+                                    {Icon && <Icon size={13} className="text-gray-300" />}
+                                    {it.label}
+                                </div>
+                            );
+                        }
                         const tone = it.danger
                             ? "text-red-600 hover:bg-red-50"
                             : "text-gray-700 hover:bg-gray-50";
@@ -326,6 +335,26 @@ const portalBase = () => {
     return match ? `/portal/${match[1]}` : "/portal/education";
 };
 
+// Shared "Request portal access" row-menu item (same flow as the Sales Leads
+// page). Shows the request action while the client has no active invitation;
+// otherwise shows the current status as a disabled line.
+const PORTAL_STATUS_LABEL = {
+    requested: "Portal access requested",
+    sent: "Portal invitation sent",
+    active: "Portal account active",
+    rejected: "Portal request rejected",
+};
+const portalRequestItem = (row, onRequest) => {
+    const st = row.portal_invitation_status || "none";
+    const canRequest = st === "none" || st === "revoked";
+    return {
+        key: "portal",
+        label: canRequest ? "Request portal access" : (PORTAL_STATUS_LABEL[st] || "Portal access"),
+        icon: KeyRound,
+        ...(canRequest ? { onClick: () => onRequest(row) } : { disabled: true }),
+    };
+};
+
 function StudentPriority({ student }) {
     const [saving, setSaving] = useState(false);
     const value = student.priority || "";
@@ -375,6 +404,18 @@ export default function EducationStudents({ students = [], schoolOptions = [], p
     const deleteStudent = (s) => {
         if (! window.confirm(`Delete "${s.name}"? This archives the record — it drops off every list but notes, documents and history are kept and can be restored.`)) return;
         router.post(`${portalBase()}/students/${s.id}/destroy`, {}, { preserveScroll: true, preserveState: true });
+    };
+
+    // Request Lead Portal access for a student — routed through whichever
+    // portal the staffer is in (each portal gates its own request route).
+    const requestPortal = (s) => {
+        if (! window.confirm(`Request Lead Portal access for ${s.name || "this client"}? Admin will review and approve.`)) return;
+        router.post(`${portalBase()}/leads/${s.id}/portal-invitation/request`, {}, {
+            preserveScroll: true,
+            preserveState: true,
+            onSuccess: () => toast.success("Portal access requested."),
+            onError: () => toast.error("Could not request portal access."),
+        });
     };
 
     const [search, setSearch] = useState("");
@@ -702,9 +743,9 @@ export default function EducationStudents({ students = [], schoolOptions = [], p
                                                     className="flex items-center gap-2.5 group/student"
                                                 >
                                                     <div className={`w-7 h-7 rounded-full flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0 overflow-hidden ${s.avatar_url ? `ring-2 ring-offset-1 ${priorityRing(s.priority)}` : (s.priority ? priorityDot(s.priority) : avatarColor(s.id))}`}>
-                                                        {s.avatar_url
-                                                            ? <img src={s.avatar_url} alt={s.name} className="w-full h-full object-cover" />
-                                                            : initials(s.name)}
+                                                        <AvatarPhoto src={s.avatar_url} title={s.name}>
+                                                            {initials(s.name)}
+                                                        </AvatarPhoto>
                                                     </div>
                                                     <div className="min-w-0">
                                                         <div className="font-semibold text-gray-900 text-xs truncate group-hover/student:text-indigo-600 transition-colors">
@@ -863,6 +904,7 @@ export default function EducationStudents({ students = [], schoolOptions = [], p
                                                             href: s.gdrive_link,
                                                             external: true,
                                                         },
+                                                        portalRequestItem(s, requestPortal),
                                                         {
                                                             key: 'edit',
                                                             label: 'Edit student',

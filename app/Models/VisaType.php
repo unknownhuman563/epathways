@@ -13,7 +13,8 @@ class VisaType extends Model
     protected $fillable = [
         'code', 'name', 'short_description', 'category', 'visa_type',
         'consultation_price_nzd', 'professional_fees', 'professional_fees_discounted',
-        'inz_application_fee',
+        'professional_fees_offshore', 'professional_fees_discounted_offshore',
+        'inz_application_fee', 'inz_application_fee_offshore',
         'consultation_duration_minutes',
         'estimated_minutes', 'icon',
         'expected_processing_days',
@@ -25,7 +26,10 @@ class VisaType extends Model
         'consultation_price_nzd' => 'decimal:2',
         'professional_fees' => 'decimal:2',
         'professional_fees_discounted' => 'decimal:2',
+        'professional_fees_offshore' => 'decimal:2',
+        'professional_fees_discounted_offshore' => 'decimal:2',
         'inz_application_fee' => 'decimal:2',
+        'inz_application_fee_offshore' => 'decimal:2',
         'consultation_duration_minutes' => 'integer',
         'estimated_minutes' => 'integer',
         'active' => 'boolean',
@@ -41,34 +45,70 @@ class VisaType extends Model
     /** The two pricing tiers a fee can be quoted at. */
     public const FEE_TIERS = ['discounted', 'normal'];
 
+    /** Applicant location — onshore (in NZ) or offshore (abroad). */
+    public const FEE_LOCATIONS = ['onshore', 'offshore'];
+
     /**
-     * The GST-exclusive professional fee for a given tier. "discounted" is the
-     * pay-now price, "normal" (the default) is the payment-plan price. Falls
-     * back to the normal fee when a discounted one hasn't been set, so a case
-     * quoted "discounted" never renders a blank fee.
+     * Which columns hold the fees for each applicant location — the two
+     * professional-fee tiers plus that location's INZ application fee. The
+     * onshore columns are the originals; offshore adds a parallel set. Keeping
+     * the map here means every fee lookup resolves the same way.
      */
-    public function professionalFeeFor(string $tier = 'normal'): ?float
+    private const FEE_FIELDS = [
+        'onshore' => ['discounted' => 'professional_fees_discounted', 'normal' => 'professional_fees', 'inz' => 'inz_application_fee'],
+        'offshore' => ['discounted' => 'professional_fees_discounted_offshore', 'normal' => 'professional_fees_offshore', 'inz' => 'inz_application_fee_offshore'],
+    ];
+
+    /**
+     * The GST-exclusive professional fee for a given tier and applicant
+     * location. "discounted" is the pay-now price, "normal" (the default) is
+     * the payment-plan price; "onshore"/"offshore" pick the applicant's
+     * location. Falls back to the normal fee for that location when a
+     * discounted one hasn't been set, so a case quoted "discounted" never
+     * renders a blank fee.
+     */
+    public function professionalFeeFor(string $tier = 'normal', string $location = 'onshore'): ?float
     {
+        $fields = self::FEE_FIELDS[$location] ?? self::FEE_FIELDS['onshore'];
+        $normal = $this->{$fields['normal']};
+
         $value = $tier === 'discounted'
-            ? ($this->professional_fees_discounted ?? $this->professional_fees)
-            : $this->professional_fees;
+            ? ($this->{$fields['discounted']} ?? $normal)
+            : $normal;
 
         return $value === null ? null : (float) $value;
     }
 
     /**
-     * The fee schedule for this visa, as the two tiers it is quoted in.
+     * The INZ (government) application fee for a given applicant location.
+     * Onshore and offshore each carry their own charge; there is no
+     * cross-location fallback, so an unset offshore fee reads as null rather
+     * than borrowing the onshore figure.
+     */
+    public function inzFeeFor(string $location = 'onshore'): ?float
+    {
+        $field = (self::FEE_FIELDS[$location] ?? self::FEE_FIELDS['onshore'])['inz'];
+        $value = $this->{$field};
+
+        return $value === null ? null : (float) $value;
+    }
+
+    /**
+     * The fee schedule for this visa at a given location, as the two tiers it
+     * is quoted in.
      *
-     * Only the GST-exclusive professional fee (per tier) and the INZ fee are
-     * stored. The GST-inclusive RRP and the "prof fees + INZ fee" total are
-     * computed here so every screen and generated document reports the same
-     * arithmetic — a stored total would drift the moment a fee is edited.
+     * Only the GST-exclusive professional fee (per tier/location) and the
+     * shared INZ fee are stored. The GST-inclusive RRP and the "prof fees +
+     * INZ fee" total are computed here so every screen and generated document
+     * reports the same arithmetic — a stored total would drift the moment a
+     * fee is edited.
      *
      * @return array<int, array{tier: string, label: string, note: string, inz_fee: float|null, excl_gst: float|null, incl_gst: float|null, total: float|null}>
      */
-    public function feeBreakdown(): array
+    public function feeBreakdown(string $location = 'onshore'): array
     {
-        $inz = $this->inz_application_fee === null ? null : (float) $this->inz_application_fee;
+        $fields = self::FEE_FIELDS[$location] ?? self::FEE_FIELDS['onshore'];
+        $inz = $this->{$fields['inz']} === null ? null : (float) $this->{$fields['inz']};
 
         $row = function (string $tier, string $label, string $note, $excl) use ($inz) {
             $excl = $excl === null ? null : (float) $excl;
@@ -90,8 +130,8 @@ class VisaType extends Model
         };
 
         return [
-            $row('discounted', 'Discounted price', 'Pay now basis', $this->professional_fees_discounted),
-            $row('normal', 'Normal price', 'Payment plan', $this->professional_fees),
+            $row('discounted', 'Discounted price', 'Pay now basis', $this->{$fields['discounted']}),
+            $row('normal', 'Normal price', 'Payment plan', $this->{$fields['normal']}),
         ];
     }
 

@@ -81,20 +81,44 @@
 </style>
 
 @if(!empty($preview))
-{{-- On-screen preview only: frame the body as an A4 page at 12pt so the
-     live preview reads like the printed document. Ignored by dompdf. --}}
+{{-- On-screen preview only: render the cover and the body as two separate
+     A4 sheets with a gap between them, so the preview paginates the way the
+     PDF does instead of running the teal cover straight into the white body.
+     dompdf never sees this block — it paginates from `page-break-after`. --}}
 <style>
     html { background: #e5e7eb; padding: 0; margin: 0; }
     body {
-        width: 794px;                 /* A4 width @ 96dpi */
-        min-height: 1123px;           /* A4 height @ 96dpi */
-        margin: 24px auto;
-        padding: 95px 55px 60px 55px; /* mirrors the @page margins */
-        background: #ffffff;
-        box-shadow: 0 2px 14px rgba(0,0,0,0.14);
+        width: auto;
+        margin: 0;
+        padding: 24px 0;          /* gap above the first sheet + below the last */
+        background: transparent;
+        box-shadow: none;
         font-size: 12pt;
     }
-    .cover { margin: -95px -55px 0 -55px; }
+
+    /* Each sheet is one A4 page @ 96dpi. */
+    .cover, .sheet-body {
+        width: 794px;
+        margin: 0 auto 24px auto; /* 24px gutter between sheets */
+        box-shadow: 0 2px 14px rgba(0,0,0,0.14);
+    }
+
+    /* Full-bleed teal page — no negative margins needed on screen, since
+       the sheet is the page rather than a block inside one. */
+    .cover {
+        height: 1123px;
+        padding: 95px 55px 60px 55px;
+    }
+
+    .sheet-body {
+        min-height: 1123px;
+        padding: 95px 55px 60px 55px;   /* mirrors the @page margins */
+        background: #ffffff;
+    }
+
+    /* The PDF page-break marker is meaningless on screen and would
+       otherwise add a stray gap of its own. */
+    .page-break { display: none; }
 </style>
 @endif
 
@@ -123,10 +147,14 @@
     </tr></table>
 </div>
 
-<div style="page-break-after: always;"></div>
+<div class="page-break" style="page-break-after: always;"></div>
 
-{{-- ---------- BODY ---------- --}}
+{{-- ---------- BODY ----------
+     The wrapper is inert in the PDF (a plain block box in normal flow) and
+     becomes the second A4 sheet in the on-screen preview. --}}
+<div class="sheet-body">
 @yield('body')
+</div>
 
 </body>
 </html>

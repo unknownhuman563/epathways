@@ -67,15 +67,16 @@ class InvoiceGenerator
      * Default settings for the New-invoice modal — visa-derived fees, the
      * next invoice number, and today / +7 days dates.
      */
-    public function defaultsFor(Lead $lead, string $tier = 'normal', bool $includeGst = false): array
+    public function defaultsFor(Lead $lead, string $tier = 'normal', bool $includeGst = false, string $location = 'onshore'): array
     {
         $visa = $lead->inz_visa_type ? VisaType::where('name', $lead->inz_visa_type)->first() : null;
         $tier = $tier === 'discounted' ? 'discounted' : 'normal';
+        $location = $location === 'offshore' ? 'offshore' : 'onshore';
 
         // Fees are stored exclusive of GST; staff choose per invoice whether
         // the service fee is quoted ex-GST or as the GST-inclusive RRP. The
         // INZ fee is a government charge and is never uplifted.
-        $serviceFee = $visa?->professionalFeeFor($tier);
+        $serviceFee = $visa?->professionalFeeFor($tier, $location);
         if ($includeGst && $serviceFee !== null) {
             $serviceFee = round($serviceFee * (1 + VisaType::GST_RATE), 2);
         }
@@ -86,11 +87,13 @@ class InvoiceGenerator
             'due_date' => now()->addDays(7)->toDateString(),
             'visa_label' => $lead->inz_visa_type ?: 'Visa',
             // Service fee follows the chosen pricing tier — discounted (pay
-            // now) or normal (payment plan).
+            // now) or normal (payment plan) — at the applicant's location.
             'fee_tier' => $tier,
+            'fee_location' => $location,
             'include_gst' => $includeGst,
             'service_fee' => $serviceFee,
-            'inz_fee' => $visa?->inz_application_fee !== null ? (float) $visa->inz_application_fee : null,
+            // The INZ disbursement differs by location too.
+            'inz_fee' => $visa?->inzFeeFor($location),
             'include_disbursement' => true,
         ];
     }
@@ -136,7 +139,8 @@ class InvoiceGenerator
         $defaults = $this->defaultsFor(
             $lead,
             $o['fee_tier'] ?? 'normal',
-            ! empty($o['include_gst'])
+            ! empty($o['include_gst']),
+            $o['fee_location'] ?? 'onshore'
         );
         $visaLabel = $o['visa_label'] ?? $defaults['visa_label'];
 

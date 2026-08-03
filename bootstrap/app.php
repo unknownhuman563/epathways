@@ -25,6 +25,7 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
         $middleware->alias([
             'portal' => \App\Http\Middleware\EnsurePortalAccess::class,
+            'tracker.enabled' => \App\Http\Middleware\EnsureTrackerEnabled::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
