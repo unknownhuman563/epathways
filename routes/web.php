@@ -729,7 +729,10 @@ Route::middleware(['auth'])->group(function () {
     // group so every department portal that can see the documents tab can
     // also manage and download files. The download controller does its own
     // role-gated check on the specific lead before streaming the file.
-    Route::middleware('portal:admin,sales,education,english,immigration,accommodation,finance')->group(function () {
+    // Build 12 §2: immigration_manager + immigration_adviser get case document
+    // write too — the adviser is no longer read-only; advice-bearing artifacts
+    // are gated by AdviceBearingPolicy (licence), not by withholding routes.
+    Route::middleware('portal:admin,sales,education,english,immigration,immigration_manager,immigration_adviser,accommodation,finance')->group(function () {
         Route::post('/admin/leads/{id}/documents/checklist/{key}/upload', [LeadDocumentController::class, 'staffChecklistUpload'])
             ->name('admin.leads.documents.checklist.upload');
         // Templated agreement generator — Blade -> PDF -> attached as a

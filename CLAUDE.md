@@ -109,7 +109,12 @@ in this layer.
    injects the ownership/department predicate itself and does not delegate scoping to endpoints;
    several controllers were audited and found to have no record-level check.
 3. **No privileged bypass.** Agent tools call the same server-side policied endpoints as the UI.
-   `immigration_adviser` is read-only and the agent must not become a write path around that.
+   Advice-bearing content is licence-gated, not role-gated (`AdviceBearingPolicy` /
+   `User::holdsCurrentLicence()`): the AI may draft an advice-bearing artifact but must **never be
+   recorded as its approver** — an AI actor holds no licence, so the `approve` ability fails for it.
+   (Build 12 §2 replaced the old "`immigration_adviser` is read-only" rule with this content-level
+   control; the human adviser now has full case write. Do not reinstate the role-level rule. See
+   `docs/immigration-architecture.md` §2.)
 4. **Autonomy levels are binding.** Each capability ships at the level in `03-capabilities.md`.
    L3 = blocks on human approval. L4 = only where the scope is narrow, logged and reversible, and
    never where advice, money or immigration outcomes are involved. Do not raise a level to simplify

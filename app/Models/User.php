@@ -21,7 +21,13 @@ class User extends Authenticatable
     /** Immigration department-head — can edit visa types incl. price. */
     public const ROLE_IMMIGRATION_MANAGER = 'immigration_manager';
 
-    /** Immigration adviser — read-only access to visa types + cases. */
+    /**
+     * Immigration adviser — the Licensed Immigration Adviser (LIA). Full write
+     * on cases; the licence (see holdsCurrentLicence()) — not the role — gates
+     * advice-bearing artifacts via AdviceBearingPolicy. Read-only on the visa
+     * catalogue (a manager/admin function). Superseded the old blanket
+     * read-only rule in Build 12 §2.
+     */
     public const ROLE_IMMIGRATION_ADVISER = 'immigration_adviser';
 
     /** Role for an external Lead who logs in to the Leads Portal. */
@@ -266,6 +272,27 @@ class User extends Authenticatable
     public function isImmigrationAdviser(): bool
     {
         return $this->role === self::ROLE_IMMIGRATION_ADVISER;
+    }
+
+    /**
+     * Whether this user may author or approve advice-bearing artifacts — the
+     * content-level control that replaces the old "immigration_adviser is
+     * read-only" role rule (Build 12 §2).
+     *
+     * The gate is the LICENCE, not the role: a current IAA licence means a
+     * non-empty number AND an expiry in the future. A lapsed licence closes
+     * the gate automatically, and no role string can substitute for it — so a
+     * system/AI actor (which never holds a licence) can never approve advice.
+     *
+     * Reuses the existing iaa_licence_* columns (the same licence printed on
+     * the engagement pack and shown on the Profile page), so there is one
+     * source of truth for "is this person licensed".
+     */
+    public function holdsCurrentLicence(): bool
+    {
+        return filled($this->iaa_licence_number)
+            && $this->iaa_licence_expiry !== null
+            && $this->iaa_licence_expiry->isFuture();
     }
 
     /**
