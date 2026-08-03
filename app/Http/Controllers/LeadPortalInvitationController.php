@@ -49,6 +49,10 @@ class LeadPortalInvitationController extends Controller
                 'accepted_at'  => $l->portal_invitation_accepted_at,
                 'expires_at'   => $l->portal_invitation_expires_at,
                 'has_account'  => (bool) $l->portalUser,
+                // Which pipeline the person belongs to, for the page tabs. A
+                // converted immigration case takes priority over a student
+                // conversion; otherwise it's still a plain lead.
+                'type'         => $l->is_immigration_case ? 'case' : ($l->is_student ? 'student' : 'lead'),
             ]);
 
         return inertia('admin/PortalInvitations', [
@@ -256,7 +260,10 @@ class LeadPortalInvitationController extends Controller
             return back()->withErrors(['error' => "A user with email {$lead->email} already exists in the system."]);
         }
 
-        $plainPassword = $this->generateReadablePassword();
+        // Generated login password = first name + last 4 digits of the
+        // reference (e.g. "Maria1234"). Easy to relay; the credentials email
+        // still asks the client to change it after first login.
+        $plainPassword = $this->credentialPassword($lead);
 
         try {
             DB::transaction(function () use ($lead, $plainPassword) {
@@ -318,7 +325,10 @@ class LeadPortalInvitationController extends Controller
             return back()->withErrors(['error' => 'No portal account exists for this lead yet.']);
         }
 
-        $plainPassword = $this->generateReadablePassword();
+        // Reset to the same easy-to-relay format as Generate (full name + "@" +
+        // last 4 of the reference). Shown once in the admin modal; the client
+        // is prompted to change it after logging back in.
+        $plainPassword = $this->credentialPassword($lead);
 
         try {
             $lead->portalUser->update([
@@ -351,10 +361,53 @@ class LeadPortalInvitationController extends Controller
     }
 
     /**
+     * Deterministic login password that always satisfies the standard
+     * complexity rules — at least 8 characters with an uppercase letter, a
+     * lowercase letter, a digit and a symbol.
+     *
+     * Built from the client's full name (letters only, each part capitalised,
+     * no spaces) + "@" + the last 4 digits of their reference, e.g.
+     * "MariaSantos@1234". The trailing block guarantees every rule even for
+     * edge cases (blank, very short or all-caps names).
+     */
+    private function credentialPassword(Lead $lead): string
+    {
+        $fullName = trim("{$lead->first_name} {$lead->last_name}");
+        $name = preg_replace('/[^A-Za-z]/', '', ucwords(strtolower($fullName)));
+        if ($name === '') {
+            $name = 'Client';
+        }
+
+        $digits = preg_replace('/\D/', '', (string) $lead->lead_id);
+        if ($digits === '') {
+            $digits = (string) $lead->id;
+        }
+        $last4 = substr(str_pad($digits, 4, '0', STR_PAD_LEFT), -4);
+
+        $password = $name.'@'.$last4;
+
+        // Guarantee each rule regardless of the input name (digit and symbol
+        // are always present via the reference block and "@").
+        if (! preg_match('/[a-z]/', $password)) {
+            $password .= 'a';
+        }
+        if (! preg_match('/[A-Z]/', $password)) {
+            $password .= 'A';
+        }
+        // Pad up to the 8-character minimum for very short names.
+        while (strlen($password) < 8) {
+            $password .= '0';
+        }
+
+        return $password;
+    }
+
+    /**
      * Random 12-char password that's strong but readable when read aloud.
      * Avoids visually-confusing chars (0/O, 1/l/I) and uses lowercase +
-     * uppercase + digits. Roughly 64 bits of entropy — fine for one-shot
-     * credentials the lead will likely change after first login.
+     * uppercase + digits. Roughly 64 bits of entropy. Currently unused by the
+     * generate/reset flows (both use credentialPassword) — kept for callers
+     * that want a non-guessable one-shot secret.
      */
     private function generateReadablePassword(): string
     {

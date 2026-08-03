@@ -1,8 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
-import { Head, router, usePage } from "@inertiajs/react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { Head, Link, router, usePage } from "@inertiajs/react";
 import {
     Search, UserCheck, UserX, Mail, Clock, Copy, Check, ExternalLink,
     KeyRound, ShieldOff, X, Eye, EyeOff, RefreshCw, AlertTriangle,
+    MoreHorizontal,
 } from "lucide-react";
 
 const STATUS_STYLES = {
@@ -18,6 +20,7 @@ export default function PortalInvitations({ invitations = [] }) {
     const { flash } = usePage().props;
     const [query, setQuery] = useState("");
     const [statusFilter, setStatusFilter] = useState("All");
+    const [typeFilter, setTypeFilter] = useState("all");
     const [savingId, setSavingId] = useState(null);
     const [copiedFor, setCopiedFor] = useState(null);
 
@@ -38,14 +41,28 @@ export default function PortalInvitations({ invitations = [] }) {
     const filtered = useMemo(() => {
         const q = query.trim().toLowerCase();
         return invitations.filter((inv) => {
+            if (typeFilter !== "all" && (inv.type || "lead") !== typeFilter) return false;
             if (statusFilter !== "All" && inv.status !== statusFilter) return false;
             if (!q) return true;
             return [inv.name, inv.email, inv.lead_id].filter(Boolean).join(" ").toLowerCase().includes(q);
         });
-    }, [invitations, query, statusFilter]);
+    }, [invitations, query, statusFilter, typeFilter]);
 
+    // Status counts respect the active type tab so the stat cards match the table.
     const counts = useMemo(() => {
-        return invitations.reduce((acc, inv) => { acc[inv.status] = (acc[inv.status] || 0) + 1; return acc; }, {});
+        return invitations
+            .filter((inv) => typeFilter === "all" || (inv.type || "lead") === typeFilter)
+            .reduce((acc, inv) => { acc[inv.status] = (acc[inv.status] || 0) + 1; return acc; }, {});
+    }, [invitations, typeFilter]);
+
+    // Per-type totals for the tab badges (independent of the type tab itself).
+    const typeCounts = useMemo(() => {
+        return invitations.reduce((acc, inv) => {
+            const t = inv.type || "lead";
+            acc[t] = (acc[t] || 0) + 1;
+            acc.all += 1;
+            return acc;
+        }, { all: 0, lead: 0, student: 0, case: 0 });
     }, [invitations]);
 
     const post = (url, leadId) => {
@@ -73,6 +90,39 @@ export default function PortalInvitations({ invitations = [] }) {
                 <p className="text-sm text-gray-600 mt-1.5 max-w-2xl">
                     Sales agents request portal access; you approve so the invitation email is sent. Active accounts can be revoked any time.
                 </p>
+            </div>
+
+            {/* Type tabs — split the list by pipeline. A person converted to an
+                immigration case shows under Cases, one converted to a student
+                under Students, everyone else under Leads. */}
+            <div className="flex flex-wrap gap-1 border-b border-gray-200">
+                {[
+                    { key: "all",     label: "All" },
+                    { key: "lead",    label: "Leads" },
+                    { key: "student", label: "Students" },
+                    { key: "case",    label: "Cases" },
+                ].map((t) => {
+                    const active = typeFilter === t.key;
+                    return (
+                        <button
+                            key={t.key}
+                            type="button"
+                            onClick={() => setTypeFilter(t.key)}
+                            className={`relative px-4 py-2.5 text-sm font-semibold transition-colors -mb-px border-b-2 ${
+                                active
+                                    ? "border-gray-900 text-gray-900"
+                                    : "border-transparent text-gray-500 hover:text-gray-800"
+                            }`}
+                        >
+                            {t.label}
+                            <span className={`ml-2 inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-[11px] font-bold ${
+                                active ? "bg-gray-900 text-white" : "bg-gray-100 text-gray-500"
+                            }`}>
+                                {typeCounts[t.key] || 0}
+                            </span>
+                        </button>
+                    );
+                })}
             </div>
 
             {/* Flash banner — shows the setup link after approval so admin
@@ -186,11 +236,13 @@ export default function PortalInvitations({ invitations = [] }) {
                             )}
                             {filtered.map((inv) => {
                                 const style = STATUS_STYLES[inv.status] || STATUS_STYLES.pending;
-                                const isSaving = savingId === inv.id;
                                 return (
                                     <tr key={inv.id} className="hover:bg-gray-50/60 transition-colors">
                                         <td className="px-6 py-4">
-                                            <div className="font-semibold text-gray-900">{inv.name}</div>
+                                            <div className="flex items-center gap-2">
+                                                <span className="font-semibold text-gray-900">{inv.name}</span>
+                                                <TypeBadge type={inv.type} />
+                                            </div>
                                             <div className="text-xs text-gray-500 mt-0.5">{inv.email}</div>
                                             <div className="text-[11px] text-gray-300 font-mono mt-0.5">{inv.lead_id}</div>
                                         </td>
@@ -218,89 +270,8 @@ export default function PortalInvitations({ invitations = [] }) {
                                             <div className="text-gray-400 mt-0.5">{fmt(inv.approved_at)}</div>
                                         </td>
                                         <td className="px-6 py-4 text-right">
-                                            <div className="inline-flex items-center gap-2 justify-end">
-                                                {inv.status === "pending" && (
-                                                    <>
-                                                        <button
-                                                            type="button"
-                                                            disabled={isSaving}
-                                                            onClick={() => {
-                                                                if (confirm(`Generate login credentials for ${inv.name} and email them to ${inv.email}? The email includes their password and how to reset it. The password is also shown here once.`)) {
-                                                                    post(`/admin/leads/${inv.id}/portal-invitation/generate-credentials`, inv.id);
-                                                                }
-                                                            }}
-                                                            title="Create the account and email the client their login details + password reset info"
-                                                            className="inline-flex items-center gap-1.5 px-3 py-2 bg-gray-900 text-white rounded-lg text-xs font-bold hover:bg-gray-800 transition-colors disabled:opacity-50"
-                                                        >
-                                                            <KeyRound size={13} />
-                                                            Generate
-                                                        </button>
-                                                        <button
-                                                            type="button"
-                                                            disabled={isSaving}
-                                                            onClick={() => post(`/admin/leads/${inv.id}/portal-invitation/reject`, inv.id)}
-                                                            className="inline-flex items-center gap-1.5 px-3 py-2 bg-white border border-gray-200 text-gray-600 rounded-lg text-xs font-semibold hover:bg-gray-50 transition-colors disabled:opacity-50"
-                                                        >
-                                                            <UserX size={13} />
-                                                            Reject
-                                                        </button>
-                                                    </>
-                                                )}
-                                                {(inv.status === "sent" || inv.status === "accepted") && (
-                                                    <>
-                                                        {inv.has_account && (
-                                                            <button
-                                                                type="button"
-                                                                disabled={isSaving}
-                                                                onClick={() => {
-                                                                    if (confirm(`Reset password for ${inv.name}? A new password will be generated and shown ONCE. Their old password will stop working immediately.`)) {
-                                                                        post(`/admin/leads/${inv.id}/portal-invitation/reset-password`, inv.id);
-                                                                    }
-                                                                }}
-                                                                title="Generate a new password — old one stops working"
-                                                                className="inline-flex items-center gap-1.5 px-3 py-2 bg-white border border-gray-200 text-gray-600 rounded-lg text-xs font-semibold hover:border-amber-300 hover:text-amber-700 transition-colors disabled:opacity-50"
-                                                            >
-                                                                <RefreshCw size={13} />
-                                                                Reset
-                                                            </button>
-                                                        )}
-                                                        <button
-                                                            type="button"
-                                                            disabled={isSaving}
-                                                            onClick={() => {
-                                                                if (confirm(`Revoke portal access for ${inv.name}? They won't be able to log in.`)) {
-                                                                    post(`/admin/leads/${inv.id}/portal-invitation/revoke`, inv.id);
-                                                                }
-                                                            }}
-                                                            className="inline-flex items-center gap-1.5 px-3 py-2 bg-white border border-gray-200 text-gray-600 rounded-lg text-xs font-semibold hover:border-red-300 hover:text-red-700 transition-colors disabled:opacity-50"
-                                                        >
-                                                            <ShieldOff size={13} />
-                                                            Revoke
-                                                        </button>
-                                                    </>
-                                                )}
-                                                {inv.status === "revoked" && (
-                                                    <button
-                                                        type="button"
-                                                        disabled={isSaving}
-                                                        onClick={() => {
-                                                            if (confirm(`Reactivate ${inv.name}'s account by generating a new password? They can use it to log in again.`)) {
-                                                                post(`/admin/leads/${inv.id}/portal-invitation/reset-password`, inv.id);
-                                                            }
-                                                        }}
-                                                        className="inline-flex items-center gap-1.5 px-3 py-2 bg-white border border-gray-200 text-gray-600 rounded-lg text-xs font-semibold hover:border-emerald-300 hover:text-emerald-700 transition-colors disabled:opacity-50"
-                                                    >
-                                                        <RefreshCw size={13} />
-                                                        Reactivate
-                                                    </button>
-                                                )}
-                                                <a
-                                                    href={`/admin/leads/${inv.id}`}
-                                                    className="inline-flex items-center gap-1.5 px-3 py-2 bg-gray-900 text-white rounded-lg text-xs font-semibold hover:bg-gray-800 transition-colors"
-                                                >
-                                                    <ExternalLink size={13} />
-                                                    Lead
-                                                </a>
+                                            <div className="inline-flex justify-end">
+                                                <RowMenu items={rowActions(inv, post)} />
                                             </div>
                                         </td>
                                     </tr>
@@ -311,6 +282,189 @@ export default function PortalInvitations({ invitations = [] }) {
                 </div>
             </div>
         </div>
+    );
+}
+
+// ── Row actions ──────────────────────────────────────────────────────────
+// Builds the kebab-menu items for one invitation row. Same behaviour as the
+// old inline buttons (confirm dialogs included) — just collapsed into the
+// 3-dots menu. `post` is the page's inertia POST helper.
+function rowActions(inv, post) {
+    const url = (path) => `/admin/leads/${inv.id}/portal-invitation/${path}`;
+    const items = [];
+
+    // Generate credentials — only for a pending request (no account yet).
+    if (inv.status === "pending") {
+        items.push({
+            key: "generate", label: "Generate credentials", icon: KeyRound,
+            onClick: () => {
+                if (confirm(`Generate login credentials for ${inv.name} and email them to ${inv.email}? The email includes their password and how to reset it. The password is also shown here once.`)) {
+                    post(url("generate-credentials"), inv.id);
+                }
+            },
+        });
+    }
+
+    // Reset password — available for ANY account that exists, whatever its
+    // status. For a revoked account this also re-enables login, so label it
+    // accordingly.
+    if (inv.has_account) {
+        const reactivates = inv.status === "revoked";
+        items.push({
+            key: "reset",
+            label: reactivates ? "Reset password & reactivate" : "Reset password",
+            icon: RefreshCw,
+            onClick: () => {
+                const msg = reactivates
+                    ? `Reactivate ${inv.name}'s account with a new password? They'll be able to log in again, and the new password is shown ONCE.`
+                    : `Reset password for ${inv.name}? A new password will be generated and shown ONCE. Their old password will stop working immediately.`;
+                if (confirm(msg)) post(url("reset-password"), inv.id);
+            },
+        });
+    }
+
+    items.push({ key: "lead", label: "Open lead", icon: ExternalLink, href: `/admin/leads/${inv.id}` });
+
+    // ── Destructive actions (rendered at the bottom under a divider) ──
+    if (inv.status === "pending") {
+        items.push({
+            key: "reject", label: "Reject request", icon: UserX, danger: true,
+            onClick: () => post(url("reject"), inv.id),
+        });
+    }
+    if ((inv.status === "sent" || inv.status === "accepted") && inv.has_account) {
+        items.push({
+            key: "revoke", label: "Revoke access", icon: ShieldOff, danger: true,
+            onClick: () => {
+                if (confirm(`Revoke portal access for ${inv.name}? They won't be able to log in.`)) {
+                    post(url("revoke"), inv.id);
+                }
+            },
+        });
+    }
+
+    return items;
+}
+
+// ── Kebab (3-dots) row menu ──────────────────────────────────────────────
+// Portalled to <body> so it's never clipped by the table's overflow. Mirrors
+// the RowMenu used across the sales/education/immigration portal tables.
+function RowMenu({ items = [] }) {
+    const [open, setOpen] = useState(false);
+    const [coords, setCoords] = useState({ top: 0, left: 0, openUp: false });
+    const triggerRef = useRef(null);
+    const menuRef = useRef(null);
+    const MENU_W = 220;
+
+    useEffect(() => {
+        if (!open || !triggerRef.current) return;
+        const place = () => {
+            const r = triggerRef.current.getBoundingClientRect();
+            const menuH = Math.min(360, items.length * 38 + 16);
+            const spaceBelow = window.innerHeight - r.bottom;
+            const openUp = spaceBelow < menuH + 12 && r.top > spaceBelow;
+            setCoords({
+                top:  openUp ? r.top - 6 : r.bottom + 6,
+                left: Math.min(r.right - MENU_W, window.innerWidth - MENU_W - 8),
+                openUp,
+            });
+        };
+        place();
+        const onScroll = () => place();
+        window.addEventListener('scroll', onScroll, true);
+        window.addEventListener('resize', onScroll);
+        return () => {
+            window.removeEventListener('scroll', onScroll, true);
+            window.removeEventListener('resize', onScroll);
+        };
+    }, [open]);
+
+    useEffect(() => {
+        if (!open) return;
+        const onDocClick = (e) => {
+            if (menuRef.current?.contains(e.target) || triggerRef.current?.contains(e.target)) return;
+            setOpen(false);
+        };
+        const onKey = (e) => { if (e.key === 'Escape') setOpen(false); };
+        document.addEventListener('mousedown', onDocClick);
+        document.addEventListener('keydown', onKey);
+        return () => {
+            document.removeEventListener('mousedown', onDocClick);
+            document.removeEventListener('keydown', onKey);
+        };
+    }, [open]);
+
+    const handleClick = (item) => {
+        setOpen(false);
+        item.onClick?.();
+    };
+
+    if (items.length === 0) return null;
+
+    return (
+        <>
+            <button
+                ref={triggerRef}
+                type="button"
+                onClick={() => setOpen(!open)}
+                title="More actions"
+                className={`inline-flex items-center justify-center w-8 h-8 rounded-md transition-colors ${open ? 'bg-gray-100 text-gray-900' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'}`}
+            >
+                <MoreHorizontal size={16} />
+            </button>
+
+            {open && typeof document !== 'undefined' && createPortal(
+                <div
+                    ref={menuRef}
+                    role="menu"
+                    style={{
+                        position: 'fixed',
+                        top:    coords.openUp ? 'auto' : coords.top,
+                        bottom: coords.openUp ? (window.innerHeight - coords.top) : 'auto',
+                        left:   Math.max(8, coords.left),
+                        width:  MENU_W,
+                        maxHeight: 360,
+                        overflowY: 'auto',
+                    }}
+                    className="z-[60] bg-white rounded-xl shadow-2xl border border-gray-100 py-1.5"
+                >
+                    {items.map((it, idx) => {
+                        const Icon = it.icon;
+                        // Destructive items sit at the bottom, separated by a divider.
+                        const showDivider = it.danger && items[idx - 1] && ! items[idx - 1].danger;
+                        const itemTone = it.danger
+                            ? 'text-red-700 hover:bg-red-50'
+                            : 'text-gray-700 hover:bg-gray-50';
+                        const iconTone = it.danger ? 'text-red-400' : 'text-gray-400';
+                        const inner = (
+                            <span className={`flex items-center gap-2.5 px-3 py-2 text-xs cursor-pointer ${itemTone}`}>
+                                {Icon && <Icon size={13} className={iconTone} />}
+                                {it.label}
+                            </span>
+                        );
+                        return (
+                            <Fragment key={it.key}>
+                                {showDivider && <div className="my-1 border-t border-gray-100" />}
+                                {it.href ? (
+                                    <Link href={it.href} onClick={() => setOpen(false)} className="block">
+                                        {inner}
+                                    </Link>
+                                ) : (
+                                    <button
+                                        type="button"
+                                        onClick={() => handleClick(it)}
+                                        className="w-full text-left block"
+                                    >
+                                        {inner}
+                                    </button>
+                                )}
+                            </Fragment>
+                        );
+                    })}
+                </div>,
+                document.body
+            )}
+        </>
     );
 }
 
@@ -434,6 +588,22 @@ function CredentialsModal({ credentials, onClose }) {
                 </div>
             </div>
         </div>
+    );
+}
+
+// Small pill showing which pipeline the person belongs to.
+const TYPE_BADGE = {
+    student: { label: "Student", cls: "bg-indigo-50 text-indigo-700 border-indigo-200" },
+    case:    { label: "Case",    cls: "bg-violet-50 text-violet-700 border-violet-200" },
+    lead:    { label: "Lead",    cls: "bg-gray-50 text-gray-500 border-gray-200" },
+};
+
+function TypeBadge({ type }) {
+    const t = TYPE_BADGE[type] || TYPE_BADGE.lead;
+    return (
+        <span className={`inline-flex px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide border ${t.cls}`}>
+            {t.label}
+        </span>
     );
 }
 
