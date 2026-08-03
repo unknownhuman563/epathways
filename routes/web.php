@@ -604,11 +604,11 @@ Route::middleware(['auth'])->group(function () {
         // role that can log into an admin sidebar. Public read is via
         // HomeController::index + the /visa-approved route (both pass
         // published approvals into the same VisaApprovedShowcase view).
-        Route::get   ('/admin/visa-approvals',                    [\App\Http\Controllers\VisaApprovalController::class, 'index'])->name('admin.visa-approvals');
-        Route::get   ('/admin/visa-approvals/people-search',      [\App\Http\Controllers\VisaApprovalController::class, 'peopleSearch'])->name('admin.visa-approvals.people-search');
-        Route::post  ('/admin/visa-approvals',                    [\App\Http\Controllers\VisaApprovalController::class, 'store'])->name('admin.visa-approvals.store');
-        Route::post  ('/admin/visa-approvals/{id}',               [\App\Http\Controllers\VisaApprovalController::class, 'update'])->name('admin.visa-approvals.update');
-        Route::delete('/admin/visa-approvals/{id}',               [\App\Http\Controllers\VisaApprovalController::class, 'destroy'])->name('admin.visa-approvals.destroy');
+        Route::get('/admin/visa-approvals', [\App\Http\Controllers\VisaApprovalController::class, 'index'])->name('admin.visa-approvals');
+        Route::get('/admin/visa-approvals/people-search', [\App\Http\Controllers\VisaApprovalController::class, 'peopleSearch'])->name('admin.visa-approvals.people-search');
+        Route::post('/admin/visa-approvals', [\App\Http\Controllers\VisaApprovalController::class, 'store'])->name('admin.visa-approvals.store');
+        Route::post('/admin/visa-approvals/{id}', [\App\Http\Controllers\VisaApprovalController::class, 'update'])->name('admin.visa-approvals.update');
+        Route::delete('/admin/visa-approvals/{id}', [\App\Http\Controllers\VisaApprovalController::class, 'destroy'])->name('admin.visa-approvals.destroy');
 
         // Per-registrant view: renders JUST the form the lead filled at
         // registration, plus an editable notes area. Any department that
@@ -1160,6 +1160,8 @@ Route::middleware(['auth'])->group(function () {
             Route::post('/cases/{id}/visa', [ImmigrationController::class, 'updateCaseVisa'])->name('cases.visa');
             // Inline priority update from the Cases table's expanded row.
             Route::post('/cases/{id}/priority', [ImmigrationController::class, 'updateCasePriority'])->name('cases.priority');
+            // Custody handoff (Build 12 phase 2). to_user_id = self is a claim.
+            Route::post('/cases/{id}/handoff', [ImmigrationController::class, 'handoff'])->name('cases.handoff');
 
             // Build 11.D — purpose-built Case Profile page. The {lead} binding
             // is the Lead model; controller hard-404s when is_immigration_case

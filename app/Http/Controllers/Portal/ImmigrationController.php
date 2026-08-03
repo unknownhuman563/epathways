@@ -307,6 +307,7 @@ class ImmigrationController extends Controller
                 'studentConverter:id,name',
                 'stageUpdater:id,name',
                 'lastActivityUser:id,name',
+                'owner:id,name,avatar_path',
             ])
                 ->immigrationCase()
                 // Newest staff activity first, falling back to the raw
@@ -315,6 +316,15 @@ class ImmigrationController extends Controller
                 ->limit(200)
                 ->get()
                 ->map(function ($l) use ($visaChecklists) {
+                    // Staleness is measured on the last *activity*, not on how
+                    // long the owner has held the case: a case actively worked
+                    // for 12 days is fine; one untouched for 10 is stuck.
+                    $amberDays = (int) config('immigration.custody_stale_amber_days', 6);
+                    $redDays = (int) config('immigration.custody_stale_red_days', 10);
+                    $lastTouch = $l->last_activity_at ?: $l->updated_at;
+                    $idleDays = $lastTouch ? (int) $lastTouch->diffInDays(now()) : null;
+                    $custodyStale = $idleDays === null ? null
+                        : ($idleDays >= $redDays ? 'red' : ($idleDays >= $amberDays ? 'amber' : null));
                     // All checklist keys for this case's visa vs. the keys it
                     // has actually submitted (any non-rejected doc). Progress
                     // is measured against the full checklist, not just the
@@ -390,6 +400,17 @@ class ImmigrationController extends Controller
                                                 ?? optional($l->studentConverter)->name,
                         // Short summary of what that edit changed.
                         'updated_desc' => $l->last_activity_desc,
+                        // Custody (Build 12 phase 2) — current owner, how long
+                        // they've held it (shown as plain text), and the
+                        // staleness colour derived above from last activity.
+                        'owner' => $l->owner ? [
+                            'id' => $l->owner->id,
+                            'name' => $l->owner->name,
+                            'avatar_url' => $l->owner->avatar_url,
+                        ] : null,
+                        'owner_since' => optional($l->owner_since)?->toIso8601String(),
+                        'custody_stale' => $custodyStale,
+                        'idle_days' => $idleDays,
                     ];
                 });
 
@@ -428,12 +449,27 @@ class ImmigrationController extends Controller
                 ->orderBy('name')
                 ->get(['id', 'code', 'name', 'category']);
 
+            // Immigration-capable staff for the handoff picker (incl. admins,
+            // who can work any portal). Ordered by name; the current user is
+            // used by the My-queue filter + "Claim" affordance.
+            $staff = \App\Models\User::query()
+                ->whereIn('role', array_merge(
+                    [\App\Models\User::ROLE_SUPER_ADMIN, \App\Models\User::ROLE_ADMIN, 'immigration'],
+                    \App\Models\User::IMMIGRATION_ROLES,
+                ))
+                ->orderBy('name')
+                ->get(['id', 'name', 'avatar_path'])
+                ->map(fn ($u) => ['id' => $u->id, 'name' => $u->name, 'avatar_url' => $u->avatar_url])
+                ->values();
+
             return inertia('portal/immigration/Cases', [
                 'cases' => $cases,
                 'distribution' => $distribution,
                 'priorities' => $priorities,
                 'stages' => Lead::IMMIGRATION_STAGES,
                 'visaTypes' => $visaTypes,
+                'me_id' => auth()->id(),
+                'staff' => $staff,
             ]);
         } catch (\Throwable $e) {
             Log::error('Immigration cases list failed', ['error' => $e->getMessage()]);
@@ -930,6 +966,80 @@ class ImmigrationController extends Controller
         $lead->save();
 
         return back();
+    }
+
+    /**
+     * Case custody handoff (Build 12 phase 2). One owner at a time; ownership
+     * changes only here, and only with the option of a note. Handing a case to
+     * yourself (to_user_id = self) is a claim — the same endpoint, no separate
+     * path. Stage is deliberately NOT touched: automatic custody movement
+     * arrives with the verdict in phase 5, derived from it.
+     */
+    public function handoff(\Illuminate\Http\Request $request, $id)
+    {
+        // Row-level scope: case-only, and 404 for anything that isn't an
+        // immigration case (EnsurePortalAccess is role-level only).
+        $lead = Lead::immigrationCase()->findOrFail($id);
+
+        $data = $request->validate([
+            'to_user_id' => ['required', 'integer', 'exists:users,id'],
+            'note' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        $me = auth()->user();
+        $newOwner = \App\Models\User::findOrFail($data['to_user_id']);
+
+        // The new owner must be able to work the immigration portal — you can't
+        // hand a case to someone who can't open it.
+        if (! $newOwner->canAccessPortal('immigration')) {
+            return back()->withErrors(['to_user_id' => 'That user cannot be assigned immigration cases.']);
+        }
+
+        $isClaim = $me && $newOwner->is($me);
+        $note = trim((string) ($data['note'] ?? ''));
+
+        $lead->current_owner_id = $newOwner->id;
+        $lead->owner_since = now();
+        $lead->save();
+
+        // The note (when given) lands as a case note so it's visible on the
+        // Notes tab — carried with the handoff, not lost in a toast.
+        if ($note !== '') {
+            \App\Models\LeadNote::create([
+                'lead_id' => $lead->id,
+                'user_id' => $me?->id,
+                'author_name' => $me?->name,
+                'author_role' => $me?->role,
+                'kind' => 'handoff',
+                'body' => ($isClaim ? 'Claimed case — ' : "Handed to {$newOwner->name} — ").$note,
+            ]);
+        }
+
+        // Show it in the Updated column (recordStaffActivity stamps quietly).
+        $lead->recordStaffActivity($isClaim ? 'Claimed case' : "Handed off to {$newOwner->name}");
+
+        // Audit trail (Build 12 §13).
+        \App\Models\ActivityLog::record('case.handoff', [
+            'description' => $isClaim
+                ? "{$me?->name} claimed case {$lead->lead_id}"
+                : "{$me?->name} handed case {$lead->lead_id} to {$newOwner->name}",
+            'properties' => [
+                'target_id' => $lead->id,
+                'to_user_id' => $newOwner->id,
+                'is_claim' => $isClaim,
+                'has_note' => $note !== '',
+            ],
+        ]);
+
+        // Notify the new owner — in-app + email, carrying the note, linking to
+        // the case. A claim doesn't notify yourself.
+        if (! $isClaim) {
+            $newOwner->notify(new \App\Notifications\CaseHandedOff($lead, $me?->name ?? 'A colleague', $note ?: null));
+        }
+
+        return back()->with('success', $isClaim
+            ? 'You now own this case.'
+            : "Case handed to {$newOwner->name}.");
     }
 
     /**
