@@ -24,6 +24,10 @@ export default function Bookings({ bookings: backendBookings }) {
                 lead_id: booking.lead?.lead_id || null,
                 lead_internal_id: booking.lead?.id || null,
                 stage: booking.lead?.status || null,
+                // Kept whole so the View Details modal can surface every field
+                // (client, appointment, intake) without a second request.
+                lead: booking.lead || null,
+                raw: booking,
                 currentCountry: booking.current_country || '—',
                 appointmentDate: booking.appointment_date ? new Date(booking.appointment_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : null,
                 appointmentTime: booking.appointment_time || null,
@@ -37,6 +41,7 @@ export default function Bookings({ bookings: backendBookings }) {
     const [activeDropdown, setActiveDropdown] = useState(null);
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [editingData, setEditingData] = useState({ id: null, date: '', time: '', status: '' });
+    const [viewingBooking, setViewingBooking] = useState(null);
 
     const toggleSelectAll = (e) => {
         if (e.target.checked) {
@@ -280,7 +285,10 @@ export default function Bookings({ bookings: backendBookings }) {
                                                 <div className="fixed inset-0 z-40" onClick={() => setActiveDropdown(null)}></div>
                                                 <div className="absolute right-6 top-12 w-48 bg-white rounded-xl shadow-xl border border-gray-100 z-50 py-2 divide-y divide-gray-50">
                                                     <div className="px-1 py-1">
-                                                        <button className="flex w-full items-center gap-3 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg">
+                                                        <button
+                                                            onClick={() => { setViewingBooking(booking); setActiveDropdown(null); }}
+                                                            className="flex w-full items-center gap-3 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg"
+                                                        >
                                                             <Eye size={16} className="text-gray-500" /> View Details
                                                         </button>
                                                         <button 
@@ -327,6 +335,105 @@ export default function Bookings({ bookings: backendBookings }) {
                 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
             `}</style>
             
+            {/* View Details Modal */}
+            {viewingBooking && (() => {
+                const vb = viewingBooking;
+                const lead = vb.lead || {};
+                const raw = vb.raw || {};
+                const Row = ({ label, value }) => (
+                    <div className="flex justify-between gap-4 py-2 border-b border-gray-50 last:border-0">
+                        <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{label}</span>
+                        <span className="text-sm text-gray-800 text-right">{value || <span className="text-gray-300">—</span>}</span>
+                    </div>
+                );
+                const Section = ({ title, children }) => (
+                    <div>
+                        <h4 className="text-[11px] font-bold text-gray-400 uppercase tracking-[0.2em] mb-1">{title}</h4>
+                        <div>{children}</div>
+                    </div>
+                );
+                const yesNo = (v) => (v === true || v === 1 || v === '1' || v === 'Yes' ? 'Yes' : (v === false || v === 0 || v === '0' || v === 'No' ? 'No' : null));
+                return (
+                    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in" onClick={() => setViewingBooking(null)}>
+                        <div className="bg-white rounded-3xl w-full max-w-2xl shadow-2xl overflow-hidden border border-white/20 max-h-[90vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+                            <div className="bg-[#436235] p-6 text-white flex items-start justify-between">
+                                <div>
+                                    <h3 className="text-xl font-bold flex items-center gap-3"><Eye size={22} /> {vb.name || 'Booking Details'}</h3>
+                                    <p className="mt-1 text-sm" style={{ color: 'rgba(255,255,255,0.8)' }}>{vb.service}{vb.consultant ? ` · ${vb.consultant}` : ''}</p>
+                                </div>
+                                <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-bold border ${getStatusStyle(vb.status)}`}>{vb.status}</span>
+                            </div>
+
+                            <div className="p-8 space-y-6 overflow-y-auto">
+                                <Section title="Appointment">
+                                    <Row label="Date" value={vb.appointmentDate} />
+                                    <Row label="Time" value={vb.appointmentTime} />
+                                    <Row label="Time Zone" value={raw.client_timezone} />
+                                    <Row label="Platform" value={vb.platform} />
+                                    <Row label="Stage" value={vb.stage} />
+                                    <Row label="Requested On" value={vb.createdAt} />
+                                    {raw.meet_link && (
+                                        <div className="flex justify-between gap-4 py-2 border-b border-gray-50">
+                                            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Meet Link</span>
+                                            <a href={raw.meet_link} target="_blank" rel="noopener noreferrer" className="text-sm text-[#436235] hover:underline text-right break-all">{raw.meet_link}</a>
+                                        </div>
+                                    )}
+                                </Section>
+
+                                <Section title="Client">
+                                    <Row label="Email" value={vb.email} />
+                                    <Row label="Phone" value={vb.phone} />
+                                    <Row label="Country" value={vb.currentCountry} />
+                                    <Row label="City" value={lead.residence_city} />
+                                    <Row label="Age" value={lead.age} />
+                                    <Row label="Gender" value={lead.gender} />
+                                    <Row label="Civil Status" value={lead.marital_status} />
+                                </Section>
+
+                                {(lead.has_children != null || lead.number_of_children != null || lead.has_dependent_partner != null || lead.partner_in_nz != null) && (
+                                    <Section title="Family">
+                                        <Row label="Has Partner/Dependents" value={yesNo(lead.supports_partner_or_dependents ?? lead.has_dependent_partner)} />
+                                        <Row label="Partner in NZ" value={yesNo(lead.partner_in_nz)} />
+                                        <Row label="Has Children" value={yesNo(lead.has_children)} />
+                                        <Row label="Number of Children" value={lead.number_of_children} />
+                                        <Row label="Children Notes" value={lead.dependent_children_notes} />
+                                    </Section>
+                                )}
+
+                                {raw.intake && Object.keys(raw.intake).length > 0 && (
+                                    <Section title="Intake Form">
+                                        {Object.entries(raw.intake)
+                                            .filter(([, v]) => v !== null && v !== '' && v !== undefined)
+                                            .map(([k, v]) => (
+                                                <Row
+                                                    key={k}
+                                                    label={k.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())}
+                                                    value={typeof v === 'boolean' ? (v ? 'Yes' : 'No') : String(v)}
+                                                />
+                                            ))}
+                                    </Section>
+                                )}
+
+                                {vb.message && (
+                                    <Section title="Message / Notes">
+                                        <p className="text-sm text-gray-700 whitespace-pre-wrap">{vb.message}</p>
+                                    </Section>
+                                )}
+                            </div>
+
+                            <div className="p-5 border-t border-gray-100 flex items-center justify-between bg-gray-50">
+                                {vb.lead_internal_id ? (
+                                    <Link href={`/admin/leads?id=${vb.lead_internal_id}`} className="inline-flex items-center gap-1.5 text-sm font-semibold text-[#436235] hover:underline">
+                                        <FileText size={15} /> Open full lead profile
+                                    </Link>
+                                ) : <span />}
+                                <button onClick={() => setViewingBooking(null)} className="px-5 py-2 rounded-xl bg-gray-900 text-white text-sm font-semibold hover:bg-black transition-colors">Close</button>
+                            </div>
+                        </div>
+                    </div>
+                );
+            })()}
+
             {/* Edit Booking Modal */}
             {isEditModalOpen && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">

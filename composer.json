@@ -76,7 +76,8 @@
             "dont-discover": []
         },
         "google/apiclient-services": [
-            "Drive"
+            "Drive",
+            "Calendar"
         ]
     },
     "config": {

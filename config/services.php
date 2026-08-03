@@ -118,6 +118,18 @@ return [
         'folder_prefix' => env('GOOGLE_DRIVE_FOLDER_PREFIX', ''),
     ],
 
+    // Google Calendar — consultation bookings create an event (with an auto
+    // Google Meet link) on a Workspace calendar via the SAME service account
+    // as Drive, using domain-wide delegation to impersonate `impersonate`.
+    // Dormant until BOTH key_file and impersonate are set. `calendar_id` is the
+    // target calendar ('primary' = the impersonated user's own calendar).
+    'google_calendar' => [
+        'key_file' => env('GOOGLE_DRIVE_KEY_FILE'),
+        'impersonate' => env('GOOGLE_CALENDAR_IMPERSONATE'),
+        'calendar_id' => env('GOOGLE_CALENDAR_ID', 'primary'),
+        'default_duration' => (int) env('GOOGLE_CALENDAR_DURATION_MIN', 30),
+    ],
+
     // n8n workflow that powers the Social MVP (stats, variant generation,
     // approve / reject / schedule, accounts, quick posts). Proxied
     // server-side by AiAdsWebhookController so OpenRouter / Zernio keys

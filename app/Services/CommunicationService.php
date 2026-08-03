@@ -360,7 +360,7 @@ class CommunicationService
      */
     private function substitute(string $template, array $context, bool $escape): string
     {
-        return preg_replace_callback('/\{\{\s*([a-z0-9_]+)\s*\}\}/i', function ($m) use ($context, $escape) {
+        return preg_replace_callback('/\{\{\s*([a-z0-9_.]+)\s*\}\}/i', function ($m) use ($context, $escape) {
             $key = strtolower($m[1]);
             if (! array_key_exists($key, $context)) {
                 Log::warning("CommunicationService: unknown template variable '{{{$key}}}'");
