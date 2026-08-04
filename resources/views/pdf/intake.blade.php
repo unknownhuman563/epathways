@@ -9,10 +9,17 @@
         * { box-sizing: border-box; }
         body { font-family: 'DejaVu Sans', sans-serif; color: #22303f; font-size: 9.5px; line-height: 1.4; margin: 0; }
 
-        /* Web / Word render (no @page margins apply) gets body padding + a
-           static header instead of the PDF's fixed repeating one. */
-        body.web, body.word { padding: 22px 26px; }
-        body.web { background: #eef1f5; }
+        /* Web / Word render (no @page margins apply) gets a static header
+           instead of the PDF's fixed repeating one. The web preview is laid
+           out as an A4 sheet centred on a grey backdrop so it reads as a page;
+           Word just gets simple padding and paginates itself. */
+        body.word { padding: 22px 26px; }
+        body.web { background: #e9edf2; padding: 20px 0; }
+        body.web .sheet {
+            width: 210mm; min-height: 296mm; margin: 0 auto;
+            background: #ffffff; padding: 15mm 14mm;
+            box-shadow: 0 3px 16px rgba(15, 23, 42, 0.18);
+        }
 
         .statichead { margin-bottom: 8px; }
         .statichead .brand { font-size: 13px; font-weight: bold; color: #1F4E79; }
@@ -66,7 +73,10 @@
             <div class="rule"></div>
         </div>
         <div class="pagefoot"></div>
-    @else
+    @endif
+
+    <div class="sheet">
+    @if ($mode !== 'pdf')
         {{-- Static header for the in-browser preview / Word export --}}
         <div class="statichead">
             <div class="brand">ePathways</div>
@@ -124,5 +134,6 @@
             </table>
         </div>
     @endforeach
+    </div>
 </body>
 </html>
