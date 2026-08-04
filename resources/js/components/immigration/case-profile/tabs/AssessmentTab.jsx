@@ -1,4 +1,4 @@
-import { ClipboardList, Send, ExternalLink } from "lucide-react";
+import { ClipboardList, Send, ExternalLink, Download } from "lucide-react";
 import { Link } from "@inertiajs/react";
 
 const VISA_LABEL = {
@@ -50,16 +50,27 @@ export default function AssessmentTab({ lead, intake }) {
                         {data.intake_id && <span className="ml-2 font-mono text-gray-400">{data.intake_id}</span>}
                     </p>
                 </div>
-                {data.assessment_id && (
-                    <Link
-                        href={type === "resident"
-                            ? `/admin/immigration/resident-intakes/${data.id}`
-                            : `/portal/immigration/intakes/${type}/${data.id}`}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold border border-gray-200 bg-white text-gray-600 hover:text-gray-900 hover:bg-gray-50 transition-colors"
-                    >
-                        Open full intake <ExternalLink size={11} />
-                    </Link>
-                )}
+                <div className="flex items-center gap-2">
+                    {/* Direct A4 PDF download (work/student/visitor intakes). */}
+                    {type !== "resident" && data.id && (
+                        <a
+                            href={`/portal/immigration/intakes/${type}/${data.id}/pdf`}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold border border-gray-200 bg-white text-gray-600 hover:text-gray-900 hover:bg-gray-50 transition-colors"
+                        >
+                            <Download size={11} /> Download PDF
+                        </a>
+                    )}
+                    {data.assessment_id && (
+                        <Link
+                            href={type === "resident"
+                                ? `/admin/immigration/resident-intakes/${data.id}`
+                                : `/portal/immigration/intakes/${type}/${data.id}`}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold border border-gray-200 bg-white text-gray-600 hover:text-gray-900 hover:bg-gray-50 transition-colors"
+                        >
+                            Open full intake <ExternalLink size={11} />
+                        </Link>
+                    )}
+                </div>
             </div>
 
             {groups.map((group) => (

@@ -323,16 +323,9 @@ export default function IntakeDetails({ type, intake, assessment = null, linkedL
     const citizenship = intake.country_of_citizenship || intake.nationality || null;
 
     const handlePrint = () => window.print();
+    // Download a clean A4 PDF from the server (was a raw JSON export).
     const handleDownload = () => {
-        const blob = new Blob([JSON.stringify(intake, null, 2)], { type: 'application/json' });
-        const url  = URL.createObjectURL(blob);
-        const a    = document.createElement('a');
-        a.href = url;
-        a.download = `${intake.intake_id || `${type}-intake`}.json`;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        URL.revokeObjectURL(url);
+        window.location.href = `/portal/immigration/intakes/${type}/${intake.id}/pdf`;
     };
 
     // Convert-to-case action. Mirrors the Convert button on the Assessments

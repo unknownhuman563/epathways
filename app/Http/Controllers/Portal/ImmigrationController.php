@@ -1345,6 +1345,211 @@ class ImmigrationController extends Controller
         ]);
     }
 
+    /**
+     * Download a Work / Student / Visitor intake (visa assessment) as a clean
+     * A4 PDF. Mirrors the on-screen IntakeDetails schema/labels so the export
+     * reads the same as the viewer — replacing the old raw-JSON download.
+     */
+    public function downloadIntakePdf(string $type, int $id)
+    {
+        $modelMap = [
+            'work' => \App\Models\WorkIntake::class,
+            'student' => \App\Models\StudentIntake::class,
+            'visitor' => \App\Models\VisitorIntake::class,
+        ];
+        if (! isset($modelMap[$type])) {
+            abort(404, 'Unknown intake type.');
+        }
+
+        $intake = $modelMap[$type]::findOrFail($id)->toArray();
+
+        $typeLabels = [
+            'work' => 'Work Visa Assessment',
+            'student' => 'Student Visa Assessment',
+            'visitor' => 'Visitor Visa Assessment',
+        ];
+
+        $lastName = $intake['family_name'] ?? $intake['last_name'] ?? '';
+        $fullName = trim(($intake['first_name'] ?? '').' '.$lastName) ?: 'Unknown applicant';
+
+        $age = isset($intake['dob']) ? $this->ageFromDob($intake['dob']) : null;
+        $snapshot = array_values(array_filter([
+            $intake['country_of_citizenship'] ?? $intake['nationality'] ?? null,
+            $age !== null ? $age.' years old' : null,
+            $intake['gender'] ?? null,
+            $intake['partnership_status'] ?? null,
+            ! empty($intake['current_country']) ? 'In '.$intake['current_country'] : null,
+        ]));
+
+        $data = [
+            'fullName' => $fullName,
+            'typeLabel' => $typeLabels[$type] ?? 'Visa Assessment',
+            'intakeId' => $intake['intake_id'] ?? null,
+            'status' => $intake['status'] ?? 'New',
+            'submittedAt' => ! empty($intake['created_at'])
+                ? \Illuminate\Support\Carbon::parse($intake['created_at'])->format('d/m/Y')
+                : null,
+            'email' => $intake['email'] ?? null,
+            'phone' => $intake['phone'] ?? null,
+            'address' => $intake['current_address'] ?? null,
+            'snapshot' => $snapshot,
+            'sections' => $this->buildIntakeSections($intake, $type),
+            'generatedAt' => now()->format('d/m/Y H:i'),
+        ];
+
+        $filename = ($intake['intake_id'] ?? ($type.'-intake')).'.pdf';
+
+        return \Barryvdh\DomPDF\Facade\Pdf::loadView('pdf.intake', $data)
+            ->setPaper('a4')
+            ->download($filename);
+    }
+
+    /** Build formatted, non-empty sections (headline first) for the intake PDF. */
+    private function buildIntakeSections(array $intake, string $type): array
+    {
+        $schema = \App\Support\IntakeSchema::for($type);
+        $headline = \App\Support\IntakeSchema::headlineTitle($type);
+
+        $out = [];
+        foreach ($schema as $section) {
+            $fields = [];
+            foreach ($section['fields'] as $f) {
+                $raw = $intake[$f['key']] ?? null;
+                if ($this->intakeFieldEmpty($raw)) {
+                    continue;
+                }
+                $kind = $f['kind'] ?? null;
+                $full = ($f['multiline'] ?? false) || $kind === 'json';
+                $fields[] = [
+                    'label' => $f['label'] ?? ucwords(str_replace('_', ' ', $f['key'])),
+                    'value' => $this->fmtIntakeValue($raw, $kind),
+                    'full' => $full,
+                ];
+            }
+            if (empty($fields)) {
+                continue;
+            }
+
+            // Chunk into rows: two half-width fields per row, full-width fields
+            // (multiline / json) get a row to themselves.
+            $rows = [];
+            $pending = null;
+            foreach ($fields as $fld) {
+                if ($fld['full']) {
+                    if ($pending) {
+                        $rows[] = [$pending];
+                        $pending = null;
+                    }
+                    $rows[] = [$fld];
+                } elseif ($pending) {
+                    $rows[] = [$pending, $fld];
+                    $pending = null;
+                } else {
+                    $pending = $fld;
+                }
+            }
+            if ($pending) {
+                $rows[] = [$pending];
+            }
+
+            $out[] = [
+                'title' => $section['title'],
+                'rows' => $rows,
+                'headline' => $section['title'] === $headline,
+            ];
+        }
+
+        // Headline section first (stable sort keeps the rest in schema order).
+        usort($out, fn ($a, $b) => ($b['headline'] <=> $a['headline']));
+
+        return $out;
+    }
+
+    private function fmtIntakeValue($raw, ?string $kind): string
+    {
+        if ($kind === 'date') {
+            try {
+                return \Illuminate\Support\Carbon::parse($raw)->format('d/m/Y');
+            } catch (\Throwable $e) {
+                return (string) $raw;
+            }
+        }
+        if ($kind === 'money') {
+            return is_numeric($raw) ? '$'.number_format((float) $raw, 2) : (string) $raw;
+        }
+        if (is_string($raw) && $kind === 'json') {
+            $decoded = json_decode($raw, true);
+            if (is_array($decoded)) {
+                return $this->fmtIntakeArray($decoded);
+            }
+        }
+        if (is_array($raw)) {
+            return $this->fmtIntakeArray($raw);
+        }
+        if (is_bool($raw)) {
+            return $raw ? 'Yes' : 'No';
+        }
+        if ($raw === 1 || $raw === '1') {
+            return 'Yes';
+        }
+        if ($raw === 0 || $raw === '0') {
+            return 'No';
+        }
+
+        return (string) $raw;
+    }
+
+    private function fmtIntakeArray(array $arr): string
+    {
+        if (empty($arr)) {
+            return '—';
+        }
+        $isList = array_keys($arr) === range(0, count($arr) - 1);
+        $lines = [];
+        if ($isList) {
+            foreach ($arr as $item) {
+                $lines[] = is_array($item) ? '• '.$this->assocLine($item) : '• '.(string) $item;
+            }
+        } else {
+            $lines[] = $this->assocLine($arr);
+        }
+
+        return implode("\n", $lines);
+    }
+
+    private function assocLine(array $item): string
+    {
+        $parts = [];
+        foreach ($item as $k => $v) {
+            if ($v === null || $v === '' || $v === []) {
+                continue;
+            }
+            $parts[] = ucwords(str_replace('_', ' ', (string) $k)).': '.(is_array($v) ? json_encode($v) : (string) $v);
+        }
+
+        return implode(', ', $parts);
+    }
+
+    private function intakeFieldEmpty($v): bool
+    {
+        if ($v === null || $v === '') {
+            return true;
+        }
+
+        return is_array($v) && count($v) === 0;
+    }
+
+    private function ageFromDob($dob): ?int
+    {
+        try {
+            $age = \Illuminate\Support\Carbon::parse($dob)->age;
+
+            return ($age >= 0 && $age < 130) ? $age : null;
+        } catch (\Throwable $e) {
+            return null;
+        }
+    }
+
     /** Documents — Queue (pending / stale / rejected) + Folders per case. */
     public function documents()
     {

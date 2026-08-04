@@ -1130,6 +1130,10 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/intakes/{type}/{id}', [ImmigrationController::class, 'showIntake'])
                 ->where(['type' => 'work|student|visitor', 'id' => '[0-9]+'])
                 ->name('intakes.show');
+            // Downloadable A4 PDF of the same intake (replaces the raw-JSON export).
+            Route::get('/intakes/{type}/{id}/pdf', [ImmigrationController::class, 'downloadIntakePdf'])
+                ->where(['type' => 'work|student|visitor', 'id' => '[0-9]+'])
+                ->name('intakes.pdf');
             // Convert a visa-interest submission to an immigration case.
             // The {id} route param is Assessment.id (post-Phase-B
             // canonical). The controller also accepts a legacy
