@@ -37,4 +37,20 @@ return [
     'custody_stale_amber_days' => 6,
     'custody_stale_red_days' => 10,
 
+    /*
+    |--------------------------------------------------------------------------
+    | Case assist — findings rules (Build 12 phase 3)
+    |--------------------------------------------------------------------------
+    |
+    | Thresholds the rules engine reads. Kept here (not hardcoded) because rule
+    | noise is the failure mode: if a typical case surfaces a wall of findings,
+    | staff stop reading the panel. Tune from the dismissal rate per finding_key.
+    |
+    */
+    'findings' => [
+        'doc_request_unanswered_days' => 5,
+        'no_contact_days' => 14,
+        'passport_expiry_months' => 6,
+    ],
+
 ];

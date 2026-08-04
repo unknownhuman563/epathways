@@ -36,6 +36,7 @@ export default function CaseProfile() {
         checklistGrouped = {}, unstructuredDocuments = [],
         checklistProgress = { required_total: 0, required_approved: 0, total: 0, approved: 0 },
         communications = [], agreements = [], notes = [], activity = [],
+        findings = { items: [], evaluated_at: null, couldnt_verify: [] },
     } = props;
 
     // Deep-link tab via ?tab=…  — preserved from the legacy
@@ -57,7 +58,7 @@ export default function CaseProfile() {
 
     const tabProps = {
         lead, intake, documents, checklist, checklistGrouped, unstructuredDocuments, checklistProgress,
-        communications, agreements, notes, activity,
+        communications, agreements, notes, activity, findings,
     };
     const ActiveTab = TABS.find((t) => t.key === activeTab)?.Comp ?? AssessmentTab;
 

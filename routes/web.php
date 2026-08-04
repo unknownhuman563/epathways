@@ -1173,6 +1173,13 @@ Route::middleware(['auth'])->group(function () {
             Route::post('/cases/{lead}/personal', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'updatePersonal'])
                 ->name('cases.personal');
 
+            // Build 12 phase 3 — case-assist findings. Dismiss carries a
+            // required reason; re-evaluate queues a refresh (never on page load).
+            Route::post('/cases/{lead}/findings/reevaluate', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'reevaluateFindings'])
+                ->name('cases.findings.reevaluate');
+            Route::post('/cases/{lead}/findings/{finding}/dismiss', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'dismissFinding'])
+                ->name('cases.findings.dismiss');
+
             // Build 11.D Phase 2 — Managed agreement endpoints. Each call
             // re-checks is_immigration_case + agreement<->lead ownership so
             // a cross-case URL guess still 404s. The route order matters:

@@ -286,6 +286,9 @@ class LeadDocumentController extends Controller
             }
         }
 
+        // A rejection/approval changes the findings picture — re-evaluate (§8d).
+        \App\Jobs\EvaluateCaseFindings::dispatch($doc->lead_id);
+
         return back()->with('success', "Document marked {$validated['status']}.");
     }
 
@@ -346,6 +349,10 @@ class LeadDocumentController extends Controller
             }
 
             $n = count($request->file('files'));
+
+            // Findings depend on what's been uploaded — re-evaluate off the
+            // request path (§8d). The job no-ops for non-cases.
+            \App\Jobs\EvaluateCaseFindings::dispatch($lead->id);
 
             return back()->with('success', "{$n} ".($n === 1 ? 'file' : 'files').' uploaded.');
         } catch (\Throwable $e) {
@@ -1057,6 +1064,9 @@ class LeadDocumentController extends Controller
             if ($lastDoc) {
                 $this->notifyDocumentSubmitted($lead, $lastDoc);
             }
+
+            // Client upload changes the findings picture — re-evaluate (§8d).
+            \App\Jobs\EvaluateCaseFindings::dispatch($lead->id);
 
             return back()->with('success', 'Document uploaded. Our team will review it shortly.');
         } catch (\Throwable $e) {

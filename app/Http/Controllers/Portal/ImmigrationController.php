@@ -948,6 +948,11 @@ class ImmigrationController extends Controller
             $lead->save();
         }
 
+        // Re-evaluate findings off the request path when the stage moves (§8d).
+        if ($stageMoved) {
+            \App\Jobs\EvaluateCaseFindings::dispatch($lead->id);
+        }
+
         return back();
     }
 

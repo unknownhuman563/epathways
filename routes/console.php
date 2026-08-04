@@ -43,3 +43,12 @@ Schedule::command('immigration:licence-expiry-check')
     ->timezone('Pacific/Auckland')
     ->name('immigration-licence-expiry-check')
     ->withoutOverlapping();
+
+// Nightly case-findings sweep (Build 12 phase 3) so time-based rules (idle
+// cases, unanswered document requests, passport expiry) refresh even on
+// untouched cases. Runs before the working day; per-case work is queued.
+Schedule::command('immigration:evaluate-findings')
+    ->dailyAt('04:30')
+    ->timezone('Pacific/Auckland')
+    ->name('immigration-evaluate-findings')
+    ->withoutOverlapping();

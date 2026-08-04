@@ -76,7 +76,93 @@ class CaseProfileController extends Controller
             'agreements' => $this->loadAgreements($lead),
             'notes' => $this->loadNotes($lead),
             'activity' => $this->loadActivity($lead),
+            // Build 12 phase 3 — case-assist findings. The last STORED result
+            // (never evaluated on page load), grouped for the AI Health tab.
+            'findings' => $this->loadFindings($lead),
         ]);
+    }
+
+    /**
+     * The last stored findings evaluation for the case (Build 12 phase 3).
+     * Open findings only, worst severity first; plus the run's timestamp and
+     * the required "couldn't verify" list. Never triggers an evaluation.
+     *
+     * @return array{items: array, evaluated_at: ?string, couldnt_verify: array}
+     */
+    private function loadFindings(Lead $lead): array
+    {
+        $order = ['blocking' => 0, 'check' => 1, 'info' => 2];
+
+        $items = \App\Models\CaseFinding::query()
+            ->where('lead_id', $lead->id)
+            ->where('status', \App\Models\CaseFinding::STATUS_OPEN)
+            ->get()
+            ->sortBy(fn ($f) => [$order[$f->severity] ?? 9, $f->first_seen_at?->timestamp ?? 0])
+            ->values()
+            ->map(fn (\App\Models\CaseFinding $f) => [
+                'id' => $f->id,
+                'finding_key' => $f->finding_key,
+                'category' => $f->category,
+                'severity' => $f->severity,
+                'title' => $f->title,
+                'detail' => $f->detail,
+                'evidence' => $f->evidence ?? [],
+                'source' => $f->source,
+                'audience' => $f->audience,
+                'first_seen_at' => optional($f->first_seen_at)->toIso8601String(),
+                'last_seen_at' => optional($f->last_seen_at)->toIso8601String(),
+            ]);
+
+        $run = \App\Models\CaseFindingRun::where('lead_id', $lead->id)->first();
+
+        return [
+            'items' => $items,
+            'evaluated_at' => optional($run?->evaluated_at)->toIso8601String(),
+            'couldnt_verify' => $run?->couldnt_verify ?? [],
+        ];
+    }
+
+    /**
+     * Dismiss a finding with a required reason (Build 12 phase 3). Persists —
+     * a dismissed finding stays dismissed even if the rule fires again, so the
+     * dismissal rate per finding_key is how the rules get tuned.
+     */
+    public function dismissFinding(Request $request, Lead $lead, \App\Models\CaseFinding $finding)
+    {
+        $user = auth()->user();
+        abort_unless($user instanceof User, 403);
+        $this->ensureCanViewCases($user);
+        abort_unless($lead->is_immigration_case, 404);
+        abort_unless($finding->lead_id === $lead->id, 404);
+
+        $data = $request->validate([
+            'reason' => 'required|string|max:500',
+        ]);
+
+        $finding->update([
+            'status' => \App\Models\CaseFinding::STATUS_DISMISSED,
+            'dismiss_reason' => $data['reason'],
+            'actioned_by' => $user->id,
+            'actioned_at' => now(),
+        ]);
+
+        return back()->with('success', 'Finding dismissed.');
+    }
+
+    /**
+     * Manually queue a re-evaluation (Build 12 phase 3). The panel still renders
+     * the last stored result; this refreshes it off the request path.
+     */
+    public function reevaluateFindings(Request $request, Lead $lead)
+    {
+        $user = auth()->user();
+        abort_unless($user instanceof User, 403);
+        $this->ensureCanViewCases($user);
+        abort_unless($lead->is_immigration_case, 404);
+
+        \App\Jobs\EvaluateCaseFindings::dispatch($lead->id);
+
+        return back()->with('success', 'Re-checking the case — findings will refresh shortly.');
     }
 
     /** POST /portal/immigration/cases/{lead}/personal — edit the applicant's
