@@ -268,6 +268,21 @@ Flag these rather than guessing:
 3. Ageing thresholds. *(Shipped in `config/immigration.php`; still a starting guess.)*
 4. Whether `immigration_manager` should also record a verdict when no licensed adviser is
    available. Default no — confirm with the LIA of record.
+5. **Step 08 QC-audit applicability — what does "first 5 cases" mean?** (§15.9.) The literal
+   `adviser_case_count_lte: 5` is almost certainly not the intent: it would re-trigger QC audits on
+   any experienced adviser who happened to drop below five active cases. "First 5 cases" reads as a
+   ramp-in QA measure, not a standing rule about caseload size. Three candidate readings:
+   - **(a) First 5 cases per adviser, ever** — `adviser_case_ordinal_lte: 5` (the adviser's 1st–5th
+     case by creation order). A one-time competency ramp for a newly-licensed/newly-onboarded
+     adviser. Never re-triggers.
+   - **(b) First 5 cases in a time window** — e.g. the first 5 after a process/policy change, or
+     within N weeks of go-live. A bedding-in measure for the *process*, not the person.
+   - **(c) A manually-toggled QA mode** — an explicit `qa_audit_enabled` flag (per adviser or
+     department) that a manager turns on/off. Most controllable; relies on someone remembering.
+
+   **Default to ship: (a)** — first 5 cases per adviser by ordinal. It matches "first 5", never
+   re-fires on caseload dips, and needs no manual upkeep. Confirm with the department before wiring,
+   but this is the safe non-blocking default; do **not** ship `adviser_case_count_lte`.
 
 ---
 
@@ -590,6 +605,15 @@ handoff. Custody stays authoritative for "who holds it"; step owners drive where
 Step ownership is **not** the same field as `current_owner_id`, and the case owner **does** move as
 steps advance (by default, via the step owner).
 
+**An automatic custody move must still notify — same as an explicit handoff (Phase 2).** Phase 2
+deliberately made every handoff notify the new owner (in-app + email, carrying a note); a step-driven
+auto-move that lands a case in someone's queue *silently* would quietly undo that, and a queue people
+don't get told about is a queue they stop checking. So when custody moves as a consequence of a step
+advancing, fire the **same `CaseHandedOff` notification** (in-app + email) to the new owner, with the
+**step name as the note** ("Now yours: step 07 · Video, booking and signature"). Reuse the Phase 2
+notification path; do not add a silent write to `current_owner_id`. A move to the *same* owner (the
+common case, since one function often owns consecutive steps) sends nothing.
+
 ### 15.9 (Q11) Template expressiveness — parallelism and applicability
 
 The linear diagram hides two things the template model must carry:
@@ -604,13 +628,20 @@ is simply "no dependency between them", and gates (§15.4) are steps that others
 **Applicability (step 08, and the partner fork).** Step 08 "QC audit of the trail — first 5 cases"
 must not fire on every case forever. Add an `applies_when` predicate to the template:
 ```
-step 08:            applies_when: { type: adviser_case_count_lte, n: 5 }
+step 08:            applies_when: <see open decision §14.5 — DO NOT ship as adviser_case_count_lte>
 partner fork/06a:   applies_when: { type: visa_is_partner }
 ```
 A step whose predicate is false is instantiated as `not_applicable` — it doesn't block, doesn't
 show as pending, and generates no findings. Applicability is a general concept (visa type, adviser
 tenure/case count, case attributes) and also models the **partner-visa fork** (§15.6) cleanly:
 those steps apply only when the visa is a partner category.
+
+> ⚠️ **Step 08's predicate is unresolved — see §14.5.** The obvious literal reading,
+> `adviser_case_count_lte: 5`, is almost certainly *wrong*: "first 5 cases" reads as a temporary
+> QA measure while the process beds in, not a permanent rule about advisers with small caseloads.
+> As `adviser_case_count_lte`, an experienced adviser who drops back under five active cases would
+> start getting QC audits again — nonsense. Do not implement that reading; §14.5 has the candidates
+> and the default to ship.
 
 ### 15.10 (Q7) Ordering, and re-specs required
 
