@@ -71,10 +71,11 @@ const stageChipClass = (stage) =>
  * always lives in exactly one tab — nothing is hidden.
  */
 const CASE_TABS = [
-    { key: 'applications', label: 'Applications', hint: 'Assessment & RFI',  stages: ['For Assessment', 'Request for Information'] },
-    { key: 'advisers',     label: 'Advisers',     hint: 'Endorsed → Invoice', stages: ['Endorsed', 'Agreement Sent', 'Agreement Signed', 'For Agreement & Invoice'] },
+    { key: 'applications', label: 'Applications', hint: 'Assessment',         stages: ['For Assessment'] },
+    { key: 'advisers',     label: 'Advisers',     hint: 'Endorsed → RFI',     stages: ['Endorsed', 'Agreement Sent', 'Agreement Signed', 'For Agreement & Invoice', 'Request for Information'] },
     { key: 'invoice',      label: 'Invoice',      hint: 'Invoice paid',       stages: ['Invoice Paid'] },
-    { key: 'visa',         label: 'Visa',         hint: 'Lodged → outcome',   stages: ['Visa Lodged', 'Approved in Principle', 'Approved Visa', 'Decline Visa'] },
+    { key: 'lodged',       label: 'Lodged',       hint: 'Submitted to INZ',   stages: ['Visa Lodged'] },
+    { key: 'visa',         label: 'Visa',         hint: 'Outcome',            stages: ['Approved in Principle', 'Approved Visa', 'Decline Visa'] },
 ];
 
 // Which tab a stage belongs to. Cases with no stage yet fall into
