@@ -11,6 +11,9 @@
 /.phpunit.cache
 /.vscode
 /.zed
+# Claude Code machine-local settings (permissions etc.) — not shared, and
+# tracking it conflicts on every settings change.
+/.claude/settings.local.json
 /auth.json
 /node_modules
 /public/build
