@@ -1352,6 +1352,41 @@ class ImmigrationController extends Controller
      */
     public function downloadIntakePdf(string $type, int $id)
     {
+        [$data, $base] = $this->intakeVifData($type, $id);
+
+        return \Barryvdh\DomPDF\Facade\Pdf::loadView('pdf.intake', array_merge($data, ['mode' => 'pdf']))
+            ->setPaper('a4')
+            ->download($base.'.pdf');
+    }
+
+    /** Inline HTML preview of the Visa Information Form (for the download modal). */
+    public function previewIntakePdf(string $type, int $id)
+    {
+        [$data] = $this->intakeVifData($type, $id);
+
+        return response(view('pdf.intake', array_merge($data, ['mode' => 'web']))->render());
+    }
+
+    /** Download the Visa Information Form as an editable Word (.doc) file. */
+    public function downloadIntakeWord(string $type, int $id)
+    {
+        [$data, $base] = $this->intakeVifData($type, $id);
+        $html = view('pdf.intake', array_merge($data, ['mode' => 'word']))->render();
+
+        return response($html, 200, [
+            'Content-Type' => 'application/msword; charset=utf-8',
+            'Content-Disposition' => 'attachment; filename="'.$base.'.doc"',
+        ]);
+    }
+
+    /**
+     * Resolve a Work / Student / Visitor intake into the Visa Information Form
+     * view data, shared by the PDF, preview and Word exports.
+     *
+     * @return array{0: array, 1: string} [$viewData, $filenameBase]
+     */
+    private function intakeVifData(string $type, int $id): array
+    {
         $modelMap = [
             'work' => \App\Models\WorkIntake::class,
             'student' => \App\Models\StudentIntake::class,
@@ -1371,11 +1406,9 @@ class ImmigrationController extends Controller
             'generatedAt' => now()->format('d/m/Y'),
         ];
 
-        $filename = ($intake['intake_id'] ?? ($type.'-visa-information-form')).'.pdf';
+        $base = $intake['intake_id'] ?? ($type.'-visa-information-form');
 
-        return \Barryvdh\DomPDF\Facade\Pdf::loadView('pdf.intake', $data)
-            ->setPaper('a4')
-            ->download($filename);
+        return [$data, $base];
     }
 
     /** Documents — Queue (pending / stale / rejected) + Folders per case. */

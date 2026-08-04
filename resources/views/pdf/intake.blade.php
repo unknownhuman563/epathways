@@ -9,7 +9,17 @@
         * { box-sizing: border-box; }
         body { font-family: 'DejaVu Sans', sans-serif; color: #22303f; font-size: 9.5px; line-height: 1.4; margin: 0; }
 
-        /* ── Repeating page header / footer ─────────────────── */
+        /* Web / Word render (no @page margins apply) gets body padding + a
+           static header instead of the PDF's fixed repeating one. */
+        body.web, body.word { padding: 22px 26px; }
+        body.web { background: #eef1f5; }
+
+        .statichead { margin-bottom: 8px; }
+        .statichead .brand { font-size: 13px; font-weight: bold; color: #1F4E79; }
+        .statichead .sub { font-size: 8px; color: #8a97a5; }
+        .statichead .rule { border-bottom: 2px solid #1F4E79; margin-top: 2px; }
+
+        /* ── Repeating page header / footer (PDF only) ──────── */
         .pagehead { position: fixed; top: -50px; left: 0; right: 0; }
         .pagehead .brand { font-size: 12px; font-weight: bold; color: #1F4E79; }
         .pagehead .sub { font-size: 7.5px; color: #8a97a5; }
@@ -46,14 +56,24 @@
         .cbox { font-size: 11px; color: #1F4E79; }
     </style>
 </head>
-<body>
-    {{-- Repeating header + footer on every page --}}
-    <div class="pagehead">
-        <div class="brand">ePathways</div>
-        <div class="sub">Immigration Advisers – New Zealand</div>
-        <div class="rule"></div>
-    </div>
-    <div class="pagefoot"></div>
+@php $mode = $mode ?? 'pdf'; @endphp
+<body class="{{ $mode }}">
+    @if ($mode === 'pdf')
+        {{-- Repeating header + footer on every page (PDF only) --}}
+        <div class="pagehead">
+            <div class="brand">ePathways</div>
+            <div class="sub">Immigration Advisers – New Zealand</div>
+            <div class="rule"></div>
+        </div>
+        <div class="pagefoot"></div>
+    @else
+        {{-- Static header for the in-browser preview / Word export --}}
+        <div class="statichead">
+            <div class="brand">ePathways</div>
+            <div class="sub">Immigration Advisers – New Zealand</div>
+            <div class="rule"></div>
+        </div>
+    @endif
 
     {{-- Title --}}
     <div class="title">Visa Information Form</div>
