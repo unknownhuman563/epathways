@@ -85,7 +85,14 @@ const tabKeyForStage = (stage) => {
     return hit ? hit.key : 'applications';
 };
 
-export default function ImmigrationCases({ cases = [], distribution = [], priorities = {}, stages = [], visaTypes = [] }) {
+export default function ImmigrationCases({ cases = [], distribution = [], priorities = {}, stages = [], visaTypes = [], total: totalCount = null, loaded = null }) {
+    // True queue size vs. how many the server actually loaded. When these
+    // differ, the safety ceiling truncated the list — warn loudly rather than
+    // silently hiding cases (the "For Assessment cases vanished" bug).
+    // (Aliased to totalCount — the component already has a local `total` that
+    // sums the distribution graph.)
+    const trueTotal = totalCount ?? cases.length;
+    const truncated = loaded != null && totalCount != null && loaded < totalCount;
     const [search, setSearch] = useState("");
     const [stageFilter, setStageFilter] = useState(null); // click a bar/legend → filter
     const [sortKey, setSortKey] = useState("updated_at");
@@ -239,9 +246,21 @@ export default function ImmigrationCases({ cases = [], distribution = [], priori
                         </button>
                     )}
                     <div className="text-[11px] font-semibold text-gray-500 ml-auto">
-                        Showing <span className="text-gray-900">{sorted.length}</span> of {cases.length} cases
+                        Showing <span className="text-gray-900">{sorted.length}</span> of {trueTotal} cases
                     </div>
                 </div>
+
+                {truncated && (
+                    <div className="mx-4 sm:mx-5 mb-3 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-[12px] text-amber-800">
+                        <AlertTriangle size={15} className="flex-shrink-0 mt-0.5" />
+                        <span>
+                            <span className="font-semibold">{trueTotal - loaded} case{trueTotal - loaded === 1 ? "" : "s"} not loaded.</span>{" "}
+                            This view is capped and older, less-active cases (often those still in
+                            <span className="font-semibold"> For Assessment</span>) aren't shown here — search can't reach them either.
+                            Ask an admin to enable server-side paging.
+                        </span>
+                    </div>
+                )}
 
                 {/* Table */}
                 <div className="overflow-x-auto overflow-y-visible">

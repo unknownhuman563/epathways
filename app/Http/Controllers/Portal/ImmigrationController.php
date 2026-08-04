@@ -299,6 +299,21 @@ class ImmigrationController extends Controller
                 ->get(['name', 'checklist_items'])
                 ->mapWithKeys(fn ($v) => [$v->name => (is_array($v->checklist_items) ? $v->checklist_items : [])]);
 
+            // The full immigration-case count, for an honest "showing X of Y"
+            // and to detect the (rare) case where we hit the safety ceiling.
+            $total = Lead::immigrationCase()->count();
+
+            // Safety ceiling only — NOT a page size. The old hard `limit(200)`
+            // silently dropped the least-recently-active cases: "For Assessment"
+            // cases sit untouched at the start of the pipeline, so every stage
+            // change on another case pushed them further down and, past 200,
+            // out of the list entirely — with client-side search unable to reach
+            // them. Load the whole queue (the scope already bounds it) so the
+            // board, its counts and its search see every case. If a tenant ever
+            // exceeds this ceiling the frontend warns rather than hiding cases
+            // silently, and that's the trigger to move to server-side paging.
+            $cap = 2000;
+
             $cases = Lead::with([
                 'documents',
                 'faceImage',
@@ -312,7 +327,7 @@ class ImmigrationController extends Controller
                 // Newest staff activity first, falling back to the raw
                 // timestamp for rows stamped before the column existed.
                 ->orderByRaw('COALESCE(last_activity_at, updated_at) DESC')
-                ->limit(200)
+                ->limit($cap)
                 ->get()
                 ->map(function ($l) use ($visaChecklists) {
                     // All checklist keys for this case's visa vs. the keys it
@@ -430,6 +445,10 @@ class ImmigrationController extends Controller
                 'priorities' => $priorities,
                 'stages' => Lead::IMMIGRATION_STAGES,
                 'visaTypes' => $visaTypes,
+                // True queue size vs. how many we loaded — the UI shows an honest
+                // count and warns if the safety ceiling ever truncated the list.
+                'total' => $total,
+                'loaded' => $cases->count(),
             ]);
         } catch (\Throwable $e) {
             Log::error('Immigration cases list failed', ['error' => $e->getMessage()]);
@@ -440,6 +459,8 @@ class ImmigrationController extends Controller
                 'priorities' => ['urgent' => 0, 'high' => 0, 'medium' => 0, 'low' => 0, 'done' => 0, 'none' => 0],
                 'stages' => Lead::IMMIGRATION_STAGES,
                 'visaTypes' => [],
+                'total' => 0,
+                'loaded' => 0,
             ]);
         }
     }
