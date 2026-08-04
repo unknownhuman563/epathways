@@ -1406,7 +1406,13 @@ class ImmigrationController extends Controller
             'generatedAt' => now()->format('d/m/Y'),
         ];
 
-        $base = $intake['intake_id'] ?? ($type.'-visa-information-form');
+        // Filename = client's name + " VIF" (e.g. "Mary Katherine Paspe VIF").
+        // Falls back to the reference id, then a generic label.
+        $name = trim(preg_replace('/[^A-Za-z0-9 \-]/', '', $vif['applicant'] ?? ''));
+        if ($name === '') {
+            $name = $intake['intake_id'] ?? 'Applicant';
+        }
+        $base = $name.' VIF';
 
         return [$data, $base];
     }
