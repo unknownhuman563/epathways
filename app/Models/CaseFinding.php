@@ -23,7 +23,8 @@ class CaseFinding extends Model
     protected $fillable = [
         'lead_id', 'finding_key', 'category', 'severity', 'title', 'detail',
         'evidence', 'source', 'audience', 'status',
-        'actioned_by', 'actioned_at', 'dismiss_reason', 'first_seen_at', 'last_seen_at',
+        'actioned_by', 'actioned_at', 'dismiss_reason', 'dismissed_fingerprint',
+        'first_seen_at', 'last_seen_at',
     ];
 
     protected $casts = [
@@ -41,5 +42,25 @@ class CaseFinding extends Model
     public function actioner(): BelongsTo
     {
         return $this->belongsTo(User::class, 'actioned_by');
+    }
+
+    /**
+     * Fingerprint of the STABLE, situation-identifying evidence — what a
+     * dismissal is scoped to. Volatile "_at" timestamps are excluded so a
+     * time-based finding (no-contact) doesn't churn on every evaluation; the
+     * identifiers that mean "a different situation" (document_id, passport
+     * expiry, request_id, the engagement-doc set) are what change the hash and
+     * re-open a dismissal.
+     *
+     * @param  array<string, mixed>  $evidence
+     */
+    public static function fingerprintFor(?array $evidence): string
+    {
+        $stable = collect($evidence ?? [])
+            ->reject(fn ($v, $k) => str_ends_with((string) $k, '_at'))
+            ->sortKeys()
+            ->all();
+
+        return hash('sha256', json_encode($stable));
     }
 }

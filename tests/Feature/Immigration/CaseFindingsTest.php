@@ -115,6 +115,48 @@ class CaseFindingsTest extends TestCase
         $this->assertSame('Applicant is exempt', $fresh->dismiss_reason);
     }
 
+    public function test_dismissal_reopens_when_the_situation_changes(): void
+    {
+        $this->studentVisa();
+        $case = $this->caseLead();
+        $staff = User::factory()->create(['role' => 'immigration']);
+
+        // A rejected police certificate (doc A).
+        $docA = LeadDocument::create([
+            'lead_id' => $case->id, 'checklist_key' => 'police_cert',
+            'original_name' => 'a.pdf', 'file_path' => 'p/a.pdf', 'mime' => 'application/pdf',
+            'size' => 1, 'status' => LeadDocument::STATUS_REJECTED, 'source' => LeadDocument::SOURCE_UPLOAD,
+        ]);
+        $docA->forceFill(['created_at' => now()->subMinutes(5)])->saveQuietly();
+
+        $this->evaluate($case);
+        $finding = CaseFinding::where('finding_key', 'doc_rejected:police_cert')->firstOrFail();
+
+        // Dismiss it (scoped to doc A's situation).
+        $this->actingAs($staff)
+            ->from("/portal/immigration/cases/{$case->id}/profile")
+            ->post("/portal/immigration/cases/{$case->id}/findings/{$finding->id}/dismiss", ['reason' => 'Client emailed a copy directly'])
+            ->assertRedirect();
+
+        // Same rejected doc → dismissal holds.
+        $this->evaluate($case);
+        $this->assertSame('dismissed', $finding->fresh()->status);
+
+        // A DIFFERENT document is uploaded and rejected — a new situation.
+        LeadDocument::create([
+            'lead_id' => $case->id, 'checklist_key' => 'police_cert',
+            'original_name' => 'b.pdf', 'file_path' => 'p/b.pdf', 'mime' => 'application/pdf',
+            'size' => 1, 'status' => LeadDocument::STATUS_REJECTED, 'source' => LeadDocument::SOURCE_UPLOAD,
+        ]);
+
+        $this->evaluate($case);
+
+        // The dismissal was scoped to the old doc — the new rejection re-opens.
+        $reopened = $finding->fresh();
+        $this->assertSame('open', $reopened->status);
+        $this->assertNull($reopened->dismiss_reason);
+    }
+
     public function test_run_records_couldnt_verify_for_unbuilt_capabilities(): void
     {
         $this->studentVisa();

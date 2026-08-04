@@ -34,6 +34,46 @@ use Illuminate\Support\Facades\DB;
  */
 class CaseFindingService
 {
+    /**
+     * Run every rule and merge results — no persistence. Shared by evaluate()
+     * (which then reconciles the stored list) and preview() (which doesn't).
+     *
+     * @return array{findings: array<string, array<string, mixed>>, couldntVerify: array<int, string>}
+     */
+    private function runRules(Lead $lead): array
+    {
+        $emitted = [];
+        $couldntVerify = [];
+
+        foreach ($this->ruleClasses() as $class) {
+            $result = app($class)->evaluate($lead);
+            foreach ($result->findings as $f) {
+                $emitted[$f['finding_key']] = $f;
+            }
+            foreach ($result->couldntVerify as $note) {
+                $couldntVerify[] = $note;
+            }
+        }
+
+        return ['findings' => $emitted, 'couldntVerify' => $couldntVerify];
+    }
+
+    /**
+     * Non-persisting evaluation — what the rules would surface right now,
+     * without touching case_findings. For the count-check preview command.
+     *
+     * @return array{open: int, couldnt_verify: int}
+     */
+    public function preview(Lead $lead): array
+    {
+        $result = $this->runRules($lead);
+
+        return [
+            'open' => count($result['findings']),
+            'couldnt_verify' => count($result['couldntVerify']),
+        ];
+    }
+
     /** @return array<int, class-string> one small class per rule (§8a). */
     private function ruleClasses(): array
     {
@@ -56,18 +96,7 @@ class CaseFindingService
      */
     public function evaluate(Lead $lead): array
     {
-        $emitted = [];
-        $couldntVerify = [];
-
-        foreach ($this->ruleClasses() as $class) {
-            $result = app($class)->evaluate($lead);
-            foreach ($result->findings as $f) {
-                $emitted[$f['finding_key']] = $f;
-            }
-            foreach ($result->couldntVerify as $note) {
-                $couldntVerify[] = $note;
-            }
-        }
+        ['findings' => $emitted, 'couldntVerify' => $couldntVerify] = $this->runRules($lead);
 
         DB::transaction(function () use ($lead, $emitted, $couldntVerify) {
             $now = now();
@@ -77,12 +106,21 @@ class CaseFindingService
                     ->where('finding_key', $key)
                     ->first();
 
-                // A dismissed finding stays dismissed even if it recurs — respect
-                // the human decision; only refresh when it was last seen.
+                // A dismissed finding is scoped to the situation it dismissed.
+                // If the stable evidence still fingerprints the same, the
+                // dismissal holds (just refresh last_seen_at). If it differs —
+                // a different rejected doc, a new passport expiry — the
+                // situation changed, so re-open it rather than staying quiet.
                 if ($existing && $existing->status === CaseFinding::STATUS_DISMISSED) {
-                    $existing->forceFill(['last_seen_at' => $now])->save();
+                    $sameSituation = $existing->dismissed_fingerprint === null
+                        || $existing->dismissed_fingerprint === CaseFinding::fingerprintFor($f['evidence'] ?? []);
 
-                    continue;
+                    if ($sameSituation) {
+                        $existing->forceFill(['last_seen_at' => $now])->save();
+
+                        continue;
+                    }
+                    // fall through to updateOrCreate below, which re-opens it.
                 }
 
                 CaseFinding::updateOrCreate(
@@ -95,10 +133,13 @@ class CaseFindingService
                         'evidence' => $f['evidence'] ?? [],
                         'source' => 'rule',
                         'audience' => $f['audience'] ?? 'staff',
-                        // Reopen an auto-resolved finding that has recurred.
+                        // Reopen an auto-resolved (or situation-changed
+                        // dismissed) finding that has recurred — a clean open.
                         'status' => CaseFinding::STATUS_OPEN,
                         'actioned_by' => null,
                         'actioned_at' => null,
+                        'dismiss_reason' => null,
+                        'dismissed_fingerprint' => null,
                         'last_seen_at' => $now,
                         'first_seen_at' => $existing->first_seen_at ?? $now,
                     ],

@@ -142,6 +142,9 @@ class CaseProfileController extends Controller
         $finding->update([
             'status' => \App\Models\CaseFinding::STATUS_DISMISSED,
             'dismiss_reason' => $data['reason'],
+            // Scope the dismissal to the current situation — a later evaluation
+            // with different stable evidence re-opens it.
+            'dismissed_fingerprint' => \App\Models\CaseFinding::fingerprintFor($finding->evidence),
             'actioned_by' => $user->id,
             'actioned_at' => now(),
         ]);
