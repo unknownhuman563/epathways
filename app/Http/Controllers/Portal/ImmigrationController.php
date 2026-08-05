@@ -1095,6 +1095,13 @@ class ImmigrationController extends Controller
                 }
                 $lead->fill($patch)->save();
 
+                // Carry over any files the applicant uploaded during the visa
+                // assessment (resident intakes store them on the intake, not as
+                // LeadDocuments) so they show in the case's Documents tab.
+                if ($intake instanceof ResidentIntake) {
+                    \App\Services\Immigration\IntakeDocumentMigrator::fromResidentIntake($intake, $lead);
+                }
+
                 // Mark the intake "Engaged" so it drops out of the
                 // triage queue. Assessment moves to "completed" so the
                 // assessment lifecycle reflects the handoff.
@@ -1144,6 +1151,10 @@ class ImmigrationController extends Controller
                     'stage_updated_by' => auth()->id(),
                 ])->save();
             }
+
+            // Carry the applicant's assessment uploads into the case documents.
+            \App\Services\Immigration\IntakeDocumentMigrator::fromResidentIntake($intake, $lead);
+
             $intake->update(['status' => 'Engaged']);
 
             return redirect("/portal/immigration/leads/{$lead->id}?tab=documents")
