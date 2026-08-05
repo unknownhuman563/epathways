@@ -10,79 +10,113 @@ use App\Services\Immigration\IntakeDocumentMigrator;
 use Illuminate\Console\Command;
 
 /**
- * Diagnose / recover a case whose visa-assessment uploads never made it into
- * the case profile. Resident intakes store uploaded files on the intake
- * (`document_files`); convert-to-case used not to copy them into LeadDocument
- * rows, so the Documents tab showed nothing.
+ * Diagnose / recover a case whose applicant uploads never made it into the
+ * case profile's Documents tab. Two legacy upload paths never created
+ * LeadDocument rows: resident-intake `document_files`, and the Lead's
+ * `education_notes.uploaded_files` (free-assessment / enrolment uploads).
  *
- *   php artisan case:docs Daniels Leano          # report only
- *   php artisan case:docs Daniels Leano --fix    # migrate intake uploads → case
+ *   php artisan case:docs Daniels          # report only
+ *   php artisan case:docs Daniels --fix    # migrate uploads into the case docs
  */
 class DiagnoseCaseDocuments extends Command
 {
-    protected $signature = 'case:docs {query* : Name or email to search for}
-        {--fix : Migrate the intake\'s uploaded files into the case\'s documents}';
+    protected $signature = 'case:docs {query?* : Name or email to search for (omit with --all)}
+        {--all : Scan every immigration case (including archived) instead of a name}
+        {--fix : Migrate the applicant\'s uploaded files into the case\'s documents}';
 
-    protected $description = 'Recover visa-assessment uploads missing from an immigration case profile';
+    protected $description = 'Recover applicant uploads missing from an immigration case profile';
 
     public function handle(): int
     {
-        $q = trim(implode(' ', (array) $this->argument('query')));
-        if ($q === '') {
-            $this->error('Provide a name or email, e.g. php artisan case:docs Daniels Leano');
+        // Bulk mode — every case, including archived. Otherwise, name/email search.
+        if ($this->option('all')) {
+            $cases = Lead::where('is_immigration_case', true)->orderBy('id')->get();
+            $this->info("Scanning {$cases->count()} immigration case(s)...");
+        } else {
+            $q = trim(implode(' ', (array) $this->argument('query')));
+            if ($q === '') {
+                $this->error('Provide a name/email, or use --all. e.g. php artisan case:docs Daniels');
 
-            return self::FAILURE;
+                return self::FAILURE;
+            }
+
+            // Match each whitespace-separated term against name/email so a full
+            // "First Last" query still resolves (each field holds only one part).
+            $terms = preg_split('/\s+/', $q);
+            $leads = Lead::query()
+                ->where(function ($outer) use ($terms) {
+                    foreach ($terms as $t) {
+                        $outer->orWhere('first_name', 'like', "%{$t}%")
+                            ->orWhere('last_name', 'like', "%{$t}%")
+                            ->orWhere('email', 'like', "%{$t}%");
+                    }
+                })
+                ->get();
+
+            if ($leads->isEmpty()) {
+                $this->warn("No leads matched \"{$q}\".");
+
+                return self::SUCCESS;
+            }
+
+            $cases = $leads->where('is_immigration_case', true);
+            if ($cases->isEmpty()) {
+                $this->warn('None of the matched leads is an immigration case.');
+            }
         }
 
-        $leads = Lead::query()
-            ->where('first_name', 'like', "%{$q}%")
-            ->orWhere('last_name', 'like', "%{$q}%")
-            ->orWhere('email', 'like', "%{$q}%")
-            ->get();
+        $pending = false;
+        $casesWithFiles = 0;
+        $totalMigrated = 0;
 
-        if ($leads->isEmpty()) {
-            $this->warn("No leads matched \"{$q}\".");
-
-            return self::SUCCESS;
-        }
-
-        $cases = $leads->where('is_immigration_case', true);
-        if ($cases->isEmpty()) {
-            $this->warn('None of the matched leads is an immigration case.');
-        }
-
-        $anyToFix = false;
+        $bulk = $this->option('all');
 
         foreach ($cases as $lead) {
+            $intake = $this->resolveResidentIntake($lead);
+            $intakeFiles = $intake ? IntakeDocumentMigrator::residentFileCount($intake) : 0;
+            $leadFiles = IntakeDocumentMigrator::leadUploadCount($lead);
+            $recoverable = $intakeFiles + $leadFiles;
+
+            // In bulk mode, only surface cases that actually have missing files.
+            if ($bulk && $recoverable === 0) {
+                continue;
+            }
+
             $onCase = LeadDocument::where('lead_id', $lead->id)->count();
             $this->line('');
             $this->info("Case #{$lead->id} {$lead->first_name} {$lead->last_name} ({$lead->email}) — {$onCase} document(s) on the case.");
+            if ($intake) {
+                $this->line("  Resident intake #{$intake->id} ({$intake->intake_id}) holds {$intakeFiles} uploaded file(s).");
+            }
+            if ($leadFiles > 0) {
+                $this->line("  Lead record holds {$leadFiles} enrolment/assessment upload(s) not yet in the case docs.");
+            }
 
-            $intake = $this->resolveResidentIntake($lead);
-            if (! $intake) {
-                $this->line('  No resident intake with uploads is linked to this case.');
+            if ($recoverable === 0) {
+                $this->line('  No recoverable uploads found on the intake or the lead record.');
                 continue;
             }
 
-            $files = IntakeDocumentMigrator::fileCount($intake);
-            $this->line("  Linked resident intake #{$intake->id} ({$intake->intake_id}) holds {$files} uploaded file(s).");
-
-            if ($files === 0) {
-                continue;
-            }
+            $casesWithFiles++;
 
             if ($this->option('fix')) {
-                $created = IntakeDocumentMigrator::fromResidentIntake($intake, $lead);
-                $this->info("  ✔ Migrated {$created} file(s) into case #{$lead->id}. Refresh the Documents tab.");
+                $created = ($intake ? IntakeDocumentMigrator::fromResidentIntake($intake, $lead) : 0)
+                    + IntakeDocumentMigrator::fromLeadUploads($lead);
+                $totalMigrated += $created;
+                $this->info("  ✔ Migrated {$created} file(s) into case #{$lead->id}.");
             } else {
-                $anyToFix = true;
-                $this->warn("  ⚠ These {$files} file(s) are NOT yet in the case Documents tab.");
+                $pending = true;
+                $this->warn("  ⚠ {$recoverable} file(s) can be recovered into the case Documents tab.");
             }
         }
 
-        if ($anyToFix) {
-            $this->line('');
-            $this->line('Re-run with --fix to copy the intake uploads into the case documents.');
+        $this->line('');
+        if ($this->option('fix')) {
+            $this->info("Done. {$casesWithFiles} case(s) had recoverable uploads; migrated {$totalMigrated} file(s) total. Refresh the Documents tab(s).");
+        } elseif ($pending) {
+            $this->line("{$casesWithFiles} case(s) have recoverable uploads. Re-run with --fix to copy them into the case documents.");
+        } else {
+            $this->info('No cases with recoverable uploads found.');
         }
 
         return self::SUCCESS;

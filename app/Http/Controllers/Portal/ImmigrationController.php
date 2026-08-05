@@ -1095,12 +1095,15 @@ class ImmigrationController extends Controller
                 }
                 $lead->fill($patch)->save();
 
-                // Carry over any files the applicant uploaded during the visa
-                // assessment (resident intakes store them on the intake, not as
-                // LeadDocuments) so they show in the case's Documents tab.
+                // Carry over any files the applicant uploaded before this
+                // conversion — resident intakes store them on the intake, and
+                // free-assessment / enrolment uploads live on the lead record —
+                // neither is a LeadDocument, so they'd otherwise never show in
+                // the case's Documents tab.
                 if ($intake instanceof ResidentIntake) {
                     \App\Services\Immigration\IntakeDocumentMigrator::fromResidentIntake($intake, $lead);
                 }
+                \App\Services\Immigration\IntakeDocumentMigrator::fromLeadUploads($lead);
 
                 // Mark the intake "Engaged" so it drops out of the
                 // triage queue. Assessment moves to "completed" so the
