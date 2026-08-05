@@ -166,18 +166,24 @@ export default function TrackingPage({
 
                     {lead && (
                         <div className="space-y-4">
-                            <IdentityHeader
-                                lead={lead}
-                                visa={visa}
-                                timeline={timeline}
-                                avatar={avatar}
-                                code={lead.tracking_code}
-                                faceKey={
-                                    (visa?.checklist || []).find((it) => (it.key || '').toLowerCase().includes('face'))?.key
-                                    || avatar?.checklist_key
-                                    || 'face_image'
-                                }
-                            />
+                            {/* Identity banner shows on the public tracker and on
+                                the lead portal's My Profile — but NOT on the
+                                Dashboard / Requirements sidebar pages, where it
+                                would just repeat on every view. */}
+                            {(!sidebarTabs || activeTab === 'profile') && (
+                                <IdentityHeader
+                                    lead={lead}
+                                    visa={visa}
+                                    timeline={timeline}
+                                    avatar={avatar}
+                                    code={lead.tracking_code}
+                                    faceKey={
+                                        (visa?.checklist || []).find((it) => (it.key || '').toLowerCase().includes('face'))?.key
+                                        || avatar?.checklist_key
+                                        || 'face_image'
+                                    }
+                                />
+                            )}
 
                             {/* Programs suggested by the adviser — only
                                 renders when staff has shortlisted programs
@@ -206,15 +212,28 @@ export default function TrackingPage({
                                 )}
 
                                 {activeTab === 'overview' && (
-                                    <OverviewTab
-                                        visa={visa}
-                                        documents={documents}
-                                        sharedDocuments={shared_documents}
-                                        agreements={agreements}
-                                        timeline={timeline}
-                                        onSeeFull={() => setJourneyOpen(true)}
-                                        onGoToVisa={() => setActiveTab('visa')}
-                                    />
+                                    sidebarTabs ? (
+                                        <ClientDashboard
+                                            lead={lead}
+                                            visa={visa}
+                                            documents={documents}
+                                            sharedDocuments={shared_documents}
+                                            agreements={agreements}
+                                            timeline={timeline}
+                                            onSeeFull={() => setJourneyOpen(true)}
+                                            onGoToVisa={() => setActiveTab('visa')}
+                                        />
+                                    ) : (
+                                        <OverviewTab
+                                            visa={visa}
+                                            documents={documents}
+                                            sharedDocuments={shared_documents}
+                                            agreements={agreements}
+                                            timeline={timeline}
+                                            onSeeFull={() => setJourneyOpen(true)}
+                                            onGoToVisa={() => setActiveTab('visa')}
+                                        />
+                                    )
                                 )}
                                 {activeTab === 'visa' && (
                                     <DocumentsHubTab
@@ -1057,6 +1076,185 @@ function attentionCount({ documents = [], sharedDocuments = [], visa = null }) {
     const unsigned = sharedDocuments.filter((d) => d.signable && ! d.signed).length;
     const rejected = documents.filter((d) => d.status === 'Rejected').length;
     return outstanding + unsigned + rejected;
+}
+
+function AlertCard({ icon: Icon, title, text, action, actionLabel }) {
+    return (
+        <div className="bg-white border border-gray-100 rounded-2xl p-4 flex items-start gap-3 shadow-sm">
+            <div className="w-9 h-9 rounded-xl bg-gray-900 flex items-center justify-center text-white shrink-0">
+                <Icon size={17} />
+            </div>
+            <div className="flex-1 min-w-0">
+                <p className="text-sm font-bold text-gray-900">{title}</p>
+                <p className="text-xs text-gray-500 mt-0.5 leading-relaxed">{text}</p>
+            </div>
+            {action && (
+                <button onClick={action} className="px-3 py-1.5 rounded-lg text-white text-xs font-bold bg-gray-900 hover:bg-black transition-colors shrink-0">
+                    {actionLabel}
+                </button>
+            )}
+        </div>
+    );
+}
+
+function ProgressRing({ pct }) {
+    const r = 54;
+    const c = 2 * Math.PI * r;
+    const off = c - (Math.max(0, Math.min(100, pct)) / 100) * c;
+    return (
+        <div className="relative w-[150px] h-[150px] mx-auto">
+            <svg width="150" height="150" viewBox="0 0 150 150">
+                <circle cx="75" cy="75" r={r} fill="none" stroke="#eef2f5" strokeWidth="14" />
+                <circle
+                    cx="75" cy="75" r={r} fill="none" stroke="url(#ringGrad)" strokeWidth="14"
+                    strokeLinecap="round" strokeDasharray={c} strokeDashoffset={off}
+                    transform="rotate(-90 75 75)"
+                />
+                <defs>
+                    <linearGradient id="ringGrad" x1="0" y1="0" x2="1" y2="1">
+                        <stop offset="0" stopColor="#4b5563" />
+                        <stop offset="1" stopColor="#111827" />
+                    </linearGradient>
+                </defs>
+            </svg>
+            <div className="absolute inset-0 flex flex-col items-center justify-center">
+                <span className="text-3xl font-bold text-gray-900 tabular-nums">{pct}%</span>
+                <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-gray-400">complete</span>
+            </div>
+        </div>
+    );
+}
+
+/**
+ * Colourful client dashboard — the lead portal's "Dashboard" (sidebar mode).
+ * Welcome hero + at-a-glance KPI chips + document-progress ring + the
+ * "needs your attention" list. Built for the client (ePathways green/teal),
+ * distinct from the staff-facing OverviewTab.
+ */
+function ClientDashboard({ lead, visa, documents = [], sharedDocuments = [], onGoToVisa }) {
+    const firstName = (lead?.first_name || 'there').split(' ')[0];
+    const checklist = visa?.checklist || [];
+
+    const byKey = new Map();
+    for (const d of documents) {
+        if (! d.checklist_key) continue;
+        const p = byKey.get(d.checklist_key);
+        if (! p || new Date(d.created_at) > new Date(p.created_at)) byKey.set(d.checklist_key, d);
+    }
+    const have = checklist.filter((it) => {
+        const doc = byKey.get(it.key);
+        return doc && doc.status !== 'Rejected';
+    }).length;
+    const total = checklist.length;
+    const pct = total ? Math.round((have / total) * 100) : 0;
+    const approved = documents.filter((d) => d.status === 'Approved').length;
+    const inReview = documents.filter((d) => d.status === 'UnderReview' || d.status === 'Submitted').length;
+    const rejected = documents.filter((d) => d.status === 'Rejected').length;
+    const stillNeeded = checklist.filter((it) => {
+        if (it.required === false) return false;
+        const doc = byKey.get(it.key);
+        return ! doc || doc.status === 'Rejected';
+    }).length;
+
+    const kpis = [
+        { label: 'Complete',     value: `${pct}%`,   Icon: Award },
+        { label: 'Approved',     value: approved,    Icon: CheckCircle2 },
+        { label: 'In review',    value: inReview,    Icon: Clock },
+        { label: 'Still needed', value: stillNeeded, Icon: Upload },
+    ];
+
+    const alerts = [];
+    sharedDocuments.filter((d) => d.signable && ! d.signed).forEach((d) => alerts.push({
+        icon: PenTool,
+        title: `Sign your ${d.title}`,
+        text: 'Your adviser has prepared it below — review and add your signature.',
+    }));
+    if (stillNeeded > 0) alerts.push({
+        icon: Upload,
+        title: `${stillNeeded} document${stillNeeded === 1 ? '' : 's'} still needed`,
+        text: 'Upload the outstanding items so your adviser can proceed.',
+        action: onGoToVisa, actionLabel: 'Upload',
+    });
+    if (rejected > 0) alerts.push({
+        icon: AlertCircle,
+        title: `${rejected} document${rejected === 1 ? '' : 's'} to re-upload`,
+        text: 'One or more uploads were not accepted. Please replace them.',
+        action: onGoToVisa, actionLabel: 'Review',
+    });
+
+    return (
+        <div className="space-y-5">
+            {/* Welcome hero */}
+            <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 p-6 sm:p-8 text-white shadow-lg shadow-gray-900/20">
+                <div className="absolute -right-12 -top-12 w-52 h-52 rounded-full bg-white/[0.06]" />
+                <div className="absolute right-24 top-20 w-24 h-24 rounded-full bg-white/[0.06]" />
+                <div className="relative">
+                    <p className="text-gray-400 text-[11px] font-bold uppercase tracking-[0.22em]">Welcome back</p>
+                    <h2 className="text-2xl sm:text-3xl font-bold mt-1.5">Hi {firstName} 👋</h2>
+                    <p className="text-gray-300 text-sm mt-2 max-w-md leading-relaxed">
+                        Here's where your {lead?.inz_visa_type || 'application'} stands.{' '}
+                        {stillNeeded > 0
+                            ? `You have ${stillNeeded} document${stillNeeded === 1 ? '' : 's'} left to upload.`
+                            : "You're all caught up — nice work!"}
+                    </p>
+                    <div className="mt-5 flex items-center gap-3 flex-wrap">
+                        <button
+                            onClick={onGoToVisa}
+                            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white text-gray-900 text-sm font-bold hover:bg-gray-100 transition-colors shadow-sm"
+                        >
+                            <Upload size={15} /> Upload documents
+                        </button>
+                        {lead?.tracking_code && (
+                            <span className="px-3 py-2 rounded-xl bg-white/10 text-white text-xs font-mono tracking-wide">
+                                {lead.tracking_code}
+                            </span>
+                        )}
+                    </div>
+                </div>
+            </div>
+
+            {/* KPI chips */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+                {kpis.map((k) => (
+                    <div key={k.label} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 sm:p-5">
+                        <div className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-gray-100 text-gray-700">
+                            <k.Icon size={18} />
+                        </div>
+                        <div className="text-3xl font-bold text-gray-900 tabular-nums mt-3">{k.value}</div>
+                        <div className="text-[11px] font-bold text-gray-400 uppercase tracking-wide mt-0.5">{k.label}</div>
+                    </div>
+                ))}
+            </div>
+
+            {/* Progress + needs attention */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
+                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 sm:p-6">
+                    <h3 className="text-sm font-bold text-gray-800 mb-3">Documents progress</h3>
+                    <ProgressRing pct={pct} />
+                    <p className="text-xs text-gray-500 text-center mt-3">
+                        <span className="font-semibold text-gray-700">{have}</span> of {total} uploaded
+                    </p>
+                </div>
+
+                <div className="lg:col-span-2 space-y-3">
+                    <h3 className="text-sm font-bold text-gray-800">Needs your attention</h3>
+                    {alerts.length === 0 ? (
+                        <div className="bg-white border border-gray-100 rounded-2xl p-5 flex items-center gap-3 shadow-sm">
+                            <div className="w-10 h-10 rounded-xl bg-gray-900 flex items-center justify-center text-white">
+                                <CheckCircle2 size={20} />
+                            </div>
+                            <div>
+                                <p className="text-sm font-bold text-gray-900">You're all caught up</p>
+                                <p className="text-xs text-gray-500 mt-0.5">Nothing needs your attention right now.</p>
+                            </div>
+                        </div>
+                    ) : (
+                        alerts.map((a, i) => <AlertCard key={i} {...a} />)
+                    )}
+                </div>
+            </div>
+        </div>
+    );
 }
 
 /**
