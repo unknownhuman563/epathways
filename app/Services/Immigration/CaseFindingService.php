@@ -9,6 +9,7 @@ use App\Services\Immigration\Findings\Rules\ChecklistItemMissingRule;
 use App\Services\Immigration\Findings\Rules\DocumentRejectedRule;
 use App\Services\Immigration\Findings\Rules\DocumentRequestUnansweredRule;
 use App\Services\Immigration\Findings\Rules\EngagementWithoutInvoiceRule;
+use App\Services\Immigration\Findings\Rules\FridayUpdateOverdueRule;
 use App\Services\Immigration\Findings\Rules\InvoiceOverdueRule;
 use App\Services\Immigration\Findings\Rules\NoClientContactRule;
 use App\Services\Immigration\Findings\Rules\OverdueStepRule;
@@ -90,6 +91,8 @@ class CaseFindingService
             // Process-chain SLA breaches (Build 12 phase 4.5). No-ops for cases
             // not yet on the chain.
             OverdueStepRule::class,
+            // The weekly Friday-update cadence (step 14).
+            FridayUpdateOverdueRule::class,
         ];
     }
 

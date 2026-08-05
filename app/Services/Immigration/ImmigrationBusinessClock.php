@@ -89,4 +89,22 @@ class ImmigrationBusinessClock
     {
         return $dueAt !== null && Carbon::parse($dueAt)->isPast();
     }
+
+    /**
+     * Recurring-cadence check (step 14, "Friday updates"). True when the cadence
+     * has lapsed — nothing logged in the trailing window (a week for a weekly
+     * cadence), or nothing ever logged. Evaluated in NZ so "a week" is a NZ week.
+     *
+     * @param  array<string, mixed>  $sla  {type: recurring, every: week|day}
+     */
+    public function recurringOverdue(?CarbonInterface $lastLoggedAt, array $sla): bool
+    {
+        $days = ($sla['every'] ?? 'week') === 'day' ? 1 : 7;
+        if (! $lastLoggedAt) {
+            return true;
+        }
+
+        return Carbon::parse($lastLoggedAt)->setTimezone($this->tz)
+            ->lt(Carbon::now($this->tz)->subDays($days));
+    }
 }

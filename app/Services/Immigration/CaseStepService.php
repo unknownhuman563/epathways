@@ -202,9 +202,17 @@ class CaseStepService
 
     /**
      * Resolve a template owner_role (a function) to a user. Minimal resolver:
-     * a per-department config map role→user id, with `adviser` falling back to
-     * the sole licensed adviser when unset. Null = unassigned (a human assigns
-     * via the existing handoff). A per-case override table can layer on later.
+     * a per-department config map role→user id (the explicit default), with
+     * `adviser` falling back to the sole licensed adviser ONLY when exactly one
+     * exists. Resolution is deterministic — never an arbitrary pick:
+     *
+     *   1. `config('immigration.step_owners.<role>')` if set → that user.
+     *   2. role = adviser, exactly ONE current-licensed user → that user.
+     *   3. otherwise → null (unassigned), and for the adviser role with MORE
+     *      than one current licence, a warning is logged so the ambiguity is
+     *      caught at assignment rather than silently resolved. Set a default
+     *      adviser in config to auto-assign when several are licensed (e.g. a
+     *      full-licence LIA and a provisional adviser both pass the gate).
      */
     private function resolveOwner(string $role): ?int
     {
@@ -219,7 +227,19 @@ class CaseStepService
                 ->get(['id', 'iaa_licence_number', 'iaa_licence_expiry'])
                 ->filter->holdsCurrentLicence();
 
-            return $advisers->count() === 1 ? (int) $advisers->first()->id : null;
+            if ($advisers->count() === 1) {
+                return (int) $advisers->first()->id;
+            }
+
+            if ($advisers->count() > 1) {
+                \Illuminate\Support\Facades\Log::warning(
+                    'Adviser step owner is ambiguous — several users hold a current licence and no default is configured. '
+                    .'Set config(immigration.step_owners.adviser). Leaving the step unassigned rather than picking arbitrarily.',
+                    ['licensed_user_ids' => $advisers->pluck('id')->all()],
+                );
+            }
+
+            return null; // 0 or >1 → unassigned, never arbitrary
         }
 
         return null;

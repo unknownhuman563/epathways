@@ -132,4 +132,51 @@ class ProcessChainTest extends TestCase
         $this->assertDatabaseHas('case_findings', ['finding_key' => 'overdue_step:12:2', 'status' => 'open']);
         $this->assertSame('actioned', CaseFinding::where('finding_key', 'overdue_step:12:1')->firstOrFail()->status);
     }
+
+    // ── A: weekly Friday-update cadence ──────────────────────────────────────
+
+    public function test_friday_update_cadence_fires_after_lodgement_and_resolves_when_logged(): void
+    {
+        $lead = $this->caseLead();
+        $this->svc->instantiate($lead);
+
+        // Pre-lodgement: the cadence rule stays silent.
+        app(CaseFindingService::class)->evaluate($lead);
+        $this->assertDatabaseMissing('case_findings', ['lead_id' => $lead->id, 'finding_key' => 'friday_update_overdue', 'status' => 'open']);
+
+        // Lodged, and no Friday update logged yet → the cadence fires.
+        CaseStepState::where('lead_id', $lead->id)->where('step_key', '13')
+            ->update(['status' => 'done', 'completed_at' => now()->subDays(10)]);
+        app(CaseFindingService::class)->evaluate($lead);
+        $this->assertDatabaseHas('case_findings', ['lead_id' => $lead->id, 'finding_key' => 'friday_update_overdue', 'status' => 'open']);
+
+        // Log a Friday update (a completed step-14 attempt) → it resolves.
+        CaseStepState::where('lead_id', $lead->id)->where('step_key', '14')
+            ->update(['status' => 'done', 'completed_at' => now()]);
+        app(CaseFindingService::class)->evaluate($lead);
+        $this->assertSame('actioned', CaseFinding::where('lead_id', $lead->id)->where('finding_key', 'friday_update_overdue')->firstOrFail()->status);
+    }
+
+    // ── B: adviser owner resolution is explicit, never arbitrary ────────────
+
+    public function test_adviser_resolver_is_null_when_ambiguous_and_default_when_configured(): void
+    {
+        \Illuminate\Support\Facades\Notification::fake();
+
+        // Two current-licensed users — a full LIA and a provisional adviser.
+        $hendry = User::factory()->create(['iaa_licence_number' => 'IAA-FULL', 'iaa_licence_type' => 'Full', 'iaa_licence_expiry' => now()->addYear()]);
+        User::factory()->create(['iaa_licence_number' => 'IAA-PROV', 'iaa_licence_type' => 'Provisional', 'iaa_licence_expiry' => now()->addYear()]);
+
+        $lead = $this->caseLead();
+        $this->svc->instantiate($lead);
+
+        // Ambiguous + no default → unassigned, NOT an arbitrary pick.
+        $state = $this->svc->reactivate($lead, '06', 'manual');
+        $this->assertNull($state->owner_user_id);
+
+        // Configured default → deterministic.
+        config(['immigration.step_owners.adviser' => $hendry->id]);
+        $state2 = $this->svc->reactivate($lead, '06', 'manual');
+        $this->assertSame($hendry->id, $state2->owner_user_id);
+    }
 }
