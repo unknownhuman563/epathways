@@ -1089,7 +1089,7 @@ function AlertCard({ icon: Icon, title, text, action, actionLabel }) {
                 <p className="text-xs text-gray-500 mt-0.5 leading-relaxed">{text}</p>
             </div>
             {action && (
-                <button onClick={action} className="px-3 py-1.5 rounded-lg text-white text-xs font-bold bg-gray-900 hover:bg-black transition-colors shrink-0">
+                <button onClick={action} className="px-3 py-1.5 rounded-lg text-white text-xs font-bold bg-[#436235] hover:bg-[#37522c] transition-colors shrink-0">
                     {actionLabel}
                 </button>
             )}
@@ -1112,8 +1112,8 @@ function ProgressRing({ pct }) {
                 />
                 <defs>
                     <linearGradient id="ringGrad" x1="0" y1="0" x2="1" y2="1">
-                        <stop offset="0" stopColor="#4b5563" />
-                        <stop offset="1" stopColor="#111827" />
+                        <stop offset="0" stopColor="#00A693" />
+                        <stop offset="1" stopColor="#436235" />
                     </linearGradient>
                 </defs>
             </svg>
@@ -1157,10 +1157,10 @@ function ClientDashboard({ lead, visa, documents = [], sharedDocuments = [], pro
     }).length;
 
     const kpis = [
-        { label: 'Complete',     value: `${pct}%`,   Icon: Award },
-        { label: 'Approved',     value: approved,    Icon: CheckCircle2 },
-        { label: 'In review',    value: inReview,    Icon: Clock },
-        { label: 'Still needed', value: stillNeeded, Icon: Upload },
+        { label: 'Complete',     value: `${pct}%`,   Icon: Award,        chip: 'bg-[#436235]/10 text-[#436235]' },
+        { label: 'Approved',     value: approved,    Icon: CheckCircle2, chip: 'bg-[#436235]/10 text-[#436235]' },
+        { label: 'In review',    value: inReview,    Icon: Clock,        chip: 'bg-gray-100 text-gray-700' },
+        { label: 'Still needed', value: stillNeeded, Icon: Upload,       chip: 'bg-gray-100 text-gray-700' },
     ];
 
     const alerts = [];
@@ -1217,7 +1217,7 @@ function ClientDashboard({ lead, visa, documents = [], sharedDocuments = [], pro
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
                 {kpis.map((k) => (
                     <div key={k.label} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 sm:p-5">
-                        <div className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-gray-100 text-gray-700">
+                        <div className={`inline-flex items-center justify-center w-10 h-10 rounded-xl ${k.chip}`}>
                             <k.Icon size={18} />
                         </div>
                         <div className="text-3xl font-bold text-gray-900 tabular-nums mt-3">{k.value}</div>
