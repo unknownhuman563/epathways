@@ -185,12 +185,11 @@ export default function TrackingPage({
                                 />
                             )}
 
-                            {/* Programs suggested by the adviser — only
-                                renders when staff has shortlisted programs
-                                on the internal Proposal & Agreements page.
-                                Sits above the tab strip so the lead sees it
-                                straight after their journey snapshot. */}
-                            {proposal && proposal.programs?.length > 0 && (
+                            {/* Programs suggested by the adviser. On the public
+                                tracker it sits above the tabs; in the lead-portal
+                                dashboard it's rendered inside ClientDashboard, so
+                                only show it here when NOT in sidebar mode. */}
+                            {!sidebarTabs && proposal && proposal.programs?.length > 0 && (
                                 <ProposalShortlist proposal={proposal} code={lead.tracking_code} />
                             )}
 
@@ -220,6 +219,7 @@ export default function TrackingPage({
                                             sharedDocuments={shared_documents}
                                             agreements={agreements}
                                             timeline={timeline}
+                                            proposal={proposal}
                                             onSeeFull={() => setJourneyOpen(true)}
                                             onGoToVisa={() => setActiveTab('visa')}
                                         />
@@ -1131,7 +1131,7 @@ function ProgressRing({ pct }) {
  * "needs your attention" list. Built for the client (ePathways green/teal),
  * distinct from the staff-facing OverviewTab.
  */
-function ClientDashboard({ lead, visa, documents = [], sharedDocuments = [], onGoToVisa }) {
+function ClientDashboard({ lead, visa, documents = [], sharedDocuments = [], proposal = null, onGoToVisa }) {
     const firstName = (lead?.first_name || 'there').split(' ')[0];
     const checklist = visa?.checklist || [];
 
@@ -1253,6 +1253,11 @@ function ClientDashboard({ lead, visa, documents = [], sharedDocuments = [], onG
                     )}
                 </div>
             </div>
+
+            {/* Adviser's shortlisted programs, if any. */}
+            {proposal && proposal.programs?.length > 0 && (
+                <ProposalShortlist proposal={proposal} code={lead?.tracking_code} />
+            )}
         </div>
     );
 }
