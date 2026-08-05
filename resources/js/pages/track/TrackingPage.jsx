@@ -1185,7 +1185,10 @@ function ClientDashboard({ lead, visa, documents = [], sharedDocuments = [], pro
     return (
         <div className="space-y-5">
             {/* Welcome hero */}
-            <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 p-6 sm:p-8 text-white shadow-lg shadow-gray-900/20">
+            <div
+                className="relative overflow-hidden rounded-3xl p-6 sm:p-8 text-white shadow-lg shadow-gray-900/20"
+                style={{ background: 'linear-gradient(135deg, #111827 0%, #1f2937 50%, #0b0f19 100%)' }}
+            >
                 <div className="absolute -right-12 -top-12 w-52 h-52 rounded-full bg-white/[0.06]" />
                 <div className="absolute right-24 top-20 w-24 h-24 rounded-full bg-white/[0.06]" />
                 <div className="relative">
