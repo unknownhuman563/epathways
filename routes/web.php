@@ -1333,6 +1333,8 @@ Route::middleware(['auth'])->group(function () {
             // New sidebar sections — most are placeholders while the full
             // workflow ships incrementally.
             Route::get('/tracker', [App\Http\Controllers\LeadPortalController::class, 'tracker'])->name('tracker');
+            // Requirements = the tracker's checklist view (sidebar item).
+            Route::get('/requirements', [App\Http\Controllers\LeadPortalController::class, 'requirements'])->name('requirements');
             Route::get('/journey', [App\Http\Controllers\LeadPortalController::class, 'journey'])->name('journey');
             Route::get('/checklist', [App\Http\Controllers\LeadPortalController::class, 'checklist'])->name('checklist');
             Route::get('/visa-forms', [App\Http\Controllers\LeadPortalController::class, 'visaForms'])->name('visa-forms');

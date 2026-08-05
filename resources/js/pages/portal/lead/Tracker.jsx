@@ -1,11 +1,27 @@
+import { router } from '@inertiajs/react';
 import TrackingPage from '@/pages/track/TrackingPage';
 
+// Each tracker tab is a sidebar page in the lead portal.
+const TAB_ROUTES = {
+    overview: '/portal/lead/dashboard',
+    visa:     '/portal/lead/requirements',
+    profile:  '/portal/lead/profile',
+};
+
 /**
- * Authenticated "Application Tracker" for the lead portal. Reuses the exact
- * public tracker UI (TrackingPage) in `embedded` mode — no Navbar/Footer/hero,
- * since LeadLayout already provides the chrome — fed by the same payload the
- * public /track/{code} page uses, resolved from the signed-in lead's record.
+ * Authenticated lead-portal view of the tracker. Reuses the public tracker UI
+ * (TrackingPage) in `embedded` + `sidebarTabs` mode: the Overview / Requirements
+ * / My Profile tabs are driven by the LeadLayout sidebar (one route each) rather
+ * than an in-page tab strip. `initialTab` comes from the controller per route.
  */
-export default function Tracker(props) {
-    return <TrackingPage {...props} embedded />;
+export default function Tracker({ initialTab = 'overview', ...props }) {
+    return (
+        <TrackingPage
+            {...props}
+            embedded
+            sidebarTabs
+            initialTab={initialTab}
+            onTabNavigate={(tab) => router.visit(TAB_ROUTES[tab] || TAB_ROUTES.overview)}
+        />
+    );
 }

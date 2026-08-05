@@ -46,6 +46,13 @@ export default function TrackingPage({
     // the full-height wrapper and the code-lookup hero. The lead is always
     // resolved in this mode, so those pieces would never render anyway.
     embedded = false,
+    // Lead-portal "sidebar mode": the three tabs live in the LeadLayout
+    // sidebar (Dashboard / Requirements / My Profile) instead of an in-page
+    // tab strip. The active tab is driven by the route (`initialTab`), the
+    // in-page strip is hidden, and tab jumps navigate via `onTabNavigate`.
+    sidebarTabs = false,
+    initialTab = 'overview',
+    onTabNavigate = null,
 }) {
     const [input, setInput] = useState(code || '');
     const flash = usePage().props.flash || {};
@@ -54,7 +61,12 @@ export default function TrackingPage({
     // ?tab=, ?section=, ?status= on first render and writes back via
     // history.replaceState as the user clicks around. Direct links to a
     // specific tab/filter combination work without an extra round-trip.
-    const [activeTab, setActiveTab] = useUrlParam('tab', 'overview');
+    const [urlTab, setUrlTab] = useUrlParam('tab', initialTab);
+    // In sidebar mode the tab is controlled by the route prop (so navigating
+    // between the sidebar pages switches it without a remount); otherwise it's
+    // the client-side URL-synced state.
+    const activeTab = sidebarTabs ? initialTab : urlTab;
+    const setActiveTab = sidebarTabs ? (tab) => onTabNavigate?.(tab) : setUrlTab;
     const [sectionFilter, setSectionFilter] = useUrlParam('section', 'all');
     const [statusFilter, setStatusFilter] = useUrlParam('status', 'all');
 
@@ -180,14 +192,18 @@ export default function TrackingPage({
                                 and Documents tabs nudge the lead toward
                                 the one with action items. */}
                             <div>
-                                <TabStrip
-                                    active={activeTab}
-                                    onChange={setActiveTab}
-                                    counts={{
-                                        attention: attentionCount({ documents, sharedDocuments: shared_documents, visa }),
-                                        visa: (visa?.checklist?.length || 0),
-                                    }}
-                                />
+                                {/* In sidebar mode the tabs live in the portal
+                                    sidebar, so the in-page strip is hidden. */}
+                                {!sidebarTabs && (
+                                    <TabStrip
+                                        active={activeTab}
+                                        onChange={setActiveTab}
+                                        counts={{
+                                            attention: attentionCount({ documents, sharedDocuments: shared_documents, visa }),
+                                            visa: (visa?.checklist?.length || 0),
+                                        }}
+                                    />
+                                )}
 
                                 {activeTab === 'overview' && (
                                     <OverviewTab
@@ -217,7 +233,7 @@ export default function TrackingPage({
                                     />
                                 )}
                                 {activeTab === 'profile' && (
-                                    <div className="bg-white rounded-b-2xl border border-t-0 border-gray-100 shadow-sm p-4 sm:p-6">
+                                    <div className={`bg-white border border-gray-100 shadow-sm p-4 sm:p-6 ${sidebarTabs ? 'rounded-2xl' : 'rounded-b-2xl border-t-0'}`}>
                                         <InformationPanel code={lead.tracking_code} info={info} />
                                     </div>
                                 )}
