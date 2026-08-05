@@ -3,7 +3,7 @@ import { router } from "@inertiajs/react";
 import { toast } from "sonner";
 import {
     Workflow, Check, Clock, Lock, ShieldCheck, RotateCcw, AlertTriangle,
-    CircleDashed, MinusCircle, Play, DollarSign,
+    CircleDashed, MinusCircle, Play, DollarSign, Gavel, Stamp,
 } from "lucide-react";
 
 const fmtDate = (iso) =>
@@ -64,8 +64,165 @@ export default function ProcessTab({ lead, process = { started: false, steps: []
                 </ol>
             </div>
 
+            <VerdictPanel
+                leadId={lead.id}
+                steps={process.steps}
+                verdict={process.verdict}
+                hasLodgementSignoff={process.has_lodgement_signoff}
+                canAttest={process.can_attest}
+                post={post}
+            />
+
             <PaymentPanel leadId={lead.id} payment={process.payment} post={post} />
             {partnerVisible && <PartnerPanel leadId={lead.id} partner={process.partner} post={post} />}
+        </div>
+    );
+}
+
+// verdict value → chip styling + label
+const VERDICT_META = {
+    good_to_go: { chip: "bg-emerald-50 text-emerald-700 border-emerald-200", label: "Good to go" },
+    needs_something: { chip: "bg-amber-50 text-amber-700 border-amber-200", label: "Needs something" },
+    cannot_endorse: { chip: "bg-rose-50 text-rose-700 border-rose-200", label: "Cannot endorse" },
+};
+
+/**
+ * Build 12 phase 5 — the adviser's verdict and lodgement sign-off. Both are
+ * advice-bearing and licence-gated: the controls only appear to a holder of a
+ * current licence (can_attest); everyone else sees the current state read-only.
+ * The lodgement sign-off is what completes step 12 — not the upload.
+ */
+function VerdictPanel({ leadId, steps, verdict, hasLodgementSignoff, canAttest, post }) {
+    const [choice, setChoice] = useState("good_to_go");
+    const [reason, setReason] = useState("");
+    const [stepKey, setStepKey] = useState("");
+    const [signoffReason, setSignoffReason] = useState("");
+
+    const reasonRequired = choice !== "good_to_go";
+    const needsStep = choice === "needs_something";
+
+    const submitVerdict = () => {
+        if (reasonRequired && ! reason.trim()) return toast.error("A reason is required for this verdict");
+        if (needsStep && ! stepKey) return toast.error("Choose which step to send back to");
+        post(
+            `/portal/immigration/cases/${leadId}/verdict`,
+            { verdict: choice, reason: reason || null, step_key: needsStep ? stepKey : null },
+            "Verdict recorded",
+        );
+        setReason("");
+    };
+
+    const submitSignoff = () =>
+        post(`/portal/immigration/cases/${leadId}/lodgement-signoff`, { reason: signoffReason || null }, "Lodgement signed off");
+
+    const cur = verdict ? VERDICT_META[verdict.verdict] : null;
+    const reopenable = steps.filter((s) => s.status !== "not_applicable");
+
+    return (
+        <div className="rounded-2xl border border-indigo-100 bg-white shadow-sm overflow-hidden">
+            <div className="px-5 py-3 border-b border-indigo-50 flex items-center justify-between gap-2">
+                <h3 className="text-[12px] font-bold uppercase tracking-[0.12em] text-indigo-600 inline-flex items-center gap-2">
+                    <Gavel size={14} /> Adviser verdict
+                </h3>
+                {cur && <span className={`text-[10px] font-bold uppercase px-1.5 py-0.5 rounded border ${cur.chip}`}>{cur.label}</span>}
+            </div>
+
+            <div className="p-5 space-y-4">
+                {verdict ? (
+                    <div className="text-[11px] text-gray-500">
+                        {cur?.label} — {verdict.adviser || "adviser"}{verdict.at && <> · {fmtDate(verdict.at)}</>}
+                        {verdict.reason && <p className="mt-1 text-gray-600">{verdict.reason}</p>}
+                    </div>
+                ) : (
+                    <p className="text-[11px] text-gray-400">No verdict recorded yet.</p>
+                )}
+
+                {canAttest ? (
+                    <div className="space-y-2 border-t border-gray-50 pt-4">
+                        <div className="flex gap-1.5 flex-wrap">
+                            {Object.entries(VERDICT_META).map(([val, m]) => (
+                                <button
+                                    key={val}
+                                    type="button"
+                                    onClick={() => setChoice(val)}
+                                    className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold border ${
+                                        choice === val ? m.chip : "border-gray-200 text-gray-500 hover:border-gray-300"
+                                    }`}
+                                >
+                                    {m.label}
+                                </button>
+                            ))}
+                        </div>
+
+                        {needsStep && (
+                            <div>
+                                <span className="block text-[11px] font-semibold text-gray-600 mb-1">Send back to step</span>
+                                <select
+                                    value={stepKey}
+                                    onChange={(e) => setStepKey(e.target.value)}
+                                    className="w-full px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs focus:outline-none focus:bg-white focus:border-gray-300"
+                                >
+                                    <option value="">Choose a step…</option>
+                                    {reopenable.map((s) => (
+                                        <option key={s.step_key} value={s.step_key}>{s.step_key} · {s.label}</option>
+                                    ))}
+                                </select>
+                            </div>
+                        )}
+
+                        {reasonRequired && (
+                            <div>
+                                <span className="block text-[11px] font-semibold text-gray-600 mb-1">Reason <span className="text-rose-500">*</span></span>
+                                <textarea
+                                    value={reason}
+                                    onChange={(e) => setReason(e.target.value)}
+                                    rows={2}
+                                    placeholder={choice === "cannot_endorse" ? "Why the case can't be endorsed…" : "What's still needed…"}
+                                    className="w-full px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs focus:outline-none focus:bg-white focus:border-gray-300"
+                                />
+                            </div>
+                        )}
+
+                        <button type="button" onClick={submitVerdict}
+                            className="px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-[11px] font-semibold hover:bg-indigo-700 inline-flex items-center gap-1">
+                            <Gavel size={12} /> Record verdict
+                        </button>
+                    </div>
+                ) : (
+                    <p className="text-[11px] text-gray-400 inline-flex items-start gap-1.5 border-t border-gray-50 pt-4">
+                        <Lock size={12} className="mt-0.5 flex-shrink-0" />
+                        Only a licensed adviser may record a verdict or sign off lodgement.
+                    </p>
+                )}
+
+                {/* Lodgement sign-off — the gate on step 12. */}
+                <div className="border-t border-gray-50 pt-4">
+                    <div className="flex items-center justify-between gap-2 mb-1">
+                        <span className="text-[11px] font-bold uppercase tracking-wide text-gray-500 inline-flex items-center gap-1.5">
+                            <Stamp size={13} /> Lodgement sign-off (step 12)
+                        </span>
+                        {hasLodgementSignoff && <span className="text-[10px] font-bold uppercase text-emerald-700 inline-flex items-center gap-1"><Check size={11} /> Signed off</span>}
+                    </div>
+                    <p className="text-[11px] text-gray-500 flex items-start gap-1.5">
+                        <AlertTriangle size={12} className="text-amber-500 mt-0.5 flex-shrink-0" />
+                        Uploading the lodged application doesn't complete step 12. The adviser's sign-off does.
+                    </p>
+                    {canAttest && ! hasLodgementSignoff && (
+                        <div className="mt-2 space-y-2">
+                            <input
+                                value={signoffReason}
+                                onChange={(e) => setSignoffReason(e.target.value)}
+                                placeholder="Note (optional)"
+                                className="w-full px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs focus:outline-none focus:bg-white focus:border-gray-300"
+                            />
+                            <button type="button" onClick={submitSignoff}
+                                className="px-3 py-1.5 rounded-lg bg-gray-900 text-white text-[11px] font-semibold hover:bg-black inline-flex items-center gap-1">
+                                <Stamp size={12} /> Sign off lodgement
+                            </button>
+                        </div>
+                    )}
+                </div>
+            </div>
         </div>
     );
 }

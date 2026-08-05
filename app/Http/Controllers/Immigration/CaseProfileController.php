@@ -235,7 +235,61 @@ class CaseProfileController extends Controller
                 'choice_document_id' => $partner->choice_document_id,
                 'resolved' => $partner->isResolved(),
             ] : null,
+            // Build 12 phase 5 — verdict + lodgement sign-off state, and whether
+            // the current user may attest (holds a current licence).
+            'verdict' => ($v = \App\Models\CaseAttestation::currentVerdict($lead->id)) ? [
+                'verdict' => $v->verdict,
+                'reason' => $v->reason,
+                'adviser' => optional($v->adviser)->name,
+                'at' => optional($v->created_at)->toIso8601String(),
+            ] : null,
+            'has_lodgement_signoff' => \App\Models\CaseAttestation::hasLodgementSignoff($lead->id),
+            'can_attest' => (bool) optional(auth()->user())->holdsCurrentLicence(),
         ];
+    }
+
+    /**
+     * Record a case verdict (Build 12 phase 5). Licence-gated through
+     * AdviceBearingPolicy — an unlicensed or lapsed user is refused before any
+     * row is written. The verdict is the write; the case's movement (advance /
+     * bounce-back / hold) is a consequence, handled by VerdictService.
+     */
+    public function recordVerdict(Request $request, Lead $lead)
+    {
+        $user = $this->guardCase($lead);
+        \Illuminate\Support\Facades\Gate::forUser($user)->authorize('approve-advice-bearing');
+
+        $data = $request->validate([
+            'verdict' => ['required', \Illuminate\Validation\Rule::in(\App\Models\CaseAttestation::VERDICTS)],
+            'reason' => 'nullable|string|max:2000',
+            'step_key' => 'nullable|string|max:20', // for needs_something
+        ]);
+
+        app(\App\Services\Immigration\VerdictService::class)
+            ->recordVerdict($lead, $data['verdict'], $data['reason'] ?? null, $user, $data['step_key'] ?? null);
+
+        \App\Jobs\EvaluateCaseFindings::dispatch($lead->id);
+
+        return back()->with('success', 'Verdict recorded.');
+    }
+
+    /**
+     * Record the adviser's lodgement sign-off (Build 12 phase 5). Licence-gated.
+     * This — not the mechanical upload — is what completes step 12.
+     */
+    public function recordLodgementSignoff(Request $request, Lead $lead)
+    {
+        $user = $this->guardCase($lead);
+        \Illuminate\Support\Facades\Gate::forUser($user)->authorize('approve-advice-bearing');
+
+        $data = $request->validate(['reason' => 'nullable|string|max:2000']);
+
+        app(\App\Services\Immigration\VerdictService::class)
+            ->recordLodgementSignoff($lead, $user, $data['reason'] ?? null);
+
+        \App\Jobs\EvaluateCaseFindings::dispatch($lead->id);
+
+        return back()->with('success', 'Lodgement signed off.');
     }
 
     /** Start (instantiate) the step chain for a case. */

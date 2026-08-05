@@ -1194,6 +1194,14 @@ Route::middleware(['auth'])->group(function () {
             Route::post('/cases/{lead}/partner-recommendation', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'partnerRecommendation'])
                 ->name('cases.partner-recommendation');
 
+            // Build 12 phase 5 — advice-bearing attestations. Licence-gated in
+            // the controller via AdviceBearingPolicy; the lodgement sign-off is
+            // what completes step 12, not the upload.
+            Route::post('/cases/{lead}/verdict', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'recordVerdict'])
+                ->name('cases.verdict');
+            Route::post('/cases/{lead}/lodgement-signoff', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'recordLodgementSignoff'])
+                ->name('cases.lodgement-signoff');
+
             // Build 11.D Phase 2 — Managed agreement endpoints. Each call
             // re-checks is_immigration_case + agreement<->lead ownership so
             // a cross-case URL guess still 404s. The route order matters:

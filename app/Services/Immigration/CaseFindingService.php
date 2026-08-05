@@ -5,6 +5,7 @@ namespace App\Services\Immigration;
 use App\Models\CaseFinding;
 use App\Models\CaseFindingRun;
 use App\Models\Lead;
+use App\Services\Immigration\Findings\Rules\CannotEndorseRule;
 use App\Services\Immigration\Findings\Rules\ChecklistItemMissingRule;
 use App\Services\Immigration\Findings\Rules\DocumentRejectedRule;
 use App\Services\Immigration\Findings\Rules\DocumentRequestUnansweredRule;
@@ -93,6 +94,8 @@ class CaseFindingService
             OverdueStepRule::class,
             // The weekly Friday-update cadence (step 14).
             FridayUpdateOverdueRule::class,
+            // A cannot_endorse verdict holds the case (Build 12 phase 5).
+            CannotEndorseRule::class,
         ];
     }
 

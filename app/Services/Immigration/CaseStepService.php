@@ -93,6 +93,28 @@ class CaseStepService
         ]);
 
         $this->maybeMoveCustody($lead, $ownerId, $t);
+
+        // Reaching the lodgement gate re-surfaces every dismissed finding
+        // (Build 12 phase 5): a finding dismissed as a convenience earlier must
+        // not ride through to submission unseen. The adviser re-reviews them
+        // before signing off. This is the fix for the phase-3 static-evidence
+        // dismissal limitation.
+        if ($t->step_key === '12') {
+            $this->reopenDismissedFindings($lead);
+        }
+    }
+
+    private function reopenDismissedFindings(Lead $lead): void
+    {
+        \App\Models\CaseFinding::where('lead_id', $lead->id)
+            ->where('status', \App\Models\CaseFinding::STATUS_DISMISSED)
+            ->update([
+                'status' => \App\Models\CaseFinding::STATUS_OPEN,
+                'dismiss_reason' => null,
+                'dismissed_fingerprint' => null,
+                'actioned_by' => null,
+                'actioned_at' => null,
+            ]);
     }
 
     /**
@@ -106,6 +128,14 @@ class CaseStepService
     {
         $state = $this->currentStates($lead)->get($stepKey);
         abort_unless($state, 404, "Step {$stepKey} not found on this case.");
+
+        // Step 12 (lodgement) completes only from an adviser lodgement sign-off,
+        // never the mechanical upload (§15.2 / phase 5). VerdictService creates
+        // the attestation first, then calls complete(); a direct "complete"
+        // without it is refused.
+        if ($stepKey === '12' && ! \App\Models\CaseAttestation::hasLodgementSignoff($lead->id)) {
+            throw new \App\Exceptions\LodgementSignoffRequiredException;
+        }
 
         $state->update([
             'status' => CaseStepState::STATUS_DONE,

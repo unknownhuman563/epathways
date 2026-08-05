@@ -114,8 +114,14 @@ class ProcessChainTest extends TestCase
         app(CaseFindingService::class)->evaluate($lead);
         $this->assertDatabaseHas('case_findings', ['finding_key' => 'overdue_step:12:1', 'status' => 'open']);
 
-        // Complete attempt 1 → its overdue finding auto-resolves.
-        $this->svc->complete($lead, '12', $this->user);
+        // Complete attempt 1 → its overdue finding auto-resolves. Step 12 only
+        // completes via the adviser's lodgement sign-off (Build 12 phase 5), not
+        // a mechanical complete(), so drive it through that path.
+        $adviser = User::factory()->create([
+            'role' => 'immigration_adviser',
+            'iaa_licence_number' => 'IAA-1', 'iaa_licence_expiry' => now()->addYear(),
+        ]);
+        app(\App\Services\Immigration\VerdictService::class)->recordLodgementSignoff($lead, $adviser, null);
         app(CaseFindingService::class)->evaluate($lead);
         $this->assertSame('actioned', CaseFinding::where('finding_key', 'overdue_step:12:1')->firstOrFail()->status);
 
