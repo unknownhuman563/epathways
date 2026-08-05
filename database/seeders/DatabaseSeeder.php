@@ -22,5 +22,7 @@ class DatabaseSeeder extends Seeder
         $this->call(PropertySeeder::class);
         $this->call(DefaultMessageTemplatesSeeder::class);
         $this->call(AiSettingsSeeder::class);
+        // Build 12 phase 4.5 — the 16-step immigration process (idempotent).
+        $this->call(CaseStepTemplateSeeder::class);
     }
 }

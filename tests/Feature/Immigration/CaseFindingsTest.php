@@ -164,10 +164,12 @@ class CaseFindingsTest extends TestCase
 
         $summary = $this->evaluate($case);
 
-        // The threads + invoice-payment rules can't run yet and must say so.
+        // The threads rule still can't run (phase 6). The invoice-payment rule
+        // GRADUATED off "couldn't verify" in phase 4.5 once case_payments landed,
+        // so payment must no longer appear here.
         $joined = implode(' ', $summary['couldnt_verify']);
         $this->assertStringContainsStringIgnoringCase('threads', $joined);
-        $this->assertStringContainsStringIgnoringCase('payment', $joined);
+        $this->assertStringNotContainsStringIgnoringCase('payment', $joined);
     }
 
     public function test_dismiss_endpoint_requires_a_reason(): void

@@ -79,6 +79,8 @@ class CaseProfileController extends Controller
             // Build 12 phase 3 — case-assist findings. The last STORED result
             // (never evaluated on page load), grouped for the AI Health tab.
             'findings' => $this->loadFindings($lead),
+            // Build 12 phase 4.5 — the process chain (steps, owners, gates, SLA).
+            'process' => $this->loadProcess($lead),
         ]);
     }
 
@@ -166,6 +168,193 @@ class CaseProfileController extends Controller
         \App\Jobs\EvaluateCaseFindings::dispatch($lead->id);
 
         return back()->with('success', 'Re-checking the case — findings will refresh shortly.');
+    }
+
+    // ── Process chain (Build 12 phase 4.5) ──────────────────────────────────
+
+    /**
+     * The case's step chain for the Process panel — each template step decorated
+     * with its current (highest-attempt) state, owner, due/overdue, plus the
+     * payment and partner-fork records. `started=false` when no chain exists yet.
+     *
+     * @return array<string, mixed>
+     */
+    private function loadProcess(Lead $lead): array
+    {
+        $states = app(\App\Services\Immigration\CaseStepService::class)->currentStates($lead);
+
+        if ($states->isEmpty()) {
+            return ['started' => false, 'steps' => [], 'payment' => null, 'partner' => null];
+        }
+
+        $owners = User::whereIn('id', $states->pluck('owner_user_id')->filter()->unique())
+            ->get(['id', 'name', 'avatar_path'])->keyBy('id');
+
+        $steps = \App\Models\CaseStepTemplate::chain()->map(function ($t) use ($states, $owners) {
+            $st = $states->get($t->step_key);
+            $owner = $st && $st->owner_user_id ? $owners->get($st->owner_user_id) : null;
+
+            return [
+                'step_key' => $t->step_key,
+                'label' => $t->label,
+                'owner_role' => $t->owner_role,
+                'stage' => $t->stage,
+                'gate' => $t->gate,
+                'is_qc' => $t->is_qc,
+                'channels_required' => $t->channels_required,
+                'depends_on' => $t->depends_on ?? [],
+                'status' => $st->status ?? 'pending',
+                'attempt' => $st->attempt ?? 1,
+                'due_at' => optional($st->due_at)->toIso8601String(),
+                'overdue' => $st && $st->status === \App\Models\CaseStepState::STATUS_ACTIVE
+                    && $st->due_at && $st->due_at->isPast(),
+                'completed_at' => optional($st->completed_at)->toIso8601String(),
+                'qc_result' => $st->qc_result,
+                'reactivation_trigger' => $st->reactivation_trigger,
+                'owner' => $owner ? ['id' => $owner->id, 'name' => $owner->name, 'avatar_url' => $owner->avatar_url] : null,
+            ];
+        })->values();
+
+        $payment = \App\Models\CasePayment::where('lead_id', $lead->id)->latest('id')->first();
+        $partner = \App\Models\CasePartnerRecommendation::where('lead_id', $lead->id)->latest('id')->first();
+
+        return [
+            'started' => true,
+            'steps' => $steps,
+            'payment' => $payment ? [
+                'amount_expected' => (float) $payment->amount_expected,
+                'amount_received' => (float) $payment->amount_received,
+                'status' => $payment->status,
+                'method' => $payment->method,
+                'received_at' => optional($payment->received_at)->toDateString(),
+            ] : null,
+            'partner' => $partner ? [
+                'recommended_main_applicant' => $partner->recommended_main_applicant,
+                'recommendation_reason' => $partner->recommendation_reason,
+                'client_choice' => $partner->client_choice,
+                'choice_document_id' => $partner->choice_document_id,
+                'resolved' => $partner->isResolved(),
+            ] : null,
+        ];
+    }
+
+    /** Start (instantiate) the step chain for a case. */
+    public function startProcess(Request $request, Lead $lead)
+    {
+        $this->guardCase($lead);
+        app(\App\Services\Immigration\CaseStepService::class)->instantiate($lead);
+
+        return back()->with('success', 'Process tracking started.');
+    }
+
+    /**
+     * Complete a step. QC steps carry a pass/fail result and 3-channel steps the
+     * channels done — both procedural, so NO licence gate (QC is not advice).
+     */
+    public function completeStep(Request $request, Lead $lead, string $step)
+    {
+        $user = $this->guardCase($lead);
+
+        $data = $request->validate([
+            'qc_result' => ['nullable', \Illuminate\Validation\Rule::in(['pass', 'fail'])],
+            'channels' => 'nullable|array',
+        ]);
+
+        app(\App\Services\Immigration\CaseStepService::class)->complete($lead, $step, $user, $data);
+        \App\Jobs\EvaluateCaseFindings::dispatch($lead->id);
+
+        return back()->with('success', "Step {$step} completed.");
+    }
+
+    /** Re-enter a completed step as a new attempt (RFI, rejected doc, manual). */
+    public function reactivateStep(Request $request, Lead $lead, string $step)
+    {
+        $this->guardCase($lead);
+
+        $data = $request->validate([
+            'trigger' => ['required', \Illuminate\Validation\Rule::in(['rfi', 'doc_rejected', 'verdict_needs_something', 'manual'])],
+            'reason' => 'nullable|string|max:500',
+        ]);
+
+        app(\App\Services\Immigration\CaseStepService::class)->reactivate($lead, $step, $data['trigger'], $data['reason'] ?? null);
+        \App\Jobs\EvaluateCaseFindings::dispatch($lead->id);
+
+        return back()->with('success', "Step {$step} re-opened ({$data['trigger']}).");
+    }
+
+    /** Record a payment against the case (§15.5) — status derived from amounts. */
+    public function recordPayment(Request $request, Lead $lead)
+    {
+        $user = $this->guardCase($lead);
+
+        $data = $request->validate([
+            'amount_expected' => 'required|numeric|min:0',
+            'amount_received' => 'required|numeric|min:0',
+            'method' => 'nullable|string|max:40',
+            'received_at' => 'nullable|date',
+        ]);
+
+        \App\Models\CasePayment::create([
+            'lead_id' => $lead->id,
+            'amount_expected' => $data['amount_expected'],
+            'amount_received' => $data['amount_received'],
+            'status' => \App\Models\CasePayment::deriveStatus((float) $data['amount_expected'], (float) $data['amount_received']),
+            'method' => $data['method'] ?? null,
+            'received_at' => $data['received_at'] ?? now(),
+            'recorded_by' => $user->id,
+        ]);
+
+        \App\Jobs\EvaluateCaseFindings::dispatch($lead->id);
+
+        return back()->with('success', 'Payment recorded.');
+    }
+
+    /**
+     * Partner-visa fork (§15.6). Recommending the main applicant is ADVICE —
+     * licence-gated. Recording the client's written choice is procedural.
+     */
+    public function partnerRecommendation(Request $request, Lead $lead)
+    {
+        $user = $this->guardCase($lead);
+
+        $data = $request->validate([
+            'recommended_main_applicant' => 'nullable|string|max:160',
+            'recommendation_reason' => 'nullable|string|max:1000',
+            'client_choice' => 'nullable|string|max:160',
+            'choice_document_id' => 'nullable|integer|exists:lead_documents,id',
+        ]);
+
+        // The recommendation is advice — only a licensed adviser may author it.
+        if (filled($data['recommended_main_applicant']) && ! $user->holdsCurrentLicence()) {
+            return back()->withErrors(['error' => 'Only a licensed adviser may recommend the main applicant.']);
+        }
+
+        $rec = \App\Models\CasePartnerRecommendation::firstOrNew(['lead_id' => $lead->id]);
+        $rec->fill(array_filter($data, fn ($v) => $v !== null));
+        $rec->recorded_by = $user->id;
+        $rec->decided_at = filled($data['client_choice']) ? now() : $rec->decided_at;
+        $rec->save();
+
+        // Once the client has chosen in writing, the fork (step 06a) is done —
+        // completing it advances the chain past the gate at step 06.
+        $svc = app(\App\Services\Immigration\CaseStepService::class);
+        $forkState = $svc->currentStates($lead)->get('06a');
+        if ($rec->isResolved() && $forkState && $forkState->status === \App\Models\CaseStepState::STATUS_ACTIVE) {
+            $svc->complete($lead, '06a', $user);
+        }
+
+        return back()->with('success', 'Partner recommendation saved.');
+    }
+
+    /** Shared case guard for the process endpoints. */
+    private function guardCase(Lead $lead): User
+    {
+        $user = auth()->user();
+        abort_unless($user instanceof User, 403);
+        $this->ensureCanViewCases($user);
+        abort_unless($lead->is_immigration_case, 404);
+
+        return $user;
     }
 
     /** POST /portal/immigration/cases/{lead}/personal — edit the applicant's

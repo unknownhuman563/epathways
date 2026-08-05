@@ -51,6 +51,27 @@ return [
         'doc_request_unanswered_days' => 5,
         'no_contact_days' => 14,
         'passport_expiry_months' => 6,
+        // Grace before an invoiced-but-unpaid case is flagged (Build 12 phase
+        // 4.5 — the invoice-overdue rule graduated off "couldn't verify" once
+        // case_payments exists).
+        'payment_overdue_days' => 7,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Process chain — step ownership resolver (Build 12 phase 4.5)
+    |--------------------------------------------------------------------------
+    |
+    | Maps a template owner_role (a process function) to a user id. Env-specific;
+    | leave null and a human assigns via handoff. `adviser` also falls back to
+    | the sole licensed adviser when unset. Set these per deployment.
+    |
+    */
+    'step_owners' => [
+        'coordinator' => null,
+        'qc' => null,
+        'ops' => null,
+        'adviser' => null,
     ],
 
 ];

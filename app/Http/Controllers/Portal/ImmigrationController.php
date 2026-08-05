@@ -930,6 +930,24 @@ class ImmigrationController extends Controller
         $newStage = $data['immigration_stage'] ?? null;
         $stageMoved = ($lead->immigration_stage ?? null) !== $newStage;
 
+        // Build 12 phase 4.5 (§15.1): the process chain is the single
+        // authoritative writer of immigration_stage. When the case is on the
+        // chain, a manual stage change is re-pointed to a forward jump through
+        // the steps (an explicit override) instead of a direct column write.
+        // Cases not yet on the chain fall back to the legacy behaviour below.
+        $steps = app(\App\Services\Immigration\CaseStepService::class);
+        if ($newStage !== null && $steps->hasChain($lead)) {
+            if ($steps->jumpToStage($lead, $newStage, auth()->user())) {
+                if (array_key_exists('immigration_assignee', $data)) {
+                    $lead->immigration_assignee = $data['immigration_assignee'] ?: null;
+                    $lead->save();
+                }
+                \App\Jobs\EvaluateCaseFindings::dispatch($lead->id);
+
+                return back();
+            }
+        }
+
         if (array_key_exists('immigration_assignee', $data)) {
             $lead->immigration_assignee = $data['immigration_assignee'] ?: null;
         }

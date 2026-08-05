@@ -11,6 +11,7 @@ use App\Services\Immigration\Findings\Rules\DocumentRequestUnansweredRule;
 use App\Services\Immigration\Findings\Rules\EngagementWithoutInvoiceRule;
 use App\Services\Immigration\Findings\Rules\InvoiceOverdueRule;
 use App\Services\Immigration\Findings\Rules\NoClientContactRule;
+use App\Services\Immigration\Findings\Rules\OverdueStepRule;
 use App\Services\Immigration\Findings\Rules\PassportExpiringRule;
 use App\Services\Immigration\Findings\Rules\UnresolvedThreadRule;
 use Illuminate\Support\Facades\DB;
@@ -86,6 +87,9 @@ class CaseFindingService
             InvoiceOverdueRule::class,
             UnresolvedThreadRule::class,
             EngagementWithoutInvoiceRule::class,
+            // Process-chain SLA breaches (Build 12 phase 4.5). No-ops for cases
+            // not yet on the chain.
+            OverdueStepRule::class,
         ];
     }
 

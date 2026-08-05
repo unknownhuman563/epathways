@@ -7,10 +7,11 @@ import DocumentsTab from "@/components/immigration/case-profile/tabs/DocumentsTa
 import AgreementTab from "@/components/immigration/case-profile/tabs/AgreementTab";
 import CommunicationsTab from "@/components/immigration/case-profile/tabs/CommunicationsTab";
 import AIHealthTab from "@/components/immigration/case-profile/tabs/AIHealthTab";
+import ProcessTab from "@/components/immigration/case-profile/tabs/ProcessTab";
 import NotesTab from "@/components/immigration/case-profile/tabs/NotesTab";
 import AiRecordAssistant from "@/components/ai/AiRecordAssistant";
 import {
-    ClipboardList, FileText, FileSignature, MessageSquare, Sparkles, StickyNote, User,
+    ClipboardList, FileText, FileSignature, MessageSquare, Sparkles, StickyNote, User, Workflow,
 } from "lucide-react";
 
 // Build 11.D — Case Profile page. Six-tab workspace for an immigration case.
@@ -21,6 +22,7 @@ const TABS = [
     { key: "personal",       label: "Personal",        icon: User,            Comp: PersonalTab },
     { key: "assessment",     label: "Assessment",      icon: ClipboardList,   Comp: AssessmentTab },
     { key: "documents",      label: "Documents",       icon: FileText,        Comp: DocumentsTab },
+    { key: "process",        label: "Process",         icon: Workflow,        Comp: ProcessTab },
     { key: "agreement",      label: "Agreement",       icon: FileSignature,   Comp: AgreementTab },
     { key: "communications", label: "Communications",  icon: MessageSquare,   Comp: CommunicationsTab },
     { key: "ai_health",      label: "AI Health",       icon: Sparkles,        Comp: AIHealthTab },
@@ -37,6 +39,7 @@ export default function CaseProfile() {
         checklistProgress = { required_total: 0, required_approved: 0, total: 0, approved: 0 },
         communications = [], agreements = [], notes = [], activity = [],
         findings = { items: [], evaluated_at: null, couldnt_verify: [] },
+        process = { started: false, steps: [], payment: null, partner: null },
     } = props;
 
     // Deep-link tab via ?tab=…  — preserved from the legacy
@@ -58,7 +61,7 @@ export default function CaseProfile() {
 
     const tabProps = {
         lead, intake, documents, checklist, checklistGrouped, unstructuredDocuments, checklistProgress,
-        communications, agreements, notes, activity, findings,
+        communications, agreements, notes, activity, findings, process,
     };
     const ActiveTab = TABS.find((t) => t.key === activeTab)?.Comp ?? AssessmentTab;
 

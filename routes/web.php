@@ -1180,6 +1180,20 @@ Route::middleware(['auth'])->group(function () {
             Route::post('/cases/{lead}/findings/{finding}/dismiss', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'dismissFinding'])
                 ->name('cases.findings.dismiss');
 
+            // Build 12 phase 4.5 — process chain. QC stamps + step completion
+            // are procedural (no licence gate); the partner recommendation is
+            // advice and gated inside the controller.
+            Route::post('/cases/{lead}/steps/start', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'startProcess'])
+                ->name('cases.steps.start');
+            Route::post('/cases/{lead}/steps/{step}/complete', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'completeStep'])
+                ->name('cases.steps.complete');
+            Route::post('/cases/{lead}/steps/{step}/reactivate', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'reactivateStep'])
+                ->name('cases.steps.reactivate');
+            Route::post('/cases/{lead}/payment', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'recordPayment'])
+                ->name('cases.payment');
+            Route::post('/cases/{lead}/partner-recommendation', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'partnerRecommendation'])
+                ->name('cases.partner-recommendation');
+
             // Build 11.D Phase 2 — Managed agreement endpoints. Each call
             // re-checks is_immigration_case + agreement<->lead ownership so
             // a cross-case URL guess still 404s. The route order matters:
