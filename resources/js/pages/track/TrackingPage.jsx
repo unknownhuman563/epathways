@@ -97,7 +97,7 @@ export default function TrackingPage({
     };
 
     return (
-        <div className={embedded ? 'font-urbanist' : 'min-h-screen bg-white font-urbanist flex flex-col'}>
+        <div className={embedded ? 'font-sans' : 'min-h-screen bg-white font-urbanist flex flex-col'}>
             <Head title={embedded ? 'Application Tracker — ePathways' : 'Track Your Application — ePathways'} />
             {!embedded && <Navbar />}
 
