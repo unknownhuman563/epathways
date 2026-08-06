@@ -16,6 +16,11 @@ use Symfony\Component\HttpFoundation\Response;
  * Super-admin controls the switch on the Maintenance screen. Default is ON
  * (absent setting → tracker available), so it fails open: a missing or
  * corrupted row never silently disables a live client surface.
+ *
+ * Only the PUBLIC (anonymous) tracker is taken offline. Authenticated users —
+ * a lead in their portal, or staff — always pass through, because the lead
+ * portal reuses these `/track/*` endpoints for uploads; otherwise toggling the
+ * public tracker off would also block signed-in clients from uploading.
  */
 class EnsureTrackerEnabled
 {
@@ -23,7 +28,7 @@ class EnsureTrackerEnabled
 
     public function handle(Request $request, Closure $next): Response
     {
-        if ((bool) Setting::get(self::SETTING_KEY, true)) {
+        if (auth()->check() || (bool) Setting::get(self::SETTING_KEY, true)) {
             return $next($request);
         }
 
