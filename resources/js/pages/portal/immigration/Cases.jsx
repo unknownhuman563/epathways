@@ -7,7 +7,7 @@ import {
     FileText, ExternalLink, Users, Calendar, ArrowUpDown,
     ArrowUp, ArrowDown, Plus, X, TrendingUp, Copy, MoreHorizontal,
     Archive, Pencil, Mail, Phone, Paperclip, KeyRound,
-    ArrowLeftRight, UserPlus, Loader2, Check,
+    ArrowLeftRight, UserPlus, Loader2, Check, Eye,
 } from "lucide-react";
 import { AvatarPhoto } from "@/components/ui/Avatar";
 import CaseFilesModal from "@/components/immigration/CaseFilesModal";
@@ -937,6 +937,7 @@ function CaseRow({ c, meId = null, stages, visaTypes = [], isExpanded, onExpand,
                             {c.lead_id && (
                                 <div className="text-[11px] text-gray-400 font-mono truncate">{c.lead_id}</div>
                             )}
+                            <AttentionChip openedAt={c.attention_opened_at} />
                         </div>
                         {needsAttention && (
                             <span title="Needs attention" className="flex-shrink-0">
@@ -1107,6 +1108,29 @@ const STALE_DOT = { amber: "bg-amber-400", red: "bg-rose-500" };
  * separate staleness dot from days-since-last-activity. Ownership duration and
  * "stuck" are deliberately not the same signal.
  */
+/**
+ * Build 12 phase 4 — attention chip. Shows whether a licensed adviser has
+ * opened this case, and when. Deliberately carries no time-on-case — the signal
+ * is "has the adviser looked", not how long they spent. Staff board only.
+ */
+function AttentionChip({ openedAt }) {
+    if (! openedAt) {
+        return (
+            <span className="mt-0.5 inline-flex items-center gap-1 text-[10px] font-semibold text-gray-400">
+                <Eye size={10} className="opacity-60" /> Not opened
+            </span>
+        );
+    }
+    return (
+        <span
+            title={`Adviser last opened ${fmtDateTime(openedAt)}`}
+            className="mt-0.5 inline-flex items-center gap-1 text-[10px] font-semibold text-teal-600"
+        >
+            <Eye size={10} /> Opened {fmtDate(openedAt)}
+        </span>
+    );
+}
+
 function CustodyCell({ c, meId = null }) {
     const owner = c.owner;
     const isMine = owner && owner.id === meId;

@@ -1181,6 +1181,12 @@ class LeadDocumentController extends Controller
             abort_unless($user->lead_id === $doc->lead_id, 403);
         }
 
+        // Build 12 phase 4 — a staff member opening a case document is passive
+        // attention on the case (§5, throttled). Never for lead/client opens.
+        if (! $user->isLead() && $doc->lead_id && optional($doc->lead)->is_immigration_case) {
+            \App\Models\CaseView::recordOpen($doc->lead_id, $user->id);
+        }
+
         // Disk inconsistency: tracker-side uploads (LeadTrackingController::uploadDoc)
         // land on the 'public' disk; staff-side uploads (staffChecklistUpload, leadUpload)
         // land on the 'local' (private) disk. The download controller has to handle

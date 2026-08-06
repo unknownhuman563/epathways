@@ -53,6 +53,12 @@ class CaseProfileController extends Controller
 
         $this->writeAuditView($lead, $user);
 
+        // Build 12 phase 4 — attention (§5). Capture the viewer's PREVIOUS open
+        // before recording this one, so the header can show what changed since
+        // they last looked; then record this open (throttled, passive).
+        $attention = $this->buildAttention($lead, $user);
+        \App\Models\CaseView::recordOpen($lead->id, $user->id);
+
         [$intakeType, $intake] = $this->resolveIntake($lead);
 
         return Inertia::render('portal/immigration/CaseProfile', [
@@ -85,7 +91,46 @@ class CaseProfileController extends Controller
             // addressed to.
             'threads' => $this->loadThreads($lead),
             'caseStaff' => $this->loadCaseStaff(),
+            // Build 12 phase 4 — attention: when this viewer last opened the case
+            // and what changed since. Staff-only; never in a client payload.
+            'attention' => $attention,
         ]);
+    }
+
+    /**
+     * Build 12 phase 4 (§5) — "what changed since you last opened this". Reads
+     * the viewer's previous CaseView (must be called BEFORE recording this open)
+     * and the activity log after it. Deliberately carries no durations. Returns
+     * null the first time a viewer opens the case (nothing to diff against).
+     *
+     * @return array{last_opened_at: string, changed_since: array<int, array<string, mixed>>}|null
+     */
+    private function buildAttention(Lead $lead, User $user): ?array
+    {
+        $previous = \App\Models\CaseView::lastOpenedBy($lead->id, $user->id);
+        if (! $previous) {
+            return null;
+        }
+
+        $changes = \App\Models\ActivityLog::query()
+            ->where('properties->subject_type', 'Lead')
+            ->where('properties->subject_id', $lead->id)
+            ->where('created_at', '>', $previous->opened_at)
+            ->latest()
+            ->limit(20)
+            ->get()
+            ->map(fn ($log) => [
+                'id' => $log->id,
+                'description' => $log->description,
+                'actor_name' => $log->actor_name ?: 'System',
+                'created_at' => optional($log->created_at)->toIso8601String(),
+            ])
+            ->all();
+
+        return [
+            'last_opened_at' => $previous->opened_at->toIso8601String(),
+            'changed_since' => $changes,
+        ];
     }
 
     /**

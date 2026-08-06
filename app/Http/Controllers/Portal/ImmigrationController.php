@@ -304,6 +304,11 @@ class ImmigrationController extends Controller
             // it, so the My-queue filter can surface "someone asked you" cases.
             $awaitingByLead = \App\Models\CaseThread::awaitingCountsFor((int) auth()->id());
 
+            // Build 12 phase 4 — attention (§5). Latest LICENSED-user open per
+            // case, so the board chip reads "has the adviser looked, and when".
+            // Unlicensed opens never count. Staff-only signal.
+            $attentionByLead = \App\Models\CaseView::latestLicensedOpens();
+
             $cases = Lead::with([
                 'documents',
                 'faceImage',
@@ -320,7 +325,7 @@ class ImmigrationController extends Controller
                 ->orderByRaw('COALESCE(last_activity_at, updated_at) DESC')
                 ->limit(200)
                 ->get()
-                ->map(function ($l) use ($visaChecklists, $awaitingByLead) {
+                ->map(function ($l) use ($visaChecklists, $awaitingByLead, $attentionByLead) {
                     // Staleness is measured on the last *activity*, not on how
                     // long the owner has held the case: a case actively worked
                     // for 12 days is fine; one untouched for 10 is stuck.
@@ -419,6 +424,9 @@ class ImmigrationController extends Controller
                         // Build 12 phase 6 — open questions on this case addressed
                         // to the viewer. Drives the queue chip + My-queue filter.
                         'awaiting_my_answer' => (int) ($awaitingByLead[$l->id] ?? 0),
+                        // Build 12 phase 4 — when a licensed adviser last opened
+                        // this case (null = not opened). No durations, staff-only.
+                        'attention_opened_at' => optional($attentionByLead[$l->id] ?? null)?->toIso8601String(),
                     ];
                 });
 

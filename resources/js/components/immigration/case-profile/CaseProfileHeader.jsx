@@ -3,7 +3,7 @@ import { toast } from "sonner";
 import CaseHealthBadge from "@/components/ai/CaseHealthBadge";
 import {
     ArrowLeft, Globe, FileSignature, MessageSquarePlus, FilePlus2,
-    BadgeCheck, Briefcase, Archive,
+    BadgeCheck, Briefcase, Archive, Eye,
 } from "lucide-react";
 import { AvatarPhoto } from "@/components/ui/Avatar";
 
@@ -13,7 +13,7 @@ const fmtDate = (iso) =>
 const initials = (name = "") =>
     name.trim().split(/\s+/).slice(0, 2).map((w) => w[0] || "").join("").toUpperCase() || "C";
 
-export default function CaseProfileHeader({ lead = {}, intake = null }) {
+export default function CaseProfileHeader({ lead = {}, intake = null, attention = null }) {
     const fullName = `${lead.first_name ?? ""} ${lead.last_name ?? ""}`.trim() || lead.lead_id || "Unnamed case";
     const visa = lead.inz_visa_type || intake?.data?.visa_type_label || "Visa type not set";
     const stage = lead.immigration_stage || lead.stage || "Stage not set";
@@ -110,11 +110,51 @@ export default function CaseProfileHeader({ lead = {}, intake = null }) {
                         <QuickAction icon={FilePlus2}      label="Request Document"   disabledHint="Available in Phase 2" />
                         <QuickAction icon={MessageSquarePlus} label="Compose Message" disabledHint="Wired by Build 11.A" />
                     </div>
+
+                    <SinceLastOpened attention={attention} />
                 </div>
             </section>
         </div>
     );
 }
+
+/**
+ * Build 12 phase 4 (§5) — "what changed since you last opened this". Passive:
+ * derived from the viewer's previous CaseView plus the activity log. Shows only
+ * whether they've looked and what moved since — never any time-on-case. Renders
+ * nothing on a first-ever open (nothing to diff against).
+ */
+function SinceLastOpened({ attention }) {
+    if (! attention?.last_opened_at) return null;
+    const changes = attention.changed_since || [];
+
+    return (
+        <div className="mt-4 rounded-xl border border-gray-100 bg-gray-50/70 px-4 py-3">
+            <p className="text-[11px] font-semibold text-gray-500 inline-flex items-center gap-1.5">
+                <Eye size={12} className="text-teal-500" />
+                Since you last opened this · {fmtDateTime(attention.last_opened_at)}
+            </p>
+            {changes.length === 0 ? (
+                <p className="mt-1 text-[11px] text-gray-400">No changes since then.</p>
+            ) : (
+                <ul className="mt-1.5 space-y-1">
+                    {changes.slice(0, 6).map((c) => (
+                        <li key={c.id} className="text-[11.5px] text-gray-600 leading-snug">
+                            <span className="text-gray-900">{c.description || "Update"}</span>
+                            <span className="text-gray-400"> · {c.actor_name} · {fmtDateTime(c.created_at)}</span>
+                        </li>
+                    ))}
+                    {changes.length > 6 && (
+                        <li className="text-[11px] text-gray-400">+{changes.length - 6} more</li>
+                    )}
+                </ul>
+            )}
+        </div>
+    );
+}
+
+const fmtDateTime = (iso) =>
+    iso ? new Date(iso).toLocaleString("en-NZ", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "—";
 
 function QuickAction({ icon: Icon, label, disabledHint }) {
     return (

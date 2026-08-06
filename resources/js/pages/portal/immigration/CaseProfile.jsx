@@ -40,7 +40,7 @@ export default function CaseProfile() {
         communications = [], agreements = [], notes = [], activity = [],
         findings = { items: [], evaluated_at: null, couldnt_verify: [] },
         process = { started: false, steps: [], payment: null, partner: null },
-        threads = [], caseStaff = [],
+        threads = [], caseStaff = [], attention = null,
     } = props;
 
     // Deep-link tab via ?tab=…  — preserved from the legacy
@@ -72,7 +72,7 @@ export default function CaseProfile() {
         <div className="max-w-[1300px] mx-auto pb-12 space-y-5">
             <Head title={`${fullName} — Case profile`} />
 
-            <CaseProfileHeader lead={lead} intake={intake} />
+            <CaseProfileHeader lead={lead} intake={intake} attention={attention} />
 
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
                 <div className="border-b border-gray-100 overflow-x-auto">
