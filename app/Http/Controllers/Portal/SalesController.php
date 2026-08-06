@@ -29,12 +29,11 @@ class SalesController extends Controller
         'Missed the Meeting',
         'Qualified but Not Ready',
         'Qualified but No Funds',
-        'Qualified',
-        'Booked Consultation',
-        'Did Not Book Consultation',
-        'No Show',
         'Consultation Done',
         'Proposal Sent',
+        'Program Selected',
+        'Consultancy Agreement Sent',
+        'Consultancy Agreement Signed',
         'Consultancy Agreement',
         'English Pro',
         'School Enrollment',
@@ -690,6 +689,11 @@ class SalesController extends Controller
                         'status' => $l->status,
                         'programs' => $picks,
                         'programs_count' => $picks->count(),
+                        // Which shortlisted program the lead settled on (set
+                        // from the tracker's "Choose this one" or by staff in
+                        // the Notify modal). Drives the highlight in the list.
+                        'preferred_program_id' => $l->preferred_program_id,
+                        'preferred_program_chosen_at' => optional($l->preferred_program_chosen_at)->toIso8601String(),
                         'updated_at' => optional($l->updated_at)->toIso8601String(),
                     ];
                 })
@@ -1122,7 +1126,7 @@ class SalesController extends Controller
         if (in_array($stage, ['Qualified but Not Ready', 'Qualified but No Funds', 'Qualified', 'Booked Consultation', 'Did Not Book Consultation', 'No Show', 'Consultation Done'], true)) {
             return 'Nurture';
         }
-        if (in_array($stage, ['Proposal Sent', 'Consultancy Agreement', 'English Pro', 'School Enrollment', 'Visa Process'], true)) {
+        if (in_array($stage, ['Proposal Sent', 'Program Selected', 'Consultancy Agreement Sent', 'Consultancy Agreement Signed', 'Consultancy Agreement', 'English Pro', 'School Enrollment', 'Visa Process'], true)) {
             return 'Qualified';
         }
 

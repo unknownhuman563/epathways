@@ -34,3 +34,5 @@ node_modules/
 service-account.json
 storage/app/google/
 prod-db-latest.sql.gz
+*.sql.gz
+*.sql

@@ -238,7 +238,7 @@ export default function TemplateEditorView({
                                 <div className="grid grid-cols-2 gap-4">
                                     {[
                                         { field: "banner_image", label: "Banner (top)", hint: "Wide header, ~600px" },
-                                        { field: "footer_image", label: "Footer image", hint: "Above the contact block" },
+                                        { field: "footer_image", label: "CTA image", hint: "Above the contact block" },
                                     ].map(({ field, label, hint }) => {
                                         const src = shownImage(field);
                                         const err = errors[field];

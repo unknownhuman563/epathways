@@ -11,6 +11,8 @@ use Google\Service\Calendar\CreateConferenceRequest;
 use Google\Service\Calendar\Event;
 use Google\Service\Calendar\EventAttendee;
 use Google\Service\Calendar\EventDateTime;
+use Google\Service\Calendar\FreeBusyRequest;
+use Google\Service\Calendar\FreeBusyRequestItem;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
 
@@ -48,7 +50,8 @@ class GoogleCalendarService
     {
         $client = new GoogleClient;
         $client->setAuthConfig(self::keyFilePath());
-        $client->setScopes([Calendar::CALENDAR_EVENTS]);
+        // Full calendar scope — covers event create + free/busy reads.
+        $client->setScopes([Calendar::CALENDAR]);
         // Domain-wide delegation: act as this Workspace user so the event lands
         // on their calendar and a Meet link can be generated.
         $client->setSubject((string) config('services.google_calendar.impersonate'));
@@ -73,7 +76,10 @@ class GoogleCalendarService
             return; // nothing to schedule
         }
 
-        $start = Carbon::parse($booking->appointment_at);
+        // Anchor the event to the timezone the client booked in, so the invite
+        // is self-describing (same absolute instant, meaningful wall time).
+        $tz = $booking->client_timezone ?: 'UTC';
+        $start = Carbon::parse($booking->appointment_at)->setTimezone($tz);
         $duration = (int) config('services.google_calendar.default_duration', 30);
         $end = (clone $start)->addMinutes($duration > 0 ? $duration : 30);
 
@@ -82,8 +88,8 @@ class GoogleCalendarService
         $event = new Event([
             'summary' => "Consultation with {$name}",
             'description' => $this->description($booking),
-            'start' => new EventDateTime(['dateTime' => $start->toRfc3339String(), 'timeZone' => 'UTC']),
-            'end' => new EventDateTime(['dateTime' => $end->toRfc3339String(), 'timeZone' => 'UTC']),
+            'start' => new EventDateTime(['dateTime' => $start->toRfc3339String(), 'timeZone' => $tz]),
+            'end' => new EventDateTime(['dateTime' => $end->toRfc3339String(), 'timeZone' => $tz]),
             'attendees' => array_values(array_filter([
                 new EventAttendee(['email' => $booking->email]),
             ])),
@@ -113,6 +119,44 @@ class GoogleCalendarService
             ]);
         } catch (\Throwable $e) {
             Log::error('Booking calendar event failed', ['booking_id' => $booking->id, 'error' => $e->getMessage()]);
+        }
+    }
+
+    /**
+     * Busy intervals on the configured calendar between two instants, so the
+     * booking page can hide already-taken slots. Returns [['start'=>ISO,
+     * 'end'=>ISO], …]; empty when unconfigured or on any error (fail-open).
+     */
+    public function busyPeriods(Carbon $from, Carbon $to): array
+    {
+        if (! self::isConfigured()) {
+            return [];
+        }
+
+        $calId = (string) config('services.google_calendar.calendar_id', 'primary');
+
+        try {
+            $request = new FreeBusyRequest([
+                'timeMin' => $from->toRfc3339String(),
+                'timeMax' => $to->toRfc3339String(),
+                'items' => [new FreeBusyRequestItem(['id' => $calId])],
+            ]);
+
+            $result = $this->calendar()->freebusy->query($request);
+            // The response keys calendars by their real id (e.g. the address),
+            // not the 'primary' alias — so merge busy from every returned entry.
+            $out = [];
+            foreach (($result->getCalendars() ?? []) as $cal) {
+                foreach (($cal->getBusy() ?? []) as $b) {
+                    $out[] = ['start' => $b->getStart(), 'end' => $b->getEnd()];
+                }
+            }
+
+            return $out;
+        } catch (\Throwable $e) {
+            Log::error('Calendar free/busy failed', ['error' => $e->getMessage()]);
+
+            return [];
         }
     }
 

@@ -471,6 +471,30 @@ class LeadTrackingController extends Controller
                     'to' => $newId,
                 ],
             ]);
+
+            // Choosing a program (not clearing) advances the pipeline to
+            // "Program Selected" (non-regressing) and emails the lead the
+            // program_selected template. Non-fatal on failure.
+            if ($newId !== null) {
+                $stages = Lead::STAGES;
+                $curIdx = array_search($lead->status, $stages, true);
+                $tgtIdx = array_search('Program Selected', $stages, true);
+                if ($tgtIdx !== false && ($curIdx === false || $curIdx < $tgtIdx)) {
+                    $lead->status = 'Program Selected';
+                    $lead->save();
+                }
+
+                try {
+                    $program = \App\Models\Program::find($newId);
+                    app(\App\Services\CommunicationService::class)->sendTemplated('program_selected', $lead, [
+                        'program_name' => $program?->title ?? '',
+                        'program_level' => $program && $program->level ? 'Level '.$program->level : '',
+                        'program_location' => $program?->location ?? '',
+                    ]);
+                } catch (\Throwable $e) {
+                    Log::warning('program_selected email failed', ['lead_id' => $lead->id, 'error' => $e->getMessage()]);
+                }
+            }
         }
 
         return redirect()

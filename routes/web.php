@@ -111,6 +111,9 @@ Route::get('/booking', function () {
     ]);
 });
 Route::post('/bookings', [BookingController::class, 'store']);
+// Busy times on the consultant's Google Calendar — drives slot availability on
+// the public booking page (fails open when Calendar isn't configured).
+Route::get('/booking/busy', [BookingController::class, 'busyTimes']);
 
 // Stripe Checkout for consultation bookings (booking is saved first, then the
 // optional payment step). Webhook is CSRF-exempt (see bootstrap/app.php).
@@ -456,6 +459,8 @@ Route::middleware(['auth'])->group(function () {
 
         Route::get('/admin/booking', [BookingController::class, 'index'])->name('admin.bookings');
         Route::post('/admin/bookings/{id}', [BookingController::class, 'update']);
+        // Convert a booking's client into a pipeline lead (education flow).
+        Route::post('/admin/bookings/{id}/convert', [BookingController::class, 'convertToLead'])->name('admin.bookings.convert');
 
         Route::get('/admin/settings', [SettingController::class, 'index'])->name('admin.settings');
         Route::post('/admin/settings', [SettingController::class, 'update']);

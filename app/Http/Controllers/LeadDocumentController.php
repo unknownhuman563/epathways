@@ -832,6 +832,9 @@ class LeadDocumentController extends Controller
     {
         $validated = $request->validate([
             'kind' => 'nullable|string|in:proposal,agreement',
+            // Optional: the shortlisted program the lead settled on. Only
+            // meaningful for proposals; must be one of the lead's picks.
+            'preferred_program_id' => 'nullable|integer',
         ]);
 
         try {
@@ -845,6 +848,37 @@ class LeadDocumentController extends Controller
             }
 
             $kind = $validated['kind'] ?? 'agreement';
+
+            // Record which program the lead chose, when staff pass it from the
+            // Notify modal. Only for proposals, and only if it's in the lead's
+            // shortlist (null clears the pick). Mirrors the tracker's own
+            // "Choose this one" write so the list highlight stays consistent.
+            if ($kind === 'proposal' && array_key_exists('preferred_program_id', $validated)) {
+                $pid = $validated['preferred_program_id'];
+                $shortlist = is_array($lead->proposed_program_ids)
+                    ? array_map('intval', $lead->proposed_program_ids)
+                    : [];
+
+                if ($pid === null || in_array((int) $pid, $shortlist, true)) {
+                    $lead->forceFill([
+                        'preferred_program_id' => $pid ? (int) $pid : null,
+                        'preferred_program_chosen_at' => $pid ? now() : null,
+                    ])->saveQuietly();
+                }
+            }
+
+            // Sending advances the pipeline stage — proposal → "Proposal Sent",
+            // agreement → "Consultancy Agreement Sent". Non-regressing: a lead
+            // already further along (e.g. Consultancy Agreement Signed, Visa
+            // Process) is left where it is.
+            $sentStage = $kind === 'proposal' ? 'Proposal Sent' : 'Consultancy Agreement Sent';
+            $stages = \App\Models\Lead::STAGES;
+            $curIdx = array_search($lead->status, $stages, true);
+            $tgtIdx = array_search($sentStage, $stages, true);
+            if ($tgtIdx !== false && ($curIdx === false || $curIdx < $tgtIdx)) {
+                $lead->status = $sentStage;
+                $lead->save();
+            }
 
             // Each notify kind has its own branded template, editable under
             // Email → Templates. Proposals also carry the lead's up-to-3

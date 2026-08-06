@@ -344,21 +344,42 @@ function ProposalsTable({ rows, portalBase, fmtDate, onNotify }) {
                                 )}
                             </td>
                             {/* ── PROGRAMS ────────────────────────────── */}
+                            {/* Once the lead has settled on a program, that
+                                pick is highlighted and the rest are dimmed so
+                                staff can see the choice at a glance. */}
                             <td className="px-3 py-3">
                                 <div className="flex flex-col gap-1.5">
-                                    {r.programs.map((p) => (
-                                        <div key={p.id} className="flex items-center gap-2">
-                                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-100">
-                                                Level {p.level}
-                                            </span>
-                                            <span className="text-[12px] font-medium text-gray-800 truncate max-w-[280px]" title={p.title}>
-                                                {p.title}
-                                            </span>
-                                            {p.location && (
-                                                <span className="text-[10px] text-gray-400 whitespace-nowrap">· {p.location}</span>
-                                            )}
-                                        </div>
-                                    ))}
+                                    {r.programs.map((p) => {
+                                        const chosen = !! r.preferred_program_id && p.id === r.preferred_program_id;
+                                        const dimmed = !! r.preferred_program_id && ! chosen;
+                                        return (
+                                            <div
+                                                key={p.id}
+                                                className={`flex items-center gap-2 rounded-md transition-colors ${
+                                                    chosen ? 'bg-emerald-50 ring-1 ring-emerald-200 px-1.5 py-1 -mx-1.5' : ''
+                                                } ${dimmed ? 'opacity-40' : ''}`}
+                                            >
+                                                <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider ${
+                                                    chosen ? 'bg-emerald-600 text-white' : 'bg-emerald-50 text-emerald-700 border border-emerald-100'
+                                                }`}>
+                                                    Level {p.level}
+                                                </span>
+                                                <span className={`text-[12px] truncate max-w-[280px] ${
+                                                    chosen ? 'font-bold text-emerald-900' : 'font-medium text-gray-800'
+                                                }`} title={p.title}>
+                                                    {p.title}
+                                                </span>
+                                                {p.location && (
+                                                    <span className="text-[10px] text-gray-400 whitespace-nowrap">· {p.location}</span>
+                                                )}
+                                                {chosen && (
+                                                    <span className="inline-flex items-center gap-1 ml-0.5 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-emerald-600 text-white shrink-0">
+                                                        <Check size={9} /> Selected
+                                                    </span>
+                                                )}
+                                            </div>
+                                        );
+                                    })}
                                 </div>
                             </td>
                             {/* ── CREATED ─────────────────────────────── */}
@@ -420,6 +441,7 @@ function DocumentsTable({ rows, portalBase, fmtSize, fmtDate, onNotify, onEdit }
                         <th className="px-3 py-3">Name</th>
                         <th className="px-3 py-3">Contacts</th>
                         <th className="px-3 py-3">Document</th>
+                        <th className="px-3 py-3">Status</th>
                         <th className="px-3 py-3">Created</th>
                         <th className="px-3 py-3 text-right pr-4">Actions</th>
                     </tr>
@@ -445,6 +467,12 @@ function DocumentsTable({ rows, portalBase, fmtSize, fmtDate, onNotify, onEdit }
 function DocumentRow({ doc, portalBase, fmtSize, fmtDate, onNotify, onEdit }) {
     const { lead } = doc;
     const mode = doc.applicant_mode; // 'single' | 'couple' | null
+    // Agreement lifecycle, read off the lead's pipeline stage: Generated (just
+    // created) → Sent (staff notified the lead) → Signed (staff marked signed).
+    const agreeStatus =
+        lead.status === 'Consultancy Agreement Signed' ? { label: 'Signed',    cls: 'bg-emerald-100 text-emerald-800 border-emerald-200' }
+      : lead.status === 'Consultancy Agreement Sent'   ? { label: 'Sent',      cls: 'bg-indigo-100 text-indigo-800 border-indigo-200' }
+      :                                                   { label: 'Generated', cls: 'bg-gray-100 text-gray-600 border-gray-200' };
     return (
         <tr className="hover:bg-gray-50/60 transition-colors align-top">
             {/* ── PROFILE (face image / initials) ──────────────────── */}
@@ -500,6 +528,13 @@ function DocumentRow({ doc, portalBase, fmtSize, fmtDate, onNotify, onEdit }) {
                 <div className="text-[10px] text-gray-400 mt-1 ml-[21px]">{fmtSize(doc.size)}</div>
             </td>
 
+            {/* ── STATUS (Generated / Sent / Signed) ───────────────── */}
+            <td className="px-3 py-3">
+                <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold border ${agreeStatus.cls}`}>
+                    {agreeStatus.label}
+                </span>
+            </td>
+
             {/* ── CREATED (date + staff who generated) ─────────────── */}
             <td className="px-3 py-3 whitespace-nowrap">
                 <div className="text-[12px] text-gray-700 font-medium">{fmtDate(doc.created_at)}</div>
@@ -546,6 +581,14 @@ function DocumentRowActions({ doc, lead, onNotify, onEdit }) {
 
     const canEdit = doc.checklist_key === 'agree.consultancy' || doc.checklist_key === 'agree.engagement_english';
     const canEmail = !! lead.email;
+    // Consultancy agreements carry a Sent → Signed lifecycle staff can set by
+    // hand (there's no e-sign for these generated docs). Reuses the same
+    // stage endpoint the Leads list uses.
+    const isConsultancy = doc.checklist_key === 'agree.consultancy';
+    const markStage = (status) => {
+        setOpen(false);
+        router.post(`/admin/leads/${lead.id}/stage`, { status }, { preserveScroll: true });
+    };
 
     const handleDelete = () => {
         setOpen(false);
@@ -613,6 +656,25 @@ function DocumentRowActions({ doc, lead, onNotify, onEdit }) {
                     >
                         <Mail size={13} className="text-gray-400" /> Email lead
                     </button>
+                    {isConsultancy && (
+                        <>
+                            <div className="my-1 border-t border-gray-100" />
+                            <button
+                                type="button"
+                                onClick={() => markStage('Consultancy Agreement Sent')}
+                                className="w-full flex items-center gap-2.5 px-3 py-2 text-left text-gray-700 hover:bg-gray-50 hover:text-indigo-700 transition-colors"
+                            >
+                                <Send size={13} className="text-gray-400" /> Mark as sent
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => markStage('Consultancy Agreement Signed')}
+                                className="w-full flex items-center gap-2.5 px-3 py-2 text-left text-gray-700 hover:bg-gray-50 hover:text-emerald-700 transition-colors"
+                            >
+                                <Check size={13} className="text-gray-400" /> Mark as signed
+                            </button>
+                        </>
+                    )}
                     <div className="my-1 border-t border-gray-100" />
                     <button
                         type="button"
@@ -854,10 +916,19 @@ function NotifyButton({ row, onNotify }) {
 //    /notify-document-ready endpoint. ─────────────────────────────────
 function NotifyLeadModal({ target, onClose }) {
     const [sending, setSending] = useState(false);
+    // Which shortlisted program the lead chose — only used for proposals.
+    // Seeded from whatever's already saved so re-notifying doesn't wipe it.
+    const [selectedProgramId, setSelectedProgramId] = useState(null);
+    useEffect(() => {
+        setSelectedProgramId(target?.lead?.preferred_program_id ?? null);
+        setSending(false);
+    }, [target]);
 
     if (! target) return null;
     const { lead, kind } = target;
-    const nounTitle  = kind === 'proposal' ? 'Proposal' : 'Agreement';
+    const isProposal = kind === 'proposal';
+    const programs   = lead.programs || [];
+    const nounTitle  = isProposal ? 'Proposal' : 'Agreement';
     const noun       = nounTitle.toLowerCase();
     const firstName  = (lead.name || '').split(' ')[0] || 'there';
     const hasEmail   = !! lead.email;
@@ -865,7 +936,11 @@ function NotifyLeadModal({ target, onClose }) {
 
     const send = () => {
         setSending(true);
-        router.post(`/admin/leads/${lead.id}/notify-document-ready`, { kind }, {
+        const payload = { kind };
+        // Record the lead's program pick alongside the notification so the
+        // list highlights it. Sent only for proposals; null clears it.
+        if (isProposal) payload.preferred_program_id = selectedProgramId;
+        router.post(`/admin/leads/${lead.id}/notify-document-ready`, payload, {
             preserveScroll: true,
             onFinish: () => { setSending(false); onClose(); },
         });
@@ -914,6 +989,57 @@ function NotifyLeadModal({ target, onClose }) {
                         <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Subject</span>
                         <span className="text-xs font-semibold text-gray-900">{subject}</span>
                     </div>
+
+                    {/* Program the lead chose — proposals only. Highlights in
+                        the list once saved; leave on "Not decided yet" to skip. */}
+                    {isProposal && programs.length > 0 && (
+                        <div>
+                            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">
+                                Program the lead chose
+                            </p>
+                            <div className="space-y-1.5">
+                                {programs.map((p) => {
+                                    const active = selectedProgramId === p.id;
+                                    return (
+                                        <label
+                                            key={p.id}
+                                            className={`flex items-center gap-2.5 px-3 py-2 rounded-lg border cursor-pointer transition-colors ${
+                                                active ? 'border-emerald-500 bg-emerald-50' : 'border-gray-200 hover:border-gray-300'
+                                            }`}
+                                        >
+                                            <input
+                                                type="radio"
+                                                name="preferred_program"
+                                                checked={active}
+                                                onChange={() => setSelectedProgramId(p.id)}
+                                                className="accent-emerald-600"
+                                            />
+                                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-emerald-100 text-emerald-700 shrink-0">
+                                                L{p.level}
+                                            </span>
+                                            <span className="text-[12px] font-medium text-gray-800 truncate" title={p.title}>
+                                                {p.title}
+                                            </span>
+                                        </label>
+                                    );
+                                })}
+                                <label
+                                    className={`flex items-center gap-2.5 px-3 py-2 rounded-lg border cursor-pointer transition-colors ${
+                                        selectedProgramId === null ? 'border-gray-400 bg-gray-50' : 'border-gray-200 hover:border-gray-300'
+                                    }`}
+                                >
+                                    <input
+                                        type="radio"
+                                        name="preferred_program"
+                                        checked={selectedProgramId === null}
+                                        onChange={() => setSelectedProgramId(null)}
+                                        className="accent-gray-600"
+                                    />
+                                    <span className="text-[12px] font-medium text-gray-500">Not decided yet</span>
+                                </label>
+                            </div>
+                        </div>
+                    )}
 
                     {/* Preview */}
                     <div>

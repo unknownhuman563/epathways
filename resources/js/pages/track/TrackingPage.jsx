@@ -3187,12 +3187,12 @@ function ProposalShortlist({ proposal, code }) {
                             key={p.id}
                             className={`relative flex flex-col rounded-xl border shadow-sm transition-all overflow-hidden ${
                                 isChosen
-                                    ? 'border-gray-900 ring-2 ring-gray-900/15 bg-gray-50'
+                                    ? 'border-emerald-500 ring-2 ring-emerald-500/25 bg-emerald-50'
                                     : 'border-gray-100 bg-white hover:border-gray-300 hover:shadow-md'
                             }`}
                         >
                             {isChosen && (
-                                <span className="absolute top-3 right-3 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-gray-900 text-white text-[9px] font-bold uppercase tracking-[0.14em] shadow-sm">
+                                <span className="absolute top-3 right-3 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-600 text-white text-[9px] font-bold uppercase tracking-[0.14em] shadow-sm">
                                     <Check size={10} strokeWidth={3} /> Chosen
                                 </span>
                             )}

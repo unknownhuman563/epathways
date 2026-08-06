@@ -6,8 +6,11 @@ import {
     ChevronDown, Clock, CheckSquare, FileSpreadsheet,
     Globe, GraduationCap, Home
 } from 'lucide-react';
+// Shared stage → pill-colour map, so the STAGE dropdown here reads exactly
+// like the coloured stage pills in the Leads list.
+import { stageClass } from '@/pages/portal/sales/Leads';
 
-export default function Bookings({ bookings: backendBookings }) {
+export default function Bookings({ bookings: backendBookings, stages = [] }) {
     const [bookings, setBookings] = useState(() => {
         if (backendBookings && backendBookings.length > 0) {
             return backendBookings.map(booking => ({
@@ -49,6 +52,48 @@ export default function Bookings({ bookings: backendBookings }) {
         } else {
             setSelectedBookings([]);
         }
+    };
+
+    // Inline pipeline-stage change straight from the Bookings table — hits
+    // the same endpoint the Leads list uses so the two stay in lockstep.
+    // Optimistic: update the row immediately, roll back if the POST fails.
+    const changeStage = (booking, newStatus) => {
+        if (! booking.lead_internal_id || newStatus === booking.stage) return;
+        const previous = booking.stage;
+        setBookings((bs) => bs.map((b) => b.id === booking.id ? { ...b, stage: newStatus } : b));
+        import('@inertiajs/react').then(({ router }) => {
+            router.post(`/admin/leads/${booking.lead_internal_id}/stage`, { status: newStatus }, {
+                preserveScroll: true,
+                preserveState: true,
+                onError: () => setBookings((bs) => bs.map((b) => b.id === booking.id ? { ...b, stage: previous } : b)),
+            });
+        });
+    };
+
+    // Convert a standalone booking into a pipeline lead (education flow).
+    // Only offered for bookings not yet linked to a lead. On success the row
+    // is updated in place so the CONVERT button disappears and the stage
+    // dropdown becomes live.
+    const [convertingId, setConvertingId] = useState(null);
+    const convertToLead = (booking) => {
+        if (booking.lead_internal_id || convertingId === booking.id) return;
+        setConvertingId(booking.id);
+        fetch(`/admin/bookings/${booking.id}/convert`, {
+            method: 'POST',
+            headers: {
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content'),
+            },
+        })
+            .then((r) => (r.ok ? r.json() : Promise.reject(r)))
+            .then((data) => {
+                const lead = data.lead || {};
+                setBookings((bs) => bs.map((b) => b.id === booking.id
+                    ? { ...b, lead_internal_id: lead.id, lead_id: lead.lead_id, stage: lead.status || 'Booking Confirmation with Bryll' }
+                    : b));
+            })
+            .catch(() => { /* leave the button so staff can retry */ })
+            .finally(() => setConvertingId(null));
     };
 
     const handleUpdateSubmit = (e) => {
@@ -211,10 +256,22 @@ export default function Bookings({ bookings: backendBookings }) {
                                     </td>
 
                                     <td className="px-6 py-4">
-                                        {booking.stage ? (
-                                            <span className="inline-flex px-2.5 py-1 rounded-full text-xs font-bold border border-gray-200 bg-gray-50 text-gray-700 whitespace-nowrap">
-                                                {booking.stage}
-                                            </span>
+                                        {booking.lead_internal_id ? (
+                                            <div className="relative inline-block">
+                                                <select
+                                                    value={booking.stage || ''}
+                                                    onChange={(e) => changeStage(booking, e.target.value)}
+                                                    title="Change pipeline stage"
+                                                    style={{ appearance: 'none', WebkitAppearance: 'none', MozAppearance: 'none', backgroundImage: 'none' }}
+                                                    className={`appearance-none max-w-[210px] truncate text-[11px] font-bold uppercase tracking-wide rounded-full border pl-3 pr-7 py-1.5 cursor-pointer focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-gray-300 transition-colors ${stageClass(booking.stage)}`}
+                                                >
+                                                    {! booking.stage && <option value="" disabled>Set stage…</option>}
+                                                    {stages.map((s) => (
+                                                        <option key={s} value={s}>{s}</option>
+                                                    ))}
+                                                </select>
+                                                <ChevronDown size={13} className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 opacity-60" />
+                                            </div>
                                         ) : (
                                             <span className="text-xs text-gray-400">—</span>
                                         )}
@@ -273,12 +330,24 @@ export default function Bookings({ bookings: backendBookings }) {
                                     </td>
 
                                     <td className="px-6 py-4 text-right pr-6 relative">
-                                        <button 
-                                            onClick={() => setActiveDropdown(activeDropdown === booking.id ? null : booking.id)}
-                                            className="inline-flex items-center gap-2 px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors shadow-sm"
-                                        >
-                                            Actions <ChevronDown size={14} className="text-gray-500" />
-                                        </button>
+                                        <div className="inline-flex items-center gap-2">
+                                            {! booking.lead_internal_id && (
+                                                <button
+                                                    onClick={() => convertToLead(booking)}
+                                                    disabled={convertingId === booking.id}
+                                                    title="Convert this client into a pipeline lead"
+                                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-orange-500 hover:bg-orange-600 text-white rounded-lg text-xs font-bold uppercase tracking-wide transition-colors shadow-sm disabled:opacity-60 disabled:cursor-not-allowed"
+                                                >
+                                                    <Globe size={13} /> {convertingId === booking.id ? 'Converting…' : 'Convert'}
+                                                </button>
+                                            )}
+                                            <button
+                                                onClick={() => setActiveDropdown(activeDropdown === booking.id ? null : booking.id)}
+                                                className="inline-flex items-center gap-2 px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors shadow-sm"
+                                            >
+                                                Actions <ChevronDown size={14} className="text-gray-500" />
+                                            </button>
+                                        </div>
 
                                         {activeDropdown === booking.id && (
                                             <>

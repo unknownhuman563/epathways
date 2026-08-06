@@ -129,11 +129,17 @@ const consultants = {
             // widget. Weekly windows are in the consultant's timezone; the
             // client sees each slot converted to their own.
             timezone: 'Asia/Manila',
+            // 15-min slots, weekdays 10am–6pm — mirrors his Google appointment
+            // schedule (hours aren't API-readable, so keep this in sync if he
+            // changes them there). Busy times are pulled live from his calendar.
             slotMinutes: 15,
+            busyUrl: '/booking/busy',
+            // end is exclusive of the last start, so 18:15 makes 6:00 PM the
+            // last bookable slot (window 10:00 AM – 6:00 PM inclusive).
             availabilityConfig: {
-                mon: { start: '08:00', end: '20:00' }, tue: { start: '08:00', end: '20:00' },
-                wed: { start: '08:00', end: '20:00' }, thu: { start: '08:00', end: '20:00' },
-                fri: { start: '08:00', end: '20:00' },
+                mon: { start: '10:00', end: '18:15' }, tue: { start: '10:00', end: '18:15' },
+                wed: { start: '10:00', end: '18:15' }, thu: { start: '10:00', end: '18:15' },
+                fri: { start: '10:00', end: '18:15' },
             },
         },
         {
@@ -442,7 +448,7 @@ export default function BookingPage({ visaTypes = [], availability = {}, booking
                     appointment_date: info.appointmentDate,
                     appointment_time: info.appointmentTime,
                     appointment_at: info.appointmentAt || null,
-                    client_timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+                    client_timezone: info.clientTimezone || Intl.DateTimeFormat().resolvedOptions().timeZone,
                     message: info.message || null,
                     platform: 'In-System',
                 }),
@@ -1079,28 +1085,56 @@ export default function BookingPage({ visaTypes = [], availability = {}, booking
                                                 ) : selection.consultant?.availabilityConfig ? (
                                                     /* Our own calendar (slots) → then the full intake form
                                                        appears once a date + time is chosen. */
-                                                    <>
-                                                        <NativeScheduler
-                                                            hideDetails
-                                                            visaTypes={[]}
-                                                            slotMinutes={selection.consultant.slotMinutes || 60}
-                                                            availability={selection.consultant.availabilityConfig}
-                                                            businessTz={selection.consultant.timezone || 'Pacific/Auckland'}
-                                                            info={selection.info}
-                                                            onChange={updateInfo}
-                                                        />
-                                                        {selection.info.appointmentAt && (
-                                                            <div className="mt-10">
-                                                                <ConsultationForm
+                                                    <AnimatePresence mode="wait">
+                                                        {!selection.info.appointmentAt ? (
+                                                            /* Step 1 — pick a slot on our calendar. */
+                                                            <motion.div
+                                                                key="calendar"
+                                                                initial={{ opacity: 0, y: 10 }}
+                                                                animate={{ opacity: 1, y: 0 }}
+                                                                exit={{ opacity: 0, y: -10 }}
+                                                                transition={{ duration: 0.25 }}
+                                                            >
+                                                                <NativeScheduler
+                                                                    hideDetails
+                                                                    visaTypes={[]}
+                                                                    slotMinutes={selection.consultant.slotMinutes || 60}
+                                                                    availability={selection.consultant.availabilityConfig}
+                                                                    businessTz={selection.consultant.timezone || 'Pacific/Auckland'}
+                                                                    busyUrl={selection.consultant.busyUrl || null}
                                                                     info={selection.info}
                                                                     onChange={updateInfo}
-                                                                    onConfirm={submitConsultation}
-                                                                    isSubmitting={isSubmitting}
-                                                                    error={error}
                                                                 />
-                                                            </div>
+                                                            </motion.div>
+                                                        ) : (
+                                                            /* Step 2 — slot chosen → calendar fades out, intake
+                                                               form fades in (fixed-height scroll area). */
+                                                            <motion.div
+                                                                key="form"
+                                                                initial={{ opacity: 0, y: 10 }}
+                                                                animate={{ opacity: 1, y: 0 }}
+                                                                exit={{ opacity: 0, y: -10 }}
+                                                                transition={{ duration: 0.25 }}
+                                                            >
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => updateInfo({ appointmentDate: '', appointmentTime: '', appointmentAt: '' })}
+                                                                    className="mb-4 inline-flex items-center gap-1.5 text-sm font-semibold text-gray-500 hover:text-[#436235] transition-colors"
+                                                                >
+                                                                    <ChevronLeft size={16} /> Change date &amp; time
+                                                                </button>
+                                                                <div className="max-h-[70vh] overflow-y-auto pr-1">
+                                                                    <ConsultationForm
+                                                                        info={selection.info}
+                                                                        onChange={updateInfo}
+                                                                        onConfirm={submitConsultation}
+                                                                        isSubmitting={isSubmitting}
+                                                                        error={error}
+                                                                    />
+                                                                </div>
+                                                            </motion.div>
                                                         )}
-                                                    </>
+                                                    </AnimatePresence>
                                                 ) : (
                                                     <>
                                                         {selection.consultant?.bookingUrl && (
@@ -1210,7 +1244,7 @@ const slotsBetween = (start, end, step = 60) => {
 // shown for display (who you'll meet) — no selection — then the visitor picks a
 // date (native react-day-picker, past/off-days disabled), a time slot, and
 // enters their contact details, all saved to a Booking on confirm.
-function NativeScheduler({ visaTypes = [], availability = {}, businessTz = 'Pacific/Auckland', slotMinutes = 60, hideDetails = false, info, onChange, onConfirm, isSubmitting, error }) {
+function NativeScheduler({ visaTypes = [], availability = {}, businessTz = 'Pacific/Auckland', slotMinutes = 60, hideDetails = false, busyUrl = null, info, onChange, onConfirm, isSubmitting, error }) {
     // Advisers' saved availability drives the bookable days + time slots;
     // fall back to Mon–Fri 9–5 if none has been set. Availability windows are in
     // the business timezone (NZ); the client sees each slot in their own.
@@ -1219,21 +1253,49 @@ function NativeScheduler({ visaTypes = [], availability = {}, businessTz = 'Paci
     const today = new Date(); today.setHours(0, 0, 0, 0);
     const [day, setDay] = useState(info.appointmentDate ? new Date(`${info.appointmentDate}T00:00:00`) : undefined);
 
-    const clientTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const [clientTz, setClientTz] = useState(info.clientTimezone || browserTz);
+    const tzOptions = useMemo(() => {
+        try { return Intl.supportedValuesOf('timeZone'); }
+        catch { return [browserTz, 'Asia/Manila', 'Asia/Singapore', 'Pacific/Auckland', 'Australia/Sydney', 'America/Los_Angeles', 'Europe/London', 'UTC']; }
+    }, [browserTz]);
+    // Keep the chosen timezone on the shared info so the booking stores it.
+    useEffect(() => { onChange({ clientTimezone: clientTz }); }, [clientTz]); // eslint-disable-line react-hooks/exhaustive-deps
     const showBoth = clientTz !== businessTz;
     const fmtIn = (date, tz) => date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: tz });
 
-    // Each NZ slot → exact UTC instant → labels in both the client's and the
-    // business timezone. The stored time is NZ (for staff); the client sees local.
+    // Busy intervals on the consultant's real Google Calendar for the selected
+    // day, so taken slots disappear. Fails open (empty) if the endpoint errors.
+    const [busy, setBusy] = useState([]);
+    useEffect(() => {
+        if (! busyUrl || ! day) { setBusy([]); return; }
+        const from = new Date(day); from.setHours(0, 0, 0, 0);
+        const to = new Date(day); to.setHours(23, 59, 59, 999);
+        let cancelled = false;
+        fetch(`${busyUrl}?from=${encodeURIComponent(from.toISOString())}&to=${encodeURIComponent(to.toISOString())}`)
+            .then((r) => (r.ok ? r.json() : { busy: [] }))
+            .then((d) => { if (! cancelled) setBusy(d.busy || []); })
+            .catch(() => { if (! cancelled) setBusy([]); });
+        return () => { cancelled = true; };
+    }, [busyUrl, day]);
+
+    // Each slot → exact UTC instant → labels in the client's + consultant's
+    // timezone. Past slots and ones overlapping a busy interval are removed.
     const dayAvail = day ? avail[DOW[day.getDay()]] : null;
     const slots = useMemo(() => {
         if (! day || ! dayAvail) return [];
+        const nowMs = Date.now();
         return slotsBetween(dayAvail.start, dayAvail.end, slotMinutes).map((t) => {
             const [hh, mm] = t.split(':').map(Number);
             const utc = new Date(new TZDate(day.getFullYear(), day.getMonth(), day.getDate(), hh, mm, 0, businessTz).getTime());
-            return { nzLabel: fmtIn(utc, businessTz), localLabel: fmtIn(utc, clientTz), utc: utc.toISOString() };
+            const startMs = utc.getTime();
+            const endMs = startMs + slotMinutes * 60000;
+            return { nzLabel: fmtIn(utc, businessTz), localLabel: fmtIn(utc, clientTz), utc: utc.toISOString(), startMs, endMs };
+        }).filter((s) => {
+            if (s.startMs <= nowMs) return false; // no past slots
+            return ! busy.some((b) => s.startMs < new Date(b.end).getTime() && s.endMs > new Date(b.start).getTime());
         });
-    }, [day, dayAvail, businessTz, clientTz, slotMinutes]);
+    }, [day, dayAvail, businessTz, clientTz, slotMinutes, busy]);
 
     const localTimeLabel = info.appointmentAt ? fmtIn(new Date(info.appointmentAt), clientTz) : info.appointmentTime;
 
@@ -1252,6 +1314,23 @@ function NativeScheduler({ visaTypes = [], availability = {}, businessTz = 'Paci
             <div>
                 <h3 className="text-lg font-semibold text-gray-900">Select a date &amp; time</h3>
                 <p className="text-sm text-gray-500 mt-0.5">Choose a slot that works for you and confirm your details below.</p>
+            </div>
+
+            {/* Timezone — above the date picker so slot times are unambiguous */}
+            <div>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1.5">Your timezone</label>
+                <div className="relative">
+                    <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" aria-hidden>🌐</span>
+                    <select
+                        value={clientTz}
+                        onChange={(e) => setClientTz(e.target.value)}
+                        aria-label="Your timezone"
+                        className="w-full md:max-w-md pl-9 pr-3 py-2.5 rounded-xl border border-gray-200 text-sm outline-none focus:ring-2 focus:ring-[#436235]/30 focus:border-[#436235] bg-white"
+                    >
+                        {tzOptions.map((tz) => <option key={tz} value={tz}>{tz.replace(/_/g, ' ')}</option>)}
+                    </select>
+                </div>
+                <p className="text-[11px] text-gray-400 mt-1">Slot times below are shown in this timezone. Consultant is in {businessTz.replace(/_/g, ' ')}.</p>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

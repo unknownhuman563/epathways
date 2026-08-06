@@ -1085,6 +1085,25 @@ class LeadController extends Controller
                 }
             }
 
+            // Send the registrant their confirmation using the `register_lead`
+            // template. Resolved by key across any department (shared-first),
+            // since this template is department-owned (education), not shared —
+            // a plain resolve(key, null) would miss it. Failure is non-fatal:
+            // the registration is already saved.
+            if (! empty($lead->email)) {
+                try {
+                    $tpl = \App\Models\MessageTemplate::active()
+                        ->where('key', 'register_lead')
+                        ->orderByRaw("CASE WHEN department = '' THEN 0 ELSE 1 END")
+                        ->first();
+                    if ($tpl) {
+                        app(\App\Services\CommunicationService::class)->sendTemplate($tpl, $lead);
+                    }
+                } catch (\Throwable $e) {
+                    Log::warning('register_lead email failed', ['lead_id' => $lead->lead_id, 'error' => $e->getMessage()]);
+                }
+            }
+
             // Run the AI analysis AFTER the response is sent so a slow / missing
             // queue worker can never make the submission hang. Wrapped so a
             // dispatch hiccup can't surface an error on an already-saved lead.
@@ -1383,8 +1402,40 @@ class LeadController extends Controller
             ];
         }
 
+        // Staff-proposed program shortlist (+ the client's chosen one), so the
+        // lead-detail Stats tab can mirror the tracker's "programs offered" card.
+        $proposal = null;
+        $ppIds = is_array($lead->proposed_program_ids) ? array_values($lead->proposed_program_ids) : [];
+        if (! empty($ppIds)) {
+            $ppPrograms = \App\Models\Program::whereIn('id', $ppIds)
+                ->get(['id', 'title', 'slug', 'level', 'category', 'location', 'price_text', 'duration_months', 'intake_months', 'image'])
+                ->keyBy('id');
+            $ppOrdered = collect($ppIds)
+                ->map(fn ($pid) => $ppPrograms->get($pid))
+                ->filter()
+                ->map(fn ($p) => [
+                    'id' => $p->id,
+                    'title' => $p->title,
+                    'level' => $p->level,
+                    'category' => $p->category,
+                    'location' => $p->location,
+                    'price_text' => $p->price_text,
+                    'duration_months' => $p->duration_months,
+                    'intake_months' => $p->intake_months,
+                    'image_url' => $p->image ? \Illuminate\Support\Facades\Storage::disk('public')->url($p->image) : null,
+                    'public_url' => '/program-details/'.($p->slug ?: $p->id),
+                ])
+                ->values();
+            $proposal = [
+                'programs' => $ppOrdered,
+                'preferred_program_id' => $lead->preferred_program_id,
+                'chosen_at' => optional($lead->preferred_program_chosen_at)->toIso8601String(),
+            ];
+        }
+
         return inertia($page, [
             'lead' => $lead,
+            'proposal' => $proposal,
             'activity' => $activity,
             'stageTimeline' => $stageTimeline,
             'checklistFiles' => $checklistFiles,
