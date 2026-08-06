@@ -1179,6 +1179,10 @@ Route::middleware(['auth'])->group(function () {
                 ->name('cases.findings.reevaluate');
             Route::post('/cases/{lead}/findings/{finding}/dismiss', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'dismissFinding'])
                 ->name('cases.findings.dismiss');
+            // Dismiss a whole rule's findings at once (the collapsed summary row).
+            // Still per-item + evidence-scoped server-side — presentation grouping only.
+            Route::post('/cases/{lead}/findings/group-dismiss', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'dismissFindingGroup'])
+                ->name('cases.findings.group-dismiss');
 
             // Build 12 phase 4.5 — process chain. QC stamps + step completion
             // are procedural (no licence gate); the partner recommendation is

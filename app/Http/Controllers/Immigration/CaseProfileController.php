@@ -251,6 +251,53 @@ class CaseProfileController extends Controller
     }
 
     /**
+     * Dismiss a whole rule's findings at once (Build 12 phase 3 refinement). The
+     * panel collapses repeated same-rule findings (e.g. 18 checklist items) into
+     * one summary row with a single dismiss — but dismissal stays PER ITEM here:
+     * each finding is dismissed individually with its own evidence fingerprint,
+     * so dedup, auto-resolve and evidence-scoped re-open all keep working exactly
+     * as they do for a single finding. The grouping is presentation-only; this is
+     * just a loop over the group's members.
+     */
+    public function dismissFindingGroup(Request $request, Lead $lead)
+    {
+        $user = auth()->user();
+        abort_unless($user instanceof User, 403);
+        $this->ensureCanViewCases($user);
+        abort_unless($lead->is_immigration_case, 404);
+
+        $data = $request->validate([
+            'prefix' => 'required|string|max:40',
+            'reason' => 'required|string|max:500',
+        ]);
+
+        // Only rules that emit one finding PER ITEM are groupable — an
+        // arbitrary prefix must not become a mass-dismiss lever.
+        $groupable = ['checklist_missing', 'doc_rejected', 'doc_request_unanswered', 'overdue_step', 'thread_unanswered'];
+        abort_unless(in_array($data['prefix'], $groupable, true), 422, 'That finding type cannot be dismissed as a group.');
+
+        $now = now();
+        $findings = \App\Models\CaseFinding::where('lead_id', $lead->id)
+            ->where('status', \App\Models\CaseFinding::STATUS_OPEN)
+            ->where('finding_key', 'like', $data['prefix'].':%')
+            ->get();
+
+        foreach ($findings as $finding) {
+            $finding->update([
+                'status' => \App\Models\CaseFinding::STATUS_DISMISSED,
+                'dismiss_reason' => $data['reason'],
+                // Per-item fingerprint — a later evaluation with different stable
+                // evidence re-opens that item on its own.
+                'dismissed_fingerprint' => \App\Models\CaseFinding::fingerprintFor($finding->evidence),
+                'actioned_by' => $user->id,
+                'actioned_at' => $now,
+            ]);
+        }
+
+        return back()->with('success', $findings->count().' findings dismissed.');
+    }
+
+    /**
      * Manually queue a re-evaluation (Build 12 phase 3). The panel still renders
      * the last stored result; this refreshes it off the request path.
      */
