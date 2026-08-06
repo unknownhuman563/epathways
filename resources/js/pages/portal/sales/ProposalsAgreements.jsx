@@ -1190,6 +1190,10 @@ function NewDocumentModal({ open, onClose, picker, programs = [], prefill = null
         // applicant_mode along so the saved PDF reflects whatever staff
         // typed on the Settings panel and which Single/Couple option they
         // originally chose.
+        // Agreements email the client on generation itself (the generate
+        // endpoint sends `consultancy_agreement`), so the notify preference
+        // rides along in the payload instead of a second POST.
+        const wantNotify = notify && canNotify;
         const payload = isProposal
             ? { program_ids: pickedProgramIds }
             : (isConsultancyType
@@ -1197,8 +1201,9 @@ function NewDocumentModal({ open, onClose, picker, programs = [], prefill = null
                     school_enrolment_fee: schoolFee,
                     english_proficiency_fee: englishFee,
                     applicant_mode: typeMeta?.applicantMode || 'single',
+                    notify: wantNotify,
                 }
-                : {});
+                : { notify: wantNotify });
 
         const finish = () => {
             setSubmitting(false);
@@ -1213,11 +1218,11 @@ function NewDocumentModal({ open, onClose, picker, programs = [], prefill = null
         router.post(url, payload, {
             preserveScroll: true,
             onSuccess: () => {
-                // Chain the notify email if the checkbox is on AND the
-                // lead has an email. Two POSTs — cheap, keeps endpoints
-                // single-responsibility, and Inertia surfaces both flash
-                // messages via the global FlashToaster.
-                if (notify && canNotify) {
+                // Consultancy agreements already emailed the client inside the
+                // generate endpoint above, so they skip the second POST (no
+                // double-send). Everything else (proposals save a shortlist;
+                // English Engagement has no self-send) still notifies here.
+                if (wantNotify && ! isConsultancyType) {
                     router.post(`/admin/leads/${leadId}/notify-document-ready`, {
                         kind: isProposal ? 'proposal' : 'agreement',
                     }, {

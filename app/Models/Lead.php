@@ -563,6 +563,36 @@ class Lead extends Model
         // Stamp who last touched the record, and with what, before the row
         // is written — this is what the portals' Updated column reports.
         static::updating(fn (Lead $lead) => $lead->stampLastActivity());
+
+        // Stage-triggered client emails — fire whenever the pipeline stage
+        // transitions (from any of the several stage-change endpoints).
+        // Guarded by wasChanged so each fires once per transition.
+        //   • Contact Attempted → missed_the_call_1 now, missed_the_call_2 on
+        //     day 3 (skipped then if the lead has since moved on).
+        //   • Not Qualified     → not_qualified now.
+        static::updated(function (Lead $lead) {
+            if (! $lead->wasChanged('status') || empty($lead->email)) {
+                return;
+            }
+
+            try {
+                if ($lead->status === 'Contact Attempted') {
+                    \App\Jobs\SendLeadFollowupEmail::sendKey('missed_the_call_1', $lead);
+                    \App\Jobs\SendLeadFollowupEmail::dispatch($lead->id, 'missed_the_call_2', 'Contact Attempted')
+                        ->delay(now()->addDays(3));
+                } elseif ($lead->status === 'Not Qualified') {
+                    \App\Jobs\SendLeadFollowupEmail::sendKey('not_qualified', $lead);
+                } elseif ($lead->status === 'Qualified but No Funds') {
+                    \App\Jobs\SendLeadFollowupEmail::sendKey('qualified_but_no_funds', $lead);
+                } elseif ($lead->status === 'Consultation Done') {
+                    \App\Jobs\SendLeadFollowupEmail::sendKey('consultation_done', $lead);
+                }
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning('Stage-change follow-up failed', [
+                    'lead_id' => $lead->id, 'status' => $lead->status, 'error' => $e->getMessage(),
+                ]);
+            }
+        });
     }
 
     /**

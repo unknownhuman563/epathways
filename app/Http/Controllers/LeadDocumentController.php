@@ -431,6 +431,27 @@ class LeadDocumentController extends Controller
             if ($consultancyScenario !== null) {
                 $generator->consultancy($lead, $consultancyScenario, $overrides);
                 $friendly = 'Consultancy Agreement';
+
+                // Generating the agreement emails the client the
+                // `consultancy_agreement` template and advances the pipeline to
+                // "Consultancy Agreement Sent". Opt-out via notify=false; a
+                // lead already further along is not regressed. Non-fatal.
+                $notify = $request->has('notify') ? $request->boolean('notify') : true;
+                if ($notify && ! empty($lead->email)) {
+                    try {
+                        app(\App\Services\CommunicationService::class)->sendTemplated('consultancy_agreement', $lead);
+
+                        $stages = \App\Models\Lead::STAGES;
+                        $curIdx = array_search($lead->status, $stages, true);
+                        $tgtIdx = array_search('Consultancy Agreement Sent', $stages, true);
+                        if ($tgtIdx !== false && ($curIdx === false || $curIdx < $tgtIdx)) {
+                            $lead->status = 'Consultancy Agreement Sent';
+                            $lead->save();
+                        }
+                    } catch (\Throwable $e) {
+                        Log::warning('consultancy_agreement email on generate failed', ['lead_id' => $lead->id, 'error' => $e->getMessage()]);
+                    }
+                }
             } elseif ($type === 'english_engagement') {
                 $generator->englishEngagement($lead);
                 $friendly = 'English Engagement';
