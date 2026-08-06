@@ -55,6 +55,10 @@ return [
         // 4.5 — the invoice-overdue rule graduated off "couldn't verify" once
         // case_payments exists).
         'payment_overdue_days' => 7,
+        // Age (days) an answer-requiring thread may sit unresolved before the
+        // UnresolvedThreadRule flags it (Build 12 phase 6 — graduated off
+        // "couldn't verify" once case_threads exists).
+        'thread_unanswered_days' => 3,
     ],
 
     /*

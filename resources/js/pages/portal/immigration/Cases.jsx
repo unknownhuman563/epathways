@@ -100,9 +100,14 @@ export default function ImmigrationCases({ cases = [], distribution = [], priori
     const [handoffCase, setHandoffCase] = useState(null);  // case being handed off / claimed
     const [tab, setTab] = useState('applications');
 
+    // "In my queue" = I own it OR someone put an answer-requiring question to me
+    // on it (Build 12 phase 6). The latter lands the case in my queue even when
+    // I don't own it.
+    const inMyQueue = (c) => (me_id && c.owner?.id === me_id) || (c.awaiting_my_answer > 0);
+
     // Custody counts for the My-queue / Unassigned filter chips.
     const custodyCounts = useMemo(() => ({
-        mine: me_id ? cases.filter((c) => c.owner?.id === me_id).length : 0,
+        mine: me_id ? cases.filter(inMyQueue).length : 0,
         unassigned: cases.filter((c) => !c.owner).length,
     }), [cases, me_id]);
 
@@ -118,7 +123,7 @@ export default function ImmigrationCases({ cases = [], distribution = [], priori
         const q = search.trim().toLowerCase();
         return cases.filter((c) => {
             if (tabKeyForStage(c.immigration_stage) !== tab) return false;
-            if (custodyFilter === 'mine' && c.owner?.id !== me_id) return false;
+            if (custodyFilter === 'mine' && ! inMyQueue(c)) return false;
             if (custodyFilter === 'unassigned' && c.owner) return false;
             if (stageFilter) {
                 const s = c.immigration_stage || 'Unassigned';
@@ -1129,6 +1134,16 @@ function CustodyCell({ c, meId = null }) {
                 </>
             ) : (
                 <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Unassigned</span>
+            )}
+            {/* Build 12 phase 6 — an open question addressed to me on this case.
+                It's in my queue even if I don't own it. */}
+            {c.awaiting_my_answer > 0 && (
+                <span
+                    title={`${c.awaiting_my_answer} open question${c.awaiting_my_answer === 1 ? "" : "s"} for you`}
+                    className="ml-1 inline-flex items-center px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 text-[10px] font-bold flex-shrink-0"
+                >
+                    {c.awaiting_my_answer} ask{c.awaiting_my_answer === 1 ? "" : "s"}
+                </span>
             )}
             {c.custody_stale && (
                 <span title={staleTitle} className="ml-auto flex-shrink-0">

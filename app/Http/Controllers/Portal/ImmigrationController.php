@@ -299,6 +299,11 @@ class ImmigrationController extends Controller
                 ->get(['name', 'checklist_items'])
                 ->mapWithKeys(fn ($v) => [$v->name => (is_array($v->checklist_items) ? $v->checklist_items : [])]);
 
+            // Build 12 phase 6 — open, answer-requiring threads addressed to the
+            // viewer. These land the case in their queue even when they don't own
+            // it, so the My-queue filter can surface "someone asked you" cases.
+            $awaitingByLead = \App\Models\CaseThread::awaitingCountsFor((int) auth()->id());
+
             $cases = Lead::with([
                 'documents',
                 'faceImage',
@@ -315,7 +320,7 @@ class ImmigrationController extends Controller
                 ->orderByRaw('COALESCE(last_activity_at, updated_at) DESC')
                 ->limit(200)
                 ->get()
-                ->map(function ($l) use ($visaChecklists) {
+                ->map(function ($l) use ($visaChecklists, $awaitingByLead) {
                     // Staleness is measured on the last *activity*, not on how
                     // long the owner has held the case: a case actively worked
                     // for 12 days is fine; one untouched for 10 is stuck.
@@ -411,6 +416,9 @@ class ImmigrationController extends Controller
                         'owner_since' => optional($l->owner_since)?->toIso8601String(),
                         'custody_stale' => $custodyStale,
                         'idle_days' => $idleDays,
+                        // Build 12 phase 6 — open questions on this case addressed
+                        // to the viewer. Drives the queue chip + My-queue filter.
+                        'awaiting_my_answer' => (int) ($awaitingByLead[$l->id] ?? 0),
                     ];
                 });
 

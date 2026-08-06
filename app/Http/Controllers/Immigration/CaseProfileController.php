@@ -81,7 +81,58 @@ class CaseProfileController extends Controller
             'findings' => $this->loadFindings($lead),
             // Build 12 phase 4.5 — the process chain (steps, owners, gates, SLA).
             'process' => $this->loadProcess($lead),
+            // Build 12 phase 6 — anchored threads, and the staff a thread can be
+            // addressed to.
+            'threads' => $this->loadThreads($lead),
+            'caseStaff' => $this->loadCaseStaff(),
         ]);
+    }
+
+    /**
+     * Every thread on the case (Build 12 phase 6, §7). Open first, then resolved
+     * for the trail. Placement is the frontend's job, derived from the anchor —
+     * a document thread renders on its document row, a step thread on its step,
+     * case/gate/stage threads in the Notes tab.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function loadThreads(Lead $lead): array
+    {
+        return \App\Models\CaseThread::query()
+            ->where('lead_id', $lead->id)
+            ->with(['author:id,name', 'addressedTo:id,name', 'resolver:id,name'])
+            ->orderByRaw('resolved_at IS NULL DESC')
+            ->orderByDesc('id')
+            ->get()
+            ->map(fn (\App\Models\CaseThread $t) => [
+                'id' => $t->id,
+                'anchor_type' => $t->anchor_type,
+                'anchor_id' => $t->anchor_id,
+                'anchor_key' => $t->anchor_key,
+                'anchor_attempt' => $t->anchor_attempt,
+                'body' => $t->body,
+                'requires_answer' => $t->requires_answer,
+                'author' => $t->author?->name,
+                'addressed_to' => $t->addressedTo ? ['id' => $t->addressedTo->id, 'name' => $t->addressedTo->name] : null,
+                'resolved_at' => optional($t->resolved_at)->toIso8601String(),
+                'resolved_by' => $t->resolver?->name,
+                'created_at' => optional($t->created_at)->toIso8601String(),
+            ])
+            ->all();
+    }
+
+    /** Immigration-capable staff a thread can be addressed to. */
+    private function loadCaseStaff(): array
+    {
+        return User::query()
+            ->whereIn('role', array_merge(
+                [User::ROLE_SUPER_ADMIN, User::ROLE_ADMIN, 'immigration'],
+                User::IMMIGRATION_ROLES,
+            ))
+            ->orderBy('name')
+            ->get(['id', 'name'])
+            ->map(fn (User $u) => ['id' => $u->id, 'name' => $u->name])
+            ->all();
     }
 
     /**
@@ -290,6 +341,81 @@ class CaseProfileController extends Controller
         \App\Jobs\EvaluateCaseFindings::dispatch($lead->id);
 
         return back()->with('success', 'Lodgement signed off.');
+    }
+
+    // ── Threads (Build 12 phase 6, §7) ──────────────────────────────────────
+
+    /**
+     * Open a thread on the case. NOT a chat message — it must anchor to
+     * something (the case, a document, a gate, a stage, or a step) or it is
+     * refused. A document anchor must name a document ON THIS CASE; a step / gate
+     * / stage anchor must carry its key. An answer-requiring thread addressed to
+     * someone notifies them the same way a handoff does (phase 2).
+     */
+    public function storeThread(Request $request, Lead $lead)
+    {
+        $user = $this->guardCase($lead);
+
+        $data = $request->validate([
+            'anchor_type' => ['required', \Illuminate\Validation\Rule::in(\App\Models\CaseThread::ANCHOR_TYPES)],
+            // document → an id on this case; step/gate/stage → a key.
+            'anchor_id' => ['nullable', 'integer', 'required_if:anchor_type,document'],
+            'anchor_key' => ['nullable', 'string', 'max:60', 'required_if:anchor_type,step', 'required_if:anchor_type,gate', 'required_if:anchor_type,stage'],
+            'anchor_attempt' => ['nullable', 'integer', 'min:1'],
+            'body' => ['required', 'string', 'max:2000'],
+            'addressed_to_id' => ['nullable', 'integer', 'exists:users,id'],
+            'requires_answer' => ['boolean'],
+        ]);
+
+        // A document anchor must reference a document that belongs to this case —
+        // row-level, not just "some document id" (§13).
+        if ($data['anchor_type'] === \App\Models\CaseThread::ANCHOR_DOCUMENT) {
+            abort_unless(
+                LeadDocument::where('id', $data['anchor_id'])->where('lead_id', $lead->id)->exists(),
+                422,
+                'That document is not on this case.'
+            );
+        }
+
+        $thread = \App\Models\CaseThread::create([
+            'lead_id' => $lead->id,
+            'anchor_type' => $data['anchor_type'],
+            'anchor_id' => $data['anchor_type'] === \App\Models\CaseThread::ANCHOR_DOCUMENT ? $data['anchor_id'] : null,
+            'anchor_key' => in_array($data['anchor_type'], ['step', 'gate', 'stage'], true) ? ($data['anchor_key'] ?? null) : null,
+            'anchor_attempt' => $data['anchor_type'] === \App\Models\CaseThread::ANCHOR_STEP ? ($data['anchor_attempt'] ?? null) : null,
+            'author_id' => $user->id,
+            'addressed_to_id' => $data['addressed_to_id'] ?? null,
+            'body' => $data['body'],
+            'requires_answer' => (bool) ($data['requires_answer'] ?? false),
+        ]);
+
+        // Answer-requiring + addressed → it lands in that person's queue, and we
+        // tell them, exactly like a handoff. Don't notify yourself.
+        if ($thread->requires_answer && $thread->addressed_to_id && $thread->addressed_to_id !== $user->id) {
+            User::find($thread->addressed_to_id)?->notify(
+                new \App\Notifications\CaseThreadAddressed($thread->load('lead'), $user->name)
+            );
+        }
+
+        return back()->with('success', 'Thread posted.');
+    }
+
+    /**
+     * Mark a thread answered (Build 12 phase 6). Explicit and recorded
+     * (resolved_at / resolved_by) — nothing is deleted. Resolving clears it from
+     * the addressee's queue and lets the finding auto-resolve on the next run.
+     */
+    public function resolveThread(Request $request, Lead $lead, \App\Models\CaseThread $thread)
+    {
+        $user = $this->guardCase($lead);
+        abort_unless($thread->lead_id === $lead->id, 404);
+
+        if (! $thread->isResolved()) {
+            $thread->forceFill(['resolved_at' => now(), 'resolved_by' => $user->id])->save();
+            \App\Jobs\EvaluateCaseFindings::dispatch($lead->id);
+        }
+
+        return back()->with('success', 'Thread resolved.');
     }
 
     /** Start (instantiate) the step chain for a case. */

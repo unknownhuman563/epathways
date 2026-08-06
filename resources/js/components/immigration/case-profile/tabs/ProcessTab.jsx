@@ -5,6 +5,7 @@ import {
     Workflow, Check, Clock, Lock, ShieldCheck, RotateCcw, AlertTriangle,
     CircleDashed, MinusCircle, Play, DollarSign, Gavel, Stamp,
 } from "lucide-react";
+import { ThreadItem, ThreadComposer } from "@/components/immigration/case-profile/threads";
 
 const fmtDate = (iso) =>
     iso ? new Date(iso).toLocaleDateString("en-NZ", { day: "numeric", month: "short", year: "numeric" }) : null;
@@ -18,8 +19,17 @@ const STATUS = {
     not_applicable: { chip: "bg-gray-50 text-gray-400 border-gray-100", icon: MinusCircle, label: "N/A" },
 };
 
-export default function ProcessTab({ lead, process = { started: false, steps: [], payment: null, partner: null } }) {
+export default function ProcessTab({ lead, process = { started: false, steps: [], payment: null, partner: null }, threads = [], caseStaff = [] }) {
     if (! lead?.id) return null;
+
+    // Build 12 phase 6 — threads anchored to a step render on that step. Group
+    // by step_key.
+    const threadsByStep = new Map();
+    for (const t of threads) {
+        if (t.anchor_type !== "step" || ! t.anchor_key) continue;
+        if (! threadsByStep.has(t.anchor_key)) threadsByStep.set(t.anchor_key, []);
+        threadsByStep.get(t.anchor_key).push(t);
+    }
 
     const post = (url, data = {}, ok) =>
         router.post(url, data, {
@@ -59,7 +69,14 @@ export default function ProcessTab({ lead, process = { started: false, steps: []
                 </div>
                 <ol className="divide-y divide-gray-50">
                     {process.steps.map((s) => (
-                        <StepRow key={s.step_key} leadId={lead.id} step={s} post={post} />
+                        <StepRow
+                            key={s.step_key}
+                            leadId={lead.id}
+                            step={s}
+                            post={post}
+                            stepThreads={threadsByStep.get(s.step_key) || []}
+                            caseStaff={caseStaff}
+                        />
                     ))}
                 </ol>
             </div>
@@ -227,7 +244,7 @@ function VerdictPanel({ leadId, steps, verdict, hasLodgementSignoff, canAttest, 
     );
 }
 
-function StepRow({ leadId, step, post }) {
+function StepRow({ leadId, step, post, stepThreads = [], caseStaff = [] }) {
     const meta = STATUS[step.status] || STATUS.pending;
     const Icon = meta.icon;
     const isActive = step.status === "active";
@@ -240,7 +257,8 @@ function StepRow({ leadId, step, post }) {
     };
 
     return (
-        <li className={`px-5 py-3 flex items-start gap-3 ${step.overdue ? "bg-rose-50/40" : ""}`}>
+        <li className={`px-5 py-3 ${step.overdue ? "bg-rose-50/40" : ""}`}>
+        <div className="flex items-start gap-3">
             <div className="flex flex-col items-center pt-0.5">
                 <Icon size={16} className={step.overdue ? "text-rose-500" : "text-gray-400"} />
                 <span className="text-[9px] font-mono text-gray-300 mt-1">{step.step_key}</span>
@@ -284,6 +302,22 @@ function StepRow({ leadId, step, post }) {
                     </button>
                 )}
             </div>
+        </div>
+
+        {/* Build 12 phase 6 — threads anchored to this step, and a composer
+            pinned to the current attempt. */}
+        <div className="mt-2 ml-9 space-y-1.5">
+            {stepThreads.map((t) => (
+                <ThreadItem key={t.id} thread={t} leadId={leadId} />
+            ))}
+            <ThreadComposer
+                leadId={leadId}
+                caseStaff={caseStaff}
+                fixedAnchor={{ anchor_type: "step", anchor_key: step.step_key, anchor_attempt: step.attempt }}
+                compact
+                placeholder={`Ask about step ${step.step_key}…`}
+            />
+        </div>
         </li>
     );
 }

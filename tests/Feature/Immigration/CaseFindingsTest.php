@@ -164,11 +164,14 @@ class CaseFindingsTest extends TestCase
 
         $summary = $this->evaluate($case);
 
-        // The threads rule still can't run (phase 6). The invoice-payment rule
-        // GRADUATED off "couldn't verify" in phase 4.5 once case_payments landed,
-        // so payment must no longer appear here.
+        // The required "couldn't verify" line still surfaces genuine data gaps
+        // (a bare case has no passport expiry on file). Two rules GRADUATED off
+        // this line and must no longer appear: the invoice-payment rule once
+        // case_payments landed (phase 4.5), and the threads rule once
+        // case_threads landed (phase 6).
         $joined = implode(' ', $summary['couldnt_verify']);
-        $this->assertStringContainsStringIgnoringCase('threads', $joined);
+        $this->assertStringContainsStringIgnoringCase('passport', $joined);
+        $this->assertStringNotContainsStringIgnoringCase('threads', $joined);
         $this->assertStringNotContainsStringIgnoringCase('payment', $joined);
     }
 

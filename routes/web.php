@@ -1202,6 +1202,13 @@ Route::middleware(['auth'])->group(function () {
             Route::post('/cases/{lead}/lodgement-signoff', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'recordLodgementSignoff'])
                 ->name('cases.lodgement-signoff');
 
+            // Build 12 phase 6 — anchored threads. Posting requires an anchor
+            // (validated in the controller); resolving is explicit and recorded.
+            Route::post('/cases/{lead}/threads', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'storeThread'])
+                ->name('cases.threads.store');
+            Route::post('/cases/{lead}/threads/{thread}/resolve', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'resolveThread'])
+                ->name('cases.threads.resolve');
+
             // Build 11.D Phase 2 — Managed agreement endpoints. Each call
             // re-checks is_immigration_case + agreement<->lead ownership so
             // a cross-case URL guess still 404s. The route order matters:
