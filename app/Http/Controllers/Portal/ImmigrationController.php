@@ -1040,10 +1040,16 @@ class ImmigrationController extends Controller
 
                 $lead = null;
 
-                // 1. Same email AND matching last name — the confident match.
-                if ($email && $wantLast !== '') {
+                // 1. Same email AND matching FULL name — the confident match.
+                //    Email is not unique to a person (families share an inbox)
+                //    and neither is a surname, so require the first name to match
+                //    too. Matching on surname alone would hijack a same-email
+                //    relative's lead (e.g. converting "Test Rogene" linked to a
+                //    different "… Rogene" and the success message named them).
+                if ($email && $wantLast !== '' && $wantFirst !== '') {
                     $lead = Lead::where('email', $email)->get()
-                        ->first(fn ($l) => strtolower(trim((string) $l->last_name)) === $wantLast);
+                        ->first(fn ($l) => strtolower(trim((string) $l->last_name)) === $wantLast
+                            && strtolower(trim((string) $l->first_name)) === $wantFirst);
                 }
 
                 // 2. No email match — a staff-created case may exist under the
@@ -1132,7 +1138,16 @@ class ImmigrationController extends Controller
     private function convertResidentIntakeWithoutAssessment(ResidentIntake $intake)
     {
         return DB::transaction(function () use ($intake) {
-            $lead = Lead::where('email', $intake->email)->first();
+            // Match a same-email lead only when the full name also matches —
+            // families share an inbox, so email alone would hijack a relative.
+            $wantFirst = strtolower(trim((string) $intake->first_name));
+            $wantLast = strtolower(trim((string) $intake->last_name));
+            $lead = null;
+            if ($intake->email && $wantFirst !== '' && $wantLast !== '') {
+                $lead = Lead::where('email', $intake->email)->get()
+                    ->first(fn ($l) => strtolower(trim((string) $l->first_name)) === $wantFirst
+                        && strtolower(trim((string) $l->last_name)) === $wantLast);
+            }
             if (! $lead) {
                 $lead = Lead::create([
                     'lead_id' => 'LP-'.str_pad((string) (Lead::max('id') + 1000), 5, '0', STR_PAD_LEFT),
