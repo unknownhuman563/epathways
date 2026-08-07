@@ -1628,7 +1628,9 @@ function requestCasePortal(c) {
         preserveScroll: true,
         preserveState: true,
         onSuccess: () => toast.success("Portal access requested."),
-        onError: () => toast.error("Could not request portal access."),
+        // Surface the specific reason from the server (e.g. no email on file)
+        // instead of a generic "could not request".
+        onError: (errors) => toast.error(errors?.error || "Could not request portal access."),
     });
 }
 
