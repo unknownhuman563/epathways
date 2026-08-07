@@ -23,27 +23,6 @@ use Illuminate\Support\Facades\Storage;
  */
 class LeadPortalController extends Controller
 {
-    /** Premium overview — hero, submissions summary, upcoming activity teaser,
-     *  latest announcement teaser. */
-    public function dashboard()
-    {
-        $lead = $this->resolveLeadOrLogout();
-        if (! $lead instanceof Lead) {
-            return $lead;
-        }
-
-        return inertia('portal/lead/Dashboard', [
-            'lead'              => $this->leadPayload($lead),
-            'submissionsCounts' => $this->submissionsCounts($lead),
-            'nextActivity'      => $this->upcomingEvents()->first(),
-            'latestAnnouncement'=> $this->announcementFeed(1)->first(),
-            'documentSummary'   => $this->documentSummary($lead),
-            'roadmap'           => LeadPhaseService::roadmap($lead->status),
-            'currentPhase'      => LeadPhaseService::phaseFor($lead->status),
-            'preEngagement'     => LeadPhaseService::isPreEngagement($lead->status),
-        ]);
-    }
-
     /** Full submissions timeline — every form the lead has signed against. */
     public function submissions()
     {
@@ -194,13 +173,6 @@ class LeadPortalController extends Controller
         ]);
     }
 
-    public function profile()
-    {
-        $lead = $this->resolveLeadOrLogout();
-        if (! $lead instanceof Lead) return $lead;
-        return inertia('portal/lead/Profile', ['lead' => $this->leadPayload($lead)]);
-    }
-
     public function settings()
     {
         $lead = $this->resolveLeadOrLogout();
@@ -209,18 +181,45 @@ class LeadPortalController extends Controller
     }
 
     /**
-     * Authenticated "Application Tracker" — the same content the public
-     * /track/{code} page shows, but resolved from the logged-in lead's own
-     * record (no code to type). Reuses LeadTrackingController's payload
-     * builder so the two surfaces can never drift.
+     * The lead portal is three tracker views, one per sidebar item:
+     *   dashboard()    → Overview      (/portal/lead/dashboard)
+     *   requirements() → checklist     (/portal/lead/requirements)
+     *   profile()      → applicant     (/portal/lead/profile)
+     * All reuse LeadTrackingController's payload builder so the client, staff
+     * and public /track/{code} surfaces can never drift. tracker() is kept as a
+     * back-compat alias that lands on the dashboard view.
      */
+    public function dashboard()
+    {
+        return $this->trackerView('overview');
+    }
+
+    public function requirements()
+    {
+        return $this->trackerView('visa');
+    }
+
+    public function profile()
+    {
+        return $this->trackerView('profile');
+    }
+
     public function tracker()
     {
+        return $this->trackerView('overview');
+    }
+
+    private function trackerView(string $tab)
+    {
         $lead = $this->resolveLeadOrLogout();
-        if (! $lead instanceof Lead) return $lead;
+        if (! $lead instanceof Lead) {
+            return $lead;
+        }
 
         $payload = app(LeadTrackingController::class)->buildTrackerPayload($lead, $lead->tracking_code);
         $payload['embedded'] = true;
+        $payload['sidebarTabs'] = true;
+        $payload['initialTab'] = $tab;
 
         return inertia('portal/lead/Tracker', $payload);
     }

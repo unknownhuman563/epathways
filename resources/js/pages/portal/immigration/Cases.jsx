@@ -71,11 +71,17 @@ const stageChipClass = (stage) =>
  * always lives in exactly one tab — nothing is hidden.
  */
 const CASE_TABS = [
-    { key: 'applications', label: 'Applications', hint: 'Assessment & RFI',  stages: ['For Assessment', 'Request for Information'] },
-    { key: 'advisers',     label: 'Advisers',     hint: 'Endorsed → Invoice', stages: ['Endorsed', 'Agreement Sent', 'Agreement Signed', 'For Agreement & Invoice'] },
+    { key: 'applications', label: 'Assessment',   hint: 'For Assessment',     stages: ['For Assessment'] },
+    { key: 'advisers',     label: 'Advisers',     hint: 'Endorsed → RFI',     stages: ['Endorsed', 'Agreement Sent', 'Agreement Signed', 'For Agreement & Invoice', 'Request for Information'] },
     { key: 'invoice',      label: 'Invoice',      hint: 'Invoice paid',       stages: ['Invoice Paid'] },
-    { key: 'visa',         label: 'Visa',         hint: 'Lodged → outcome',   stages: ['Visa Lodged', 'Approved in Principle', 'Approved Visa', 'Decline Visa'] },
+    { key: 'lodged',       label: 'Lodged',       hint: 'Submitted to INZ',   stages: ['Visa Lodged'] },
+    { key: 'visa',         label: 'Visa',         hint: 'Outcome',            stages: ['Approved in Principle', 'Approved Visa', 'Decline Visa'] },
 ];
+
+// Leftmost "All" tab — shows every case regardless of stage. Kept out of
+// CASE_TABS so it doesn't act as a stage bucket in tabKeyForStage().
+const ALL_TAB = { key: 'all', label: 'All Assessments', hint: 'Every case' };
+const RENDER_TABS = [ALL_TAB, ...CASE_TABS];
 
 // Which tab a stage belongs to. Cases with no stage yet fall into
 // Applications — that's where the journey starts.
@@ -85,7 +91,14 @@ const tabKeyForStage = (stage) => {
     return hit ? hit.key : 'applications';
 };
 
-export default function ImmigrationCases({ cases = [], distribution = [], priorities = {}, stages = [], visaTypes = [] }) {
+export default function ImmigrationCases({ cases = [], distribution = [], priorities = {}, stages = [], visaTypes = [], total: totalCount = null, loaded = null }) {
+    // True queue size vs. how many the server actually loaded. When these
+    // differ, the safety ceiling truncated the list — warn loudly rather than
+    // silently hiding cases (the "For Assessment cases vanished" bug).
+    // (Aliased to totalCount — the component already has a local `total` that
+    // sums the distribution graph.)
+    const trueTotal = totalCount ?? cases.length;
+    const truncated = loaded != null && totalCount != null && loaded < totalCount;
     const [search, setSearch] = useState("");
     const [stageFilter, setStageFilter] = useState(null); // click a bar/legend → filter
     const [sortKey, setSortKey] = useState("updated_at");
@@ -98,7 +111,7 @@ export default function ImmigrationCases({ cases = [], distribution = [], priori
     const [tab, setTab] = useState('applications');
 
     const tabCounts = useMemo(() => {
-        const counts = {};
+        const counts = { all: cases.length };
         for (const t of CASE_TABS) counts[t.key] = 0;
         for (const c of cases) counts[tabKeyForStage(c.immigration_stage)] += 1;
         return counts;
@@ -108,7 +121,8 @@ export default function ImmigrationCases({ cases = [], distribution = [], priori
     const filtered = useMemo(() => {
         const q = search.trim().toLowerCase();
         return cases.filter((c) => {
-            if (tabKeyForStage(c.immigration_stage) !== tab) return false;
+            // The "All" tab shows every stage; the others bucket by stage.
+            if (tab !== 'all' && tabKeyForStage(c.immigration_stage) !== tab) return false;
             if (stageFilter) {
                 const s = c.immigration_stage || 'Unassigned';
                 if (s !== stageFilter) return false;
@@ -175,11 +189,24 @@ export default function ImmigrationCases({ cases = [], distribution = [], priori
                 </div>
             </div>
 
-            <div className="flex items-center justify-end">
+            {/* Search + Add-new share one row, outside the table. Search runs
+                across the active tab (use the "All Assessments" tab to search
+                every case by name). */}
+            <div className="flex items-center gap-3">
+                <div className="relative flex-1 max-w-md">
+                    <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <input
+                        type="text"
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                        placeholder="Search by name, lead ID, INZ reference, visa type…"
+                        className="w-full pl-9 pr-3 py-2.5 bg-white border border-gray-200 rounded-xl text-sm text-gray-800 shadow-sm focus:outline-none focus:border-gray-400 transition-colors"
+                    />
+                </div>
                 <button
                     type="button"
                     onClick={() => setCreating(true)}
-                    className="px-4 py-2 bg-gray-900 text-white text-sm font-semibold rounded-xl hover:bg-black transition-colors flex items-center gap-2 flex-shrink-0"
+                    className="px-4 py-2.5 bg-gray-900 text-white text-sm font-semibold rounded-xl hover:bg-black transition-colors flex items-center gap-2 flex-shrink-0"
                 >
                     <Plus size={14} strokeWidth={2.5} /> Add new case
                 </button>
@@ -189,7 +216,7 @@ export default function ImmigrationCases({ cases = [], distribution = [], priori
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm">
                 {/* Tabs — follow the case through the stage pipeline */}
                 <div className="flex px-4 sm:px-5 border-b border-gray-100 overflow-x-auto">
-                    {CASE_TABS.map((t) => {
+                    {RENDER_TABS.map((t) => {
                         const active = tab === t.key;
                         return (
                             <button
@@ -217,17 +244,7 @@ export default function ImmigrationCases({ cases = [], distribution = [], priori
                     })}
                 </div>
 
-                <div className="px-4 sm:px-5 py-3 flex items-center gap-3 border-b border-gray-100">
-                    <div className="relative flex-1 max-w-md">
-                        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                        <input
-                            type="text"
-                            value={search}
-                            onChange={(e) => setSearch(e.target.value)}
-                            placeholder="Search by name, lead ID, INZ reference, visa type…"
-                            className="w-full pl-9 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs text-gray-800 focus:outline-none focus:bg-white focus:border-gray-300 transition-colors"
-                        />
-                    </div>
+                <div className="px-4 sm:px-5 py-2.5 flex items-center gap-3 border-b border-gray-100">
                     {stageFilter && (
                         <button
                             type="button"
@@ -239,9 +256,21 @@ export default function ImmigrationCases({ cases = [], distribution = [], priori
                         </button>
                     )}
                     <div className="text-[11px] font-semibold text-gray-500 ml-auto">
-                        Showing <span className="text-gray-900">{sorted.length}</span> of {cases.length} cases
+                        Showing <span className="text-gray-900">{sorted.length}</span> of {trueTotal} cases
                     </div>
                 </div>
+
+                {truncated && (
+                    <div className="mx-4 sm:mx-5 mb-3 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-[12px] text-amber-800">
+                        <AlertTriangle size={15} className="flex-shrink-0 mt-0.5" />
+                        <span>
+                            <span className="font-semibold">{trueTotal - loaded} case{trueTotal - loaded === 1 ? "" : "s"} not loaded.</span>{" "}
+                            This view is capped and older, less-active cases (often those still in
+                            <span className="font-semibold"> For Assessment</span>) aren't shown here — search can't reach them either.
+                            Ask an admin to enable server-side paging.
+                        </span>
+                    </div>
+                )}
 
                 {/* Table */}
                 <div className="overflow-x-auto overflow-y-visible">

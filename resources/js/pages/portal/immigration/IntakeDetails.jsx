@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Head, Link, router } from '@inertiajs/react';
+import IntakeDownloadModal from '@/components/immigration/IntakeDownloadModal';
 import {
     ArrowLeft, Mail, Phone, Calendar, Globe, FileText, Briefcase, GraduationCap,
     Plane, Languages, Users, ShieldCheck, HeartPulse, Award, MessageSquare,
@@ -323,17 +324,8 @@ export default function IntakeDetails({ type, intake, assessment = null, linkedL
     const citizenship = intake.country_of_citizenship || intake.nationality || null;
 
     const handlePrint = () => window.print();
-    const handleDownload = () => {
-        const blob = new Blob([JSON.stringify(intake, null, 2)], { type: 'application/json' });
-        const url  = URL.createObjectURL(blob);
-        const a    = document.createElement('a');
-        a.href = url;
-        a.download = `${intake.intake_id || `${type}-intake`}.json`;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        URL.revokeObjectURL(url);
-    };
+    // Preview the Visa Information Form, then download as PDF or Word.
+    const [downloadOpen, setDownloadOpen] = useState(false);
 
     // Convert-to-case action. Mirrors the Convert button on the Assessments
     // queue, just exposed here so staff don't have to bounce back to the
@@ -375,7 +367,7 @@ export default function IntakeDetails({ type, intake, assessment = null, linkedL
                 <Printer size={15} /> Print
             </button>
             <button
-                onClick={handleDownload}
+                onClick={() => setDownloadOpen(true)}
                 className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl border border-gray-200 bg-white text-sm font-semibold text-gray-700 hover:bg-gray-50 hover:text-gray-900 transition-colors"
             >
                 <Download size={15} /> Download
@@ -409,6 +401,15 @@ export default function IntakeDetails({ type, intake, assessment = null, linkedL
     return (
         <div id="intake-print" className="space-y-5 max-w-[1300px] mx-auto pb-12">
             <Head title={`${fullName} — ${meta.label}`} />
+
+            <IntakeDownloadModal
+                open={downloadOpen}
+                onClose={() => setDownloadOpen(false)}
+                type={type}
+                id={intake.id}
+                applicant={fullName}
+            />
+
 
             <style>{`
                 @media print {

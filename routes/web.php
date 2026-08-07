@@ -1150,6 +1150,17 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/intakes/{type}/{id}', [ImmigrationController::class, 'showIntake'])
                 ->where(['type' => 'work|student|visitor', 'id' => '[0-9]+'])
                 ->name('intakes.show');
+            // Visa Information Form export — A4 PDF download, an inline HTML
+            // preview (for the download modal), and an editable Word (.doc).
+            Route::get('/intakes/{type}/{id}/pdf', [ImmigrationController::class, 'downloadIntakePdf'])
+                ->where(['type' => 'work|student|visitor', 'id' => '[0-9]+'])
+                ->name('intakes.pdf');
+            Route::get('/intakes/{type}/{id}/preview', [ImmigrationController::class, 'previewIntakePdf'])
+                ->where(['type' => 'work|student|visitor', 'id' => '[0-9]+'])
+                ->name('intakes.preview');
+            Route::get('/intakes/{type}/{id}/word', [ImmigrationController::class, 'downloadIntakeWord'])
+                ->where(['type' => 'work|student|visitor', 'id' => '[0-9]+'])
+                ->name('intakes.word');
             // Convert a visa-interest submission to an immigration case.
             // The {id} route param is Assessment.id (post-Phase-B
             // canonical). The controller also accepts a legacy
@@ -1342,6 +1353,8 @@ Route::middleware(['auth'])->group(function () {
             // New sidebar sections — most are placeholders while the full
             // workflow ships incrementally.
             Route::get('/tracker', [App\Http\Controllers\LeadPortalController::class, 'tracker'])->name('tracker');
+            // Requirements = the tracker's checklist view (sidebar item).
+            Route::get('/requirements', [App\Http\Controllers\LeadPortalController::class, 'requirements'])->name('requirements');
             Route::get('/journey', [App\Http\Controllers\LeadPortalController::class, 'journey'])->name('journey');
             Route::get('/checklist', [App\Http\Controllers\LeadPortalController::class, 'checklist'])->name('checklist');
             Route::get('/visa-forms', [App\Http\Controllers\LeadPortalController::class, 'visaForms'])->name('visa-forms');
