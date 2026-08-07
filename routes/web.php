@@ -115,6 +115,14 @@ Route::post('/bookings', [BookingController::class, 'store']);
 // the public booking page (fails open when Calendar isn't configured).
 Route::get('/booking/busy', [BookingController::class, 'busyTimes']);
 
+// Client self-service reschedule / cancel from the booking emails. The token
+// identifies the booking (known client → the booking page skips the intake
+// form and only asks for a new slot). Cancel is a GET confirmation → POST.
+Route::get('/booking/reschedule/{token}', [BookingController::class, 'reschedulePage'])->name('booking.reschedule');
+Route::post('/booking/reschedule/{token}', [BookingController::class, 'reschedule'])->name('booking.reschedule.submit');
+Route::get('/booking/cancel/{token}', [BookingController::class, 'cancelPage'])->name('booking.cancel');
+Route::post('/booking/cancel/{token}', [BookingController::class, 'cancel'])->name('booking.cancel.submit');
+
 // Stripe Checkout for consultation bookings (booking is saved first, then the
 // optional payment step). Webhook is CSRF-exempt (see bootstrap/app.php).
 Route::post('/bookings/{booking}/checkout', [\App\Http\Controllers\PaymentController::class, 'checkout']);

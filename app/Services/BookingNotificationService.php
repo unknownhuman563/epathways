@@ -35,6 +35,15 @@ class BookingNotificationService
             ? rtrim((string) config('app.url'), '/').'/track/'.$lead->tracking_code
             : rtrim((string) config('app.url'), '/');
 
+        // Token-driven self-service links. Fall back to the tracker when a
+        // booking predates the token column (shouldn't happen post-backfill).
+        $rescheduleUrl = $booking->manage_token
+            ? url('/booking/reschedule/'.$booking->manage_token)
+            : $trackerUrl;
+        $cancelUrl = $booking->manage_token
+            ? url('/booking/cancel/'.$booking->manage_token)
+            : $trackerUrl;
+
         return [
             'contact.email' => $booking->email,
             'appointment.only_start_date' => $when?->format('j M Y') ?? '',
@@ -42,8 +51,8 @@ class BookingNotificationService
             'appointment.timezone' => $tz,
             'appointment.meeting_location' => $booking->meet_link ?: 'Google Meet — link in your calendar invite',
             'tracker_url' => $trackerUrl,
-            'reschedule_url' => $trackerUrl, // TODO: dedicated reschedule flow
-            'cancel_url' => $trackerUrl,     // TODO: dedicated cancel flow
+            'reschedule_url' => $rescheduleUrl,
+            'cancel_url' => $cancelUrl,
         ];
     }
 

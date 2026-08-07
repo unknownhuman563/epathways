@@ -226,8 +226,16 @@ const consultants = {
     ]
 };
 
-export default function BookingPage({ visaTypes = [], availability = {}, bookingTimezone = "Pacific/Auckland" }) {
+export default function BookingPage({ visaTypes = [], availability = {}, bookingTimezone = "Pacific/Auckland", reschedule = null }) {
     const [step, setStep] = useState(1);
+    // Reschedule mode (opened from a booking email's Reschedule link): the
+    // client is already on record, so we skip the whole wizard + intake form
+    // and only show the slot picker for their existing consultant.
+    const [rescheduleDone, setRescheduleDone] = useState(false);
+    const rescheduleConsultant = useMemo(() => {
+        if (! reschedule) return null;
+        return Object.values(consultants).flat().find((c) => c.name === reschedule.consultant_name) || null;
+    }, [reschedule]);
     const [openFaq, setOpenFaq] = useState(null);
     const [selection, setSelection] = useState({
         category: null,
@@ -332,6 +340,37 @@ export default function BookingPage({ visaTypes = [], availability = {}, booking
     };
 
     const updateInfo = (patch) => setSelection(prev => ({ ...prev, info: { ...prev.info, ...patch } }));
+
+    // Submit a new slot for an existing booking (reschedule flow). Only the
+    // date/time is sent — everything else stays as recorded.
+    const submitReschedule = async () => {
+        setError(null);
+        const info = selection.info;
+        if (! info.appointmentDate || ! info.appointmentTime) { setError('Please pick a new date and time.'); return; }
+        setIsSubmitting(true);
+        try {
+            const res = await fetch(`/booking/reschedule/${reschedule.token}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content'),
+                },
+                body: JSON.stringify({
+                    appointment_date: info.appointmentDate,
+                    appointment_time: info.appointmentTime,
+                    appointment_at: info.appointmentAt || null,
+                    client_timezone: info.clientTimezone || Intl.DateTimeFormat().resolvedOptions().timeZone,
+                }),
+            });
+            if (res.ok) setRescheduleDone(true);
+            else setError('Could not reschedule. Please try again.');
+        } catch {
+            setError('Network error. Please try again.');
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
 
     // In-system consultation booking (education / general consultants): the
     // visitor picks a slot on our own calendar (NativeScheduler) then confirms.
@@ -631,6 +670,71 @@ export default function BookingPage({ visaTypes = [], availability = {}, booking
             setIsSubmitting(false);
         }
     };
+
+    // ── Reschedule mode ─────────────────────────────────────────────────
+    // Token-driven: skip the wizard + intake form entirely, just show the slot
+    // picker for the existing consultant. On confirm, POST the new slot.
+    if (reschedule) {
+        const con = rescheduleConsultant;
+        const schedProps = con?.availabilityConfig
+            ? { slotMinutes: con.slotMinutes || 60, availability: con.availabilityConfig, businessTz: con.timezone || bookingTimezone, busyUrl: con.busyUrl || null }
+            : { slotMinutes: 30, availability: availability, businessTz: bookingTimezone, busyUrl: null };
+        const canConfirm = selection.info.appointmentDate && selection.info.appointmentTime && !isSubmitting;
+        return (
+            <div className="min-h-screen font-urbanist bg-[#F9F8F6]">
+                <Navbar />
+                <section className="py-20 px-4">
+                    <div className="max-w-6xl mx-auto">
+                        {!rescheduleDone ? (
+                            <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
+                                <div className="lg:col-span-4">
+                                    <h1 className="text-4xl md:text-5xl font-light text-black mb-4">Reschedule your consultation</h1>
+                                    <p className="text-gray-600 leading-relaxed mb-8">
+                                        Hi {reschedule.first_name || 'there'}, pick a new time that works for you. Your details are already on file — no need to fill anything in again.
+                                    </p>
+                                    <div className="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm">
+                                        <p className="text-[10px] uppercase tracking-widest text-gray-500 font-bold mb-2">Current booking</p>
+                                        <p className="font-bold text-gray-900">{reschedule.service_type}</p>
+                                        {reschedule.consultant_name && <p className="text-sm text-gray-600 mt-0.5">with {reschedule.consultant_name}</p>}
+                                        {reschedule.current_date && (
+                                            <div className="flex items-center gap-2 text-sm text-[#436235] mt-3">
+                                                <Calendar size={15} />
+                                                <span>{reschedule.current_date}{reschedule.current_time ? ` at ${reschedule.current_time}` : ''}</span>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                                <div className="lg:col-span-8">
+                                    <NativeScheduler hideDetails visaTypes={[]} {...schedProps} info={selection.info} onChange={updateInfo} />
+                                    {error && <p className="text-sm text-rose-600 mt-3">{error}</p>}
+                                    <button
+                                        type="button"
+                                        onClick={submitReschedule}
+                                        disabled={!canConfirm}
+                                        className="mt-5 w-full inline-flex items-center justify-center gap-2 px-5 py-3 bg-[#436235] text-white text-sm font-semibold rounded-xl hover:bg-[#375029] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                    >
+                                        {isSubmitting ? 'Rescheduling…' : 'Confirm new time'}
+                                    </button>
+                                    <p className="text-[11px] text-gray-400 text-center mt-3">Your calendar invite will be updated automatically.</p>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="max-w-xl mx-auto text-center py-16">
+                                <div className="w-16 h-16 mx-auto rounded-full bg-[#436235]/10 flex items-center justify-center mb-6">
+                                    <CheckCircle size={32} className="text-[#436235]" strokeWidth={1.5} />
+                                </div>
+                                <h1 className="text-4xl md:text-5xl font-light text-black mb-3">You're rescheduled!</h1>
+                                <p className="text-gray-600 leading-relaxed">
+                                    Your consultation has been moved and your calendar invite updated. We've emailed you the new details.
+                                </p>
+                            </div>
+                        )}
+                    </div>
+                </section>
+                <Footer />
+            </div>
+        );
+    }
 
     return (
         <div className={`min-h-screen font-urbanist transition-colors duration-500 ${ui === 'consultant' ? 'bg-[#121613]' : 'bg-[#F9F8F6]'}`}>

@@ -43,6 +43,126 @@ class BookingController extends Controller
     }
 
     /**
+     * Reschedule flow — opened from the "Reschedule" button in a booking email.
+     * The token identifies the booking, so the booking page renders in
+     * reschedule mode: no intake form (the client is already on record), just
+     * the slot picker for their existing consultant.
+     */
+    public function reschedulePage(string $token)
+    {
+        $booking = Booking::where('manage_token', $token)->firstOrFail();
+
+        if (in_array(strtolower((string) $booking->status), ['cancelled', 'canceled'], true)) {
+            return Inertia::render('booking/CancelBooking', [
+                'booking' => $this->bookingBrief($booking),
+                'alreadyCancelled' => true,
+            ]);
+        }
+
+        return Inertia::render('booking/BookingPage', [
+            'visaTypes' => [],
+            'availability' => (object) [],
+            'bookingTimezone' => config('services.booking.timezone', 'Pacific/Auckland'),
+            'reschedule' => [
+                'token' => $booking->manage_token,
+                'consultant_name' => $booking->consultant_name,
+                'service_type' => $booking->service_type,
+                'first_name' => $booking->first_name,
+                'client_timezone' => $booking->client_timezone,
+                'current_date' => optional($booking->appointment_date)->toDateString(),
+                'current_time' => $booking->appointment_time,
+            ],
+        ]);
+    }
+
+    /** Persist a rescheduled slot: move the booking + Google event, re-notify. */
+    public function reschedule(Request $request, string $token)
+    {
+        $booking = Booking::where('manage_token', $token)->firstOrFail();
+
+        $data = $request->validate([
+            'appointment_date' => 'required|date',
+            'appointment_time' => 'required|string|max:50',
+            'appointment_at' => 'nullable|date',
+            'client_timezone' => 'nullable|string|max:64',
+        ]);
+
+        $booking->fill([
+            'appointment_date' => $data['appointment_date'],
+            'appointment_time' => $data['appointment_time'],
+            'appointment_at' => $data['appointment_at'] ?? $booking->appointment_at,
+            'client_timezone' => $data['client_timezone'] ?: $booking->client_timezone,
+            'status' => 'Confirmed',
+        ])->save();
+
+        try {
+            app(\App\Services\GoogleCalendarService::class)->updateConsultationEvent($booking->fresh());
+        } catch (\Throwable $e) {
+            Log::warning('Reschedule calendar move failed', ['booking_id' => $booking->id, 'error' => $e->getMessage()]);
+        }
+
+        $notifier = app(\App\Services\BookingNotificationService::class);
+        $notifier->sendTemplateKey($booking, 'reschedule_booking');
+        $notifier->scheduleReminders($booking);
+
+        if ($request->wantsJson()) {
+            return response()->json(['ok' => true]);
+        }
+
+        return redirect()->route('booking.reschedule', $token)->with('success', 'Your consultation has been rescheduled.');
+    }
+
+    /** Cancel flow — GET confirmation page (so a prefetch can't cancel). */
+    public function cancelPage(string $token)
+    {
+        $booking = Booking::where('manage_token', $token)->firstOrFail();
+
+        return Inertia::render('booking/CancelBooking', [
+            'booking' => $this->bookingBrief($booking),
+            'token' => $token,
+            'alreadyCancelled' => in_array(strtolower((string) $booking->status), ['cancelled', 'canceled'], true),
+        ]);
+    }
+
+    /** Confirm cancel: mark cancelled, delete the Google event, notify. */
+    public function cancel(Request $request, string $token)
+    {
+        $booking = Booking::where('manage_token', $token)->firstOrFail();
+
+        if (! in_array(strtolower((string) $booking->status), ['cancelled', 'canceled'], true)) {
+            $booking->update(['status' => 'Cancelled']);
+
+            try {
+                app(\App\Services\GoogleCalendarService::class)->cancelConsultationEvent($booking);
+            } catch (\Throwable $e) {
+                Log::warning('Cancel calendar delete failed', ['booking_id' => $booking->id, 'error' => $e->getMessage()]);
+            }
+
+            $notifier = app(\App\Services\BookingNotificationService::class);
+            $notifier->sendTemplateKey($booking, 'cancel_booking');
+            $notifier->cancelReminders($booking);
+        }
+
+        return Inertia::render('booking/CancelBooking', [
+            'booking' => $this->bookingBrief($booking->fresh()),
+            'alreadyCancelled' => true,
+            'justCancelled' => true,
+        ]);
+    }
+
+    /** Compact booking summary for the reschedule / cancel client pages. */
+    private function bookingBrief(Booking $booking): array
+    {
+        return [
+            'first_name' => $booking->first_name,
+            'service_type' => $booking->service_type,
+            'consultant_name' => $booking->consultant_name,
+            'appointment_date' => optional($booking->appointment_date)->toDateString(),
+            'appointment_time' => $booking->appointment_time,
+        ];
+    }
+
+    /**
      * Convert a booking's client into a pipeline lead. Bookings are standalone
      * by default — staff click "Convert" on the Bookings list to promote the
      * client into Leads (education flow). Find-or-create by email (dedupe),
