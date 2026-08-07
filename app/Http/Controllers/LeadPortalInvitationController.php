@@ -69,8 +69,12 @@ class LeadPortalInvitationController extends Controller
         if (! $lead->email) {
             return back()->withErrors(['error' => 'This lead has no email on file. Add one before requesting portal access.']);
         }
-        if (! in_array($lead->portal_invitation_status, ['none', 'revoked'], true)) {
-            return back()->withErrors(['error' => "Portal access is already {$lead->portal_invitation_status}."]);
+        // A lead that never had a portal invitation has a NULL status; the UI
+        // treats null/'' as requestable (status || 'none'), so normalise here
+        // too — otherwise the strict check rejected cases with "already .".
+        $status = $lead->portal_invitation_status ?: 'none';
+        if (! in_array($status, ['none', 'revoked'], true)) {
+            return back()->withErrors(['error' => "Portal access is already {$status}."]);
         }
 
         $lead->update([
