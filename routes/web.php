@@ -467,6 +467,7 @@ Route::middleware(['auth'])->group(function () {
 
         Route::get('/admin/booking', [BookingController::class, 'index'])->name('admin.bookings');
         Route::post('/admin/bookings/{id}', [BookingController::class, 'update']);
+        Route::delete('/admin/bookings/{id}', [BookingController::class, 'destroy'])->name('admin.bookings.destroy');
         // Convert a booking's client into a pipeline lead (education flow).
         Route::post('/admin/bookings/{id}/convert', [BookingController::class, 'convertToLead'])->name('admin.bookings.convert');
 

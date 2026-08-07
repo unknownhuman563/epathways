@@ -150,6 +150,27 @@ class BookingController extends Controller
         ]);
     }
 
+    /** Delete a booking record (admin cleanup) + its calendar event + reminders. */
+    public function destroy($id)
+    {
+        $booking = Booking::findOrFail($id);
+
+        // Remove the Google Calendar event too — silently (no client email),
+        // since this is an admin cleanup, not a client-facing cancellation.
+        try {
+            app(\App\Services\GoogleCalendarService::class)->cancelConsultationEvent($booking, false);
+        } catch (\Throwable $e) {
+            Log::warning('Delete booking calendar cleanup failed', ['booking_id' => $booking->id, 'error' => $e->getMessage()]);
+        }
+
+        // Drop any pending reminders so they don't fire for a removed booking.
+        \App\Models\BookingReminder::where('booking_id', $booking->id)->delete();
+
+        $booking->delete();
+
+        return redirect()->back()->with('success', 'Booking deleted.');
+    }
+
     /** Compact booking summary for the reschedule / cancel client pages. */
     private function bookingBrief(Booking $booking): array
     {

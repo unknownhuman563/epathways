@@ -152,22 +152,26 @@ class GoogleCalendarService
     }
 
     /**
-     * Delete a booking's calendar event (cancellation). Notifies attendees,
-     * then clears the event id / Meet link off the booking. Idempotent.
+     * Delete a booking's calendar event, then clear the event id / Meet link.
+     * Idempotent. $notify=true emails attendees the cancellation (client-facing
+     * Cancel flow); pass false for a silent admin delete (no email).
      */
-    public function cancelConsultationEvent(Booking $booking): void
+    public function cancelConsultationEvent(Booking $booking, bool $notify = true): void
     {
         if (self::isConfigured() && ! empty($booking->google_event_id)) {
             $calId = (string) config('services.google_calendar.calendar_id', 'primary');
             try {
-                $this->calendar()->events->delete($calId, $booking->google_event_id, ['sendUpdates' => 'all']);
-                Log::info('Booking calendar event cancelled', ['booking_id' => $booking->id]);
+                $this->calendar()->events->delete($calId, $booking->google_event_id, ['sendUpdates' => $notify ? 'all' : 'none']);
+                Log::info('Booking calendar event deleted', ['booking_id' => $booking->id, 'notified' => $notify]);
             } catch (\Throwable $e) {
                 Log::error('Booking calendar event delete failed', ['booking_id' => $booking->id, 'error' => $e->getMessage()]);
             }
         }
 
-        $booking->forceFill(['google_event_id' => null, 'meet_link' => null])->save();
+        // Skip the save when the row is about to be deleted anyway.
+        if ($booking->exists) {
+            $booking->forceFill(['google_event_id' => null, 'meet_link' => null])->save();
+        }
     }
 
     /**
