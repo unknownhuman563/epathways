@@ -580,6 +580,12 @@ class Lead extends Model
                     \App\Jobs\SendLeadFollowupEmail::sendKey('missed_the_call_1', $lead);
                     \App\Jobs\SendLeadFollowupEmail::dispatch($lead->id, 'missed_the_call_2', 'Contact Attempted')
                         ->delay(now()->addDays(3));
+                } elseif ($lead->status === 'Missed the Meeting') {
+                    // missed_the_booking_1 now, missed_the_booking_2 on day 1
+                    // (skipped then if the lead has moved off this stage).
+                    \App\Jobs\SendLeadFollowupEmail::sendKey('missed_the_booking_1', $lead);
+                    \App\Jobs\SendLeadFollowupEmail::dispatch($lead->id, 'missed_the_booking_2', 'Missed the Meeting')
+                        ->delay(now()->addDays(1));
                 } elseif ($lead->status === 'Not Qualified') {
                     \App\Jobs\SendLeadFollowupEmail::sendKey('not_qualified', $lead);
                 } elseif ($lead->status === 'Qualified but No Funds') {
