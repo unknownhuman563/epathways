@@ -1073,6 +1073,20 @@ class LeadTrackingController extends Controller
                 'client_signer_ip' => $request->ip(),
             ])->save();
 
+            // Signing a consultancy agreement advances the pipeline to
+            // "Consultancy Agreement Signed" (non-regressing). That stage
+            // transition fires the consultancy_signe client email via the
+            // Lead model trigger (same path as staff "Mark as signed").
+            if ($isConsultancy) {
+                $stages = Lead::STAGES;
+                $curIdx = array_search($lead->status, $stages, true);
+                $tgtIdx = array_search('Consultancy Agreement Signed', $stages, true);
+                if ($tgtIdx !== false && ($curIdx === false || $curIdx < $tgtIdx)) {
+                    $lead->status = 'Consultancy Agreement Signed';
+                    $lead->save();
+                }
+            }
+
             return back()->with('success', 'Thank you — your agreement has been signed.');
         } catch (\Throwable $e) {
             Log::error('Client agreement signing failed', ['doc_id' => $docId, 'error' => $e->getMessage()]);

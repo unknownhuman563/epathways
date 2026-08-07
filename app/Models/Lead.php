@@ -586,6 +586,9 @@ class Lead extends Model
                     \App\Jobs\SendLeadFollowupEmail::sendKey('qualified_but_no_funds', $lead);
                 } elseif ($lead->status === 'Consultation Done') {
                     \App\Jobs\SendLeadFollowupEmail::sendKey('consultation_done', $lead);
+                } elseif ($lead->status === 'Consultancy Agreement Signed') {
+                    // Key intentionally spelled 'consultancy_signe' per template.
+                    \App\Jobs\SendLeadFollowupEmail::sendKey('consultancy_signe', $lead);
                 }
             } catch (\Throwable $e) {
                 \Illuminate\Support\Facades\Log::warning('Stage-change follow-up failed', [
