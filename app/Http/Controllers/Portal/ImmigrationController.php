@@ -1330,10 +1330,15 @@ class ImmigrationController extends Controller
                 ->pluck('assessment_id')
                 ->flip();
 
-            $normalize = function ($intake, string $visaType, $assessment) use ($convertedAssessmentIds): array {
+            $normalize = function ($intake, string $visaType, $assessment, $review = null) use ($convertedAssessmentIds): array {
                 $first = (string) ($intake->first_name ?? '');
                 $last = (string) ($intake->last_name ?? $intake->family_name ?? '');
                 $hasAssessment = (bool) $assessment;
+
+                // Readiness — how COMPLETE & clean this submission is, so the
+                // adviser can prioritise the ready-to-action ones. NOT an
+                // eligibility/outcome signal (that would be AI-061, licence-gated).
+                [$readiness, $readinessPct] = $this->readinessFor($intake, $review);
 
                 // Triaged — staff have changed the intake status away from
                 // the default "Submitted"/"submitted"/"New" set. Anything
@@ -1357,6 +1362,10 @@ class ImmigrationController extends Controller
                     'phone' => $intake->phone,
                     'status' => $intake->status,
                     'created_at' => $intake->created_at,
+                    // Readiness prioritisation (completeness-based, not outcome).
+                    'readiness' => $readiness,        // ready | minor | needs_info
+                    'readiness_pct' => $readinessPct, // % of the form filled in
+                    'readiness_reviewed' => (bool) $review, // whether an AI review fed in
                     'extra' => $visaType === 'resident'
                         ? trim(($intake->current_visa_type ?? '').($intake->job_title ? ' · '.$intake->job_title : ''))
                         : null,
@@ -1402,11 +1411,29 @@ class ImmigrationController extends Controller
             $aStudent = $loadAssessments(\App\Models\StudentIntake::class, $student);
             $aVisitor = $loadAssessments(\App\Models\VisitorIntake::class, $visitor);
 
+            // Latest AI review per intake (if any) — feeds the readiness signal.
+            $loadReviews = function (string $modelClass, $intakes) {
+                if ($intakes->isEmpty()) {
+                    return collect();
+                }
+
+                return \App\Models\AssessmentAiReview::where('intakeable_type', $modelClass)
+                    ->whereIn('intakeable_id', $intakes->pluck('id'))
+                    ->orderByDesc('id')
+                    ->get()
+                    ->groupBy('intakeable_id')
+                    ->map(fn ($g) => $g->first());
+            };
+            $rvResident = $loadReviews(ResidentIntake::class, $resident);
+            $rvWork = $loadReviews(\App\Models\WorkIntake::class, $work);
+            $rvStudent = $loadReviews(\App\Models\StudentIntake::class, $student);
+            $rvVisitor = $loadReviews(\App\Models\VisitorIntake::class, $visitor);
+
             $rows = collect()
-                ->concat($resident->map(fn ($r) => $normalize($r, 'resident', $aResident->get($r->id))))
-                ->concat($work->map(fn ($r) => $normalize($r, 'work', $aWork->get($r->id))))
-                ->concat($student->map(fn ($r) => $normalize($r, 'student', $aStudent->get($r->id))))
-                ->concat($visitor->map(fn ($r) => $normalize($r, 'visitor', $aVisitor->get($r->id))));
+                ->concat($resident->map(fn ($r) => $normalize($r, 'resident', $aResident->get($r->id), $rvResident->get($r->id))))
+                ->concat($work->map(fn ($r) => $normalize($r, 'work', $aWork->get($r->id), $rvWork->get($r->id))))
+                ->concat($student->map(fn ($r) => $normalize($r, 'student', $aStudent->get($r->id), $rvStudent->get($r->id))))
+                ->concat($visitor->map(fn ($r) => $normalize($r, 'visitor', $aVisitor->get($r->id), $rvVisitor->get($r->id))));
 
             $intakes = $rows->sortByDesc('created_at')->values();
 
@@ -1501,6 +1528,123 @@ class ImmigrationController extends Controller
                 'status' => $lead->status,
             ] : null,
         ]);
+    }
+
+    /**
+     * Readiness of an intake for adviser prioritisation — how COMPLETE and clean
+     * the submission is, NOT how likely it is to succeed (that would be
+     * eligibility advice, AI-061, licence-gated). Blends form-field completeness
+     * with any AI review's flagged gaps.
+     *
+     * @return array{0: string, 1: int} [tier, completeness %]
+     */
+    private function readinessFor($intake, $review = null): array
+    {
+        // Plumbing fields don't count toward "did the applicant fill it in".
+        $skip = [
+            'id', 'created_at', 'updated_at', 'deleted_at', 'edit_token', 'token',
+            'booking_id', 'intake_id', 'status', 'intakeable_type', 'intakeable_id',
+            'payment_status', 'payment_session_id', 'payment_amount_cents',
+            'payment_currency', 'paid_at',
+        ];
+        $attrs = collect($intake->getAttributes())->except($skip);
+        $total = $attrs->count();
+        $filled = $attrs->filter(fn ($v) => $v !== null && $v !== '' && $v !== '[]' && $v !== '{}')->count();
+        $pct = $total > 0 ? (int) round($filled / $total * 100) : 0;
+
+        // Count "check"-severity flags from a stored AI review (gaps/inconsistencies).
+        $checks = 0;
+        if ($review) {
+            foreach (array_merge($review->observations ?? [], $review->risks ?? []) as $o) {
+                if (($o['severity'] ?? 'info') === 'check') {
+                    $checks++;
+                }
+            }
+        }
+
+        $tier = 'ready';
+        if ($pct < 60 || ($review && $checks >= 3)) {
+            $tier = 'needs_info';
+        } elseif ($pct < 85 || ($review && $checks >= 1)) {
+            $tier = 'minor';
+        }
+
+        return [$tier, $pct];
+    }
+
+    /** Map an assessment type slug to its intake model class. */
+    private function intakeClassFor(string $type): ?string
+    {
+        return [
+            'resident' => \App\Models\ResidentIntake::class,
+            'work' => \App\Models\WorkIntake::class,
+            'student' => \App\Models\StudentIntake::class,
+            'visitor' => \App\Models\VisitorIntake::class,
+        ][$type] ?? null;
+    }
+
+    /** Serialize a stored AI review for the frontend. */
+    private function serializeAiReview(?\App\Models\AssessmentAiReview $r): ?array
+    {
+        if (! $r) {
+            return null;
+        }
+
+        return [
+            'id' => $r->id,
+            'summary' => $r->summary,
+            'observations' => $r->observations ?? [],
+            'risks' => $r->risks ?? [],
+            'checklist' => $r->checklist ?? [],
+            'adviser_note' => $r->adviser_note,
+            'client_email' => $r->client_email ?? ['subject' => '', 'body' => ''],
+            'model' => $r->model,
+            'reviewed_by' => optional($r->reviewer)->name,
+            'created_at' => optional($r->created_at)->toIso8601String(),
+        ];
+    }
+
+    /**
+     * Return the last stored AI review for an intake (or null). Immigration
+     * staff only (route group). Internal, indicative — see aiReviewRun.
+     */
+    public function aiReviewShow(string $type, int $id)
+    {
+        abort_unless($this->intakeClassFor($type), 404);
+        $review = \App\Models\AssessmentAiReview::latestFor($this->intakeClassFor($type), $id);
+
+        return response()->json(['review' => $this->serializeAiReview($review)]);
+    }
+
+    /**
+     * Run an AI completeness/consistency review of an intake. INTERNAL and
+     * INDICATIVE only — it flags missing/inconsistent fields for the licensed
+     * adviser to follow up, and is NOT eligibility advice or a decision
+     * (immigration AI guardrails §1/§2). Immigration staff only (route group).
+     */
+    public function aiReviewRun(Request $request, string $type, int $id)
+    {
+        $class = $this->intakeClassFor($type);
+        abort_unless($class, 404);
+        $intake = $class::findOrFail($id);
+
+        $ai = app(\App\Services\OpenRouterService::class);
+        if (! $ai->configured()) {
+            return response()->json([
+                'message' => 'AI review isn\'t configured yet — add a valid OPENROUTER_API_KEY to .env.',
+            ], 422);
+        }
+
+        try {
+            $review = app(\App\Services\Immigration\AssessmentReviewService::class)
+                ->review($intake, $type, $request->user());
+        } catch (\Throwable $e) {
+            Log::error('AI assessment review failed', ['type' => $type, 'id' => $id, 'error' => $e->getMessage()]);
+
+            return response()->json(['message' => 'The AI review could not be completed. Please try again.'], 500);
+        }
+
+        return response()->json(['review' => $this->serializeAiReview($review)]);
     }
 
     /** Documents — Queue (pending / stale / rejected) + Folders per case. */

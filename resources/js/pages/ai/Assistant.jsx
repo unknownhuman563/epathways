@@ -80,7 +80,7 @@ export default function Assistant({ subject = null, aiEnabled = true, backUrl = 
         : ["Draft a follow-up email", "How do I convert a lead?", "Summarise my day"];
 
     return (
-        <div className="min-h-screen bg-gray-50 flex flex-col font-urbanist">
+        <div className="h-full min-h-0 bg-gray-50 flex flex-col font-urbanist rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
             <Head title="AI Assistant — ePathways" />
 
             {/* Top bar */}

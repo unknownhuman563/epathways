@@ -60,6 +60,7 @@ class User extends Authenticatable
         'email',
         'password',
         'role',
+        'referral_code',
         'lead_id',
         'iaa_licence_number',
         'iaa_licence_type',
@@ -402,5 +403,35 @@ class User extends Authenticatable
     public function agentLeads()
     {
         return $this->hasMany(Lead::class, 'agent_id');
+    }
+
+    /**
+     * Ensure this agent has a public referral code + return it. Idempotent —
+     * generates a unique "AGT-XXXXXX" on first call, then returns the stored
+     * value on every call after. No-op for non-agent roles (returns null).
+     *
+     * Used by the Agent portal to build the /register?ref=CODE link the
+     * agent shares with prospective leads. When a lead submits through that
+     * link the storeRegistration handler resolves the code back to this
+     * user id and stamps it on Lead.agent_id.
+     */
+    public function ensureReferralCode(): ?string
+    {
+        if ($this->role !== 'agent') {
+            return null;
+        }
+        if ($this->referral_code) {
+            return $this->referral_code;
+        }
+
+        for ($i = 0; $i < 5; $i++) {
+            $candidate = 'AGT-'.strtoupper(\Illuminate\Support\Str::random(6));
+            if (! self::where('referral_code', $candidate)->exists()) {
+                $this->forceFill(['referral_code' => $candidate])->save();
+                return $candidate;
+            }
+        }
+
+        return null;
     }
 }

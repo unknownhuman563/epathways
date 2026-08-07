@@ -1143,6 +1143,15 @@ Route::middleware(['auth'])->group(function () {
             // ResidentIntake.id for backward compat — any pre-Phase-B
             // bookmark that POSTed an intake id still resolves cleanly.
             Route::post('/assessments/{id}/convert-to-case', [ImmigrationController::class, 'convertAssessmentToCase'])->name('assessments.convert');
+            // AI completeness/consistency review of an intake (internal, indicative
+            // — NOT eligibility advice). GET returns the last stored review; POST
+            // runs a fresh one. Immigration-staff only (route group).
+            Route::get('/assessments/{type}/{id}/ai-review', [ImmigrationController::class, 'aiReviewShow'])
+                ->where(['type' => 'resident|work|student|visitor', 'id' => '[0-9]+'])
+                ->name('assessments.ai-review.show');
+            Route::post('/assessments/{type}/{id}/ai-review', [ImmigrationController::class, 'aiReviewRun'])
+                ->where(['type' => 'resident|work|student|visitor', 'id' => '[0-9]+'])
+                ->name('assessments.ai-review.run');
             Route::get('/cases', [ImmigrationController::class, 'cases'])->name('cases');
             // Engagement + Invoice generation workspaces. Declared before the
             // /cases/{lead}/... routes below; both are single-segment literals

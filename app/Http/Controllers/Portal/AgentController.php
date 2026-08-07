@@ -47,6 +47,13 @@ class AgentController extends Controller
             ->limit(8)
             ->get();
 
+        // Public per-agent registration link. Generated on first read so
+        // agents seeded before the referral_code column existed still get
+        // one automatically.
+        $agent = Auth::user();
+        $code = $agent?->ensureReferralCode();
+        $referralUrl = $code ? url('/register?ref='.$code) : null;
+
         return inertia('portal/agent/Dashboard', [
             'stats' => [
                 'total'      => $base()->count(),
@@ -55,6 +62,10 @@ class AgentController extends Controller
                 'converted'  => $base()->where(fn ($q) => $q->where('status', 'Converted')->orWhere('is_student', true)->orWhere('is_immigration_case', true))->count(),
             ],
             'recent' => $recent->map(fn ($l) => $this->leadRow($l)),
+            'referral' => [
+                'code' => $code,
+                'url' => $referralUrl,
+            ],
         ]);
     }
 

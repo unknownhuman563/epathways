@@ -803,14 +803,31 @@ class LeadController extends Controller
      * but drops Immigration / Character / Family / Additional, plus a CV +
      * Passport upload step.
      */
-    public function showRegistration()
+    public function showRegistration(\Illuminate\Http\Request $request)
     {
         $programs = \App\Models\Program::where('status', 'published')
             ->orderBy('level')
             ->orderBy('title')
             ->get(['id', 'title', 'level', 'institution']);
 
-        return inertia('register/QuickRegisterPage');
+        // Optional agent attribution — /register?ref=AGT-XXXXXX. We resolve
+        // the code to a name for a friendly "Referred by …" banner and pass
+        // the raw code back so the form can post it on submit. Unknown or
+        // missing codes just render the vanilla page.
+        $ref = $request->query('ref');
+        $agent = null;
+        if ($ref) {
+            $agent = \App\Models\User::where('role', 'agent')
+                ->where('referral_code', $ref)
+                ->first(['id', 'name']);
+        }
+
+        return inertia('register/QuickRegisterPage', [
+            'referral' => $agent ? [
+                'code' => $ref,
+                'agent_name' => $agent->name,
+            ] : null,
+        ]);
     }
 
     /** The detailed multi-step registration (no Immigration/Character/Family/Additional). */
@@ -900,12 +917,26 @@ class LeadController extends Controller
             'passport_files' => 'nullable|array|max:10',
             'passport_files.*' => 'file|mimes:pdf,doc,docx,xls,csv,jpg,jpeg,png,gif|max:10240',
             'declaration_accepted' => 'required|accepted',
+            // Optional agent attribution — carried through as a hidden
+            // field from the /register?ref=CODE URL. Unknown codes are
+            // silently ignored so a stale link never blocks a submission.
+            'ref' => 'nullable|string|max:20',
         ]);
 
         try {
             DB::beginTransaction();
 
             $data = $request->all();
+
+            // Resolve the referring agent (if any) BEFORE the first save
+            // so agent_id lands on the initial row rather than needing a
+            // follow-up update.
+            $agentId = null;
+            if (! empty($validated['ref'])) {
+                $agentId = \App\Models\User::where('role', 'agent')
+                    ->where('referral_code', $validated['ref'])
+                    ->value('id');
+            }
 
             $passportPath = $request->hasFile('passport_pdf')
                 ? $request->file('passport_pdf')->store('passports', 'public')
@@ -935,6 +966,11 @@ class LeadController extends Controller
                 'gender' => $data['gender'] ?? null,
                 'marital_status' => $data['marital_status'] ?? null,
                 'terms_accepted' => $request->boolean('terms_accepted'),
+                // Only stamp the agent when the lead doesn't already have
+                // one — a returning lead shouldn't be silently re-attributed
+                // just because they submitted through a different agent's
+                // link the second time.
+                'agent_id' => $existing->agent_id ?: $agentId,
                 // Country of origin (registration) maps to country of birth.
                 'country_of_birth' => $data['country_of_origin'] ?? ($data['country_of_birth'] ?? null),
                 'place_of_birth' => $data['place_of_birth'] ?? null,

@@ -3,9 +3,11 @@ import { Head, Link, router } from "@inertiajs/react";
 import {
     ChevronRight, ChevronDown, ClipboardCheck, FileEdit, Globe, Send, Search,
     Users, Briefcase, GraduationCap, Plane,
-    Check, FileText, UserCheck, ArrowRightCircle,
+    Check, FileText, UserCheck, ArrowRightCircle, AlertTriangle,
 } from "lucide-react";
 import PortalPageHeader from "@/components/portal/PortalPageHeader";
+import { AiAssessmentReviewModal } from "@/components/immigration/AiAssessmentReview";
+import { Sparkles } from "lucide-react";
 
 // ── Visa-type metadata ─────────────────────────────────────────────────────
 const VISA_TYPES = [
@@ -66,11 +68,20 @@ const initials = (name = "") =>
 
 // ── Page ───────────────────────────────────────────────────────────────────
 
+// Readiness prioritisation — how complete/clean the submission is (NOT an
+// eligibility or outcome signal). Higher rank sorts first.
+const READINESS = {
+    ready:      { label: "Ready",      chip: "bg-emerald-50 text-emerald-700 border-emerald-200", dot: "bg-emerald-500", rank: 3 },
+    minor:      { label: "Minor gaps", chip: "bg-amber-50 text-amber-700 border-amber-200",       dot: "bg-amber-500",   rank: 2 },
+    needs_info: { label: "Needs info", chip: "bg-rose-50 text-rose-700 border-rose-200",           dot: "bg-rose-500",    rank: 1 },
+};
+
 export default function ImmigrationAssessments({ intakes = [] }) {
-    const [activeVisa,   setActiveVisa]   = useState("all");
-    const [statusFilter, setStatusFilter] = useState("all"); // all | submitted | draft | completed
-    const [search,       setSearch]       = useState("");
-    const [expanded,     setExpanded]     = useState(() => new Set());
+    const [activeVisa,      setActiveVisa]      = useState("all");
+    const [statusFilter,    setStatusFilter]    = useState("all"); // all | submitted | draft | completed
+    const [readinessFilter, setReadinessFilter] = useState("all"); // all | ready | minor | needs_info
+    const [search,          setSearch]          = useState("");
+    const [expanded,        setExpanded]        = useState(() => new Set());
 
     const toggleExpanded = (key) => {
         setExpanded((prev) => {
@@ -94,13 +105,30 @@ export default function ImmigrationAssessments({ intakes = [] }) {
             if (statusFilter === "submitted" && ! isSubmitted(i))   return false;
             if (statusFilter === "draft"     && ! isDraft(i))       return false;
             if (statusFilter === "completed" && ! isCompleted(i))   return false;
+            if (readinessFilter !== "all" && (i.readiness || "needs_info") !== readinessFilter) return false;
             if (q) {
                 const hay = `${i.name} ${i.email || ""} ${i.phone || ""} ${i.intake_id || ""} ${i.status || ""}`.toLowerCase();
                 if (! hay.includes(q)) return false;
             }
             return true;
+        // Prioritise: most-ready first, then most-recent.
+        }).sort((a, b) => {
+            const ra = READINESS[a.readiness]?.rank ?? 0;
+            const rb = READINESS[b.readiness]?.rank ?? 0;
+            if (rb !== ra) return rb - ra;
+            return new Date(b.created_at || 0) - new Date(a.created_at || 0);
         });
-    }, [intakes, activeVisa, statusFilter, search]);
+    }, [intakes, activeVisa, statusFilter, readinessFilter, search]);
+
+    const readinessCounts = useMemo(() => {
+        const scope = activeVisa === "all" ? intakes : intakes.filter((i) => i.visa_type === activeVisa);
+        return {
+            all:        scope.length,
+            ready:      scope.filter((i) => i.readiness === "ready").length,
+            minor:      scope.filter((i) => i.readiness === "minor").length,
+            needs_info: scope.filter((i) => (i.readiness || "needs_info") === "needs_info").length,
+        };
+    }, [intakes, activeVisa]);
 
     const statusCounts = useMemo(() => {
         const scope = activeVisa === "all"
@@ -168,6 +196,18 @@ export default function ImmigrationAssessments({ intakes = [] }) {
                     </div>
                 </div>
 
+                {/* Readiness prioritisation — how ready each submission is to
+                    action (completeness/consistency), so the adviser can pick the
+                    ready ones first. Not an eligibility/outcome signal. */}
+                <div className="flex items-center gap-1.5 flex-wrap px-4 py-2 border-b border-gray-100">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mr-1">Priority</span>
+                    <StatusPill label="Any"        count={readinessCounts.all}        active={readinessFilter === "all"}        onClick={() => setReadinessFilter("all")} />
+                    <StatusPill label="Ready"      count={readinessCounts.ready}      active={readinessFilter === "ready"}      onClick={() => setReadinessFilter("ready")}      icon={<Check size={11} />}         tone="emerald" />
+                    <StatusPill label="Minor gaps" count={readinessCounts.minor}      active={readinessFilter === "minor"}      onClick={() => setReadinessFilter("minor")}      icon={<FileEdit size={11} />}      tone="amber" />
+                    <StatusPill label="Needs info" count={readinessCounts.needs_info} active={readinessFilter === "needs_info"} onClick={() => setReadinessFilter("needs_info")} icon={<AlertTriangle size={11} />} tone="rose" />
+                    <span className="text-[10px] text-gray-400 ml-1">by completeness — not an eligibility signal</span>
+                </div>
+
                 {/* Table / list */}
                 {intakes.length === 0 ? (
                     <EmptyState icon={<ClipboardCheck size={26} />} title="No assessments yet." />
@@ -178,7 +218,7 @@ export default function ImmigrationAssessments({ intakes = [] }) {
                         action={
                             <button
                                 type="button"
-                                onClick={() => { setSearch(""); setStatusFilter("all"); setActiveVisa("all"); }}
+                                onClick={() => { setSearch(""); setStatusFilter("all"); setActiveVisa("all"); setReadinessFilter("all"); }}
                                 className="mt-3 text-[11px] font-bold uppercase tracking-wider text-gray-600 hover:text-gray-900"
                             >
                                 Clear filters
@@ -195,6 +235,7 @@ export default function ImmigrationAssessments({ intakes = [] }) {
                                     <th className="px-4 py-2.5">Visa</th>
                                     <th className="px-4 py-2.5">Contact</th>
                                     <th className="px-4 py-2.5 w-[220px]">Progress</th>
+                                    <th className="px-4 py-2.5">Priority</th>
                                     <th className="px-4 py-2.5">Submitted</th>
                                     <th className="px-4 py-2.5 text-right">Actions</th>
                                 </tr>
@@ -250,6 +291,7 @@ function StatusPill({ label, count, active, onClick, icon, tone = "gray" }) {
         blue:    "bg-blue-600 text-white border-blue-600",
         amber:   "bg-amber-600 text-white border-amber-600",
         emerald: "bg-emerald-600 text-white border-emerald-600",
+        rose:    "bg-rose-600 text-white border-rose-600",
     };
     const activeClass = TONES[tone] || TONES.gray;
     return (
@@ -274,6 +316,7 @@ function StatusPill({ label, count, active, onClick, icon, tone = "gray" }) {
 function IntakeRow({ intake: i, expanded = false, onToggle }) {
     const { stage, pct } = progressOf(i);
     const stageStyle     = STAGE_STYLES[stage];
+    const [aiOpen, setAiOpen] = useState(false);
 
     return (
         <>
@@ -333,6 +376,11 @@ function IntakeRow({ intake: i, expanded = false, onToggle }) {
                 </div>
             </td>
 
+            {/* Priority — readiness by completeness (not an eligibility signal) */}
+            <td className="px-4 py-3 align-middle">
+                <ReadinessChip readiness={i.readiness} pct={i.readiness_pct} reviewed={i.readiness_reviewed} />
+            </td>
+
             {/* Submitted */}
             <td className="px-4 py-3 align-middle">
                 <span className="text-[11px] text-gray-600 tabular-nums">{fmtDate(i.created_at)}</span>
@@ -342,6 +390,22 @@ function IntakeRow({ intake: i, expanded = false, onToggle }) {
                 toggle the row's expansion. */}
             <td className="px-4 py-3 align-middle" onClick={(e) => e.stopPropagation()}>
                 <div className="flex items-center justify-end gap-1">
+                    <button
+                        type="button"
+                        onClick={() => setAiOpen(true)}
+                        title="AI completeness review (internal, indicative — not advice)"
+                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider border border-indigo-200 text-indigo-600 hover:bg-indigo-50 transition-colors"
+                    >
+                        <Sparkles size={10} /> AI review
+                    </button>
+                    {aiOpen && (
+                        <AiAssessmentReviewModal
+                            type={i.visa_type}
+                            id={i.id}
+                            name={i.name}
+                            onClose={() => setAiOpen(false)}
+                        />
+                    )}
                     {i.can_convert && (
                         <button
                             type="button"
@@ -387,12 +451,31 @@ function IntakeRow({ intake: i, expanded = false, onToggle }) {
 
         {expanded && (
             <tr className="bg-gray-50/60 border-b border-gray-100">
-                <td colSpan={7} className="px-6 py-5">
+                <td colSpan={8} className="px-6 py-5">
                     <JourneyRow intake={i} />
                 </td>
             </tr>
         )}
         </>
+    );
+}
+
+/**
+ * Readiness chip — how complete/clean this submission is, so the adviser can
+ * prioritise. Completeness-based, NOT an eligibility or outcome prediction.
+ */
+function ReadinessChip({ readiness, pct, reviewed }) {
+    const meta = READINESS[readiness] || READINESS.needs_info;
+    const title = `${pct ?? 0}% of the form filled${reviewed ? " · AI review flags included" : ""} — completeness only, not an eligibility signal`;
+    return (
+        <span
+            title={title}
+            className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${meta.chip}`}
+        >
+            <span className={`w-1.5 h-1.5 rounded-full ${meta.dot}`} />
+            {meta.label}
+            {typeof pct === "number" && <span className="font-semibold tabular-nums opacity-70">{pct}%</span>}
+        </span>
     );
 }
 

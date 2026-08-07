@@ -57,6 +57,14 @@ return [
         'api_key' => env('GEMINI_API_KEY'),
     ],
 
+    // OpenRouter — OpenAI-compatible gateway to many models. Key lives in .env
+    // only; read via config('services.openrouter.*'), never env() in app code.
+    'openrouter' => [
+        'api_key' => env('OPENROUTER_API_KEY'),
+        'base_url' => env('OPENROUTER_BASE_URL', 'https://openrouter.ai/api/v1'),
+        'model' => env('OPENROUTER_MODEL', 'openai/gpt-4o-mini'),
+    ],
+
     // Stripe Checkout — used by the resident-intake payment step. The
     // publishable `key` is sent to the browser; `secret` and `webhook_secret`
     // stay server-side. `webhook_secret` verifies signatures on the

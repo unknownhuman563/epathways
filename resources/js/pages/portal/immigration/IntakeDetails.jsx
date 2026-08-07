@@ -1,5 +1,6 @@
 import React from 'react';
 import { Head, Link, router } from '@inertiajs/react';
+import AiAssessmentReview from '@/components/immigration/AiAssessmentReview';
 import {
     ArrowLeft, Mail, Phone, Calendar, Globe, FileText, Briefcase, GraduationCap,
     Plane, Languages, Users, ShieldCheck, HeartPulse, Award, MessageSquare,
@@ -477,6 +478,12 @@ export default function IntakeDetails({ type, intake, assessment = null, linkedL
             {/* BODY — main column with sections, sidebar with quick info. */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-start">
                 <div className="lg:col-span-2 space-y-5">
+
+                    {/* AI completeness/consistency review — internal & indicative,
+                        surfaces gaps for the adviser to follow up (not advice). */}
+                    <div className="no-print">
+                        <AiAssessmentReview type={type} id={intake.id} />
+                    </div>
 
                     {/* Headline section — Job offer / Study plan / Visit
                         details. Pulled forward so the most defining
