@@ -29,12 +29,11 @@ class SalesController extends Controller
         'Missed the Meeting',
         'Qualified but Not Ready',
         'Qualified but No Funds',
-        'Qualified',
-        'Booked Consultation',
-        'Did Not Book Consultation',
-        'No Show',
         'Consultation Done',
         'Proposal Sent',
+        'Program Selected',
+        'Consultancy Agreement Sent',
+        'Consultancy Agreement Signed',
         'Consultancy Agreement',
         'English Pro',
         'School Enrollment',
@@ -370,7 +369,9 @@ class SalesController extends Controller
                     'original_name' => $d->original_name,
                     'size' => $d->size,
                     'mime' => $d->mime,
-                    'url' => $d->file_path ? \Illuminate\Support\Facades\Storage::disk('public')->url($d->file_path) : null,
+                    // Access-checked staff stream, not a public URL — client
+                    // uploads live on the private disk (Privacy-Act fix).
+                    'url' => $d->file_path ? route('admin.documents.download', ['docId' => $d->id]).'?inline=1' : null,
                     'created_at' => optional($d->created_at)->toIso8601String(),
                 ])
                 ->all();
@@ -560,8 +561,8 @@ class SalesController extends Controller
             // to 3 programs a staff member suggested for the lead, stored
             // on leads.proposed_program_ids. Agreements are still generated
             // PDFs (Consultancy, English Engagement).
-            $agreementKeys  = ['agree.consultancy', 'agree.engagement_english'];
-            $generatedKeys  = $agreementKeys;
+            $agreementKeys = ['agree.consultancy', 'agree.engagement_english'];
+            $generatedKeys = $agreementKeys;
 
             // Stages the system reads as "ready for a document":
             //   Proposal-ready → Consultation Done  (adviser has met the lead,
@@ -569,22 +570,22 @@ class SalesController extends Controller
             //   Agreement-ready → Proposal Sent + Consultancy Agreement stage
             //                    (client has seen the proposal / is ready to
             //                    sign, but no consultancy agreement generated yet)
-            $suggestionProposalStages  = ['Consultation Done'];
+            $suggestionProposalStages = ['Consultation Done'];
             $suggestionAgreementStages = ['Proposal Sent', 'Consultancy Agreement'];
-            $suggestionStages          = array_merge($suggestionProposalStages, $suggestionAgreementStages);
+            $suggestionStages = array_merge($suggestionProposalStages, $suggestionAgreementStages);
 
             // Every lead that has at least one generated doc, plus a per-lead
             // count / latest-generated date so each tab can render useful
             // context without a second query.
             $withDocs = Lead::whereHas('documents', function ($q) use ($generatedKeys) {
-                    $q->whereIn('checklist_key', $generatedKeys)
-                      ->where('source', \App\Models\LeadDocument::SOURCE_GENERATED);
-                })
+                $q->whereIn('checklist_key', $generatedKeys)
+                    ->where('source', \App\Models\LeadDocument::SOURCE_GENERATED);
+            })
                 ->with(['faceImage', 'documents' => function ($q) use ($generatedKeys) {
                     $q->whereIn('checklist_key', $generatedKeys)
-                      ->where('source', \App\Models\LeadDocument::SOURCE_GENERATED)
-                      ->with('uploader:id,name,email')
-                      ->orderByDesc('created_at');
+                        ->where('source', \App\Models\LeadDocument::SOURCE_GENERATED)
+                        ->with('uploader:id,name,email')
+                        ->orderByDesc('created_at');
                 }])
                 ->orderByDesc('updated_at')
                 ->get();
@@ -605,8 +606,8 @@ class SalesController extends Controller
                         'id' => $d->id,
                         'checklist_key' => $d->checklist_key,
                         'type' => match ($d->checklist_key) {
-                            'agree.proposal'           => 'Proposal',
-                            'agree.consultancy'        => 'Consultancy Agreement',
+                            'agree.proposal' => 'Proposal',
+                            'agree.consultancy' => 'Consultancy Agreement',
                             'agree.engagement_english' => 'English Engagement',
                             default => ucfirst(str_replace(['agree.', '_'], ['', ' '], $d->checklist_key)),
                         },
@@ -688,6 +689,11 @@ class SalesController extends Controller
                         'status' => $l->status,
                         'programs' => $picks,
                         'programs_count' => $picks->count(),
+                        // Which shortlisted program the lead settled on (set
+                        // from the tracker's "Choose this one" or by staff in
+                        // the Notify modal). Drives the highlight in the list.
+                        'preferred_program_id' => $l->preferred_program_id,
+                        'preferred_program_chosen_at' => optional($l->preferred_program_chosen_at)->toIso8601String(),
                         'updated_at' => optional($l->updated_at)->toIso8601String(),
                     ];
                 })
@@ -705,10 +711,10 @@ class SalesController extends Controller
                     // gap qualifies, so OR the two conditions.
                     $q->where(function ($qq) {
                         $qq->whereNull('proposed_program_ids')
-                           ->orWhereRaw("proposed_program_ids = '[]'");
+                            ->orWhereRaw("proposed_program_ids = '[]'");
                     })->orWhereDoesntHave('documents', function ($qq) use ($generatedKeys) {
                         $qq->whereIn('checklist_key', $generatedKeys)
-                           ->where('source', \App\Models\LeadDocument::SOURCE_GENERATED);
+                            ->where('source', \App\Models\LeadDocument::SOURCE_GENERATED);
                     });
                 })
                 ->orderByDesc('updated_at')
@@ -817,10 +823,10 @@ class SalesController extends Controller
     private function proposalsPageForRequest(Request $request): string
     {
         return match ($this->currentPortalFromRequest($request)) {
-            'education'   => 'portal/education/ProposalsAgreements',
+            'education' => 'portal/education/ProposalsAgreements',
             'immigration' => 'portal/immigration/ProposalsAgreements',
-            'admin'       => 'admin/ProposalsAgreements',
-            default       => 'portal/sales/ProposalsAgreements',
+            'admin' => 'admin/ProposalsAgreements',
+            default => 'portal/sales/ProposalsAgreements',
         };
     }
 
@@ -1120,7 +1126,7 @@ class SalesController extends Controller
         if (in_array($stage, ['Qualified but Not Ready', 'Qualified but No Funds', 'Qualified', 'Booked Consultation', 'Did Not Book Consultation', 'No Show', 'Consultation Done'], true)) {
             return 'Nurture';
         }
-        if (in_array($stage, ['Proposal Sent', 'Consultancy Agreement', 'English Pro', 'School Enrollment', 'Visa Process'], true)) {
+        if (in_array($stage, ['Proposal Sent', 'Program Selected', 'Consultancy Agreement Sent', 'Consultancy Agreement Signed', 'Consultancy Agreement', 'English Pro', 'School Enrollment', 'Visa Process'], true)) {
             return 'Qualified';
         }
 

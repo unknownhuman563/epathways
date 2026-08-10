@@ -1,6 +1,6 @@
 import React, { useRef, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Search, ArrowRight } from 'react-feather';
+import { Search, ArrowRight, ArrowLeft } from 'react-feather';
 import { Link } from '@inertiajs/react';
 import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
@@ -8,6 +8,7 @@ import ScrollToTop from "@/components/ui/ScrollToTop";
 import PromoBanner from "@/components/ui/PromoBanner";
 import PromoModal from "@/components/ui/PromoModal";
 import { INDUSTRY_CATEGORIES } from "@/data/industryCategories";
+import DiscoverCarousel from "@/components/programs/DiscoverCarousel";
 
 // Assets
 import heroBg from "@assets/Services/education.png";
@@ -70,6 +71,32 @@ export default function ProgramsLevels({ programs = [], activePromos = [] }) {
 
     const visiblePrograms = filteredPrograms.slice(0, visibleCount);
 
+    // Category groups for the stacked carousels shown in the "All Programs"
+    // view — each respects the active search. Ordered Diplomas → Bachelor →
+    // PG/Masters to match the marketing layout.
+    const CATEGORY_ROWS = [
+        { key: 'diplomas', title: 'Diplomas' },
+        { key: 'bachelors', title: 'Bachelor' },
+        { key: 'masters', title: 'PG / Masters' },
+    ];
+    const byCat = (key) => filteredPrograms.filter((p) => p.category === key);
+
+    // Search control — rendered on the right of the first category title.
+    const searchBar = (
+        <div className="relative w-[300px] lg:w-[380px]">
+            <input
+                type="text"
+                placeholder="Search programs..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-6 pr-12 py-3 rounded-full border border-gray-200 bg-white text-gray-600 placeholder-gray-400/80 focus:outline-none focus:border-gray-400 focus:ring-0 transition-colors text-base font-light tracking-wide shadow-sm"
+            />
+            <button className="absolute right-4 top-1/2 -translate-y-1/2 p-1.5 group" aria-label="Search">
+                <Search className="w-5 h-5 text-black group-hover:scale-110 transition-transform duration-200" strokeWidth={2} />
+            </button>
+        </div>
+    );
+
     const handleSeeMore = () => {
         setVisibleCount(prev => prev + 12); // Show 12 more on click
     };
@@ -102,7 +129,7 @@ export default function ProgramsLevels({ programs = [], activePromos = [] }) {
                         className="text-3xl md:text-4xl lg:text-5xl font-normal text-white max-w-3xl mx-auto leading-tight tracking-wide"
                         style={{ fontWeight: 400 }}
                     >
-                        good education to build a better future
+                        good education to build a <span className="font-bold">better future</span>
                     </motion.h1>
                 </div>
 
@@ -165,169 +192,41 @@ export default function ProgramsLevels({ programs = [], activePromos = [] }) {
             {/* Search Section */}
             <section ref={gridRef} className="py-20 bg-white scroll-mt-24">
                 <div className="container mx-auto px-4 max-w-7xl">
-                    {/* Search Bar */}
-                    <div className="mb-20 mt-32">
-                        <div className="relative max-w-xl mx-auto">
-                            <input
-                                type="text"
-                                placeholder="Search programs..."
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                                className="w-full pl-8 pr-16 py-4 rounded-full border border-gray-200 bg-white text-gray-600 placeholder-gray-400/80 focus:outline-none focus:border-gray-400 focus:ring-0 transition-colors text-lg font-light tracking-wide shadow-sm"
-                            />
-                            <button className="absolute right-6 top-1/2 -translate-y-1/2 p-2 group">
-                                <Search className="w-6 h-6 text-black group-hover:scale-110 transition-transform duration-200" strokeWidth={2} />
-                            </button>
-                        </div>
-                    </div>
+                    <div className="mt-16" />
 
-                    {/* Header and Filter Tabs */}
-                    <div className="flex flex-col md:flex-row items-end justify-between mb-12 border-b-0">
-                        <div className="mb-6 md:mb-0">
-                            <h2 className="text-4xl md:text-5xl font-normal text-[#282728] uppercase tracking-wide mb-1">Discover</h2>
-                            <h3 className="text-xl font-normal text-gray-600 uppercase tracking-widest pl-1">Top Courses</h3>
-                        </div>
 
-                        <div className="flex flex-wrap items-end gap-x-8 gap-y-3 pb-2">
+                    {/* Back to all — shown when a category "See More" opened its grid */}
+                    {activeFilter !== 'all' && (
+                        <div className="mb-10">
                             <button
-                                onClick={() => setActiveFilter('all')}
-                                className={`text-sm font-bold uppercase tracking-widest pb-2 transition-all border-b-2 ${activeFilter === 'all'
-                                    ? 'text-[#436235] border-[#436235]'
-                                    : 'text-gray-600 border-transparent hover:text-gray-900'
-                                    }`}
+                                onClick={() => { setActiveFilter('all'); setVisibleCount(8); }}
+                                className="inline-flex items-center gap-2 text-xs font-bold text-gray-500 hover:text-[#282728] uppercase tracking-widest transition-colors"
                             >
-                                All Programs
+                                <ArrowLeft size={14} strokeWidth={2} />
+                                All Programmes
                             </button>
-                            <button
-                                onClick={() => setActiveFilter('diplomas')}
-                                className={`text-sm font-bold uppercase tracking-widest pb-2 transition-all border-b-2 ${activeFilter === 'diplomas'
-                                    ? 'text-[#436235] border-[#436235]'
-                                    : 'text-gray-600 border-transparent hover:text-gray-900'
-                                    }`}
-                            >
-                                Diplomas
-                            </button>
-                            <button
-                                onClick={() => setActiveFilter('bachelors')}
-                                className={`text-sm font-bold uppercase tracking-widest pb-2 transition-all border-b-2 ${activeFilter === 'bachelors'
-                                    ? 'text-[#436235] border-[#436235]'
-                                    : 'text-gray-600 border-transparent hover:text-gray-900'
-                                    }`}
-                            >
-                                Bachelor
-                            </button>
-                            <button
-                                onClick={() => setActiveFilter('masters')}
-                                className={`text-sm font-bold uppercase tracking-widest pb-2 transition-all border-b-2 ${activeFilter === 'masters'
-                                    ? 'text-[#436235] border-[#436235]'
-                                    : 'text-gray-600 border-transparent hover:text-gray-900'
-                                    }`}
-                            >
-                                PG / Masters
-                            </button>
-
-                            {/* INDUSTRY — hover-triggered dropdown. Clicking an
-                                item sets activeFilter to 'industry:{id}' and
-                                the grid re-filters. The tab shows the picked
-                                industry's short label when active so users see
-                                what's currently narrowing the results. */}
-                            <div
-                                className="relative"
-                                onMouseEnter={() => setIndustryOpen(true)}
-                                onMouseLeave={() => setIndustryOpen(false)}
-                            >
-                                <button
-                                    type="button"
-                                    onClick={() => setIndustryOpen((v) => !v)}
-                                    className={`inline-flex items-center gap-1.5 text-sm font-bold uppercase tracking-widest pb-2 transition-all border-b-2 ${activeIndustry
-                                        ? 'text-[#436235] border-[#436235]'
-                                        : 'text-gray-600 border-transparent hover:text-gray-900'
-                                        }`}
-                                    aria-haspopup="true"
-                                    aria-expanded={industryOpen}
-                                >
-                                    Industry
-                                    <svg
-                                        className={`w-3 h-3 transition-transform duration-200 ${industryOpen ? 'rotate-180' : ''}`}
-                                        viewBox="0 0 12 12"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        strokeWidth="2"
-                                    >
-                                        <path d="M2 4l4 4 4-4" strokeLinecap="round" strokeLinejoin="round" />
-                                    </svg>
-                                </button>
-
-                                {/* Dropdown panel */}
-                                {industryOpen && (
-                                    <div
-                                        role="menu"
-                                        className="absolute right-0 md:right-0 top-full mt-1 z-30 w-[320px] max-w-[92vw] bg-white border border-gray-200 shadow-2xl rounded-md py-2"
-                                    >
-                                        {INDUSTRY_CATEGORIES.map((ind) => {
-                                            const selected = activeFilter === `industry:${ind.id}`;
-                                            return (
-                                                <button
-                                                    key={ind.id}
-                                                    type="button"
-                                                    onClick={() => pickIndustry(ind.id)}
-                                                    className={`w-full text-left px-4 py-2.5 transition-colors ${selected
-                                                        ? 'bg-[#436235]/10 text-[#436235]'
-                                                        : 'text-gray-700 hover:bg-gray-50 hover:text-[#282728]'
-                                                        }`}
-                                                    role="menuitem"
-                                                >
-                                                    <p className="text-[13px] font-semibold leading-snug">
-                                                        {ind.title}
-                                                    </p>
-                                                    <p className="text-[10.5px] text-gray-400 mt-0.5 tracking-wide">
-                                                        {ind.programs.length} programmes
-                                                    </p>
-                                                </button>
-                                            );
-                                        })}
-
-                                        {activeIndustry && (
-                                            <>
-                                                <div className="my-1 border-t border-gray-100" />
-                                                <button
-                                                    type="button"
-                                                    onClick={() => { setActiveFilter('all'); setIndustryOpen(false); }}
-                                                    className="w-full text-left px-4 py-2 text-[11px] font-bold uppercase tracking-widest text-gray-500 hover:text-gray-900"
-                                                >
-                                                    Clear industry filter
-                                                </button>
-                                            </>
-                                        )}
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Active-industry chip — subtle strip under the tabs so
-                        the user sees what's currently narrowing the grid even
-                        after they've scrolled the dropdown away. */}
-                    {activeIndustry && (
-                        <div className="mb-8 flex items-center gap-3 flex-wrap">
-                            <span className="text-[10px] font-bold uppercase tracking-[0.22em] text-gray-500">
-                                Showing:
-                            </span>
-                            <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#436235]/10 text-[#436235] text-[11px] font-semibold">
-                                {activeIndustry.title}
-                                <button
-                                    type="button"
-                                    onClick={() => setActiveFilter('all')}
-                                    className="hover:text-[#282728] font-bold"
-                                    aria-label="Clear industry filter"
-                                >
-                                    ×
-                                </button>
-                            </span>
                         </div>
                     )}
 
-                    {/* Program Cards Grid */}
+                    {/* All Programs → stacked category carousels (Diplomas,
+                        Bachelor, PG/Masters). A specific tab / industry filter
+                        falls through to the classic grid below. */}
+                    {activeFilter === 'all' && (
+                        <div>
+                            {CATEGORY_ROWS.map((row, idx) => (
+                                <DiscoverCarousel
+                                    key={row.key}
+                                    title={row.title}
+                                    programs={byCat(row.key)}
+                                    onSeeMore={() => setActiveFilter(row.key)}
+                                    headerRight={idx === 0 ? searchBar : undefined}
+                                />
+                            ))}
+                        </div>
+                    )}
+
+                    {/* Program Cards Grid — filtered views only */}
+                    {activeFilter !== 'all' && (
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
                         {visiblePrograms.map((program, index) => (
                             <motion.div
@@ -411,9 +310,10 @@ export default function ProgramsLevels({ programs = [], activePromos = [] }) {
                             </motion.div>
                         ))}
                     </div>
+                    )}
 
-                    {/* See More Button */}
-                    {visibleCount < filteredPrograms.length && (
+                    {/* See More Button — grid (filtered) views only */}
+                    {activeFilter !== 'all' && visibleCount < filteredPrograms.length && (
                         <div className="text-center mt-16">
                             <button
                                 onClick={handleSeeMore}

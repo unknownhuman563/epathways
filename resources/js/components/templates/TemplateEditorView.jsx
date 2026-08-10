@@ -1,9 +1,23 @@
 import { useState } from "react";
 import { Head, Link, router, useForm } from "@inertiajs/react";
-import { ArrowLeft, Save, Trash2, Send, Mail, Smartphone, ImagePlus, X } from "lucide-react";
+import { ArrowLeft, Save, Trash2, Send, Mail, Smartphone, ImagePlus, X, AlertTriangle } from "lucide-react";
 import RichTextEditor from "@/components/templates/RichTextEditor";
 
 const inp = "w-full px-3 py-2 rounded-lg border border-gray-200 text-sm outline-none focus:ring-2 focus:ring-gray-300 focus:border-gray-300";
+
+// Keys the app sends automatically by resolving the SHARED copy (department = '').
+// Moving one of these off Shared silently stops that email — so we warn + confirm.
+// (Stage-transition keys are intentionally excluded — their send job resolves by
+// key across any department, so they're safe to move.)
+const SYSTEM_TEMPLATE_KEYS = [
+    "event_registration",
+    "tracker_welcome",
+    "doc_request",
+    "doc_approved",
+    "doc_rejected",
+    "program_proposal",
+    "consultancy_agreement",
+];
 
 /**
  * Shared template editor, reused by the admin area and every department
@@ -76,13 +90,26 @@ export default function TemplateEditorView({
         if (removed) return null;
         return field === "banner_image" ? template?.banner_image_url : template?.footer_image_url;
     };
-    const showDeptSelector = !!departmentOptions && !editing;
+    // Admin (cross-department) context supplies departmentOptions — show the
+    // selector on both create and edit so scope (shared / a department) is
+    // changeable. Portal staff never get options, so it stays hidden for them.
+    const showDeptSelector = !!departmentOptions;
+    // Warn when a system-triggered template is being scoped off Shared.
+    const systemKeyOffShared = SYSTEM_TEMPLATE_KEYS.includes(data.key) && data.department !== "";
 
     const toggleChannel = (ch) =>
         setData("channels", data.channels.includes(ch) ? data.channels.filter((c) => c !== ch) : [...data.channels, ch]);
 
     const submit = (e) => {
         e.preventDefault();
+        // Guardrail: confirm before scoping a system-triggered template off Shared.
+        if (systemKeyOffShared && !window.confirm(
+            `"${data.key}" is sent automatically by the system, which looks up the Shared copy.\n\n` +
+            `Moving it to a department will silently stop these emails from sending.\n\n` +
+            `Continue anyway?`
+        )) {
+            return;
+        }
         // Only send multipart when an image is actually staged — a plain JSON
         // request keeps booleans/arrays native (FormData stringifies `true`,
         // which fails Laravel's boolean rule). When multipart IS needed, PUT is
@@ -155,6 +182,14 @@ export default function TemplateEditorView({
                                     ))}
                                 </select>
                                 {errors.department && <span className="text-xs text-rose-600">{errors.department}</span>}
+                                {systemKeyOffShared && (
+                                    <span className="mt-2 flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                                        <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+                                        <span>
+                                            <strong>"{data.key}"</strong> is a system-triggered template. The app sends the <strong>Shared</strong> copy — moving it to a department will silently stop these emails. Keep it on <strong>Shared (all departments)</strong> unless you intend to disable it.
+                                        </span>
+                                    </span>
+                                )}
                             </label>
                         )}
                         <label className="block">
@@ -203,7 +238,7 @@ export default function TemplateEditorView({
                                 <div className="grid grid-cols-2 gap-4">
                                     {[
                                         { field: "banner_image", label: "Banner (top)", hint: "Wide header, ~600px" },
-                                        { field: "footer_image", label: "Footer image", hint: "Above the contact block" },
+                                        { field: "footer_image", label: "CTA image", hint: "Above the contact block" },
                                     ].map(({ field, label, hint }) => {
                                         const src = shownImage(field);
                                         const err = errors[field];

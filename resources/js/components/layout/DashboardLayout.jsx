@@ -232,11 +232,11 @@ export default function DashboardLayout({
                             href={item.href}
                             className={`flex items-center gap-3 px-3 py-2 rounded-lg text-[13px] font-medium transition-all duration-200 group ${
                                 isActive
-                                    ? "bg-gray-100/80 text-gray-900 shadow-sm"
+                                    ? `${accent} text-white shadow-md`
                                     : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
                             }`}
                         >
-                            <div className={`${isActive ? "text-gray-900" : "text-gray-500 group-hover:text-gray-600"}`}>{item.icon}</div>
+                            <div className={`${isActive ? "text-white" : "text-gray-500 group-hover:text-gray-600"}`}>{item.icon}</div>
                             <span className="flex-1">{item.name}</span>
                             <NavBadge value={item.badge} tone={item.badgeTone} />
                         </Link>

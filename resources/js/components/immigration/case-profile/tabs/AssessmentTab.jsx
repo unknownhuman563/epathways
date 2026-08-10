@@ -1,5 +1,7 @@
-import { ClipboardList, Send, ExternalLink } from "lucide-react";
+import { useState } from "react";
+import { ClipboardList, Send, ExternalLink, Download } from "lucide-react";
 import { Link } from "@inertiajs/react";
+import IntakeDownloadModal from "@/components/immigration/IntakeDownloadModal";
 
 const VISA_LABEL = {
     resident: "Resident Visa (SMC)",
@@ -33,15 +35,27 @@ const FIELD_GROUPS = {
 };
 
 export default function AssessmentTab({ lead, intake }) {
+    const [downloadOpen, setDownloadOpen] = useState(false);
+
     if (! intake) {
         return <EmptyState lead={lead} />;
     }
 
     const { type, data } = intake;
     const groups = FIELD_GROUPS[type] || FIELD_GROUPS.work;
+    const applicant = [data.first_name, data.family_name || data.last_name].filter(Boolean).join(" ");
 
     return (
         <div className="space-y-5">
+            {type !== "resident" && data.id && (
+                <IntakeDownloadModal
+                    open={downloadOpen}
+                    onClose={() => setDownloadOpen(false)}
+                    type={type}
+                    id={data.id}
+                    applicant={applicant}
+                />
+            )}
             <div className="flex items-start justify-between gap-3 flex-wrap">
                 <div>
                     <h2 className="text-base font-bold text-gray-900">Visa assessment submission</h2>
@@ -50,16 +64,28 @@ export default function AssessmentTab({ lead, intake }) {
                         {data.intake_id && <span className="ml-2 font-mono text-gray-400">{data.intake_id}</span>}
                     </p>
                 </div>
-                {data.assessment_id && (
-                    <Link
-                        href={type === "resident"
-                            ? `/admin/immigration/resident-intakes/${data.id}`
-                            : `/portal/immigration/intakes/${type}/${data.id}`}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold border border-gray-200 bg-white text-gray-600 hover:text-gray-900 hover:bg-gray-50 transition-colors"
-                    >
-                        Open full intake <ExternalLink size={11} />
-                    </Link>
-                )}
+                <div className="flex items-center gap-2">
+                    {/* Preview + download (PDF / Word) — work/student/visitor intakes. */}
+                    {type !== "resident" && data.id && (
+                        <button
+                            type="button"
+                            onClick={() => setDownloadOpen(true)}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold border border-gray-200 bg-white text-gray-600 hover:text-gray-900 hover:bg-gray-50 transition-colors"
+                        >
+                            <Download size={11} /> Download
+                        </button>
+                    )}
+                    {data.assessment_id && (
+                        <Link
+                            href={type === "resident"
+                                ? `/admin/immigration/resident-intakes/${data.id}`
+                                : `/portal/immigration/intakes/${type}/${data.id}`}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold border border-gray-200 bg-white text-gray-600 hover:text-gray-900 hover:bg-gray-50 transition-colors"
+                        >
+                            Open full intake <ExternalLink size={11} />
+                        </Link>
+                    )}
+                </div>
             </div>
 
             {groups.map((group) => (

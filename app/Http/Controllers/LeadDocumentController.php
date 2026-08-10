@@ -438,6 +438,27 @@ class LeadDocumentController extends Controller
             if ($consultancyScenario !== null) {
                 $generator->consultancy($lead, $consultancyScenario, $overrides);
                 $friendly = 'Consultancy Agreement';
+
+                // Generating the agreement emails the client the
+                // `consultancy_agreement` template and advances the pipeline to
+                // "Consultancy Agreement Sent". Opt-out via notify=false; a
+                // lead already further along is not regressed. Non-fatal.
+                $notify = $request->has('notify') ? $request->boolean('notify') : true;
+                if ($notify && ! empty($lead->email)) {
+                    try {
+                        app(\App\Services\CommunicationService::class)->sendTemplated('consultancy_agreement', $lead);
+
+                        $stages = \App\Models\Lead::STAGES;
+                        $curIdx = array_search($lead->status, $stages, true);
+                        $tgtIdx = array_search('Consultancy Agreement Sent', $stages, true);
+                        if ($tgtIdx !== false && ($curIdx === false || $curIdx < $tgtIdx)) {
+                            $lead->status = 'Consultancy Agreement Sent';
+                            $lead->save();
+                        }
+                    } catch (\Throwable $e) {
+                        Log::warning('consultancy_agreement email on generate failed', ['lead_id' => $lead->id, 'error' => $e->getMessage()]);
+                    }
+                }
             } elseif ($type === 'english_engagement') {
                 $generator->englishEngagement($lead);
                 $friendly = 'English Engagement';
@@ -843,6 +864,9 @@ class LeadDocumentController extends Controller
     {
         $validated = $request->validate([
             'kind' => 'nullable|string|in:proposal,agreement',
+            // Optional: the shortlisted program the lead settled on. Only
+            // meaningful for proposals; must be one of the lead's picks.
+            'preferred_program_id' => 'nullable|integer',
         ]);
 
         try {
@@ -856,6 +880,37 @@ class LeadDocumentController extends Controller
             }
 
             $kind = $validated['kind'] ?? 'agreement';
+
+            // Record which program the lead chose, when staff pass it from the
+            // Notify modal. Only for proposals, and only if it's in the lead's
+            // shortlist (null clears the pick). Mirrors the tracker's own
+            // "Choose this one" write so the list highlight stays consistent.
+            if ($kind === 'proposal' && array_key_exists('preferred_program_id', $validated)) {
+                $pid = $validated['preferred_program_id'];
+                $shortlist = is_array($lead->proposed_program_ids)
+                    ? array_map('intval', $lead->proposed_program_ids)
+                    : [];
+
+                if ($pid === null || in_array((int) $pid, $shortlist, true)) {
+                    $lead->forceFill([
+                        'preferred_program_id' => $pid ? (int) $pid : null,
+                        'preferred_program_chosen_at' => $pid ? now() : null,
+                    ])->saveQuietly();
+                }
+            }
+
+            // Sending advances the pipeline stage — proposal → "Proposal Sent",
+            // agreement → "Consultancy Agreement Sent". Non-regressing: a lead
+            // already further along (e.g. Consultancy Agreement Signed, Visa
+            // Process) is left where it is.
+            $sentStage = $kind === 'proposal' ? 'Proposal Sent' : 'Consultancy Agreement Sent';
+            $stages = \App\Models\Lead::STAGES;
+            $curIdx = array_search($lead->status, $stages, true);
+            $tgtIdx = array_search($sentStage, $stages, true);
+            if ($tgtIdx !== false && ($curIdx === false || $curIdx < $tgtIdx)) {
+                $lead->status = $sentStage;
+                $lead->save();
+            }
 
             // Each notify kind has its own branded template, editable under
             // Email → Templates. Proposals also carry the lead's up-to-3
@@ -1187,11 +1242,10 @@ class LeadDocumentController extends Controller
             \App\Models\CaseView::recordOpen($doc->lead_id, $user->id);
         }
 
-        // Disk inconsistency: tracker-side uploads (LeadTrackingController::uploadDoc)
-        // land on the 'public' disk; staff-side uploads (staffChecklistUpload, leadUpload)
-        // land on the 'local' (private) disk. The download controller has to handle
-        // both so a file uploaded via either path is viewable. Local wins when present
-        // to keep private uploads from being accidentally moved to a public disk later.
+        // All uploads now land on the private ('local') disk. The 'public'
+        // fallback covers the pre-migration window on production where a few
+        // older tracker uploads still sit in public until
+        // `documents:privatize --purge` relocates them. Local wins when present.
         $disk = Storage::disk(self::DISK)->exists($doc->file_path)
             ? self::DISK
             : (Storage::disk('public')->exists($doc->file_path) ? 'public' : null);

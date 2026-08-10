@@ -111,6 +111,17 @@ Route::get('/booking', function () {
     ]);
 });
 Route::post('/bookings', [BookingController::class, 'store']);
+// Busy times on the consultant's Google Calendar — drives slot availability on
+// the public booking page (fails open when Calendar isn't configured).
+Route::get('/booking/busy', [BookingController::class, 'busyTimes']);
+
+// Client self-service reschedule / cancel from the booking emails. The token
+// identifies the booking (known client → the booking page skips the intake
+// form and only asks for a new slot). Cancel is a GET confirmation → POST.
+Route::get('/booking/reschedule/{token}', [BookingController::class, 'reschedulePage'])->name('booking.reschedule');
+Route::post('/booking/reschedule/{token}', [BookingController::class, 'reschedule'])->name('booking.reschedule.submit');
+Route::get('/booking/cancel/{token}', [BookingController::class, 'cancelPage'])->name('booking.cancel');
+Route::post('/booking/cancel/{token}', [BookingController::class, 'cancel'])->name('booking.cancel.submit');
 
 // Stripe Checkout for consultation bookings (booking is saved first, then the
 // optional payment step). Webhook is CSRF-exempt (see bootstrap/app.php).
@@ -120,9 +131,21 @@ Route::get('/booking/payment/cancel/{booking}', [\App\Http\Controllers\PaymentCo
 Route::post('/stripe/webhook', [\App\Http\Controllers\PaymentController::class, 'webhook'])->name('stripe.webhook');
 
 Route::get('/education-journey', function () {
+    // Published programmes (title/slug/image) so the "Best 10 Green List"
+    // carousel can match its curated cards to real programme records and
+    // link + illustrate them. Matching is done client-side by title.
+    $programs = \App\Models\Program::where('status', 'published')
+        ->get(['title', 'slug', 'image'])
+        ->map(fn ($p) => [
+            'title' => $p->title,
+            'slug' => $p->slug,
+            'image_url' => $p->image ? \Illuminate\Support\Facades\Storage::disk('public')->url($p->image) : null,
+        ])
+        ->values();
+
     return inertia('education-journey/EducationJourneyPage', array_merge(
         UserReviewController::publicPayload(\App\Models\UserReview::DEPT_EDUCATION),
-        ['activePromos' => PromoFeed::active()]
+        ['activePromos' => PromoFeed::active(), 'programs' => $programs]
     ));
 });
 
@@ -265,6 +288,9 @@ Route::middleware(['throttle:tracker', 'tracker.enabled'])->group(function () {
     Route::post('/track/{code}/document/{doc}', [LeadTrackingController::class, 'updateDoc'])->name('track.doc.update');
     // Download a staff-shared / generated document (engagement pack).
     Route::get('/track/{code}/documents/{doc}/download', [LeadTrackingController::class, 'downloadDoc'])->name('track.doc.download');
+    // Client's own uploads streamed from the private disk (code-gated). Public
+    // URLs for these were a Privacy-Act exposure — see streamUpload().
+    Route::get('/track/{code}/uploads/{doc}', [LeadTrackingController::class, 'streamUpload'])->name('track.upload.stream');
     // Live HTML preview for the signing modal (real-time signature).
     Route::get('/track/{code}/documents/{doc}/preview', [LeadTrackingController::class, 'previewDoc'])->name('track.doc.preview');
     // Client e-signs the generated Written Agreement.
@@ -445,6 +471,9 @@ Route::middleware(['auth'])->group(function () {
 
         Route::get('/admin/booking', [BookingController::class, 'index'])->name('admin.bookings');
         Route::post('/admin/bookings/{id}', [BookingController::class, 'update']);
+        Route::delete('/admin/bookings/{id}', [BookingController::class, 'destroy'])->name('admin.bookings.destroy');
+        // Convert a booking's client into a pipeline lead (education flow).
+        Route::post('/admin/bookings/{id}/convert', [BookingController::class, 'convertToLead'])->name('admin.bookings.convert');
 
         Route::get('/admin/settings', [SettingController::class, 'index'])->name('admin.settings');
         Route::post('/admin/settings', [SettingController::class, 'update']);
@@ -1137,6 +1166,17 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/intakes/{type}/{id}', [ImmigrationController::class, 'showIntake'])
                 ->where(['type' => 'work|student|visitor', 'id' => '[0-9]+'])
                 ->name('intakes.show');
+            // Visa Information Form export — A4 PDF download, an inline HTML
+            // preview (for the download modal), and an editable Word (.doc).
+            Route::get('/intakes/{type}/{id}/pdf', [ImmigrationController::class, 'downloadIntakePdf'])
+                ->where(['type' => 'work|student|visitor', 'id' => '[0-9]+'])
+                ->name('intakes.pdf');
+            Route::get('/intakes/{type}/{id}/preview', [ImmigrationController::class, 'previewIntakePdf'])
+                ->where(['type' => 'work|student|visitor', 'id' => '[0-9]+'])
+                ->name('intakes.preview');
+            Route::get('/intakes/{type}/{id}/word', [ImmigrationController::class, 'downloadIntakeWord'])
+                ->where(['type' => 'work|student|visitor', 'id' => '[0-9]+'])
+                ->name('intakes.word');
             // Convert a visa-interest submission to an immigration case.
             // The {id} route param is Assessment.id (post-Phase-B
             // canonical). The controller also accepts a legacy
@@ -1384,6 +1424,8 @@ Route::middleware(['auth'])->group(function () {
             // New sidebar sections — most are placeholders while the full
             // workflow ships incrementally.
             Route::get('/tracker', [App\Http\Controllers\LeadPortalController::class, 'tracker'])->name('tracker');
+            // Requirements = the tracker's checklist view (sidebar item).
+            Route::get('/requirements', [App\Http\Controllers\LeadPortalController::class, 'requirements'])->name('requirements');
             Route::get('/journey', [App\Http\Controllers\LeadPortalController::class, 'journey'])->name('journey');
             Route::get('/checklist', [App\Http\Controllers\LeadPortalController::class, 'checklist'])->name('checklist');
             Route::get('/visa-forms', [App\Http\Controllers\LeadPortalController::class, 'visaForms'])->name('visa-forms');

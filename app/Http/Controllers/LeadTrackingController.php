@@ -305,7 +305,10 @@ class LeadTrackingController extends Controller
         $firstPath = null;
 
         foreach ($files as $file) {
-            $path = $file->store("lead-documents/{$lead->id}", 'public');
+            // Private disk: client uploads (passports, bank statements, academic
+            // records) must never be world-readable. Served back to the client
+            // through the code-gated streamUpload() route, never a public URL.
+            $path = $file->store("lead-documents/{$lead->id}", 'local');
             $firstPath ??= $path;
 
             $lastDoc = LeadDocument::create([
@@ -386,13 +389,10 @@ class LeadTrackingController extends Controller
             // keeping the LeadDocument row beats blocking the lead on a
             // disk hiccup.
             if ($doc->file_path) {
-                try {
-                    Storage::disk('public')->delete($doc->file_path);
-                } catch (\Throwable $e) { /* noop */
-                }
+                $this->deleteUpload($doc->file_path);
             }
             $file = $request->file('file');
-            $path = $file->store("lead-documents/{$lead->id}", 'public');
+            $path = $file->store("lead-documents/{$lead->id}", 'local');
 
             $doc->fill([
                 'original_name' => $file->getClientOriginalName(),
@@ -471,6 +471,30 @@ class LeadTrackingController extends Controller
                     'to' => $newId,
                 ],
             ]);
+
+            // Choosing a program (not clearing) advances the pipeline to
+            // "Program Selected" (non-regressing) and emails the lead the
+            // program_selected template. Non-fatal on failure.
+            if ($newId !== null) {
+                $stages = Lead::STAGES;
+                $curIdx = array_search($lead->status, $stages, true);
+                $tgtIdx = array_search('Program Selected', $stages, true);
+                if ($tgtIdx !== false && ($curIdx === false || $curIdx < $tgtIdx)) {
+                    $lead->status = 'Program Selected';
+                    $lead->save();
+                }
+
+                try {
+                    $program = \App\Models\Program::find($newId);
+                    app(\App\Services\CommunicationService::class)->sendTemplated('program_selected', $lead, [
+                        'program_name' => $program?->title ?? '',
+                        'program_level' => $program && $program->level ? 'Level '.$program->level : '',
+                        'program_location' => $program?->location ?? '',
+                    ]);
+                } catch (\Throwable $e) {
+                    Log::warning('program_selected email failed', ['lead_id' => $lead->id, 'error' => $e->getMessage()]);
+                }
+            }
         }
 
         return redirect()
@@ -500,10 +524,7 @@ class LeadTrackingController extends Controller
         }
 
         if ($doc->file_path) {
-            try {
-                Storage::disk('public')->delete($doc->file_path);
-            } catch (\Throwable $e) { /* noop */
-            }
+            $this->deleteUpload($doc->file_path);
         }
         $doc->delete();
 
@@ -512,7 +533,81 @@ class LeadTrackingController extends Controller
             ->with('success', 'Document removed.');
     }
 
+    /**
+     * Stream a client's OWN uploaded document (passport, bank statement,
+     * academic record) back to them. Gated by the tracking code exactly like
+     * downloadDoc(): the doc must belong to the lead the code resolves to, be
+     * one of their own uploads, and not be hidden from the tracker.
+     *
+     * Files live on the private disk; the public-disk fallback covers the
+     * brief window on production between deploying this change and running
+     * `documents:privatize --purge`, while a few originals still sit in
+     * public. Once purged, every file resolves on 'local'.
+     */
+    public function streamUpload(Request $request, string $code, $docId)
+    {
+        $lead = $this->resolveLead($code);
+        abort_unless($lead, 404);
+
+        $doc = LeadDocument::where('id', $docId)
+            ->where('lead_id', $lead->id)
+            ->firstOrFail();
+
+        // Only the client's own uploads stream here — shared/generated docs go
+        // through downloadDoc(), which enforces its own rules.
+        abort_unless($doc->source === LeadDocument::SOURCE_UPLOAD, 403);
+
+        // Respect the staff tracker-visibility toggle.
+        $hidden = is_array($lead->hidden_track_documents) ? $lead->hidden_track_documents : [];
+        abort_if($doc->checklist_key && in_array($doc->checklist_key, $hidden, true), 404);
+
+        $disk = $this->resolveUploadDisk($doc->file_path);
+        abort_unless($disk, 404);
+
+        // ?inline=1 → render in the browser (image avatar / gallery preview);
+        // otherwise force a download.
+        if ($request->boolean('inline')) {
+            return response()->file(Storage::disk($disk)->path($doc->file_path), [
+                'Content-Type' => $doc->mime ?: 'application/octet-stream',
+                'Content-Disposition' => 'inline; filename="'.$doc->original_name.'"',
+            ]);
+        }
+
+        return response()->download(Storage::disk($disk)->path($doc->file_path), $doc->original_name);
+    }
+
     // ─── helpers ────────────────────────────────────────────────────────
+
+    /**
+     * Which disk currently holds an upload: private first, public as the
+     * pre-migration fallback. Null if the file is on neither.
+     */
+    private function resolveUploadDisk(?string $path): ?string
+    {
+        if (! $path) {
+            return null;
+        }
+
+        return Storage::disk('local')->exists($path) ? 'local'
+            : (Storage::disk('public')->exists($path) ? 'public' : null);
+    }
+
+    /**
+     * Best-effort delete of an upload from wherever it lives (private and, for
+     * not-yet-migrated files, public). Swallows disk hiccups — keeping the
+     * LeadDocument row consistent matters more than a stray orphan file.
+     */
+    private function deleteUpload(string $path): void
+    {
+        foreach (['local', 'public'] as $disk) {
+            try {
+                if (Storage::disk($disk)->exists($path)) {
+                    Storage::disk($disk)->delete($path);
+                }
+            } catch (\Throwable $e) { /* noop */
+            }
+        }
+    }
 
     /**
      * Notify staff that a lead submitted (or replaced) a document. Goes to
@@ -635,7 +730,9 @@ class LeadTrackingController extends Controller
         }
 
         return [
-            'url' => Storage::disk('public')->url($doc->file_path),
+            // Code-gated stream, not a public URL — the file lives on the
+            // private disk. ?inline=1 renders it as the avatar image.
+            'url' => "/track/{$lead->tracking_code}/uploads/{$doc->id}?inline=1",
             'document_id' => $doc->id,
             'checklist_key' => $doc->checklist_key,
         ];
@@ -665,9 +762,10 @@ class LeadTrackingController extends Controller
                 'status' => $d->status,
                 'source' => $d->source,
                 'created_at' => $d->created_at?->toIso8601String(),
-                // Public storage URL — drives the gallery thumbnail click
-                // and the inline image preview for jpeg/png uploads.
-                'url' => $d->file_path ? Storage::disk('public')->url($d->file_path) : null,
+                // Code-gated private stream (drives the gallery thumbnail
+                // click + inline image preview). ?inline=1 renders in-browser;
+                // the client's own tracking code is the bearer credential.
+                'url' => $d->file_path ? "/track/{$lead->tracking_code}/uploads/{$d->id}?inline=1" : null,
                 'is_image' => str_starts_with((string) $d->mime, 'image/'),
                 // Lead can only edit / delete while the doc is still
                 // pending review. Once a staff member touches it the
@@ -818,17 +916,20 @@ class LeadTrackingController extends Controller
                 $overrides['client_signature'] = $clientSig;
             }
             $html = $generator->renderHtml($lead, $type, $overrides);
+
             return response($html)->header('Content-Type', 'text/html; charset=utf-8');
         }
 
         if ($doc->checklist_key === 'agree.consultancy') {
             [$view, $payload] = $this->consultancyPreviewFor($doc, $lead, $clientSig);
+
             return response(view($view, $payload)->render())
                 ->header('Content-Type', 'text/html; charset=utf-8');
         }
 
         if ($doc->checklist_key === 'agree.engagement_english') {
             $payload = $this->englishEngagementPreviewFor($doc, $lead, $clientSig);
+
             return response(view('agreements.engagement-english', $payload)->render())
                 ->header('Content-Type', 'text/html; charset=utf-8');
         }
@@ -971,6 +1072,20 @@ class LeadTrackingController extends Controller
                 'client_signer_name' => $request->input('signer_name') ?: trim("{$lead->first_name} {$lead->last_name}"),
                 'client_signer_ip' => $request->ip(),
             ])->save();
+
+            // Signing a consultancy agreement advances the pipeline to
+            // "Consultancy Agreement Signed" (non-regressing). That stage
+            // transition fires the consultancy_signe client email via the
+            // Lead model trigger (same path as staff "Mark as signed").
+            if ($isConsultancy) {
+                $stages = Lead::STAGES;
+                $curIdx = array_search($lead->status, $stages, true);
+                $tgtIdx = array_search('Consultancy Agreement Signed', $stages, true);
+                if ($tgtIdx !== false && ($curIdx === false || $curIdx < $tgtIdx)) {
+                    $lead->status = 'Consultancy Agreement Signed';
+                    $lead->save();
+                }
+            }
 
             return back()->with('success', 'Thank you — your agreement has been signed.');
         } catch (\Throwable $e) {

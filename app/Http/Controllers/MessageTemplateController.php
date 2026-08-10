@@ -135,8 +135,24 @@ class MessageTemplateController extends Controller
         $template = MessageTemplate::findOrFail($id);
         $this->authorizeTemplate($ctx['department'], $template);
 
-        // Key and department are immutable after creation — code references them.
+        // Key stays immutable (code references it). Department is editable in the
+        // admin cross-department context only — portal staff keep their own.
         $data = $request->validate([...$this->bodyRules(), ...$this->imageRules()]);
+
+        // Department is editable from every portal now. Guard key+department
+        // uniqueness when moving a template between scopes.
+        $department = $this->resolveStoreDepartment($request, $ctx['department']);
+        $clash = MessageTemplate::where('key', $template->key)
+            ->where('department', $department)
+            ->where('id', '!=', $template->id)
+            ->exists();
+        if ($clash) {
+            return back()->withErrors([
+                'department' => "A '{$template->key}' template already exists in that scope.",
+            ]);
+        }
+        $data['department'] = $department;
+
         $this->applyImages($request, $data, $template);
         $data['email_body'] = $this->sanitizeBody($data['email_body'] ?? null);
         $template->update($data);
@@ -300,7 +316,9 @@ class MessageTemplateController extends Controller
             'basePath' => "/portal/{$department}/email-templates",
             'listComponent' => "portal/{$department}/EmailTemplates",
             'editorComponent' => "portal/{$department}/EmailTemplateEditor",
-            'departmentOptions' => null,
+            // Department picker is now available in every portal, not just the
+            // admin area — staff can scope a template to shared or any team.
+            'departmentOptions' => $this->departmentOptions(),
             'scopeLabel' => ucfirst($department),
         ];
     }
@@ -311,15 +329,18 @@ class MessageTemplateController extends Controller
      */
     private function resolveStoreDepartment(Request $request, ?string $actingDepartment): string
     {
-        if ($actingDepartment !== null) {
-            return $actingDepartment;
-        }
-
         $request->validate([
             'department' => ['nullable', Rule::in(array_merge([''], MessageTemplate::DEPARTMENTS))],
         ]);
 
-        return (string) ($request->input('department') ?: '');
+        // The selector now shows in every portal, so honour an explicitly
+        // submitted department; otherwise default to the acting portal's own
+        // department (or shared in the admin area).
+        if ($request->has('department')) {
+            return (string) ($request->input('department') ?: '');
+        }
+
+        return (string) ($actingDepartment ?: '');
     }
 
     /**

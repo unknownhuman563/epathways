@@ -168,7 +168,7 @@ class AgreementGenerator
 
         $signerName = $signer?->name ?: 'Neil Bryan Escaner';
         $signerMobile = $signer?->phone ?: '+63945 107 6871';
-        $signerSignature = method_exists($signer, 'signatureDataUri')
+        $signerSignature = $signer && method_exists($signer, 'signatureDataUri')
             ? $signer->signatureDataUri()
             : null;
 

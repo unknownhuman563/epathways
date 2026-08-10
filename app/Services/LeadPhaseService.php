@@ -28,6 +28,9 @@ class LeadPhaseService
             'lead_copy'   => "Welcome aboard. Sign your consultancy agreement and complete your initial payment with Bryll. Once received, we'll kick off your application.",
             'stages'      => [
                 'Proposal Sent',
+                'Program Selected',
+                'Consultancy Agreement Sent',
+                'Consultancy Agreement Signed',
                 'Consultancy Agreement',
             ],
         ],

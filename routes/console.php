@@ -29,6 +29,12 @@ Schedule::command('events:dispatch-due-emails')
     ->name('dispatch-due-event-emails')
     ->withoutOverlapping();
 
+// Fire any due booking reminder (booking_confirmation_2..5).
+Schedule::command('bookings:dispatch-due-reminders')
+    ->everyMinute()
+    ->name('dispatch-due-booking-reminders')
+    ->withoutOverlapping();
+
 // Pull inbound email replies from the monitored mailbox into the system.
 Schedule::command('email:sync-replies')
     ->everyFiveMinutes()

@@ -309,6 +309,21 @@ class ImmigrationController extends Controller
             // Unlicensed opens never count. Staff-only signal.
             $attentionByLead = \App\Models\CaseView::latestLicensedOpens();
 
+            // The full immigration-case count, for an honest "showing X of Y"
+            // and to detect the (rare) case where we hit the safety ceiling.
+            $total = Lead::immigrationCase()->count();
+
+            // Safety ceiling only — NOT a page size. The old hard `limit(200)`
+            // silently dropped the least-recently-active cases: "For Assessment"
+            // cases sit untouched at the start of the pipeline, so every stage
+            // change on another case pushed them further down and, past 200,
+            // out of the list entirely — with client-side search unable to reach
+            // them. Load the whole queue (the scope already bounds it) so the
+            // board, its counts and its search see every case. If a tenant ever
+            // exceeds this ceiling the frontend warns rather than hiding cases
+            // silently, and that's the trigger to move to server-side paging.
+            $cap = 2000;
+
             $cases = Lead::with([
                 'documents',
                 'faceImage',
@@ -323,7 +338,7 @@ class ImmigrationController extends Controller
                 // Newest staff activity first, falling back to the raw
                 // timestamp for rows stamped before the column existed.
                 ->orderByRaw('COALESCE(last_activity_at, updated_at) DESC')
-                ->limit(200)
+                ->limit($cap)
                 ->get()
                 ->map(function ($l) use ($visaChecklists, $awaitingByLead, $attentionByLead) {
                     // Staleness is measured on the last *activity*, not on how
@@ -486,6 +501,10 @@ class ImmigrationController extends Controller
                 'visaTypes' => $visaTypes,
                 'me_id' => auth()->id(),
                 'staff' => $staff,
+                // True queue size vs. how many we loaded — the UI shows an honest
+                // count and warns if the safety ceiling ever truncated the list.
+                'total' => $total,
+                'loaded' => $cases->count(),
             ]);
         } catch (\Throwable $e) {
             Log::error('Immigration cases list failed', ['error' => $e->getMessage()]);
@@ -496,6 +515,8 @@ class ImmigrationController extends Controller
                 'priorities' => ['urgent' => 0, 'high' => 0, 'medium' => 0, 'low' => 0, 'done' => 0, 'none' => 0],
                 'stages' => Lead::IMMIGRATION_STAGES,
                 'visaTypes' => [],
+                'total' => 0,
+                'loaded' => 0,
             ]);
         }
     }
@@ -1177,10 +1198,16 @@ class ImmigrationController extends Controller
 
                 $lead = null;
 
-                // 1. Same email AND matching last name — the confident match.
-                if ($email && $wantLast !== '') {
+                // 1. Same email AND matching FULL name — the confident match.
+                //    Email is not unique to a person (families share an inbox)
+                //    and neither is a surname, so require the first name to match
+                //    too. Matching on surname alone would hijack a same-email
+                //    relative's lead (e.g. converting "Test Rogene" linked to a
+                //    different "… Rogene" and the success message named them).
+                if ($email && $wantLast !== '' && $wantFirst !== '') {
                     $lead = Lead::where('email', $email)->get()
-                        ->first(fn ($l) => strtolower(trim((string) $l->last_name)) === $wantLast);
+                        ->first(fn ($l) => strtolower(trim((string) $l->last_name)) === $wantLast
+                            && strtolower(trim((string) $l->first_name)) === $wantFirst);
                 }
 
                 // 2. No email match — a staff-created case may exist under the
@@ -1232,6 +1259,16 @@ class ImmigrationController extends Controller
                 }
                 $lead->fill($patch)->save();
 
+                // Carry over any files the applicant uploaded before this
+                // conversion — resident intakes store them on the intake, and
+                // free-assessment / enrolment uploads live on the lead record —
+                // neither is a LeadDocument, so they'd otherwise never show in
+                // the case's Documents tab.
+                if ($intake instanceof ResidentIntake) {
+                    \App\Services\Immigration\IntakeDocumentMigrator::fromResidentIntake($intake, $lead);
+                }
+                \App\Services\Immigration\IntakeDocumentMigrator::fromLeadUploads($lead);
+
                 // Mark the intake "Engaged" so it drops out of the
                 // triage queue. Assessment moves to "completed" so the
                 // assessment lifecycle reflects the handoff.
@@ -1259,7 +1296,16 @@ class ImmigrationController extends Controller
     private function convertResidentIntakeWithoutAssessment(ResidentIntake $intake)
     {
         return DB::transaction(function () use ($intake) {
-            $lead = Lead::where('email', $intake->email)->first();
+            // Match a same-email lead only when the full name also matches —
+            // families share an inbox, so email alone would hijack a relative.
+            $wantFirst = strtolower(trim((string) $intake->first_name));
+            $wantLast = strtolower(trim((string) $intake->last_name));
+            $lead = null;
+            if ($intake->email && $wantFirst !== '' && $wantLast !== '') {
+                $lead = Lead::where('email', $intake->email)->get()
+                    ->first(fn ($l) => strtolower(trim((string) $l->first_name)) === $wantFirst
+                        && strtolower(trim((string) $l->last_name)) === $wantLast);
+            }
             if (! $lead) {
                 $lead = Lead::create([
                     'lead_id' => 'LP-'.str_pad((string) (Lead::max('id') + 1000), 5, '0', STR_PAD_LEFT),
@@ -1281,6 +1327,10 @@ class ImmigrationController extends Controller
                     'stage_updated_by' => auth()->id(),
                 ])->save();
             }
+
+            // Carry the applicant's assessment uploads into the case documents.
+            \App\Services\Immigration\IntakeDocumentMigrator::fromResidentIntake($intake, $lead);
+
             $intake->update(['status' => 'Engaged']);
 
             return redirect("/portal/immigration/leads/{$lead->id}?tab=documents")
@@ -1679,6 +1729,78 @@ class ImmigrationController extends Controller
         ]);
 
         return response()->json(['review' => $this->serializeAiReview($review->fresh(['reviewer', 'editor']))]);
+    }
+
+    /**
+     * Download a Work / Student / Visitor intake as the official ePathways
+     * "Visa Information Form – General Application" PDF, filled with the
+     * applicant's submitted answers. Replaces the old raw-JSON export.
+     */
+    public function downloadIntakePdf(string $type, int $id)
+    {
+        [$data, $base] = $this->intakeVifData($type, $id);
+
+        return \Barryvdh\DomPDF\Facade\Pdf::loadView('pdf.intake', array_merge($data, ['mode' => 'pdf']))
+            ->setPaper('a4')
+            ->download($base.'.pdf');
+    }
+
+    /** Inline HTML preview of the Visa Information Form (for the download modal). */
+    public function previewIntakePdf(string $type, int $id)
+    {
+        [$data] = $this->intakeVifData($type, $id);
+
+        return response(view('pdf.intake', array_merge($data, ['mode' => 'web']))->render());
+    }
+
+    /** Download the Visa Information Form as an editable Word (.doc) file. */
+    public function downloadIntakeWord(string $type, int $id)
+    {
+        [$data, $base] = $this->intakeVifData($type, $id);
+        $html = view('pdf.intake', array_merge($data, ['mode' => 'word']))->render();
+
+        return response($html, 200, [
+            'Content-Type' => 'application/msword; charset=utf-8',
+            'Content-Disposition' => 'attachment; filename="'.$base.'.doc"',
+        ]);
+    }
+
+    /**
+     * Resolve a Work / Student / Visitor intake into the Visa Information Form
+     * view data, shared by the PDF, preview and Word exports.
+     *
+     * @return array{0: array, 1: string} [$viewData, $filenameBase]
+     */
+    private function intakeVifData(string $type, int $id): array
+    {
+        $modelMap = [
+            'work' => \App\Models\WorkIntake::class,
+            'student' => \App\Models\StudentIntake::class,
+            'visitor' => \App\Models\VisitorIntake::class,
+        ];
+        if (! isset($modelMap[$type])) {
+            abort(404, 'Unknown intake type.');
+        }
+
+        $intake = $modelMap[$type]::findOrFail($id)->toArray();
+        $vif = \App\Support\VisaInformationForm::build($intake);
+
+        $data = [
+            'applicant' => $vif['applicant'] ?: 'Applicant',
+            'sections' => $vif['sections'],
+            'intakeId' => $intake['intake_id'] ?? null,
+            'generatedAt' => now()->format('d/m/Y'),
+        ];
+
+        // Filename = client's name + " VIF" (e.g. "Mary Katherine Paspe VIF").
+        // Falls back to the reference id, then a generic label.
+        $name = trim(preg_replace('/[^A-Za-z0-9 \-]/', '', $vif['applicant'] ?? ''));
+        if ($name === '') {
+            $name = $intake['intake_id'] ?? 'Applicant';
+        }
+        $base = $name.' VIF';
+
+        return [$data, $base];
     }
 
     /** Documents — Queue (pending / stale / rejected) + Folders per case. */

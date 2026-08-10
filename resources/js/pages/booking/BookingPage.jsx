@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo } from "react";
+import ConsultationForm from "@/components/booking/ConsultationForm";
 import { motion, AnimatePresence } from "framer-motion";
 import { DayPicker } from "react-day-picker";
 import "react-day-picker/style.css";
@@ -124,7 +125,22 @@ const consultants = {
             sessionFormat: 'Video Call or Phone',
             institutions: 'Nationwide Support',
             specialisesIn: ['Admissions', 'Course Matching', 'Pathway Planning', 'Student Support'],
-            bookingUrl: 'https://go.epathways.co.nz/widget/bookings/meet-with-bryll-emma'
+            // Our own calendar (NativeScheduler) drives the slots — no external
+            // widget. Weekly windows are in the consultant's timezone; the
+            // client sees each slot converted to their own.
+            timezone: 'Asia/Manila',
+            // 15-min slots, weekdays 10am–6pm — mirrors his Google appointment
+            // schedule (hours aren't API-readable, so keep this in sync if he
+            // changes them there). Busy times are pulled live from his calendar.
+            slotMinutes: 15,
+            busyUrl: '/booking/busy',
+            // end is exclusive of the last start, so 18:15 makes 6:00 PM the
+            // last bookable slot (window 10:00 AM – 6:00 PM inclusive).
+            availabilityConfig: {
+                mon: { start: '10:00', end: '18:15' }, tue: { start: '10:00', end: '18:15' },
+                wed: { start: '10:00', end: '18:15' }, thu: { start: '10:00', end: '18:15' },
+                fri: { start: '10:00', end: '18:15' },
+            },
         },
         {
             id: 6,
@@ -210,8 +226,16 @@ const consultants = {
     ]
 };
 
-export default function BookingPage({ visaTypes = [], availability = {}, bookingTimezone = "Pacific/Auckland" }) {
+export default function BookingPage({ visaTypes = [], availability = {}, bookingTimezone = "Pacific/Auckland", reschedule = null }) {
     const [step, setStep] = useState(1);
+    // Reschedule mode (opened from a booking email's Reschedule link): the
+    // client is already on record, so we skip the whole wizard + intake form
+    // and only show the slot picker for their existing consultant.
+    const [rescheduleDone, setRescheduleDone] = useState(false);
+    const rescheduleConsultant = useMemo(() => {
+        if (! reschedule) return null;
+        return Object.values(consultants).flat().find((c) => c.name === reschedule.consultant_name) || null;
+    }, [reschedule]);
     const [openFaq, setOpenFaq] = useState(null);
     const [selection, setSelection] = useState({
         category: null,
@@ -317,6 +341,118 @@ export default function BookingPage({ visaTypes = [], availability = {}, booking
 
     const updateInfo = (patch) => setSelection(prev => ({ ...prev, info: { ...prev.info, ...patch } }));
 
+    // Submit a new slot for an existing booking (reschedule flow). Only the
+    // date/time is sent — everything else stays as recorded.
+    const submitReschedule = async () => {
+        setError(null);
+        const info = selection.info;
+        if (! info.appointmentDate || ! info.appointmentTime) { setError('Please pick a new date and time.'); return; }
+        setIsSubmitting(true);
+        try {
+            const res = await fetch(`/booking/reschedule/${reschedule.token}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content'),
+                },
+                body: JSON.stringify({
+                    appointment_date: info.appointmentDate,
+                    appointment_time: info.appointmentTime,
+                    appointment_at: info.appointmentAt || null,
+                    client_timezone: info.clientTimezone || Intl.DateTimeFormat().resolvedOptions().timeZone,
+                }),
+            });
+            if (res.ok) setRescheduleDone(true);
+            else setError('Could not reschedule. Please try again.');
+        } catch {
+            setError('Network error. Please try again.');
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    // In-system consultation booking (education / general consultants): the
+    // visitor picks a slot on our own calendar (NativeScheduler) then confirms.
+    // No visa/payment — just records the booking with the chosen slot.
+    const submitConsultation = async () => {
+        setError(null);
+        const info = selection.info;
+        const fullName = (info.fullName || '').trim();
+        const [firstName, ...rest] = fullName.split(/\s+/);
+        const lastName = rest.join(' ');
+        const email = (info.email || '').trim();
+        if (!firstName || !email) { setError('Please enter your name and email.'); return; }
+        if (!info.phoneNumber?.trim()) { setError('Please enter your phone number.'); return; }
+        if (!info.appointmentDate || !info.appointmentTime) { setError('Please pick a date and time.'); return; }
+        if (!info.educationAttainment) { setError('Please select your current education attainment.'); return; }
+        if (!info.consentFollowup) { setError('Please tick the follow-up consent to proceed.'); return; }
+        if (submittedRef.current) return;
+        submittedRef.current = true;
+        setIsSubmitting(true);
+
+        // The full intake payload — stored verbatim on the booking (bookings.intake).
+        const intake = {
+            full_name: fullName, age: info.age || null, gender: info.gender || null,
+            civil_status: info.maritalStatus || null, email, phone: info.phoneNumber || null,
+            city: info.city || null, current_location: info.currentLocation || null,
+            country_of_origin: info.countryOfOrigin || null,
+            education_attainment: info.educationAttainment || null, bachelor_course: info.bachelorCourse || null,
+            occupation: info.occupation || null, pathway: info.pathway || null,
+            partner_name: info.partnerName || null, partner_age: info.partnerAge || null,
+            partner_education_level: info.partnerEducationLevel || null, partner_education_other: info.partnerEducationOther || null,
+            partner_work_experience: info.partnerWorkExperience || null, partner_years_experience: info.partnerYearsExperience || null,
+            number_of_children: info.numberOfChildren || null, child_ages: info.childAges || null,
+            bring_children: info.bringChildren || null, bring_children_other: info.bringChildrenOther || null,
+            additional_info: info.message || null,
+            consent_followup: !!info.consentFollowup, consent_recording: !!info.consentRecording,
+        };
+
+        const fd = new FormData();
+        const put = (k, v) => { if (v !== null && v !== undefined && v !== '') fd.append(k, v); };
+        put('first_name', firstName);
+        put('last_name', lastName || null);
+        put('email', email);
+        put('phone', info.phoneNumber || null);
+        put('current_country', info.countryOfOrigin || info.currentLocation || null);
+        put('service_type', selection.category?.title);
+        put('consultant_name', selection.consultant?.name);
+        put('message', info.message || null);
+        put('platform', 'In-System');
+        put('appointment_date', info.appointmentDate);
+        put('appointment_time', info.appointmentTime);
+        put('appointment_at', info.appointmentAt || null);
+        put('client_timezone', Intl.DateTimeFormat().resolvedOptions().timeZone);
+        fd.append('intake', JSON.stringify(intake));
+        // Document uploads, keyed by checklist bucket.
+        const docMap = { cvFiles: 'cv', passportFiles: 'passport', diplomaFiles: 'diploma', transcriptFiles: 'transcript' };
+        Object.entries(docMap).forEach(([key, bucket]) => {
+            (info[key] || []).forEach((file) => fd.append(`documents[${bucket}][]`, file));
+        });
+
+        try {
+            const response = await fetch('/bookings', {
+                method: 'POST',
+                headers: {
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content'),
+                },
+                body: fd,
+            });
+            if (response.ok) {
+                setBookingSuccess(true);
+            } else {
+                submittedRef.current = false;
+                setError('Could not create the booking. Please try again.');
+            }
+        } catch {
+            submittedRef.current = false;
+            setError('Network error. Please try again.');
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
     // In-system booking (immigration): the visitor picks a date + time on our
     // own calendar — no external widget — so we submit those details directly.
     const submitNativeBooking = async () => {
@@ -351,7 +487,7 @@ export default function BookingPage({ visaTypes = [], availability = {}, booking
                     appointment_date: info.appointmentDate,
                     appointment_time: info.appointmentTime,
                     appointment_at: info.appointmentAt || null,
-                    client_timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+                    client_timezone: info.clientTimezone || Intl.DateTimeFormat().resolvedOptions().timeZone,
                     message: info.message || null,
                     platform: 'In-System',
                 }),
@@ -534,6 +670,71 @@ export default function BookingPage({ visaTypes = [], availability = {}, booking
             setIsSubmitting(false);
         }
     };
+
+    // ── Reschedule mode ─────────────────────────────────────────────────
+    // Token-driven: skip the wizard + intake form entirely, just show the slot
+    // picker for the existing consultant. On confirm, POST the new slot.
+    if (reschedule) {
+        const con = rescheduleConsultant;
+        const schedProps = con?.availabilityConfig
+            ? { slotMinutes: con.slotMinutes || 60, availability: con.availabilityConfig, businessTz: con.timezone || bookingTimezone, busyUrl: con.busyUrl || null }
+            : { slotMinutes: 30, availability: availability, businessTz: bookingTimezone, busyUrl: null };
+        const canConfirm = selection.info.appointmentDate && selection.info.appointmentTime && !isSubmitting;
+        return (
+            <div className="min-h-screen font-urbanist bg-[#F9F8F6]">
+                <Navbar />
+                <section className="py-20 px-4">
+                    <div className="max-w-6xl mx-auto">
+                        {!rescheduleDone ? (
+                            <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
+                                <div className="lg:col-span-4">
+                                    <h1 className="text-4xl md:text-5xl font-light text-black mb-4">Reschedule your consultation</h1>
+                                    <p className="text-gray-600 leading-relaxed mb-8">
+                                        Hi {reschedule.first_name || 'there'}, pick a new time that works for you. Your details are already on file — no need to fill anything in again.
+                                    </p>
+                                    <div className="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm">
+                                        <p className="text-[10px] uppercase tracking-widest text-gray-500 font-bold mb-2">Current booking</p>
+                                        <p className="font-bold text-gray-900">{reschedule.service_type}</p>
+                                        {reschedule.consultant_name && <p className="text-sm text-gray-600 mt-0.5">with {reschedule.consultant_name}</p>}
+                                        {reschedule.current_date && (
+                                            <div className="flex items-center gap-2 text-sm text-[#436235] mt-3">
+                                                <Calendar size={15} />
+                                                <span>{reschedule.current_date}{reschedule.current_time ? ` at ${reschedule.current_time}` : ''}</span>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                                <div className="lg:col-span-8">
+                                    <NativeScheduler hideDetails visaTypes={[]} {...schedProps} info={selection.info} onChange={updateInfo} />
+                                    {error && <p className="text-sm text-rose-600 mt-3">{error}</p>}
+                                    <button
+                                        type="button"
+                                        onClick={submitReschedule}
+                                        disabled={!canConfirm}
+                                        className="mt-5 w-full inline-flex items-center justify-center gap-2 px-5 py-3 bg-[#436235] text-white text-sm font-semibold rounded-xl hover:bg-[#375029] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                    >
+                                        {isSubmitting ? 'Rescheduling…' : 'Confirm new time'}
+                                    </button>
+                                    <p className="text-[11px] text-gray-400 text-center mt-3">Your calendar invite will be updated automatically.</p>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="max-w-xl mx-auto text-center py-16">
+                                <div className="w-16 h-16 mx-auto rounded-full bg-[#436235]/10 flex items-center justify-center mb-6">
+                                    <CheckCircle size={32} className="text-[#436235]" strokeWidth={1.5} />
+                                </div>
+                                <h1 className="text-4xl md:text-5xl font-light text-black mb-3">You're rescheduled!</h1>
+                                <p className="text-gray-600 leading-relaxed">
+                                    Your consultation has been moved and your calendar invite updated. We've emailed you the new details.
+                                </p>
+                            </div>
+                        )}
+                    </div>
+                </section>
+                <Footer />
+            </div>
+        );
+    }
 
     return (
         <div className={`min-h-screen font-urbanist transition-colors duration-500 ${ui === 'consultant' ? 'bg-[#121613]' : 'bg-[#F9F8F6]'}`}>
@@ -985,6 +1186,59 @@ export default function BookingPage({ visaTypes = [], availability = {}, booking
                                                         isSubmitting={isSubmitting}
                                                         error={error}
                                                     />
+                                                ) : selection.consultant?.availabilityConfig ? (
+                                                    /* Our own calendar (slots) → then the full intake form
+                                                       appears once a date + time is chosen. */
+                                                    <AnimatePresence mode="wait">
+                                                        {!selection.info.appointmentAt ? (
+                                                            /* Step 1 — pick a slot on our calendar. */
+                                                            <motion.div
+                                                                key="calendar"
+                                                                initial={{ opacity: 0, y: 10 }}
+                                                                animate={{ opacity: 1, y: 0 }}
+                                                                exit={{ opacity: 0, y: -10 }}
+                                                                transition={{ duration: 0.25 }}
+                                                            >
+                                                                <NativeScheduler
+                                                                    hideDetails
+                                                                    visaTypes={[]}
+                                                                    slotMinutes={selection.consultant.slotMinutes || 60}
+                                                                    availability={selection.consultant.availabilityConfig}
+                                                                    businessTz={selection.consultant.timezone || 'Pacific/Auckland'}
+                                                                    busyUrl={selection.consultant.busyUrl || null}
+                                                                    info={selection.info}
+                                                                    onChange={updateInfo}
+                                                                />
+                                                            </motion.div>
+                                                        ) : (
+                                                            /* Step 2 — slot chosen → calendar fades out, intake
+                                                               form fades in (fixed-height scroll area). */
+                                                            <motion.div
+                                                                key="form"
+                                                                initial={{ opacity: 0, y: 10 }}
+                                                                animate={{ opacity: 1, y: 0 }}
+                                                                exit={{ opacity: 0, y: -10 }}
+                                                                transition={{ duration: 0.25 }}
+                                                            >
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => updateInfo({ appointmentDate: '', appointmentTime: '', appointmentAt: '' })}
+                                                                    className="mb-4 inline-flex items-center gap-1.5 text-sm font-semibold text-gray-500 hover:text-[#436235] transition-colors"
+                                                                >
+                                                                    <ChevronLeft size={16} /> Change date &amp; time
+                                                                </button>
+                                                                <div className="max-h-[70vh] overflow-y-auto pr-1">
+                                                                    <ConsultationForm
+                                                                        info={selection.info}
+                                                                        onChange={updateInfo}
+                                                                        onConfirm={submitConsultation}
+                                                                        isSubmitting={isSubmitting}
+                                                                        error={error}
+                                                                    />
+                                                                </div>
+                                                            </motion.div>
+                                                        )}
+                                                    </AnimatePresence>
                                                 ) : (
                                                     <>
                                                         {selection.consultant?.bookingUrl && (
@@ -1076,13 +1330,17 @@ const to12h = (t) => {
     return `${hh}:${String(m).padStart(2, '0')} ${ap}`;
 };
 
-// Hourly slot starts within a start–end window (last start is one hour before
-// end, since a consultation runs ~1 hour).
-const slotsBetween = (start, end) => {
-    const [sh] = start.split(':').map(Number);
-    const [eh] = end.split(':').map(Number);
+// Slot starts within a start–end window, stepping by `step` minutes (default
+// 60). The last start is one step before the end.
+const slotsBetween = (start, end, step = 60) => {
+    const [sh, sm] = start.split(':').map(Number);
+    const [eh, em] = end.split(':').map(Number);
+    const startMin = sh * 60 + (sm || 0);
+    const endMin = eh * 60 + (em || 0);
     const out = [];
-    for (let h = sh; h < eh; h++) out.push(`${String(h).padStart(2, '0')}:00`);
+    for (let m = startMin; m < endMin; m += step) {
+        out.push(`${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`);
+    }
     return out;
 };
 
@@ -1090,7 +1348,7 @@ const slotsBetween = (start, end) => {
 // shown for display (who you'll meet) — no selection — then the visitor picks a
 // date (native react-day-picker, past/off-days disabled), a time slot, and
 // enters their contact details, all saved to a Booking on confirm.
-function NativeScheduler({ visaTypes = [], availability = {}, businessTz = 'Pacific/Auckland', info, onChange, onConfirm, isSubmitting, error }) {
+function NativeScheduler({ visaTypes = [], availability = {}, businessTz = 'Pacific/Auckland', slotMinutes = 60, hideDetails = false, busyUrl = null, info, onChange, onConfirm, isSubmitting, error }) {
     // Advisers' saved availability drives the bookable days + time slots;
     // fall back to Mon–Fri 9–5 if none has been set. Availability windows are in
     // the business timezone (NZ); the client sees each slot in their own.
@@ -1099,21 +1357,49 @@ function NativeScheduler({ visaTypes = [], availability = {}, businessTz = 'Paci
     const today = new Date(); today.setHours(0, 0, 0, 0);
     const [day, setDay] = useState(info.appointmentDate ? new Date(`${info.appointmentDate}T00:00:00`) : undefined);
 
-    const clientTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const [clientTz, setClientTz] = useState(info.clientTimezone || browserTz);
+    const tzOptions = useMemo(() => {
+        try { return Intl.supportedValuesOf('timeZone'); }
+        catch { return [browserTz, 'Asia/Manila', 'Asia/Singapore', 'Pacific/Auckland', 'Australia/Sydney', 'America/Los_Angeles', 'Europe/London', 'UTC']; }
+    }, [browserTz]);
+    // Keep the chosen timezone on the shared info so the booking stores it.
+    useEffect(() => { onChange({ clientTimezone: clientTz }); }, [clientTz]); // eslint-disable-line react-hooks/exhaustive-deps
     const showBoth = clientTz !== businessTz;
     const fmtIn = (date, tz) => date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: tz });
 
-    // Each NZ slot → exact UTC instant → labels in both the client's and the
-    // business timezone. The stored time is NZ (for staff); the client sees local.
+    // Busy intervals on the consultant's real Google Calendar for the selected
+    // day, so taken slots disappear. Fails open (empty) if the endpoint errors.
+    const [busy, setBusy] = useState([]);
+    useEffect(() => {
+        if (! busyUrl || ! day) { setBusy([]); return; }
+        const from = new Date(day); from.setHours(0, 0, 0, 0);
+        const to = new Date(day); to.setHours(23, 59, 59, 999);
+        let cancelled = false;
+        fetch(`${busyUrl}?from=${encodeURIComponent(from.toISOString())}&to=${encodeURIComponent(to.toISOString())}`)
+            .then((r) => (r.ok ? r.json() : { busy: [] }))
+            .then((d) => { if (! cancelled) setBusy(d.busy || []); })
+            .catch(() => { if (! cancelled) setBusy([]); });
+        return () => { cancelled = true; };
+    }, [busyUrl, day]);
+
+    // Each slot → exact UTC instant → labels in the client's + consultant's
+    // timezone. Past slots and ones overlapping a busy interval are removed.
     const dayAvail = day ? avail[DOW[day.getDay()]] : null;
     const slots = useMemo(() => {
         if (! day || ! dayAvail) return [];
-        return slotsBetween(dayAvail.start, dayAvail.end).map((t) => {
-            const [hh] = t.split(':').map(Number);
-            const utc = new Date(new TZDate(day.getFullYear(), day.getMonth(), day.getDate(), hh, 0, 0, businessTz).getTime());
-            return { nzLabel: fmtIn(utc, businessTz), localLabel: fmtIn(utc, clientTz), utc: utc.toISOString() };
+        const nowMs = Date.now();
+        return slotsBetween(dayAvail.start, dayAvail.end, slotMinutes).map((t) => {
+            const [hh, mm] = t.split(':').map(Number);
+            const utc = new Date(new TZDate(day.getFullYear(), day.getMonth(), day.getDate(), hh, mm, 0, businessTz).getTime());
+            const startMs = utc.getTime();
+            const endMs = startMs + slotMinutes * 60000;
+            return { nzLabel: fmtIn(utc, businessTz), localLabel: fmtIn(utc, clientTz), utc: utc.toISOString(), startMs, endMs };
+        }).filter((s) => {
+            if (s.startMs <= nowMs) return false; // no past slots
+            return ! busy.some((b) => s.startMs < new Date(b.end).getTime() && s.endMs > new Date(b.start).getTime());
         });
-    }, [day, dayAvail, businessTz, clientTz]);
+    }, [day, dayAvail, businessTz, clientTz, slotMinutes, busy]);
 
     const localTimeLabel = info.appointmentAt ? fmtIn(new Date(info.appointmentAt), clientTz) : info.appointmentTime;
 
@@ -1132,6 +1418,23 @@ function NativeScheduler({ visaTypes = [], availability = {}, businessTz = 'Paci
             <div>
                 <h3 className="text-lg font-semibold text-gray-900">Select a date &amp; time</h3>
                 <p className="text-sm text-gray-500 mt-0.5">Choose a slot that works for you and confirm your details below.</p>
+            </div>
+
+            {/* Timezone — above the date picker so slot times are unambiguous */}
+            <div>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1.5">Your timezone</label>
+                <div className="relative">
+                    <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" aria-hidden>🌐</span>
+                    <select
+                        value={clientTz}
+                        onChange={(e) => setClientTz(e.target.value)}
+                        aria-label="Your timezone"
+                        className="w-full md:max-w-md pl-9 pr-3 py-2.5 rounded-xl border border-gray-200 text-sm outline-none focus:ring-2 focus:ring-[#436235]/30 focus:border-[#436235] bg-white"
+                    >
+                        {tzOptions.map((tz) => <option key={tz} value={tz}>{tz.replace(/_/g, ' ')}</option>)}
+                    </select>
+                </div>
+                <p className="text-[11px] text-gray-400 mt-1">Slot times below are shown in this timezone. Consultant is in {businessTz.replace(/_/g, ' ')}.</p>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -1153,7 +1456,7 @@ function NativeScheduler({ visaTypes = [], availability = {}, businessTz = 'Paci
                         {day ? `Times · ${format(day, 'EEE, d MMM yyyy')}` : 'Pick a date first'}
                     </p>
                     {day && showBoth && (
-                        <p className="text-[11px] text-gray-400 mb-2">Shown in your timezone ({clientTz.replace('_', ' ')}). Adviser time is NZ.</p>
+                        <p className="text-[11px] text-gray-400 mb-2">Shown in your timezone ({clientTz.replace('_', ' ')}). Slots are set in the consultant's local time.</p>
                     )}
                     {!day ? (
                         <div className="h-40 flex items-center justify-center text-sm text-gray-400 text-center">
@@ -1164,7 +1467,7 @@ function NativeScheduler({ visaTypes = [], availability = {}, businessTz = 'Paci
                             No times available on this day.
                         </div>
                     ) : (
-                        <div className="grid grid-cols-3 gap-2">
+                        <div className="grid grid-cols-3 gap-2 max-h-[360px] overflow-y-auto pr-1">
                             {slots.map((s) => {
                                 const active = info.appointmentAt === s.utc;
                                 return (
@@ -1172,13 +1475,13 @@ function NativeScheduler({ visaTypes = [], availability = {}, businessTz = 'Paci
                                         key={s.utc}
                                         type="button"
                                         onClick={() => onChange({ appointmentTime: s.nzLabel, appointmentAt: s.utc })}
-                                        title={showBoth ? `NZ time: ${s.nzLabel}` : undefined}
+                                        title={showBoth ? `Consultant's time: ${s.nzLabel}` : undefined}
                                         className={`px-2 py-1.5 rounded-lg text-sm font-medium border transition-colors ${active
                                             ? 'bg-[#436235] text-white border-[#436235]'
                                             : 'bg-white text-gray-700 border-gray-200 hover:border-[#436235] hover:text-[#436235]'}`}
                                     >
                                         {s.localLabel}
-                                        {showBoth && <span className={`block text-[9px] ${active ? 'text-white/70' : 'text-gray-400'}`}>NZ {s.nzLabel}</span>}
+                                        {showBoth && <span className={`block text-[9px] ${active ? 'text-white/70' : 'text-gray-400'}`}>{s.nzLabel}</span>}
                                     </button>
                                 );
                             })}
@@ -1187,7 +1490,8 @@ function NativeScheduler({ visaTypes = [], availability = {}, businessTz = 'Paci
                 </div>
             </div>
 
-            {/* Contact details */}
+            {/* Contact details — hidden when a richer form handles them */}
+            {!hideDetails && (
             <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5 space-y-4">
                 <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">Your details</p>
 
@@ -1226,7 +1530,7 @@ function NativeScheduler({ visaTypes = [], availability = {}, businessTz = 'Paci
                 {(info.appointmentDate && info.appointmentTime) && (
                     <div className="flex items-center gap-2 text-sm text-[#436235] bg-[#436235]/5 border border-[#436235]/15 rounded-xl px-3 py-2">
                         <Calendar size={15} /> {format(new Date(`${info.appointmentDate}T00:00:00`), 'EEEE, d MMMM yyyy')} at {localTimeLabel}
-                        {showBoth && <span className="text-[#436235]/70">(NZ {info.appointmentTime})</span>}
+                        {showBoth && <span className="text-[#436235]/70">(consultant's time {info.appointmentTime})</span>}
                     </div>
                 )}
 
@@ -1240,8 +1544,9 @@ function NativeScheduler({ visaTypes = [], availability = {}, businessTz = 'Paci
                 >
                     {isSubmitting ? 'Confirming…' : payLabel}
                 </button>
-                <p className="text-[11px] text-gray-400 text-center">You'll receive a confirmation email. Times are shown in New Zealand time (NZST).</p>
+                <p className="text-[11px] text-gray-400 text-center">You'll receive a confirmation email. Times are shown in your local timezone.</p>
             </div>
+            )}
         </div>
     );
 }

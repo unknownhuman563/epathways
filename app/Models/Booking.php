@@ -4,10 +4,21 @@ namespace App\Models;
 
 use App\Traits\LogsActivity;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Str;
 
 class Booking extends Model
 {
     use LogsActivity;
+
+    protected static function booted(): void
+    {
+        // Every booking gets a bearer token for its reschedule / cancel links.
+        static::creating(function (Booking $booking) {
+            if (empty($booking->manage_token)) {
+                $booking->manage_token = Str::random(48);
+            }
+        });
+    }
 
     public const PAYMENT_UNPAID = 'unpaid';
 
@@ -25,6 +36,7 @@ class Booking extends Model
         'property_id',
         'consultant_name',
         'message',
+        'intake',
         'platform',
         'status',
         'payment_status',
@@ -37,11 +49,15 @@ class Booking extends Model
         'appointment_time',
         'appointment_at',
         'client_timezone',
+        'google_event_id',
+        'meet_link',
         'resident_intake_id',
         'lead_id',
+        'manage_token',
     ];
 
     protected $casts = [
+        'intake' => 'array',
         'appointment_date' => 'date',
         'appointment_at' => 'datetime',
         'amount' => 'decimal:2',

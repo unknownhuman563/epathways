@@ -35,6 +35,9 @@ const STAGE_STYLES = {
     "No Show":                        "bg-teal-100 text-teal-800 border-teal-200",
     "Consultation Done":              "bg-purple-100 text-purple-800 border-purple-200",
     "Proposal Sent":                  "bg-sky-100 text-sky-800 border-sky-200",
+    "Program Selected":               "bg-teal-100 text-teal-800 border-teal-200",
+    "Consultancy Agreement Sent":     "bg-indigo-100 text-indigo-800 border-indigo-200",
+    "Consultancy Agreement Signed":   "bg-emerald-100 text-emerald-800 border-emerald-200",
     "Consultancy Agreement":          "bg-indigo-100 text-indigo-800 border-indigo-200",
     "English Pro":                    "bg-emerald-50 text-emerald-700 border-emerald-200",
     "School Enrollment":              "bg-green-100 text-green-800 border-green-200",
@@ -44,7 +47,110 @@ const STAGE_STYLES = {
 };
 const stageClass = (s) => STAGE_STYLES[s] || "bg-gray-100 text-gray-700 border-gray-200";
 
-export default function LeadDetails({ lead: backendLead, activity = [], stageTimeline = [], checklistFiles = {}, documentOrphans = [], statuses = [], notes = [], tags = [], allTags = [], tasks = [], staffOptions = [], eventRegistration = null, currentUser = null }) {
+// Read-only mirror of the tracker's program shortlist for staff: lists the
+// programs offered to this lead and highlights (green) the one the client
+// chose from their tracker. Rendered on the Lead Stats tab under the AI card.
+function ProposedProgramsCard({ proposal }) {
+    const programs = proposal?.programs || [];
+    const chosenId = proposal?.preferred_program_id ?? null;
+    const chosen = programs.find((p) => p.id === chosenId) || null;
+
+    return (
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+            <div className="px-6 py-5 border-b border-gray-100 flex items-start justify-between gap-4 bg-gradient-to-br from-gray-50 to-white">
+                <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-9 h-9 rounded-lg bg-[#436235]/10 text-[#436235] flex items-center justify-center shrink-0">
+                        <Sparkles size={16} strokeWidth={2.25} />
+                    </div>
+                    <div className="min-w-0">
+                        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-gray-500 mb-0.5">Programs offered</p>
+                        <h2 className="text-base font-bold text-gray-900 tracking-tight">
+                            {chosen ? 'Client chose a program' : 'Programs proposed to this lead'}
+                        </h2>
+                        <p className="text-[12px] text-gray-500 mt-0.5 leading-relaxed">
+                            {programs.length === 0
+                                ? 'No programs proposed yet — shortlist some from Proposal & Agreements.'
+                                : chosen
+                                    ? <>Client selected <span className="font-semibold text-gray-700">{chosen.title}</span> from their tracker.</>
+                                    : "These are the programs staff shortlisted. The client picks one on their tracker."}
+                        </p>
+                    </div>
+                </div>
+                {programs.length > 0 && (
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold tabular-nums bg-gray-100 text-gray-700 shrink-0">
+                        {programs.length} option{programs.length === 1 ? '' : 's'}
+                    </span>
+                )}
+            </div>
+
+            {programs.length > 0 && (
+                <div className="p-4 sm:p-5 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {programs.map((p) => {
+                        const isChosen = chosenId === p.id;
+                        return (
+                            <article
+                                key={p.id}
+                                className={`relative flex flex-col rounded-xl border shadow-sm overflow-hidden ${
+                                    isChosen ? 'border-emerald-500 ring-2 ring-emerald-500/25 bg-emerald-50' : 'border-gray-100 bg-white'
+                                }`}
+                            >
+                                {isChosen && (
+                                    <span className="absolute top-3 right-3 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-600 text-white text-[9px] font-bold uppercase tracking-[0.14em] shadow-sm">
+                                        <Check size={10} strokeWidth={3} /> Chosen
+                                    </span>
+                                )}
+                                {p.image_url ? (
+                                    <div className="h-24 w-full overflow-hidden bg-gray-100">
+                                        <img src={p.image_url} alt="" className="w-full h-full object-cover" />
+                                    </div>
+                                ) : (
+                                    <div className="h-24 w-full bg-gradient-to-br from-gray-100 via-gray-50 to-white flex items-center justify-center">
+                                        <GraduationCap size={26} className="text-gray-400" />
+                                    </div>
+                                )}
+                                <div className="p-4 flex-1 flex flex-col">
+                                    <div className="flex items-center gap-1.5 mb-2">
+                                        {p.level != null && (
+                                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-gray-100 text-gray-800 border border-gray-200">
+                                                Level {p.level}
+                                            </span>
+                                        )}
+                                        {p.category && <span className="text-[10px] font-medium text-gray-500 capitalize">{p.category}</span>}
+                                    </div>
+                                    <h3 className="text-[13px] font-bold text-gray-900 leading-snug mb-2">{p.title}</h3>
+                                    <ul className="text-[11px] text-gray-600 space-y-1 mb-3">
+                                        {p.location && (
+                                            <li className="inline-flex items-center gap-1.5"><MapPin size={11} className="text-gray-400" /> {p.location}</li>
+                                        )}
+                                        {p.duration_months && (
+                                            <li className="inline-flex items-center gap-1.5"><Clock size={11} className="text-gray-400" /> {p.duration_months} months</li>
+                                        )}
+                                        {p.intake_months && (
+                                            <li className="inline-flex items-center gap-1.5"><Calendar size={11} className="text-gray-400" /> Intake: {p.intake_months}</li>
+                                        )}
+                                    </ul>
+                                    {p.price_text && <p className="text-[11px] font-semibold text-gray-700 mb-3">{p.price_text}</p>}
+                                    <div className="mt-auto">
+                                        <a
+                                            href={p.public_url}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-gray-600 hover:text-[#436235] transition-colors"
+                                        >
+                                            <Eye size={12} /> View program
+                                        </a>
+                                    </div>
+                                </div>
+                            </article>
+                        );
+                    })}
+                </div>
+            )}
+        </div>
+    );
+}
+
+export default function LeadDetails({ lead: backendLead, proposal = null, activity = [], stageTimeline = [], checklistFiles = {}, documentOrphans = [], statuses = [], notes = [], tags = [], allTags = [], tasks = [], staffOptions = [], eventRegistration = null, currentUser = null }) {
     // Derive the "Back to Leads" URL from the current path so sales users
     // return to /portal/sales/leads, education users to /portal/education/leads,
     // and admins to /admin/leads — never a 403.
@@ -561,6 +667,7 @@ export default function LeadDetails({ lead: backendLead, activity = [], stageTim
             <div className={activeTab === 'stats' ? 'space-y-6' : 'hidden'}>
                 <StatsQuickRow lead={backendLead} tasks={tasks} tags={tags} notes={notes} />
                 <AICapabilityHero lead={backendLead} />
+                <ProposedProgramsCard proposal={proposal} />
 
                 {/* Tasks + Tags side-by-side — paired workspace row. */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

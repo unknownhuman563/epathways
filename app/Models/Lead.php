@@ -175,12 +175,11 @@ class Lead extends Model
         'Missed the Meeting',
         'Qualified but Not Ready',
         'Qualified but No Funds',
-        'Qualified',
-        'Booked Consultation',
-        'Did Not Book Consultation',
-        'No Show',
         'Consultation Done',
         'Proposal Sent',
+        'Program Selected',
+        'Consultancy Agreement Sent',
+        'Consultancy Agreement Signed',
         'Consultancy Agreement',
         'English Pro',
         'School Enrollment',
@@ -574,6 +573,60 @@ class Lead extends Model
         // Stamp who last touched the record, and with what, before the row
         // is written — this is what the portals' Updated column reports.
         static::updating(fn (Lead $lead) => $lead->stampLastActivity());
+
+        // Stage-triggered client emails — fire whenever the pipeline stage
+        // transitions (from any of the several stage-change endpoints).
+        // Guarded by wasChanged so each fires once per transition.
+        //   • Contact Attempted → missed_the_call_1 now, missed_the_call_2 on
+        //     day 3 (skipped then if the lead has since moved on).
+        //   • Not Qualified     → not_qualified now.
+        static::updated(function (Lead $lead) {
+            if (! $lead->wasChanged('status') || empty($lead->email)) {
+                return;
+            }
+
+            try {
+                if ($lead->status === 'Contact Attempted') {
+                    \App\Jobs\SendLeadFollowupEmail::sendKey('missed_the_call_1', $lead);
+                    \App\Jobs\SendLeadFollowupEmail::dispatch($lead->id, 'missed_the_call_2', 'Contact Attempted')
+                        ->delay(now()->addDays(3));
+                } elseif ($lead->status === 'Contacted for Booking') {
+                    \App\Jobs\SendLeadFollowupEmail::sendKey('contacted_for_booking_1', $lead);
+                } elseif ($lead->status === 'Missed the Meeting') {
+                    // missed_the_booking_1 now, missed_the_booking_2 on day 1
+                    // (skipped then if the lead has moved off this stage).
+                    \App\Jobs\SendLeadFollowupEmail::sendKey('missed_the_booking_1', $lead);
+                    \App\Jobs\SendLeadFollowupEmail::dispatch($lead->id, 'missed_the_booking_2', 'Missed the Meeting')
+                        ->delay(now()->addDays(1));
+                } elseif ($lead->status === 'Not Qualified') {
+                    \App\Jobs\SendLeadFollowupEmail::sendKey('not_qualified', $lead);
+                } elseif ($lead->status === 'Qualified but No Funds') {
+                    \App\Jobs\SendLeadFollowupEmail::sendKey('qualified_but_no_funds', $lead);
+                } elseif ($lead->status === 'Qualified but Not Ready') {
+                    \App\Jobs\SendLeadFollowupEmail::sendKey('qualified_but_not_ready', $lead);
+                } elseif ($lead->status === 'Consultation Done') {
+                    \App\Jobs\SendLeadFollowupEmail::sendKey('consultation_done', $lead);
+                } elseif ($lead->status === 'Consultancy Agreement Signed') {
+                    // Key intentionally spelled 'consultancy_signe' per template.
+                    \App\Jobs\SendLeadFollowupEmail::sendKey('consultancy_signe', $lead);
+                } elseif ($lead->status === 'Proposal Sent') {
+                    // Feedback-request drip after the proposal (program_proposal)
+                    // is sent: day 1, day 2, day 5. Each is skipped at fire time
+                    // if the lead has moved on from "Proposal Sent" (e.g. chose a
+                    // program), so a responsive lead stops getting nudges.
+                    \App\Jobs\SendLeadFollowupEmail::dispatch($lead->id, 'proposal_send_1', 'Proposal Sent')
+                        ->delay(now()->addDays(1));
+                    \App\Jobs\SendLeadFollowupEmail::dispatch($lead->id, 'proposal_send_2', 'Proposal Sent')
+                        ->delay(now()->addDays(2));
+                    \App\Jobs\SendLeadFollowupEmail::dispatch($lead->id, 'proposal_send_3', 'Proposal Sent')
+                        ->delay(now()->addDays(5));
+                }
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning('Stage-change follow-up failed', [
+                    'lead_id' => $lead->id, 'status' => $lead->status, 'error' => $e->getMessage(),
+                ]);
+            }
+        });
     }
 
     /**
@@ -733,8 +786,11 @@ class Lead extends Model
     {
         $doc = $this->relationLoaded('faceImage') ? $this->faceImage : $this->faceImage()->first();
 
+        // Client uploads live on the private disk (Privacy-Act fix), so serve
+        // the avatar through the access-checked staff download route rather
+        // than a public URL. Every staff role can reach admin.documents.download.
         return $doc && $doc->file_path
-            ? \Illuminate\Support\Facades\Storage::disk('public')->url($doc->file_path)
+            ? route('admin.documents.download', ['docId' => $doc->id]).'?inline=1'
             : null;
     }
 

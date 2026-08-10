@@ -610,7 +610,7 @@ function ToggleSmall({ label, checked, onChange }) {
 }
 
 // ─── Create / Edit Event Slide-Over ───────────────────────────────────────────
-function EventFormModal({ open, onClose, editingEvent, defaultFormFields = [], customFieldTypes = ['text','email','tel','textarea','select','pills'], lockedFieldKeys = ['first_name','last_name','email','phone'], agents = [] }) {
+function EventFormModal({ open, onClose, editingEvent, defaultFormFields = [], customFieldTypes = ['text','email','tel','textarea','select','pills'], lockedFieldKeys = ['first_name','last_name','email','phone'], agents = [], emailTemplates = [] }) {
     const isEditing = !!editingEvent;
     const [step, setStep] = useState(1);
     const [hasSessions, setHasSessions] = useState(false);
@@ -626,6 +626,8 @@ function EventFormModal({ open, onClose, editingEvent, defaultFormFields = [], c
         // sessions. Sessions still own their own time columns.
         time_start: '', time_end: '',
         status: 'upcoming', mode: 'in-person', location: '', organizer_id: '', agent_id: '', notes: '',
+        // Optional confirmation email template for registrants ('' = default).
+        registration_template_id: '',
         banner_image: null,
         sessions: [emptySession()],
         // Per-event registration-form schema. Seeded from the canonical
@@ -666,6 +668,7 @@ function EventFormModal({ open, onClose, editingEvent, defaultFormFields = [], c
                 organizer_id: editingEvent.organizer_id || '',
                 agent_id: editingEvent.agent_id || '',
                 notes: editingEvent.notes || '',
+                registration_template_id: editingEvent.registration_template_id || '',
                 banner_image: null,
                 sessions: sessions.length ? sessions : [emptySession()],
                 form_fields: Array.isArray(editingEvent.form_fields) && editingEvent.form_fields.length > 0
@@ -918,6 +921,22 @@ function EventFormModal({ open, onClose, editingEvent, defaultFormFields = [], c
                                 <p className="text-[11px] text-gray-400 mt-1">Leads who register for this event are credited to this agent.</p>
                             </div>
 
+                            {/* Registration confirmation email template — the
+                                email a registrant receives for THIS event.
+                                Blank = the global default 'event_registration'. */}
+                            <div>
+                                <Label>Registration Email Template</Label>
+                                <Select value={data.registration_template_id} onChange={e => setField('registration_template_id', e.target.value)}>
+                                    <option value="">— Default (event registration) —</option>
+                                    {emailTemplates.map((t) => (
+                                        <option key={t.id} value={t.id}>
+                                            {t.name}{t.department ? ` · ${t.department}` : ' · shared'}
+                                        </option>
+                                    ))}
+                                </Select>
+                                <p className="text-[11px] text-gray-400 mt-1">Sent automatically when someone registers for this event. Leave as default to use the global template.</p>
+                            </div>
+
                             {/* Address / venue — only for in-person & hybrid events */}
                             {data.mode !== 'online' && (
                                 <div>
@@ -1121,7 +1140,7 @@ function EventFormModal({ open, onClose, editingEvent, defaultFormFields = [], c
 }
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
-export default function Events({ events: backendEvents, defaultFormFields = [], customFieldTypes = [], lockedFieldKeys = [], agents = [] }) {
+export default function Events({ events: backendEvents, defaultFormFields = [], customFieldTypes = [], lockedFieldKeys = [], agents = [], emailTemplates = [] }) {
     const events = backendEvents && backendEvents.length > 0 ? backendEvents : MOCK_EVENTS;
     const [selectedEvents, setSelectedEvents] = useState([]);
     const [activeDropdown, setActiveDropdown] = useState(null);
@@ -1423,6 +1442,7 @@ export default function Events({ events: backendEvents, defaultFormFields = [], 
                 customFieldTypes={customFieldTypes}
                 lockedFieldKeys={lockedFieldKeys}
                 agents={agents}
+                emailTemplates={emailTemplates}
             />
 
             <style dangerouslySetInnerHTML={{ __html: `

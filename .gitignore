@@ -33,3 +33,9 @@ node_modules/
 /blob-report/
 /playwright/.cache/
 /playwright/.auth/
+
+service-account.json
+storage/app/google/
+prod-db-latest.sql.gz
+*.sql.gz
+*.sql

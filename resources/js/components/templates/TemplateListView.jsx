@@ -213,7 +213,7 @@ export default function TemplateListView({ templates = [], folders = [], basePat
                                 <th className="px-4 py-3 w-10"></th>
                                 <th className="px-6 py-3">Template</th>
                                 <th className="px-6 py-3">Key</th>
-                                {isAdmin && <th className="px-6 py-3">Department</th>}
+                                <th className="px-6 py-3">Department</th>
                                 <th className="px-6 py-3">Channels</th>
                                 <th className="px-6 py-3">Active</th>
                                 <th className="px-6 py-3">Updated</th>
@@ -222,7 +222,7 @@ export default function TemplateListView({ templates = [], folders = [], basePat
                         </thead>
                         <tbody className="divide-y divide-gray-50">
                             {visibleTemplates.length === 0 ? (
-                                <tr><td colSpan={isAdmin ? 8 : 7} className="px-6 py-16 text-center text-sm text-gray-400">
+                                <tr><td colSpan={8} className="px-6 py-16 text-center text-sm text-gray-400">
                                     {currentFolder ? "This folder is empty." : "No templates here."}
                                 </td></tr>
                             ) : (
@@ -239,13 +239,11 @@ export default function TemplateListView({ templates = [], folders = [], basePat
                                         </td>
                                         <td className="px-6 py-3 font-semibold text-gray-900 text-sm cursor-pointer" onClick={() => router.visit(`${basePath}/${t.id}`)}>{t.name}</td>
                                         <td className="px-6 py-3 cursor-pointer" onClick={() => router.visit(`${basePath}/${t.id}`)}><code className="text-xs bg-gray-100 rounded px-1.5 py-0.5 text-gray-600">{t.key}</code></td>
-                                        {isAdmin && (
-                                            <td className="px-6 py-3">
-                                                <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${t.department ? "bg-indigo-50 text-indigo-700" : "bg-gray-100 text-gray-500"}`}>
-                                                    {t.department ? titleCase(t.department) : "Shared"}
-                                                </span>
-                                            </td>
-                                        )}
+                                        <td className="px-6 py-3">
+                                            <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${t.department ? "bg-indigo-50 text-indigo-700" : "bg-gray-100 text-gray-500"}`}>
+                                                {t.department ? titleCase(t.department) : "Shared"}
+                                            </span>
+                                        </td>
                                         <td className="px-6 py-3">
                                             <div className="flex items-center gap-1.5">
                                                 {t.channels.includes("email") && <span className="inline-flex items-center gap-1 text-xs bg-blue-50 text-blue-700 rounded-full px-2 py-0.5"><Mail size={11} /> Email</span>}

@@ -360,12 +360,21 @@ class CommunicationService
      */
     private function substitute(string $template, array $context, bool $escape): string
     {
-        return preg_replace_callback('/\{\{\s*([a-z0-9_]+)\s*\}\}/i', function ($m) use ($context, $escape) {
+        return preg_replace_callback('/\{\{\s*([a-z0-9_.]+)\s*\}\}/i', function ($m) use ($context, $escape) {
             $key = strtolower($m[1]);
             if (! array_key_exists($key, $context)) {
-                Log::warning("CommunicationService: unknown template variable '{{{$key}}}'");
+                // Fall back from a dotted variable to its underscore form, so
+                // {{first.name}} resolves to the `first_name` context key. Only
+                // used when the literal key is absent, so templates that supply
+                // literal dotted keys (e.g. booking's {{contact.email}}) win.
+                $alt = str_replace('.', '_', $key);
+                if ($alt !== $key && array_key_exists($alt, $context)) {
+                    $key = $alt;
+                } else {
+                    Log::warning("CommunicationService: unknown template variable '{{{$key}}}'");
 
-                return '';
+                    return '';
+                }
             }
             $value = (string) $context[$key];
 
