@@ -14,7 +14,7 @@ use Illuminate\Database\Eloquent\Relations\MorphTo;
 class AssessmentAiReview extends Model
 {
     protected $fillable = [
-        'intakeable_type', 'intakeable_id', 'reviewed_by',
+        'intakeable_type', 'intakeable_id', 'reviewed_by', 'edited_by', 'edited_at',
         'provider', 'model', 'observations', 'summary', 'raw',
         'risks', 'checklist', 'adviser_note', 'client_email',
     ];
@@ -24,7 +24,13 @@ class AssessmentAiReview extends Model
         'risks' => 'array',
         'checklist' => 'array',
         'client_email' => 'array',
+        'edited_at' => 'datetime',
     ];
+
+    public function editor(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'edited_by');
+    }
 
     public function intakeable(): MorphTo
     {

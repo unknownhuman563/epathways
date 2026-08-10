@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from "react";
 import { createPortal } from "react-dom";
 import {
     Sparkles, RefreshCw, AlertTriangle, Info, ShieldCheck, X, Loader2,
-    FileText, ListChecks, StickyNote, Mail, Copy, Check, UserRound,
+    FileText, ListChecks, StickyNote, Mail, Copy, Check, UserRound, Save,
 } from "lucide-react";
 
 // AI assessment "adviser pack" for a visa-assessment intake.
@@ -89,7 +89,46 @@ export default function AiAssessmentReview({ type, id }) {
     const [fetching, setFetching] = useState(true);
     const [error, setError] = useState(null);
 
+    // Adviser-editable working copies of the drafted note + client email.
+    const [note, setNote] = useState("");
+    const [subject, setSubject] = useState("");
+    const [body, setBody] = useState("");
+    const [saving, setSaving] = useState(false);
+    const [savedTick, setSavedTick] = useState(false);
+
     const base = `/portal/immigration/assessments/${type}/${id}/ai-review`;
+
+    // Sync the editable copies whenever a review loads or is re-run.
+    useEffect(() => {
+        setNote(review?.adviser_note || "");
+        setSubject(review?.client_email?.subject || "");
+        setBody(review?.client_email?.body || "");
+    }, [review]);
+
+    const saveEdits = useCallback(async () => {
+        setSaving(true);
+        setError(null);
+        try {
+            const res = await fetch(`${base}/edit`, {
+                method: "POST",
+                credentials: "same-origin",
+                headers: { "Content-Type": "application/json", Accept: "application/json", "X-Requested-With": "XMLHttpRequest", ...csrfHeaders() },
+                body: JSON.stringify({ adviser_note: note, client_email: { subject, body } }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (! res.ok) { setError(data.message || "Could not save your edits."); return; }
+            setReview(data.review || null);
+            setSavedTick(true); setTimeout(() => setSavedTick(false), 1500);
+        } catch {
+            setError("Could not save your edits.");
+        } finally {
+            setSaving(false);
+        }
+    }, [base, note, subject, body]);
+
+    const dirty = review && (note !== (review.adviser_note || "")
+        || subject !== (review.client_email?.subject || "")
+        || body !== (review.client_email?.body || ""));
 
     useEffect(() => {
         let alive = true;
@@ -120,8 +159,16 @@ export default function AiAssessmentReview({ type, id }) {
         }
     }, [base]);
 
-    const email = review?.client_email || {};
-    const emailText = email.subject || email.body ? `Subject: ${email.subject || ""}\n\n${email.body || ""}` : "";
+    const emailText = subject || body ? `Subject: ${subject}\n\n${body}` : "";
+
+    // Save control shown in the note/email section headers.
+    const saveBtn = (
+        <button type="button" onClick={saveEdits} disabled={saving || ! dirty}
+            className="inline-flex items-center gap-1 text-[10.5px] font-semibold text-indigo-600 hover:text-indigo-800 disabled:text-gray-300 disabled:cursor-default">
+            {savedTick ? <Check size={11} className="text-emerald-500" /> : saving ? <Loader2 size={11} className="animate-spin" /> : <Save size={11} />}
+            {savedTick ? "Saved" : "Save"}
+        </button>
+    );
 
     return (
         <div className="rounded-2xl border border-indigo-100 bg-white shadow-sm overflow-hidden">
@@ -189,34 +236,36 @@ export default function AiAssessmentReview({ type, id }) {
                             </Section>
                         )}
 
-                        {review.adviser_note && (
-                            <Section icon={StickyNote} title="Draft adviser note" right={<CopyButton text={review.adviser_note} />}>
-                                <textarea
-                                    readOnly
-                                    value={review.adviser_note}
-                                    rows={6}
-                                    className="w-full text-[12.5px] px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg leading-relaxed resize-y"
-                                />
-                            </Section>
-                        )}
+                        <Section icon={StickyNote} title="Draft adviser note (editable)" right={<div className="flex items-center gap-3"><CopyButton text={note} />{saveBtn}</div>}>
+                            <textarea
+                                value={note}
+                                onChange={(e) => setNote(e.target.value)}
+                                rows={6}
+                                placeholder="The adviser's note — edit the AI draft, or write your own."
+                                className="w-full text-[12.5px] px-3 py-2 bg-white border border-gray-200 rounded-lg leading-relaxed resize-y focus:outline-none focus:border-indigo-300"
+                            />
+                        </Section>
 
-                        {(email.subject || email.body) && (
-                            <Section icon={Mail} title="Draft client email (status only — adviser sends)" right={<CopyButton text={emailText} />}>
-                                <div className="rounded-lg border border-gray-200 overflow-hidden">
-                                    <div className="px-3 py-1.5 bg-gray-50 border-b border-gray-100 text-[12px] text-gray-700">
-                                        <span className="font-semibold">Subject:</span> {email.subject}
-                                    </div>
-                                    <textarea readOnly value={email.body} rows={6}
-                                        className="w-full text-[12.5px] px-3 py-2 leading-relaxed resize-y border-0 focus:outline-none" />
-                                </div>
-                                <p className="text-[10.5px] text-gray-400">This is a draft. Review, edit, and send it yourself — nothing is sent automatically.</p>
-                            </Section>
-                        )}
+                        <Section icon={Mail} title="Draft client email (status only — adviser sends)" right={<div className="flex items-center gap-3"><CopyButton text={emailText} />{saveBtn}</div>}>
+                            <div className="rounded-lg border border-gray-200 overflow-hidden">
+                                <input
+                                    value={subject}
+                                    onChange={(e) => setSubject(e.target.value)}
+                                    placeholder="Subject"
+                                    className="w-full px-3 py-1.5 bg-gray-50 border-b border-gray-100 text-[12px] text-gray-800 focus:outline-none"
+                                />
+                                <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={6}
+                                    placeholder="Status/process-only acknowledgement — no advice."
+                                    className="w-full text-[12.5px] px-3 py-2 leading-relaxed resize-y border-0 focus:outline-none" />
+                            </div>
+                            <p className="text-[10.5px] text-gray-400">Draft — edit as needed and send it yourself. Nothing is sent automatically, and it must stay status/process only.</p>
+                        </Section>
 
                         <p className="text-[10.5px] text-gray-400 border-t border-gray-50 pt-2">
                             {review.reviewed_by ? `Run by ${review.reviewed_by}` : "Run"}
                             {review.created_at && ` · ${fmtWhen(review.created_at)}`}
                             {review.model && ` · ${review.model}`}
+                            {review.edited_by && ` · edited by ${review.edited_by}${review.edited_at ? ` ${fmtWhen(review.edited_at)}` : ""}`}
                         </p>
                     </>
                 )}

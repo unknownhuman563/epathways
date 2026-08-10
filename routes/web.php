@@ -1152,6 +1152,10 @@ Route::middleware(['auth'])->group(function () {
             Route::post('/assessments/{type}/{id}/ai-review', [ImmigrationController::class, 'aiReviewRun'])
                 ->where(['type' => 'resident|work|student|visitor', 'id' => '[0-9]+'])
                 ->name('assessments.ai-review.run');
+            // Adviser saves edits to the drafted note + client email (they author it).
+            Route::post('/assessments/{type}/{id}/ai-review/edit', [ImmigrationController::class, 'aiReviewEdit'])
+                ->where(['type' => 'resident|work|student|visitor', 'id' => '[0-9]+'])
+                ->name('assessments.ai-review.edit');
             Route::get('/cases', [ImmigrationController::class, 'cases'])->name('cases');
             // Engagement + Invoice generation workspaces. Declared before the
             // /cases/{lead}/... routes below; both are single-segment literals

@@ -1601,6 +1601,8 @@ class ImmigrationController extends Controller
             'model' => $r->model,
             'reviewed_by' => optional($r->reviewer)->name,
             'created_at' => optional($r->created_at)->toIso8601String(),
+            'edited_by' => optional($r->editor)->name,
+            'edited_at' => optional($r->edited_at)->toIso8601String(),
         ];
     }
 
@@ -1645,6 +1647,38 @@ class ImmigrationController extends Controller
         }
 
         return response()->json(['review' => $this->serializeAiReview($review)]);
+    }
+
+    /**
+     * Save the adviser's edits to the drafted note + client email on the latest
+     * review. The adviser is the author of record (guardrail §2) — the AI output
+     * stays in `raw`; this overwrites the working copy and stamps who/when.
+     */
+    public function aiReviewEdit(Request $request, string $type, int $id)
+    {
+        $class = $this->intakeClassFor($type);
+        abort_unless($class, 404);
+
+        $review = \App\Models\AssessmentAiReview::latestFor($class, $id);
+        abort_unless($review, 404, 'Run an AI review first.');
+
+        $data = $request->validate([
+            'adviser_note' => 'nullable|string|max:8000',
+            'client_email' => 'nullable|array',
+            'client_email.subject' => 'nullable|string|max:255',
+            'client_email.body' => 'nullable|string|max:8000',
+        ]);
+
+        $review->update([
+            'adviser_note' => $data['adviser_note'] ?? $review->adviser_note,
+            'client_email' => array_key_exists('client_email', $data)
+                ? ['subject' => $data['client_email']['subject'] ?? '', 'body' => $data['client_email']['body'] ?? '']
+                : $review->client_email,
+            'edited_by' => $request->user()->id,
+            'edited_at' => now(),
+        ]);
+
+        return response()->json(['review' => $this->serializeAiReview($review->fresh(['reviewer', 'editor']))]);
     }
 
     /** Documents — Queue (pending / stale / rejected) + Folders per case. */
@@ -1822,86 +1856,62 @@ class ImmigrationController extends Controller
 
     public function reports(Request $request)
     {
-        $period = in_array($request->input('period', 'weekly'), ['weekly', 'monthly', 'quarterly', 'custom'], true)
-            ? $request->input('period', 'weekly') : 'weekly';
-
+        // ── Date range (default: last 2 weeks) ───────────────────────────
+        [$preset, $from, $to] = $this->resolveReportRange($request);
         $now = now();
-        $weekStart = $now->copy()->startOfWeek();
+        $rangeDays = max(1, (int) $from->diffInDays($to) + 1);
 
         // Stage groupings (based on the case's current immigration_stage).
         $awaitingStages = ['Visa Lodged', 'Request for Information', 'Approved in Principle'];
-        $inProgress = ['For Assessment', 'Endorsed', 'Agreement Sent', 'Agreement Signed', 'For Agreement & Invoice', 'Invoice Paid'];
         $lodgedStages = ['Visa Lodged', 'Request for Information', 'Approved in Principle', 'Approved Visa', 'Decline Visa'];
         $endorsedStages = ['Endorsed', 'Agreement Sent', 'Agreement Signed', 'For Agreement & Invoice', 'Invoice Paid', 'Visa Lodged', 'Request for Information', 'Approved in Principle', 'Approved Visa', 'Decline Visa'];
         $engagedStages = ['Agreement Signed', 'For Agreement & Invoice', 'Invoice Paid', 'Visa Lodged', 'Request for Information', 'Approved in Principle', 'Approved Visa', 'Decline Visa'];
+        $terminalStages = ['Approved Visa', 'Decline Visa'];
 
         $count = fn ($stages) => Lead::immigrationCase()->whereIn('immigration_stage', (array) $stages)->count();
-        $countWeek = fn ($stages) => Lead::immigrationCase()
+        // Movements INTO a set of stages within the window (by stage_updated_at).
+        $inWindow = fn ($stages) => Lead::immigrationCase()
             ->whereIn('immigration_stage', (array) $stages)
-            ->where('stage_updated_at', '>=', $weekStart)
+            ->whereBetween('stage_updated_at', [$from, $to])
             ->count();
 
-        // Adviser most cases were endorsed/assigned to this week.
-        $adviser = Lead::immigrationCase()
-            ->whereNotNull('immigration_assignee')
-            ->where('stage_updated_at', '>=', $weekStart)
-            ->selectRaw('immigration_assignee, COUNT(*) as c')
-            ->groupBy('immigration_assignee')
-            ->orderByDesc('c')
-            ->first();
-
-        $weekly = [
-            'new_clients' => Lead::immigrationCase()->where('immigration_converted_at', '>=', $weekStart)->count(),
-            'files_endorsed' => $countWeek(['For Assessment', 'Endorsed']),
-            'endorsed_to' => $adviser->immigration_assignee ?? (Lead::IMMIGRATION_STAGE_ASSIGNEES[0] ?? 'the team'),
-            'endorsed_to_count' => (int) ($adviser->c ?? 0),
-            'agreements_signed' => $countWeek('Agreement Signed'),
-            'apps_lodged' => $countWeek('Visa Lodged'),
-            'visas_approved' => $countWeek('Approved Visa'),
+        // ── Activity in the selected window ──────────────────────────────
+        $activity = [
+            'new_clients' => Lead::immigrationCase()->whereBetween('immigration_converted_at', [$from, $to])->count(),
+            'files_endorsed' => $inWindow(['For Assessment', 'Endorsed']),
+            'agreements_signed' => $inWindow('Agreement Signed'),
+            'apps_lodged' => $inWindow('Visa Lodged'),
+            'visas_approved' => $inWindow('Approved Visa'),
+            'visas_declined' => $inWindow('Decline Visa'),
         ];
 
-        $pipeline = [
-            'ready' => $count('Invoice Paid'),
-            'in_progress' => $count($inProgress),
-            'awaiting_decision' => $count($awaitingStages),
-        ];
-
-        // ── Cases by stage — the full pipeline breakdown (primary focus) ──
+        // ── Cases by stage — current snapshot ────────────────────────────
         $stageDistribution = collect(Lead::IMMIGRATION_STAGES)
             ->map(fn ($s) => ['stage' => $s, 'count' => $count($s)])
             ->push(['stage' => 'Unassigned', 'count' => Lead::immigrationCase()->whereNull('immigration_stage')->count()])
             ->values();
         $totalCases = $stageDistribution->sum('count');
 
-        // ── Documents submitted this week (secondary focus) ──────────────
-        $docWeek = fn () => LeadDocument::where('created_at', '>=', $weekStart);
-        $byDay = [];
-        for ($i = 0; $i < 7; $i++) {
-            $day = $weekStart->copy()->addDays($i);
-            $byDay[] = [
-                'label' => $day->format('D'),
-                'count' => LeadDocument::whereBetween('created_at', [$day->copy()->startOfDay(), $day->copy()->endOfDay()])->count(),
-            ];
-        }
+        // ── Documents in the window ──────────────────────────────────────
+        $docWin = fn () => LeadDocument::whereBetween('created_at', [$from, $to]);
         $documents = [
-            'total' => (clone $docWeek())->count(),
-            'approved' => (clone $docWeek())->where('status', 'Approved')->count(),
-            'pending' => (clone $docWeek())->whereIn('status', ['Submitted', 'UnderReview'])->count(),
-            'rejected' => (clone $docWeek())->where('status', 'Rejected')->count(),
+            'total' => (clone $docWin())->count(),
+            'approved' => (clone $docWin())->where('status', 'Approved')->count(),
+            'pending' => (clone $docWin())->whereIn('status', ['Submitted', 'UnderReview'])->count(),
+            'rejected' => (clone $docWin())->where('status', 'Rejected')->count(),
             'pending_review_all' => LeadDocument::whereIn('status', ['Submitted', 'UnderReview'])->count(),
-            'by_day' => $byDay,
         ];
 
         // ── 6-month trend — new cases vs visas approved per month ────────
         $trend = [];
         for ($i = 5; $i >= 0; $i--) {
             $m = $now->copy()->subMonths($i);
-            $start = $m->copy()->startOfMonth();
-            $end = $m->copy()->endOfMonth();
+            $mStart = $m->copy()->startOfMonth();
+            $mEnd = $m->copy()->endOfMonth();
             $trend[] = [
                 'label' => $m->format('M'),
-                'new_cases' => Lead::immigrationCase()->whereBetween('immigration_converted_at', [$start, $end])->count(),
-                'approved' => Lead::immigrationCase()->where('immigration_stage', 'Approved Visa')->whereBetween('stage_updated_at', [$start, $end])->count(),
+                'new_cases' => Lead::immigrationCase()->whereBetween('immigration_converted_at', [$mStart, $mEnd])->count(),
+                'approved' => Lead::immigrationCase()->where('immigration_stage', 'Approved Visa')->whereBetween('stage_updated_at', [$mStart, $mEnd])->count(),
             ];
         }
 
@@ -1910,7 +1920,7 @@ class ImmigrationController extends Controller
         $decided = $approved + $declined;
 
         $kpis = [
-            'active_cases' => Lead::immigrationCase()->count(),
+            'active_cases' => Lead::immigrationCase()->whereNotIn('immigration_stage', $terminalStages)->count(),
             'with_inz' => $count($awaitingStages),
             'docs_pending' => $documents['pending_review_all'],
             'approval_rate' => $decided > 0 ? (int) round($approved / $decided * 100) : 0,
@@ -1928,17 +1938,218 @@ class ImmigrationController extends Controller
         ];
 
         return inertia('portal/immigration/Reports', [
-            'period' => $period,
+            'range' => [
+                'preset' => $preset,
+                'from' => $from->toDateString(),
+                'to' => $to->toDateString(),
+                'days' => $rangeDays,
+                'label' => $this->reportRangeLabel($preset, $from, $to),
+            ],
             'kpis' => $kpis,
-            'weekly' => $weekly,
+            'activity' => $activity,
             'stageDistribution' => $stageDistribution,
             'totalCases' => $totalCases,
             'documents' => $documents,
             'trend' => $trend,
             'ytd' => $ytd,
+            'attention' => $this->needsAttention($terminalStages),
+            'workload' => $this->adviserWorkload($terminalStages),
             'generated_at' => now()->toIso8601String(),
             'generated_by' => optional(auth()->user())->name,
         ]);
+    }
+
+    /**
+     * Resolve the report window from the request. Default is the last 14 days.
+     * Presets: two_weeks | this_month | last_month | quarter | custom(from,to).
+     *
+     * @return array{0: string, 1: \Illuminate\Support\Carbon, 2: \Illuminate\Support\Carbon}
+     */
+    private function resolveReportRange(Request $request): array
+    {
+        $now = now();
+        $preset = $request->input('preset', 'two_weeks');
+        if (! in_array($preset, ['two_weeks', 'this_month', 'last_month', 'quarter', 'custom'], true)) {
+            $preset = 'two_weeks';
+        }
+
+        switch ($preset) {
+            case 'this_month':
+                return [$preset, $now->copy()->startOfMonth(), $now->copy()->endOfDay()];
+            case 'last_month':
+                $m = $now->copy()->subMonthNoOverflow();
+
+                return [$preset, $m->copy()->startOfMonth(), $m->copy()->endOfMonth()];
+            case 'quarter':
+                return [$preset, $now->copy()->subMonthsNoOverflow(3)->startOfDay(), $now->copy()->endOfDay()];
+            case 'custom':
+                $from = $request->filled('from')
+                    ? \Illuminate\Support\Carbon::parse($request->input('from'))->startOfDay()
+                    : $now->copy()->subDays(14)->startOfDay();
+                $to = $request->filled('to')
+                    ? \Illuminate\Support\Carbon::parse($request->input('to'))->endOfDay()
+                    : $now->copy()->endOfDay();
+                if ($from->gt($to)) {
+                    [$from, $to] = [$to->copy()->startOfDay(), $from->copy()->endOfDay()];
+                }
+
+                return [$preset, $from, $to];
+            default: // two_weeks
+                return ['two_weeks', $now->copy()->subDays(14)->startOfDay(), $now->copy()->endOfDay()];
+        }
+    }
+
+    private function reportRangeLabel(string $preset, \Illuminate\Support\Carbon $from, \Illuminate\Support\Carbon $to): string
+    {
+        return match ($preset) {
+            'this_month' => $from->format('F Y'),
+            'last_month' => $from->format('F Y'),
+            'quarter' => 'Last 3 months',
+            'two_weeks' => 'Last 2 weeks',
+            default => $from->format('d M Y').' – '.$to->format('d M Y'),
+        };
+    }
+
+    /**
+     * Cases needing attention — merges the real operational signals so staff
+     * see what to chase first: stale custody, unassigned, blocking findings,
+     * overdue process steps, documents awaiting review, unanswered questions,
+     * and cases the adviser could not endorse. Snapshot (not window-bound).
+     *
+     * @param  array<int, string>  $terminalStages
+     * @return array<int, array<string, mixed>>
+     */
+    private function needsAttention(array $terminalStages): array
+    {
+        $now = now();
+        $amber = (int) config('immigration.custody_stale_amber_days', 6);
+        $red = (int) config('immigration.custody_stale_red_days', 10);
+        $docDays = 5;
+        $threadDays = (int) config('immigration.findings.thread_unanswered_days', 3);
+
+        // Active (non-terminal) cases, keyed by id, with owner for labelling.
+        $cases = Lead::immigrationCase()
+            ->where(function ($q) use ($terminalStages) {
+                $q->whereNotIn('immigration_stage', $terminalStages)->orWhereNull('immigration_stage');
+            })
+            ->with('owner:id,name')
+            ->get(['id', 'lead_id', 'first_name', 'last_name', 'current_owner_id', 'last_activity_at', 'updated_at', 'immigration_stage'])
+            ->keyBy('id');
+
+        if ($cases->isEmpty()) {
+            return [];
+        }
+        $ids = $cases->keys()->all();
+
+        $attn = [];
+        $bump = function ($id, string $reason, int $weight) use (&$attn, $cases) {
+            if (! isset($cases[$id])) {
+                return;
+            }
+            if (! isset($attn[$id])) {
+                $l = $cases[$id];
+                $idle = ($l->last_activity_at ?: $l->updated_at)?->diffInDays(now());
+                $attn[$id] = [
+                    'id' => $id,
+                    'name' => trim("{$l->first_name} {$l->last_name}") ?: ($l->lead_id ?: 'Unknown'),
+                    'owner' => optional($l->owner)->name,
+                    'stage' => $l->immigration_stage,
+                    'idle_days' => $idle !== null ? (int) $idle : null,
+                    'reasons' => [],
+                    'score' => 0,
+                ];
+            }
+            $attn[$id]['reasons'][] = $reason;
+            $attn[$id]['score'] += $weight;
+        };
+
+        // 1) Stale custody + unassigned.
+        foreach ($cases as $id => $l) {
+            $idle = (int) (($l->last_activity_at ?: $l->updated_at)?->diffInDays($now) ?? 0);
+            if ($idle >= $red) {
+                $bump($id, "No activity for {$idle} days", 2);
+            } elseif ($idle >= $amber) {
+                $bump($id, "Going stale ({$idle}d idle)", 1);
+            }
+            if (! $l->current_owner_id) {
+                $bump($id, 'Unassigned — no owner', 1);
+            }
+        }
+
+        // 2) Open blocking findings.
+        foreach (\App\Models\CaseFinding::whereIn('lead_id', $ids)->where('status', 'open')->where('severity', 'blocking')
+            ->selectRaw('lead_id, COUNT(*) c')->groupBy('lead_id')->pluck('c', 'lead_id') as $id => $c) {
+            $bump($id, $c.' blocking issue'.($c == 1 ? '' : 's'), 3);
+        }
+
+        // 3) Overdue process steps.
+        foreach (\App\Models\CaseStepState::whereIn('lead_id', $ids)->where('status', 'active')
+            ->whereNotNull('due_at')->where('due_at', '<', $now)
+            ->selectRaw('lead_id, COUNT(*) c')->groupBy('lead_id')->pluck('c', 'lead_id') as $id => $c) {
+            $bump($id, $c.' step'.($c == 1 ? '' : 's').' overdue', 2);
+        }
+
+        // 4) Documents awaiting review too long.
+        foreach (LeadDocument::whereIn('lead_id', $ids)->whereIn('status', ['Submitted', 'UnderReview'])
+            ->where('created_at', '<', $now->copy()->subDays($docDays))
+            ->selectRaw('lead_id, COUNT(*) c')->groupBy('lead_id')->pluck('c', 'lead_id') as $id => $c) {
+            $bump($id, $c.' doc'.($c == 1 ? '' : 's').' awaiting review', 1);
+        }
+
+        // 5) Unanswered questions (threads).
+        foreach (\App\Models\CaseThread::whereIn('lead_id', $ids)->awaitingAnswer()
+            ->where('created_at', '<=', $now->copy()->subDays($threadDays))
+            ->selectRaw('lead_id, COUNT(*) c')->groupBy('lead_id')->pluck('c', 'lead_id') as $id => $c) {
+            $bump($id, $c.' unanswered question'.($c == 1 ? '' : 's'), 2);
+        }
+
+        // 6) Latest verdict is cannot_endorse.
+        $latestVerdicts = \App\Models\CaseAttestation::whereIn('lead_id', $ids)->where('type', 'verdict')
+            ->orderByDesc('id')->get(['lead_id', 'verdict'])->unique('lead_id');
+        foreach ($latestVerdicts->where('verdict', 'cannot_endorse')->pluck('lead_id') as $id) {
+            $bump($id, 'Adviser could not endorse — on hold', 3);
+        }
+
+        return collect($attn)
+            ->sortByDesc(fn ($a) => [$a['score'], $a['idle_days'] ?? 0])
+            ->values()
+            ->take(30)
+            ->map(fn ($a) => array_merge($a, [
+                'severity' => $a['score'] >= 3 ? 'high' : ($a['score'] >= 2 ? 'medium' : 'low'),
+                'link' => "/portal/immigration/cases/{$a['id']}/profile",
+            ]))
+            ->all();
+    }
+
+    /**
+     * How the active caseload is spread across owners — plus an unassigned
+     * bucket — so a manager can see who's carrying what.
+     *
+     * @param  array<int, string>  $terminalStages
+     * @return array<int, array<string, mixed>>
+     */
+    private function adviserWorkload(array $terminalStages): array
+    {
+        $base = fn () => Lead::immigrationCase()->where(function ($q) use ($terminalStages) {
+            $q->whereNotIn('immigration_stage', $terminalStages)->orWhereNull('immigration_stage');
+        });
+
+        $counts = (clone $base())->whereNotNull('current_owner_id')
+            ->selectRaw('current_owner_id, COUNT(*) c')->groupBy('current_owner_id')->pluck('c', 'current_owner_id');
+
+        $names = User::whereIn('id', $counts->keys())->pluck('name', 'id');
+
+        $rows = $counts->map(fn ($c, $id) => [
+            'owner' => $names[$id] ?? 'Unknown',
+            'count' => (int) $c,
+        ])->sortByDesc('count')->values();
+
+        $unassigned = (clone $base())->whereNull('current_owner_id')->count();
+        if ($unassigned > 0) {
+            $rows->push(['owner' => 'Unassigned', 'count' => $unassigned]);
+        }
+
+        return $rows->all();
     }
 
     // Stubs — coming-soon pages.
