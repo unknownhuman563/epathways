@@ -5,6 +5,7 @@ import {
     ListChecks, LineChart, User, Bell, Tag, Star, CheckSquare, ClipboardCheck,
     Building2, Ticket, Mail,
     PenLine, Megaphone, Smartphone, MessageSquare, FileText, Award,
+    Clock,
 } from "lucide-react";
 
 export default function EducationLayout({ children }) {
@@ -54,6 +55,7 @@ export default function EducationLayout({ children }) {
         { name: "Account", section: true },
         { name: "My Profile",    href: "/portal/education/profile",       icon: <User size={20} /> },
         { name: "Notifications", href: "/portal/education/notifications", icon: <Bell size={20} />, badge: badges.notifications_unread, badgeTone: "warning" },
+        { name: "Daily Time Record", href: "/portal/education/dtr", icon: <Clock size={20} /> },
         { name: "My Tickets",    href: "/portal/tickets",                icon: <Ticket size={20} /> },
     ];
 

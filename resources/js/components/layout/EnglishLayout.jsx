@@ -1,5 +1,5 @@
 import DashboardLayout from "./DashboardLayout";
-import { LayoutDashboard, Languages, Users, ClipboardCheck, Ticket, Mail } from "lucide-react";
+import { Clock, LayoutDashboard, Languages, Users, ClipboardCheck, Ticket, Mail } from "lucide-react";
 
 const ENGLISH_NAV = [
     { name: "Dashboard", href: "/portal/english/dashboard", icon: <LayoutDashboard size={20} /> },
@@ -9,7 +9,8 @@ const ENGLISH_NAV = [
     { name: "Email Templates", href: "/portal/english/email-templates", icon: <Mail size={20} /> },
 
     { name: "Account", section: true },
-    { name: "My Tickets", href: "/portal/tickets", icon: <Ticket size={20} /> },
+    { name: "Daily Time Record", href: "/portal/english/dtr", icon: <Clock size={20} /> },
+        { name: "My Tickets", href: "/portal/tickets", icon: <Ticket size={20} /> },
 ];
 
 export default function EnglishLayout({ children }) {

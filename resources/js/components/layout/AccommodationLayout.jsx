@@ -1,5 +1,5 @@
 import DashboardLayout from "./DashboardLayout";
-import {
+import { Clock,
     LayoutDashboard, Home, Users, Workflow, Receipt, Wallet,
     CalendarDays, CalendarCheck, ClipboardList, Flame, MessageSquare, MessageSquareWarning, BarChart3, User, Bell, Ticket,
 } from "lucide-react";
@@ -27,7 +27,8 @@ const ACCOMMODATION_NAV = [
     { name: "Account", section: true },
     { name: "My Profile", href: "/portal/accommodation/profile", icon: <User size={20} /> },
     { name: "Notifications", href: "/portal/accommodation/notifications", icon: <Bell size={20} /> },
-    { name: "My Tickets", href: "/portal/tickets", icon: <Ticket size={20} /> },
+    { name: "Daily Time Record", href: "/portal/accommodation/dtr", icon: <Clock size={20} /> },
+        { name: "My Tickets", href: "/portal/tickets", icon: <Ticket size={20} /> },
 ];
 
 export default function AccommodationLayout({ children }) {
