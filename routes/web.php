@@ -138,6 +138,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/dtr/time-out', [\App\Http\Controllers\DtrController::class, 'timeOut'])->name('dtr.timeout');
 
     Route::get('/admin/dtr', [\App\Http\Controllers\DtrController::class, 'show'])->name('admin.dtr');
+    Route::get('/admin/dtr/manage', [\App\Http\Controllers\DtrController::class, 'manage'])->name('admin.dtr.manage');
     Route::get('/admin/dtr/summary', [\App\Http\Controllers\DtrController::class, 'summary'])->name('admin.dtr.summary');
     Route::get('/portal/sales/dtr', [\App\Http\Controllers\DtrController::class, 'show'])->name('portal.sales.dtr');
     Route::get('/portal/education/dtr', [\App\Http\Controllers\DtrController::class, 'show'])->name('portal.education.dtr');
