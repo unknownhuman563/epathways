@@ -85,6 +85,15 @@ class InzFormFiller
 
         $path = \Illuminate\Support\Facades\Storage::disk('local')->path($version->file_path);
 
+        // FPDM die()s on structures it can't handle (linearization, object
+        // streams, incremental updates) — every real Adobe INZ PDF. Pre-check
+        // and throw a clean error rather than let die() abort the request.
+        $head = (string) file_get_contents($path, false, null, 0, 2048);
+        $tail = (string) file_get_contents($path, false, null, max(0, filesize($path) - 512), 512);
+        if (str_contains($head, '/Linearized') || str_contains($head, '/ObjStm') || str_contains($tail, '/Prev')) {
+            throw new \RuntimeException("{$version->form->code} {$version->version_label} is a modern PDF (needs the overlay map, not AcroForm fill).");
+        }
+
         // FPDM is legacy code that emits benign PHP 8 warnings (e.g. "Undefined
         // array key") while parsing. Laravel's error handler promotes those to
         // fatal ErrorExceptions, so silence non-fatal levels for the fill only —
@@ -136,8 +145,11 @@ class InzFormFiller
 
         try {
             $pdf = new \setasign\Fpdi\Fpdi();
-            $pdf->setSourceFile($path);
-            $pageCount = $pdf->setSourceFile($path);
+            try {
+                $pageCount = $pdf->setSourceFile($path);
+            } catch (\setasign\Fpdi\PdfParser\CrossReference\CrossReferenceException $e) {
+                throw new \RuntimeException("{$version->form->code} {$version->version_label} uses a compressed PDF structure the free engine can't read. Re-save it without Fast Web View, or enable the compressed-PDF parser.");
+            }
 
             for ($n = 1; $n <= $pageCount; $n++) {
                 $tpl = $pdf->importPage($n);

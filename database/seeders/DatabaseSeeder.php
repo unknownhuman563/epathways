@@ -24,5 +24,7 @@ class DatabaseSeeder extends Seeder
         $this->call(AiSettingsSeeder::class);
         // Build 12 phase 4.5 — the 16-step immigration process (idempotent).
         $this->call(CaseStepTemplateSeeder::class);
+        // Official INZ forms (real PDFs + overlay maps) — installed everywhere.
+        $this->call(OfficialInzFormsSeeder::class);
     }
 }

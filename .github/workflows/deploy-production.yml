@@ -60,6 +60,8 @@ jobs:
               --exclude='storage/app/public/*' \
               --exclude='storage/app/private/*' \
               --exclude='storage/app/google' \
+              --exclude='storage/app/inz-forms' \
+              --exclude='storage/app/inz-generated' \
               ./ ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/var/www/epathways-production/
           }
           for attempt in 1 2 3; do
@@ -79,6 +81,7 @@ jobs:
             sudo find storage bootstrap/cache -type f -exec chmod 664 {} \; &&
             php artisan storage:link &&
             php artisan migrate --force &&
+            php artisan db:seed --class=OfficialInzFormsSeeder --force &&
             php artisan config:cache &&
             php artisan view:cache &&
             php artisan queue:restart
