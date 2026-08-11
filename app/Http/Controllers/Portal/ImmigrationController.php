@@ -546,6 +546,101 @@ class ImmigrationController extends Controller
     }
 
     /**
+     * INZ Forms console under Case — every immigration case with the INZ forms
+     * its visa category offers, and the state of each (ready to fill, sent to
+     * the client, submitted). Staff generate the official draft or send a form
+     * to the client to fill, from one screen instead of opening each case.
+     */
+    public function caseInzForms()
+    {
+        $cases = Lead::immigrationCase()
+            ->orderByDesc('updated_at')
+            ->limit(300)
+            ->get(['id', 'lead_id', 'first_name', 'last_name', 'email', 'inz_visa_type', 'immigration_stage']);
+
+        // visa type/code → category, and forms grouped by category (loaded once).
+        $visaCategory = [];
+        foreach (\App\Models\VisaType::get(['name', 'code', 'category']) as $v) {
+            if ($v->name) {
+                $visaCategory[$v->name] = $v->category;
+            }
+            if ($v->code) {
+                $visaCategory[$v->code] = $v->category;
+            }
+        }
+        $formsByCategory = \App\Models\InzForm::where('is_active', true)->orderBy('code')->get()->groupBy('category');
+
+        $assignments = \App\Models\CaseFormAssignment::whereIn('lead_id', $cases->pluck('id'))
+            ->get()->groupBy('lead_id');
+
+        // Already-generated INZ drafts (LeadDocument source=generated, keyed by
+        // "inz:{code}") so each row can show + link to the latest draft.
+        $generated = \App\Models\LeadDocument::whereIn('lead_id', $cases->pluck('id'))
+            ->where('source', 'generated')
+            ->where('source_variant', 'like', 'inz:%')
+            ->orderByDesc('created_at')
+            ->get(['id', 'lead_id', 'source_variant', 'created_at'])
+            ->groupBy('lead_id');
+
+        // Flat rows for the register table: one per (case × available INZ form).
+        $rows = collect();
+        $casePicker = collect();
+        foreach ($cases as $l) {
+            $category = $l->inz_visa_type ? ($visaCategory[$l->inz_visa_type] ?? null) : null;
+            $forms = $category ? ($formsByCategory[$category] ?? collect()) : collect();
+            $mine = ($assignments[$l->id] ?? collect())->keyBy('inz_form_id');
+            $docs = $generated[$l->id] ?? collect(); // newest-first already
+            $name = trim("{$l->first_name} {$l->last_name}") ?: 'Unknown';
+
+            $casePicker->push([
+                'id' => $l->id,
+                'lead_id' => $l->lead_id,
+                'name' => $name,
+                'visa_type' => $l->inz_visa_type,
+                'category' => $category,
+            ]);
+
+            foreach ($forms as $f) {
+                $v = $f->currentVersion();
+                $a = $mine->get($f->id);
+                $doc = $docs->firstWhere('source_variant', "inz:{$f->code}");
+                $rows->push([
+                    'case_id' => $l->id,
+                    'lead_id' => $l->lead_id,
+                    'case_name' => $name,
+                    'code' => $f->code,
+                    'name' => $f->name,
+                    'category' => $f->category,
+                    'version' => $v?->version_label,
+                    'ready' => $v?->isReady() ?? false,
+                    'lapsing' => $v?->isLapsing() ?? false,
+                    'assignment_status' => $a?->status,
+                    'generated_document_id' => $doc?->id,
+                    'generated_at' => optional($doc?->created_at)->toIso8601String(),
+                ]);
+            }
+        }
+
+        // Newest generated drafts float to the top; ungenerated rows follow.
+        $rows = $rows->sortByDesc(fn ($r) => $r['generated_at'] ?? '')->values();
+
+        // Modal reference data: categories and the forms available under each.
+        $formsByCat = $formsByCategory->map(fn ($group) => $group->map(fn ($f) => [
+            'code' => $f->code,
+            'name' => $f->name,
+            'ready' => $f->currentVersion()?->isReady() ?? false,
+        ])->values());
+        $categories = \App\Models\VisaCategory::orderBy('name')->pluck('name')->values();
+
+        return inertia('portal/immigration/CaseInzForms', [
+            'rows' => $rows->values(),
+            'cases' => $casePicker->values(),
+            'categories' => $categories,
+            'formsByCategory' => $formsByCat,
+        ]);
+    }
+
+    /**
      * Engagement generation workspace — pick a case, choose which
      * engagement documents to generate (Written Agreement + IAA
      * standards), preview them live, and generate. The Written Agreement's
@@ -2285,9 +2380,223 @@ class ImmigrationController extends Controller
         return inertia('portal/immigration/Intakes', []);
     }
 
+    /** INZ form catalogue + version register (upload official PDFs, map fields). */
     public function inzForms()
     {
-        return inertia('portal/immigration/InzForms', []);
+        $forms = \App\Models\InzForm::with(['versions' => fn ($q) => $q->orderByDesc('is_current')->orderByDesc('id')])
+            ->orderBy('category')->orderBy('code')
+            ->get()
+            ->map(fn (\App\Models\InzForm $f) => [
+                'id' => $f->id,
+                'code' => $f->code,
+                'name' => $f->name,
+                'category' => $f->category,
+                'is_active' => $f->is_active,
+                'versions' => $f->versions->map(fn (\App\Models\InzFormVersion $v) => [
+                    'id' => $v->id,
+                    'version_label' => $v->version_label,
+                    'is_current' => $v->is_current,
+                    'ready' => $v->isReady(),
+                    'is_acroform' => $v->is_acroform,
+                    'field_map' => $v->field_map ?? [],
+                    'effective_from' => optional($v->effective_from)->toDateString(),
+                    'accepted_until' => optional($v->accepted_until)->toDateString(),
+                    'lapsing' => $v->isLapsing(),
+                    'lapsed' => $v->hasLapsed(),
+                    'checked_at' => optional($v->checked_at)->toIso8601String(),
+                ])->values(),
+            ]);
+
+        $visaTypes = \App\Models\VisaType::orderBy('category')->orderBy('name')
+            ->get(['id', 'code', 'name', 'category']);
+
+        $categories = \App\Models\VisaCategory::orderBy('name')->get()->map(fn ($c) => [
+            'id' => $c->id,
+            'name' => $c->name,
+            'code' => $c->code,
+            'description' => $c->description,
+            'visa_type_ids' => $visaTypes->where('category', $c->name)->pluck('id')->values(),
+            'form_count' => $forms->where('category', $c->name)->count(),
+        ]);
+
+        return inertia('portal/immigration/InzForms', [
+            'forms' => $forms,
+            'categories' => $categories,
+            'visaTypes' => $visaTypes,
+            // The context keys a field map can reference (for the map editor).
+            'contextKeys' => array_keys(\App\Services\Immigration\InzCaseContext::for(new Lead)),
+        ]);
+    }
+
+    /** Create a visa category. */
+    public function categoryStore(Request $request)
+    {
+        $data = $request->validate([
+            'name' => 'required|string|max:60|unique:visa_categories,name',
+            'code' => 'nullable|string|max:20',
+            'description' => 'nullable|string|max:255',
+        ]);
+        \App\Models\VisaCategory::create($data);
+
+        return back()->with('success', "Added category {$data['name']}.");
+    }
+
+    /** Update a category (renaming re-tags its visa types + INZ forms). */
+    public function categoryUpdate(Request $request, \App\Models\VisaCategory $category)
+    {
+        $data = $request->validate([
+            'name' => 'required|string|max:60|unique:visa_categories,name,'.$category->id,
+            'code' => 'nullable|string|max:20',
+            'description' => 'nullable|string|max:255',
+        ]);
+
+        $oldName = $category->name;
+        $category->update($data);
+
+        if ($oldName !== $data['name']) {
+            \App\Models\VisaType::where('category', $oldName)->update(['category' => $data['name']]);
+            \App\Models\InzForm::where('category', $oldName)->update(['category' => $data['name']]);
+        }
+
+        return back()->with('success', "Updated category {$data['name']}.");
+    }
+
+    /** Delete a category (visa types / forms keep their string until reassigned). */
+    public function categoryDestroy(\App\Models\VisaCategory $category)
+    {
+        $name = $category->name;
+        $category->delete();
+
+        return back()->with('success', "Removed category {$name}.");
+    }
+
+    /** Set which visa types belong to a category (authoritative for that category). */
+    public function categoryAssignVisas(Request $request, \App\Models\VisaCategory $category)
+    {
+        $data = $request->validate([
+            'visa_type_ids' => 'present|array',
+            'visa_type_ids.*' => 'integer|exists:visa_types,id',
+        ]);
+
+        // Selected visas → this category; any previously in this category but no
+        // longer selected → cleared (the selection is the source of truth).
+        \App\Models\VisaType::where('category', $category->name)
+            ->whereNotIn('id', $data['visa_type_ids'])
+            ->update(['category' => null]);
+        \App\Models\VisaType::whereIn('id', $data['visa_type_ids'])
+            ->update(['category' => $category->name]);
+
+        return back()->with('success', "Updated visas under {$category->name}.");
+    }
+
+    /** Upload the official PDF for a form version (creates the version if new). */
+    public function inzUploadVersion(Request $request, \App\Models\InzForm $form)
+    {
+        $data = $request->validate([
+            'version_label' => 'required|string|max:40',
+            'file' => 'required|file|mimetypes:application/pdf|max:20480',
+            'effective_from' => 'nullable|date',
+            'accepted_until' => 'nullable|date',
+            'make_current' => 'boolean',
+        ]);
+
+        $bytes = file_get_contents($request->file('file')->getRealPath());
+        $path = "inz-forms/{$form->code}/".\Illuminate\Support\Str::slug($data['version_label']).'.pdf';
+        \Illuminate\Support\Facades\Storage::disk('local')->put($path, $bytes);
+
+        $version = $form->versions()->updateOrCreate(
+            ['version_label' => $data['version_label']],
+            [
+                'file_path' => $path,
+                'is_acroform' => app(\App\Services\Immigration\InzFormFiller::class)->looksLikeAcroForm($bytes),
+                'effective_from' => $data['effective_from'] ?? null,
+                'accepted_until' => $data['accepted_until'] ?? null,
+                'checked_at' => now(),
+                'uploaded_by' => auth()->id(),
+            ],
+        );
+
+        if ($request->boolean('make_current', true)) {
+            $form->versions()->where('id', '!=', $version->id)->update(['is_current' => false]);
+            $version->forceFill(['is_current' => true])->save();
+        }
+
+        return back()->with('success', "Uploaded {$form->code} {$data['version_label']}.");
+    }
+
+    /** Save the field map (pdf_field → context source) for a version. */
+    public function inzSaveFieldMap(Request $request, \App\Models\InzFormVersion $version)
+    {
+        $data = $request->validate([
+            'field_map' => 'present|array',
+            'field_map.*.pdf_field' => 'required|string|max:120',
+            'field_map.*.source' => 'nullable|string|max:120',
+            'field_map.*.literal' => 'nullable|string|max:255',
+        ]);
+
+        $version->forceFill(['field_map' => array_values($data['field_map']), 'checked_at' => now()])->save();
+
+        return back()->with('success', 'Field map saved.');
+    }
+
+    /** Record that a human verified this is still the current INZ version. */
+    public function inzMarkChecked(\App\Models\InzFormVersion $version)
+    {
+        $version->forceFill(['checked_at' => now()])->save();
+
+        return back()->with('success', 'Marked as checked.');
+    }
+
+    /** Create a new INZ form in the catalogue. */
+    public function inzStoreForm(Request $request)
+    {
+        $data = $request->validate([
+            'code' => 'required|string|max:20|unique:inz_forms,code',
+            'name' => 'required|string|max:255',
+            'category' => 'nullable|string|max:40',
+        ]);
+        \App\Models\InzForm::create($data + ['is_active' => true]);
+
+        return back()->with('success', "Added {$data['code']}.");
+    }
+
+    /** Update an INZ form's name / category / active flag. */
+    public function inzUpdateForm(Request $request, \App\Models\InzForm $form)
+    {
+        $data = $request->validate([
+            'name' => 'required|string|max:255',
+            'category' => 'nullable|string|max:40',
+            'is_active' => 'boolean',
+        ]);
+        $form->update($data);
+
+        return back()->with('success', "Updated {$form->code}.");
+    }
+
+    /** Delete an INZ form and its versions. */
+    public function inzDestroyForm(\App\Models\InzForm $form)
+    {
+        $code = $form->code;
+        $form->delete();
+
+        return back()->with('success', "Removed {$code}.");
+    }
+
+    /** Delete a single version. */
+    public function inzDeleteVersion(\App\Models\InzFormVersion $version)
+    {
+        $version->delete();
+
+        return back()->with('success', 'Version removed.');
+    }
+
+    /** Make a version the current one to file. */
+    public function inzSetCurrentVersion(\App\Models\InzFormVersion $version)
+    {
+        $version->form->versions()->where('id', '!=', $version->id)->update(['is_current' => false]);
+        $version->forceFill(['is_current' => true])->save();
+
+        return back()->with('success', "{$version->version_label} is now current.");
     }
 
     public function checklistTemplates()

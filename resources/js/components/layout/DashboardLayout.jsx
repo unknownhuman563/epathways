@@ -356,7 +356,9 @@ function NavBadge({ value, tone = "default" }) {
         ? "bg-red-500 text-white"
         : tone === "warning"
             ? "bg-amber-500 text-white"
-            : "bg-gray-900 text-white";
+            : tone === "teal"
+                ? "bg-[#009688] text-white"
+                : "bg-gray-900 text-white";
     return (
         <span className={`inline-flex items-center justify-center min-w-[20px] h-[20px] px-1.5 rounded-full text-[10px] font-bold tabular-nums ${cls}`}>
             {value}

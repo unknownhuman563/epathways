@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { Head, Link, router } from "@inertiajs/react";
 import {
-    Layers, FolderOpen, Clock, CheckCircle2, XCircle, TrendingUp,
-    UserPlus, Handshake, Plane, ThumbsUp, FileText, Download, Share2, Lock,
+    Layers, Clock, CheckCircle2, XCircle, TrendingUp,
+    UserPlus, Handshake, Plane, ThumbsUp, Download, Share2, Lock,
     AlertTriangle, ArrowRight, Users, CalendarRange,
 } from "lucide-react";
 import PortalPageHeader from "@/components/portal/PortalPageHeader";
@@ -29,7 +29,7 @@ const SEV = {
 
 export default function ImmigrationReports({
     range = { preset: "two_weeks", label: "Last 2 weeks" }, kpis = {}, activity = {},
-    stageDistribution = [], totalCases = 0, documents = {}, trend = [], ytd = {},
+    stageDistribution = [], totalCases = 0, trend = [], ytd = {},
     attention = [], workload = [], generated_at, generated_by,
 }) {
     const [from, setFrom] = useState(range.from || "");
@@ -154,7 +154,7 @@ export default function ImmigrationReports({
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                 <Kpi icon={<Layers size={16} />} label="Active cases" value={kpis.active_cases ?? 0} hint="excludes decided" />
                 <Kpi icon={<Clock size={16} />} label="With INZ" value={kpis.with_inz ?? 0} hint="awaiting decision" />
-                <Kpi icon={<FolderOpen size={16} />} label="Docs pending review" value={kpis.docs_pending ?? 0} />
+                <Kpi icon={<AlertTriangle size={16} />} label="Needs attention" value={attention.length} hint="cases to chase" />
                 <Kpi icon={<TrendingUp size={16} />} label="Approval rate" value={`${kpis.approval_rate ?? 0}%`} accent />
             </div>
 
@@ -237,26 +237,6 @@ export default function ImmigrationReports({
                 </ul>
             </section>
 
-            {/* Documents in period */}
-            <section className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 sm:p-6">
-                <div className="flex items-center gap-2.5 mb-4">
-                    <span className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center"><FileText size={15} /></span>
-                    <h2 className="text-sm font-bold uppercase tracking-[0.14em] text-gray-800">Documents — {range.label?.toLowerCase()}</h2>
-                </div>
-                <div className="flex items-end gap-6 flex-wrap">
-                    <div>
-                        <p className="text-5xl font-bold text-gray-900 tabular-nums leading-none">{documents.total ?? 0}</p>
-                        <p className="text-[11px] text-gray-400 mt-1.5">uploaded in this period</p>
-                    </div>
-                    <div className="flex items-center gap-2 flex-wrap">
-                        <Chip tone="emerald" label="Approved" value={documents.approved ?? 0} />
-                        <Chip tone="amber" label="Pending" value={documents.pending ?? 0} />
-                        <Chip tone="rose" label="Rejected" value={documents.rejected ?? 0} />
-                        <Chip tone="amber" label="Awaiting review (all time)" value={documents.pending_review_all ?? 0} />
-                    </div>
-                </div>
-            </section>
-
             {/* Year-to-date outcomes */}
             <section className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 sm:p-6">
                 <div className="flex items-center justify-between gap-3 mb-5 flex-wrap">
@@ -312,19 +292,6 @@ function Kpi({ icon, label, value, hint, accent = false }) {
             <p className={`text-3xl font-bold tabular-nums mt-2.5 ${accent ? "text-emerald-600" : "text-gray-900"}`}>{value}</p>
             {hint && <p className="text-[11px] text-gray-400 mt-0.5">{hint}</p>}
         </div>
-    );
-}
-
-function Chip({ tone, label, value }) {
-    const map = {
-        emerald: "bg-emerald-50 text-emerald-700 ring-emerald-100",
-        amber: "bg-amber-50 text-amber-700 ring-amber-100",
-        rose: "bg-rose-50 text-rose-700 ring-rose-100",
-    };
-    return (
-        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold ring-1 ${map[tone]}`}>
-            {label} <span className="tabular-nums font-bold">{value}</span>
-        </span>
     );
 }
 

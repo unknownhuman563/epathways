@@ -94,7 +94,261 @@ class CaseProfileController extends Controller
             // Build 12 phase 4 — attention: when this viewer last opened the case
             // and what changed since. Staff-only; never in a client payload.
             'attention' => $attention,
+            // Case financials — fees, invoice, payment ledger, derived owed/settled
+            // (replaces the spreadsheet's money columns).
+            'financials' => $this->loadFinancials($lead),
+            // INZ forms available for this visa type (current version + readiness).
+            'inzForms' => $this->loadInzForms($lead),
         ]);
+    }
+
+    /**
+     * Per-case financials for the Financials tab: the fee/invoice record, the
+     * payment ledger, and the derived totals. Every figure is arithmetic on
+     * human-entered values — nothing is generated.
+     *
+     * @return array<string, mixed>
+     */
+    private function loadFinancials(Lead $lead): array
+    {
+        $fin = \App\Models\CaseFinancial::where('lead_id', $lead->id)->first();
+
+        $payments = \App\Models\CaseFinancePayment::where('lead_id', $lead->id)
+            ->with('recorder:id,name')
+            ->orderBy('paid_at')
+            ->get()
+            ->map(fn ($p) => [
+                'id' => $p->id,
+                'paid_at' => optional($p->paid_at)->toDateString(),
+                'amount' => (float) $p->amount,
+                'method' => $p->method,
+                'reference' => $p->reference,
+                'recorded_by' => optional($p->recorder)->name,
+            ])->all();
+
+        return [
+            'referred_by' => $lead->referral,
+            'record' => $fin ? [
+                'service_fee_normal' => (float) $fin->service_fee_normal,
+                'service_fee_chargeable' => (float) $fin->service_fee_chargeable,
+                'inz_fee' => (float) $fin->inz_fee,
+                'other_fee' => (float) $fin->other_fee,
+                'disbursement' => $fin->disbursement !== null ? (float) $fin->disbursement : null,
+                'payment_type' => $fin->payment_type,
+                'inz_fee_paid_to' => $fin->inz_fee_paid_to,
+                'issued_from' => $fin->issued_from,
+                'invoice_no' => $fin->invoice_no,
+                'invoice_sent_at' => optional($fin->invoice_sent_at)->toDateString(),
+                'currency' => $fin->currency,
+                'notes' => $fin->notes,
+            ] : null,
+            'payments' => $payments,
+            'totals' => [
+                'payable' => $fin ? $fin->totalPayable() : 0,
+                'paid' => $fin ? $fin->totalPaid() : (float) \App\Models\CaseFinancePayment::where('lead_id', $lead->id)->sum('amount'),
+                'owed' => $fin ? $fin->amountOwed() : 0,
+                'disbursement' => $fin ? $fin->disbursementAmount() : 0,
+                'net_after_disbursement' => $fin ? $fin->netAfterDisbursement() : 0,
+                'settled' => $fin ? $fin->isSettled() : false,
+            ],
+        ];
+    }
+
+    /** Create/update the case's fee + invoice record, and the referral. */
+    public function saveFinancials(Request $request, Lead $lead)
+    {
+        $user = $this->guardCase($lead);
+
+        $data = $request->validate([
+            'service_fee_normal' => 'nullable|numeric|min:0',
+            'service_fee_chargeable' => 'nullable|numeric|min:0',
+            'inz_fee' => 'nullable|numeric|min:0',
+            'other_fee' => 'nullable|numeric|min:0',
+            'disbursement' => 'nullable|numeric|min:0',
+            'payment_type' => ['nullable', \Illuminate\Validation\Rule::in(['pay_now', 'pay_later'])],
+            'inz_fee_paid_to' => 'nullable|string|max:60',
+            'issued_from' => 'nullable|string|max:20',
+            'invoice_no' => 'nullable|string|max:60',
+            'invoice_sent_at' => 'nullable|date',
+            'currency' => 'nullable|string|max:8',
+            'notes' => 'nullable|string|max:2000',
+            'referred_by' => 'nullable|string|max:120',
+        ]);
+
+        \App\Models\CaseFinancial::updateOrCreate(
+            ['lead_id' => $lead->id],
+            array_merge(
+                collect($data)->except('referred_by')->map(fn ($v) => $v === '' ? null : $v)->all(),
+                ['updated_by' => $user->id],
+            ),
+        );
+
+        // "Referred by" lives on the lead itself (shared with the rest of the CRM).
+        if (array_key_exists('referred_by', $data)) {
+            $lead->forceFill(['referral' => $data['referred_by'] ?: null])->save();
+        }
+
+        return back()->with('success', 'Financials saved.');
+    }
+
+    /** Add a receipt to the case's payment ledger. */
+    public function addFinancePayment(Request $request, Lead $lead)
+    {
+        $user = $this->guardCase($lead);
+
+        $data = $request->validate([
+            'paid_at' => 'required|date',
+            'amount' => 'required|numeric|min:0.01',
+            'method' => 'nullable|string|max:40',
+            'reference' => 'nullable|string|max:120',
+        ]);
+
+        \App\Models\CaseFinancePayment::create(array_merge($data, [
+            'lead_id' => $lead->id,
+            'recorded_by' => $user->id,
+        ]));
+
+        return back()->with('success', 'Payment recorded.');
+    }
+
+    /** Remove a receipt from the ledger. */
+    public function deleteFinancePayment(Request $request, Lead $lead, \App\Models\CaseFinancePayment $payment)
+    {
+        $this->guardCase($lead);
+        abort_unless($payment->lead_id === $lead->id, 404);
+        $payment->delete();
+
+        return back()->with('success', 'Payment removed.');
+    }
+
+    // ── INZ forms (fill the official PDF; never a look-alike) ────────────────
+
+    /**
+     * The INZ forms available for this case's visa type, with the current
+     * version and whether its official PDF is on file / lapsing. Drives the
+     * "Generate INZ forms" affordance.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function loadInzForms(Lead $lead): array
+    {
+        // A case's visa type resolves to a category; the INZ forms in that
+        // category are what this case can generate.
+        $visaType = $lead->inz_visa_type
+            ? \App\Models\VisaType::where('name', $lead->inz_visa_type)->orWhere('code', $lead->inz_visa_type)->first()
+            : null;
+        $category = $visaType?->category;
+
+        $forms = $category
+            ? \App\Models\InzForm::where('category', $category)->where('is_active', true)->orderBy('code')->get()
+            : collect();
+
+        $assignments = \App\Models\CaseFormAssignment::where('lead_id', $lead->id)->get()->keyBy('inz_form_id');
+
+        return $forms->map(function (\App\Models\InzForm $f) use ($assignments) {
+            $v = $f->currentVersion();
+            $a = $assignments->get($f->id);
+
+            return [
+                'code' => $f->code,
+                'name' => $f->name,
+                'category' => $f->category,
+                'version' => $v?->version_label,
+                'ready' => $v?->isReady() ?? false,           // official PDF uploaded + fillable
+                'lapsing' => $v?->isLapsing() ?? false,
+                'assignment_status' => $a?->status,            // null | assigned | submitted | reviewed
+                'assignment_submitted_at' => optional($a?->submitted_at)->toIso8601String(),
+            ];
+        })->all();
+    }
+
+    /**
+     * Generate a filled INZ form for the case. Fills the OFFICIAL current-version
+     * PDF from case data, records the version filled against, and drops it on the
+     * case as a DRAFT — never auto-filed (step-10 human check first).
+     */
+    public function generateInzForm(Request $request, Lead $lead, string $code)
+    {
+        $user = $this->guardCase($lead);
+
+        $form = \App\Models\InzForm::where('code', $code)->firstOrFail();
+        $version = $form->currentVersion();
+        abort_unless($version, 422, "No current version registered for {$code}.");
+
+        if (! $version->isReady()) {
+            return back()->with('error', "No official PDF uploaded yet for {$code} ({$version->version_label}).");
+        }
+
+        // If the client filled this form in the portal, use their answers;
+        // otherwise fill from case data.
+        $assignment = \App\Models\CaseFormAssignment::where('lead_id', $lead->id)
+            ->where('inz_form_id', $form->id)->where('status', 'submitted')->first();
+
+        try {
+            $filler = app(\App\Services\Immigration\InzFormFiller::class);
+            $bytes = $assignment
+                ? $filler->fillWithValues($version, $assignment->field_values ?? [])
+                : $filler->fill($version, \App\Services\Immigration\InzCaseContext::for($lead));
+        } catch (\Throwable $e) {
+            Log::warning('INZ form fill failed', ['code' => $code, 'lead' => $lead->id, 'error' => $e->getMessage()]);
+
+            return back()->with('error', $e->getMessage());
+        }
+
+        $path = "inz-generated/{$lead->id}/".\Illuminate\Support\Str::uuid().'.pdf';
+        \Illuminate\Support\Facades\Storage::disk('local')->put($path, $bytes);
+
+        LeadDocument::create([
+            'lead_id' => $lead->id,
+            'original_name' => "{$code} - {$form->name} ({$version->version_label}).pdf",
+            'file_path' => $path,
+            'mime' => 'application/pdf',
+            'size' => strlen($bytes),
+            'source' => 'generated',
+            'source_variant' => "inz:{$code}",
+            'inz_form_version_id' => $version->id,
+            'status' => 'StaffShared',
+            'uploaded_by' => $user->id,
+            'note' => "Draft — INZ {$code} {$version->version_label}. Review before filing (step 10).",
+        ]);
+
+        // Generating from the client's answers marks the assignment reviewed.
+        if ($assignment) {
+            $assignment->forceFill(['status' => 'reviewed', 'reviewed_by' => $user->id, 'reviewed_at' => now()])->save();
+        }
+
+        return back()->with('success', "{$code} generated as a draft on the case. Review before filing.");
+    }
+
+    /**
+     * Send an INZ form to the client to fill in the lead portal. Prefills the
+     * mapped fields with what we already hold; the client completes/corrects.
+     */
+    public function assignInzForm(Request $request, Lead $lead, string $code)
+    {
+        $user = $this->guardCase($lead);
+        $form = \App\Models\InzForm::where('code', $code)->firstOrFail();
+        $version = $form->currentVersion();
+        abort_unless($version, 422, "No current version for {$code}.");
+
+        // Prefill [pdfField => value] from case data for the mapped fields.
+        $filler = app(\App\Services\Immigration\InzFormFiller::class);
+        $prefill = $filler->fieldValues($version, \App\Services\Immigration\InzCaseContext::for($lead));
+
+        \App\Models\CaseFormAssignment::updateOrCreate(
+            ['lead_id' => $lead->id, 'inz_form_id' => $form->id],
+            [
+                'inz_form_version_id' => $version->id,
+                'status' => 'assigned',
+                'field_values' => $prefill,
+                'assigned_by' => $user->id,
+                'submitted_at' => null,
+                'reviewed_at' => null,
+                'reviewed_by' => null,
+            ],
+        );
+
+        return back()->with('success', "{$code} sent to the client to fill in their portal.");
     }
 
     /**

@@ -36,16 +36,18 @@ export default function ImmigrationLayout({ children }) {
                 { name: "List of Cases", href: "/portal/immigration/cases",            icon: <Globe size={16} /> },
                 { name: "Engagement",    href: "/portal/immigration/cases/engagement", icon: <FileSignature size={16} /> },
                 { name: "Invoice",       href: "/portal/immigration/cases/invoice",    icon: <ReceiptText size={16} /> },
+                { name: "INZ Forms",     href: "/portal/immigration/cases/inz-forms",  icon: <FileText size={16} /> },
             ],
         },
         // Shared with Education + Sales — same screen, this portal's layout.
         { name: "Students",     href: "/portal/immigration/students",     icon: <GraduationCap size={20} /> },
-        { name: "Documents",    href: "/portal/immigration/documents",    icon: <FolderOpen size={20} />,     badge: badges.docs_pending_review, badgeTone: "warning" },
+        { name: "Documents",    href: "/portal/immigration/documents",    icon: <FolderOpen size={20} />,     badge: badges.docs_pending_review, badgeTone: "teal" },
         { name: "Task Board",   href: "/portal/immigration/tasks",        icon: <CheckSquare size={20} /> },
         { name: "Appointments", href: "/portal/immigration/appointments", icon: <Calendar size={20} /> },
 
         { name: "Setup", section: true },
         { name: "Visas",               href: "/portal/immigration/visa-types",          icon: <FileBadge size={20} /> },
+        { name: "INZ Forms",           href: "/portal/immigration/inz-forms",           icon: <FileText size={20} /> },
 
         {
             name: "Email",
@@ -63,12 +65,12 @@ export default function ImmigrationLayout({ children }) {
 
         { name: "Account", section: true },
         { name: "My Profile",    href: "/portal/immigration/profile",       icon: <User size={20} /> },
-        { name: "Notifications", href: "/portal/immigration/notifications", icon: <Bell size={20} />, badge: badges.notifications_unread, badgeTone: "warning" },
+        { name: "Notifications", href: "/portal/immigration/notifications", icon: <Bell size={20} />, badge: badges.notifications_unread, badgeTone: "teal" },
         { name: "My Tickets",    href: "/portal/tickets",                  icon: <Ticket size={20} /> },
     ];
 
     return (
-        <DashboardLayout brand="ePathways." subtitle="Immigration Portal" accent="bg-amber-600" nav={NAV}>
+        <DashboardLayout brand="ePathways." subtitle="Immigration Portal" accent="bg-[#009688]" nav={NAV}>
             {children}
         </DashboardLayout>
     );

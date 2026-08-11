@@ -1202,6 +1202,8 @@ Route::middleware(['auth'])->group(function () {
             // so they never collide with the {lead} binding.
             Route::get('/cases/engagement', [ImmigrationController::class, 'engagement'])->name('cases.engagement');
             Route::get('/cases/invoice', [ImmigrationController::class, 'invoice'])->name('cases.invoice');
+            // INZ Forms console — generate/send INZ forms across all cases.
+            Route::get('/cases/inz-forms', [ImmigrationController::class, 'caseInzForms'])->name('cases.inz-forms');
             // Create new case from the Cases page "Add new case" modal.
             Route::post('/cases', [ImmigrationController::class, 'storeCase'])->name('cases.store');
             // Edit an existing case (same modal fields as create).
@@ -1266,6 +1268,23 @@ Route::middleware(['auth'])->group(function () {
             Route::post('/cases/{lead}/threads/{thread}/resolve', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'resolveThread'])
                 ->name('cases.threads.resolve');
 
+            // Case financials — fees/invoice record + payment ledger (replaces the
+            // spreadsheet money columns). Figures are human-entered; totals derived.
+            Route::post('/cases/{lead}/financials', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'saveFinancials'])
+                ->name('cases.financials.save');
+            Route::post('/cases/{lead}/financials/payments', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'addFinancePayment'])
+                ->name('cases.financials.payments.add');
+            Route::delete('/cases/{lead}/financials/payments/{payment}', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'deleteFinancePayment'])
+                ->name('cases.financials.payments.delete');
+
+            // Generate a filled INZ form (official PDF) as a draft on the case.
+            Route::post('/cases/{lead}/inz-forms/{code}/generate', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'generateInzForm'])
+                ->where('code', 'INZ[0-9]+')->name('cases.inz-forms.generate');
+
+            // Send an INZ form to the client to fill in their portal.
+            Route::post('/cases/{lead}/inz-forms/{code}/assign', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'assignInzForm'])
+                ->where('code', 'INZ[0-9]+')->name('cases.inz-forms.assign');
+
             // Build 11.D Phase 2 — Managed agreement endpoints. Each call
             // re-checks is_immigration_case + agreement<->lead ownership so
             // a cross-case URL guess still 404s. The route order matters:
@@ -1295,6 +1314,21 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/visa-types/{visa_type}/price-history', [VisaTypeController::class, 'priceHistory'])->name('visa-types.price-history');
             Route::get('/intakes', [ImmigrationController::class, 'intakes'])->name('intakes');
             Route::get('/inz-forms', [ImmigrationController::class, 'inzForms'])->name('inz-forms');
+            // INZ form catalogue admin — upload official PDF per version, map fields,
+            // record the human "still current" check.
+            Route::post('/inz-forms', [ImmigrationController::class, 'inzStoreForm'])->name('inz-forms.store');
+            Route::post('/inz-forms/{form}', [ImmigrationController::class, 'inzUpdateForm'])->name('inz-forms.update');
+            Route::delete('/inz-forms/{form}', [ImmigrationController::class, 'inzDestroyForm'])->name('inz-forms.destroy');
+            Route::post('/inz-forms/{form}/versions', [ImmigrationController::class, 'inzUploadVersion'])->name('inz-forms.versions.upload');
+            Route::post('/inz-forms/versions/{version}/field-map', [ImmigrationController::class, 'inzSaveFieldMap'])->name('inz-forms.versions.field-map');
+            Route::post('/inz-forms/versions/{version}/checked', [ImmigrationController::class, 'inzMarkChecked'])->name('inz-forms.versions.checked');
+            Route::post('/inz-forms/versions/{version}/set-current', [ImmigrationController::class, 'inzSetCurrentVersion'])->name('inz-forms.versions.set-current');
+            Route::delete('/inz-forms/versions/{version}', [ImmigrationController::class, 'inzDeleteVersion'])->name('inz-forms.versions.delete');
+            // Visa categories (Setup → Category): CRUD + assign which visas belong.
+            Route::post('/visa-categories', [ImmigrationController::class, 'categoryStore'])->name('visa-categories.store');
+            Route::post('/visa-categories/{category}', [ImmigrationController::class, 'categoryUpdate'])->name('visa-categories.update');
+            Route::delete('/visa-categories/{category}', [ImmigrationController::class, 'categoryDestroy'])->name('visa-categories.destroy');
+            Route::post('/visa-categories/{category}/visas', [ImmigrationController::class, 'categoryAssignVisas'])->name('visa-categories.visas');
             Route::get('/checklist-templates', [ImmigrationController::class, 'checklistTemplates'])->name('checklist-templates');
 
             // Students — the same screen Education owns, rendered under this
@@ -1429,6 +1463,8 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/journey', [App\Http\Controllers\LeadPortalController::class, 'journey'])->name('journey');
             Route::get('/checklist', [App\Http\Controllers\LeadPortalController::class, 'checklist'])->name('checklist');
             Route::get('/visa-forms', [App\Http\Controllers\LeadPortalController::class, 'visaForms'])->name('visa-forms');
+            Route::get('/visa-forms/{id}/preview', [App\Http\Controllers\LeadPortalController::class, 'visaFormPreview'])->name('visa-forms.preview');
+            Route::post('/visa-forms/{id}', [App\Http\Controllers\LeadPortalController::class, 'visaFormSubmit'])->name('visa-forms.submit');
             Route::get('/appointments', [App\Http\Controllers\LeadPortalController::class, 'appointments'])->name('appointments');
             Route::get('/proposals', [App\Http\Controllers\LeadPortalController::class, 'proposals'])->name('proposals');
             Route::get('/agreements', [App\Http\Controllers\LeadPortalController::class, 'agreements'])->name('agreements');

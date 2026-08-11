@@ -96,13 +96,76 @@ class LeadPortalController extends Controller
         ]);
     }
 
-    /** Multi-section Visa Forms — placeholder for the wizard. */
+    /** INZ forms the case sent this client to fill — with a preview + fields. */
     public function visaForms()
     {
         $lead = $this->resolveLeadOrLogout();
-        if (! $lead instanceof Lead) return $lead;
+        if (! $lead instanceof Lead) {
+            return $lead;
+        }
 
-        return inertia('portal/lead/VisaForms', ['lead' => $this->leadPayload($lead)]);
+        $filler = app(\App\Services\Immigration\InzFormFiller::class);
+        $context = \App\Services\Immigration\InzCaseContext::for($lead);
+
+        $forms = \App\Models\CaseFormAssignment::where('lead_id', $lead->id)
+            ->with(['form', 'version'])
+            ->orderByDesc('updated_at')
+            ->get()
+            ->map(fn (\App\Models\CaseFormAssignment $a) => [
+                'id' => $a->id,
+                'code' => $a->form->code,
+                'name' => $a->form->name,
+                'version' => $a->version?->version_label,
+                'status' => $a->status,
+                'ready' => $a->version?->isReady() ?? false,
+                'preview_url' => ($a->version && $a->version->isReady()) ? "/portal/lead/visa-forms/{$a->id}/preview" : null,
+                'fields' => $a->version ? $filler->clientFields($a->version, $context, $a->field_values ?? []) : [],
+                'submitted_at' => optional($a->submitted_at)->toIso8601String(),
+            ]);
+
+        return inertia('portal/lead/VisaForms', ['lead' => $this->leadPayload($lead), 'forms' => $forms]);
+    }
+
+    /** Client submits their filled answers for an assigned INZ form. */
+    public function visaFormSubmit(\Illuminate\Http\Request $request, int $id)
+    {
+        $lead = $this->resolveLeadOrLogout();
+        if (! $lead instanceof Lead) {
+            return $lead;
+        }
+
+        $assignment = \App\Models\CaseFormAssignment::where('id', $id)->where('lead_id', $lead->id)->firstOrFail();
+
+        $data = $request->validate([
+            'field_values' => 'present|array',
+            'field_values.*' => 'nullable|string|max:2000',
+        ]);
+
+        $assignment->forceFill([
+            'field_values' => $data['field_values'],
+            'status' => 'submitted',
+            'submitted_at' => now(),
+        ])->save();
+
+        return back()->with('success', 'Submitted — your adviser will review it.');
+    }
+
+    /** Stream the official INZ PDF for an assigned form (preview, client-owned). */
+    public function visaFormPreview(int $id)
+    {
+        $lead = $this->resolveLeadOrLogout();
+        if (! $lead instanceof Lead) {
+            return $lead;
+        }
+
+        $assignment = \App\Models\CaseFormAssignment::where('id', $id)->where('lead_id', $lead->id)->firstOrFail();
+        $version = $assignment->version;
+        abort_unless($version && $version->isReady(), 404);
+
+        return response()->file(\Illuminate\Support\Facades\Storage::disk('local')->path($version->file_path), [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'inline; filename="'.$assignment->form->code.'.pdf"',
+        ]);
     }
 
     /** Appointments — upcoming + past, derived from Bookings on email match. */
