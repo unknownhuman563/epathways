@@ -1,5 +1,5 @@
 import React from "react";
-import Logo from "@assets/newlogosite.png";
+import Logo from "@assets/ep_only.png";
 import IcefLogo from "@assets/about_us/icef.png";
 import { Instagram, Facebook, Linkedin, MessageCircle } from "lucide-react";
 import { usePage } from "@inertiajs/react";
@@ -136,7 +136,7 @@ export default function Footer() {
             <a href="/activities" className="hover:text-green-400 transition-colors">Activities</a>
           </div>
           <div className="text-gray-500">
-            © {currentYear} ePathways. All rights reserved.
+            © {currentYear} eP. All rights reserved.
           </div>
         </div>
       </div>

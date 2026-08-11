@@ -15,10 +15,16 @@ export default defineConfig({
         react(),
         tailwindcss(),
     ],
-    // REMOVE OR COMMENT OUT THE SERVER BLOCK BELOW
-
-
-
+    // Bind the dev server to IPv4 so the generated `public/hot` uses
+    // http://127.0.0.1:5173 — matching how the Laravel app is browsed
+    // (127.0.0.1:8000). Without this, Vite writes an IPv6 `[::1]` host and
+    // the browser can't load assets, leaving the page blank.
+    server: {
+        host: '127.0.0.1',
+        hmr: {
+            host: '127.0.0.1',
+        },
+    },
     resolve: {
         alias: {
             "@": "/resources/js",

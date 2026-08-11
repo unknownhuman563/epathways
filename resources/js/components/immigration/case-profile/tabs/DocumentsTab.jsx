@@ -7,6 +7,7 @@ import {
     Send, X as XIcon, AlertCircle, Paperclip,
 } from "lucide-react";
 import CaseFilesModal from "@/components/immigration/CaseFilesModal";
+import { ThreadItem, ThreadComposer } from "@/components/immigration/case-profile/threads";
 
 // Documents tab — table view that joins the visa-type checklist with
 // uploaded LeadDocuments by checklist_key. Each row is a required (or
@@ -41,7 +42,21 @@ export default function DocumentsTab({
     documents = [],
     checklist = { items: [] },
     checklistProgress = { required_total: 0, required_approved: 0, total: 0, approved: 0 },
+    threads = [],
+    caseStaff = [],
+    vif = null,
 }) {
+    // Build 12 phase 6 — document-anchored threads render on their document's
+    // row (and nowhere else). Group them by the document they anchor to.
+    const threadsByDoc = useMemo(() => {
+        const map = new Map();
+        for (const t of threads) {
+            if (t.anchor_type !== "document" || ! t.anchor_id) continue;
+            if (! map.has(t.anchor_id)) map.set(t.anchor_id, []);
+            map.get(t.anchor_id).push(t);
+        }
+        return map;
+    }, [threads]);
     // "File history" modal — every file on the case with its status, kept
     // separate from the checklist table below.
     const [filesOpen, setFilesOpen] = useState(false);
@@ -91,17 +106,24 @@ export default function DocumentsTab({
         // Adviser-generated engagement documents (Written Agreement + IAA
         // standards) get their own clearly-named group rather than being
         // lumped in with unmatched uploads.
-        const isEngagement = typeof d.source_variant === "string" && d.source_variant.startsWith("engagement:");
+        const variant = typeof d.source_variant === "string" ? d.source_variant : "";
+        const isEngagement = variant.startsWith("engagement:");
+        const isInvoice = variant.startsWith("invoice:");
+        const isInz = variant.startsWith("inz:");
         const isGenerated = d.source === "generated";
         return {
             kind:     "orphan",
             key:      `orphan-${d.id}`,
             label:    d.original_name,
-            category: isEngagement
-                ? "Engagement documents"
-                : isGenerated
-                    ? "Generated documents"
-                    : "Other (no checklist match)",
+            category: isInvoice
+                ? "Invoices"
+                : isEngagement
+                    ? "Engagement documents"
+                    : isInz
+                        ? "INZ forms (generated)"
+                        : isGenerated
+                            ? "Generated documents"
+                            : "Other (no checklist match)",
             required: false,
             document: d,
         };
@@ -130,16 +152,19 @@ export default function DocumentsTab({
 
     if (allRows.length === 0) {
         return (
-            <div className="text-center py-12 border border-dashed border-gray-200 rounded-xl bg-gray-50/50">
-                <FileText size={32} className="mx-auto text-gray-300" />
-                <p className="mt-3 text-sm font-semibold text-gray-700">
-                    No checklist configured for this visa type
-                </p>
-                <p className="text-xs text-gray-500 mt-1">
-                    {checklist.visa
-                        ? `Source: ${checklist.source} · ${checklist.visa}`
-                        : "No documents on file and no checklist available."}
-                </p>
+            <div className="space-y-4">
+                {vif && <VifCard vif={vif} />}
+                <div className="text-center py-12 border border-dashed border-gray-200 rounded-xl bg-gray-50/50">
+                    <FileText size={32} className="mx-auto text-gray-300" />
+                    <p className="mt-3 text-sm font-semibold text-gray-700">
+                        No checklist configured for this visa type
+                    </p>
+                    <p className="text-xs text-gray-500 mt-1">
+                        {checklist.visa
+                            ? `Source: ${checklist.source} · ${checklist.visa}`
+                            : "No documents on file and no checklist available."}
+                    </p>
+                </div>
             </div>
         );
     }
@@ -153,6 +178,7 @@ export default function DocumentsTab({
 
     return (
         <div className="space-y-4">
+            {vif && <VifCard vif={vif} />}
             <div className="flex items-end justify-between gap-3 flex-wrap">
                 <div className="min-w-0">
                     <h2 className="text-base font-bold text-gray-900">Documents</h2>
@@ -234,7 +260,13 @@ export default function DocumentsTab({
                                             </td>
                                         </tr>
                                         {groupRows.map((row) => (
-                                            <Row key={row.key} row={row} leadId={lead.id} />
+                                            <Row
+                                                key={row.key}
+                                                row={row}
+                                                leadId={lead.id}
+                                                docThreads={row.document ? (threadsByDoc.get(row.document.id) || []) : []}
+                                                caseStaff={caseStaff}
+                                            />
                                         ))}
                                     </Fragment>
                                 );
@@ -255,7 +287,7 @@ export default function DocumentsTab({
     );
 }
 
-function Row({ row, leadId }) {
+function Row({ row, leadId, docThreads = [], caseStaff = [] }) {
     const doc = row.document;
     const [status, setStatus] = useState(doc?.status || "");
     const [note, setNote] = useState(doc?.note || "");
@@ -322,6 +354,7 @@ function Row({ row, leadId }) {
     };
 
     return (
+        <Fragment>
         <tr className="border-b border-gray-50 last:border-b-0 align-top">
             {/* Document slot. For checklist rows the leading icon is a
                 tracker-visibility checkbox (checked = shown on the applicant's
@@ -464,6 +497,27 @@ function Row({ row, leadId }) {
                 />
             )}
         </tr>
+        {/* Build 12 phase 6 — threads anchored to THIS document render here and
+            nowhere else. A composer appears only when there's a file to anchor to. */}
+        {doc && (
+            <tr className="border-b border-gray-50 last:border-b-0">
+                <td colSpan={4} className="px-4 pb-3 pt-0">
+                    <div className="ml-6 space-y-1.5">
+                        {docThreads.map((t) => (
+                            <ThreadItem key={t.id} thread={t} leadId={leadId} />
+                        ))}
+                        <ThreadComposer
+                            leadId={leadId}
+                            caseStaff={caseStaff}
+                            fixedAnchor={{ anchor_type: "document", anchor_id: doc.id }}
+                            compact
+                            placeholder={`Ask about ${row.label}…`}
+                        />
+                    </div>
+                </td>
+            </tr>
+        )}
+        </Fragment>
     );
 }
 
@@ -810,6 +864,33 @@ function RequestFromClient({ leadId, rowLabel, rowRequired }) {
 // VisaType.checklist_items often use dotted keys like "identity.passport"
 // or "admission.tor" — surface the leading segment as a category fallback
 // when the JSON doesn't carry an explicit category field.
+// VIF — the official Visa Information Form built from the case's assessment.
+// Always reflects the latest intake; downloaded on demand (not stored).
+function VifCard({ vif }) {
+    return (
+        <div className="rounded-xl border border-[#009688]/25 bg-[#009688]/5 p-4 flex items-center gap-3 flex-wrap">
+            <div className="w-9 h-9 rounded-xl bg-[#009688]/15 flex items-center justify-center flex-shrink-0">
+                <FileText size={17} className="text-[#009688]" />
+            </div>
+            <div className="min-w-0 flex-1">
+                <div className="text-sm font-bold text-gray-900">Visa Information Form (Assessment)</div>
+                <p className="text-[12px] text-gray-500">Official ePathways VIF, filled from this case's visa assessment.</p>
+            </div>
+            <div className="flex items-center gap-1.5 flex-shrink-0">
+                <a href={vif.preview_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 text-gray-700 text-[11px] font-semibold hover:bg-white">
+                    <Eye size={12} /> Preview
+                </a>
+                <a href={vif.pdf_url} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#009688] text-white text-[11px] font-semibold hover:bg-[#00796b]">
+                    <Download size={12} /> PDF
+                </a>
+                <a href={vif.word_url} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#009688]/30 text-[#009688] text-[11px] font-semibold hover:bg-[#009688]/5">
+                    <Download size={12} /> Word
+                </a>
+            </div>
+        </div>
+    );
+}
+
 function categoryFromKey(key) {
     if (! key || typeof key !== "string") return null;
     const parts = key.split(/[.\-:]/);

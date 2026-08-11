@@ -63,7 +63,8 @@ class NotificationController extends Controller
             'english'       => 'portal/english/Notifications',
             'accommodation' => 'portal/accommodation/Notifications',
             'lead'          => 'portal/lead/Notifications',
-            'immigration', 'immigration_manager', 'immigration_adviser' => 'portal/immigration/Notifications',
+            'immigration_adviser' => 'portal/immigration-adviser/Notifications',
+            'immigration', 'immigration_manager' => 'portal/immigration/Notifications',
             default         => 'admin/Notifications', // admin + super_admin
         };
     }

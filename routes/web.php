@@ -249,6 +249,8 @@ Route::get('/student-interest', [StudentIntakeController::class, 'showForm'])->n
 Route::post('/student-interest', [StudentIntakeController::class, 'store']);
 Route::get('/visitor-interest', [VisitorIntakeController::class, 'showForm'])->name('visitor-interest');
 Route::post('/visitor-interest', [VisitorIntakeController::class, 'store']);
+Route::get('/family-interest', [\App\Http\Controllers\FamilyIntakeController::class, 'showForm'])->name('family-interest');
+Route::post('/family-interest', [\App\Http\Controllers\FamilyIntakeController::class, 'store']);
 
 // Token-based edit links (no auth — the opaque token is the bearer credential).
 Route::get('/resident-interest/edit/{token}', [ResidentIntakeController::class, 'showEditForm'])->name('resident-interest.edit');
@@ -403,6 +405,10 @@ Route::middleware(['auth'])->group(function () {
                 ->get(['id', 'name', 'channels', 'email_subject', 'email_body', 'sms_body'])
         );
     })->name('api.message-templates');
+
+    // Dedicated AI Assistant page — one context-aware surface. General by
+    // default; ?subject_id scopes it to a record (authorised in the controller).
+    Route::get('/assistant', [\App\Http\Controllers\AiAssistantController::class, 'show'])->name('assistant');
 
     // AI Foundation (Build 9) — JSON endpoints for the topbar chat panel and
     // the lead health badge. Session-auth (CSRF via X-XSRF-TOKEN from JS);
@@ -655,11 +661,11 @@ Route::middleware(['auth'])->group(function () {
         // role that can log into an admin sidebar. Public read is via
         // HomeController::index + the /visa-approved route (both pass
         // published approvals into the same VisaApprovedShowcase view).
-        Route::get   ('/admin/visa-approvals',                    [\App\Http\Controllers\VisaApprovalController::class, 'index'])->name('admin.visa-approvals');
-        Route::get   ('/admin/visa-approvals/people-search',      [\App\Http\Controllers\VisaApprovalController::class, 'peopleSearch'])->name('admin.visa-approvals.people-search');
-        Route::post  ('/admin/visa-approvals',                    [\App\Http\Controllers\VisaApprovalController::class, 'store'])->name('admin.visa-approvals.store');
-        Route::post  ('/admin/visa-approvals/{id}',               [\App\Http\Controllers\VisaApprovalController::class, 'update'])->name('admin.visa-approvals.update');
-        Route::delete('/admin/visa-approvals/{id}',               [\App\Http\Controllers\VisaApprovalController::class, 'destroy'])->name('admin.visa-approvals.destroy');
+        Route::get('/admin/visa-approvals', [\App\Http\Controllers\VisaApprovalController::class, 'index'])->name('admin.visa-approvals');
+        Route::get('/admin/visa-approvals/people-search', [\App\Http\Controllers\VisaApprovalController::class, 'peopleSearch'])->name('admin.visa-approvals.people-search');
+        Route::post('/admin/visa-approvals', [\App\Http\Controllers\VisaApprovalController::class, 'store'])->name('admin.visa-approvals.store');
+        Route::post('/admin/visa-approvals/{id}', [\App\Http\Controllers\VisaApprovalController::class, 'update'])->name('admin.visa-approvals.update');
+        Route::delete('/admin/visa-approvals/{id}', [\App\Http\Controllers\VisaApprovalController::class, 'destroy'])->name('admin.visa-approvals.destroy');
 
         // Per-registrant view: renders JUST the form the lead filled at
         // registration, plus an editable notes area. Any department that
@@ -780,7 +786,10 @@ Route::middleware(['auth'])->group(function () {
     // group so every department portal that can see the documents tab can
     // also manage and download files. The download controller does its own
     // role-gated check on the specific lead before streaming the file.
-    Route::middleware('portal:admin,sales,education,english,immigration,accommodation,finance')->group(function () {
+    // Build 12 §2: immigration_manager + immigration_adviser get case document
+    // write too — the adviser is no longer read-only; advice-bearing artifacts
+    // are gated by AdviceBearingPolicy (licence), not by withholding routes.
+    Route::middleware('portal:admin,sales,education,english,immigration,immigration_manager,immigration_adviser,accommodation,finance')->group(function () {
         Route::post('/admin/leads/{id}/documents/checklist/{key}/upload', [LeadDocumentController::class, 'staffChecklistUpload'])
             ->name('admin.leads.documents.checklist.upload');
         // Templated agreement generator — Blade -> PDF -> attached as a
@@ -1140,6 +1149,17 @@ Route::middleware(['auth'])->group(function () {
             Route::delete('/assessments/{id}', [EnglishController::class, 'destroyAssessment'])->name('assessments.destroy');
         });
 
+        // Immigration Adviser (LIA) portal — separate from the manager's full
+        // immigration portal, scoped to the adviser's own casework + sign-off.
+        Route::middleware('portal:admin,immigration_adviser')->prefix('immigration-adviser')->name('portal.immigration-adviser.')->group(function () {
+            Route::get('/dashboard', [\App\Http\Controllers\Portal\ImmigrationAdviserController::class, 'dashboard'])->name('dashboard');
+            Route::get('/cases', [\App\Http\Controllers\Portal\ImmigrationAdviserController::class, 'cases'])->name('cases');
+            Route::get('/cases/{lead}', [\App\Http\Controllers\Portal\ImmigrationAdviserController::class, 'showCase'])->name('cases.show');
+            Route::get('/sign-off', [\App\Http\Controllers\Portal\ImmigrationAdviserController::class, 'signOff'])->name('sign-off');
+            Route::get('/notifications', [\App\Http\Controllers\NotificationController::class, 'index'])->name('notifications');
+            Route::get('/profile', [\App\Http\Controllers\Portal\ImmigrationAdviserController::class, 'profile'])->name('profile');
+        });
+
         Route::middleware('portal:immigration')->prefix('immigration')->name('portal.immigration.')->group(function () {
             Route::get('/dashboard', [ImmigrationController::class, 'dashboard'])->name('dashboard');
             Route::get('/leads', [ImmigrationController::class, 'leads'])->name('leads');
@@ -1202,12 +1222,27 @@ Route::middleware(['auth'])->group(function () {
             // ResidentIntake.id for backward compat — any pre-Phase-B
             // bookmark that POSTed an intake id still resolves cleanly.
             Route::post('/assessments/{id}/convert-to-case', [ImmigrationController::class, 'convertAssessmentToCase'])->name('assessments.convert');
+            // AI completeness/consistency review of an intake (internal, indicative
+            // — NOT eligibility advice). GET returns the last stored review; POST
+            // runs a fresh one. Immigration-staff only (route group).
+            Route::get('/assessments/{type}/{id}/ai-review', [ImmigrationController::class, 'aiReviewShow'])
+                ->where(['type' => 'resident|work|student|visitor|family', 'id' => '[0-9]+'])
+                ->name('assessments.ai-review.show');
+            Route::post('/assessments/{type}/{id}/ai-review', [ImmigrationController::class, 'aiReviewRun'])
+                ->where(['type' => 'resident|work|student|visitor|family', 'id' => '[0-9]+'])
+                ->name('assessments.ai-review.run');
+            // Adviser saves edits to the drafted note + client email (they author it).
+            Route::post('/assessments/{type}/{id}/ai-review/edit', [ImmigrationController::class, 'aiReviewEdit'])
+                ->where(['type' => 'resident|work|student|visitor|family', 'id' => '[0-9]+'])
+                ->name('assessments.ai-review.edit');
             Route::get('/cases', [ImmigrationController::class, 'cases'])->name('cases');
             // Engagement + Invoice generation workspaces. Declared before the
             // /cases/{lead}/... routes below; both are single-segment literals
             // so they never collide with the {lead} binding.
             Route::get('/cases/engagement', [ImmigrationController::class, 'engagement'])->name('cases.engagement');
             Route::get('/cases/invoice', [ImmigrationController::class, 'invoice'])->name('cases.invoice');
+            // INZ Forms console — generate/send INZ forms across all cases.
+            Route::get('/cases/inz-forms', [ImmigrationController::class, 'caseInzForms'])->name('cases.inz-forms');
             // Create new case from the Cases page "Add new case" modal.
             Route::post('/cases', [ImmigrationController::class, 'storeCase'])->name('cases.store');
             // Edit an existing case (same modal fields as create).
@@ -1219,6 +1254,8 @@ Route::middleware(['auth'])->group(function () {
             Route::post('/cases/{id}/visa', [ImmigrationController::class, 'updateCaseVisa'])->name('cases.visa');
             // Inline priority update from the Cases table's expanded row.
             Route::post('/cases/{id}/priority', [ImmigrationController::class, 'updateCasePriority'])->name('cases.priority');
+            // Custody handoff (Build 12 phase 2). to_user_id = self is a claim.
+            Route::post('/cases/{id}/handoff', [ImmigrationController::class, 'handoff'])->name('cases.handoff');
 
             // Build 11.D — purpose-built Case Profile page. The {lead} binding
             // is the Lead model; controller hard-404s when is_immigration_case
@@ -1229,6 +1266,77 @@ Route::middleware(['auth'])->group(function () {
             // Edit the applicant's personal details from the Case Profile "Personal" tab.
             Route::post('/cases/{lead}/personal', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'updatePersonal'])
                 ->name('cases.personal');
+
+            // Build 12 phase 3 — case-assist findings. Dismiss carries a
+            // required reason; re-evaluate queues a refresh (never on page load).
+            Route::post('/cases/{lead}/findings/reevaluate', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'reevaluateFindings'])
+                ->name('cases.findings.reevaluate');
+            Route::post('/cases/{lead}/findings/{finding}/dismiss', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'dismissFinding'])
+                ->name('cases.findings.dismiss');
+            // Dismiss a whole rule's findings at once (the collapsed summary row).
+            // Still per-item + evidence-scoped server-side — presentation grouping only.
+            Route::post('/cases/{lead}/findings/group-dismiss', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'dismissFindingGroup'])
+                ->name('cases.findings.group-dismiss');
+
+            // Build 12 phase 4.5 — process chain. QC stamps + step completion
+            // are procedural (no licence gate); the partner recommendation is
+            // advice and gated inside the controller.
+            Route::post('/cases/{lead}/steps/start', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'startProcess'])
+                ->name('cases.steps.start');
+            Route::post('/cases/{lead}/steps/{step}/complete', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'completeStep'])
+                ->name('cases.steps.complete');
+            Route::post('/cases/{lead}/steps/{step}/reactivate', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'reactivateStep'])
+                ->name('cases.steps.reactivate');
+            Route::post('/cases/{lead}/payment', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'recordPayment'])
+                ->name('cases.payment');
+            Route::post('/cases/{lead}/partner-recommendation', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'partnerRecommendation'])
+                ->name('cases.partner-recommendation');
+
+            // Build 12 phase 5 — advice-bearing attestations. Licence-gated in
+            // the controller via AdviceBearingPolicy; the lodgement sign-off is
+            // what completes step 12, not the upload.
+            Route::post('/cases/{lead}/verdict', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'recordVerdict'])
+                ->name('cases.verdict');
+            Route::post('/cases/{lead}/lodgement-signoff', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'recordLodgementSignoff'])
+                ->name('cases.lodgement-signoff');
+
+            // Build 12 phase 6 — anchored threads. Posting requires an anchor
+            // (validated in the controller); resolving is explicit and recorded.
+            Route::post('/cases/{lead}/threads', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'storeThread'])
+                ->name('cases.threads.store');
+            Route::post('/cases/{lead}/threads/{thread}/resolve', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'resolveThread'])
+                ->name('cases.threads.resolve');
+
+            // Case financials — fees/invoice record + payment ledger (replaces the
+            // spreadsheet money columns). Figures are human-entered; totals derived.
+            Route::post('/cases/{lead}/financials', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'saveFinancials'])
+                ->name('cases.financials.save');
+            Route::post('/cases/{lead}/financials/payments', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'addFinancePayment'])
+                ->name('cases.financials.payments.add');
+            Route::delete('/cases/{lead}/financials/payments/{payment}', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'deleteFinancePayment'])
+                ->name('cases.financials.payments.delete');
+            // Generate / preview the case invoice from the fees + payment ledger.
+            Route::post('/cases/{lead}/financials/invoice', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'generateInvoice'])
+                ->name('cases.financials.invoice');
+            Route::get('/cases/{lead}/financials/invoice/preview', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'previewInvoice'])
+                ->name('cases.financials.invoice.preview');
+
+            // Generate a filled INZ form (official PDF) as a draft on the case.
+            Route::post('/cases/{lead}/inz-forms/{code}/generate', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'generateInzForm'])
+                ->where('code', 'INZ[0-9]+')->name('cases.inz-forms.generate');
+
+            // Send an INZ form to the client to fill in their portal.
+            Route::post('/cases/{lead}/inz-forms/{code}/assign', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'assignInzForm'])
+                ->where('code', 'INZ[0-9]+')->name('cases.inz-forms.assign');
+
+            // Case dependants (children / partner) — sub-records + their documents.
+            Route::post('/cases/{lead}/dependents', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'addDependent'])->name('cases.dependents.store');
+            Route::get('/cases/{lead}/dependent-source', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'dependentSourceIdentity'])->name('cases.dependent-source');
+            Route::put('/cases/{lead}/dependents/{dependent}', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'updateDependent'])->name('cases.dependents.update');
+            Route::delete('/cases/{lead}/dependents/{dependent}', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'deleteDependent'])->name('cases.dependents.destroy');
+            Route::post('/cases/{lead}/dependents/{dependent}/documents', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'uploadDependentDocument'])->name('cases.dependents.documents.store');
+            Route::post('/cases/{lead}/dependents/{dependent}/documents/{document}/status', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'setDependentDocumentStatus'])->name('cases.dependents.documents.status');
+            Route::delete('/cases/{lead}/dependents/{dependent}/documents/{document}', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'deleteDependentDocument'])->name('cases.dependents.documents.destroy');
 
             // Build 11.D Phase 2 — Managed agreement endpoints. Each call
             // re-checks is_immigration_case + agreement<->lead ownership so
@@ -1259,6 +1367,21 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/visa-types/{visa_type}/price-history', [VisaTypeController::class, 'priceHistory'])->name('visa-types.price-history');
             Route::get('/intakes', [ImmigrationController::class, 'intakes'])->name('intakes');
             Route::get('/inz-forms', [ImmigrationController::class, 'inzForms'])->name('inz-forms');
+            // INZ form catalogue admin — upload official PDF per version, map fields,
+            // record the human "still current" check.
+            Route::post('/inz-forms', [ImmigrationController::class, 'inzStoreForm'])->name('inz-forms.store');
+            Route::post('/inz-forms/{form}', [ImmigrationController::class, 'inzUpdateForm'])->name('inz-forms.update');
+            Route::delete('/inz-forms/{form}', [ImmigrationController::class, 'inzDestroyForm'])->name('inz-forms.destroy');
+            Route::post('/inz-forms/{form}/versions', [ImmigrationController::class, 'inzUploadVersion'])->name('inz-forms.versions.upload');
+            Route::post('/inz-forms/versions/{version}/field-map', [ImmigrationController::class, 'inzSaveFieldMap'])->name('inz-forms.versions.field-map');
+            Route::post('/inz-forms/versions/{version}/checked', [ImmigrationController::class, 'inzMarkChecked'])->name('inz-forms.versions.checked');
+            Route::post('/inz-forms/versions/{version}/set-current', [ImmigrationController::class, 'inzSetCurrentVersion'])->name('inz-forms.versions.set-current');
+            Route::delete('/inz-forms/versions/{version}', [ImmigrationController::class, 'inzDeleteVersion'])->name('inz-forms.versions.delete');
+            // Visa categories (Setup → Category): CRUD + assign which visas belong.
+            Route::post('/visa-categories', [ImmigrationController::class, 'categoryStore'])->name('visa-categories.store');
+            Route::post('/visa-categories/{category}', [ImmigrationController::class, 'categoryUpdate'])->name('visa-categories.update');
+            Route::delete('/visa-categories/{category}', [ImmigrationController::class, 'categoryDestroy'])->name('visa-categories.destroy');
+            Route::post('/visa-categories/{category}/visas', [ImmigrationController::class, 'categoryAssignVisas'])->name('visa-categories.visas');
             Route::get('/checklist-templates', [ImmigrationController::class, 'checklistTemplates'])->name('checklist-templates');
 
             // Students — the same screen Education owns, rendered under this
@@ -1393,6 +1516,20 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/journey', [App\Http\Controllers\LeadPortalController::class, 'journey'])->name('journey');
             Route::get('/checklist', [App\Http\Controllers\LeadPortalController::class, 'checklist'])->name('checklist');
             Route::get('/visa-forms', [App\Http\Controllers\LeadPortalController::class, 'visaForms'])->name('visa-forms');
+            Route::get('/visa-forms/{id}/preview', [App\Http\Controllers\LeadPortalController::class, 'visaFormPreview'])->name('visa-forms.preview');
+            Route::post('/visa-forms/{id}', [App\Http\Controllers\LeadPortalController::class, 'visaFormSubmit'])->name('visa-forms.submit');
+            // Visa Information Form — client generates from their assessment.
+            Route::get('/visa-assessment', [App\Http\Controllers\LeadPortalController::class, 'visaAssessment'])->name('visa-assessment');
+            Route::post('/vif', [App\Http\Controllers\LeadPortalController::class, 'generateVif'])->name('vif.generate');
+            Route::get('/vif', [App\Http\Controllers\LeadPortalController::class, 'downloadVif'])->name('vif.download');
+            // My Family — dependants the principal adds + their documents.
+            Route::get('/family', [App\Http\Controllers\LeadPortalController::class, 'family'])->name('family');
+            Route::post('/family', [App\Http\Controllers\LeadPortalController::class, 'familyStore'])->name('family.store');
+            Route::put('/family/{id}', [App\Http\Controllers\LeadPortalController::class, 'familyUpdate'])->name('family.update');
+            Route::delete('/family/{id}', [App\Http\Controllers\LeadPortalController::class, 'familyDelete'])->name('family.destroy');
+            Route::post('/family/{id}/documents', [App\Http\Controllers\LeadPortalController::class, 'familyDocumentStore'])->name('family.documents.store');
+            Route::get('/family/{id}/documents/{docId}', [App\Http\Controllers\LeadPortalController::class, 'familyDocumentDownload'])->name('family.documents.download');
+            Route::delete('/family/{id}/documents/{docId}', [App\Http\Controllers\LeadPortalController::class, 'familyDocumentDelete'])->name('family.documents.destroy');
             Route::get('/appointments', [App\Http\Controllers\LeadPortalController::class, 'appointments'])->name('appointments');
             Route::get('/proposals', [App\Http\Controllers\LeadPortalController::class, 'proposals'])->name('proposals');
             Route::get('/agreements', [App\Http\Controllers\LeadPortalController::class, 'agreements'])->name('agreements');

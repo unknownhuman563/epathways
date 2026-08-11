@@ -9,6 +9,7 @@ use Illuminate\Http\Request;
 use Illuminate\Mail\Events\MessageSent;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
@@ -31,7 +32,7 @@ class AppServiceProvider extends ServiceProvider
                 return new \App\Services\Sms\TwilioSmsProvider($sid, config('services.twilio.token'), config('services.twilio.from'));
             }
 
-            return new \App\Services\Sms\NullSmsProvider();
+            return new \App\Services\Sms\NullSmsProvider;
         });
 
         // Build 11.D Phase 3 — E-signature provider. StubSignatureProvider
@@ -53,6 +54,14 @@ class AppServiceProvider extends ServiceProvider
         // reaches the mail server (fires on the queue worker).
         Event::listen(MessageSent::class, \App\Listeners\MarkMessageLogSent::class);
 
+        // Build 12 §2 — advice-bearing content is licence-gated, not
+        // role-gated. `approve-advice-bearing` is the class-level ability used
+        // for UI affordances; as the advice-bearing models land they are also
+        // mapped to AdviceBearingPolicy so `authorize('approve', $model)`
+        // resolves here. The gate is the current IAA licence, so a lapsed
+        // licence — or an AI/system actor with none — can never approve.
+        Gate::define('approve-advice-bearing', [\App\Policies\AdviceBearingPolicy::class, 'approve']);
+
         // Already-logged-in users hitting a 'guest' route (e.g. /login) land on
         // their own home — admins on /admin/dashboard, portal staff on their portal.
         RedirectIfAuthenticated::redirectUsing(
@@ -67,21 +76,21 @@ class AppServiceProvider extends ServiceProvider
         // Public /track/{code} throttle — 30 requests/min per code+IP to
         // blunt tracking-code enumeration without bothering real leads.
         RateLimiter::for('tracker', fn (Request $request) => Limit::perMinute(30)
-            ->by(($request->route('code') ?? 'none') . '|' . $request->ip()));
+            ->by(($request->route('code') ?? 'none').'|'.$request->ip()));
 
         // Build the reset URL on the app's own domain (config, not env) so it
         // points at our Inertia reset page rather than a framework default.
         ResetPassword::createUrlUsing(fn ($notifiable, string $token) => rtrim(config('app.url'), '/')
-            . '/reset-password/' . $token . '?email=' . urlencode($notifiable->getEmailForPasswordReset()));
+            .'/reset-password/'.$token.'?email='.urlencode($notifiable->getEmailForPasswordReset()));
 
         // Professional tone, matching the lead-portal invitation email (D7).
         ResetPassword::toMailUsing(function ($notifiable, string $token) {
-            $url = rtrim(config('app.url'), '/') . '/reset-password/' . $token
-                . '?email=' . urlencode($notifiable->getEmailForPasswordReset());
+            $url = rtrim(config('app.url'), '/').'/reset-password/'.$token
+                .'?email='.urlencode($notifiable->getEmailForPasswordReset());
 
             return (new MailMessage)
                 ->subject('ePathways Account Recovery')
-                ->greeting('Hi ' . ($notifiable->name ?? 'there') . ',')
+                ->greeting('Hi '.($notifiable->name ?? 'there').',')
                 ->line('We received a request to reset the password for your ePathways account.')
                 ->action('Reset your password', $url)
                 ->line('This link expires in 60 minutes.')

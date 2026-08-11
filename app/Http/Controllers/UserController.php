@@ -12,10 +12,16 @@ use Illuminate\Validation\Rule;
 
 class UserController extends Controller
 {
-    /** super-admin + admin + every department-portal role. */
+    /** super-admin + admin + every department-portal role + the immigration
+     *  manager/adviser tiers (so an admin can actually assign them and manage
+     *  their IAA licence — Build 12 fast-follow). */
     private function roleValues(): array
     {
-        return array_merge([User::ROLE_SUPER_ADMIN, User::ROLE_ADMIN], User::PORTAL_ROLES);
+        return array_merge(
+            [User::ROLE_SUPER_ADMIN, User::ROLE_ADMIN],
+            User::PORTAL_ROLES,
+            User::IMMIGRATION_ROLES,
+        );
     }
 
     public function index()
@@ -25,7 +31,10 @@ class UserController extends Controller
         // staff directory.
         $users = User::whereNotIn('role', ['lead', 'revoked_lead'])
             ->orderBy('name')
-            ->get(['id', 'name', 'email', 'phone', 'location', 'role', 'avatar_path', 'created_at']);
+            ->get(['id', 'name', 'email', 'phone', 'location', 'role', 'avatar_path', 'created_at',
+                // IAA licence — admin-managed (Build 12 fast-follow); the edit
+                // modal pre-fills from these.
+                'iaa_licence_number', 'iaa_licence_type', 'iaa_licence_expiry', 'iaa_licence_verified_at']);
 
         // Cross-link rolls for the User Management tabs. Each list is a
         // thin name + email + stage projection that the frontend renders
@@ -71,6 +80,16 @@ class UserController extends Controller
             'role' => ['required', Rule::in($this->roleValues())],
             'password' => ['required', \Illuminate\Validation\Rules\Password::defaults()],
             'avatar' => 'nullable|'.UploadValidation::image(),
+            // IAA licence — admin-set + audited (Build 12 fast-follow). The
+            // expiry is load-bearing (it gates advice), so it is required
+            // whenever a number is recorded; a number with no expiry would
+            // silently fail the gate.
+            'iaa_licence_number' => 'nullable|string|max:60',
+            'iaa_licence_type' => 'nullable|string|in:Full,Provisional,Limited',
+            'iaa_licence_expiry' => 'nullable|date|required_with:iaa_licence_number',
+            'iaa_licence_verified_at' => 'nullable|date',
+        ], [
+            'iaa_licence_expiry.required_with' => 'Set the licence expiry date whenever a licence number is recorded — the expiry is what gates advice.',
         ]);
 
         // Only a super admin may create another super admin.
@@ -107,6 +126,15 @@ class UserController extends Controller
             'role' => ['required', Rule::in($this->roleValues())],
             'password' => ['nullable', \Illuminate\Validation\Rules\Password::defaults()],
             'avatar' => 'nullable|'.UploadValidation::image(),
+            // IAA licence — admin-set + audited (Build 12 fast-follow). Expiry
+            // required whenever a number is present so the advice gate is never
+            // left with a number but no expiry.
+            'iaa_licence_number' => 'nullable|string|max:60',
+            'iaa_licence_type' => 'nullable|string|in:Full,Provisional,Limited',
+            'iaa_licence_expiry' => 'nullable|date|required_with:iaa_licence_number',
+            'iaa_licence_verified_at' => 'nullable|date',
+        ], [
+            'iaa_licence_expiry.required_with' => 'Set the licence expiry date whenever a licence number is recorded — the expiry is what gates advice.',
         ]);
 
         // Don't let anyone change their own role — avoids locking yourself out
@@ -128,6 +156,12 @@ class UserController extends Controller
         $user->phone = $validated['phone'] ?? null;
         $user->location = $validated['location'] ?? null;
         $user->role = $validated['role'];
+        // Licence fields — nulled out when cleared, so revoking a licence is a
+        // real admin action captured in the audit's `changed` list.
+        $user->iaa_licence_number = $validated['iaa_licence_number'] ?? null;
+        $user->iaa_licence_type = $validated['iaa_licence_type'] ?? null;
+        $user->iaa_licence_expiry = $validated['iaa_licence_expiry'] ?? null;
+        $user->iaa_licence_verified_at = $validated['iaa_licence_verified_at'] ?? null;
         $passwordChanged = ! empty($validated['password']);
         if ($passwordChanged) {
             $user->password = $validated['password'];

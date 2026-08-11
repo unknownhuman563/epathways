@@ -36,10 +36,15 @@ async function request(url, { method = "GET", body } = {}) {
 export const aiClient = {
     listConversations: () => request("/api/ai/conversations"),
     getConversation: (id) => request(`/api/ai/conversations/${id}`),
-    sendMessage: (message, conversationId = null) =>
+    // `subject` (optional) scopes the turn to a record: { type: "lead", id }.
+    sendMessage: (message, conversationId = null, subject = null) =>
         request("/api/ai/messages", {
             method: "POST",
-            body: { message, conversation_id: conversationId },
+            body: {
+                message,
+                conversation_id: conversationId,
+                ...(subject ? { subject_type: subject.type, subject_id: subject.id } : {}),
+            },
         }),
     archiveConversation: (id) => request(`/api/ai/conversations/${id}`, { method: "DELETE" }),
     leadAnalysis: (leadId) => request(`/api/ai/leads/${leadId}/analysis`),

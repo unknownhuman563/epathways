@@ -1,0 +1,172 @@
+%PDF-1.4
+%‚„œ”
+1 0 obj
+<<
+/Type /Catalog
+/Pages 2 0 R
+/AcroForm <<
+/Fields [6 0 R 7 0 R 8 0 R 9 0 R 10 0 R 11 0 R 12 0 R 13 0 R]
+/NeedAppearances true
+/DA (/Helv 0 Tf 0 g)
+/DR << /Font << /Helv 5 0 R >> >>
+>>
+>>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /Helv 5 0 R >> >> /Contents 4 0 R /Annots [6 0 R 7 0 R 8 0 R 9 0 R 10 0 R 11 0 R 12 0 R 13 0 R] >>
+endobj
+4 0 obj
+<< /Length 720 >>
+stream
+BT /Helv 15 Tf 60 790 Td (INZ DEMO FORM ‚Äî Student Visa \(local sample\)) Tj ET
+0.6 0.6 0.6 RG
+BT /Helv 9 Tf 60 736 Td (Family name \(surname\)) Tj ET
+0.5 w 60 720 m 520 720 l S
+BT /Helv 9 Tf 60 696 Td (Given names) Tj ET
+0.5 w 60 680 m 520 680 l S
+BT /Helv 9 Tf 60 656 Td (Date of birth \(DD/MM/YYYY\)) Tj ET
+0.5 w 60 640 m 520 640 l S
+BT /Helv 9 Tf 60 616 Td (Nationality) Tj ET
+0.5 w 60 600 m 520 600 l S
+BT /Helv 9 Tf 60 576 Td (Passport number) Tj ET
+0.5 w 60 560 m 520 560 l S
+BT /Helv 9 Tf 60 536 Td (Passport expiry \(DD/MM/YYYY\)) Tj ET
+0.5 w 60 520 m 520 520 l S
+BT /Helv 9 Tf 60 496 Td (Email address) Tj ET
+0.5 w 60 480 m 520 480 l S
+BT /Helv 9 Tf 60 456 Td (Contact phone) Tj ET
+0.5 w 60 440 m 520 440 l S
+endstream
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+6 0 obj
+<<
+/Type /Annot
+/Subtype /Widget
+/FT /Tx
+/T (family_name) /V <4E475559454E>
+/Rect [60 722 520 738]
+/F 4
+/DA (/Helv 11 Tf 0 g)
+/Ff 0
+/P 3 0 R
+>>
+endobj
+7 0 obj
+<<
+/Type /Annot
+/Subtype /Widget
+/FT /Tx
+/T (given_names) /V <4D696E6820416E>
+/Rect [60 682 520 698]
+/F 4
+/DA (/Helv 11 Tf 0 g)
+/Ff 0
+/P 3 0 R
+>>
+endobj
+8 0 obj
+<<
+/Type /Annot
+/Subtype /Widget
+/FT /Tx
+/T (date_of_birth) /V <31342F30332F32303031>
+/Rect [60 642 520 658]
+/F 4
+/DA (/Helv 11 Tf 0 g)
+/Ff 0
+/P 3 0 R
+>>
+endobj
+9 0 obj
+<<
+/Type /Annot
+/Subtype /Widget
+/FT /Tx
+/T (nationality) /V <566965746E616D>
+/Rect [60 602 520 618]
+/F 4
+/DA (/Helv 11 Tf 0 g)
+/Ff 0
+/P 3 0 R
+>>
+endobj
+10 0 obj
+<<
+/Type /Annot
+/Subtype /Widget
+/FT /Tx
+/T (passport_number) /V <4331323334353637>
+/Rect [60 562 520 578]
+/F 4
+/DA (/Helv 11 Tf 0 g)
+/Ff 0
+/P 3 0 R
+>>
+endobj
+11 0 obj
+<<
+/Type /Annot
+/Subtype /Widget
+/FT /Tx
+/T (passport_expiry) /V <32302F30392F32303330>
+/Rect [60 522 520 538]
+/F 4
+/DA (/Helv 11 Tf 0 g)
+/Ff 0
+/P 3 0 R
+>>
+endobj
+12 0 obj
+<<
+/Type /Annot
+/Subtype /Widget
+/FT /Tx
+/T (email) /V <6D696E682E616E406578616D706C652E636F6D>
+/Rect [60 482 520 498]
+/F 4
+/DA (/Helv 11 Tf 0 g)
+/Ff 0
+/P 3 0 R
+>>
+endobj
+13 0 obj
+<<
+/Type /Annot
+/Subtype /Widget
+/FT /Tx
+/T (phone) /V <2B3634203231203535352030313939>
+/Rect [60 442 520 458]
+/F 4
+/DA (/Helv 11 Tf 0 g)
+/Ff 0
+/P 3 0 R
+>>
+endobj
+xref
+0 14
+0000000000 65535 f 
+0000000015 00000 n 
+0000000219 00000 n 
+0000000276 00000 n 
+0000000466 00000 n 
+0000001236 00000 n 
+0000001306 00000 n 
+0000001465 00000 n 
+0000001626 00000 n 
+0000001795 00000 n 
+0000001956 00000 n 
+0000002124 00000 n 
+0000002296 00000 n 
+0000002476 00000 n 
+trailer
+<< /Size 14 /Root 1 0 R >>
+startxref
+2436
+%%EOF
+2648

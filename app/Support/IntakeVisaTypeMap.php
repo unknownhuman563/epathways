@@ -2,6 +2,7 @@
 
 namespace App\Support;
 
+use App\Models\FamilyIntake;
 use App\Models\ResidentIntake;
 use App\Models\StudentIntake;
 use App\Models\VisaType;
@@ -49,6 +50,11 @@ final class IntakeVisaTypeMap
             'code'     => ['VISITOR', 'GVV'],
             'category' => 'Visitor',
             'label'    => 'Visitor Visa (GVV)',
+        ],
+        FamilyIntake::class => [
+            'code'     => ['FAMILY', 'PARTNER'],
+            'category' => 'Partnership',
+            'label'    => 'Family Visa (Partner / Child)',
         ],
     ];
 
