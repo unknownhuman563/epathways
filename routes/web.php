@@ -223,6 +223,8 @@ Route::get('/student-interest', [StudentIntakeController::class, 'showForm'])->n
 Route::post('/student-interest', [StudentIntakeController::class, 'store']);
 Route::get('/visitor-interest', [VisitorIntakeController::class, 'showForm'])->name('visitor-interest');
 Route::post('/visitor-interest', [VisitorIntakeController::class, 'store']);
+Route::get('/family-interest', [\App\Http\Controllers\FamilyIntakeController::class, 'showForm'])->name('family-interest');
+Route::post('/family-interest', [\App\Http\Controllers\FamilyIntakeController::class, 'store']);
 
 // Token-based edit links (no auth — the opaque token is the bearer credential).
 Route::get('/resident-interest/edit/{token}', [ResidentIntakeController::class, 'showEditForm'])->name('resident-interest.edit');
