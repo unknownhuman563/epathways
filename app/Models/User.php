@@ -352,6 +352,11 @@ class User extends Authenticatable
         if ($portal === 'immigration' && in_array($this->role, self::IMMIGRATION_ROLES, true)) {
             return true;
         }
+        // The adviser's own portal (separate from the manager's immigration
+        // portal). Only the adviser role — admins already passed above.
+        if ($portal === 'immigration-adviser') {
+            return $this->role === self::ROLE_IMMIGRATION_ADVISER;
+        }
 
         return $this->role === $portal;
     }
@@ -383,6 +388,10 @@ class User extends Authenticatable
         }
         if ($this->isSuperAdmin()) {
             return '/admin/super-dashboard';
+        }
+        // The adviser lands on their own portal; the manager keeps the full one.
+        if ($this->role === self::ROLE_IMMIGRATION_ADVISER) {
+            return '/portal/immigration-adviser/dashboard';
         }
         if (in_array($this->role, self::IMMIGRATION_ROLES, true)) {
             return '/portal/immigration/dashboard';

@@ -1121,6 +1121,17 @@ Route::middleware(['auth'])->group(function () {
             Route::delete('/assessments/{id}', [EnglishController::class, 'destroyAssessment'])->name('assessments.destroy');
         });
 
+        // Immigration Adviser (LIA) portal — separate from the manager's full
+        // immigration portal, scoped to the adviser's own casework + sign-off.
+        Route::middleware('portal:admin,immigration_adviser')->prefix('immigration-adviser')->name('portal.immigration-adviser.')->group(function () {
+            Route::get('/dashboard', [\App\Http\Controllers\Portal\ImmigrationAdviserController::class, 'dashboard'])->name('dashboard');
+            Route::get('/cases', [\App\Http\Controllers\Portal\ImmigrationAdviserController::class, 'cases'])->name('cases');
+            Route::get('/cases/{lead}', [\App\Http\Controllers\Portal\ImmigrationAdviserController::class, 'showCase'])->name('cases.show');
+            Route::get('/sign-off', [\App\Http\Controllers\Portal\ImmigrationAdviserController::class, 'signOff'])->name('sign-off');
+            Route::get('/notifications', [\App\Http\Controllers\NotificationController::class, 'index'])->name('notifications');
+            Route::get('/profile', [\App\Http\Controllers\Portal\ImmigrationAdviserController::class, 'profile'])->name('profile');
+        });
+
         Route::middleware('portal:immigration')->prefix('immigration')->name('portal.immigration.')->group(function () {
             Route::get('/dashboard', [ImmigrationController::class, 'dashboard'])->name('dashboard');
             Route::get('/leads', [ImmigrationController::class, 'leads'])->name('leads');

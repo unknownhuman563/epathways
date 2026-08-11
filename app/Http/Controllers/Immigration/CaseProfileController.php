@@ -40,7 +40,7 @@ use Inertia\Inertia;
  */
 class CaseProfileController extends Controller
 {
-    public function show(Lead $lead, CaseChecklistService $checklist)
+    public function show(Lead $lead, CaseChecklistService $checklist, string $page = 'portal/immigration/CaseProfile')
     {
         $user = auth()->user();
         abort_unless($user instanceof User, 403);
@@ -61,7 +61,7 @@ class CaseProfileController extends Controller
 
         [$intakeType, $intake] = $this->resolveIntake($lead);
 
-        return Inertia::render('portal/immigration/CaseProfile', [
+        return Inertia::render($page, [
             'lead' => $this->serializeLead($lead),
             'intake' => $intake ? ['type' => $intakeType, 'data' => $intake] : null,
             'documents' => $this->loadDocuments($lead),
