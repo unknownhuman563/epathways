@@ -1330,6 +1330,7 @@ Route::middleware(['auth'])->group(function () {
 
             // Case dependants (children / partner) — sub-records + their documents.
             Route::post('/cases/{lead}/dependents', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'addDependent'])->name('cases.dependents.store');
+            Route::get('/cases/{lead}/dependent-source', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'dependentSourceIdentity'])->name('cases.dependent-source');
             Route::put('/cases/{lead}/dependents/{dependent}', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'updateDependent'])->name('cases.dependents.update');
             Route::delete('/cases/{lead}/dependents/{dependent}', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'deleteDependent'])->name('cases.dependents.destroy');
             Route::post('/cases/{lead}/dependents/{dependent}/documents', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'uploadDependentDocument'])->name('cases.dependents.documents.store');

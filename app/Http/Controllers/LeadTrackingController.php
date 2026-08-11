@@ -244,9 +244,8 @@ class LeadTrackingController extends Controller
             }
         }
 
-        return redirect()
-            ->route('track.lookup', ['code' => $lead->tracking_code])
-            ->with('success', 'Your information has been updated.');
+        // Stay on the page the update came from (portal or public tracker).
+        return back()->with('success', 'Your information has been updated.');
     }
 
     /**
@@ -344,9 +343,9 @@ class LeadTrackingController extends Controller
             $lead->fill($patch)->save();
         }
 
-        return redirect()
-            ->route('track.lookup', ['code' => $lead->tracking_code])
-            ->with('success', 'Your document has been uploaded.');
+        // Stay on the page the upload came from (the lead portal Documents view
+        // or the public tracker) instead of always bouncing to /track/{code}.
+        return back()->with('success', 'Your document has been uploaded.');
     }
 
     /**
@@ -415,9 +414,7 @@ class LeadTrackingController extends Controller
             $this->notifyDocumentSubmitted($lead, $doc, 'replaced');
         }
 
-        return redirect()
-            ->route('track.lookup', ['code' => $lead->tracking_code])
-            ->with('success', 'Document updated.');
+        return back()->with('success', 'Document updated.');
     }
 
     /**
@@ -497,9 +494,7 @@ class LeadTrackingController extends Controller
             }
         }
 
-        return redirect()
-            ->route('track.lookup', ['code' => $lead->tracking_code])
-            ->with('success', $newId ? 'Your preferred program is saved.' : 'Program preference cleared.');
+        return back()->with('success', $newId ? 'Your preferred program is saved.' : 'Program preference cleared.');
     }
 
     public function deleteDoc(Request $request, string $code, int $docId)
@@ -528,9 +523,7 @@ class LeadTrackingController extends Controller
         }
         $doc->delete();
 
-        return redirect()
-            ->route('track.lookup', ['code' => $lead->tracking_code])
-            ->with('success', 'Document removed.');
+        return back()->with('success', 'Document removed.');
     }
 
     /**

@@ -1,15 +1,13 @@
 import DashboardLayout from "./DashboardLayout";
-import { LayoutDashboard, ListChecks, User, Users, FileText } from "lucide-react";
+import { LayoutDashboard, User, Users, FileText } from "lucide-react";
 
-// Lead Portal sidebar — the three tracker views, one per sidebar item. Each
-// route renders the tracker (TrackingPage) at a fixed tab: Dashboard = Overview,
-// Requirements = the checklist, My Profile = the applicant's details.
+// Lead Portal sidebar. Documents = the tracker's checklist view; Dashboard =
+// overview; Profile = the applicant's details; Family = dependants.
 const LEAD_NAV = [
-    { name: "Dashboard",    href: "/portal/lead/dashboard",    icon: <LayoutDashboard size={20} /> },
-    { name: "Requirements", href: "/portal/lead/requirements", icon: <ListChecks size={20} /> },
-    { name: "Visa Form",    href: "/portal/lead/visa-assessment", icon: <FileText size={20} /> },
-    { name: "My Family",    href: "/portal/lead/family",       icon: <Users size={20} /> },
-    { name: "My Profile",   href: "/portal/lead/profile",      icon: <User size={20} /> },
+    { name: "Dashboard", href: "/portal/lead/dashboard",    icon: <LayoutDashboard size={20} /> },
+    { name: "Documents", href: "/portal/lead/requirements", icon: <FileText size={20} /> },
+    { name: "Family",    href: "/portal/lead/family",       icon: <Users size={20} /> },
+    { name: "Profile",   href: "/portal/lead/profile",      icon: <User size={20} /> },
 ];
 
 export default function LeadLayout({ children }) {
