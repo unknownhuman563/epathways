@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import Logo from "@assets/newlogosite.png";
+import Logo from "@assets/ep_only.png";
 import ExaltLogo from "@assets/accomodation/exaltlogo.jpg";
 
 const NAV_LINKS = [
