@@ -96,6 +96,20 @@ export default function Bookings({ bookings: backendBookings, stages = [] }) {
             .finally(() => setConvertingId(null));
     };
 
+    // Delete a booking (admin cleanup). Confirms, then removes the row and
+    // drops it from the table on success.
+    const deleteBooking = (booking) => {
+        setActiveDropdown(null);
+        if (! confirm(`Delete this booking for ${booking.name || 'this client'}? This can't be undone.`)) return;
+        import('@inertiajs/react').then(({ router }) => {
+            router.delete(`/admin/bookings/${booking.id}`, {
+                preserveScroll: true,
+                preserveState: true,
+                onSuccess: () => setBookings((bs) => bs.filter((b) => b.id !== booking.id)),
+            });
+        });
+    };
+
     const handleUpdateSubmit = (e) => {
         e.preventDefault();
         import('@inertiajs/react').then(({ router }) => {
@@ -377,7 +391,10 @@ export default function Bookings({ bookings: backendBookings, stages = [] }) {
                                                         </button>
                                                     </div>
                                                     <div className="px-1 py-1">
-                                                        <button className="flex w-full items-center gap-3 px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg">
+                                                        <button
+                                                            onClick={() => deleteBooking(booking)}
+                                                            className="flex w-full items-center gap-3 px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg"
+                                                        >
                                                             <Trash2 size={16} /> Delete
                                                         </button>
                                                     </div>

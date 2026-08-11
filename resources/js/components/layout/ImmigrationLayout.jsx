@@ -6,6 +6,7 @@ import {
     User, Bell, CheckSquare, Ticket, Mail,
     PenLine, Megaphone, Smartphone, MessageSquare,
     FileSignature, ReceiptText, GraduationCap, Award,
+    Clock,
 } from "lucide-react";
 
 export default function ImmigrationLayout({ children }) {
@@ -67,6 +68,7 @@ export default function ImmigrationLayout({ children }) {
         { name: "Account", section: true },
         { name: "My Profile",    href: "/portal/immigration/profile",       icon: <User size={20} /> },
         { name: "Notifications", href: "/portal/immigration/notifications", icon: <Bell size={20} />, badge: badges.notifications_unread, badgeTone: "warning" },
+        { name: "Daily Time Record", href: "/portal/immigration/dtr", icon: <Clock size={20} /> },
         { name: "My Tickets",    href: "/portal/tickets",                  icon: <Ticket size={20} /> },
     ];
 

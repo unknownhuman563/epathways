@@ -41,6 +41,7 @@ const ADMIN_NAV = [
     { name: "Portal Invitations", href: "/admin/portal-invitations", icon: <KeyRound size={20} /> },
     { name: "Events", href: "/admin/events", icon: <CalendarIcon size={20} /> },
     { name: "Bookings", href: "/admin/booking", icon: <BookOpen size={20} /> },
+    { name: "Daily Time Record", href: "/admin/dtr", icon: <Clock size={20} /> },
     { name: "Availability", href: "/admin/availability", icon: <Clock size={20} /> },
     { name: "Programs", href: "/admin/programs", icon: <GraduationCap size={20} /> },
     { name: "Schools",  href: "/admin/schools",  icon: <Building2 size={20} /> },

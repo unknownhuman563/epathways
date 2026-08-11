@@ -115,6 +115,39 @@ Route::post('/bookings', [BookingController::class, 'store']);
 // the public booking page (fails open when Calendar isn't configured).
 Route::get('/booking/busy', [BookingController::class, 'busyTimes']);
 
+// Client self-service reschedule / cancel from the booking emails. The token
+// identifies the booking (known client → the booking page skips the intake
+// form and only asks for a new slot). Cancel is a GET confirmation → POST.
+Route::get('/booking/reschedule/{token}', [BookingController::class, 'reschedulePage'])->name('booking.reschedule');
+Route::post('/booking/reschedule/{token}', [BookingController::class, 'reschedule'])->name('booking.reschedule.submit');
+Route::get('/booking/cancel/{token}', [BookingController::class, 'cancelPage'])->name('booking.cancel');
+Route::post('/booking/cancel/{token}', [BookingController::class, 'cancel'])->name('booking.cancel.submit');
+
+// ── DTR (Daily Time & Task Record) ──────────────────────────────────────
+// Per-user module surfaced in every staff portal's sidebar. All endpoints are
+// user-scoped (they act on the logged-in user's own record), so plain `auth`
+// is enough; the per-portal GET routes exist only so each renders under its
+// own portal chrome (page name → layout, via thin re-export pages).
+Route::middleware('auth')->group(function () {
+    Route::post('/dtr/setup', [\App\Http\Controllers\DtrController::class, 'saveSetup'])->name('dtr.setup');
+    Route::post('/dtr/entry', [\App\Http\Controllers\DtrController::class, 'saveEntry'])->name('dtr.entry');
+    Route::post('/dtr/pending/toggle', [\App\Http\Controllers\DtrController::class, 'togglePending'])->name('dtr.pending.toggle');
+    Route::post('/dtr/leaves', [\App\Http\Controllers\DtrController::class, 'fileLeave'])->name('dtr.leaves.file');
+    Route::post('/dtr/leaves/{id}/review', [\App\Http\Controllers\DtrController::class, 'reviewLeave'])->name('dtr.leaves.review');
+    Route::post('/dtr/time-in', [\App\Http\Controllers\DtrController::class, 'timeIn'])->name('dtr.timein');
+    Route::post('/dtr/time-out', [\App\Http\Controllers\DtrController::class, 'timeOut'])->name('dtr.timeout');
+
+    Route::get('/admin/dtr', [\App\Http\Controllers\DtrController::class, 'show'])->name('admin.dtr');
+    Route::get('/admin/dtr/summary', [\App\Http\Controllers\DtrController::class, 'summary'])->name('admin.dtr.summary');
+    Route::get('/portal/sales/dtr', [\App\Http\Controllers\DtrController::class, 'show'])->name('portal.sales.dtr');
+    Route::get('/portal/education/dtr', [\App\Http\Controllers\DtrController::class, 'show'])->name('portal.education.dtr');
+    Route::get('/portal/english/dtr', [\App\Http\Controllers\DtrController::class, 'show'])->name('portal.english.dtr');
+    Route::get('/portal/immigration/dtr', [\App\Http\Controllers\DtrController::class, 'show'])->name('portal.immigration.dtr');
+    Route::get('/portal/accommodation/dtr', [\App\Http\Controllers\DtrController::class, 'show'])->name('portal.accommodation.dtr');
+    Route::get('/portal/agent/dtr', [\App\Http\Controllers\DtrController::class, 'show'])->name('portal.agent.dtr');
+    Route::get('/portal/finance/dtr', [\App\Http\Controllers\DtrController::class, 'show'])->name('portal.finance.dtr');
+});
+
 // Stripe Checkout for consultation bookings (booking is saved first, then the
 // optional payment step). Webhook is CSRF-exempt (see bootstrap/app.php).
 Route::post('/bookings/{booking}/checkout', [\App\Http\Controllers\PaymentController::class, 'checkout']);
@@ -459,6 +492,7 @@ Route::middleware(['auth'])->group(function () {
 
         Route::get('/admin/booking', [BookingController::class, 'index'])->name('admin.bookings');
         Route::post('/admin/bookings/{id}', [BookingController::class, 'update']);
+        Route::delete('/admin/bookings/{id}', [BookingController::class, 'destroy'])->name('admin.bookings.destroy');
         // Convert a booking's client into a pipeline lead (education flow).
         Route::post('/admin/bookings/{id}/convert', [BookingController::class, 'convertToLead'])->name('admin.bookings.convert');
 

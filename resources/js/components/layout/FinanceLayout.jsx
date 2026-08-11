@@ -1,9 +1,10 @@
 import DashboardLayout from "./DashboardLayout";
-import { LayoutDashboard, ClipboardList } from "lucide-react";
+import { Clock, LayoutDashboard, ClipboardList } from "lucide-react";
 
 const FINANCE_NAV = [
     { name: "Dashboard", href: "/portal/finance/dashboard", icon: <LayoutDashboard size={20} /> },
     { name: "Task Board", href: "/portal/finance/tasks", icon: <ClipboardList size={20} /> },
+    { name: "Daily Time Record", href: "/portal/finance/dtr", icon: <Clock size={20} /> },
 ];
 
 export default function FinanceLayout({ children }) {
