@@ -103,6 +103,14 @@ class CaseProfileController extends Controller
             // INZ forms available for this visa type (current version + readiness).
             'inzForms' => $this->loadInzForms($lead),
             'dependents' => $this->loadDependents($lead),
+            // Cases the dependant can be related to (defaults to this case).
+            'caseOptions' => Lead::immigrationCase()
+                ->orderBy('first_name')->limit(500)
+                ->get(['id', 'lead_id', 'first_name', 'last_name'])
+                ->map(fn ($l) => [
+                    'id' => $l->id,
+                    'name' => (trim("{$l->first_name} {$l->last_name}") ?: $l->lead_id).($l->lead_id ? " ({$l->lead_id})" : ''),
+                ])->values(),
         ]);
     }
 
@@ -419,6 +427,26 @@ class CaseProfileController extends Controller
         ]));
 
         return back()->with('success', 'Dependant added to the case.');
+    }
+
+    /**
+     * A case's applicant identity — used to pre-fill the Add-dependant form when
+     * the dependant's details match an existing case. Guarded like any case view.
+     */
+    public function dependentSourceIdentity(Lead $lead)
+    {
+        $this->guardCase($lead);
+
+        return response()->json([
+            'first_name' => $lead->first_name,
+            'family_name' => $lead->last_name,
+            'middle_name' => $lead->middle_name,
+            'dob' => optional($lead->dob)->toDateString(),
+            'gender' => $lead->gender,
+            'nationality' => $lead->citizenship ?: $lead->residence_country,
+            'passport_number' => $lead->passport_number,
+            'passport_expiry' => optional($lead->passport_expiry)->toDateString(),
+        ]);
     }
 
     public function updateDependent(Request $request, Lead $lead, \App\Models\CaseDependent $dependent)

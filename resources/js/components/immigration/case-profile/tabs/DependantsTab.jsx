@@ -21,7 +21,7 @@ const STATUS = {
     Rejected:    { label: "Rejected",      tone: "bg-red-50 text-red-700 border-red-200",            icon: XCircle },
 };
 
-export default function DependantsTab({ lead, dependents = [] }) {
+export default function DependantsTab({ lead, dependents = [], caseOptions = [] }) {
     const [editing, setEditing] = useState(null);
     const [docsFor, setDocsFor] = useState(null);
     if (!lead?.id) return null;
@@ -66,7 +66,7 @@ export default function DependantsTab({ lead, dependents = [] }) {
                 </div>
             )}
 
-            {editing && <DependantModal dependant={editing} base={base} onClose={() => setEditing(null)} />}
+            {editing && <DependantModal dependant={editing} base={base} caseOptions={caseOptions} currentLeadId={lead.id} onClose={() => setEditing(null)} />}
             {openDoc && <DocumentsModal d={openDoc} base={base} onClose={() => setDocsFor(null)} />}
         </div>
     );
@@ -252,9 +252,10 @@ function DocumentsModal({ d, base, onClose }) {
     );
 }
 
-function DependantModal({ dependant, base, onClose }) {
+function DependantModal({ dependant, base, caseOptions = [], currentLeadId, onClose }) {
     const isNew = !dependant.id;
     const [form, setForm] = useState({
+        lead_id: "", // fill-source selector only; the dependant is added to the current case
         relationship: dependant.relationship || "child",
         first_name: dependant.first_name || "",
         family_name: dependant.family_name || "",
@@ -269,6 +270,30 @@ function DependantModal({ dependant, base, onClose }) {
     const [saving, setSaving] = useState(false);
     const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
 
+    // Selecting a case pre-fills the still-empty identity fields from that case's
+    // applicant (fetched on demand so we don't ship every case's passport).
+    const pickCase = (id) => {
+        setForm((f) => ({ ...f, lead_id: id }));
+        if (!id) return;
+        fetch(`/portal/immigration/cases/${id}/dependent-source`, { headers: { Accept: "application/json" }, credentials: "same-origin" })
+            .then((r) => (r.ok ? r.json() : null))
+            .then((d) => {
+                if (!d) return;
+                setForm((f) => ({
+                    ...f,
+                    first_name: f.first_name || d.first_name || "",
+                    family_name: f.family_name || d.family_name || "",
+                    middle_name: f.middle_name || d.middle_name || "",
+                    dob: f.dob || d.dob || "",
+                    gender: f.gender || d.gender || "",
+                    nationality: f.nationality || d.nationality || "",
+                    passport_number: f.passport_number || d.passport_number || "",
+                    passport_expiry: f.passport_expiry || d.passport_expiry || "",
+                }));
+            })
+            .catch(() => {});
+    };
+
     const submit = () => {
         setSaving(true);
         const opts = {
@@ -277,6 +302,8 @@ function DependantModal({ dependant, base, onClose }) {
             onError: (err) => toast.error(Object.values(err)[0] || "Could not save"),
             onFinish: () => setSaving(false),
         };
+        // The dependant is always added to the CURRENT case (this Family tab).
+        // "Related to case" only pre-fills the details — it isn't the target.
         if (isNew) router.post(base, form, opts);
         else router.put(`${base}/${dependant.id}`, form, opts);
     };
@@ -289,6 +316,15 @@ function DependantModal({ dependant, base, onClose }) {
                     <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-700"><X size={18} /></button>
                 </div>
                 <div className="p-5 space-y-3.5">
+                    {isNew && caseOptions.length > 0 && (
+                        <Field label="Related to case (optional)">
+                            <select value={form.lead_id} onChange={(e) => pickCase(e.target.value)} className={INPUT}>
+                                <option value="">— Enter details manually —</option>
+                                {caseOptions.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                            </select>
+                            <p className="text-[10.5px] text-gray-400 mt-1">Copies that applicant's details into the empty fields below. The dependant is added to <span className="font-semibold">this</span> case.</p>
+                        </Field>
+                    )}
                     <Field label="Relationship">
                         <select value={form.relationship} onChange={(e) => set("relationship", e.target.value)} className={INPUT}>
                             {RELATIONSHIPS.map((r) => <option key={r} value={r}>{REL_LABEL[r]}</option>)}
