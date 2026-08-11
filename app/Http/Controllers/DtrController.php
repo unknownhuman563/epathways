@@ -116,6 +116,8 @@ class DtrController extends Controller
     /** File a leave request — must start at least a week from today. */
     public function fileLeave(Request $request)
     {
+        $this->requireSetting();
+
         $data = $request->validate([
             'type' => 'required|string|max:40',
             'start_date' => 'required|date',
@@ -297,9 +299,23 @@ class DtrController extends Controller
         return back()->with('success', "DTR set up for {$target->name}.");
     }
 
+    /**
+     * Guard: staff can only log against a DTR their admin has set up. Returns
+     * the completed setting or aborts — used by every self-service write.
+     */
+    private function requireSetting(): DtrSetting
+    {
+        $setting = DtrSetting::where('user_id', auth()->id())->where('is_complete', true)->first();
+        abort_if(! $setting, 403, 'Your DTR has not been set up by an admin yet.');
+
+        return $setting;
+    }
+
     /** Create/update a day's entry (times, tasks, remarks). */
     public function saveEntry(Request $request)
     {
+        $this->requireSetting();
+
         $data = $request->validate([
             'work_date' => 'required|date',
             'time_in' => 'nullable|string|max:8',
@@ -326,8 +342,8 @@ class DtrController extends Controller
     /** One-tap clock in — stamps the current time (in the user's DTR timezone). */
     public function timeIn()
     {
-        $setting = DtrSetting::where('user_id', auth()->id())->first();
-        $now = now($setting?->timezone ?: config('app.timezone', 'UTC'));
+        $setting = $this->requireSetting();
+        $now = now($setting->timezone ?: config('app.timezone', 'UTC'));
 
         $entry = DtrEntry::firstOrNew(['user_id' => auth()->id(), 'work_date' => $now->toDateString()]);
         if (! $entry->time_in) {
@@ -341,8 +357,8 @@ class DtrController extends Controller
     /** One-tap clock out — closes the latest open shift (handles cross-midnight). */
     public function timeOut()
     {
-        $setting = DtrSetting::where('user_id', auth()->id())->first();
-        $now = now($setting?->timezone ?: config('app.timezone', 'UTC'));
+        $setting = $this->requireSetting();
+        $now = now($setting->timezone ?: config('app.timezone', 'UTC'));
 
         $entry = DtrEntry::where('user_id', auth()->id())
             ->whereNotNull('time_in')->whereNull('time_out')

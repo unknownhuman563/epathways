@@ -14,6 +14,14 @@ const COLS = [
 
 const fmt = (key, v) => (key === "total_hours" || key === "avg_hrs") ? Number(v || 0).toFixed(2) : (v ?? 0);
 
+// Per-team colour, mirroring the spreadsheet (NZ = blue, PH = teal). Falls
+// back to a neutral slate for any team we don't have a colour for yet.
+const TEAM_THEMES = {
+    "New Zealand": { header: "bg-indigo-50 text-indigo-800", subtotalRow: "bg-indigo-50/60", subtotalText: "text-indigo-700" },
+    "Philippines": { header: "bg-teal-50 text-teal-800", subtotalRow: "bg-teal-50/60", subtotalText: "text-teal-700" },
+};
+const teamTheme = (team) => TEAM_THEMES[team] || { header: "bg-slate-50 text-slate-700", subtotalRow: "bg-slate-50/60", subtotalText: "text-slate-700" };
+
 export default function DtrSummary({ teams = [], total = {}, start = "", end = "", pendingLeaves = [] }) {
     const [range, setRange] = useState({ start, end });
     const apply = (next) => {
@@ -87,10 +95,12 @@ export default function DtrSummary({ teams = [], total = {}, start = "", end = "
                         <tbody>
                             {teams.length === 0 ? (
                                 <tr><td colSpan={9} className="px-4 py-12 text-center text-gray-400">No staff have set up a DTR yet.</td></tr>
-                            ) : teams.map((t) => (
+                            ) : teams.map((t) => {
+                                const th = teamTheme(t.team);
+                                return (
                                 <React.Fragment key={t.team}>
-                                    <tr className="bg-gray-50/80 border-y border-gray-100">
-                                        <td colSpan={9} className="px-4 py-2 text-[11px] font-bold uppercase tracking-widest text-gray-600">{t.team}</td>
+                                    <tr className={`${th.header} border-y border-gray-100`}>
+                                        <td colSpan={9} className="px-4 py-2 text-[11px] font-bold uppercase tracking-widest">{t.team} team</td>
                                     </tr>
                                     {t.staff.map((s, i) => (
                                         <tr key={s.name + i} className="border-b border-gray-50 hover:bg-gray-50/50">
@@ -103,20 +113,25 @@ export default function DtrSummary({ teams = [], total = {}, start = "", end = "
                                             ))}
                                         </tr>
                                     ))}
-                                    <tr className="bg-[#436235]/5 border-b border-gray-100">
-                                        <td className="px-4 py-2 text-[11px] font-bold text-[#436235]">{t.team} subtotal</td>
+                                    <tr className={`${th.subtotalRow} border-b border-gray-100`}>
+                                        <td className={`px-4 py-2 text-[11px] font-bold ${th.subtotalText}`}>{t.team} subtotal</td>
                                         <td></td>
-                                        {COLS.map(([k]) => <td key={k} className="px-3 py-2 text-right tabular-nums font-bold text-[#436235]">{fmt(k, t.subtotal[k])}</td>)}
+                                        {COLS.map(([k]) => <td key={k} className={`px-3 py-2 text-right tabular-nums font-bold ${th.subtotalText}`}>{fmt(k, t.subtotal[k])}</td>)}
                                     </tr>
                                 </React.Fragment>
-                            ))}
+                                );
+                            })}
                         </tbody>
                         {teams.length > 0 && (
                             <tfoot>
                                 <tr className="bg-gray-900 text-white">
                                     <td className="px-4 py-3 font-bold uppercase tracking-wider text-[11px]">All staff</td>
                                     <td></td>
-                                    {COLS.map(([k]) => <td key={k} className="px-3 py-3 text-right tabular-nums font-bold">{fmt(k, total[k])}</td>)}
+                                    {COLS.map(([k]) => (
+                                        <td key={k} className={`px-3 py-3 text-right tabular-nums font-bold ${k === "late_days" && total[k] > 0 ? "text-rose-300" : k === "days_missing_tasks" && total[k] > 0 ? "text-amber-300" : ""}`}>
+                                            {fmt(k, total[k])}
+                                        </td>
+                                    ))}
                                 </tr>
                             </tfoot>
                         )}
