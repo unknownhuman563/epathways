@@ -79,7 +79,6 @@ const ADMIN_NAV = [
         icon: <Globe size={20} />,
         children: [
             { name: "Dashboard", href: "/portal/immigration/dashboard", icon: <LayoutDashboard size={16} /> },
-            { name: "Resident Visa Intake", href: "/admin/immigration/resident-intakes", icon: <FileText size={16} /> },
         ],
     },
     {

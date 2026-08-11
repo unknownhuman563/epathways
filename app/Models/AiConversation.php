@@ -13,7 +13,7 @@ use Illuminate\Support\Collection;
  */
 class AiConversation extends Model
 {
-    protected $fillable = ['user_id', 'title', 'last_message_at', 'is_archived'];
+    protected $fillable = ['user_id', 'subject_type', 'subject_id', 'title', 'last_message_at', 'is_archived'];
 
     protected $casts = [
         'last_message_at' => 'datetime',

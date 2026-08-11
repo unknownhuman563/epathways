@@ -167,6 +167,15 @@ const VISA_ASSESSMENT_CARDS = [
         img:     VisitorVisaImg,
         meta:    '1–4 weeks',
     },
+    {
+        eyebrow: 'Family',
+        title:   'Family Visa',
+        sub:     'Partner or dependent child of a NZ visa holder.',
+        href:    '/family-interest',
+        accent:  'from-rose-500 to-pink-600',
+        img:     VisitorVisaImg,
+        meta:    '2–6 months',
+    },
 ];
 
 function VisaAssessmentSection() {

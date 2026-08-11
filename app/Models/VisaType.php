@@ -177,4 +177,11 @@ class VisaType extends Model
     {
         return $this->priceHistory()->first();
     }
+
+    /** INZ forms this visa type needs (the version-tracked catalogue). */
+    public function inzForms(): \Illuminate\Database\Eloquent\Relations\BelongsToMany
+    {
+        return $this->belongsToMany(InzForm::class, 'inz_form_visa_type')
+            ->withPivot('required')->withTimestamps();
+    }
 }

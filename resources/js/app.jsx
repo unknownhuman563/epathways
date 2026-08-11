@@ -10,10 +10,12 @@ import SalesLayout from './components/layout/SalesLayout';
 import EducationLayout from './components/layout/EducationLayout';
 import EnglishLayout from './components/layout/EnglishLayout';
 import ImmigrationLayout from './components/layout/ImmigrationLayout';
+import ImmigrationAdviserLayout from './components/layout/ImmigrationAdviserLayout';
 import AccommodationLayout from './components/layout/AccommodationLayout';
 import FinanceLayout from './components/layout/FinanceLayout';
 import AgentLayout from './components/layout/AgentLayout';
 import LeadLayout from './components/layout/LeadLayout';
+import RoleLayout from './components/layout/RoleLayout';
 import FlashToaster from './components/ui/FlashToaster';
 import FloatingContact from './components/ui/FloatingContact';
 import MobileStickyCTA from './components/ui/MobileStickyCTA';
@@ -24,6 +26,7 @@ const PORTAL_LAYOUTS = {
   'portal/sales/': SalesLayout,
   'portal/education/': EducationLayout,
   'portal/english/': EnglishLayout,
+  'portal/immigration-adviser/': ImmigrationAdviserLayout,
   'portal/immigration/': ImmigrationLayout,
   'portal/accommodation/': AccommodationLayout,
   'portal/finance/': FinanceLayout,
@@ -52,6 +55,10 @@ createInertiaApp({
 
     if (name.startsWith('admin/')) {
       page.default.layout = page.default.layout || ((page) => <AdminLayout>{page}</AdminLayout>);
+    } else if (name.startsWith('ai/')) {
+      // Role-agnostic authenticated pages (AI Assistant) reachable from every
+      // portal — wrap in the sidebar chrome matching the signed-in user's role.
+      page.default.layout = page.default.layout || ((page) => <RoleLayout>{page}</RoleLayout>);
     } else {
       const match = Object.keys(PORTAL_LAYOUTS).find((prefix) => name.startsWith(prefix));
       if (match) {

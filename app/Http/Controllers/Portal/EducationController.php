@@ -330,6 +330,12 @@ class EducationController extends Controller
                         // shown as a dropdown in the Status column; falls
                         // back to the lead's generic status only as a hint.
                         'status' => $l->education_stage ?: $l->status,
+                        // Lead Portal access state — drives the "Request portal
+                        // access" row action so it reflects requested/sent/
+                        // accepted instead of always reading as a fresh request.
+                        // This list is shared into the Sales + Immigration
+                        // Students tabs too, so one field fixes all three.
+                        'portal_invitation_status' => $l->portal_invitation_status ?: 'none',
                         'education_stage' => $l->education_stage,
                         'english_stage' => $l->english_stage,
                         'immigration_stage' => $l->immigration_stage,

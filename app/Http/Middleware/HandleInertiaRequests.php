@@ -104,7 +104,17 @@ class HandleInertiaRequests extends Middleware
         $path = $request->path();
         $out = [];
 
-        if (str_starts_with($path, 'portal/immigration')) {
+        if (str_starts_with($path, 'portal/immigration-adviser')) {
+            // Adviser portal — scoped to the adviser's own cases + sign-off.
+            $caseScope = \App\Models\Lead::immigrationCase()
+                ->when(! $user->isAdmin(), fn ($q) => $q->where('current_owner_id', $user->id));
+            $myIds = (clone $caseScope)->pluck('id');
+            $out['immigration-adviser'] = [
+                'my_cases'             => $myIds->count(),
+                'pending_signoff'      => $myIds->filter(fn ($id) => \App\Models\CaseAttestation::currentVerdict($id) === null || ! \App\Models\CaseAttestation::hasLodgementSignoff($id))->count(),
+                'notifications_unread' => $user->unreadNotifications()->count(),
+            ];
+        } elseif (str_starts_with($path, 'portal/immigration')) {
             $todayStart = now()->startOfDay();
             $weekStart  = now()->startOfWeek();
             $out['immigration'] = [

@@ -1461,6 +1461,10 @@ class LeadTrackingController extends Controller
         $stageRank = [
             'Endorsed' => 1,
             'Visa Lodged' => 2,
+            // An interim visa is granted off the back of a lodged application
+            // while INZ decides, so it ranks with lodgement — without an entry
+            // here the client's journey would regress to "not lodged yet".
+            'Interim Visa Issued' => 2,
             'Request for Information' => 3,
             'Approved in Principle' => 4,
             'Approved Visa' => 5,

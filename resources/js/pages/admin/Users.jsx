@@ -6,7 +6,7 @@ import {
     Search, Plus, Edit2, Trash2, ChevronDown, ChevronLeft, ChevronRight,
     Users as UsersIcon, ShieldCheck, Briefcase, X, AlertCircle, AlertTriangle, Mail,
     Building2, UserPlus, GraduationCap, FileSignature, ArrowRight, Camera,
-    Lock, Eye, EyeOff,
+    Lock, Eye, EyeOff, BadgeCheck,
 } from 'lucide-react';
 
 const ROLE_STYLES = {
@@ -48,7 +48,15 @@ function Input(props) {
     );
 }
 
-const blankUser = () => ({ name: '', email: '', phone: '', location: '', role: '', password: '', avatar: null });
+const blankUser = () => ({
+    name: '', email: '', phone: '', location: '', role: '', password: '', avatar: null,
+    iaa_licence_number: '', iaa_licence_type: '', iaa_licence_expiry: '', iaa_licence_verified_at: '',
+});
+
+// Roles that resolve to the Immigration portal — the only ones for whom an IAA
+// licence is meaningful, so the licence fields only show for these.
+const IMMIGRATION_ROLES = ['immigration', 'immigration_manager', 'immigration_adviser'];
+const dateOnly = (v) => (v ? String(v).slice(0, 10) : '');
 
 function UserModal({ open, onClose, editing, roles }) {
     const isEdit = !!editing;
@@ -74,6 +82,10 @@ function UserModal({ open, onClose, editing, roles }) {
             role: editing.role ?? (roles[0] || ''),
             password: '',
             avatar: null,
+            iaa_licence_number: editing.iaa_licence_number ?? '',
+            iaa_licence_type: editing.iaa_licence_type ?? '',
+            iaa_licence_expiry: dateOnly(editing.iaa_licence_expiry),
+            iaa_licence_verified_at: dateOnly(editing.iaa_licence_verified_at),
         };
     };
 
@@ -212,6 +224,64 @@ function UserModal({ open, onClose, editing, roles }) {
                                 Super Admin adds the cross-department super dashboard on top of full admin access; Admin opens the whole admin area; a portal role only gets that department's portal.
                             </p>
                         </div>
+
+                        {IMMIGRATION_ROLES.includes(data.role) && (
+                            <div className="rounded-xl border border-amber-200 bg-amber-50/40 p-3.5 space-y-3">
+                                <div className="flex items-center gap-2">
+                                    <BadgeCheck size={14} className="text-amber-600" />
+                                    <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-amber-700">IAA licence</p>
+                                </div>
+                                <p className="text-[11px] text-gray-500 -mt-1">
+                                    Gates who may record advice and prints on engagement documents. Set from the public IAA register; expiry is required whenever a number is entered.
+                                </p>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div className="col-span-2">
+                                        <Label>Licence number</Label>
+                                        <Input
+                                            value={data.iaa_licence_number}
+                                            onChange={e => setField('iaa_licence_number', e.target.value)}
+                                            placeholder="e.g. 201912345"
+                                        />
+                                    </div>
+                                    <div>
+                                        <Label>Type</Label>
+                                        <select
+                                            value={data.iaa_licence_type}
+                                            onChange={e => setField('iaa_licence_type', e.target.value)}
+                                            className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-gray-900 transition-all"
+                                        >
+                                            <option value="">Select…</option>
+                                            <option value="Full">Full</option>
+                                            <option value="Provisional">Provisional</option>
+                                            <option value="Limited">Limited</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <Label required={!!data.iaa_licence_number}>Expiry</Label>
+                                        <input
+                                            type="date"
+                                            value={data.iaa_licence_expiry}
+                                            onChange={e => setField('iaa_licence_expiry', e.target.value)}
+                                            className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-gray-900 transition-all"
+                                        />
+                                    </div>
+                                    <div className="col-span-2">
+                                        <Label>Last verified on IAA register</Label>
+                                        <input
+                                            type="date"
+                                            value={data.iaa_licence_verified_at}
+                                            onChange={e => setField('iaa_licence_verified_at', e.target.value)}
+                                            className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-gray-900 transition-all"
+                                        />
+                                    </div>
+                                </div>
+                                {data.iaa_licence_number && !data.iaa_licence_expiry && (
+                                    <p className="text-[11px] font-semibold text-amber-700">
+                                        Set an expiry date — a licence number with no expiry fails the advice gate.
+                                    </p>
+                                )}
+                            </div>
+                        )}
 
                         <div>
                             <Label required={!isEdit}>Password</Label>

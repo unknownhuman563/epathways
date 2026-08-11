@@ -75,6 +75,11 @@ class Lead extends Model
         'For Agreement & Invoice',
         'Invoice Paid',
         'Visa Lodged',
+        // Onshore applicants are granted an interim visa that keeps them
+        // lawful while INZ decides. It sits after lodgement and before any
+        // RFI/outcome — order matters, the list is used as a forward-only
+        // rank by CaseStepService::deriveStage().
+        'Interim Visa Issued',
         'Request for Information',
         'Approved in Principle',
         'Approved Visa',
@@ -262,6 +267,9 @@ class Lead extends Model
         // IMMIGRATION_STAGES). Each carries an optional named assignee.
         'english_stage', 'english_assignee',
         'immigration_stage', 'immigration_priority', 'immigration_assignee',
+        // Case custody (Build 12 phase 2) — one owner at a time, changed only
+        // through an explicit handoff. See ImmigrationController::handoff().
+        'current_owner_id', 'owner_since',
         // Full dated timeline of every department status change — drives the
         // Pipeline "when did this status happen" view. See recordStageChange().
         'stage_history',
@@ -347,6 +355,7 @@ class Lead extends Model
         'agreements_acknowledged_at' => 'datetime',
         'stage_updated_at' => 'datetime',
         'last_activity_at' => 'datetime',
+        'owner_since' => 'datetime',
         'stage_history' => 'array',
         'last_seen_at' => 'datetime',
         'is_student' => 'boolean',
@@ -444,6 +453,18 @@ class Lead extends Model
     public function lastActivityUser()
     {
         return $this->belongsTo(User::class, 'last_activity_by');
+    }
+
+    /** The case's current owner (custody), or null when unassigned. */
+    public function owner()
+    {
+        return $this->belongsTo(User::class, 'current_owner_id');
+    }
+
+    /** Dependants (children / partner) included in this immigration case. */
+    public function dependents()
+    {
+        return $this->hasMany(CaseDependent::class);
     }
 
     /** Staff member this lead is currently assigned to (or null). */
@@ -627,6 +648,10 @@ class Lead extends Model
         'created_at', 'updated_at', 'deleted_at',
         'ai_analysis', 'ai_analysis_status',
         'last_seen_at', 'stage_history',
+        // Custody is stamped explicitly by the handoff (recordStaffActivity),
+        // so the auto-stamp ignores these to avoid a generic "Updated
+        // current_owner_id" description.
+        'current_owner_id', 'owner_since',
         'last_activity_at', 'last_activity_by', 'last_activity_desc',
     ];
 

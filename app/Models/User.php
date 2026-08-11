@@ -21,7 +21,13 @@ class User extends Authenticatable
     /** Immigration department-head — can edit visa types incl. price. */
     public const ROLE_IMMIGRATION_MANAGER = 'immigration_manager';
 
-    /** Immigration adviser — read-only access to visa types + cases. */
+    /**
+     * Immigration adviser — the Licensed Immigration Adviser (LIA). Full write
+     * on cases; the licence (see holdsCurrentLicence()) — not the role — gates
+     * advice-bearing artifacts via AdviceBearingPolicy. Read-only on the visa
+     * catalogue (a manager/admin function). Superseded the old blanket
+     * read-only rule in Build 12 §2.
+     */
     public const ROLE_IMMIGRATION_ADVISER = 'immigration_adviser';
 
     /** Role for an external Lead who logs in to the Leads Portal. */
@@ -54,10 +60,12 @@ class User extends Authenticatable
         'email',
         'password',
         'role',
+        'referral_code',
         'lead_id',
         'iaa_licence_number',
         'iaa_licence_type',
         'iaa_licence_expiry',
+        'iaa_licence_verified_at',
         'avatar_path',
         'signature_path',
         'signature_updated_at',
@@ -92,6 +100,7 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'last_login_at' => 'datetime',
             'iaa_licence_expiry' => 'date',
+            'iaa_licence_verified_at' => 'date',
             'signature_updated_at' => 'datetime',
             'password' => 'hashed',
         ];
@@ -269,6 +278,27 @@ class User extends Authenticatable
     }
 
     /**
+     * Whether this user may author or approve advice-bearing artifacts — the
+     * content-level control that replaces the old "immigration_adviser is
+     * read-only" role rule (Build 12 §2).
+     *
+     * The gate is the LICENCE, not the role: a current IAA licence means a
+     * non-empty number AND an expiry in the future. A lapsed licence closes
+     * the gate automatically, and no role string can substitute for it — so a
+     * system/AI actor (which never holds a licence) can never approve advice.
+     *
+     * Reuses the existing iaa_licence_* columns (the same licence printed on
+     * the engagement pack and shown on the Profile page), so there is one
+     * source of truth for "is this person licensed".
+     */
+    public function holdsCurrentLicence(): bool
+    {
+        return filled($this->iaa_licence_number)
+            && $this->iaa_licence_expiry !== null
+            && $this->iaa_licence_expiry->isFuture();
+    }
+
+    /**
      * Whether this user is an external lead logging into the Leads Portal.
      */
     public function isLead(): bool
@@ -322,6 +352,11 @@ class User extends Authenticatable
         if ($portal === 'immigration' && in_array($this->role, self::IMMIGRATION_ROLES, true)) {
             return true;
         }
+        // The adviser's own portal (separate from the manager's immigration
+        // portal). Only the adviser role — admins already passed above.
+        if ($portal === 'immigration-adviser') {
+            return $this->role === self::ROLE_IMMIGRATION_ADVISER;
+        }
 
         return $this->role === $portal;
     }
@@ -354,6 +389,10 @@ class User extends Authenticatable
         if ($this->isSuperAdmin()) {
             return '/admin/super-dashboard';
         }
+        // The adviser lands on their own portal; the manager keeps the full one.
+        if ($this->role === self::ROLE_IMMIGRATION_ADVISER) {
+            return '/portal/immigration-adviser/dashboard';
+        }
         if (in_array($this->role, self::IMMIGRATION_ROLES, true)) {
             return '/portal/immigration/dashboard';
         }
@@ -373,5 +412,35 @@ class User extends Authenticatable
     public function agentLeads()
     {
         return $this->hasMany(Lead::class, 'agent_id');
+    }
+
+    /**
+     * Ensure this agent has a public referral code + return it. Idempotent —
+     * generates a unique "AGT-XXXXXX" on first call, then returns the stored
+     * value on every call after. No-op for non-agent roles (returns null).
+     *
+     * Used by the Agent portal to build the /register?ref=CODE link the
+     * agent shares with prospective leads. When a lead submits through that
+     * link the storeRegistration handler resolves the code back to this
+     * user id and stamps it on Lead.agent_id.
+     */
+    public function ensureReferralCode(): ?string
+    {
+        if ($this->role !== 'agent') {
+            return null;
+        }
+        if ($this->referral_code) {
+            return $this->referral_code;
+        }
+
+        for ($i = 0; $i < 5; $i++) {
+            $candidate = 'AGT-'.strtoupper(\Illuminate\Support\Str::random(6));
+            if (! self::where('referral_code', $candidate)->exists()) {
+                $this->forceFill(['referral_code' => $candidate])->save();
+                return $candidate;
+            }
+        }
+
+        return null;
     }
 }
