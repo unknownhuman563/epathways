@@ -1,5 +1,5 @@
 import DashboardLayout from "./DashboardLayout";
-import { LayoutDashboard, ListChecks, User } from "lucide-react";
+import { LayoutDashboard, ListChecks, User, Users, FileText } from "lucide-react";
 
 // Lead Portal sidebar — the three tracker views, one per sidebar item. Each
 // route renders the tracker (TrackingPage) at a fixed tab: Dashboard = Overview,
@@ -7,6 +7,8 @@ import { LayoutDashboard, ListChecks, User } from "lucide-react";
 const LEAD_NAV = [
     { name: "Dashboard",    href: "/portal/lead/dashboard",    icon: <LayoutDashboard size={20} /> },
     { name: "Requirements", href: "/portal/lead/requirements", icon: <ListChecks size={20} /> },
+    { name: "Visa Form",    href: "/portal/lead/visa-assessment", icon: <FileText size={20} /> },
+    { name: "My Family",    href: "/portal/lead/family",       icon: <Users size={20} /> },
     { name: "My Profile",   href: "/portal/lead/profile",      icon: <User size={20} /> },
 ];
 

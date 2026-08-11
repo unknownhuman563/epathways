@@ -24,7 +24,7 @@ class LeadDocument extends Model
     public const SOURCE_GENERATED = 'generated';
 
     protected $fillable = [
-        'lead_id', 'request_id', 'checklist_key',
+        'lead_id', 'dependent_id', 'request_id', 'checklist_key',
         'original_name', 'file_path', 'mime', 'size',
         'status', 'source', 'source_variant', 'note', 'inz_form_version_id',
         'uploaded_by', 'reviewed_by', 'reviewed_at',

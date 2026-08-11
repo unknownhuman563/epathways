@@ -132,7 +132,21 @@ class InzFormsDemoSeeder extends Seeder
             }
         }
 
-        $this->command?->info('INZ Forms demo seeded: 3 cases, INZ1014 assignments (submitted + sent), 1 generated official draft.');
+        // Dependants on the first case, so the Family tab + the cases-list
+        // "related to" indicator show populated out of the box.
+        $principal = Lead::where('lead_id', 'CASE-DEMO-01')->first();
+        if ($principal) {
+            \App\Models\CaseDependent::updateOrCreate(
+                ['lead_id' => $principal->id, 'first_name' => 'Lily', 'family_name' => 'Nguyen'],
+                ['relationship' => 'child', 'dob' => '2015-06-10', 'gender' => 'Female', 'nationality' => 'Vietnam', 'passport_number' => 'C9990001', 'source' => 'staff', 'added_by' => $adviser?->id],
+            );
+            \App\Models\CaseDependent::updateOrCreate(
+                ['lead_id' => $principal->id, 'first_name' => 'Bao', 'family_name' => 'Nguyen'],
+                ['relationship' => 'child', 'dob' => '2018-02-22', 'gender' => 'Male', 'nationality' => 'Vietnam', 'passport_number' => 'C9990002', 'source' => 'portal', 'added_by' => $adviser?->id],
+            );
+        }
+
+        $this->command?->info('INZ Forms demo seeded: 3 cases, INZ1014 assignments (submitted + sent), 1 generated official draft, 2 dependants on case 01.');
     }
 
     /** Reuse an LIA/immigration/admin user as the demo adviser, else any user. */

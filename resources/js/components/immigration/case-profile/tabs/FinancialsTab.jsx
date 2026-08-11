@@ -2,7 +2,7 @@ import { useState } from "react";
 import { router } from "@inertiajs/react";
 import { toast } from "sonner";
 import {
-    DollarSign, Receipt, Plus, Trash2, CheckCircle2, AlertCircle, UserPlus, Save,
+    DollarSign, Receipt, Plus, Trash2, CheckCircle2, AlertCircle, UserPlus, Save, Eye, FileDown,
 } from "lucide-react";
 
 // Case Financials — the money side of the immigration dashboard (fees, invoice,
@@ -51,6 +51,17 @@ export default function FinancialsTab({ lead, financials = { record: null, payme
         });
     };
 
+    const [invoicing, setInvoicing] = useState(false);
+    const generateInvoice = () => {
+        setInvoicing(true);
+        router.post(`/portal/immigration/cases/${lead.id}/financials/invoice`, {}, {
+            preserveScroll: true,
+            onSuccess: () => toast.success("Invoice generated — see Documents"),
+            onError: (e) => toast.error(Object.values(e)[0] || "Could not generate invoice"),
+            onFinish: () => setInvoicing(false),
+        });
+    };
+
     return (
         <div className="space-y-5">
             {/* Summary */}
@@ -71,9 +82,21 @@ export default function FinancialsTab({ lead, financials = { record: null, payme
 
             {/* Fees + invoice */}
             <section className="rounded-2xl border border-gray-100 bg-white shadow-sm p-5">
-                <h3 className="text-[12px] font-bold uppercase tracking-[0.12em] text-gray-500 inline-flex items-center gap-2 mb-4">
-                    <DollarSign size={14} /> Fees &amp; invoice
-                </h3>
+                <div className="flex items-center justify-between gap-3 flex-wrap mb-4">
+                    <h3 className="text-[12px] font-bold uppercase tracking-[0.12em] text-gray-500 inline-flex items-center gap-2">
+                        <DollarSign size={14} /> Fees &amp; invoice
+                    </h3>
+                    <div className="flex items-center gap-1.5">
+                        <a href={`/portal/immigration/cases/${lead.id}/financials/invoice/preview`} target="_blank" rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 text-gray-700 text-[11px] font-semibold hover:bg-gray-50">
+                            <Eye size={13} /> Preview invoice
+                        </a>
+                        <button type="button" onClick={generateInvoice} disabled={invoicing}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-900 text-white text-[11px] font-semibold hover:bg-black disabled:opacity-50">
+                            <FileDown size={13} /> {invoicing ? "Generating…" : "Generate invoice"}
+                        </button>
+                    </div>
+                </div>
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                     <Money label="Service fee (normal)" value={form.service_fee_normal} onChange={(v) => set("service_fee_normal", v)} />
                     <Money label="Service fee (chargeable)" value={form.service_fee_chargeable} onChange={(v) => set("service_fee_chargeable", v)} />

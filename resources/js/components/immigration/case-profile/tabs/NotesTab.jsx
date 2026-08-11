@@ -1,4 +1,7 @@
-import { Pin, StickyNote, Activity, MessagesSquare } from "lucide-react";
+import { useState } from "react";
+import { router } from "@inertiajs/react";
+import { toast } from "sonner";
+import { Pin, StickyNote, Activity, MessagesSquare, Plus } from "lucide-react";
 import { ThreadItem, ThreadComposer } from "@/components/immigration/case-profile/threads";
 
 // Phase 1 ships read-only notes + activity stream. Write actions (add
@@ -45,8 +48,9 @@ export default function NotesTab({ notes = [], activity = [], threads = [], lead
                 <section>
                     <h3 className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-3 inline-flex items-center gap-2">
                         <StickyNote size={13} className="text-gray-400" />
-                        Notes ({notes.length})
+                        Internal notes ({notes.length})
                     </h3>
+                    {lead?.id && <NoteComposer leadId={lead.id} />}
                     {notes.length === 0 ? (
                         <EmptyBlock icon={StickyNote} label="No notes yet" />
                     ) : (
@@ -87,6 +91,45 @@ export default function NotesTab({ notes = [], activity = [], threads = [], lead
                         </ul>
                     )}
                 </section>
+            </div>
+        </div>
+    );
+}
+
+function NoteComposer({ leadId }) {
+    const [body, setBody] = useState("");
+    const [pinned, setPinned] = useState(false);
+    const [saving, setSaving] = useState(false);
+
+    const submit = () => {
+        if (!body.trim()) return;
+        setSaving(true);
+        router.post(`/admin/leads/${leadId}/notes`, { body, pinned }, {
+            preserveScroll: true,
+            onSuccess: () => { setBody(""); setPinned(false); toast.success("Note added"); },
+            onError: (e) => toast.error(Object.values(e)[0] || "Could not add note"),
+            onFinish: () => setSaving(false),
+        });
+    };
+
+    return (
+        <div className="mb-3 rounded-xl border border-gray-100 bg-white p-3">
+            <textarea
+                value={body}
+                onChange={(e) => setBody(e.target.value)}
+                rows={2}
+                placeholder="Add an internal note (visible to staff only)…"
+                className="w-full text-sm outline-none resize-none placeholder-gray-400"
+            />
+            <div className="flex items-center justify-between mt-2 pt-2 border-t border-gray-50">
+                <label className="inline-flex items-center gap-1.5 text-[12px] text-gray-500 cursor-pointer">
+                    <input type="checkbox" checked={pinned} onChange={(e) => setPinned(e.target.checked)} className="rounded" />
+                    <Pin size={12} className={pinned ? "text-amber-500" : "text-gray-400"} /> Pin
+                </label>
+                <button type="button" onClick={submit} disabled={saving || !body.trim()}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-900 text-white text-[12px] font-semibold hover:bg-black disabled:opacity-40">
+                    <Plus size={13} /> {saving ? "Adding…" : "Add note"}
+                </button>
             </div>
         </div>
     );

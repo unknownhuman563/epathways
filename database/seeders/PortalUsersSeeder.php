@@ -37,6 +37,26 @@ class PortalUsersSeeder extends Seeder
             );
         }
 
-        $this->command->info('Department portal users seeded ('.implode(', ', User::PORTAL_ROLES).').');
+        // Immigration sub-roles (not in PORTAL_ROLES): the manager (full portal)
+        // and the adviser (LIA — own portal). The adviser gets a current IAA
+        // licence so advice-bearing sign-off is exercisable.
+        User::updateOrCreate(
+            ['email' => env('IMMIGRATION_MANAGER_SEED_EMAIL', 'immigration.manager@epathways.co.nz')],
+            ['name' => 'Immigration Manager', 'password' => bcrypt($password), 'role' => User::ROLE_IMMIGRATION_MANAGER],
+        );
+        User::updateOrCreate(
+            ['email' => env('IMMIGRATION_ADVISER_SEED_EMAIL', 'immigration.adviser@epathways.co.nz')],
+            [
+                'name' => 'Immigration Adviser',
+                'password' => bcrypt($password),
+                'role' => User::ROLE_IMMIGRATION_ADVISER,
+                'iaa_licence_number' => '202500123',
+                'iaa_licence_type' => 'full',
+                'iaa_licence_expiry' => now()->addYear()->toDateString(),
+                'iaa_licence_verified_at' => now(),
+            ],
+        );
+
+        $this->command->info('Department portal users seeded ('.implode(', ', User::PORTAL_ROLES).', immigration_manager, immigration_adviser).');
     }
 }

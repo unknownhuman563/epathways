@@ -1121,6 +1121,17 @@ Route::middleware(['auth'])->group(function () {
             Route::delete('/assessments/{id}', [EnglishController::class, 'destroyAssessment'])->name('assessments.destroy');
         });
 
+        // Immigration Adviser (LIA) portal — separate from the manager's full
+        // immigration portal, scoped to the adviser's own casework + sign-off.
+        Route::middleware('portal:admin,immigration_adviser')->prefix('immigration-adviser')->name('portal.immigration-adviser.')->group(function () {
+            Route::get('/dashboard', [\App\Http\Controllers\Portal\ImmigrationAdviserController::class, 'dashboard'])->name('dashboard');
+            Route::get('/cases', [\App\Http\Controllers\Portal\ImmigrationAdviserController::class, 'cases'])->name('cases');
+            Route::get('/cases/{lead}', [\App\Http\Controllers\Portal\ImmigrationAdviserController::class, 'showCase'])->name('cases.show');
+            Route::get('/sign-off', [\App\Http\Controllers\Portal\ImmigrationAdviserController::class, 'signOff'])->name('sign-off');
+            Route::get('/notifications', [\App\Http\Controllers\NotificationController::class, 'index'])->name('notifications');
+            Route::get('/profile', [\App\Http\Controllers\Portal\ImmigrationAdviserController::class, 'profile'])->name('profile');
+        });
+
         Route::middleware('portal:immigration')->prefix('immigration')->name('portal.immigration.')->group(function () {
             Route::get('/dashboard', [ImmigrationController::class, 'dashboard'])->name('dashboard');
             Route::get('/leads', [ImmigrationController::class, 'leads'])->name('leads');
@@ -1276,6 +1287,11 @@ Route::middleware(['auth'])->group(function () {
                 ->name('cases.financials.payments.add');
             Route::delete('/cases/{lead}/financials/payments/{payment}', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'deleteFinancePayment'])
                 ->name('cases.financials.payments.delete');
+            // Generate / preview the case invoice from the fees + payment ledger.
+            Route::post('/cases/{lead}/financials/invoice', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'generateInvoice'])
+                ->name('cases.financials.invoice');
+            Route::get('/cases/{lead}/financials/invoice/preview', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'previewInvoice'])
+                ->name('cases.financials.invoice.preview');
 
             // Generate a filled INZ form (official PDF) as a draft on the case.
             Route::post('/cases/{lead}/inz-forms/{code}/generate', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'generateInzForm'])
@@ -1284,6 +1300,14 @@ Route::middleware(['auth'])->group(function () {
             // Send an INZ form to the client to fill in their portal.
             Route::post('/cases/{lead}/inz-forms/{code}/assign', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'assignInzForm'])
                 ->where('code', 'INZ[0-9]+')->name('cases.inz-forms.assign');
+
+            // Case dependants (children / partner) — sub-records + their documents.
+            Route::post('/cases/{lead}/dependents', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'addDependent'])->name('cases.dependents.store');
+            Route::put('/cases/{lead}/dependents/{dependent}', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'updateDependent'])->name('cases.dependents.update');
+            Route::delete('/cases/{lead}/dependents/{dependent}', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'deleteDependent'])->name('cases.dependents.destroy');
+            Route::post('/cases/{lead}/dependents/{dependent}/documents', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'uploadDependentDocument'])->name('cases.dependents.documents.store');
+            Route::post('/cases/{lead}/dependents/{dependent}/documents/{document}/status', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'setDependentDocumentStatus'])->name('cases.dependents.documents.status');
+            Route::delete('/cases/{lead}/dependents/{dependent}/documents/{document}', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'deleteDependentDocument'])->name('cases.dependents.documents.destroy');
 
             // Build 11.D Phase 2 — Managed agreement endpoints. Each call
             // re-checks is_immigration_case + agreement<->lead ownership so
@@ -1465,6 +1489,18 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/visa-forms', [App\Http\Controllers\LeadPortalController::class, 'visaForms'])->name('visa-forms');
             Route::get('/visa-forms/{id}/preview', [App\Http\Controllers\LeadPortalController::class, 'visaFormPreview'])->name('visa-forms.preview');
             Route::post('/visa-forms/{id}', [App\Http\Controllers\LeadPortalController::class, 'visaFormSubmit'])->name('visa-forms.submit');
+            // Visa Information Form — client generates from their assessment.
+            Route::get('/visa-assessment', [App\Http\Controllers\LeadPortalController::class, 'visaAssessment'])->name('visa-assessment');
+            Route::post('/vif', [App\Http\Controllers\LeadPortalController::class, 'generateVif'])->name('vif.generate');
+            Route::get('/vif', [App\Http\Controllers\LeadPortalController::class, 'downloadVif'])->name('vif.download');
+            // My Family — dependants the principal adds + their documents.
+            Route::get('/family', [App\Http\Controllers\LeadPortalController::class, 'family'])->name('family');
+            Route::post('/family', [App\Http\Controllers\LeadPortalController::class, 'familyStore'])->name('family.store');
+            Route::put('/family/{id}', [App\Http\Controllers\LeadPortalController::class, 'familyUpdate'])->name('family.update');
+            Route::delete('/family/{id}', [App\Http\Controllers\LeadPortalController::class, 'familyDelete'])->name('family.destroy');
+            Route::post('/family/{id}/documents', [App\Http\Controllers\LeadPortalController::class, 'familyDocumentStore'])->name('family.documents.store');
+            Route::get('/family/{id}/documents/{docId}', [App\Http\Controllers\LeadPortalController::class, 'familyDocumentDownload'])->name('family.documents.download');
+            Route::delete('/family/{id}/documents/{docId}', [App\Http\Controllers\LeadPortalController::class, 'familyDocumentDelete'])->name('family.documents.destroy');
             Route::get('/appointments', [App\Http\Controllers\LeadPortalController::class, 'appointments'])->name('appointments');
             Route::get('/proposals', [App\Http\Controllers\LeadPortalController::class, 'proposals'])->name('proposals');
             Route::get('/agreements', [App\Http\Controllers\LeadPortalController::class, 'agreements'])->name('agreements');

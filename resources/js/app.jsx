@@ -10,6 +10,7 @@ import SalesLayout from './components/layout/SalesLayout';
 import EducationLayout from './components/layout/EducationLayout';
 import EnglishLayout from './components/layout/EnglishLayout';
 import ImmigrationLayout from './components/layout/ImmigrationLayout';
+import ImmigrationAdviserLayout from './components/layout/ImmigrationAdviserLayout';
 import AccommodationLayout from './components/layout/AccommodationLayout';
 import FinanceLayout from './components/layout/FinanceLayout';
 import AgentLayout from './components/layout/AgentLayout';
@@ -25,6 +26,7 @@ const PORTAL_LAYOUTS = {
   'portal/sales/': SalesLayout,
   'portal/education/': EducationLayout,
   'portal/english/': EnglishLayout,
+  'portal/immigration-adviser/': ImmigrationAdviserLayout,
   'portal/immigration/': ImmigrationLayout,
   'portal/accommodation/': AccommodationLayout,
   'portal/finance/': FinanceLayout,

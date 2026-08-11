@@ -75,6 +75,11 @@ class Lead extends Model
         'For Agreement & Invoice',
         'Invoice Paid',
         'Visa Lodged',
+        // Onshore applicants are granted an interim visa that keeps them
+        // lawful while INZ decides. It sits after lodgement and before any
+        // RFI/outcome — order matters, the list is used as a forward-only
+        // rank by CaseStepService::deriveStage().
+        'Interim Visa Issued',
         'Request for Information',
         'Approved in Principle',
         'Approved Visa',
@@ -454,6 +459,12 @@ class Lead extends Model
     public function owner()
     {
         return $this->belongsTo(User::class, 'current_owner_id');
+    }
+
+    /** Dependants (children / partner) included in this immigration case. */
+    public function dependents()
+    {
+        return $this->hasMany(CaseDependent::class);
     }
 
     /** Staff member this lead is currently assigned to (or null). */

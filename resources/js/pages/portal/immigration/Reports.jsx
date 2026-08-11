@@ -8,6 +8,8 @@ import {
 import PortalPageHeader from "@/components/portal/PortalPageHeader";
 
 const PRESETS = [
+    { key: "today", label: "Today" },
+    { key: "this_week", label: "This week" },
     { key: "two_weeks", label: "Last 2 weeks" },
     { key: "this_month", label: "This month" },
     { key: "last_month", label: "Last month" },
