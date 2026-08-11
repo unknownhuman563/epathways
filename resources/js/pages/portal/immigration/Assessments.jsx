@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { Head, Link, router } from "@inertiajs/react";
 import {
     ChevronRight, ChevronDown, ClipboardCheck, FileEdit, Globe, Send, Search,
-    Users, Briefcase, GraduationCap, Plane,
+    Users, Briefcase, GraduationCap, Plane, Heart,
     Check, FileText, UserCheck, ArrowRightCircle, AlertTriangle,
 } from "lucide-react";
 import PortalPageHeader from "@/components/portal/PortalPageHeader";
@@ -16,6 +16,7 @@ const VISA_TYPES = [
     { key: "work",     label: "Work",         icon: <Briefcase size={13} />      },
     { key: "student",  label: "Student",      icon: <GraduationCap size={13} />  },
     { key: "visitor",  label: "Visitor",      icon: <Plane size={13} />          },
+    { key: "family",   label: "Family",       icon: <Heart size={13} />          },
 ];
 
 const VISA_AVATAR_BG = {
@@ -23,6 +24,7 @@ const VISA_AVATAR_BG = {
     work:     "bg-blue-500",
     student:  "bg-purple-500",
     visitor:  "bg-emerald-500",
+    family:   "bg-rose-500",
 };
 
 const VISA_LABEL = {
@@ -30,6 +32,7 @@ const VISA_LABEL = {
     work:     "Work",
     student:  "Student",
     visitor:  "Visitor",
+    family:   "Family",
 };
 
 // Status buckets — only an explicit "Submitted" counts as Submitted.
@@ -93,7 +96,7 @@ export default function ImmigrationAssessments({ intakes = [] }) {
     };
 
     const visaCounts = useMemo(() => {
-        const c = { all: intakes.length, resident: 0, work: 0, student: 0, visitor: 0 };
+        const c = { all: intakes.length, resident: 0, work: 0, student: 0, visitor: 0, family: 0 };
         for (const i of intakes) c[i.visa_type] = (c[i.visa_type] || 0) + 1;
         return c;
     }, [intakes]);

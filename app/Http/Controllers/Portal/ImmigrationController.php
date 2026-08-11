@@ -1378,7 +1378,7 @@ class ImmigrationController extends Controller
                 $intake->update(['status' => 'Engaged']);
                 $assessment->update(['status' => 'completed']);
 
-                return redirect("/portal/immigration/leads/{$lead->id}?tab=documents")
+                return redirect("/portal/immigration/cases/{$lead->id}/profile?tab=documents")
                     ->with('success', "Converted {$lead->first_name} to an immigration case.");
             });
         } catch (\Throwable $e) {
@@ -1436,7 +1436,7 @@ class ImmigrationController extends Controller
 
             $intake->update(['status' => 'Engaged']);
 
-            return redirect("/portal/immigration/leads/{$lead->id}?tab=documents")
+            return redirect("/portal/immigration/cases/{$lead->id}/profile?tab=documents")
                 ->with('success', "Converted {$intake->first_name} to an immigration case.");
         });
     }
@@ -1558,11 +1558,13 @@ class ImmigrationController extends Controller
             $work = \App\Models\WorkIntake::latest()->limit(200)->get();
             $student = \App\Models\StudentIntake::latest()->limit(200)->get();
             $visitor = \App\Models\VisitorIntake::latest()->limit(200)->get();
+            $family = \App\Models\FamilyIntake::latest()->limit(200)->get();
 
             $aResident = $loadAssessments(ResidentIntake::class, $resident);
             $aWork = $loadAssessments(\App\Models\WorkIntake::class, $work);
             $aStudent = $loadAssessments(\App\Models\StudentIntake::class, $student);
             $aVisitor = $loadAssessments(\App\Models\VisitorIntake::class, $visitor);
+            $aFamily = $loadAssessments(\App\Models\FamilyIntake::class, $family);
 
             // Latest AI review per intake (if any) — feeds the readiness signal.
             $loadReviews = function (string $modelClass, $intakes) {
@@ -1581,12 +1583,14 @@ class ImmigrationController extends Controller
             $rvWork = $loadReviews(\App\Models\WorkIntake::class, $work);
             $rvStudent = $loadReviews(\App\Models\StudentIntake::class, $student);
             $rvVisitor = $loadReviews(\App\Models\VisitorIntake::class, $visitor);
+            $rvFamily = $loadReviews(\App\Models\FamilyIntake::class, $family);
 
             $rows = collect()
                 ->concat($resident->map(fn ($r) => $normalize($r, 'resident', $aResident->get($r->id), $rvResident->get($r->id))))
                 ->concat($work->map(fn ($r) => $normalize($r, 'work', $aWork->get($r->id), $rvWork->get($r->id))))
                 ->concat($student->map(fn ($r) => $normalize($r, 'student', $aStudent->get($r->id), $rvStudent->get($r->id))))
-                ->concat($visitor->map(fn ($r) => $normalize($r, 'visitor', $aVisitor->get($r->id), $rvVisitor->get($r->id))));
+                ->concat($visitor->map(fn ($r) => $normalize($r, 'visitor', $aVisitor->get($r->id), $rvVisitor->get($r->id))))
+                ->concat($family->map(fn ($r) => $normalize($r, 'family', $aFamily->get($r->id), $rvFamily->get($r->id))));
 
             $intakes = $rows->sortByDesc('created_at')->values();
 
@@ -1612,6 +1616,7 @@ class ImmigrationController extends Controller
             'work' => \App\Models\WorkIntake::class,
             'student' => \App\Models\StudentIntake::class,
             'visitor' => \App\Models\VisitorIntake::class,
+            'family' => \App\Models\FamilyIntake::class,
         ];
         if (! isset($modelMap[$type])) {
             abort(404, 'Unknown intake type.');
@@ -1733,6 +1738,7 @@ class ImmigrationController extends Controller
             'work' => \App\Models\WorkIntake::class,
             'student' => \App\Models\StudentIntake::class,
             'visitor' => \App\Models\VisitorIntake::class,
+            'family' => \App\Models\FamilyIntake::class,
         ][$type] ?? null;
     }
 
