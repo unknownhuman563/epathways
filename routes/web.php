@@ -1200,14 +1200,14 @@ Route::middleware(['auth'])->group(function () {
             // — NOT eligibility advice). GET returns the last stored review; POST
             // runs a fresh one. Immigration-staff only (route group).
             Route::get('/assessments/{type}/{id}/ai-review', [ImmigrationController::class, 'aiReviewShow'])
-                ->where(['type' => 'resident|work|student|visitor', 'id' => '[0-9]+'])
+                ->where(['type' => 'resident|work|student|visitor|family', 'id' => '[0-9]+'])
                 ->name('assessments.ai-review.show');
             Route::post('/assessments/{type}/{id}/ai-review', [ImmigrationController::class, 'aiReviewRun'])
-                ->where(['type' => 'resident|work|student|visitor', 'id' => '[0-9]+'])
+                ->where(['type' => 'resident|work|student|visitor|family', 'id' => '[0-9]+'])
                 ->name('assessments.ai-review.run');
             // Adviser saves edits to the drafted note + client email (they author it).
             Route::post('/assessments/{type}/{id}/ai-review/edit', [ImmigrationController::class, 'aiReviewEdit'])
-                ->where(['type' => 'resident|work|student|visitor', 'id' => '[0-9]+'])
+                ->where(['type' => 'resident|work|student|visitor|family', 'id' => '[0-9]+'])
                 ->name('assessments.ai-review.edit');
             Route::get('/cases', [ImmigrationController::class, 'cases'])->name('cases');
             // Engagement + Invoice generation workspaces. Declared before the

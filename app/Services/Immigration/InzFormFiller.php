@@ -65,6 +65,14 @@ class InzFormFiller
             throw new \RuntimeException("No official PDF on file for {$version->form->code} ({$version->version_label}).");
         }
 
+        // isReady() only checks the path is set — the file may be absent on this
+        // server (e.g. uploaded on another environment, or the official-forms
+        // seeder hasn't run here). Fail with a clear message rather than the
+        // cryptic FPDI "No stream given." error.
+        if (! \Illuminate\Support\Facades\Storage::disk('local')->exists($version->file_path)) {
+            throw new \RuntimeException("The official PDF for {$version->form->code} isn't on this server. Re-upload it in Setup → INZ Forms, or run the official-forms seeder.");
+        }
+
         // Real INZ PDFs use coordinate overlay; simple fillable PDFs use FPDM.
         return $this->usesOverlay($version)
             ? $this->overlayFill($version, $values)

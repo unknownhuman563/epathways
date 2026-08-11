@@ -71,6 +71,7 @@ class OfficialInzFormsSeeder extends Seeder
         $extractor = app(InzFieldExtractor::class);
 
         foreach (self::FORMS as $code => $cfg) {
+          try {
             VisaCategory::firstOrCreate(['name' => $cfg['category']], ['description' => $cfg['category'].' visa pathway']);
 
             $form = InzForm::updateOrCreate(
@@ -90,12 +91,18 @@ class OfficialInzFormsSeeder extends Seeder
             Storage::disk('local')->put($dest, file_get_contents($asset));
 
             // Resolve the overlay coordinate map from the PDF's field geometry.
+            // A parser hiccup must not skip installing the version — fall back
+            // to an empty map (the blank official PDF still generates).
             $map = [];
             if ($cfg['map'] && $extractor->supported()) {
-                $map = $extractor->buildOverlayMap($asset, $cfg['map']);
-                $missing = count($cfg['map']) - count($map);
-                if ($missing > 0) {
-                    $this->command?->warn("{$code}: {$missing} mapped field(s) not found in the PDF.");
+                try {
+                    $map = $extractor->buildOverlayMap($asset, $cfg['map']);
+                    $missing = count($cfg['map']) - count($map);
+                    if ($missing > 0) {
+                        $this->command?->warn("{$code}: {$missing} mapped field(s) not found in the PDF.");
+                    }
+                } catch (\Throwable $e) {
+                    $this->command?->warn("{$code}: field-map extraction failed — installing with no map. ".$e->getMessage());
                 }
             }
 
@@ -115,6 +122,11 @@ class OfficialInzFormsSeeder extends Seeder
             );
 
             $this->command?->info("{$code}: installed ({$dest}), ".count($map).' field(s) mapped.');
+          } catch (\Throwable $e) {
+            // Never let one form abort the seeder (and thus the deploy chain).
+            $this->command?->warn("{$code}: install failed — ".$e->getMessage());
+            \Illuminate\Support\Facades\Log::warning('OfficialInzFormsSeeder failed for '.$code, ['error' => $e->getMessage()]);
+          }
         }
     }
 }
