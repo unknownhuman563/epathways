@@ -2,7 +2,7 @@ import { useRef, useState } from "react";
 import { router } from "@inertiajs/react";
 import { toast } from "sonner";
 import {
-    Users, Plus, X, Pencil, Trash2, Upload, FileText, Eye, Download, IdCard, FolderOpen,
+    Users, Plus, X, Pencil, Trash2, Upload, FileText, Eye, Download, IdCard, FolderOpen, Link as LinkIcon,
     CheckCircle2, Clock, AlertTriangle, XCircle, Circle,
 } from "lucide-react";
 
@@ -59,10 +59,22 @@ export default function DependantsTab({ lead, dependents = [], caseOptions = [] 
                     <p className="text-xs text-gray-500 mt-1">Add children or a partner included in this application.</p>
                 </div>
             ) : (
-                <div className="space-y-3">
-                    {dependents.map((d) => (
-                        <DependantCard key={d.id} d={d} onEdit={() => setEditing(d)} onRemove={() => remove(d)} onDocs={() => setDocsFor(d)} />
-                    ))}
+                <div className="border border-gray-100 rounded-2xl overflow-hidden bg-white shadow-sm overflow-x-auto">
+                    <table className="w-full min-w-[640px] text-sm">
+                        <thead>
+                            <tr className="bg-gray-700 text-[10.5px] font-bold uppercase tracking-wider text-gray-100">
+                                <th className="text-left px-4 py-3">Dependant</th>
+                                <th className="text-left px-4 py-3">Relationship</th>
+                                <th className="text-left px-4 py-3">Documents</th>
+                                <th className="text-right px-4 py-3">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-50">
+                            {dependents.map((d) => (
+                                <DependantRow key={d.id} d={d} onEdit={() => setEditing(d)} onRemove={() => remove(d)} onDocs={() => setDocsFor(d)} />
+                            ))}
+                        </tbody>
+                    </table>
                 </div>
             )}
 
@@ -85,35 +97,50 @@ function ProgressBar({ done, total }) {
     );
 }
 
-function DependantCard({ d, onEdit, onRemove, onDocs }) {
+function DependantRow({ d, onEdit, onRemove, onDocs }) {
     const p = d.progress || { required_done: 0, required_total: 0 };
+    // The child's uploaded Face image, if any — shown as their profile photo.
+    const photo = (d.checklist || []).find((i) => i.key?.endsWith("face_image") && i.document)?.document;
+    const photoUrl = photo ? `/admin/documents/${photo.id}/download?inline=1` : null;
     return (
-        <div className="rounded-2xl border border-gray-100 bg-white shadow-sm px-5 py-4 flex items-center gap-4 flex-wrap">
-            <div className="w-9 h-9 rounded-xl bg-[#009688]/10 flex items-center justify-center flex-shrink-0">
-                <IdCard size={16} className="text-[#009688]" />
-            </div>
-            <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-sm font-bold text-gray-900">{d.full_name}</span>
-                    <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border bg-[#009688]/10 text-[#009688] border-[#009688]/30">{REL_LABEL[d.relationship] || d.relationship}</span>
-                    {d.source === "portal" && <span className="text-[10px] font-semibold text-gray-400 border border-gray-200 rounded px-1.5 py-0.5">Added by applicant</span>}
+        <tr className="hover:bg-gray-50/60">
+            <td className="px-4 py-3">
+                <div className="flex items-center gap-3">
+                    {photoUrl ? (
+                        <img src={photoUrl} alt={d.full_name} className="w-9 h-9 rounded-xl object-cover flex-shrink-0 border border-gray-100" />
+                    ) : (
+                        <div className="w-9 h-9 rounded-xl bg-[#009688]/10 flex items-center justify-center flex-shrink-0">
+                            <IdCard size={16} className="text-[#009688]" />
+                        </div>
+                    )}
+                    <div className="min-w-0">
+                        <div className="text-sm font-bold text-gray-900 truncate">{d.full_name}</div>
+                        <div className="text-[12px] text-gray-500 truncate">
+                            {[d.dob && `DOB ${d.dob}`, d.nationality, d.passport_number && `Passport ${d.passport_number}`].filter(Boolean).join(" · ") || "No details yet"}
+                        </div>
+                    </div>
                 </div>
-                <p className="text-[12px] text-gray-500 mt-0.5">
-                    {[d.dob && `DOB ${d.dob}`, d.nationality, d.passport_number && `Passport ${d.passport_number}`].filter(Boolean).join(" · ") || "No details yet"}
-                </p>
-            </div>
-            <div className="hidden sm:block">
-                <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-1">Required docs</div>
-                <ProgressBar done={p.required_done} total={p.required_total} />
-            </div>
-            <div className="flex items-center gap-1.5 flex-shrink-0">
-                <button type="button" onClick={onDocs} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#009688]/30 text-[#009688] text-[11px] font-semibold hover:bg-[#009688]/5">
-                    <FolderOpen size={13} /> Documents
-                </button>
-                <button type="button" onClick={onEdit} title="Edit" className="p-1.5 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50"><Pencil size={13} /></button>
-                <button type="button" onClick={onRemove} title="Remove" className="p-1.5 rounded-lg border border-gray-200 text-red-500 hover:bg-red-50"><Trash2 size={13} /></button>
-            </div>
-        </div>
+            </td>
+            <td className="px-4 py-3">
+                <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border bg-[#009688]/10 text-[#009688] border-[#009688]/30">{REL_LABEL[d.relationship] || d.relationship}</span>
+                {d.source === "portal" && <span className="text-[10px] font-semibold text-gray-400 border border-gray-200 rounded px-1.5 py-0.5 ml-1">Applicant</span>}
+                {d.linked_lead_id && (
+                    <div className="mt-1 inline-flex items-center gap-1 text-[10px] font-semibold text-sky-700 bg-sky-50 border border-sky-100 rounded px-1.5 py-0.5" title="This dependant is tied to their own case">
+                        <LinkIcon size={10} /> Tied to case
+                    </div>
+                )}
+            </td>
+            <td className="px-4 py-3"><ProgressBar done={p.required_done} total={p.required_total} /></td>
+            <td className="px-4 py-3">
+                <div className="flex items-center justify-end gap-1.5">
+                    <button type="button" onClick={onDocs} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#009688]/30 text-[#009688] text-[11px] font-semibold hover:bg-[#009688]/5">
+                        <FolderOpen size={13} /> Documents
+                    </button>
+                    <button type="button" onClick={onEdit} title="Edit" className="p-1.5 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50"><Pencil size={13} /></button>
+                    <button type="button" onClick={onRemove} title="Remove" className="p-1.5 rounded-lg border border-gray-200 text-red-500 hover:bg-red-50"><Trash2 size={13} /></button>
+                </div>
+            </td>
+        </tr>
     );
 }
 
@@ -122,6 +149,9 @@ function DocumentsModal({ d, base, onClose }) {
     const [busyKey, setBusyKey] = useState(null);
     const checklist = d.checklist || [];
     const other = d.other_documents || [];
+    // Tied to the child's own case: documents live there. View/download only —
+    // uploads, approvals and removals happen on the child's own case.
+    const linked = !!d.linked;
 
     const upload = (key, e) => {
         const file = e.target.files?.[0];
@@ -146,13 +176,18 @@ function DocumentsModal({ d, base, onClose }) {
 
     const AttachmentCell = ({ item, doc, busy }) => (
         <div className="flex items-center gap-1.5">
-            <button type="button" onClick={() => fileRefs.current[item.key]?.click()} disabled={busy}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-900 text-white text-[11px] font-semibold hover:bg-black disabled:opacity-50">
-                <Upload size={12} /> {busy ? "Uploading…" : doc ? "Replace" : "Upload"}
-            </button>
-            <input ref={(el) => (fileRefs.current[item.key] = el)} type="file" className="hidden" onChange={(e) => upload(item.key, e)} />
+            {!linked && (
+                <>
+                    <button type="button" onClick={() => fileRefs.current[item.key]?.click()} disabled={busy}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-900 text-white text-[11px] font-semibold hover:bg-black disabled:opacity-50">
+                        <Upload size={12} /> {busy ? "Uploading…" : doc ? "Replace" : "Upload"}
+                    </button>
+                    <input ref={(el) => (fileRefs.current[item.key] = el)} type="file" className="hidden" onChange={(e) => upload(item.key, e)} />
+                </>
+            )}
             {doc && <a href={`/admin/documents/${doc.id}/download?inline=1`} target="_blank" rel="noopener noreferrer" title="View" className="p-1.5 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50"><Eye size={12} /></a>}
             {doc && <a href={`/admin/documents/${doc.id}/download`} title="Download" className="p-1.5 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50"><Download size={12} /></a>}
+            {linked && !doc && <span className="text-[11px] text-gray-400">Not yet submitted</span>}
         </div>
     );
 
@@ -168,6 +203,12 @@ function DocumentsModal({ d, base, onClose }) {
                 </div>
 
                 <div className="p-5 overflow-y-auto">
+                    {linked && (
+                        <div className="mb-4 flex items-start gap-2 rounded-xl border border-sky-100 bg-sky-50 px-4 py-3">
+                            <FolderOpen size={16} className="text-sky-500 mt-0.5 flex-shrink-0" />
+                            <p className="text-[12px] text-sky-800">These documents were submitted by <span className="font-semibold">{d.linked_case_name || d.full_name}</span> on their own case — shown here read-only. Approve, replace or remove them from the child's own case.</p>
+                        </div>
+                    )}
                     <div className="border border-gray-100 rounded-xl overflow-hidden">
                         <table className="w-full text-sm">
                             <thead>
@@ -194,6 +235,7 @@ function DocumentsModal({ d, base, onClose }) {
                                             <td className="px-4 py-3">
                                                 <span className="text-[13px] font-medium text-gray-800">{item.label}</span>
                                                 {item.required && <span className="text-red-500 ml-1">*</span>}
+                                                {item.hint && <div className="text-[11px] text-gray-400 mt-0.5 max-w-[260px]">{item.hint}</div>}
                                                 {doc && <div className="text-[11px] text-gray-400 truncate mt-0.5 max-w-[240px]">{doc.original_name}</div>}
                                             </td>
                                             <td className="px-4 py-3"><AttachmentCell item={item} doc={doc} busy={busy} /></td>
@@ -201,7 +243,7 @@ function DocumentsModal({ d, base, onClose }) {
                                                 <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold border ${st.tone}`}>{st.label}</span>
                                             </td>
                                             <td className="px-4 py-3">
-                                                {doc ? (
+                                                {doc && !linked ? (
                                                     <div className="flex items-center gap-1">
                                                         <button type="button" title="Approve" onClick={() => setStatus(doc, "Approved")} className="px-1.5 py-1 rounded text-[10px] font-semibold text-emerald-700 hover:bg-emerald-50">Approve</button>
                                                         <button type="button" title="Reject" onClick={() => setStatus(doc, "Rejected")} className="px-1.5 py-1 rounded text-[10px] font-semibold text-red-600 hover:bg-red-50">Reject</button>
@@ -229,7 +271,7 @@ function DocumentsModal({ d, base, onClose }) {
                                                     <a href={`/admin/documents/${doc.id}/download?inline=1`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-gray-200 text-gray-600 text-[11px] font-semibold hover:bg-gray-50"><Eye size={12} /> View</a>
                                                 </td>
                                                 <td className="px-4 py-3"><span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold border ${(STATUS[doc.status] || STATUS.Submitted).tone}`}>{(STATUS[doc.status] || STATUS.Submitted).label}</span></td>
-                                                <td className="px-4 py-3"><button type="button" onClick={() => removeDoc(doc)} className="p-1 rounded text-red-500 hover:bg-red-50"><Trash2 size={12} /></button></td>
+                                                <td className="px-4 py-3">{!linked && <button type="button" onClick={() => removeDoc(doc)} className="p-1 rounded text-red-500 hover:bg-red-50"><Trash2 size={12} /></button>}</td>
                                             </tr>
                                         ))}
                                     </>
@@ -255,7 +297,7 @@ function DocumentsModal({ d, base, onClose }) {
 function DependantModal({ dependant, base, caseOptions = [], currentLeadId, onClose }) {
     const isNew = !dependant.id;
     const [form, setForm] = useState({
-        lead_id: "", // fill-source selector only; the dependant is added to the current case
+        linked_lead_id: dependant.linked_lead_id || "", // ties this dependant to the child's own case
         relationship: dependant.relationship || "child",
         first_name: dependant.first_name || "",
         family_name: dependant.family_name || "",
@@ -270,10 +312,11 @@ function DependantModal({ dependant, base, caseOptions = [], currentLeadId, onCl
     const [saving, setSaving] = useState(false);
     const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
 
-    // Selecting a case pre-fills the still-empty identity fields from that case's
-    // applicant (fetched on demand so we don't ship every case's passport).
+    // Selecting a case TIES this dependant to that child's own case (linked_lead_id)
+    // and pre-fills the still-empty identity fields from that case's applicant
+    // (fetched on demand so we don't ship every case's passport).
     const pickCase = (id) => {
-        setForm((f) => ({ ...f, lead_id: id }));
+        setForm((f) => ({ ...f, linked_lead_id: id }));
         if (!id) return;
         fetch(`/portal/immigration/cases/${id}/dependent-source`, { headers: { Accept: "application/json" }, credentials: "same-origin" })
             .then((r) => (r.ok ? r.json() : null))
@@ -303,7 +346,8 @@ function DependantModal({ dependant, base, caseOptions = [], currentLeadId, onCl
             onFinish: () => setSaving(false),
         };
         // The dependant is always added to the CURRENT case (this Family tab).
-        // "Related to case" only pre-fills the details — it isn't the target.
+        // "Related to case" ties it to the child's own case (linked_lead_id) so the
+        // child's submitted documents show here — it is NOT the target case.
         if (isNew) router.post(base, form, opts);
         else router.put(`${base}/${dependant.id}`, form, opts);
     };
@@ -317,12 +361,12 @@ function DependantModal({ dependant, base, caseOptions = [], currentLeadId, onCl
                 </div>
                 <div className="p-5 space-y-3.5">
                     {isNew && caseOptions.length > 0 && (
-                        <Field label="Related to case (optional)">
-                            <select value={form.lead_id} onChange={(e) => pickCase(e.target.value)} className={INPUT}>
-                                <option value="">— Enter details manually —</option>
+                        <Field label="Tie to the child's own case (optional)">
+                            <select value={form.linked_lead_id} onChange={(e) => pickCase(e.target.value)} className={INPUT}>
+                                <option value="">— Not tied to a case (enter details manually) —</option>
                                 {caseOptions.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                             </select>
-                            <p className="text-[10.5px] text-gray-400 mt-1">Copies that applicant's details into the empty fields below. The dependant is added to <span className="font-semibold">this</span> case.</p>
+                            <p className="text-[10.5px] text-gray-400 mt-1">Ties this dependant to that case, so the documents the child submits on their own case appear here. The dependant is still listed on <span className="font-semibold">this</span> case.</p>
                         </Field>
                     )}
                     <Field label="Relationship">

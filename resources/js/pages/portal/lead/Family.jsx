@@ -111,6 +111,8 @@ function DocumentsModal({ d, onClose }) {
     const fileRefs = useRef({});
     const [busyKey, setBusyKey] = useState(null);
     const checklist = d.checklist || [];
+    // Tied to this member's own case — they upload there; here it's view-only.
+    const linked = !!d.linked;
 
     const upload = (key, e) => {
         const file = e.target.files?.[0];
@@ -139,6 +141,12 @@ function DocumentsModal({ d, onClose }) {
                     <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-700"><X size={18} /></button>
                 </div>
                 <div className="p-5 space-y-2.5 overflow-y-auto">
+                    {linked && (
+                        <div className="flex items-start gap-2 rounded-xl border border-sky-100 bg-sky-50 px-4 py-3 mb-1">
+                            <FolderOpen size={16} className="text-sky-500 mt-0.5 flex-shrink-0" />
+                            <p className="text-[12px] text-sky-800">{d.full_name} uploads these documents on their own portal. You can view what they've submitted here.</p>
+                        </div>
+                    )}
                     {checklist.map((item) => {
                         const st = STATUS[item.status] || STATUS.Missing;
                         const StIcon = st.icon;
@@ -157,17 +165,22 @@ function DocumentsModal({ d, onClose }) {
                                     <span className={`inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border ${st.tone}`}><StIcon size={10} />{st.label}</span>
                                 </div>
                                 <div className="flex items-center gap-1.5 mt-2.5">
-                                    <button type="button" onClick={() => fileRefs.current[item.key]?.click()} disabled={busy}
-                                        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-[11px] font-semibold disabled:opacity-50" style={{ color: ACCENT, borderColor: `${ACCENT}4d` }}>
-                                        <Upload size={12} /> {busy ? "Uploading…" : doc ? "Replace" : "Upload"}
-                                    </button>
-                                    <input ref={(el) => (fileRefs.current[item.key] = el)} type="file" className="hidden" onChange={(e) => upload(item.key, e)} />
-                                    {doc && (
+                                    {!linked && (
                                         <>
-                                            <a href={`/portal/lead/family/${d.id}/documents/${doc.id}`} target="_blank" rel="noopener noreferrer" className="p-1.5 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50"><Eye size={12} /></a>
-                                            <button type="button" onClick={() => removeDoc(doc)} className="p-1.5 rounded-lg border border-gray-200 text-red-500 hover:bg-red-50"><Trash2 size={12} /></button>
+                                            <button type="button" onClick={() => fileRefs.current[item.key]?.click()} disabled={busy}
+                                                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-[11px] font-semibold disabled:opacity-50" style={{ color: ACCENT, borderColor: `${ACCENT}4d` }}>
+                                                <Upload size={12} /> {busy ? "Uploading…" : doc ? "Replace" : "Upload"}
+                                            </button>
+                                            <input ref={(el) => (fileRefs.current[item.key] = el)} type="file" className="hidden" onChange={(e) => upload(item.key, e)} />
                                         </>
                                     )}
+                                    {doc && (
+                                        <a href={`/portal/lead/family/${d.id}/documents/${doc.id}`} target="_blank" rel="noopener noreferrer" className="p-1.5 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50"><Eye size={12} /></a>
+                                    )}
+                                    {doc && !linked && (
+                                        <button type="button" onClick={() => removeDoc(doc)} className="p-1.5 rounded-lg border border-gray-200 text-red-500 hover:bg-red-50"><Trash2 size={12} /></button>
+                                    )}
+                                    {linked && !doc && <span className="text-[11px] text-gray-400">Not yet submitted</span>}
                                 </div>
                             </div>
                         );

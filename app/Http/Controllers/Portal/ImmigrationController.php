@@ -327,6 +327,7 @@ class ImmigrationController extends Controller
             $cases = Lead::with([
                 'documents',
                 'dependents',
+                'tiedAsDependent.lead:id,lead_id,first_name,last_name',
                 'faceImage',
                 'portalUser:id,lead_id,last_login_at',
                 'immigrationConverter:id,name',
@@ -416,6 +417,12 @@ class ImmigrationController extends Controller
                             'full_name' => $d->fullName(),
                             'relationship' => $d->relationship,
                         ])->values(),
+                        // When this case is itself tied to a parent's case as a
+                        // dependant, the parent it belongs to (reciprocal badge).
+                        'tied_to' => $l->tiedAsDependent && $l->tiedAsDependent->lead ? [
+                            'id' => $l->tiedAsDependent->lead->id,
+                            'name' => trim("{$l->tiedAsDependent->lead->first_name} {$l->tiedAsDependent->lead->last_name}") ?: $l->tiedAsDependent->lead->lead_id,
+                        ] : null,
                         // Checklist-based progress: how many of the visa's
                         // checklist items the case has submitted (out of the
                         // full checklist).

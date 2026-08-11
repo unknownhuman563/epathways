@@ -282,7 +282,7 @@ class LeadPortalController extends Controller
         }
 
         $dependents = \App\Models\CaseDependent::where('lead_id', $lead->id)
-            ->with(['documents' => fn ($q) => $q->orderByDesc('created_at')])
+            ->with(['documents' => fn ($q) => $q->orderByDesc('created_at'), 'linkedLead'])
             ->orderBy('created_at')
             ->get()
             ->map(fn (\App\Models\CaseDependent $d) => array_merge([
@@ -416,7 +416,16 @@ class LeadPortalController extends Controller
             return $lead;
         }
         $dep = \App\Models\CaseDependent::where('id', $id)->where('lead_id', $lead->id)->firstOrFail();
-        $doc = \App\Models\LeadDocument::where('id', $docId)->where('dependent_id', $dep->id)->firstOrFail();
+        // Documents attached directly to the dependant sub-record, OR — when the
+        // dependant is tied to the child's own case — documents the child
+        // submitted on that linked case (read-through, so the parent can view them).
+        $doc = \App\Models\LeadDocument::where('id', $docId)
+            ->where(function ($q) use ($dep) {
+                $q->where('dependent_id', $dep->id);
+                if ($dep->linked_lead_id) {
+                    $q->orWhere('lead_id', $dep->linked_lead_id);
+                }
+            })->firstOrFail();
         abort_unless($doc->file_path && \Illuminate\Support\Facades\Storage::disk('local')->exists($doc->file_path), 404);
 
         return response()->file(\Illuminate\Support\Facades\Storage::disk('local')->path($doc->file_path), [

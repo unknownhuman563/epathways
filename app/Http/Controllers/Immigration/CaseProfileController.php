@@ -103,6 +103,19 @@ class CaseProfileController extends Controller
             // INZ forms available for this visa type (current version + readiness).
             'inzForms' => $this->loadInzForms($lead),
             'dependents' => $this->loadDependents($lead),
+            // When this case is itself tied to a parent's case as a dependant,
+            // the parent it belongs to (reciprocal indicator in the header).
+            'tiedTo' => (function () use ($lead) {
+                $tie = $lead->tiedAsDependent()->with('lead:id,lead_id,first_name,last_name')->first();
+                if (! $tie || ! $tie->lead) {
+                    return null;
+                }
+
+                return [
+                    'id' => $tie->lead->id,
+                    'name' => trim("{$tie->lead->first_name} {$tie->lead->last_name}") ?: $tie->lead->lead_id,
+                ];
+            })(),
             // Cases the dependant can be related to (defaults to this case).
             'caseOptions' => Lead::immigrationCase()
                 ->orderBy('first_name')->limit(500)
@@ -378,7 +391,7 @@ class CaseProfileController extends Controller
     private function loadDependents(Lead $lead): array
     {
         return \App\Models\CaseDependent::where('lead_id', $lead->id)
-            ->with(['documents' => fn ($q) => $q->orderByDesc('created_at')])
+            ->with(['documents' => fn ($q) => $q->orderByDesc('created_at'), 'linkedLead'])
             ->orderBy('created_at')
             ->get()
             ->map(fn (\App\Models\CaseDependent $d) => array_merge([
@@ -395,6 +408,8 @@ class CaseProfileController extends Controller
                 'passport_expiry' => optional($d->passport_expiry)->toDateString(),
                 'source' => $d->source,
                 'notes' => $d->notes,
+                'linked_lead_id' => $d->linked_lead_id,
+                'linked_case_name' => $d->linkedLead?->name,
             ], $d->checklistData()))->all();
     }
 
@@ -402,6 +417,7 @@ class CaseProfileController extends Controller
     {
         return [
             'relationship' => ['required', \Illuminate\Validation\Rule::in(\App\Models\CaseDependent::RELATIONSHIPS)],
+            'linked_lead_id' => ['nullable', \Illuminate\Validation\Rule::exists('leads', 'id')],
             'first_name' => 'nullable|string|max:120',
             'family_name' => 'nullable|string|max:120',
             'middle_name' => 'nullable|string|max:120',
