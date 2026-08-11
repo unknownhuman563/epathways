@@ -22,13 +22,12 @@ const TEAM_THEMES = {
 };
 const teamTheme = (team) => TEAM_THEMES[team] || { header: "bg-slate-50 text-slate-700", subtotalRow: "bg-slate-50/60", subtotalText: "text-slate-700" };
 
-export default function DtrSummary({ teams = [], total = {}, start = "", end = "", pendingLeaves = [] }) {
+export default function DtrSummary({ teams = [], total = {}, start = "", end = "" }) {
     const [range, setRange] = useState({ start, end });
     const apply = (next) => {
         setRange(next);
         router.get("/admin/dtr/summary", next, { preserveState: true, preserveScroll: true, replace: true });
     };
-    const review = (id, action) => router.post(`/dtr/leaves/${id}/review`, { action }, { preserveScroll: true });
 
     return (
         <div className="space-y-6 max-w-[1400px] mx-auto pb-12">
@@ -57,29 +56,6 @@ export default function DtrSummary({ teams = [], total = {}, start = "", end = "
                     </label>
                 </div>
             </div>
-
-            {/* Pending leave requests — awaiting approval */}
-            {pendingLeaves.length > 0 && (
-                <div className="bg-white rounded-2xl border border-amber-200 shadow-sm overflow-hidden">
-                    <div className="px-6 py-4 border-b border-amber-100 bg-amber-50/60">
-                        <h2 className="text-sm font-bold text-amber-800">Leave requests awaiting approval · {pendingLeaves.length}</h2>
-                    </div>
-                    <div className="divide-y divide-gray-100">
-                        {pendingLeaves.map((l) => (
-                            <div key={l.id} className="flex items-center justify-between gap-4 px-6 py-3">
-                                <div className="min-w-0">
-                                    <p className="text-sm font-semibold text-gray-900">{l.user} · <span className="text-gray-600">{l.type}</span></p>
-                                    <p className="text-xs text-gray-500">{l.start_date}{l.end_date !== l.start_date ? ` → ${l.end_date}` : ""}{l.reason ? ` · ${l.reason}` : ""}</p>
-                                </div>
-                                <div className="flex items-center gap-2 shrink-0">
-                                    <button onClick={() => review(l.id, "approve")} className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700 transition-colors">Approve</button>
-                                    <button onClick={() => review(l.id, "reject")} className="px-3 py-1.5 rounded-lg bg-white border border-rose-300 text-rose-600 text-xs font-bold hover:bg-rose-50 transition-colors">Reject</button>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            )}
 
             {/* Table */}
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">

@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { Head, Link, router } from "@inertiajs/react";
-import { Clock, ArrowLeft, Settings, CheckCircle2, CircleDashed, X, Save, Search } from "lucide-react";
+import { Clock, ArrowLeft, Settings, CheckCircle2, CircleDashed, X, Save, Search, Download } from "lucide-react";
 
 // Known teams → their timezone. Picking a team auto-fills the tz so PH/NZ
 // staff can't mismatch them. Add teams here as they're onboarded.
@@ -130,8 +130,49 @@ function SetupModal({ person, onClose }) {
     );
 }
 
+// Pick a date, then download that staffer's daily-report PDF.
+function ReportModal({ person, onClose }) {
+    const [date, setDate] = useState(() => {
+        const d = new Date();
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    });
+    const download = () => {
+        if (!date) return;
+        window.open(`/dtr/report?date=${date}&user=${person.id}`, "_blank");
+        onClose();
+    };
+    const input = "w-full px-3 py-2 rounded-xl border border-gray-200 text-sm outline-none focus:ring-2 focus:ring-[#436235]/30 focus:border-[#436235]";
+    return (
+        <div className="fixed inset-0 z-50 flex items-start justify-center p-4 sm:p-8 overflow-y-auto bg-black/40 backdrop-blur-sm" onClick={onClose}>
+            <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden my-16" onClick={(e) => e.stopPropagation()}>
+                <div className="px-6 py-4 border-b border-gray-100 bg-gradient-to-br from-gray-50 to-white flex items-start justify-between">
+                    <div>
+                        <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-gray-400 mb-1">Generate daily report</p>
+                        <h2 className="text-lg font-bold text-gray-900">{person.name}</h2>
+                    </div>
+                    <button onClick={onClose} className="p-2 rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-700"><X size={18} /></button>
+                </div>
+                <div className="p-6">
+                    <label className="block">
+                        <span className="block text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1.5">Report date</span>
+                        <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={input} />
+                    </label>
+                    <p className="text-[11px] text-gray-400 mt-2">Downloads a PDF of {person.name.split(" ")[0]}'s time, tasks and remarks for the selected day.</p>
+                </div>
+                <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-2 bg-gray-50/50">
+                    <button onClick={onClose} className="px-4 py-2.5 text-sm font-semibold text-gray-600 rounded-xl hover:bg-gray-100 transition-colors">Cancel</button>
+                    <button onClick={download} disabled={!date} className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#436235] text-white text-sm font-bold rounded-xl hover:bg-[#375029] disabled:opacity-60 transition-colors">
+                        <Download size={15} /> Download PDF
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
 export default function DtrManage({ staff = [] }) {
     const [editing, setEditing] = useState(null);
+    const [reportFor, setReportFor] = useState(null);
     const [q, setQ] = useState("");
 
     const filtered = useMemo(() => {
@@ -209,9 +250,16 @@ export default function DtrManage({ staff = [] }) {
                                             )}
                                         </td>
                                         <td className="px-3 py-3 text-right">
-                                            <button onClick={() => setEditing(s)} className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${ready ? "bg-white border border-gray-200 text-gray-700 hover:bg-gray-50" : "bg-[#436235] text-white hover:bg-[#375029]"}`}>
-                                                <Settings size={13} /> {ready ? "Edit" : "Set up"}
-                                            </button>
+                                            <div className="inline-flex items-center gap-2 justify-end">
+                                                {ready && (
+                                                    <button onClick={() => setReportFor(s)} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors">
+                                                        <Download size={13} /> Report
+                                                    </button>
+                                                )}
+                                                <button onClick={() => setEditing(s)} className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${ready ? "bg-white border border-gray-200 text-gray-700 hover:bg-gray-50" : "bg-[#436235] text-white hover:bg-[#375029]"}`}>
+                                                    <Settings size={13} /> {ready ? "Edit" : "Set up"}
+                                                </button>
+                                            </div>
                                         </td>
                                     </tr>
                                 );
@@ -226,6 +274,7 @@ export default function DtrManage({ staff = [] }) {
             </p>
 
             {editing && <SetupModal person={editing} onClose={() => setEditing(null)} />}
+            {reportFor && <ReportModal person={reportFor} onClose={() => setReportFor(null)} />}
         </div>
     );
 }
