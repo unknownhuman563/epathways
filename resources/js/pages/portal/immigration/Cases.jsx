@@ -25,6 +25,7 @@ const STAGE_COLORS = {
     'For Agreement & Invoice':             'bg-orange-500',
     'Invoice Paid':            'bg-lime-500',
     'Visa Lodged':             'bg-indigo-500',
+    'Interim Visa Issued':     'bg-blue-500',
     'Request for Information': 'bg-amber-500',
     'Approved in Principle':   'bg-violet-500',
     'Approved Visa':           'bg-emerald-500',
@@ -42,6 +43,7 @@ const STAGE_HEX = {
     'For Agreement & Invoice':             '#f97316',
     'Invoice Paid':            '#84cc16',
     'Visa Lodged':             '#6366f1',
+    'Interim Visa Issued':     '#3b82f6',
     'Request for Information': '#f59e0b',
     'Approved in Principle':   '#8b5cf6',
     'Approved Visa':           '#22c55e',
@@ -57,6 +59,7 @@ const STAGE_CHIP = {
     'For Agreement & Invoice':             'bg-orange-50 text-orange-700 border-orange-200',
     'Invoice Paid':            'bg-lime-50 text-lime-700 border-lime-200',
     'Visa Lodged':             'bg-indigo-50 text-indigo-700 border-indigo-200',
+    'Interim Visa Issued':     'bg-blue-50 text-blue-700 border-blue-200',
     'Request for Information': 'bg-amber-50 text-amber-700 border-amber-200',
     'Approved in Principle':   'bg-violet-50 text-violet-700 border-violet-200',
     'Approved Visa':           'bg-emerald-50 text-emerald-700 border-emerald-200',
@@ -75,7 +78,7 @@ const CASE_TABS = [
     { key: 'applications', label: 'Assessment',   hint: 'For Assessment',     stages: ['For Assessment'] },
     { key: 'advisers',     label: 'Advisers',     hint: 'Endorsed → RFI',     stages: ['Endorsed', 'Agreement Sent', 'Agreement Signed', 'For Agreement & Invoice', 'Request for Information'] },
     { key: 'invoice',      label: 'Invoice',      hint: 'Invoice paid',       stages: ['Invoice Paid'] },
-    { key: 'lodged',       label: 'Lodged',       hint: 'Submitted to INZ',   stages: ['Visa Lodged'] },
+    { key: 'lodged',       label: 'Lodged',       hint: 'Submitted to INZ',   stages: ['Visa Lodged', 'Interim Visa Issued'] },
     { key: 'visa',         label: 'Visa',         hint: 'Outcome',            stages: ['Approved in Principle', 'Approved Visa', 'Decline Visa'] },
 ];
 
@@ -324,7 +327,7 @@ export default function ImmigrationCases({ cases = [], distribution = [], priori
                                 <SortableTh label="Visa"        sortKey="visa"      current={sortKey} dir={sortDir} onSort={toggleSort} />
                                 <SortableTh label="Country"     sortKey="country"   current={sortKey} dir={sortDir} onSort={toggleSort} />
                                 <th className="px-3 py-3">Docs</th>
-                                <th className="px-3 py-3">With</th>
+                                <th className="px-3 py-3">Refer</th>
                                 <SortableTh label="Updated" sortKey="updated_at" current={sortKey} dir={sortDir} onSort={toggleSort} />
                                 <th className="px-3 py-3 text-right pr-4">Actions</th>
                             </tr>
@@ -963,8 +966,13 @@ function CaseRow({ c, meId = null, stages, visaTypes = [], isExpanded, onExpand,
                             <div className="font-semibold text-gray-900 text-sm truncate group-hover/case:text-amber-700 transition-colors">
                                 {c.name}
                             </div>
-                            {c.lead_id && (
-                                <div className="text-[11px] text-gray-400 font-mono truncate">{c.lead_id}</div>
+                            {c.dependents?.length > 0 && (
+                                <div className="mt-1 flex items-center gap-1 flex-wrap" title={`Related: ${c.dependents.map((d) => d.full_name).join(", ")}`}>
+                                    <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border bg-[#009688]/10 text-[#009688] border-[#009688]/30">
+                                        <Users size={10} /> {c.dependents.length} dependant{c.dependents.length > 1 ? "s" : ""}
+                                    </span>
+                                    <span className="text-[10px] text-gray-400 truncate max-w-[160px]">{c.dependents.map((d) => d.full_name).join(", ")}</span>
+                                </div>
                             )}
                             <AttentionChip openedAt={c.attention_opened_at} />
                         </div>

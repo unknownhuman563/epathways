@@ -2,18 +2,16 @@ import { useEffect, useMemo, useState } from "react";
 import { Head, usePage } from "@inertiajs/react";
 import CaseProfileHeader from "@/components/immigration/case-profile/CaseProfileHeader";
 import PersonalTab from "@/components/immigration/case-profile/tabs/PersonalTab";
-import AssessmentTab from "@/components/immigration/case-profile/tabs/AssessmentTab";
 import DocumentsTab from "@/components/immigration/case-profile/tabs/DocumentsTab";
-import AgreementTab from "@/components/immigration/case-profile/tabs/AgreementTab";
 import CommunicationsTab from "@/components/immigration/case-profile/tabs/CommunicationsTab";
 import AIHealthTab from "@/components/immigration/case-profile/tabs/AIHealthTab";
 import ProcessTab from "@/components/immigration/case-profile/tabs/ProcessTab";
 import NotesTab from "@/components/immigration/case-profile/tabs/NotesTab";
 import FinancialsTab from "@/components/immigration/case-profile/tabs/FinancialsTab";
-import InzFormsTab from "@/components/immigration/case-profile/tabs/InzFormsTab";
+import DependantsTab from "@/components/immigration/case-profile/tabs/DependantsTab";
 import AiRecordAssistant from "@/components/ai/AiRecordAssistant";
 import {
-    ClipboardList, FileText, FileSignature, MessageSquare, Sparkles, StickyNote, User, Workflow, DollarSign, FileCheck2,
+    FileText, MessageSquare, Sparkles, StickyNote, User, Workflow, DollarSign, Users,
 } from "lucide-react";
 
 // Build 11.D — Case Profile page. Six-tab workspace for an immigration case.
@@ -21,14 +19,12 @@ import {
 // Visual basis: the IntakeDetails profile (gray + white CRM theme).
 
 const TABS = [
-    { key: "personal",       label: "Personal",        icon: User,            Comp: PersonalTab },
-    { key: "assessment",     label: "Assessment",      icon: ClipboardList,   Comp: AssessmentTab },
-    { key: "documents",      label: "Documents",       icon: FileText,        Comp: DocumentsTab },
-    { key: "process",        label: "Process",         icon: Workflow,        Comp: ProcessTab },
-    { key: "financials",     label: "Financials",      icon: DollarSign,      Comp: FinancialsTab },
-    { key: "inz_forms",      label: "INZ Forms",       icon: FileCheck2,      Comp: InzFormsTab },
-    { key: "agreement",      label: "Agreement",       icon: FileSignature,   Comp: AgreementTab },
-    { key: "communications", label: "Communications",  icon: MessageSquare,   Comp: CommunicationsTab },
+    { key: "personal",       label: "Personal",           icon: User,          Comp: PersonalTab },
+    { key: "dependants",     label: "Family",             icon: Users,         Comp: DependantsTab },
+    { key: "documents",      label: "Documents",          icon: FileText,      Comp: DocumentsTab },
+    { key: "process",        label: "Process",            icon: Workflow,      Comp: ProcessTab },
+    { key: "financials",     label: "Payments & Invoice", icon: DollarSign,    Comp: FinancialsTab },
+    { key: "communications", label: "Communications",     icon: MessageSquare, Comp: CommunicationsTab },
     { key: "ai_health",      label: "AI Health",       icon: Sparkles,        Comp: AIHealthTab },
     { key: "notes",          label: "Notes & Activity", icon: StickyNote,     Comp: NotesTab },
 ];
@@ -46,15 +42,15 @@ export default function CaseProfile() {
         process = { started: false, steps: [], payment: null, partner: null },
         threads = [], caseStaff = [], attention = null,
         financials = { record: null, payments: [], totals: {}, referred_by: null },
-        inzForms = [],
+        inzForms = [], dependents = [], vif = null,
     } = props;
 
     // Deep-link tab via ?tab=…  — preserved from the legacy
     // /portal/immigration/leads/{id}?tab=documents convert-redirect URL.
     const initialTab = useMemo(() => {
-        if (typeof window === "undefined") return "assessment";
+        if (typeof window === "undefined") return "personal";
         const t = new URLSearchParams(window.location.search).get("tab");
-        return t && VALID_TABS.has(t) ? t : "assessment";
+        return t && VALID_TABS.has(t) ? t : "personal";
     }, []);
     const [activeTab, setActiveTab] = useState(initialTab);
 
@@ -68,9 +64,9 @@ export default function CaseProfile() {
 
     const tabProps = {
         lead, intake, documents, checklist, checklistGrouped, unstructuredDocuments, checklistProgress,
-        communications, agreements, notes, activity, findings, process, threads, caseStaff, financials, inzForms,
+        communications, agreements, notes, activity, findings, process, threads, caseStaff, financials, inzForms, dependents, vif,
     };
-    const ActiveTab = TABS.find((t) => t.key === activeTab)?.Comp ?? AssessmentTab;
+    const ActiveTab = TABS.find((t) => t.key === activeTab)?.Comp ?? PersonalTab;
 
     const fullName = `${lead.first_name ?? ""} ${lead.last_name ?? ""}`.trim() || lead.lead_id || "Case";
 

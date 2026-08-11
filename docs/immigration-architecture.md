@@ -132,8 +132,13 @@ A case is a `Lead` with `is_immigration_case = true`. Key immigration columns:
 - Uses `LogsActivity` trait (audited to `/admin/activity-logs`).
 
 **`IMMIGRATION_STAGES`:** For Assessment → Endorsed → Agreement Sent → Agreement Signed →
-For Agreement & Invoice → Invoice Paid → Visa Lodged → Request for Information →
-Approved in Principle → Approved Visa → Decline Visa.
+For Agreement & Invoice → Invoice Paid → Visa Lodged → Interim Visa Issued →
+Request for Information → Approved in Principle → Approved Visa → Decline Visa.
+
+The order is load-bearing — `CaseStepService::deriveStage()` treats the array index as a
+forward-only rank. *Interim Visa Issued* has no process-chain step mapped to it, so it is a
+manual-only stage: `jumpToStage()` returns false and the controller falls through to the legacy
+direct write (which still stamps `stage_updated_*` and pushes stage history).
 
 ### `VisaType` (`app/Models/VisaType.php`) — the pricing catalogue
 - Consultation fee/duration, checklist (`checklist_items` JSON), INZ form ref, icon, category.

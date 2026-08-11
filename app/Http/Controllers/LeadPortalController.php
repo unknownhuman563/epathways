@@ -168,6 +168,262 @@ class LeadPortalController extends Controller
         ]);
     }
 
+    /**
+     * Visa Information Form — the client generates the official VIF from their
+     * completed assessment; it then becomes downloadable here and satisfies the
+     * VIF checklist item. The client never uploads it (it's produced, not provided).
+     */
+    public function visaAssessment()
+    {
+        $lead = $this->resolveLeadOrLogout();
+        if (! $lead instanceof Lead) {
+            return $lead;
+        }
+
+        return inertia('portal/lead/VisaAssessment', [
+            'lead' => $this->leadPayload($lead),
+            'vif' => $this->leadVif($lead),
+        ]);
+    }
+
+    /** Resolve the lead's assessment intake (authoritative FK path). */
+    private function leadIntake(Lead $lead)
+    {
+        if (! $lead->assessment_id) {
+            return [null, null];
+        }
+        $assessment = \App\Models\Assessment::whereNotNull('intakeable_type')->find($lead->assessment_id);
+        $intake = $assessment?->intakeable;
+        $type = $intake ? match ($intake::class) {
+            \App\Models\WorkIntake::class => 'work',
+            \App\Models\StudentIntake::class => 'student',
+            \App\Models\VisitorIntake::class => 'visitor',
+            default => null,
+        } : null;
+
+        return [$type, $type ? $intake : null];
+    }
+
+    /** VIF availability + generated state for the client portal. */
+    private function leadVif(Lead $lead): array
+    {
+        [$type, $intake] = $this->leadIntake($lead);
+        $doc = \App\Models\LeadDocument::where('lead_id', $lead->id)->where('source_variant', 'vif')->latest()->first();
+
+        return [
+            'available' => $type !== null && $intake !== null, // has a work/student/visitor assessment
+            'generated' => (bool) $doc,
+            'generated_at' => optional($doc?->created_at)->toIso8601String(),
+            'download_url' => $doc ? '/portal/lead/vif' : null,
+        ];
+    }
+
+    /** Client generates their official VIF from the assessment. */
+    public function generateVif()
+    {
+        $lead = $this->resolveLeadOrLogout();
+        if (! $lead instanceof Lead) {
+            return $lead;
+        }
+        [$type, $intake] = $this->leadIntake($lead);
+        abort_unless($intake, 422, 'No completed assessment to generate a Visa Information Form from.');
+
+        $vif = \App\Support\VisaInformationForm::build($intake->toArray());
+        $bytes = \Barryvdh\DomPDF\Facade\Pdf::loadView('pdf.intake', [
+            'applicant' => $vif['applicant'] ?: 'Applicant',
+            'sections' => $vif['sections'],
+            'intakeId' => $intake->intake_id ?? null,
+            'generatedAt' => now()->format('d/m/Y'),
+            'mode' => 'pdf',
+        ])->setPaper('a4')->output();
+
+        $name = trim(preg_replace('/[^A-Za-z0-9 \-]/', '', $vif['applicant'] ?? '')) ?: 'Applicant';
+        $path = "lead-documents/{$lead->id}/vif-".\Illuminate\Support\Str::uuid().'.pdf';
+        \Illuminate\Support\Facades\Storage::disk('local')->put($path, $bytes);
+
+        // Replaces any prior VIF; checklist_key 'svf' satisfies the VIF checklist item.
+        \App\Models\LeadDocument::updateOrCreate(
+            ['lead_id' => $lead->id, 'source_variant' => 'vif'],
+            [
+                'checklist_key' => 'svf',
+                'original_name' => "{$name} VIF.pdf",
+                'file_path' => $path,
+                'mime' => 'application/pdf',
+                'size' => strlen($bytes),
+                'source' => 'generated',
+                'status' => 'Submitted',
+            ],
+        );
+
+        return back()->with('success', 'Your Visa Information Form has been generated.');
+    }
+
+    /** Stream the client's generated VIF. */
+    public function downloadVif()
+    {
+        $lead = $this->resolveLeadOrLogout();
+        if (! $lead instanceof Lead) {
+            return $lead;
+        }
+        $doc = \App\Models\LeadDocument::where('lead_id', $lead->id)->where('source_variant', 'vif')->latest()->firstOrFail();
+        abort_unless($doc->file_path && \Illuminate\Support\Facades\Storage::disk('local')->exists($doc->file_path), 404);
+
+        return response()->file(\Illuminate\Support\Facades\Storage::disk('local')->path($doc->file_path), [
+            'Content-Disposition' => 'inline; filename="'.$doc->original_name.'"',
+        ]);
+    }
+
+    /** My Family — dependants the principal has included in their application. */
+    public function family()
+    {
+        $lead = $this->resolveLeadOrLogout();
+        if (! $lead instanceof Lead) {
+            return $lead;
+        }
+
+        $dependents = \App\Models\CaseDependent::where('lead_id', $lead->id)
+            ->with(['documents' => fn ($q) => $q->orderByDesc('created_at')])
+            ->orderBy('created_at')
+            ->get()
+            ->map(fn (\App\Models\CaseDependent $d) => array_merge([
+                'id' => $d->id,
+                'relationship' => $d->relationship,
+                'first_name' => $d->first_name,
+                'family_name' => $d->family_name,
+                'middle_name' => $d->middle_name,
+                'full_name' => $d->fullName(),
+                'dob' => optional($d->dob)->toDateString(),
+                'gender' => $d->gender,
+                'nationality' => $d->nationality,
+                'passport_number' => $d->passport_number,
+                'passport_expiry' => optional($d->passport_expiry)->toDateString(),
+            ], $d->checklistData()));
+
+        return inertia('portal/lead/Family', ['lead' => $this->leadPayload($lead), 'dependents' => $dependents]);
+    }
+
+    private function familyRules(): array
+    {
+        return [
+            'relationship' => ['required', \Illuminate\Validation\Rule::in(\App\Models\CaseDependent::RELATIONSHIPS)],
+            'first_name' => 'nullable|string|max:120',
+            'family_name' => 'nullable|string|max:120',
+            'middle_name' => 'nullable|string|max:120',
+            'dob' => 'nullable|date',
+            'gender' => 'nullable|string|max:20',
+            'nationality' => 'nullable|string|max:100',
+            'passport_number' => 'nullable|string|max:60',
+            'passport_expiry' => 'nullable|date',
+        ];
+    }
+
+    /** Principal adds a dependant — auto-linked to their own case. */
+    public function familyStore(\Illuminate\Http\Request $request)
+    {
+        $lead = $this->resolveLeadOrLogout();
+        if (! $lead instanceof Lead) {
+            return $lead;
+        }
+
+        \App\Models\CaseDependent::create(array_merge($request->validate($this->familyRules()), [
+            'lead_id' => $lead->id,
+            'source' => 'portal',
+        ]));
+
+        return back()->with('success', 'Family member added.');
+    }
+
+    public function familyUpdate(\Illuminate\Http\Request $request, int $id)
+    {
+        $lead = $this->resolveLeadOrLogout();
+        if (! $lead instanceof Lead) {
+            return $lead;
+        }
+        $dep = \App\Models\CaseDependent::where('id', $id)->where('lead_id', $lead->id)->firstOrFail();
+        $dep->update($request->validate($this->familyRules()));
+
+        return back()->with('success', 'Family member updated.');
+    }
+
+    public function familyDelete(int $id)
+    {
+        $lead = $this->resolveLeadOrLogout();
+        if (! $lead instanceof Lead) {
+            return $lead;
+        }
+        $dep = \App\Models\CaseDependent::where('id', $id)->where('lead_id', $lead->id)->firstOrFail();
+        foreach ($dep->documents as $doc) {
+            if ($doc->file_path && \Illuminate\Support\Facades\Storage::disk('local')->exists($doc->file_path)) {
+                \Illuminate\Support\Facades\Storage::disk('local')->delete($doc->file_path);
+            }
+        }
+        $dep->documents()->delete();
+        $dep->delete();
+
+        return back()->with('success', 'Family member removed.');
+    }
+
+    public function familyDocumentStore(\Illuminate\Http\Request $request, int $id)
+    {
+        $lead = $this->resolveLeadOrLogout();
+        if (! $lead instanceof Lead) {
+            return $lead;
+        }
+        $dep = \App\Models\CaseDependent::where('id', $id)->where('lead_id', $lead->id)->firstOrFail();
+        $data = $request->validate([
+            'file' => 'required|file|max:20480',
+            'checklist_key' => ['nullable', 'string', \Illuminate\Validation\Rule::in(\App\Services\Immigration\DependentChecklist::keys($dep->relationship))],
+        ]);
+
+        $file = $request->file('file');
+        $path = $file->store("lead-documents/{$lead->id}/dependents/{$dep->id}", 'local');
+
+        \App\Models\LeadDocument::create([
+            'lead_id' => $lead->id,
+            'dependent_id' => $dep->id,
+            'checklist_key' => $data['checklist_key'] ?? null,
+            'original_name' => $file->getClientOriginalName(),
+            'file_path' => $path,
+            'mime' => $file->getClientMimeType(),
+            'size' => $file->getSize(),
+            'source' => 'dependent',
+            'status' => 'Submitted',
+        ]);
+
+        return back()->with('success', 'Document uploaded.');
+    }
+
+    public function familyDocumentDelete(int $id, int $docId)
+    {
+        $lead = $this->resolveLeadOrLogout();
+        if (! $lead instanceof Lead) {
+            return $lead;
+        }
+        $dep = \App\Models\CaseDependent::where('id', $id)->where('lead_id', $lead->id)->firstOrFail();
+        $doc = \App\Models\LeadDocument::where('id', $docId)->where('dependent_id', $dep->id)->firstOrFail();
+        if ($doc->file_path && \Illuminate\Support\Facades\Storage::disk('local')->exists($doc->file_path)) {
+            \Illuminate\Support\Facades\Storage::disk('local')->delete($doc->file_path);
+        }
+        $doc->delete();
+
+        return back()->with('success', 'Document removed.');
+    }
+
+    public function familyDocumentDownload(int $id, int $docId)
+    {
+        $lead = $this->resolveLeadOrLogout();
+        if (! $lead instanceof Lead) {
+            return $lead;
+        }
+        $dep = \App\Models\CaseDependent::where('id', $id)->where('lead_id', $lead->id)->firstOrFail();
+        $doc = \App\Models\LeadDocument::where('id', $docId)->where('dependent_id', $dep->id)->firstOrFail();
+        abort_unless($doc->file_path && \Illuminate\Support\Facades\Storage::disk('local')->exists($doc->file_path), 404);
+
+        return response()->file(\Illuminate\Support\Facades\Storage::disk('local')->path($doc->file_path), [
+            'Content-Disposition' => 'inline; filename="'.$doc->original_name.'"',
+        ]);
+    }
+
     /** Appointments — upcoming + past, derived from Bookings on email match. */
     public function appointments()
     {

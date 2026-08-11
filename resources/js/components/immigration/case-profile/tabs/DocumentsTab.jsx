@@ -44,6 +44,7 @@ export default function DocumentsTab({
     checklistProgress = { required_total: 0, required_approved: 0, total: 0, approved: 0 },
     threads = [],
     caseStaff = [],
+    vif = null,
 }) {
     // Build 12 phase 6 — document-anchored threads render on their document's
     // row (and nowhere else). Group them by the document they anchor to.
@@ -105,17 +106,24 @@ export default function DocumentsTab({
         // Adviser-generated engagement documents (Written Agreement + IAA
         // standards) get their own clearly-named group rather than being
         // lumped in with unmatched uploads.
-        const isEngagement = typeof d.source_variant === "string" && d.source_variant.startsWith("engagement:");
+        const variant = typeof d.source_variant === "string" ? d.source_variant : "";
+        const isEngagement = variant.startsWith("engagement:");
+        const isInvoice = variant.startsWith("invoice:");
+        const isInz = variant.startsWith("inz:");
         const isGenerated = d.source === "generated";
         return {
             kind:     "orphan",
             key:      `orphan-${d.id}`,
             label:    d.original_name,
-            category: isEngagement
-                ? "Engagement documents"
-                : isGenerated
-                    ? "Generated documents"
-                    : "Other (no checklist match)",
+            category: isInvoice
+                ? "Invoices"
+                : isEngagement
+                    ? "Engagement documents"
+                    : isInz
+                        ? "INZ forms (generated)"
+                        : isGenerated
+                            ? "Generated documents"
+                            : "Other (no checklist match)",
             required: false,
             document: d,
         };
@@ -144,16 +152,19 @@ export default function DocumentsTab({
 
     if (allRows.length === 0) {
         return (
-            <div className="text-center py-12 border border-dashed border-gray-200 rounded-xl bg-gray-50/50">
-                <FileText size={32} className="mx-auto text-gray-300" />
-                <p className="mt-3 text-sm font-semibold text-gray-700">
-                    No checklist configured for this visa type
-                </p>
-                <p className="text-xs text-gray-500 mt-1">
-                    {checklist.visa
-                        ? `Source: ${checklist.source} · ${checklist.visa}`
-                        : "No documents on file and no checklist available."}
-                </p>
+            <div className="space-y-4">
+                {vif && <VifCard vif={vif} />}
+                <div className="text-center py-12 border border-dashed border-gray-200 rounded-xl bg-gray-50/50">
+                    <FileText size={32} className="mx-auto text-gray-300" />
+                    <p className="mt-3 text-sm font-semibold text-gray-700">
+                        No checklist configured for this visa type
+                    </p>
+                    <p className="text-xs text-gray-500 mt-1">
+                        {checklist.visa
+                            ? `Source: ${checklist.source} · ${checklist.visa}`
+                            : "No documents on file and no checklist available."}
+                    </p>
+                </div>
             </div>
         );
     }
@@ -167,6 +178,7 @@ export default function DocumentsTab({
 
     return (
         <div className="space-y-4">
+            {vif && <VifCard vif={vif} />}
             <div className="flex items-end justify-between gap-3 flex-wrap">
                 <div className="min-w-0">
                     <h2 className="text-base font-bold text-gray-900">Documents</h2>
@@ -852,6 +864,33 @@ function RequestFromClient({ leadId, rowLabel, rowRequired }) {
 // VisaType.checklist_items often use dotted keys like "identity.passport"
 // or "admission.tor" — surface the leading segment as a category fallback
 // when the JSON doesn't carry an explicit category field.
+// VIF — the official Visa Information Form built from the case's assessment.
+// Always reflects the latest intake; downloaded on demand (not stored).
+function VifCard({ vif }) {
+    return (
+        <div className="rounded-xl border border-[#009688]/25 bg-[#009688]/5 p-4 flex items-center gap-3 flex-wrap">
+            <div className="w-9 h-9 rounded-xl bg-[#009688]/15 flex items-center justify-center flex-shrink-0">
+                <FileText size={17} className="text-[#009688]" />
+            </div>
+            <div className="min-w-0 flex-1">
+                <div className="text-sm font-bold text-gray-900">Visa Information Form (Assessment)</div>
+                <p className="text-[12px] text-gray-500">Official ePathways VIF, filled from this case's visa assessment.</p>
+            </div>
+            <div className="flex items-center gap-1.5 flex-shrink-0">
+                <a href={vif.preview_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 text-gray-700 text-[11px] font-semibold hover:bg-white">
+                    <Eye size={12} /> Preview
+                </a>
+                <a href={vif.pdf_url} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#009688] text-white text-[11px] font-semibold hover:bg-[#00796b]">
+                    <Download size={12} /> PDF
+                </a>
+                <a href={vif.word_url} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#009688]/30 text-[#009688] text-[11px] font-semibold hover:bg-[#009688]/5">
+                    <Download size={12} /> Word
+                </a>
+            </div>
+        </div>
+    );
+}
+
 function categoryFromKey(key) {
     if (! key || typeof key !== "string") return null;
     const parts = key.split(/[.\-:]/);

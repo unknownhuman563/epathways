@@ -326,6 +326,7 @@ class ImmigrationController extends Controller
 
             $cases = Lead::with([
                 'documents',
+                'dependents',
                 'faceImage',
                 'portalUser:id,lead_id,last_login_at',
                 'immigrationConverter:id,name',
@@ -408,6 +409,13 @@ class ImmigrationController extends Controller
                         'docs_approved' => $l->documents->where('status', 'Approved')->count(),
                         'docs_pending' => $l->documents->whereIn('status', ['Submitted', 'UnderReview'])->count(),
                         'docs_rejected' => $l->documents->where('status', 'Rejected')->count(),
+                        // Dependants (children / partner) included in this case,
+                        // so the list can show "related to" and who's tied in.
+                        'dependents' => $l->dependents->map(fn ($d) => [
+                            'id' => $d->id,
+                            'full_name' => $d->fullName(),
+                            'relationship' => $d->relationship,
+                        ])->values(),
                         // Checklist-based progress: how many of the visa's
                         // checklist items the case has submitted (out of the
                         // full checklist).
@@ -2186,11 +2194,15 @@ class ImmigrationController extends Controller
     {
         $now = now();
         $preset = $request->input('preset', 'two_weeks');
-        if (! in_array($preset, ['two_weeks', 'this_month', 'last_month', 'quarter', 'custom'], true)) {
+        if (! in_array($preset, ['today', 'this_week', 'two_weeks', 'this_month', 'last_month', 'quarter', 'custom'], true)) {
             $preset = 'two_weeks';
         }
 
         switch ($preset) {
+            case 'today':
+                return [$preset, $now->copy()->startOfDay(), $now->copy()->endOfDay()];
+            case 'this_week':
+                return [$preset, $now->copy()->startOfWeek(), $now->copy()->endOfDay()];
             case 'this_month':
                 return [$preset, $now->copy()->startOfMonth(), $now->copy()->endOfDay()];
             case 'last_month':
@@ -2219,6 +2231,8 @@ class ImmigrationController extends Controller
     private function reportRangeLabel(string $preset, \Illuminate\Support\Carbon $from, \Illuminate\Support\Carbon $to): string
     {
         return match ($preset) {
+            'today' => 'Today',
+            'this_week' => 'This week',
             'this_month' => $from->format('F Y'),
             'last_month' => $from->format('F Y'),
             'quarter' => 'Last 3 months',

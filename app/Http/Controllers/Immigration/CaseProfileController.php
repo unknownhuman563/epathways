@@ -65,6 +65,9 @@ class CaseProfileController extends Controller
             'lead' => $this->serializeLead($lead),
             'intake' => $intake ? ['type' => $intakeType, 'data' => $intake] : null,
             'documents' => $this->loadDocuments($lead),
+            // The Visa Information Form (official assessment PDF), auto-available
+            // in Documents when the case took a work/student/visitor assessment.
+            'vif' => $this->resolveVif($intakeType, $intake),
             // Build 11.D Phase 4 — checklist resolution delegated to
             // CaseChecklistService. `items` is the flat list (kept for
             // backward-compat with the existing table view); `grouped`
@@ -99,6 +102,7 @@ class CaseProfileController extends Controller
             'financials' => $this->loadFinancials($lead),
             // INZ forms available for this visa type (current version + readiness).
             'inzForms' => $this->loadInzForms($lead),
+            'dependents' => $this->loadDependents($lead),
         ]);
     }
 
@@ -221,6 +225,101 @@ class CaseProfileController extends Controller
         return back()->with('success', 'Payment removed.');
     }
 
+    /**
+     * Assemble the invoice view-data from the case's financial record + ledger.
+     * Shared by generate (PDF), preview (HTML) and Word exports.
+     *
+     * @return array{0: array<string, mixed>, 1: string}  [$viewData, $invoiceNo]
+     */
+    private function invoiceData(Lead $lead): array
+    {
+        $fin = \App\Models\CaseFinancial::firstOrNew(['lead_id' => $lead->id]);
+        $currency = $fin->currency ?: 'NZD';
+
+        // Auto-assign a stable invoice number the first time one is generated.
+        $invoiceNo = $fin->invoice_no ?: 'INV-'.str_pad((string) $lead->id, 4, '0', STR_PAD_LEFT);
+
+        $lines = collect([
+            ['label' => 'Professional service fee', 'amount' => (float) $fin->service_fee_chargeable],
+            ['label' => 'INZ application fee', 'amount' => (float) $fin->inz_fee],
+            ['label' => 'Other fee', 'amount' => (float) $fin->other_fee],
+        ])->filter(fn ($l) => $l['amount'] > 0)->values()->all();
+
+        $payments = \App\Models\CaseFinancePayment::where('lead_id', $lead->id)->orderBy('paid_at')->get()
+            ->map(fn ($p) => [
+                'paid_at' => optional($p->paid_at)->format('d/m/Y'),
+                'method' => $p->method,
+                'reference' => $p->reference,
+                'amount' => (float) $p->amount,
+            ])->all();
+
+        $data = [
+            'invoiceNo' => $invoiceNo,
+            'invoiceDate' => optional($fin->invoice_sent_at)->format('d/m/Y') ?: now()->format('d/m/Y'),
+            'generatedAt' => now()->format('d/m/Y'),
+            'billTo' => trim("{$lead->first_name} {$lead->last_name}") ?: ($lead->lead_id ?: 'Applicant'),
+            'caseRef' => $lead->inz_reference ?: $lead->lead_id,
+            'issuedFrom' => $fin->issued_from,
+            'currency' => $currency,
+            'lines' => $lines,
+            'totalPayable' => $fin->totalPayable(),
+            'totalPaid' => $fin->totalPaid(),
+            'owed' => $fin->amountOwed(),
+            'disbursement' => $fin->disbursementAmount(),
+            'settled' => $fin->isSettled(),
+            'payments' => $payments,
+            'notes' => $fin->notes,
+        ];
+
+        return [$data, $invoiceNo];
+    }
+
+    /** Inline HTML preview of the case invoice (for the Financials tab modal). */
+    public function previewInvoice(Lead $lead)
+    {
+        $this->guardCase($lead);
+        [$data] = $this->invoiceData($lead);
+
+        return response(view('pdf.invoice', array_merge($data, ['mode' => 'web']))->render());
+    }
+
+    /**
+     * Generate the case invoice PDF, store it as a draft document on the case
+     * (so it appears in Documents), and stamp the invoice number + sent date on
+     * the financial record. Numbers come only from the recorded fees/ledger.
+     */
+    public function generateInvoice(Lead $lead)
+    {
+        $user = $this->guardCase($lead);
+        [$data, $invoiceNo] = $this->invoiceData($lead);
+
+        $bytes = \Barryvdh\DomPDF\Facade\Pdf::loadView('pdf.invoice', array_merge($data, ['mode' => 'pdf']))
+            ->setPaper('a4')->output();
+
+        $path = "inz-generated/{$lead->id}/invoice-".\Illuminate\Support\Str::uuid().'.pdf';
+        \Illuminate\Support\Facades\Storage::disk('local')->put($path, $bytes);
+
+        LeadDocument::create([
+            'lead_id' => $lead->id,
+            'original_name' => "Invoice {$invoiceNo}.pdf",
+            'file_path' => $path,
+            'mime' => 'application/pdf',
+            'size' => strlen($bytes),
+            'source' => 'generated',
+            'source_variant' => "invoice:{$invoiceNo}",
+            'status' => 'StaffShared',
+            'uploaded_by' => $user->id,
+        ]);
+
+        // Persist the invoice number + sent date onto the financial record.
+        \App\Models\CaseFinancial::updateOrCreate(
+            ['lead_id' => $lead->id],
+            ['invoice_no' => $invoiceNo, 'invoice_sent_at' => now(), 'updated_by' => $user->id],
+        );
+
+        return back()->with('success', "Invoice {$invoiceNo} generated — see Documents.");
+    }
+
     // ── INZ forms (fill the official PDF; never a look-alike) ────────────────
 
     /**
@@ -260,6 +359,154 @@ class CaseProfileController extends Controller
                 'assignment_submitted_at' => optional($a?->submitted_at)->toIso8601String(),
             ];
         })->all();
+    }
+
+    /**
+     * Dependants included in this case (children / partner / etc.), each with
+     * their own documents. Sub-records of the case — no login.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function loadDependents(Lead $lead): array
+    {
+        return \App\Models\CaseDependent::where('lead_id', $lead->id)
+            ->with(['documents' => fn ($q) => $q->orderByDesc('created_at')])
+            ->orderBy('created_at')
+            ->get()
+            ->map(fn (\App\Models\CaseDependent $d) => array_merge([
+                'id' => $d->id,
+                'relationship' => $d->relationship,
+                'family_name' => $d->family_name,
+                'first_name' => $d->first_name,
+                'middle_name' => $d->middle_name,
+                'full_name' => $d->fullName(),
+                'dob' => optional($d->dob)->toDateString(),
+                'gender' => $d->gender,
+                'nationality' => $d->nationality,
+                'passport_number' => $d->passport_number,
+                'passport_expiry' => optional($d->passport_expiry)->toDateString(),
+                'source' => $d->source,
+                'notes' => $d->notes,
+            ], $d->checklistData()))->all();
+    }
+
+    private function dependentRules(): array
+    {
+        return [
+            'relationship' => ['required', \Illuminate\Validation\Rule::in(\App\Models\CaseDependent::RELATIONSHIPS)],
+            'first_name' => 'nullable|string|max:120',
+            'family_name' => 'nullable|string|max:120',
+            'middle_name' => 'nullable|string|max:120',
+            'dob' => 'nullable|date',
+            'gender' => 'nullable|string|max:20',
+            'nationality' => 'nullable|string|max:100',
+            'passport_number' => 'nullable|string|max:60',
+            'passport_expiry' => 'nullable|date',
+            'notes' => 'nullable|string|max:500',
+        ];
+    }
+
+    /** Staff adds a dependant to the case. */
+    public function addDependent(Request $request, Lead $lead)
+    {
+        $user = $this->guardCase($lead);
+        $data = $request->validate($this->dependentRules());
+
+        \App\Models\CaseDependent::create(array_merge($data, [
+            'lead_id' => $lead->id,
+            'source' => 'staff',
+            'added_by' => $user->id,
+        ]));
+
+        return back()->with('success', 'Dependant added to the case.');
+    }
+
+    public function updateDependent(Request $request, Lead $lead, \App\Models\CaseDependent $dependent)
+    {
+        $this->guardCase($lead);
+        abort_unless($dependent->lead_id === $lead->id, 404);
+        $dependent->update($request->validate($this->dependentRules()));
+
+        return back()->with('success', 'Dependant updated.');
+    }
+
+    public function deleteDependent(Lead $lead, \App\Models\CaseDependent $dependent)
+    {
+        $this->guardCase($lead);
+        abort_unless($dependent->lead_id === $lead->id, 404);
+
+        // Remove the dependant's document files, then the records.
+        foreach ($dependent->documents as $doc) {
+            if ($doc->file_path && \Illuminate\Support\Facades\Storage::disk('local')->exists($doc->file_path)) {
+                \Illuminate\Support\Facades\Storage::disk('local')->delete($doc->file_path);
+            }
+        }
+        $dependent->documents()->delete();
+        $dependent->delete();
+
+        return back()->with('success', 'Dependant removed.');
+    }
+
+    /** Staff uploads a document for a specific dependant checklist item. */
+    public function uploadDependentDocument(Request $request, Lead $lead, \App\Models\CaseDependent $dependent)
+    {
+        $user = $this->guardCase($lead);
+        abort_unless($dependent->lead_id === $lead->id, 404);
+        $data = $request->validate([
+            'file' => 'required|file|max:20480', // 20 MB
+            'checklist_key' => ['nullable', 'string', \Illuminate\Validation\Rule::in(\App\Services\Immigration\DependentChecklist::keys($dependent->relationship))],
+        ]);
+
+        $file = $request->file('file');
+        $path = $file->store("lead-documents/{$lead->id}/dependents/{$dependent->id}", 'local');
+
+        LeadDocument::create([
+            'lead_id' => $lead->id,
+            'dependent_id' => $dependent->id,
+            'checklist_key' => $data['checklist_key'] ?? null,
+            'original_name' => $file->getClientOriginalName(),
+            'file_path' => $path,
+            'mime' => $file->getClientMimeType(),
+            'size' => $file->getSize(),
+            'source' => 'dependent',
+            'status' => 'Submitted',
+            'uploaded_by' => $user->id,
+        ]);
+
+        return back()->with('success', 'Document uploaded for the dependant.');
+    }
+
+    /** Staff reviews a dependant's document (approve / reject / etc.). */
+    public function setDependentDocumentStatus(Request $request, Lead $lead, \App\Models\CaseDependent $dependent, LeadDocument $document)
+    {
+        $user = $this->guardCase($lead);
+        abort_unless($dependent->lead_id === $lead->id && $document->dependent_id === $dependent->id, 404);
+        $data = $request->validate([
+            'status' => ['required', \Illuminate\Validation\Rule::in(['Submitted', 'UnderReview', 'Approved', 'Rejected'])],
+            'note' => 'nullable|string|max:500',
+        ]);
+
+        $document->forceFill([
+            'status' => $data['status'],
+            'note' => $data['note'] ?? $document->note,
+            'reviewed_by' => $user->id,
+            'reviewed_at' => now(),
+        ])->save();
+
+        return back()->with('success', "Document marked {$data['status']}.");
+    }
+
+    public function deleteDependentDocument(Lead $lead, \App\Models\CaseDependent $dependent, LeadDocument $document)
+    {
+        $this->guardCase($lead);
+        abort_unless($dependent->lead_id === $lead->id && $document->dependent_id === $dependent->id, 404);
+
+        if ($document->file_path && \Illuminate\Support\Facades\Storage::disk('local')->exists($document->file_path)) {
+            \Illuminate\Support\Facades\Storage::disk('local')->delete($document->file_path);
+        }
+        $document->delete();
+
+        return back()->with('success', 'Document removed.');
     }
 
     /**
@@ -954,6 +1201,31 @@ class CaseProfileController extends Controller
     }
 
     /**
+     * The case's Visa Information Form (official assessment PDF), available in
+     * Documents when the case took a work/student/visitor assessment. Points at
+     * the existing on-demand VIF exports (always reflects the latest intake),
+     * so nothing is stored/duplicated.
+     *
+     * @param  array<string, mixed>|null  $intake
+     * @return array<string, mixed>|null
+     */
+    private function resolveVif(?string $type, ?array $intake): ?array
+    {
+        if (! $type || ! in_array($type, ['work', 'student', 'visitor'], true) || empty($intake['id'])) {
+            return null; // resident intakes / sales-converted cases have no VIF
+        }
+        $id = $intake['id'];
+
+        return [
+            'type' => $type,
+            'id' => $id,
+            'preview_url' => "/portal/immigration/intakes/{$type}/{$id}/preview",
+            'pdf_url' => "/portal/immigration/intakes/{$type}/{$id}/pdf",
+            'word_url' => "/portal/immigration/intakes/{$type}/{$id}/word",
+        ];
+    }
+
+    /**
      * Cases have two origin paths (see audit Section 6):
      *   1. Sales-converted via LeadController::convertToCase — no intake row, returns [null, null]
      *   2. Assessment-converted via Portal\ImmigrationController::convertAssessmentToCase —
@@ -1101,6 +1373,7 @@ class CaseProfileController extends Controller
     private function loadDocuments(Lead $lead): array
     {
         return LeadDocument::where('lead_id', $lead->id)
+            ->whereNull('dependent_id') // dependants' docs live under the Family tab
             ->orderByDesc('created_at')
             ->get()
             ->map(fn (LeadDocument $d) => [
