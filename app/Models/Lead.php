@@ -262,6 +262,9 @@ class Lead extends Model
         // IMMIGRATION_STAGES). Each carries an optional named assignee.
         'english_stage', 'english_assignee',
         'immigration_stage', 'immigration_priority', 'immigration_assignee',
+        // Case custody (Build 12 phase 2) — one owner at a time, changed only
+        // through an explicit handoff. See ImmigrationController::handoff().
+        'current_owner_id', 'owner_since',
         // Full dated timeline of every department status change — drives the
         // Pipeline "when did this status happen" view. See recordStageChange().
         'stage_history',
@@ -347,6 +350,7 @@ class Lead extends Model
         'agreements_acknowledged_at' => 'datetime',
         'stage_updated_at' => 'datetime',
         'last_activity_at' => 'datetime',
+        'owner_since' => 'datetime',
         'stage_history' => 'array',
         'last_seen_at' => 'datetime',
         'is_student' => 'boolean',
@@ -444,6 +448,12 @@ class Lead extends Model
     public function lastActivityUser()
     {
         return $this->belongsTo(User::class, 'last_activity_by');
+    }
+
+    /** The case's current owner (custody), or null when unassigned. */
+    public function owner()
+    {
+        return $this->belongsTo(User::class, 'current_owner_id');
     }
 
     /** Staff member this lead is currently assigned to (or null). */
@@ -580,15 +590,36 @@ class Lead extends Model
                     \App\Jobs\SendLeadFollowupEmail::sendKey('missed_the_call_1', $lead);
                     \App\Jobs\SendLeadFollowupEmail::dispatch($lead->id, 'missed_the_call_2', 'Contact Attempted')
                         ->delay(now()->addDays(3));
+                } elseif ($lead->status === 'Contacted for Booking') {
+                    \App\Jobs\SendLeadFollowupEmail::sendKey('contacted_for_booking_1', $lead);
+                } elseif ($lead->status === 'Missed the Meeting') {
+                    // missed_the_booking_1 now, missed_the_booking_2 on day 1
+                    // (skipped then if the lead has moved off this stage).
+                    \App\Jobs\SendLeadFollowupEmail::sendKey('missed_the_booking_1', $lead);
+                    \App\Jobs\SendLeadFollowupEmail::dispatch($lead->id, 'missed_the_booking_2', 'Missed the Meeting')
+                        ->delay(now()->addDays(1));
                 } elseif ($lead->status === 'Not Qualified') {
                     \App\Jobs\SendLeadFollowupEmail::sendKey('not_qualified', $lead);
                 } elseif ($lead->status === 'Qualified but No Funds') {
                     \App\Jobs\SendLeadFollowupEmail::sendKey('qualified_but_no_funds', $lead);
+                } elseif ($lead->status === 'Qualified but Not Ready') {
+                    \App\Jobs\SendLeadFollowupEmail::sendKey('qualified_but_not_ready', $lead);
                 } elseif ($lead->status === 'Consultation Done') {
                     \App\Jobs\SendLeadFollowupEmail::sendKey('consultation_done', $lead);
                 } elseif ($lead->status === 'Consultancy Agreement Signed') {
                     // Key intentionally spelled 'consultancy_signe' per template.
                     \App\Jobs\SendLeadFollowupEmail::sendKey('consultancy_signe', $lead);
+                } elseif ($lead->status === 'Proposal Sent') {
+                    // Feedback-request drip after the proposal (program_proposal)
+                    // is sent: day 1, day 2, day 5. Each is skipped at fire time
+                    // if the lead has moved on from "Proposal Sent" (e.g. chose a
+                    // program), so a responsive lead stops getting nudges.
+                    \App\Jobs\SendLeadFollowupEmail::dispatch($lead->id, 'proposal_send_1', 'Proposal Sent')
+                        ->delay(now()->addDays(1));
+                    \App\Jobs\SendLeadFollowupEmail::dispatch($lead->id, 'proposal_send_2', 'Proposal Sent')
+                        ->delay(now()->addDays(2));
+                    \App\Jobs\SendLeadFollowupEmail::dispatch($lead->id, 'proposal_send_3', 'Proposal Sent')
+                        ->delay(now()->addDays(5));
                 }
             } catch (\Throwable $e) {
                 \Illuminate\Support\Facades\Log::warning('Stage-change follow-up failed', [
@@ -606,6 +637,10 @@ class Lead extends Model
         'created_at', 'updated_at', 'deleted_at',
         'ai_analysis', 'ai_analysis_status',
         'last_seen_at', 'stage_history',
+        // Custody is stamped explicitly by the handoff (recordStaffActivity),
+        // so the auto-stamp ignores these to avoid a generic "Updated
+        // current_owner_id" description.
+        'current_owner_id', 'owner_since',
         'last_activity_at', 'last_activity_by', 'last_activity_desc',
     ];
 

@@ -299,6 +299,16 @@ class ImmigrationController extends Controller
                 ->get(['name', 'checklist_items'])
                 ->mapWithKeys(fn ($v) => [$v->name => (is_array($v->checklist_items) ? $v->checklist_items : [])]);
 
+            // Build 12 phase 6 — open, answer-requiring threads addressed to the
+            // viewer. These land the case in their queue even when they don't own
+            // it, so the My-queue filter can surface "someone asked you" cases.
+            $awaitingByLead = \App\Models\CaseThread::awaitingCountsFor((int) auth()->id());
+
+            // Build 12 phase 4 — attention (§5). Latest LICENSED-user open per
+            // case, so the board chip reads "has the adviser looked, and when".
+            // Unlicensed opens never count. Staff-only signal.
+            $attentionByLead = \App\Models\CaseView::latestLicensedOpens();
+
             // The full immigration-case count, for an honest "showing X of Y"
             // and to detect the (rare) case where we hit the safety ceiling.
             $total = Lead::immigrationCase()->count();
@@ -322,6 +332,7 @@ class ImmigrationController extends Controller
                 'studentConverter:id,name',
                 'stageUpdater:id,name',
                 'lastActivityUser:id,name',
+                'owner:id,name,avatar_path',
             ])
                 ->immigrationCase()
                 // Newest staff activity first, falling back to the raw
@@ -329,7 +340,16 @@ class ImmigrationController extends Controller
                 ->orderByRaw('COALESCE(last_activity_at, updated_at) DESC')
                 ->limit($cap)
                 ->get()
-                ->map(function ($l) use ($visaChecklists) {
+                ->map(function ($l) use ($visaChecklists, $awaitingByLead, $attentionByLead) {
+                    // Staleness is measured on the last *activity*, not on how
+                    // long the owner has held the case: a case actively worked
+                    // for 12 days is fine; one untouched for 10 is stuck.
+                    $amberDays = (int) config('immigration.custody_stale_amber_days', 6);
+                    $redDays = (int) config('immigration.custody_stale_red_days', 10);
+                    $lastTouch = $l->last_activity_at ?: $l->updated_at;
+                    $idleDays = $lastTouch ? (int) $lastTouch->diffInDays(now()) : null;
+                    $custodyStale = $idleDays === null ? null
+                        : ($idleDays >= $redDays ? 'red' : ($idleDays >= $amberDays ? 'amber' : null));
                     // All checklist keys for this case's visa vs. the keys it
                     // has actually submitted (any non-rejected doc). Progress
                     // is measured against the full checklist, not just the
@@ -370,6 +390,10 @@ class ImmigrationController extends Controller
                         'phone' => $l->phone,
                         'country' => $l->residence_country,
                         'status' => $l->status,
+                        // Lead Portal access state — drives the "Request portal
+                        // access" row action so it reflects requested/sent/
+                        // accepted instead of always reading as a fresh request.
+                        'portal_invitation_status' => $l->portal_invitation_status ?: 'none',
                         'inz_status' => $l->inz_status,
                         'inz_visa_type' => $l->inz_visa_type,
                         'inz_reference' => $l->inz_reference,
@@ -401,6 +425,23 @@ class ImmigrationController extends Controller
                                                 ?? optional($l->studentConverter)->name,
                         // Short summary of what that edit changed.
                         'updated_desc' => $l->last_activity_desc,
+                        // Custody (Build 12 phase 2) — current owner, how long
+                        // they've held it (shown as plain text), and the
+                        // staleness colour derived above from last activity.
+                        'owner' => $l->owner ? [
+                            'id' => $l->owner->id,
+                            'name' => $l->owner->name,
+                            'avatar_url' => $l->owner->avatar_url,
+                        ] : null,
+                        'owner_since' => optional($l->owner_since)?->toIso8601String(),
+                        'custody_stale' => $custodyStale,
+                        'idle_days' => $idleDays,
+                        // Build 12 phase 6 — open questions on this case addressed
+                        // to the viewer. Drives the queue chip + My-queue filter.
+                        'awaiting_my_answer' => (int) ($awaitingByLead[$l->id] ?? 0),
+                        // Build 12 phase 4 — when a licensed adviser last opened
+                        // this case (null = not opened). No durations, staff-only.
+                        'attention_opened_at' => optional($attentionByLead[$l->id] ?? null)?->toIso8601String(),
                     ];
                 });
 
@@ -439,12 +480,27 @@ class ImmigrationController extends Controller
                 ->orderBy('name')
                 ->get(['id', 'code', 'name', 'category']);
 
+            // Immigration-capable staff for the handoff picker (incl. admins,
+            // who can work any portal). Ordered by name; the current user is
+            // used by the My-queue filter + "Claim" affordance.
+            $staff = \App\Models\User::query()
+                ->whereIn('role', array_merge(
+                    [\App\Models\User::ROLE_SUPER_ADMIN, \App\Models\User::ROLE_ADMIN, 'immigration'],
+                    \App\Models\User::IMMIGRATION_ROLES,
+                ))
+                ->orderBy('name')
+                ->get(['id', 'name', 'avatar_path'])
+                ->map(fn ($u) => ['id' => $u->id, 'name' => $u->name, 'avatar_url' => $u->avatar_url])
+                ->values();
+
             return inertia('portal/immigration/Cases', [
                 'cases' => $cases,
                 'distribution' => $distribution,
                 'priorities' => $priorities,
                 'stages' => Lead::IMMIGRATION_STAGES,
                 'visaTypes' => $visaTypes,
+                'me_id' => auth()->id(),
+                'staff' => $staff,
                 // True queue size vs. how many we loaded — the UI shows an honest
                 // count and warns if the safety ceiling ever truncated the list.
                 'total' => $total,
@@ -487,6 +543,101 @@ class ImmigrationController extends Controller
                 'immigration_stage' => $l->immigration_stage,
             ])
             ->values();
+    }
+
+    /**
+     * INZ Forms console under Case — every immigration case with the INZ forms
+     * its visa category offers, and the state of each (ready to fill, sent to
+     * the client, submitted). Staff generate the official draft or send a form
+     * to the client to fill, from one screen instead of opening each case.
+     */
+    public function caseInzForms()
+    {
+        $cases = Lead::immigrationCase()
+            ->orderByDesc('updated_at')
+            ->limit(300)
+            ->get(['id', 'lead_id', 'first_name', 'last_name', 'email', 'inz_visa_type', 'immigration_stage']);
+
+        // visa type/code → category, and forms grouped by category (loaded once).
+        $visaCategory = [];
+        foreach (\App\Models\VisaType::get(['name', 'code', 'category']) as $v) {
+            if ($v->name) {
+                $visaCategory[$v->name] = $v->category;
+            }
+            if ($v->code) {
+                $visaCategory[$v->code] = $v->category;
+            }
+        }
+        $formsByCategory = \App\Models\InzForm::where('is_active', true)->orderBy('code')->get()->groupBy('category');
+
+        $assignments = \App\Models\CaseFormAssignment::whereIn('lead_id', $cases->pluck('id'))
+            ->get()->groupBy('lead_id');
+
+        // Already-generated INZ drafts (LeadDocument source=generated, keyed by
+        // "inz:{code}") so each row can show + link to the latest draft.
+        $generated = \App\Models\LeadDocument::whereIn('lead_id', $cases->pluck('id'))
+            ->where('source', 'generated')
+            ->where('source_variant', 'like', 'inz:%')
+            ->orderByDesc('created_at')
+            ->get(['id', 'lead_id', 'source_variant', 'created_at'])
+            ->groupBy('lead_id');
+
+        // Flat rows for the register table: one per (case × available INZ form).
+        $rows = collect();
+        $casePicker = collect();
+        foreach ($cases as $l) {
+            $category = $l->inz_visa_type ? ($visaCategory[$l->inz_visa_type] ?? null) : null;
+            $forms = $category ? ($formsByCategory[$category] ?? collect()) : collect();
+            $mine = ($assignments[$l->id] ?? collect())->keyBy('inz_form_id');
+            $docs = $generated[$l->id] ?? collect(); // newest-first already
+            $name = trim("{$l->first_name} {$l->last_name}") ?: 'Unknown';
+
+            $casePicker->push([
+                'id' => $l->id,
+                'lead_id' => $l->lead_id,
+                'name' => $name,
+                'visa_type' => $l->inz_visa_type,
+                'category' => $category,
+            ]);
+
+            foreach ($forms as $f) {
+                $v = $f->currentVersion();
+                $a = $mine->get($f->id);
+                $doc = $docs->firstWhere('source_variant', "inz:{$f->code}");
+                $rows->push([
+                    'case_id' => $l->id,
+                    'lead_id' => $l->lead_id,
+                    'case_name' => $name,
+                    'code' => $f->code,
+                    'name' => $f->name,
+                    'category' => $f->category,
+                    'version' => $v?->version_label,
+                    'ready' => $v?->isReady() ?? false,
+                    'lapsing' => $v?->isLapsing() ?? false,
+                    'assignment_status' => $a?->status,
+                    'generated_document_id' => $doc?->id,
+                    'generated_at' => optional($doc?->created_at)->toIso8601String(),
+                ]);
+            }
+        }
+
+        // Newest generated drafts float to the top; ungenerated rows follow.
+        $rows = $rows->sortByDesc(fn ($r) => $r['generated_at'] ?? '')->values();
+
+        // Modal reference data: categories and the forms available under each.
+        $formsByCat = $formsByCategory->map(fn ($group) => $group->map(fn ($f) => [
+            'code' => $f->code,
+            'name' => $f->name,
+            'ready' => $f->currentVersion()?->isReady() ?? false,
+        ])->values());
+        $categories = \App\Models\VisaCategory::orderBy('name')->pluck('name')->values();
+
+        return inertia('portal/immigration/CaseInzForms', [
+            'rows' => $rows->values(),
+            'cases' => $casePicker->values(),
+            'categories' => $categories,
+            'formsByCategory' => $formsByCat,
+        ]);
     }
 
     /**
@@ -619,7 +770,7 @@ class ImmigrationController extends Controller
         return User::whereNotNull('iaa_licence_number')
             ->where('iaa_licence_number', '!=', '')
             ->orderBy('name')
-            ->get(['id', 'name', 'iaa_licence_number', 'signature_path'])
+            ->get(['id', 'name', 'iaa_licence_number', 'iaa_licence_expiry', 'signature_path'])
             ->map(fn ($u) => [
                 'id' => $u->id,
                 'name' => $u->name,
@@ -628,6 +779,11 @@ class ImmigrationController extends Controller
                 // otherwise suppress the "no signature" warning while the
                 // agreement still renders a blank signature line.
                 'has_signature' => $u->hasSignature(),
+                // A lapsed-licence adviser stays in the list but is flagged so
+                // the picker can warn/disable — generation is blocked server-
+                // side regardless (EngagementDocumentGenerator guard).
+                'licence_current' => $u->holdsCurrentLicence(),
+                'licence_expiry' => optional($u->iaa_licence_expiry)->toDateString(),
             ])
             ->values();
     }
@@ -906,6 +1062,24 @@ class ImmigrationController extends Controller
         $newStage = $data['immigration_stage'] ?? null;
         $stageMoved = ($lead->immigration_stage ?? null) !== $newStage;
 
+        // Build 12 phase 4.5 (§15.1): the process chain is the single
+        // authoritative writer of immigration_stage. When the case is on the
+        // chain, a manual stage change is re-pointed to a forward jump through
+        // the steps (an explicit override) instead of a direct column write.
+        // Cases not yet on the chain fall back to the legacy behaviour below.
+        $steps = app(\App\Services\Immigration\CaseStepService::class);
+        if ($newStage !== null && $steps->hasChain($lead)) {
+            if ($steps->jumpToStage($lead, $newStage, auth()->user())) {
+                if (array_key_exists('immigration_assignee', $data)) {
+                    $lead->immigration_assignee = $data['immigration_assignee'] ?: null;
+                    $lead->save();
+                }
+                \App\Jobs\EvaluateCaseFindings::dispatch($lead->id);
+
+                return back();
+            }
+        }
+
         if (array_key_exists('immigration_assignee', $data)) {
             $lead->immigration_assignee = $data['immigration_assignee'] ?: null;
         }
@@ -922,6 +1096,11 @@ class ImmigrationController extends Controller
 
         if ($stageMoved || $lead->isDirty('immigration_assignee')) {
             $lead->save();
+        }
+
+        // Re-evaluate findings off the request path when the stage moves (§8d).
+        if ($stageMoved) {
+            \App\Jobs\EvaluateCaseFindings::dispatch($lead->id);
         }
 
         return back();
@@ -942,6 +1121,80 @@ class ImmigrationController extends Controller
         $lead->save();
 
         return back();
+    }
+
+    /**
+     * Case custody handoff (Build 12 phase 2). One owner at a time; ownership
+     * changes only here, and only with the option of a note. Handing a case to
+     * yourself (to_user_id = self) is a claim — the same endpoint, no separate
+     * path. Stage is deliberately NOT touched: automatic custody movement
+     * arrives with the verdict in phase 5, derived from it.
+     */
+    public function handoff(\Illuminate\Http\Request $request, $id)
+    {
+        // Row-level scope: case-only, and 404 for anything that isn't an
+        // immigration case (EnsurePortalAccess is role-level only).
+        $lead = Lead::immigrationCase()->findOrFail($id);
+
+        $data = $request->validate([
+            'to_user_id' => ['required', 'integer', 'exists:users,id'],
+            'note' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        $me = auth()->user();
+        $newOwner = \App\Models\User::findOrFail($data['to_user_id']);
+
+        // The new owner must be able to work the immigration portal — you can't
+        // hand a case to someone who can't open it.
+        if (! $newOwner->canAccessPortal('immigration')) {
+            return back()->withErrors(['to_user_id' => 'That user cannot be assigned immigration cases.']);
+        }
+
+        $isClaim = $me && $newOwner->is($me);
+        $note = trim((string) ($data['note'] ?? ''));
+
+        $lead->current_owner_id = $newOwner->id;
+        $lead->owner_since = now();
+        $lead->save();
+
+        // The note (when given) lands as a case note so it's visible on the
+        // Notes tab — carried with the handoff, not lost in a toast.
+        if ($note !== '') {
+            \App\Models\LeadNote::create([
+                'lead_id' => $lead->id,
+                'user_id' => $me?->id,
+                'author_name' => $me?->name,
+                'author_role' => $me?->role,
+                'kind' => 'handoff',
+                'body' => ($isClaim ? 'Claimed case — ' : "Handed to {$newOwner->name} — ").$note,
+            ]);
+        }
+
+        // Show it in the Updated column (recordStaffActivity stamps quietly).
+        $lead->recordStaffActivity($isClaim ? 'Claimed case' : "Handed off to {$newOwner->name}");
+
+        // Audit trail (Build 12 §13).
+        \App\Models\ActivityLog::record('case.handoff', [
+            'description' => $isClaim
+                ? "{$me?->name} claimed case {$lead->lead_id}"
+                : "{$me?->name} handed case {$lead->lead_id} to {$newOwner->name}",
+            'properties' => [
+                'target_id' => $lead->id,
+                'to_user_id' => $newOwner->id,
+                'is_claim' => $isClaim,
+                'has_note' => $note !== '',
+            ],
+        ]);
+
+        // Notify the new owner — in-app + email, carrying the note, linking to
+        // the case. A claim doesn't notify yourself.
+        if (! $isClaim) {
+            $newOwner->notify(new \App\Notifications\CaseHandedOff($lead, $me?->name ?? 'A colleague', $note ?: null));
+        }
+
+        return back()->with('success', $isClaim
+            ? 'You now own this case.'
+            : "Case handed to {$newOwner->name}.");
     }
 
     /**
@@ -1222,10 +1475,15 @@ class ImmigrationController extends Controller
                 ->pluck('assessment_id')
                 ->flip();
 
-            $normalize = function ($intake, string $visaType, $assessment) use ($convertedAssessmentIds): array {
+            $normalize = function ($intake, string $visaType, $assessment, $review = null) use ($convertedAssessmentIds): array {
                 $first = (string) ($intake->first_name ?? '');
                 $last = (string) ($intake->last_name ?? $intake->family_name ?? '');
                 $hasAssessment = (bool) $assessment;
+
+                // Readiness — how COMPLETE & clean this submission is, so the
+                // adviser can prioritise the ready-to-action ones. NOT an
+                // eligibility/outcome signal (that would be AI-061, licence-gated).
+                [$readiness, $readinessPct] = $this->readinessFor($intake, $review);
 
                 // Triaged — staff have changed the intake status away from
                 // the default "Submitted"/"submitted"/"New" set. Anything
@@ -1249,6 +1507,10 @@ class ImmigrationController extends Controller
                     'phone' => $intake->phone,
                     'status' => $intake->status,
                     'created_at' => $intake->created_at,
+                    // Readiness prioritisation (completeness-based, not outcome).
+                    'readiness' => $readiness,        // ready | minor | needs_info
+                    'readiness_pct' => $readinessPct, // % of the form filled in
+                    'readiness_reviewed' => (bool) $review, // whether an AI review fed in
                     'extra' => $visaType === 'resident'
                         ? trim(($intake->current_visa_type ?? '').($intake->job_title ? ' · '.$intake->job_title : ''))
                         : null,
@@ -1294,11 +1556,29 @@ class ImmigrationController extends Controller
             $aStudent = $loadAssessments(\App\Models\StudentIntake::class, $student);
             $aVisitor = $loadAssessments(\App\Models\VisitorIntake::class, $visitor);
 
+            // Latest AI review per intake (if any) — feeds the readiness signal.
+            $loadReviews = function (string $modelClass, $intakes) {
+                if ($intakes->isEmpty()) {
+                    return collect();
+                }
+
+                return \App\Models\AssessmentAiReview::where('intakeable_type', $modelClass)
+                    ->whereIn('intakeable_id', $intakes->pluck('id'))
+                    ->orderByDesc('id')
+                    ->get()
+                    ->groupBy('intakeable_id')
+                    ->map(fn ($g) => $g->first());
+            };
+            $rvResident = $loadReviews(ResidentIntake::class, $resident);
+            $rvWork = $loadReviews(\App\Models\WorkIntake::class, $work);
+            $rvStudent = $loadReviews(\App\Models\StudentIntake::class, $student);
+            $rvVisitor = $loadReviews(\App\Models\VisitorIntake::class, $visitor);
+
             $rows = collect()
-                ->concat($resident->map(fn ($r) => $normalize($r, 'resident', $aResident->get($r->id))))
-                ->concat($work->map(fn ($r) => $normalize($r, 'work', $aWork->get($r->id))))
-                ->concat($student->map(fn ($r) => $normalize($r, 'student', $aStudent->get($r->id))))
-                ->concat($visitor->map(fn ($r) => $normalize($r, 'visitor', $aVisitor->get($r->id))));
+                ->concat($resident->map(fn ($r) => $normalize($r, 'resident', $aResident->get($r->id), $rvResident->get($r->id))))
+                ->concat($work->map(fn ($r) => $normalize($r, 'work', $aWork->get($r->id), $rvWork->get($r->id))))
+                ->concat($student->map(fn ($r) => $normalize($r, 'student', $aStudent->get($r->id), $rvStudent->get($r->id))))
+                ->concat($visitor->map(fn ($r) => $normalize($r, 'visitor', $aVisitor->get($r->id), $rvVisitor->get($r->id))));
 
             $intakes = $rows->sortByDesc('created_at')->values();
 
@@ -1393,6 +1673,157 @@ class ImmigrationController extends Controller
                 'status' => $lead->status,
             ] : null,
         ]);
+    }
+
+    /**
+     * Readiness of an intake for adviser prioritisation — how COMPLETE and clean
+     * the submission is, NOT how likely it is to succeed (that would be
+     * eligibility advice, AI-061, licence-gated). Blends form-field completeness
+     * with any AI review's flagged gaps.
+     *
+     * @return array{0: string, 1: int} [tier, completeness %]
+     */
+    private function readinessFor($intake, $review = null): array
+    {
+        // Plumbing fields don't count toward "did the applicant fill it in".
+        $skip = [
+            'id', 'created_at', 'updated_at', 'deleted_at', 'edit_token', 'token',
+            'booking_id', 'intake_id', 'status', 'intakeable_type', 'intakeable_id',
+            'payment_status', 'payment_session_id', 'payment_amount_cents',
+            'payment_currency', 'paid_at',
+        ];
+        $attrs = collect($intake->getAttributes())->except($skip);
+        $total = $attrs->count();
+        $filled = $attrs->filter(fn ($v) => $v !== null && $v !== '' && $v !== '[]' && $v !== '{}')->count();
+        $pct = $total > 0 ? (int) round($filled / $total * 100) : 0;
+
+        // Count "check"-severity flags from a stored AI review (gaps/inconsistencies).
+        $checks = 0;
+        if ($review) {
+            foreach (array_merge($review->observations ?? [], $review->risks ?? []) as $o) {
+                if (($o['severity'] ?? 'info') === 'check') {
+                    $checks++;
+                }
+            }
+        }
+
+        $tier = 'ready';
+        if ($pct < 60 || ($review && $checks >= 3)) {
+            $tier = 'needs_info';
+        } elseif ($pct < 85 || ($review && $checks >= 1)) {
+            $tier = 'minor';
+        }
+
+        return [$tier, $pct];
+    }
+
+    /** Map an assessment type slug to its intake model class. */
+    private function intakeClassFor(string $type): ?string
+    {
+        return [
+            'resident' => \App\Models\ResidentIntake::class,
+            'work' => \App\Models\WorkIntake::class,
+            'student' => \App\Models\StudentIntake::class,
+            'visitor' => \App\Models\VisitorIntake::class,
+        ][$type] ?? null;
+    }
+
+    /** Serialize a stored AI review for the frontend. */
+    private function serializeAiReview(?\App\Models\AssessmentAiReview $r): ?array
+    {
+        if (! $r) {
+            return null;
+        }
+
+        return [
+            'id' => $r->id,
+            'summary' => $r->summary,
+            'observations' => $r->observations ?? [],
+            'risks' => $r->risks ?? [],
+            'checklist' => $r->checklist ?? [],
+            'adviser_note' => $r->adviser_note,
+            'client_email' => $r->client_email ?? ['subject' => '', 'body' => ''],
+            'model' => $r->model,
+            'reviewed_by' => optional($r->reviewer)->name,
+            'created_at' => optional($r->created_at)->toIso8601String(),
+            'edited_by' => optional($r->editor)->name,
+            'edited_at' => optional($r->edited_at)->toIso8601String(),
+        ];
+    }
+
+    /**
+     * Return the last stored AI review for an intake (or null). Immigration
+     * staff only (route group). Internal, indicative — see aiReviewRun.
+     */
+    public function aiReviewShow(string $type, int $id)
+    {
+        abort_unless($this->intakeClassFor($type), 404);
+        $review = \App\Models\AssessmentAiReview::latestFor($this->intakeClassFor($type), $id);
+
+        return response()->json(['review' => $this->serializeAiReview($review)]);
+    }
+
+    /**
+     * Run an AI completeness/consistency review of an intake. INTERNAL and
+     * INDICATIVE only — it flags missing/inconsistent fields for the licensed
+     * adviser to follow up, and is NOT eligibility advice or a decision
+     * (immigration AI guardrails §1/§2). Immigration staff only (route group).
+     */
+    public function aiReviewRun(Request $request, string $type, int $id)
+    {
+        $class = $this->intakeClassFor($type);
+        abort_unless($class, 404);
+        $intake = $class::findOrFail($id);
+
+        $ai = app(\App\Services\OpenRouterService::class);
+        if (! $ai->configured()) {
+            return response()->json([
+                'message' => 'AI review isn\'t configured yet — add a valid OPENROUTER_API_KEY to .env.',
+            ], 422);
+        }
+
+        try {
+            $review = app(\App\Services\Immigration\AssessmentReviewService::class)
+                ->review($intake, $type, $request->user());
+        } catch (\Throwable $e) {
+            Log::error('AI assessment review failed', ['type' => $type, 'id' => $id, 'error' => $e->getMessage()]);
+
+            return response()->json(['message' => 'The AI review could not be completed. Please try again.'], 500);
+        }
+
+        return response()->json(['review' => $this->serializeAiReview($review)]);
+    }
+
+    /**
+     * Save the adviser's edits to the drafted note + client email on the latest
+     * review. The adviser is the author of record (guardrail §2) — the AI output
+     * stays in `raw`; this overwrites the working copy and stamps who/when.
+     */
+    public function aiReviewEdit(Request $request, string $type, int $id)
+    {
+        $class = $this->intakeClassFor($type);
+        abort_unless($class, 404);
+
+        $review = \App\Models\AssessmentAiReview::latestFor($class, $id);
+        abort_unless($review, 404, 'Run an AI review first.');
+
+        $data = $request->validate([
+            'adviser_note' => 'nullable|string|max:8000',
+            'client_email' => 'nullable|array',
+            'client_email.subject' => 'nullable|string|max:255',
+            'client_email.body' => 'nullable|string|max:8000',
+        ]);
+
+        $review->update([
+            'adviser_note' => $data['adviser_note'] ?? $review->adviser_note,
+            'client_email' => array_key_exists('client_email', $data)
+                ? ['subject' => $data['client_email']['subject'] ?? '', 'body' => $data['client_email']['body'] ?? '']
+                : $review->client_email,
+            'edited_by' => $request->user()->id,
+            'edited_at' => now(),
+        ]);
+
+        return response()->json(['review' => $this->serializeAiReview($review->fresh(['reviewer', 'editor']))]);
     }
 
     /**
@@ -1642,86 +2073,62 @@ class ImmigrationController extends Controller
 
     public function reports(Request $request)
     {
-        $period = in_array($request->input('period', 'weekly'), ['weekly', 'monthly', 'quarterly', 'custom'], true)
-            ? $request->input('period', 'weekly') : 'weekly';
-
+        // ── Date range (default: last 2 weeks) ───────────────────────────
+        [$preset, $from, $to] = $this->resolveReportRange($request);
         $now = now();
-        $weekStart = $now->copy()->startOfWeek();
+        $rangeDays = max(1, (int) $from->diffInDays($to) + 1);
 
         // Stage groupings (based on the case's current immigration_stage).
         $awaitingStages = ['Visa Lodged', 'Request for Information', 'Approved in Principle'];
-        $inProgress = ['For Assessment', 'Endorsed', 'Agreement Sent', 'Agreement Signed', 'For Agreement & Invoice', 'Invoice Paid'];
         $lodgedStages = ['Visa Lodged', 'Request for Information', 'Approved in Principle', 'Approved Visa', 'Decline Visa'];
         $endorsedStages = ['Endorsed', 'Agreement Sent', 'Agreement Signed', 'For Agreement & Invoice', 'Invoice Paid', 'Visa Lodged', 'Request for Information', 'Approved in Principle', 'Approved Visa', 'Decline Visa'];
         $engagedStages = ['Agreement Signed', 'For Agreement & Invoice', 'Invoice Paid', 'Visa Lodged', 'Request for Information', 'Approved in Principle', 'Approved Visa', 'Decline Visa'];
+        $terminalStages = ['Approved Visa', 'Decline Visa'];
 
         $count = fn ($stages) => Lead::immigrationCase()->whereIn('immigration_stage', (array) $stages)->count();
-        $countWeek = fn ($stages) => Lead::immigrationCase()
+        // Movements INTO a set of stages within the window (by stage_updated_at).
+        $inWindow = fn ($stages) => Lead::immigrationCase()
             ->whereIn('immigration_stage', (array) $stages)
-            ->where('stage_updated_at', '>=', $weekStart)
+            ->whereBetween('stage_updated_at', [$from, $to])
             ->count();
 
-        // Adviser most cases were endorsed/assigned to this week.
-        $adviser = Lead::immigrationCase()
-            ->whereNotNull('immigration_assignee')
-            ->where('stage_updated_at', '>=', $weekStart)
-            ->selectRaw('immigration_assignee, COUNT(*) as c')
-            ->groupBy('immigration_assignee')
-            ->orderByDesc('c')
-            ->first();
-
-        $weekly = [
-            'new_clients' => Lead::immigrationCase()->where('immigration_converted_at', '>=', $weekStart)->count(),
-            'files_endorsed' => $countWeek(['For Assessment', 'Endorsed']),
-            'endorsed_to' => $adviser->immigration_assignee ?? (Lead::IMMIGRATION_STAGE_ASSIGNEES[0] ?? 'the team'),
-            'endorsed_to_count' => (int) ($adviser->c ?? 0),
-            'agreements_signed' => $countWeek('Agreement Signed'),
-            'apps_lodged' => $countWeek('Visa Lodged'),
-            'visas_approved' => $countWeek('Approved Visa'),
+        // ── Activity in the selected window ──────────────────────────────
+        $activity = [
+            'new_clients' => Lead::immigrationCase()->whereBetween('immigration_converted_at', [$from, $to])->count(),
+            'files_endorsed' => $inWindow(['For Assessment', 'Endorsed']),
+            'agreements_signed' => $inWindow('Agreement Signed'),
+            'apps_lodged' => $inWindow('Visa Lodged'),
+            'visas_approved' => $inWindow('Approved Visa'),
+            'visas_declined' => $inWindow('Decline Visa'),
         ];
 
-        $pipeline = [
-            'ready' => $count('Invoice Paid'),
-            'in_progress' => $count($inProgress),
-            'awaiting_decision' => $count($awaitingStages),
-        ];
-
-        // ── Cases by stage — the full pipeline breakdown (primary focus) ──
+        // ── Cases by stage — current snapshot ────────────────────────────
         $stageDistribution = collect(Lead::IMMIGRATION_STAGES)
             ->map(fn ($s) => ['stage' => $s, 'count' => $count($s)])
             ->push(['stage' => 'Unassigned', 'count' => Lead::immigrationCase()->whereNull('immigration_stage')->count()])
             ->values();
         $totalCases = $stageDistribution->sum('count');
 
-        // ── Documents submitted this week (secondary focus) ──────────────
-        $docWeek = fn () => LeadDocument::where('created_at', '>=', $weekStart);
-        $byDay = [];
-        for ($i = 0; $i < 7; $i++) {
-            $day = $weekStart->copy()->addDays($i);
-            $byDay[] = [
-                'label' => $day->format('D'),
-                'count' => LeadDocument::whereBetween('created_at', [$day->copy()->startOfDay(), $day->copy()->endOfDay()])->count(),
-            ];
-        }
+        // ── Documents in the window ──────────────────────────────────────
+        $docWin = fn () => LeadDocument::whereBetween('created_at', [$from, $to]);
         $documents = [
-            'total' => (clone $docWeek())->count(),
-            'approved' => (clone $docWeek())->where('status', 'Approved')->count(),
-            'pending' => (clone $docWeek())->whereIn('status', ['Submitted', 'UnderReview'])->count(),
-            'rejected' => (clone $docWeek())->where('status', 'Rejected')->count(),
+            'total' => (clone $docWin())->count(),
+            'approved' => (clone $docWin())->where('status', 'Approved')->count(),
+            'pending' => (clone $docWin())->whereIn('status', ['Submitted', 'UnderReview'])->count(),
+            'rejected' => (clone $docWin())->where('status', 'Rejected')->count(),
             'pending_review_all' => LeadDocument::whereIn('status', ['Submitted', 'UnderReview'])->count(),
-            'by_day' => $byDay,
         ];
 
         // ── 6-month trend — new cases vs visas approved per month ────────
         $trend = [];
         for ($i = 5; $i >= 0; $i--) {
             $m = $now->copy()->subMonths($i);
-            $start = $m->copy()->startOfMonth();
-            $end = $m->copy()->endOfMonth();
+            $mStart = $m->copy()->startOfMonth();
+            $mEnd = $m->copy()->endOfMonth();
             $trend[] = [
                 'label' => $m->format('M'),
-                'new_cases' => Lead::immigrationCase()->whereBetween('immigration_converted_at', [$start, $end])->count(),
-                'approved' => Lead::immigrationCase()->where('immigration_stage', 'Approved Visa')->whereBetween('stage_updated_at', [$start, $end])->count(),
+                'new_cases' => Lead::immigrationCase()->whereBetween('immigration_converted_at', [$mStart, $mEnd])->count(),
+                'approved' => Lead::immigrationCase()->where('immigration_stage', 'Approved Visa')->whereBetween('stage_updated_at', [$mStart, $mEnd])->count(),
             ];
         }
 
@@ -1730,7 +2137,7 @@ class ImmigrationController extends Controller
         $decided = $approved + $declined;
 
         $kpis = [
-            'active_cases' => Lead::immigrationCase()->count(),
+            'active_cases' => Lead::immigrationCase()->whereNotIn('immigration_stage', $terminalStages)->count(),
             'with_inz' => $count($awaitingStages),
             'docs_pending' => $documents['pending_review_all'],
             'approval_rate' => $decided > 0 ? (int) round($approved / $decided * 100) : 0,
@@ -1748,17 +2155,218 @@ class ImmigrationController extends Controller
         ];
 
         return inertia('portal/immigration/Reports', [
-            'period' => $period,
+            'range' => [
+                'preset' => $preset,
+                'from' => $from->toDateString(),
+                'to' => $to->toDateString(),
+                'days' => $rangeDays,
+                'label' => $this->reportRangeLabel($preset, $from, $to),
+            ],
             'kpis' => $kpis,
-            'weekly' => $weekly,
+            'activity' => $activity,
             'stageDistribution' => $stageDistribution,
             'totalCases' => $totalCases,
             'documents' => $documents,
             'trend' => $trend,
             'ytd' => $ytd,
+            'attention' => $this->needsAttention($terminalStages),
+            'workload' => $this->adviserWorkload($terminalStages),
             'generated_at' => now()->toIso8601String(),
             'generated_by' => optional(auth()->user())->name,
         ]);
+    }
+
+    /**
+     * Resolve the report window from the request. Default is the last 14 days.
+     * Presets: two_weeks | this_month | last_month | quarter | custom(from,to).
+     *
+     * @return array{0: string, 1: \Illuminate\Support\Carbon, 2: \Illuminate\Support\Carbon}
+     */
+    private function resolveReportRange(Request $request): array
+    {
+        $now = now();
+        $preset = $request->input('preset', 'two_weeks');
+        if (! in_array($preset, ['two_weeks', 'this_month', 'last_month', 'quarter', 'custom'], true)) {
+            $preset = 'two_weeks';
+        }
+
+        switch ($preset) {
+            case 'this_month':
+                return [$preset, $now->copy()->startOfMonth(), $now->copy()->endOfDay()];
+            case 'last_month':
+                $m = $now->copy()->subMonthNoOverflow();
+
+                return [$preset, $m->copy()->startOfMonth(), $m->copy()->endOfMonth()];
+            case 'quarter':
+                return [$preset, $now->copy()->subMonthsNoOverflow(3)->startOfDay(), $now->copy()->endOfDay()];
+            case 'custom':
+                $from = $request->filled('from')
+                    ? \Illuminate\Support\Carbon::parse($request->input('from'))->startOfDay()
+                    : $now->copy()->subDays(14)->startOfDay();
+                $to = $request->filled('to')
+                    ? \Illuminate\Support\Carbon::parse($request->input('to'))->endOfDay()
+                    : $now->copy()->endOfDay();
+                if ($from->gt($to)) {
+                    [$from, $to] = [$to->copy()->startOfDay(), $from->copy()->endOfDay()];
+                }
+
+                return [$preset, $from, $to];
+            default: // two_weeks
+                return ['two_weeks', $now->copy()->subDays(14)->startOfDay(), $now->copy()->endOfDay()];
+        }
+    }
+
+    private function reportRangeLabel(string $preset, \Illuminate\Support\Carbon $from, \Illuminate\Support\Carbon $to): string
+    {
+        return match ($preset) {
+            'this_month' => $from->format('F Y'),
+            'last_month' => $from->format('F Y'),
+            'quarter' => 'Last 3 months',
+            'two_weeks' => 'Last 2 weeks',
+            default => $from->format('d M Y').' – '.$to->format('d M Y'),
+        };
+    }
+
+    /**
+     * Cases needing attention — merges the real operational signals so staff
+     * see what to chase first: stale custody, unassigned, blocking findings,
+     * overdue process steps, documents awaiting review, unanswered questions,
+     * and cases the adviser could not endorse. Snapshot (not window-bound).
+     *
+     * @param  array<int, string>  $terminalStages
+     * @return array<int, array<string, mixed>>
+     */
+    private function needsAttention(array $terminalStages): array
+    {
+        $now = now();
+        $amber = (int) config('immigration.custody_stale_amber_days', 6);
+        $red = (int) config('immigration.custody_stale_red_days', 10);
+        $docDays = 5;
+        $threadDays = (int) config('immigration.findings.thread_unanswered_days', 3);
+
+        // Active (non-terminal) cases, keyed by id, with owner for labelling.
+        $cases = Lead::immigrationCase()
+            ->where(function ($q) use ($terminalStages) {
+                $q->whereNotIn('immigration_stage', $terminalStages)->orWhereNull('immigration_stage');
+            })
+            ->with('owner:id,name')
+            ->get(['id', 'lead_id', 'first_name', 'last_name', 'current_owner_id', 'last_activity_at', 'updated_at', 'immigration_stage'])
+            ->keyBy('id');
+
+        if ($cases->isEmpty()) {
+            return [];
+        }
+        $ids = $cases->keys()->all();
+
+        $attn = [];
+        $bump = function ($id, string $reason, int $weight) use (&$attn, $cases) {
+            if (! isset($cases[$id])) {
+                return;
+            }
+            if (! isset($attn[$id])) {
+                $l = $cases[$id];
+                $idle = ($l->last_activity_at ?: $l->updated_at)?->diffInDays(now());
+                $attn[$id] = [
+                    'id' => $id,
+                    'name' => trim("{$l->first_name} {$l->last_name}") ?: ($l->lead_id ?: 'Unknown'),
+                    'owner' => optional($l->owner)->name,
+                    'stage' => $l->immigration_stage,
+                    'idle_days' => $idle !== null ? (int) $idle : null,
+                    'reasons' => [],
+                    'score' => 0,
+                ];
+            }
+            $attn[$id]['reasons'][] = $reason;
+            $attn[$id]['score'] += $weight;
+        };
+
+        // 1) Stale custody + unassigned.
+        foreach ($cases as $id => $l) {
+            $idle = (int) (($l->last_activity_at ?: $l->updated_at)?->diffInDays($now) ?? 0);
+            if ($idle >= $red) {
+                $bump($id, "No activity for {$idle} days", 2);
+            } elseif ($idle >= $amber) {
+                $bump($id, "Going stale ({$idle}d idle)", 1);
+            }
+            if (! $l->current_owner_id) {
+                $bump($id, 'Unassigned — no owner', 1);
+            }
+        }
+
+        // 2) Open blocking findings.
+        foreach (\App\Models\CaseFinding::whereIn('lead_id', $ids)->where('status', 'open')->where('severity', 'blocking')
+            ->selectRaw('lead_id, COUNT(*) c')->groupBy('lead_id')->pluck('c', 'lead_id') as $id => $c) {
+            $bump($id, $c.' blocking issue'.($c == 1 ? '' : 's'), 3);
+        }
+
+        // 3) Overdue process steps.
+        foreach (\App\Models\CaseStepState::whereIn('lead_id', $ids)->where('status', 'active')
+            ->whereNotNull('due_at')->where('due_at', '<', $now)
+            ->selectRaw('lead_id, COUNT(*) c')->groupBy('lead_id')->pluck('c', 'lead_id') as $id => $c) {
+            $bump($id, $c.' step'.($c == 1 ? '' : 's').' overdue', 2);
+        }
+
+        // 4) Documents awaiting review too long.
+        foreach (LeadDocument::whereIn('lead_id', $ids)->whereIn('status', ['Submitted', 'UnderReview'])
+            ->where('created_at', '<', $now->copy()->subDays($docDays))
+            ->selectRaw('lead_id, COUNT(*) c')->groupBy('lead_id')->pluck('c', 'lead_id') as $id => $c) {
+            $bump($id, $c.' doc'.($c == 1 ? '' : 's').' awaiting review', 1);
+        }
+
+        // 5) Unanswered questions (threads).
+        foreach (\App\Models\CaseThread::whereIn('lead_id', $ids)->awaitingAnswer()
+            ->where('created_at', '<=', $now->copy()->subDays($threadDays))
+            ->selectRaw('lead_id, COUNT(*) c')->groupBy('lead_id')->pluck('c', 'lead_id') as $id => $c) {
+            $bump($id, $c.' unanswered question'.($c == 1 ? '' : 's'), 2);
+        }
+
+        // 6) Latest verdict is cannot_endorse.
+        $latestVerdicts = \App\Models\CaseAttestation::whereIn('lead_id', $ids)->where('type', 'verdict')
+            ->orderByDesc('id')->get(['lead_id', 'verdict'])->unique('lead_id');
+        foreach ($latestVerdicts->where('verdict', 'cannot_endorse')->pluck('lead_id') as $id) {
+            $bump($id, 'Adviser could not endorse — on hold', 3);
+        }
+
+        return collect($attn)
+            ->sortByDesc(fn ($a) => [$a['score'], $a['idle_days'] ?? 0])
+            ->values()
+            ->take(30)
+            ->map(fn ($a) => array_merge($a, [
+                'severity' => $a['score'] >= 3 ? 'high' : ($a['score'] >= 2 ? 'medium' : 'low'),
+                'link' => "/portal/immigration/cases/{$a['id']}/profile",
+            ]))
+            ->all();
+    }
+
+    /**
+     * How the active caseload is spread across owners — plus an unassigned
+     * bucket — so a manager can see who's carrying what.
+     *
+     * @param  array<int, string>  $terminalStages
+     * @return array<int, array<string, mixed>>
+     */
+    private function adviserWorkload(array $terminalStages): array
+    {
+        $base = fn () => Lead::immigrationCase()->where(function ($q) use ($terminalStages) {
+            $q->whereNotIn('immigration_stage', $terminalStages)->orWhereNull('immigration_stage');
+        });
+
+        $counts = (clone $base())->whereNotNull('current_owner_id')
+            ->selectRaw('current_owner_id, COUNT(*) c')->groupBy('current_owner_id')->pluck('c', 'current_owner_id');
+
+        $names = User::whereIn('id', $counts->keys())->pluck('name', 'id');
+
+        $rows = $counts->map(fn ($c, $id) => [
+            'owner' => $names[$id] ?? 'Unknown',
+            'count' => (int) $c,
+        ])->sortByDesc('count')->values();
+
+        $unassigned = (clone $base())->whereNull('current_owner_id')->count();
+        if ($unassigned > 0) {
+            $rows->push(['owner' => 'Unassigned', 'count' => $unassigned]);
+        }
+
+        return $rows->all();
     }
 
     // Stubs — coming-soon pages.
@@ -1772,9 +2380,223 @@ class ImmigrationController extends Controller
         return inertia('portal/immigration/Intakes', []);
     }
 
+    /** INZ form catalogue + version register (upload official PDFs, map fields). */
     public function inzForms()
     {
-        return inertia('portal/immigration/InzForms', []);
+        $forms = \App\Models\InzForm::with(['versions' => fn ($q) => $q->orderByDesc('is_current')->orderByDesc('id')])
+            ->orderBy('category')->orderBy('code')
+            ->get()
+            ->map(fn (\App\Models\InzForm $f) => [
+                'id' => $f->id,
+                'code' => $f->code,
+                'name' => $f->name,
+                'category' => $f->category,
+                'is_active' => $f->is_active,
+                'versions' => $f->versions->map(fn (\App\Models\InzFormVersion $v) => [
+                    'id' => $v->id,
+                    'version_label' => $v->version_label,
+                    'is_current' => $v->is_current,
+                    'ready' => $v->isReady(),
+                    'is_acroform' => $v->is_acroform,
+                    'field_map' => $v->field_map ?? [],
+                    'effective_from' => optional($v->effective_from)->toDateString(),
+                    'accepted_until' => optional($v->accepted_until)->toDateString(),
+                    'lapsing' => $v->isLapsing(),
+                    'lapsed' => $v->hasLapsed(),
+                    'checked_at' => optional($v->checked_at)->toIso8601String(),
+                ])->values(),
+            ]);
+
+        $visaTypes = \App\Models\VisaType::orderBy('category')->orderBy('name')
+            ->get(['id', 'code', 'name', 'category']);
+
+        $categories = \App\Models\VisaCategory::orderBy('name')->get()->map(fn ($c) => [
+            'id' => $c->id,
+            'name' => $c->name,
+            'code' => $c->code,
+            'description' => $c->description,
+            'visa_type_ids' => $visaTypes->where('category', $c->name)->pluck('id')->values(),
+            'form_count' => $forms->where('category', $c->name)->count(),
+        ]);
+
+        return inertia('portal/immigration/InzForms', [
+            'forms' => $forms,
+            'categories' => $categories,
+            'visaTypes' => $visaTypes,
+            // The context keys a field map can reference (for the map editor).
+            'contextKeys' => array_keys(\App\Services\Immigration\InzCaseContext::for(new Lead)),
+        ]);
+    }
+
+    /** Create a visa category. */
+    public function categoryStore(Request $request)
+    {
+        $data = $request->validate([
+            'name' => 'required|string|max:60|unique:visa_categories,name',
+            'code' => 'nullable|string|max:20',
+            'description' => 'nullable|string|max:255',
+        ]);
+        \App\Models\VisaCategory::create($data);
+
+        return back()->with('success', "Added category {$data['name']}.");
+    }
+
+    /** Update a category (renaming re-tags its visa types + INZ forms). */
+    public function categoryUpdate(Request $request, \App\Models\VisaCategory $category)
+    {
+        $data = $request->validate([
+            'name' => 'required|string|max:60|unique:visa_categories,name,'.$category->id,
+            'code' => 'nullable|string|max:20',
+            'description' => 'nullable|string|max:255',
+        ]);
+
+        $oldName = $category->name;
+        $category->update($data);
+
+        if ($oldName !== $data['name']) {
+            \App\Models\VisaType::where('category', $oldName)->update(['category' => $data['name']]);
+            \App\Models\InzForm::where('category', $oldName)->update(['category' => $data['name']]);
+        }
+
+        return back()->with('success', "Updated category {$data['name']}.");
+    }
+
+    /** Delete a category (visa types / forms keep their string until reassigned). */
+    public function categoryDestroy(\App\Models\VisaCategory $category)
+    {
+        $name = $category->name;
+        $category->delete();
+
+        return back()->with('success', "Removed category {$name}.");
+    }
+
+    /** Set which visa types belong to a category (authoritative for that category). */
+    public function categoryAssignVisas(Request $request, \App\Models\VisaCategory $category)
+    {
+        $data = $request->validate([
+            'visa_type_ids' => 'present|array',
+            'visa_type_ids.*' => 'integer|exists:visa_types,id',
+        ]);
+
+        // Selected visas → this category; any previously in this category but no
+        // longer selected → cleared (the selection is the source of truth).
+        \App\Models\VisaType::where('category', $category->name)
+            ->whereNotIn('id', $data['visa_type_ids'])
+            ->update(['category' => null]);
+        \App\Models\VisaType::whereIn('id', $data['visa_type_ids'])
+            ->update(['category' => $category->name]);
+
+        return back()->with('success', "Updated visas under {$category->name}.");
+    }
+
+    /** Upload the official PDF for a form version (creates the version if new). */
+    public function inzUploadVersion(Request $request, \App\Models\InzForm $form)
+    {
+        $data = $request->validate([
+            'version_label' => 'required|string|max:40',
+            'file' => 'required|file|mimetypes:application/pdf|max:20480',
+            'effective_from' => 'nullable|date',
+            'accepted_until' => 'nullable|date',
+            'make_current' => 'boolean',
+        ]);
+
+        $bytes = file_get_contents($request->file('file')->getRealPath());
+        $path = "inz-forms/{$form->code}/".\Illuminate\Support\Str::slug($data['version_label']).'.pdf';
+        \Illuminate\Support\Facades\Storage::disk('local')->put($path, $bytes);
+
+        $version = $form->versions()->updateOrCreate(
+            ['version_label' => $data['version_label']],
+            [
+                'file_path' => $path,
+                'is_acroform' => app(\App\Services\Immigration\InzFormFiller::class)->looksLikeAcroForm($bytes),
+                'effective_from' => $data['effective_from'] ?? null,
+                'accepted_until' => $data['accepted_until'] ?? null,
+                'checked_at' => now(),
+                'uploaded_by' => auth()->id(),
+            ],
+        );
+
+        if ($request->boolean('make_current', true)) {
+            $form->versions()->where('id', '!=', $version->id)->update(['is_current' => false]);
+            $version->forceFill(['is_current' => true])->save();
+        }
+
+        return back()->with('success', "Uploaded {$form->code} {$data['version_label']}.");
+    }
+
+    /** Save the field map (pdf_field → context source) for a version. */
+    public function inzSaveFieldMap(Request $request, \App\Models\InzFormVersion $version)
+    {
+        $data = $request->validate([
+            'field_map' => 'present|array',
+            'field_map.*.pdf_field' => 'required|string|max:120',
+            'field_map.*.source' => 'nullable|string|max:120',
+            'field_map.*.literal' => 'nullable|string|max:255',
+        ]);
+
+        $version->forceFill(['field_map' => array_values($data['field_map']), 'checked_at' => now()])->save();
+
+        return back()->with('success', 'Field map saved.');
+    }
+
+    /** Record that a human verified this is still the current INZ version. */
+    public function inzMarkChecked(\App\Models\InzFormVersion $version)
+    {
+        $version->forceFill(['checked_at' => now()])->save();
+
+        return back()->with('success', 'Marked as checked.');
+    }
+
+    /** Create a new INZ form in the catalogue. */
+    public function inzStoreForm(Request $request)
+    {
+        $data = $request->validate([
+            'code' => 'required|string|max:20|unique:inz_forms,code',
+            'name' => 'required|string|max:255',
+            'category' => 'nullable|string|max:40',
+        ]);
+        \App\Models\InzForm::create($data + ['is_active' => true]);
+
+        return back()->with('success', "Added {$data['code']}.");
+    }
+
+    /** Update an INZ form's name / category / active flag. */
+    public function inzUpdateForm(Request $request, \App\Models\InzForm $form)
+    {
+        $data = $request->validate([
+            'name' => 'required|string|max:255',
+            'category' => 'nullable|string|max:40',
+            'is_active' => 'boolean',
+        ]);
+        $form->update($data);
+
+        return back()->with('success', "Updated {$form->code}.");
+    }
+
+    /** Delete an INZ form and its versions. */
+    public function inzDestroyForm(\App\Models\InzForm $form)
+    {
+        $code = $form->code;
+        $form->delete();
+
+        return back()->with('success', "Removed {$code}.");
+    }
+
+    /** Delete a single version. */
+    public function inzDeleteVersion(\App\Models\InzFormVersion $version)
+    {
+        $version->delete();
+
+        return back()->with('success', 'Version removed.');
+    }
+
+    /** Make a version the current one to file. */
+    public function inzSetCurrentVersion(\App\Models\InzFormVersion $version)
+    {
+        $version->form->versions()->where('id', '!=', $version->id)->update(['is_current' => false]);
+        $version->forceFill(['is_current' => true])->save();
+
+        return back()->with('success', "{$version->version_label} is now current.");
     }
 
     public function checklistTemplates()
@@ -1787,7 +2609,7 @@ class ImmigrationController extends Controller
         $me = auth()->user();
 
         return inertia('portal/immigration/Profile', [
-            'user' => $me->only(['id', 'name', 'email', 'role', 'iaa_licence_number', 'iaa_licence_type', 'iaa_licence_expiry']),
+            'user' => $me->only(['id', 'name', 'email', 'role', 'iaa_licence_number', 'iaa_licence_type', 'iaa_licence_expiry', 'iaa_licence_verified_at']),
             'signature' => [
                 'data_uri' => $me->signatureDataUri(),
                 'updated_at' => optional($me->signature_updated_at)?->toIso8601String(),
@@ -1797,20 +2619,13 @@ class ImmigrationController extends Controller
 
     public function updateProfile(Request $request)
     {
-        $validated = $request->validate([
-            'iaa_licence_number' => 'nullable|string|max:60',
-            'iaa_licence_type' => 'nullable|string|in:Full,Provisional,Limited',
-        ]);
-        try {
-            $me = auth()->user();
-            $me->fill($validated)->save();
-
-            return back()->with('success', 'Profile updated.');
-        } catch (\Throwable $e) {
-            Log::error('Immigration profile update failed', ['error' => $e->getMessage()]);
-
-            return back()->with('error', 'Could not update profile.');
-        }
+        // IAA licence details are a compliance record — admin-set + audited via
+        // the admin Users screen (Build 12 fast-follow). Self-service editing
+        // was removed so the advice gate cannot be self-certified: the licence
+        // that prints on a client's legal document is not something its holder
+        // edits. This endpoint no longer writes anything; the profile page
+        // shows the licence read-only and points staff at an administrator.
+        return back()->with('error', 'Licence details are managed by an administrator. Ask an admin to update your IAA licence record.');
     }
 
     /**

@@ -1,27 +1,13 @@
-import { useState } from "react";
-import { Head, router } from "@inertiajs/react";
-import { User, Mail, Briefcase, ShieldCheck, Lock, BadgeCheck } from "lucide-react";
+import { Head } from "@inertiajs/react";
+import { User, Mail, Briefcase, ShieldCheck, Lock, BadgeCheck, Info } from "lucide-react";
 import PortalPageHeader from "@/components/portal/PortalPageHeader";
 import AvatarUploader from "@/components/AvatarUploader";
 import SignatureCard from "@/components/SignatureCard";
 
-export default function ImmigrationProfile({ user, signature }) {
-    const initial = (user?.name || "?").slice(0, 1).toUpperCase();
-    const [form, setForm] = useState({
-        iaa_licence_number: user?.iaa_licence_number || "",
-        iaa_licence_type: user?.iaa_licence_type || "",
-    });
-    const [saving, setSaving] = useState(false);
+const fmtDate = (iso) =>
+    iso ? new Date(iso.slice(0, 10) + "T00:00:00").toLocaleDateString("en-NZ", { day: "numeric", month: "short", year: "numeric" }) : "—";
 
-    const submit = (e) => {
-        e?.preventDefault?.();
-        setSaving(true);
-        router.post('/portal/immigration/profile', form, {
-            preserveScroll: true,
-            preserveState: true,
-            onFinish: () => setSaving(false),
-        });
-    };
+export default function ImmigrationProfile({ user, signature }) {
     return (
         <div className="space-y-6 max-w-3xl mx-auto pb-12">
             <Head title="My Profile — Immigration" />
@@ -44,48 +30,30 @@ export default function ImmigrationProfile({ user, signature }) {
                 </dl>
             </section>
 
-            {/* IAA licence — real, editable. Surfaces on the dashboard
-                compliance card and on every case the adviser views. */}
-            <form onSubmit={submit} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-4">
-                <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2.5">
-                        <BadgeCheck size={16} className="text-amber-600" />
-                        <h2 className="text-sm font-bold uppercase tracking-[0.18em] text-gray-900">IAA licence</h2>
-                    </div>
-                    <button type="submit" disabled={saving} className="px-4 py-1.5 bg-amber-600 text-white rounded-lg text-[11px] font-bold uppercase tracking-wider hover:bg-amber-700 disabled:opacity-40">
-                        {saving ? 'Saving…' : 'Save'}
-                    </button>
+            {/* IAA licence — read-only. Admin-set + audited (Build 12): the
+                licence certifies authority to give advice and prints on a
+                client's legal document, so its holder does not edit it. */}
+            <section className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-4">
+                <div className="flex items-center gap-2.5">
+                    <BadgeCheck size={16} className="text-amber-600" />
+                    <h2 className="text-sm font-bold uppercase tracking-[0.18em] text-gray-900">IAA licence</h2>
                 </div>
-                <p className="text-[11px] text-gray-500">
-                    Required for NZ-licensed Immigration Advisers. Your licence number and type appear on the engagement documents you sign.
-                </p>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <label className="block">
-                        <span className="block text-[11px] font-semibold text-gray-600 mb-1.5">Licence number</span>
-                        <input
-                            type="text"
-                            value={form.iaa_licence_number}
-                            onChange={(e) => setForm((f) => ({ ...f, iaa_licence_number: e.target.value }))}
-                            placeholder="e.g. 201912345"
-                            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm font-mono outline-none focus:border-amber-500"
-                        />
-                    </label>
-                    <label className="block">
-                        <span className="block text-[11px] font-semibold text-gray-600 mb-1.5">Type of licence</span>
-                        <select
-                            value={form.iaa_licence_type}
-                            onChange={(e) => setForm((f) => ({ ...f, iaa_licence_type: e.target.value }))}
-                            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:border-amber-500 bg-white"
-                        >
-                            <option value="">Select…</option>
-                            <option value="Full">Full</option>
-                            <option value="Provisional">Provisional</option>
-                            <option value="Limited">Limited</option>
-                        </select>
-                    </label>
-                </div>
-            </form>
+                <dl className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <ReadField label="Licence number" value={user?.iaa_licence_number || "—"} mono />
+                    <ReadField label="Type of licence" value={user?.iaa_licence_type || "—"} />
+                    <ReadField label="Expiry" value={fmtDate(user?.iaa_licence_expiry)} />
+                    <ReadField label="Last verified on IAA register" value={fmtDate(user?.iaa_licence_verified_at)} />
+                </dl>
+
+                <p className="flex items-start gap-2 text-[11px] text-gray-500 bg-gray-50 border border-gray-100 rounded-xl px-3 py-2.5">
+                    <Info size={13} className="text-gray-400 shrink-0 mt-0.5" />
+                    <span>
+                        Your licence number and type appear on the engagement documents you sign.
+                        These details are managed by an administrator — <span className="font-semibold text-gray-700">contact an admin to update them</span>.
+                    </span>
+                </p>
+            </section>
 
             <SignatureCard
                 signature={signature}
@@ -121,6 +89,17 @@ export default function ImmigrationProfile({ user, signature }) {
                     </li>
                 </ul>
             </section>
+        </div>
+    );
+}
+
+function ReadField({ label, value, mono = false }) {
+    return (
+        <div>
+            <dt className="text-[11px] font-semibold text-gray-600 mb-1.5">{label}</dt>
+            <dd className={`w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-900 ${mono ? "font-mono" : ""}`}>
+                {value}
+            </dd>
         </div>
     );
 }

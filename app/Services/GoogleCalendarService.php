@@ -123,6 +123,58 @@ class GoogleCalendarService
     }
 
     /**
+     * Move an existing booking's calendar event to its (new) appointment_at.
+     * No-op when unconfigured or the booking has no event / no appointment.
+     * Notifies attendees so the client's calendar + Meet invite update.
+     */
+    public function updateConsultationEvent(Booking $booking): void
+    {
+        if (! self::isConfigured() || empty($booking->google_event_id) || blank($booking->appointment_at)) {
+            return;
+        }
+
+        $tz = $booking->client_timezone ?: 'UTC';
+        $start = Carbon::parse($booking->appointment_at)->setTimezone($tz);
+        $duration = (int) config('services.google_calendar.default_duration', 30);
+        $end = (clone $start)->addMinutes($duration > 0 ? $duration : 30);
+        $calId = (string) config('services.google_calendar.calendar_id', 'primary');
+
+        try {
+            $event = $this->calendar()->events->get($calId, $booking->google_event_id);
+            $event->setStart(new EventDateTime(['dateTime' => $start->toRfc3339String(), 'timeZone' => $tz]));
+            $event->setEnd(new EventDateTime(['dateTime' => $end->toRfc3339String(), 'timeZone' => $tz]));
+            $this->calendar()->events->update($calId, $booking->google_event_id, $event, ['sendUpdates' => 'all']);
+
+            Log::info('Booking calendar event moved', ['booking_id' => $booking->id]);
+        } catch (\Throwable $e) {
+            Log::error('Booking calendar event update failed', ['booking_id' => $booking->id, 'error' => $e->getMessage()]);
+        }
+    }
+
+    /**
+     * Delete a booking's calendar event, then clear the event id / Meet link.
+     * Idempotent. $notify=true emails attendees the cancellation (client-facing
+     * Cancel flow); pass false for a silent admin delete (no email).
+     */
+    public function cancelConsultationEvent(Booking $booking, bool $notify = true): void
+    {
+        if (self::isConfigured() && ! empty($booking->google_event_id)) {
+            $calId = (string) config('services.google_calendar.calendar_id', 'primary');
+            try {
+                $this->calendar()->events->delete($calId, $booking->google_event_id, ['sendUpdates' => $notify ? 'all' : 'none']);
+                Log::info('Booking calendar event deleted', ['booking_id' => $booking->id, 'notified' => $notify]);
+            } catch (\Throwable $e) {
+                Log::error('Booking calendar event delete failed', ['booking_id' => $booking->id, 'error' => $e->getMessage()]);
+            }
+        }
+
+        // Skip the save when the row is about to be deleted anyway.
+        if ($booking->exists) {
+            $booking->forceFill(['google_event_id' => null, 'meet_link' => null])->save();
+        }
+    }
+
+    /**
      * Busy intervals on the configured calendar between two instants, so the
      * booking page can hide already-taken slots. Returns [['start'=>ISO,
      * 'end'=>ISO], …]; empty when unconfigured or on any error (fail-open).

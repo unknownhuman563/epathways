@@ -7,6 +7,7 @@ import {
     Send, X as XIcon, AlertCircle, Paperclip,
 } from "lucide-react";
 import CaseFilesModal from "@/components/immigration/CaseFilesModal";
+import { ThreadItem, ThreadComposer } from "@/components/immigration/case-profile/threads";
 
 // Documents tab — table view that joins the visa-type checklist with
 // uploaded LeadDocuments by checklist_key. Each row is a required (or
@@ -41,7 +42,20 @@ export default function DocumentsTab({
     documents = [],
     checklist = { items: [] },
     checklistProgress = { required_total: 0, required_approved: 0, total: 0, approved: 0 },
+    threads = [],
+    caseStaff = [],
 }) {
+    // Build 12 phase 6 — document-anchored threads render on their document's
+    // row (and nowhere else). Group them by the document they anchor to.
+    const threadsByDoc = useMemo(() => {
+        const map = new Map();
+        for (const t of threads) {
+            if (t.anchor_type !== "document" || ! t.anchor_id) continue;
+            if (! map.has(t.anchor_id)) map.set(t.anchor_id, []);
+            map.get(t.anchor_id).push(t);
+        }
+        return map;
+    }, [threads]);
     // "File history" modal — every file on the case with its status, kept
     // separate from the checklist table below.
     const [filesOpen, setFilesOpen] = useState(false);
@@ -234,7 +248,13 @@ export default function DocumentsTab({
                                             </td>
                                         </tr>
                                         {groupRows.map((row) => (
-                                            <Row key={row.key} row={row} leadId={lead.id} />
+                                            <Row
+                                                key={row.key}
+                                                row={row}
+                                                leadId={lead.id}
+                                                docThreads={row.document ? (threadsByDoc.get(row.document.id) || []) : []}
+                                                caseStaff={caseStaff}
+                                            />
                                         ))}
                                     </Fragment>
                                 );
@@ -255,7 +275,7 @@ export default function DocumentsTab({
     );
 }
 
-function Row({ row, leadId }) {
+function Row({ row, leadId, docThreads = [], caseStaff = [] }) {
     const doc = row.document;
     const [status, setStatus] = useState(doc?.status || "");
     const [note, setNote] = useState(doc?.note || "");
@@ -322,6 +342,7 @@ function Row({ row, leadId }) {
     };
 
     return (
+        <Fragment>
         <tr className="border-b border-gray-50 last:border-b-0 align-top">
             {/* Document slot. For checklist rows the leading icon is a
                 tracker-visibility checkbox (checked = shown on the applicant's
@@ -464,6 +485,27 @@ function Row({ row, leadId }) {
                 />
             )}
         </tr>
+        {/* Build 12 phase 6 — threads anchored to THIS document render here and
+            nowhere else. A composer appears only when there's a file to anchor to. */}
+        {doc && (
+            <tr className="border-b border-gray-50 last:border-b-0">
+                <td colSpan={4} className="px-4 pb-3 pt-0">
+                    <div className="ml-6 space-y-1.5">
+                        {docThreads.map((t) => (
+                            <ThreadItem key={t.id} thread={t} leadId={leadId} />
+                        ))}
+                        <ThreadComposer
+                            leadId={leadId}
+                            caseStaff={caseStaff}
+                            fixedAnchor={{ anchor_type: "document", anchor_id: doc.id }}
+                            compact
+                            placeholder={`Ask about ${row.label}…`}
+                        />
+                    </div>
+                </td>
+            </tr>
+        )}
+        </Fragment>
     );
 }
 

@@ -24,7 +24,7 @@ const ATTAINMENTS = [
 const PATHWAYS = ['Study + Work Pathways', 'Work Pathway', 'Other'];
 const BRING_CHILDREN = ['Yes', 'No', 'Other'];
 
-export default function QuickRegisterPage() {
+export default function QuickRegisterPage({ referral = null }) {
     const { data, setData, post, processing, errors, wasSuccessful } = useForm({
         // Personal
         first_name: '', last_name: '', email: '', phone: '',
@@ -43,6 +43,9 @@ export default function QuickRegisterPage() {
         cv_files: [], passport_files: [], diploma_files: [], transcript_files: [],
         // Consents (map to the two server-required flags)
         terms_accepted: false, declaration_accepted: false,
+        // Agent attribution — carried through from /register?ref=CODE. The
+        // server validates the code and stamps lead.agent_id on save.
+        ref: referral?.code || '',
     });
 
     const isMarried = data.marital_status === 'Married';
@@ -107,6 +110,23 @@ export default function QuickRegisterPage() {
                         </div>
                     ) : (
                         <form onSubmit={submit} className="space-y-9">
+
+                            {/* Referring-agent banner — only when the URL
+                                carried ?ref=CODE that resolves to an
+                                actual agent. Purely informational; the
+                                real attribution rides in a hidden field
+                                below. */}
+                            {referral?.agent_name && (
+                                <div className="rounded-xl border border-[#436235]/30 bg-[#f4f8f0] px-4 py-3 flex items-start gap-3">
+                                    <CheckCircle size={18} className="text-[#436235] flex-shrink-0 mt-0.5" />
+                                    <div className="text-[13px] leading-snug">
+                                        <div className="font-bold text-[#282728]">Referred by {referral.agent_name}</div>
+                                        <div className="text-gray-600 mt-0.5">Your application will be linked to this agent so they can follow up with you.</div>
+                                    </div>
+                                </div>
+                            )}
+                            {/* Hidden pass-through for the referral code. */}
+                            {data.ref && <input type="hidden" name="ref" value={data.ref} />}
 
                             {/* Personal Information */}
                             <Section title="Personal Information">

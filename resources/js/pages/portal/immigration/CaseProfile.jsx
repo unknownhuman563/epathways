@@ -7,9 +7,13 @@ import DocumentsTab from "@/components/immigration/case-profile/tabs/DocumentsTa
 import AgreementTab from "@/components/immigration/case-profile/tabs/AgreementTab";
 import CommunicationsTab from "@/components/immigration/case-profile/tabs/CommunicationsTab";
 import AIHealthTab from "@/components/immigration/case-profile/tabs/AIHealthTab";
+import ProcessTab from "@/components/immigration/case-profile/tabs/ProcessTab";
 import NotesTab from "@/components/immigration/case-profile/tabs/NotesTab";
+import FinancialsTab from "@/components/immigration/case-profile/tabs/FinancialsTab";
+import InzFormsTab from "@/components/immigration/case-profile/tabs/InzFormsTab";
+import AiRecordAssistant from "@/components/ai/AiRecordAssistant";
 import {
-    ClipboardList, FileText, FileSignature, MessageSquare, Sparkles, StickyNote, User,
+    ClipboardList, FileText, FileSignature, MessageSquare, Sparkles, StickyNote, User, Workflow, DollarSign, FileCheck2,
 } from "lucide-react";
 
 // Build 11.D — Case Profile page. Six-tab workspace for an immigration case.
@@ -20,6 +24,9 @@ const TABS = [
     { key: "personal",       label: "Personal",        icon: User,            Comp: PersonalTab },
     { key: "assessment",     label: "Assessment",      icon: ClipboardList,   Comp: AssessmentTab },
     { key: "documents",      label: "Documents",       icon: FileText,        Comp: DocumentsTab },
+    { key: "process",        label: "Process",         icon: Workflow,        Comp: ProcessTab },
+    { key: "financials",     label: "Financials",      icon: DollarSign,      Comp: FinancialsTab },
+    { key: "inz_forms",      label: "INZ Forms",       icon: FileCheck2,      Comp: InzFormsTab },
     { key: "agreement",      label: "Agreement",       icon: FileSignature,   Comp: AgreementTab },
     { key: "communications", label: "Communications",  icon: MessageSquare,   Comp: CommunicationsTab },
     { key: "ai_health",      label: "AI Health",       icon: Sparkles,        Comp: AIHealthTab },
@@ -35,6 +42,11 @@ export default function CaseProfile() {
         checklistGrouped = {}, unstructuredDocuments = [],
         checklistProgress = { required_total: 0, required_approved: 0, total: 0, approved: 0 },
         communications = [], agreements = [], notes = [], activity = [],
+        findings = { items: [], evaluated_at: null, couldnt_verify: [] },
+        process = { started: false, steps: [], payment: null, partner: null },
+        threads = [], caseStaff = [], attention = null,
+        financials = { record: null, payments: [], totals: {}, referred_by: null },
+        inzForms = [],
     } = props;
 
     // Deep-link tab via ?tab=…  — preserved from the legacy
@@ -56,7 +68,7 @@ export default function CaseProfile() {
 
     const tabProps = {
         lead, intake, documents, checklist, checklistGrouped, unstructuredDocuments, checklistProgress,
-        communications, agreements, notes, activity,
+        communications, agreements, notes, activity, findings, process, threads, caseStaff, financials, inzForms,
     };
     const ActiveTab = TABS.find((t) => t.key === activeTab)?.Comp ?? AssessmentTab;
 
@@ -66,7 +78,7 @@ export default function CaseProfile() {
         <div className="max-w-[1300px] mx-auto pb-12 space-y-5">
             <Head title={`${fullName} — Case profile`} />
 
-            <CaseProfileHeader lead={lead} intake={intake} />
+            <CaseProfileHeader lead={lead} intake={intake} attention={attention} />
 
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
                 <div className="border-b border-gray-100 overflow-x-auto">
@@ -96,6 +108,8 @@ export default function CaseProfile() {
                     <ActiveTab {...tabProps} />
                 </div>
             </div>
+
+            <AiRecordAssistant subjectId={lead.id} label={`${fullName} · immigration case`} immigration />
         </div>
     );
 }

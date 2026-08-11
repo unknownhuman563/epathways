@@ -1,7 +1,8 @@
+import { useState } from "react";
 import { Head, Link, usePage } from "@inertiajs/react";
 import {
     Users as UsersIcon, CalendarDays, CalendarRange, CheckCircle2,
-    Plus, ArrowRight, Mail, Phone,
+    Plus, ArrowRight, Mail, Phone, Link as LinkIcon, Copy, Check,
 } from "lucide-react";
 import Avatar from "@/components/ui/Avatar";
 
@@ -14,8 +15,28 @@ const fmtDate = (iso) => {
     return new Date(iso).toLocaleDateString("en-NZ", { day: "2-digit", month: "short" });
 };
 
-export default function AgentDashboard({ stats = {}, recent = [] }) {
+export default function AgentDashboard({ stats = {}, recent = [], referral = null }) {
     const user = usePage().props?.auth?.user;
+    const [copied, setCopied] = useState(false);
+
+    const copyReferral = async () => {
+        if (! referral?.url) return;
+        try {
+            await navigator.clipboard.writeText(referral.url);
+            setCopied(true);
+            setTimeout(() => setCopied(false), 1800);
+        } catch (e) {
+            // Older browsers / http contexts — fall back to a selection copy.
+            const t = document.createElement('textarea');
+            t.value = referral.url;
+            document.body.appendChild(t);
+            t.select();
+            document.execCommand('copy');
+            document.body.removeChild(t);
+            setCopied(true);
+            setTimeout(() => setCopied(false), 1800);
+        }
+    };
 
     const cards = [
         { label: "Total Leads", value: stats.total ?? 0, icon: <UsersIcon className="w-5 h-5" />, dark: true },
@@ -54,6 +75,46 @@ export default function AgentDashboard({ stats = {}, recent = [] }) {
                     </div>
                 ))}
             </div>
+
+            {/* Personal referral link — share this URL and every lead who
+                registers through it is auto-attributed to this agent, so
+                sales sees the source immediately. */}
+            {referral?.url && (
+                <div className="rounded-2xl bg-gradient-to-br from-gray-900 via-gray-900 to-gray-800 text-white shadow-lg overflow-hidden">
+                    <div className="flex flex-col lg:flex-row lg:items-center gap-4 p-5">
+                        <div className="flex items-center gap-3 flex-shrink-0">
+                            <div className="w-11 h-11 rounded-xl bg-white/10 flex items-center justify-center">
+                                <LinkIcon size={18} />
+                            </div>
+                            <div>
+                                <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-gray-300">Your referral link</div>
+                                <div className="text-[13px] font-semibold mt-0.5">
+                                    Share it — new sign-ups are credited to you automatically.
+                                </div>
+                            </div>
+                        </div>
+                        <div className="flex-1 flex items-center gap-2 min-w-0">
+                            <div className="flex-1 min-w-0 bg-white/10 border border-white/10 rounded-lg px-3 py-2.5 font-mono text-[12px] truncate" title={referral.url}>
+                                {referral.url}
+                            </div>
+                            <button
+                                type="button"
+                                onClick={copyReferral}
+                                className={`inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-lg text-[12px] font-bold transition-colors flex-shrink-0 ${
+                                    copied ? 'bg-emerald-500 text-white' : 'bg-white text-gray-900 hover:bg-gray-100'
+                                }`}
+                            >
+                                {copied ? <><Check size={13} strokeWidth={3} /> Copied</> : <><Copy size={13} /> Copy</>}
+                            </button>
+                        </div>
+                    </div>
+                    {referral.code && (
+                        <div className="px-5 pb-3 -mt-1 text-[11px] text-gray-400 flex items-center gap-1.5">
+                            Code: <span className="font-mono font-semibold text-gray-200">{referral.code}</span>
+                        </div>
+                    )}
+                </div>
+            )}
 
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
                 <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">

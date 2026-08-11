@@ -4,12 +4,18 @@ namespace App\Services;
 
 use App\Models\AiConversation;
 use App\Models\AiMessage;
+use App\Models\Lead;
 use App\Models\User;
 
 /**
  * Orchestrates one staff chat turn: persists the user message, replays the
  * last N messages as context, calls the model, and persists the reply.
  * Conversations are per-user and survive across sessions.
+ *
+ * When a `$subject` Lead is passed, the turn is a READ-ONLY "ask about this
+ * record" — the record's factual briefing is injected each turn and the
+ * assistant is constrained to answer only from it (and, for immigration
+ * cases, never to give advice).
  */
 class AiChatService
 {
@@ -18,10 +24,12 @@ class AiChatService
     /**
      * @return array{conversation: AiConversation, message: AiMessage}
      */
-    public function sendMessage(User $user, ?AiConversation $conversation, string $userMessage): array
+    public function sendMessage(User $user, ?AiConversation $conversation, string $userMessage, ?Lead $subject = null): array
     {
         $conversation = $conversation ?? AiConversation::create([
             'user_id'         => $user->id,
+            'subject_type'    => $subject ? 'lead' : null,
+            'subject_id'      => $subject?->id,
             'title'           => str()->limit($userMessage, 60, ''),
             'last_message_at' => now(),
         ]);
@@ -37,10 +45,17 @@ class AiChatService
             ->map(fn (AiMessage $m) => ['role' => $m->role, 'content' => $m->content])
             ->all();
 
-        $messages = array_merge(
-            [['role' => 'system', 'content' => $this->ai->getSystemPrompt($user)]],
-            $history,
-        );
+        $system = [['role' => 'system', 'content' => $this->ai->getSystemPrompt($user)]];
+
+        // Record-scoped turn: inject the factual briefing + guardrails as an
+        // extra system message so the model always has the current facts and
+        // can't wander outside them.
+        if ($subject) {
+            $ctx = AiRecordContext::for($subject);
+            $system[] = ['role' => 'system', 'content' => $this->recordInstructions($ctx)];
+        }
+
+        $messages = array_merge($system, $history);
 
         $result = $this->ai->chat($messages);
         $assistantContent = $result['content']
@@ -60,5 +75,27 @@ class AiChatService
             'conversation' => $conversation->fresh(),
             'message'      => $assistantMessage,
         ];
+    }
+
+    /**
+     * The system message that grounds a record-scoped turn: the factual
+     * briefing, the read-only boundary, and — for immigration cases — the
+     * hard no-advice guardrail.
+     *
+     * @param  array{label: string, is_immigration: bool, text: string}  $ctx
+     */
+    private function recordInstructions(array $ctx): string
+    {
+        $rules = [
+            'You are answering questions about ONE specific record for the staff member.',
+            'Use ONLY the RECORD BRIEFING below and the conversation. If a detail is not in the briefing, say it is "not on file" — never guess or invent client details.',
+            'You are READ-ONLY: you cannot change records, upload documents, send messages, or take any action. If asked to do something, explain the staff member must do it themselves in the portal.',
+        ];
+
+        if ($ctx['is_immigration']) {
+            $rules[] = 'CRITICAL — this is an immigration case. You must NOT give immigration advice or any opinion on eligibility, chances, or the likely outcome. Only a Licensed Immigration Adviser may do that. Limit yourself to status, process, and which documents or steps are outstanding, drawn from the briefing. If asked anything advisory, say it must be referred to the Licensed Immigration Adviser.';
+        }
+
+        return implode("\n", $rules)."\n\n".$ctx['text'];
     }
 }

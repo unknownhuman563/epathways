@@ -202,6 +202,12 @@ class AIService
             'X-Title' => 'ePathways CRM',
         ])
             ->timeout((int) config('ai.timeout_seconds', 30))
+            // Bound the TCP connect phase so a dead route (e.g. a host with
+            // broken IPv6) fails fast instead of hanging for minutes, and
+            // force IPv4 — some networks advertise IPv6 to openrouter.ai but
+            // can't actually reach it, which stalls the whole request.
+            ->connectTimeout((int) config('ai.connect_timeout_seconds', 10))
+            ->withOptions(['curl' => [CURLOPT_IPRESOLVE => CURL_IPRESOLVE_V4]])
             ->post(rtrim(config('ai.base_url'), '/').'/chat/completions', $payload);
     }
 

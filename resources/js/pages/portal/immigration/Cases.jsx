@@ -7,6 +7,7 @@ import {
     FileText, ExternalLink, Users, Calendar, ArrowUpDown,
     ArrowUp, ArrowDown, Plus, X, TrendingUp, Copy, MoreHorizontal,
     Archive, Pencil, Mail, Phone, Paperclip, KeyRound,
+    ArrowLeftRight, UserPlus, Loader2, Check, Eye,
 } from "lucide-react";
 import { AvatarPhoto } from "@/components/ui/Avatar";
 import CaseFilesModal from "@/components/immigration/CaseFilesModal";
@@ -91,7 +92,7 @@ const tabKeyForStage = (stage) => {
     return hit ? hit.key : 'applications';
 };
 
-export default function ImmigrationCases({ cases = [], distribution = [], priorities = {}, stages = [], visaTypes = [], total: totalCount = null, loaded = null }) {
+export default function ImmigrationCases({ cases = [], distribution = [], priorities = {}, stages = [], visaTypes = [], me_id = null, staff = [], total: totalCount = null, loaded = null }) {
     // True queue size vs. how many the server actually loaded. When these
     // differ, the safety ceiling truncated the list — warn loudly rather than
     // silently hiding cases (the "For Assessment cases vanished" bug).
@@ -101,6 +102,7 @@ export default function ImmigrationCases({ cases = [], distribution = [], priori
     const truncated = loaded != null && totalCount != null && loaded < totalCount;
     const [search, setSearch] = useState("");
     const [stageFilter, setStageFilter] = useState(null); // click a bar/legend → filter
+    const [custodyFilter, setCustodyFilter] = useState('all'); // all | mine | unassigned
     const [sortKey, setSortKey] = useState("updated_at");
     const [sortDir, setSortDir] = useState("desc");
     const [openStageMenuId, setOpenStageMenuId] = useState(null);
@@ -108,7 +110,19 @@ export default function ImmigrationCases({ cases = [], distribution = [], priori
     const [creating, setCreating] = useState(false);
     const [editingCase, setEditingCase] = useState(null); // case row being edited
     const [filesCase, setFilesCase] = useState(null);     // case whose files are open
+    const [handoffCase, setHandoffCase] = useState(null);  // case being handed off / claimed
     const [tab, setTab] = useState('applications');
+
+    // "In my queue" = I own it OR someone put an answer-requiring question to me
+    // on it (Build 12 phase 6). The latter lands the case in my queue even when
+    // I don't own it.
+    const inMyQueue = (c) => (me_id && c.owner?.id === me_id) || (c.awaiting_my_answer > 0);
+
+    // Custody counts for the My-queue / Unassigned filter chips.
+    const custodyCounts = useMemo(() => ({
+        mine: me_id ? cases.filter(inMyQueue).length : 0,
+        unassigned: cases.filter((c) => !c.owner).length,
+    }), [cases, me_id]);
 
     const tabCounts = useMemo(() => {
         const counts = { all: cases.length };
@@ -123,6 +137,8 @@ export default function ImmigrationCases({ cases = [], distribution = [], priori
         return cases.filter((c) => {
             // The "All" tab shows every stage; the others bucket by stage.
             if (tab !== 'all' && tabKeyForStage(c.immigration_stage) !== tab) return false;
+            if (custodyFilter === 'mine' && ! inMyQueue(c)) return false;
+            if (custodyFilter === 'unassigned' && c.owner) return false;
             if (stageFilter) {
                 const s = c.immigration_stage || 'Unassigned';
                 if (s !== stageFilter) return false;
@@ -132,7 +148,7 @@ export default function ImmigrationCases({ cases = [], distribution = [], priori
                 c.name, c.lead_id, c.email, c.phone, c.country, c.inz_visa_type, c.inz_reference,
             ].some((v) => (v || '').toString().toLowerCase().includes(q));
         });
-    }, [cases, search, stageFilter, tab]);
+    }, [cases, search, stageFilter, tab, custodyFilter, me_id]);
 
     const sorted = useMemo(() => {
         const arr = [...filtered];
@@ -255,6 +271,31 @@ export default function ImmigrationCases({ cases = [], distribution = [], priori
                             <span className="text-gray-300">×</span>
                         </button>
                     )}
+
+                    {/* Custody filter — My queue / Unassigned are first-class
+                        triage views. Unassigned is where dropped cases surface. */}
+                    <div className="flex items-center gap-1 rounded-lg border border-gray-200 bg-gray-50 p-0.5">
+                        {[
+                            { key: 'all', label: 'All' },
+                            { key: 'mine', label: 'My queue', count: custodyCounts.mine },
+                            { key: 'unassigned', label: 'Unassigned', count: custodyCounts.unassigned },
+                        ].map((f) => (
+                            <button
+                                key={f.key}
+                                type="button"
+                                onClick={() => setCustodyFilter(f.key)}
+                                className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors flex items-center gap-1.5 ${
+                                    custodyFilter === f.key ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-800'
+                                }`}
+                            >
+                                {f.label}
+                                {f.count !== undefined && (
+                                    <span className={`text-[10px] tabular-nums ${custodyFilter === f.key ? 'text-gray-400' : 'text-gray-400'}`}>{f.count}</span>
+                                )}
+                            </button>
+                        ))}
+                    </div>
+
                     <div className="text-[11px] font-semibold text-gray-500 ml-auto">
                         Showing <span className="text-gray-900">{sorted.length}</span> of {trueTotal} cases
                     </div>
@@ -283,6 +324,7 @@ export default function ImmigrationCases({ cases = [], distribution = [], priori
                                 <SortableTh label="Visa"        sortKey="visa"      current={sortKey} dir={sortDir} onSort={toggleSort} />
                                 <SortableTh label="Country"     sortKey="country"   current={sortKey} dir={sortDir} onSort={toggleSort} />
                                 <th className="px-3 py-3">Docs</th>
+                                <th className="px-3 py-3">With</th>
                                 <SortableTh label="Updated" sortKey="updated_at" current={sortKey} dir={sortDir} onSort={toggleSort} />
                                 <th className="px-3 py-3 text-right pr-4">Actions</th>
                             </tr>
@@ -290,7 +332,7 @@ export default function ImmigrationCases({ cases = [], distribution = [], priori
                         <tbody className="divide-y divide-gray-100">
                             {sorted.length === 0 ? (
                                 <tr>
-                                    <td colSpan={8} className="px-6 py-20 text-center">
+                                    <td colSpan={9} className="px-6 py-20 text-center">
                                         <div className="flex flex-col items-center gap-2 text-gray-400">
                                             <Globe size={22} />
                                             <p className="text-sm font-medium">
@@ -306,6 +348,7 @@ export default function ImmigrationCases({ cases = [], distribution = [], priori
                                 <CaseRow
                                     key={c.id}
                                     c={c}
+                                    meId={me_id}
                                     stages={stages}
                                     visaTypes={visaTypes}
                                     isExpanded={expandedId === c.id}
@@ -315,6 +358,7 @@ export default function ImmigrationCases({ cases = [], distribution = [], priori
                                     onStageMenuClose={() => setOpenStageMenuId(null)}
                                     onEdit={() => setEditingCase(c)}
                                     onViewFiles={() => setFilesCase(c)}
+                                    onHandoff={() => setHandoffCase(c)}
                                 />
                             ))}
                         </tbody>
@@ -337,6 +381,15 @@ export default function ImmigrationCases({ cases = [], distribution = [], priori
                     leadId={filesCase.id}
                     leadName={filesCase.name}
                     onClose={() => setFilesCase(null)}
+                />
+            )}
+
+            {handoffCase && (
+                <HandoffModal
+                    c={handoffCase}
+                    meId={me_id}
+                    staff={staff}
+                    onClose={() => setHandoffCase(null)}
                 />
             )}
         </div>
@@ -867,7 +920,7 @@ function DistributionGraph({ distribution = [], total = 0, activeStage = null, o
 
 // ─── Table row ──────────────────────────────────────────────────────────
 
-function CaseRow({ c, stages, visaTypes = [], isExpanded, onExpand, stageMenuOpen, onStageMenuToggle, onStageMenuClose, onEdit, onViewFiles }) {
+function CaseRow({ c, meId = null, stages, visaTypes = [], isExpanded, onExpand, stageMenuOpen, onStageMenuToggle, onStageMenuClose, onEdit, onViewFiles, onHandoff }) {
     // DOCS progress reflects the visa checklist: how many required items
     // the case has submitted, out of the total required.
     const chkTotal = c.checklist_total || 0;
@@ -913,6 +966,7 @@ function CaseRow({ c, stages, visaTypes = [], isExpanded, onExpand, stageMenuOpe
                             {c.lead_id && (
                                 <div className="text-[11px] text-gray-400 font-mono truncate">{c.lead_id}</div>
                             )}
+                            <AttentionChip openedAt={c.attention_opened_at} />
                         </div>
                         {needsAttention && (
                             <span title="Needs attention" className="flex-shrink-0">
@@ -964,6 +1018,14 @@ function CaseRow({ c, stages, visaTypes = [], isExpanded, onExpand, stageMenuOpe
                     ) : (
                         <span className="text-gray-300">—</span>
                     )}
+                </td>
+
+                {/* With — current owner + how long they've held it (plain
+                    text). The colour is a separate staleness dot driven by days
+                    since last activity, so "long" and "stuck" don't get
+                    conflated. */}
+                <td className="px-3 py-2.5 whitespace-nowrap">
+                    <CustodyCell c={c} meId={meId} />
                 </td>
 
                 {/* Updated — the last staff activity on this case: when, who,
@@ -1020,6 +1082,12 @@ function CaseRow({ c, stages, visaTypes = [], isExpanded, onExpand, stageMenuOpe
                                 icon: ExternalLink,
                                 href: `/portal/immigration/cases/${c.id}/profile`,
                             },
+                            {
+                                key: 'handoff',
+                                label: c.owner ? 'Hand off case' : 'Claim / assign',
+                                icon: ArrowLeftRight,
+                                onClick: () => onHandoff?.(),
+                            },
                             portalRequestItem(c, requestCasePortal),
                             {
                                 key: 'edit',
@@ -1041,12 +1109,227 @@ function CaseRow({ c, stages, visaTypes = [], isExpanded, onExpand, stageMenuOpe
 
             {isExpanded && (
                 <tr className="bg-amber-50/20 border-t border-amber-100/60">
-                    <td colSpan={8} className="px-6 py-4">
+                    <td colSpan={9} className="px-6 py-4">
                         <CaseDetail c={c} />
                     </td>
                 </tr>
             )}
         </React.Fragment>
+    );
+}
+
+// Compact "owned for" duration — plain text, no colour. "12d", "3h", "just now".
+function ownedForShort(iso) {
+    if (!iso) return null;
+    const ms = Date.now() - new Date(iso).getTime();
+    if (ms < 0) return "just now";
+    const mins = Math.floor(ms / 60000);
+    if (mins < 60) return mins <= 1 ? "just now" : `${mins}m`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return `${hrs}h`;
+    return `${Math.floor(hrs / 24)}d`;
+}
+
+const STALE_DOT = { amber: "bg-amber-400", red: "bg-rose-500" };
+
+/**
+ * The "With" cell — owner + how long they've held the case (plain text), plus a
+ * separate staleness dot from days-since-last-activity. Ownership duration and
+ * "stuck" are deliberately not the same signal.
+ */
+/**
+ * Build 12 phase 4 — attention chip. Shows whether a licensed adviser has
+ * opened this case, and when. Deliberately carries no time-on-case — the signal
+ * is "has the adviser looked", not how long they spent. Staff board only.
+ */
+function AttentionChip({ openedAt }) {
+    if (! openedAt) {
+        return (
+            <span className="mt-0.5 inline-flex items-center gap-1 text-[10px] font-semibold text-gray-400">
+                <Eye size={10} className="opacity-60" /> Not opened
+            </span>
+        );
+    }
+    return (
+        <span
+            title={`Adviser last opened ${fmtDateTime(openedAt)}`}
+            className="mt-0.5 inline-flex items-center gap-1 text-[10px] font-semibold text-teal-600"
+        >
+            <Eye size={10} /> Opened {fmtDate(openedAt)}
+        </span>
+    );
+}
+
+function CustodyCell({ c, meId = null }) {
+    const owner = c.owner;
+    const isMine = owner && owner.id === meId;
+    const staleTitle = c.custody_stale
+        ? `No activity for ${c.idle_days} day${c.idle_days === 1 ? "" : "s"}`
+        : null;
+
+    return (
+        <div className="flex items-center gap-2 min-w-[120px]">
+            {owner ? (
+                <>
+                    <div className="w-6 h-6 rounded-full overflow-hidden bg-gray-100 ring-1 ring-gray-200 flex items-center justify-center text-[9px] font-bold text-gray-500 flex-shrink-0">
+                        <AvatarPhoto src={owner.avatar_url} title={owner.name}>
+                            {initials(owner.name)}
+                        </AvatarPhoto>
+                    </div>
+                    <div className="min-w-0">
+                        <div className={`text-xs font-medium truncate max-w-[110px] ${isMine ? "text-amber-700" : "text-gray-800"}`}>
+                            {isMine ? "You" : owner.name}
+                        </div>
+                        {c.owner_since && (
+                            <div className="text-[10px] text-gray-400 tabular-nums">{ownedForShort(c.owner_since)}</div>
+                        )}
+                    </div>
+                </>
+            ) : (
+                <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Unassigned</span>
+            )}
+            {/* Build 12 phase 6 — an open question addressed to me on this case.
+                It's in my queue even if I don't own it. */}
+            {c.awaiting_my_answer > 0 && (
+                <span
+                    title={`${c.awaiting_my_answer} open question${c.awaiting_my_answer === 1 ? "" : "s"} for you`}
+                    className="ml-1 inline-flex items-center px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 text-[10px] font-bold flex-shrink-0"
+                >
+                    {c.awaiting_my_answer} ask{c.awaiting_my_answer === 1 ? "" : "s"}
+                </span>
+            )}
+            {c.custody_stale && (
+                <span title={staleTitle} className="ml-auto flex-shrink-0">
+                    <span className={`block w-2 h-2 rounded-full ${STALE_DOT[c.custody_stale]}`} />
+                </span>
+            )}
+        </div>
+    );
+}
+
+/**
+ * Handoff / claim modal. Picks a new owner (self = claim, same endpoint) and
+ * carries an optional note that reaches the recipient in-app + email and lands
+ * on the case's Notes tab.
+ */
+function HandoffModal({ c, meId = null, staff = [], onClose }) {
+    const [toUserId, setToUserId] = useState(null);
+    const [note, setNote] = useState("");
+    const [search, setSearch] = useState("");
+    const [submitting, setSubmitting] = useState(false);
+
+    const filtered = useMemo(() => {
+        const q = search.trim().toLowerCase();
+        return q ? staff.filter((s) => s.name.toLowerCase().includes(q)) : staff;
+    }, [staff, search]);
+
+    const alreadyMine = c.owner?.id === meId;
+
+    const submit = (targetId) => {
+        if (!targetId) return;
+        setSubmitting(true);
+        router.post(`/portal/immigration/cases/${c.id}/handoff`, { to_user_id: targetId, note }, {
+            preserveScroll: true,
+            onSuccess: () => onClose(),
+            onError: () => toast.error("Could not hand off the case."),
+            onFinish: () => setSubmitting(false),
+        });
+    };
+
+    return (
+        <div className="fixed inset-0 z-[100] bg-black/40 backdrop-blur-sm flex items-center justify-center p-4" onClick={onClose}>
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md" onClick={(e) => e.stopPropagation()}>
+                <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+                    <div className="flex items-center gap-2.5">
+                        <div className="w-8 h-8 rounded-lg bg-gray-900 text-white flex items-center justify-center">
+                            <ArrowLeftRight size={15} />
+                        </div>
+                        <div>
+                            <h3 className="text-sm font-bold text-gray-900">Hand off case</h3>
+                            <p className="text-[11px] text-gray-500">{c.name}</p>
+                        </div>
+                    </div>
+                    <button onClick={onClose} className="text-gray-400 hover:text-gray-700"><X size={18} /></button>
+                </div>
+
+                <div className="px-5 py-4 space-y-3">
+                    <p className="text-[11px] text-gray-500">
+                        Currently {c.owner ? <span className="font-semibold text-gray-700">{c.owner.name}</span> : <span className="font-semibold text-gray-500">unassigned</span>}.
+                        The new owner is notified with your note.
+                    </p>
+
+                    {meId && !alreadyMine && (
+                        <button
+                            type="button"
+                            disabled={submitting}
+                            onClick={() => submit(meId)}
+                            className="w-full inline-flex items-center justify-center gap-2 px-3 py-2 rounded-xl bg-amber-600 text-white text-xs font-bold hover:bg-amber-700 transition-colors disabled:opacity-50"
+                        >
+                            <UserPlus size={14} /> Claim — assign to me
+                        </button>
+                    )}
+
+                    <div>
+                        <div className="relative">
+                            <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                            <input
+                                value={search}
+                                onChange={(e) => setSearch(e.target.value)}
+                                placeholder="Search staff…"
+                                className="w-full pl-8 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs focus:outline-none focus:bg-white focus:border-gray-300"
+                            />
+                        </div>
+                        <div className="mt-2 max-h-44 overflow-y-auto rounded-lg border border-gray-100 divide-y divide-gray-50">
+                            {filtered.length === 0 && <div className="px-3 py-3 text-center text-[11px] text-gray-400">No staff found.</div>}
+                            {filtered.map((s) => {
+                                const isCurrent = s.id === c.owner?.id;
+                                return (
+                                    <button
+                                        key={s.id}
+                                        type="button"
+                                        disabled={isCurrent}
+                                        onClick={() => setToUserId(s.id)}
+                                        className={`w-full flex items-center gap-2.5 px-3 py-2 text-left transition-colors ${
+                                            toUserId === s.id ? "bg-amber-50" : "hover:bg-gray-50"
+                                        } ${isCurrent ? "opacity-40 cursor-not-allowed" : ""}`}
+                                    >
+                                        <div className="w-6 h-6 rounded-full overflow-hidden bg-gray-100 ring-1 ring-gray-200 flex items-center justify-center text-[9px] font-bold text-gray-500 flex-shrink-0">
+                                            <AvatarPhoto src={s.avatar_url} title={s.name}>{initials(s.name)}</AvatarPhoto>
+                                        </div>
+                                        <span className="text-xs font-medium text-gray-800 truncate flex-1">
+                                            {s.id === meId ? `${s.name} (you)` : s.name}
+                                        </span>
+                                        {isCurrent && <span className="text-[10px] text-gray-400">current</span>}
+                                        {toUserId === s.id && <Check size={14} className="text-amber-600" />}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+
+                    <textarea
+                        value={note}
+                        onChange={(e) => setNote(e.target.value)}
+                        rows={3}
+                        placeholder="Handoff note (optional) — what the new owner needs to know…"
+                        className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs resize-y focus:outline-none focus:bg-white focus:border-gray-300"
+                    />
+                </div>
+
+                <div className="px-5 py-3 border-t border-gray-100 flex items-center justify-end gap-2">
+                    <button onClick={onClose} className="px-4 py-2 text-xs font-semibold text-gray-600 hover:text-gray-900">Cancel</button>
+                    <button
+                        type="button"
+                        disabled={!toUserId || submitting}
+                        onClick={() => submit(toUserId)}
+                        className="px-4 py-2 bg-gray-900 text-white text-xs font-bold rounded-xl hover:bg-black transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        {submitting ? <Loader2 size={14} className="animate-spin" /> : <ArrowLeftRight size={14} />}
+                        Hand off
+                    </button>
+                </div>
+            </div>
+        </div>
     );
 }
 
@@ -1628,7 +1911,9 @@ function requestCasePortal(c) {
         preserveScroll: true,
         preserveState: true,
         onSuccess: () => toast.success("Portal access requested."),
-        onError: () => toast.error("Could not request portal access."),
+        // Surface the specific reason from the server (e.g. no email on file)
+        // instead of a generic "could not request".
+        onError: (errors) => toast.error(errors?.error || "Could not request portal access."),
     });
 }
 

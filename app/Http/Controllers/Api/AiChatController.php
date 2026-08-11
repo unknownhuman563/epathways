@@ -61,6 +61,9 @@ class AiChatController extends Controller
         $data = $request->validate([
             'message'         => 'required|string|max:8000',
             'conversation_id' => 'nullable|integer|exists:ai_conversations,id',
+            // Optional record scope — "ask about this lead / student / case".
+            'subject_type'    => 'nullable|in:lead',
+            'subject_id'      => 'nullable|integer|exists:leads,id',
         ]);
 
         $conversation = null;
@@ -69,7 +72,16 @@ class AiChatController extends Controller
             abort_unless($conversation->user_id === $request->user()->id, 403);
         }
 
-        $result = $this->chatService->sendMessage($request->user(), $conversation, $data['message']);
+        // Resolve + AUTHORISE the record before the model ever sees it. Scope
+        // is enforced here, not delegated to the endpoint (see docs/ai-agent).
+        $subject = null;
+        if (! empty($data['subject_id'])) {
+            $subject = \App\Models\Lead::findOrFail($data['subject_id']);
+            abort_unless(\App\Support\AiScope::canAccessLead($request->user(), $subject), 403,
+                'You do not have access to this record.');
+        }
+
+        $result = $this->chatService->sendMessage($request->user(), $conversation, $data['message'], $subject);
 
         return response()->json([
             'conversation' => $result['conversation'],

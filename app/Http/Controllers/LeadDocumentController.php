@@ -286,6 +286,9 @@ class LeadDocumentController extends Controller
             }
         }
 
+        // A rejection/approval changes the findings picture — re-evaluate (§8d).
+        \App\Jobs\EvaluateCaseFindings::dispatch($doc->lead_id);
+
         return back()->with('success', "Document marked {$validated['status']}.");
     }
 
@@ -346,6 +349,10 @@ class LeadDocumentController extends Controller
             }
 
             $n = count($request->file('files'));
+
+            // Findings depend on what's been uploaded — re-evaluate off the
+            // request path (§8d). The job no-ops for non-cases.
+            \App\Jobs\EvaluateCaseFindings::dispatch($lead->id);
 
             return back()->with('success', "{$n} ".($n === 1 ? 'file' : 'files').' uploaded.');
         } catch (\Throwable $e) {
@@ -530,6 +537,10 @@ class LeadDocumentController extends Controller
             }
 
             return back()->with('success', $message);
+        } catch (\App\Exceptions\StaleSignerLicenceException $e) {
+            // Expected refusal, not a fault — the chosen adviser's licence has
+            // lapsed. Surface the clear message; do not log as an error.
+            return back()->withErrors(['error' => $e->getMessage()]);
         } catch (\Throwable $e) {
             Log::error('Engagement bulk generation failed', ['lead_id' => $leadId, 'error' => $e->getMessage()]);
 
@@ -1109,6 +1120,9 @@ class LeadDocumentController extends Controller
                 $this->notifyDocumentSubmitted($lead, $lastDoc);
             }
 
+            // Client upload changes the findings picture — re-evaluate (§8d).
+            \App\Jobs\EvaluateCaseFindings::dispatch($lead->id);
+
             return back()->with('success', 'Document uploaded. Our team will review it shortly.');
         } catch (\Throwable $e) {
             Log::error('Lead checklist upload failed', ['lead_id' => $lead->id, 'key' => $key, 'error' => $e->getMessage()]);
@@ -1220,6 +1234,12 @@ class LeadDocumentController extends Controller
         // Lead users can only download files tied to their own lead record.
         if ($user->isLead()) {
             abort_unless($user->lead_id === $doc->lead_id, 403);
+        }
+
+        // Build 12 phase 4 — a staff member opening a case document is passive
+        // attention on the case (§5, throttled). Never for lead/client opens.
+        if (! $user->isLead() && $doc->lead_id && optional($doc->lead)->is_immigration_case) {
+            \App\Models\CaseView::recordOpen($doc->lead_id, $user->id);
         }
 
         // All uploads now land on the private ('local') disk. The 'public'
