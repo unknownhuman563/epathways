@@ -4,11 +4,6 @@ import { Clock, LogIn, LogOut, Save, Settings, AlertTriangle, CheckCircle, BarCh
 
 const DOW = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
 
-// Known teams → their timezone. Picking a team in Setup auto-fills the tz so
-// PH/NZ staff can't mismatch them. Add teams here as they're onboarded.
-const TEAM_TZ = { "Philippines": "Asia/Manila", "New Zealand": "Pacific/Auckland" };
-const KNOWN_TEAMS = Object.keys(TEAM_TZ);
-
 // Carried-forward pending items from earlier days — the checklist to close.
 function CarriedChecklist({ carried }) {
     const [items, setItems] = useState(carried);
@@ -218,120 +213,39 @@ const compute = (timeIn, timeOut, s) => {
     return { net, variance, attendance };
 };
 
-// Module-level so they keep a stable identity across renders — defining these
-// inside a component remounts the inputs on every keystroke (focus loss).
-function Field({ label, hint, children }) {
-    return (
-        <label className="block">
-            <span className="block text-[11px] font-bold uppercase tracking-wider text-gray-500 mb-1">{label}</span>
-            {children}
-            {hint && <span className="block text-[11px] text-gray-400 mt-1">{hint}</span>}
-        </label>
-    );
-}
-
-function Metric({ label, value, tone }) {
-    return (
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm px-4 py-3">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">{label}</p>
-            <p className={`text-lg font-bold ${tone || "text-gray-900"}`}>{value}</p>
-        </div>
-    );
-}
-
-export default function DtrPage({ setting = null, entries = [], carried = [], leaves = [], leaveTypes = [], minLeaveDate = "", holidays = {}, account = {}, today = "", canSummary = false }) {
+export default function DtrPage({ setting = null, entries = [], carried = [], leaves = [], leaveTypes = [], minLeaveDate = "", holidays = {}, account = {}, today = "", canSummary = false, canManage = false }) {
     const ready = setting && setting.is_complete;
     return (
         <div className="space-y-6 max-w-[1400px] mx-auto pb-12">
             <Head title="DTR — Daily Time & Task Record" />
             {ready
-                ? <DailyRecord setting={setting} entries={entries} carried={carried} leaves={leaves} leaveTypes={leaveTypes} minLeaveDate={minLeaveDate} holidays={holidays} account={account} today={today} canSummary={canSummary} />
-                : <SetupForm setting={setting} account={account} />}
+                ? <DailyRecord setting={setting} entries={entries} carried={carried} leaves={leaves} leaveTypes={leaveTypes} minLeaveDate={minLeaveDate} holidays={holidays} account={account} today={today} canSummary={canSummary} canManage={canManage} />
+                : <NotSetUp account={account} canManage={canManage} />}
         </div>
     );
 }
 
-// ── Initial setup (the yellow cells, set once) ─────────────────────────────
-function SetupForm({ setting, account }) {
-    const tzOptions = useMemo(() => {
-        try { return Intl.supportedValuesOf("timeZone"); }
-        catch { return ["Asia/Manila", "Pacific/Auckland", "Australia/Sydney", "UTC"]; }
-    }, []);
-    const [f, setF] = useState({
-        label: setting?.label || `${account.name || "My"} · DTR`,
-        position: setting?.position || "",
-        team: setting?.team || "",
-        timezone: setting?.timezone || "Asia/Manila",
-        sched_in: setting?.sched_in || "09:00",
-        sched_out: setting?.sched_out || "18:00",
-        break_hours: setting?.break_hours ?? 1,
-        reports_to: setting?.reports_to || "",
-        std_hours: setting?.std_hours ?? 8,
-        grace_mins: setting?.grace_mins ?? 10,
-        break_after: setting?.break_after ?? 6,
-    });
-    const [saving, setSaving] = useState(false);
-    const [otherTeam, setOtherTeam] = useState(!!setting?.team && !KNOWN_TEAMS.includes(setting.team));
-    const set = (k) => (e) => setF((p) => ({ ...p, [k]: e.target.value }));
-
-    // Picking a known team auto-fills the timezone; "Other" lets them type a
-    // custom team name and keep their own timezone.
-    const onTeamChange = (e) => {
-        const v = e.target.value;
-        if (v === "__other") { setOtherTeam(true); setF((p) => ({ ...p, team: "" })); return; }
-        setOtherTeam(false);
-        setF((p) => ({ ...p, team: v, timezone: TEAM_TZ[v] || p.timezone }));
-    };
-
-    const save = () => {
-        setSaving(true);
-        router.post("/dtr/setup", f, { preserveScroll: true, onFinish: () => setSaving(false) });
-    };
-
-    const input = "w-full px-3 py-2 rounded-xl border border-gray-200 text-sm outline-none focus:ring-2 focus:ring-[#436235]/30 focus:border-[#436235]";
-
+// Shown to a staffer whose DTR admin hasn't configured yet. Staff no longer
+// set up their own — the schedule/timezone/hours are set for them, so this is
+// a wait-state (or, for admins, a shortcut into the setup manager).
+function NotSetUp({ account, canManage }) {
     return (
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-            <div className="px-6 py-5 border-b border-gray-100 bg-gradient-to-br from-gray-50 to-white">
-                <p className="text-[10px] font-bold uppercase tracking-[0.28em] text-gray-400 mb-1">Set up your DTR</p>
-                <h1 className="text-2xl font-bold text-gray-900">Let's set up your Daily Time & Task Record</h1>
-                <p className="text-sm text-gray-500 mt-1">Fill these once — they drive your Net Hours, Variance and Attendance. Linked account: <span className="font-semibold text-gray-700">{account.name} ({account.email})</span></p>
-            </div>
-
-            <div className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-                <Field label="DTR name"><input className={input} value={f.label} onChange={set("label")} placeholder="e.g. Angelika · DTR" /></Field>
-                <Field label="Position"><input className={input} value={f.position} onChange={set("position")} /></Field>
-                <Field label="Team" hint="Sets your holidays & default timezone">
-                    <select className={input} value={otherTeam ? "__other" : f.team} onChange={onTeamChange}>
-                        <option value="">Select team…</option>
-                        {KNOWN_TEAMS.map((t) => <option key={t} value={t}>{t}</option>)}
-                        <option value="__other">Other…</option>
-                    </select>
-                    {otherTeam && (
-                        <input className={`${input} mt-2`} value={f.team} onChange={set("team")} placeholder="Custom team name" />
-                    )}
-                </Field>
-
-                <Field label="Time zone">
-                    <select className={input} value={f.timezone} onChange={set("timezone")}>
-                        {tzOptions.map((t) => <option key={t} value={t}>{t.replace(/_/g, " ")}</option>)}
-                    </select>
-                </Field>
-                <Field label="Sched. in" hint="When your duty starts"><input type="time" className={input} value={f.sched_in} onChange={set("sched_in")} /></Field>
-                <Field label="Sched. out" hint="When you're done for the day"><input type="time" className={input} value={f.sched_out} onChange={set("sched_out")} /></Field>
-
-                <Field label="Break (hrs)"><input type="number" step="0.25" min="0" className={input} value={f.break_hours} onChange={set("break_hours")} /></Field>
-                <Field label="Break after (hrs)" hint="Break is deducted once you work past this"><input type="number" step="0.5" min="0" className={input} value={f.break_after} onChange={set("break_after")} /></Field>
-                <Field label="Std hrs / day"><input type="number" step="0.5" min="0" className={input} value={f.std_hours} onChange={set("std_hours")} /></Field>
-
-                <Field label="Grace (mins)" hint="Late is counted after this"><input type="number" step="1" min="0" className={input} value={f.grace_mins} onChange={set("grace_mins")} /></Field>
-                <Field label="Reports to"><input className={input} value={f.reports_to} onChange={set("reports_to")} /></Field>
-            </div>
-
-            <div className="px-6 py-4 border-t border-gray-100 flex justify-end bg-gray-50/50">
-                <button onClick={save} disabled={saving} className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#436235] text-white text-sm font-bold rounded-xl hover:bg-[#375029] disabled:opacity-60 transition-colors">
-                    <Save size={15} /> {saving ? "Saving…" : "Save & start my DTR"}
-                </button>
+            <div className="px-6 py-16 flex flex-col items-center text-center">
+                <div className="w-14 h-14 rounded-2xl bg-amber-50 text-amber-500 flex items-center justify-center mb-4">
+                    <Clock size={26} />
+                </div>
+                <h1 className="text-xl font-bold text-gray-900">Your DTR isn't set up yet</h1>
+                <p className="text-sm text-gray-500 mt-2 max-w-md">
+                    An admin sets your schedule, timezone and hours before you can start clocking in.
+                    Once that's done your Daily Time Record will appear here.
+                    {account?.name ? <> Linked account: <span className="font-semibold text-gray-700">{account.name}</span>.</> : null}
+                </p>
+                {canManage && (
+                    <Link href="/admin/dtr/manage" className="mt-6 inline-flex items-center gap-2 px-5 py-2.5 bg-[#436235] text-white text-sm font-bold rounded-xl hover:bg-[#375029] transition-colors">
+                        <Settings size={15} /> Set up staff DTR
+                    </Link>
+                )}
             </div>
         </div>
     );
@@ -509,11 +423,9 @@ function DayEditor({ setting, entry, date, isToday = false }) {
     );
 }
 
-function DailyRecord({ setting, entries, carried = [], leaves = [], leaveTypes = [], minLeaveDate = "", holidays = {}, account, today, canSummary = false }) {
-    const [showSetup, setShowSetup] = useState(false);
+function DailyRecord({ setting, entries, carried = [], leaves = [], leaveTypes = [], minLeaveDate = "", holidays = {}, account, today, canSummary = false, canManage = false }) {
     const [expanded, setExpanded] = useState(null);
     const [view, setView] = useState("dtr");
-    if (showSetup) return <SetupForm setting={setting} account={account} />;
 
     const todayEntry = entries.find((e) => e.work_date === today);
     const past = entries.filter((e) => e.work_date !== today);
@@ -539,9 +451,11 @@ function DailyRecord({ setting, entries, carried = [], leaves = [], leaveTypes =
                             <BarChart3 size={15} /> Team Summary
                         </Link>
                     )}
-                    <button onClick={() => setShowSetup(true)} className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-xl text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors">
-                        <Settings size={15} /> Settings
-                    </button>
+                    {canManage && (
+                        <Link href="/admin/dtr/manage" className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-xl text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors">
+                            <Settings size={15} /> Manage DTR
+                        </Link>
+                    )}
                 </div>
             </div>
 

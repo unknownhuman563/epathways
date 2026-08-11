@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\DtrEntry;
 use App\Models\DtrLeave;
 use App\Models\DtrSetting;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 
@@ -78,14 +79,45 @@ class DtrController extends Controller
             'minLeaveDate' => now($setting?->timezone ?: config('app.timezone', 'UTC'))->addDays(7)->toDateString(),
             'account' => ['name' => $user->name, 'email' => $user->email],
             'today' => $today,
-            // HR/admin get a link to the team-wide summary.
+            // HR/admin get a link to the team-wide summary + setup manager.
             'canSummary' => in_array($user->role, ['admin', 'super_admin'], true),
+            'canManage' => in_array($user->role, ['admin', 'super_admin'], true),
+        ]);
+    }
+
+    /**
+     * Admin/super_admin only — the DTR setup manager. Lists every staff member
+     * with their setup status so admin can create or edit each person's yellow
+     * cells (schedule, timezone, std hours, etc.). Staff never self-setup: they
+     * only clock in/out and log tasks against the config admin gives them.
+     */
+    public function manage()
+    {
+        abort_unless(in_array(auth()->user()->role, ['admin', 'super_admin'], true), 403);
+
+        $settings = DtrSetting::get()->keyBy('user_id');
+
+        $staff = User::where('role', '!=', User::ROLE_LEAD)
+            ->orderBy('name')
+            ->get(['id', 'name', 'email', 'role'])
+            ->map(fn (User $u) => [
+                'id' => $u->id,
+                'name' => $u->name,
+                'email' => $u->email,
+                'role' => $u->role,
+                'setting' => $settings->get($u->id),
+            ])->values();
+
+        return inertia('admin/DtrManage', [
+            'staff' => $staff,
         ]);
     }
 
     /** File a leave request — must start at least a week from today. */
     public function fileLeave(Request $request)
     {
+        $this->requireSetting();
+
         $data = $request->validate([
             'type' => 'required|string|max:40',
             'start_date' => 'required|date',
@@ -230,10 +262,17 @@ class DtrController extends Controller
         ];
     }
 
-    /** Save the one-time-per-person setup (the yellow cells). */
+    /**
+     * Save a staff member's setup (the yellow cells). Admin/super_admin only —
+     * staff no longer configure their own DTR; the admin sets each person's
+     * schedule/timezone/hours and the user just clocks in/out against it.
+     */
     public function saveSetup(Request $request)
     {
+        abort_unless(in_array(auth()->user()->role, ['admin', 'super_admin'], true), 403);
+
         $data = $request->validate([
+            'user_id' => 'required|integer|exists:users,id',
             'label' => 'nullable|string|max:120',
             'position' => 'nullable|string|max:120',
             'team' => 'nullable|string|max:120',
@@ -247,15 +286,36 @@ class DtrController extends Controller
             'break_after' => 'nullable|numeric|min:0|max:24',
         ]);
 
-        $data['is_complete'] = true;
-        DtrSetting::updateOrCreate(['user_id' => auth()->id()], $data);
+        // A DTR belongs to a staff account, never an external lead.
+        $target = User::findOrFail($data['user_id']);
+        abort_if($target->role === User::ROLE_LEAD, 422, 'Leads do not have a DTR.');
 
-        return back()->with('success', 'Your DTR is set up.');
+        $userId = $data['user_id'];
+        unset($data['user_id']);
+        $data['is_complete'] = true;
+
+        DtrSetting::updateOrCreate(['user_id' => $userId], $data);
+
+        return back()->with('success', "DTR set up for {$target->name}.");
+    }
+
+    /**
+     * Guard: staff can only log against a DTR their admin has set up. Returns
+     * the completed setting or aborts — used by every self-service write.
+     */
+    private function requireSetting(): DtrSetting
+    {
+        $setting = DtrSetting::where('user_id', auth()->id())->where('is_complete', true)->first();
+        abort_if(! $setting, 403, 'Your DTR has not been set up by an admin yet.');
+
+        return $setting;
     }
 
     /** Create/update a day's entry (times, tasks, remarks). */
     public function saveEntry(Request $request)
     {
+        $this->requireSetting();
+
         $data = $request->validate([
             'work_date' => 'required|date',
             'time_in' => 'nullable|string|max:8',
@@ -282,8 +342,8 @@ class DtrController extends Controller
     /** One-tap clock in — stamps the current time (in the user's DTR timezone). */
     public function timeIn()
     {
-        $setting = DtrSetting::where('user_id', auth()->id())->first();
-        $now = now($setting?->timezone ?: config('app.timezone', 'UTC'));
+        $setting = $this->requireSetting();
+        $now = now($setting->timezone ?: config('app.timezone', 'UTC'));
 
         $entry = DtrEntry::firstOrNew(['user_id' => auth()->id(), 'work_date' => $now->toDateString()]);
         if (! $entry->time_in) {
@@ -297,8 +357,8 @@ class DtrController extends Controller
     /** One-tap clock out — closes the latest open shift (handles cross-midnight). */
     public function timeOut()
     {
-        $setting = DtrSetting::where('user_id', auth()->id())->first();
-        $now = now($setting?->timezone ?: config('app.timezone', 'UTC'));
+        $setting = $this->requireSetting();
+        $now = now($setting->timezone ?: config('app.timezone', 'UTC'));
 
         $entry = DtrEntry::where('user_id', auth()->id())
             ->whereNotNull('time_in')->whereNull('time_out')
