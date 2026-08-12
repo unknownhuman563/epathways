@@ -299,6 +299,73 @@ class DtrController extends Controller
     }
 
     /**
+     * Admin edit of any staffer's day entry (Team Daily Reports). Unlike the
+     * self-service saveEntry — which locks past days for everyone — an admin may
+     * amend a closed record here. Preserves the carried-pending "done" ticks by
+     * merging on the payload's own pending_done flags.
+     */
+    public function adminUpdateEntry(Request $request)
+    {
+        abort_unless(in_array(auth()->user()->role, ['admin', 'super_admin'], true), 403);
+
+        $data = $request->validate([
+            'user_id' => 'required|integer|exists:users,id',
+            'work_date' => 'required|date',
+            'time_in' => 'nullable|string|max:8',
+            'time_out' => 'nullable|string|max:8',
+            'tasks' => 'nullable|array|max:100',
+            'tasks.*.task' => 'nullable|string|max:1000',
+            'tasks.*.pending' => 'nullable|string|max:1000',
+            'tasks.*.pending_done' => 'nullable|boolean',
+            'remarks' => 'nullable|string|max:2000',
+        ]);
+
+        // The target must have a DTR set up (an admin can't invent a record for
+        // a user who was never onboarded).
+        abort_unless(DtrSetting::where('user_id', $data['user_id'])->exists(), 422, 'This user has no DTR set up.');
+
+        $date = Carbon::parse($data['work_date'])->toDateString();
+
+        $tasks = array_values(array_map(fn ($t) => [
+            'task' => (string) ($t['task'] ?? ''),
+            'pending' => (string) ($t['pending'] ?? ''),
+            'pending_done' => (bool) ($t['pending_done'] ?? false),
+        ], $data['tasks'] ?? []));
+
+        DtrEntry::updateOrCreate(
+            ['user_id' => $data['user_id'], 'work_date' => $date],
+            [
+                'time_in' => $data['time_in'] ?: null,
+                'time_out' => $data['time_out'] ?: null,
+                'tasks' => $tasks,
+                'remarks' => $data['remarks'] ?: null,
+            ],
+        );
+
+        return back()->with('success', 'DTR record updated.');
+    }
+
+    /**
+     * Admin delete of a staffer's day entry (Team Daily Reports). Removes the
+     * whole record for that user + day.
+     */
+    public function adminDeleteEntry(Request $request)
+    {
+        abort_unless(in_array(auth()->user()->role, ['admin', 'super_admin'], true), 403);
+
+        $data = $request->validate([
+            'user_id' => 'required|integer',
+            'work_date' => 'required|date',
+        ]);
+
+        DtrEntry::where('user_id', $data['user_id'])
+            ->where('work_date', Carbon::parse($data['work_date'])->toDateString())
+            ->delete();
+
+        return back()->with('success', 'DTR record deleted.');
+    }
+
+    /**
      * Generate a single day's report as a downloadable PDF — proof of the work
      * done that day (times, net/variance/attendance, tasks, remarks). A user
      * can generate their own; admin/super_admin can generate any staffer's.
@@ -433,17 +500,31 @@ class DtrController extends Controller
             ->groupBy('user_id');
 
         $rows = $settings->map(function (DtrSetting $s) use ($entries) {
-            $days = 0; $hours = 0; $late = 0; $tasks = 0; $missing = 0; $open = 0;
-            foreach ($entries->get($s->user_id, collect()) as $e) {
+            $days = 0;
+            $hours = 0;
+            $late = 0;
+            $tasks = 0;
+            $missing = 0;
+            $open = 0;
+            $userEntries = $entries->get($s->user_id, collect());
+            foreach ($userEntries as $e) {
                 $r = $this->computeRow($e, $s);
-                if ($r['net_hrs'] !== null) { $days++; $hours += $r['net_hrs']; }
-                if ($r['attendance'] === 'Late') { $late++; }
-                if ($r['net_hrs'] !== null && $r['tasks_count'] === 0) { $missing++; }
+                if ($r['net_hrs'] !== null) {
+                    $days++;
+                    $hours += $r['net_hrs'];
+                }
+                if ($r['attendance'] === 'Late') {
+                    $late++;
+                }
+                if ($r['net_hrs'] !== null && $r['tasks_count'] === 0) {
+                    $missing++;
+                }
                 $tasks += $r['tasks_count'];
                 $open += $r['open_count'];
             }
 
             return [
+                'has_activity' => $userEntries->isNotEmpty(),
                 'name' => $s->user?->name ?: ($s->label ?: 'Unknown'),
                 'team' => $s->team ?: 'Unassigned',
                 'days_logged' => $days,
@@ -454,7 +535,12 @@ class DtrController extends Controller
                 'days_missing_tasks' => $missing,
                 'open_items' => $open,
             ];
-        });
+        })
+        // Only show staff who actually have a DTR record in this period — a
+        // staffer with nothing logged (or whose record was deleted) drops off
+        // the summary entirely instead of showing an all-zero row.
+            ->filter(fn ($r) => $r['has_activity'])
+            ->values();
 
         $teams = $rows->groupBy('team')
             ->map(fn ($teamRows, $team) => [

@@ -70,7 +70,7 @@ export default function DtrSummary({ teams = [], total = {}, start = "", end = "
                         </thead>
                         <tbody>
                             {teams.length === 0 ? (
-                                <tr><td colSpan={9} className="px-4 py-12 text-center text-gray-400">No staff have set up a DTR yet.</td></tr>
+                                <tr><td colSpan={9} className="px-4 py-12 text-center text-gray-400">No DTR records logged in this period.</td></tr>
                             ) : teams.map((t) => {
                                 const th = teamTheme(t.team);
                                 return (
