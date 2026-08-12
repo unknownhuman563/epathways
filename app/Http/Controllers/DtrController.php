@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\DtrEntry;
 use App\Models\DtrLeave;
 use App\Models\DtrSetting;
+use App\Models\DtrSettingHistory;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -612,9 +613,93 @@ class DtrController extends Controller
         unset($data['user_id']);
         $data['is_complete'] = true;
 
-        DtrSetting::updateOrCreate(['user_id' => $userId], $data);
+        // Snapshot the before-state so we can audit exactly what changed.
+        $existing = DtrSetting::where('user_id', $userId)->first();
+
+        $setting = DtrSetting::updateOrCreate(['user_id' => $userId], $data);
+
+        $this->recordSettingHistory($userId, $existing, $setting);
 
         return back()->with('success', "DTR set up for {$target->name}.");
+    }
+
+    /** Human labels for the audited setup fields, in display order. */
+    private const SETTING_FIELDS = [
+        'label' => 'DTR name',
+        'position' => 'Position',
+        'team' => 'Team',
+        'timezone' => 'Time zone',
+        'sched_in' => 'Sched. in',
+        'sched_out' => 'Sched. out',
+        'break_hours' => 'Break (hrs)',
+        'break_after' => 'Break after (hrs)',
+        'std_hours' => 'Std hrs / day',
+        'grace_mins' => 'Grace (mins)',
+        'reports_to' => 'Reports to',
+    ];
+
+    /**
+     * Write an audit row when a staffer's DTR setup is created or changed.
+     * `$before` is null on first setup (logged as a "created" entry listing the
+     * initial values); otherwise only fields that actually moved are recorded.
+     */
+    private function recordSettingHistory(int $userId, ?DtrSetting $before, DtrSetting $after): void
+    {
+        $norm = fn ($v) => $v === null || $v === '' ? null : (is_numeric($v) ? (string) (0 + $v) : (string) $v);
+
+        $changes = [];
+        foreach (array_keys(self::SETTING_FIELDS) as $field) {
+            $old = $before ? $norm($before->getAttribute($field)) : null;
+            $new = $norm($after->getAttribute($field));
+
+            if ($before === null) {
+                if ($new !== null) {
+                    $changes[$field] = ['from' => null, 'to' => $new];
+                }
+            } elseif ($old !== $new) {
+                $changes[$field] = ['from' => $old, 'to' => $new];
+            }
+        }
+
+        if (empty($changes)) {
+            return; // nothing actually changed — don't log a no-op save
+        }
+
+        DtrSettingHistory::create([
+            'user_id' => $userId,
+            'changed_by' => auth()->id(),
+            'changed_by_name' => auth()->user()->name,
+            'action' => $before ? 'updated' : 'created',
+            'changes' => $changes,
+        ]);
+    }
+
+    /**
+     * Audit trail for one staffer's DTR setup — the change log shown in the
+     * Setup Manager. Admin/super_admin only.
+     */
+    public function settingHistory($userId)
+    {
+        abort_unless(in_array(auth()->user()->role, ['admin', 'super_admin'], true), 403);
+
+        $tz = config('app.timezone', 'UTC');
+
+        $rows = DtrSettingHistory::where('user_id', $userId)
+            ->orderByDesc('created_at')->orderByDesc('id')
+            ->limit(200)->get()
+            ->map(fn (DtrSettingHistory $h) => [
+                'id' => $h->id,
+                'action' => $h->action,
+                'by' => $h->changed_by_name ?: 'System',
+                'at' => optional($h->created_at)->timezone($tz)->format('M j, Y g:i A'),
+                'changes' => collect($h->changes ?? [])->map(fn ($c, $field) => [
+                    'field' => self::SETTING_FIELDS[$field] ?? $field,
+                    'from' => $c['from'] ?? null,
+                    'to' => $c['to'] ?? null,
+                ])->values()->all(),
+            ])->values();
+
+        return response()->json(['history' => $rows]);
     }
 
     /**
