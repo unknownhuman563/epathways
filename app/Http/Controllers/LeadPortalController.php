@@ -282,7 +282,7 @@ class LeadPortalController extends Controller
         }
 
         $dependents = \App\Models\CaseDependent::where('lead_id', $lead->id)
-            ->with(['documents' => fn ($q) => $q->orderByDesc('created_at'), 'linkedLead'])
+            ->with(['documents' => fn ($q) => $q->orderByDesc('created_at'), 'linkedLead', 'visaType'])
             ->orderBy('created_at')
             ->get()
             ->map(fn (\App\Models\CaseDependent $d) => array_merge([
@@ -370,9 +370,12 @@ class LeadPortalController extends Controller
             return $lead;
         }
         $dep = \App\Models\CaseDependent::where('id', $id)->where('lead_id', $lead->id)->firstOrFail();
+        // The dependant's valid checklist keys come from the visa assigned to
+        // them (by staff). Tied-to-a-case dependants are read-only here.
+        abort_if($dep->linked_lead_id, 403, 'This family member manages their documents on their own case.');
         $data = $request->validate([
             'file' => 'required|file|max:20480',
-            'checklist_key' => ['nullable', 'string', \Illuminate\Validation\Rule::in(\App\Services\Immigration\DependentChecklist::keys($dep->relationship))],
+            'checklist_key' => ['nullable', 'string', \Illuminate\Validation\Rule::in($dep->checklistKeys())],
         ]);
 
         $file = $request->file('file');
@@ -517,9 +520,97 @@ class LeadPortalController extends Controller
      * and public /track/{code} surfaces can never drift. tracker() is kept as a
      * back-compat alias that lands on the dashboard view.
      */
+    /**
+     * Client dashboard — a lively overview (not the raw tracker): journey
+     * progress, at-a-glance analytics, the family/dependants' document status,
+     * the next appointment, submissions, and news. The document *checklist*
+     * detail lives on the Documents (tracker) page.
+     */
     public function dashboard()
     {
-        return $this->trackerView('overview');
+        $lead = $this->resolveLeadOrLogout();
+        if (! $lead instanceof Lead) {
+            return $lead;
+        }
+
+        $family = $this->familySummary($lead);
+        $docSummary = $this->documentSummary($lead);
+        $counts = $this->submissionsCounts($lead);
+        $roadmap = LeadPhaseService::roadmap($lead->status);
+        $currentPhase = LeadPhaseService::phaseFor($lead->status);
+
+        $nextBooking = Booking::where('email', $lead->email)
+            ->whereNotNull('appointment_date')
+            ->whereDate('appointment_date', '>=', now()->toDateString())
+            ->orderBy('appointment_date')
+            ->first();
+
+        return inertia('portal/lead/Dashboard', [
+            'lead'               => $this->leadPayload($lead),
+            'submissionsCounts'  => $counts,
+            'documentSummary'    => $docSummary,
+            'nextActivity'       => $this->upcomingEvents(1)->first(),
+            'latestAnnouncement' => $this->announcementFeed(1)->first(),
+            'roadmap'            => $roadmap,
+            'currentPhase'       => $currentPhase,
+            'preEngagement'      => LeadPhaseService::isPreEngagement($lead->status),
+            'family'             => $family,
+            'nextAppointment'    => $nextBooking ? $this->bookingRow($nextBooking) : null,
+            'analytics'          => $this->dashboardAnalytics($roadmap, $currentPhase, $docSummary, $family, $counts),
+        ]);
+    }
+
+    /**
+     * Compact per-dependant status for the dashboard "My family" band: name,
+     * relationship, their document progress, and their uploaded photo (served
+     * through the record-scoped portal route, never a public URL).
+     */
+    private function familySummary(Lead $lead): array
+    {
+        return \App\Models\CaseDependent::where('lead_id', $lead->id)
+            ->with(['documents' => fn ($q) => $q->orderByDesc('created_at'), 'linkedLead', 'visaType'])
+            ->orderBy('created_at')
+            ->get()
+            ->map(function (\App\Models\CaseDependent $d) {
+                $data = $d->checklistData();
+                $photo = collect($data['checklist'])
+                    ->first(fn ($i) => str_ends_with((string) ($i['key'] ?? ''), 'face_image') && ! empty($i['document']));
+                $p = $data['progress'];
+
+                return [
+                    'id'           => $d->id,
+                    'full_name'    => $d->fullName(),
+                    'relationship' => $d->relationship,
+                    'photo_url'    => $photo ? "/portal/lead/family/{$d->id}/documents/{$photo['document']['id']}" : null,
+                    'progress'     => $p,
+                    'linked'       => $data['linked'] ?? false,
+                    'complete'     => $p['required_total'] > 0 && $p['required_done'] >= $p['required_total'],
+                ];
+            })->all();
+    }
+
+    /** Derived headline numbers for the dashboard analytics band. */
+    private function dashboardAnalytics(array $roadmap, ?array $currentPhase, array $docSummary, array $family, array $counts): array
+    {
+        $journeyTotal = count($roadmap);
+        $journeyStep = $currentPhase ? ((int) $currentPhase['index'] + 1) : 0;
+
+        $famReqTotal = collect($family)->sum(fn ($f) => $f['progress']['required_total']);
+        $famReqDone = collect($family)->sum(fn ($f) => $f['progress']['required_done']);
+
+        return [
+            'journey_pct'       => $journeyTotal ? (int) round($journeyStep / $journeyTotal * 100) : 0,
+            'journey_step'      => $journeyStep,
+            'journey_total'     => $journeyTotal,
+            'docs_total'        => $docSummary['total'],
+            'docs_approved'     => $docSummary['approved'],
+            'docs_pending'      => $docSummary['pending'],
+            'family_count'      => count($family),
+            'family_docs_total' => $famReqTotal,
+            'family_docs_done'  => $famReqDone,
+            'family_pct'        => $famReqTotal ? (int) round($famReqDone / $famReqTotal * 100) : 0,
+            'bookings'          => $counts['bookings'],
+        ];
     }
 
     public function requirements()

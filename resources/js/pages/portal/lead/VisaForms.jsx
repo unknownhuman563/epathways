@@ -11,7 +11,7 @@ import PortalPageHeader from "@/components/portal/PortalPageHeader";
 
 const STATUS = {
     assigned:  { label: "To fill",   tone: "bg-amber-50 text-amber-700 border-amber-200",     icon: Clock },
-    submitted: { label: "Submitted", tone: "bg-[#436235]/10 text-[#436235] border-[#436235]/30", icon: CheckCircle2 },
+    submitted: { label: "Submitted", tone: "bg-[#009688]/10 text-[#009688] border-[#009688]/30", icon: CheckCircle2 },
     reviewed:  { label: "Reviewed",  tone: "bg-gray-100 text-gray-600 border-gray-200",         icon: CheckCircle2 },
 };
 
@@ -48,10 +48,10 @@ export default function LeadVisaForms({ lead, forms = [] }) {
                                 key={f.id}
                                 type="button"
                                 onClick={() => setOpenId(f.id)}
-                                className="w-full text-left rounded-2xl border border-gray-100 bg-white shadow-sm px-5 py-4 flex items-center gap-4 hover:border-[#436235]/40 transition-colors"
+                                className="w-full text-left rounded-2xl border border-gray-100 bg-white shadow-sm px-5 py-4 flex items-center gap-4 hover:border-[#009688]/40 transition-colors"
                             >
-                                <div className="w-10 h-10 rounded-xl bg-[#436235]/10 flex items-center justify-center flex-shrink-0">
-                                    <FileText size={18} className="text-[#436235]" />
+                                <div className="w-10 h-10 rounded-xl bg-[#009688]/10 flex items-center justify-center flex-shrink-0">
+                                    <FileText size={18} className="text-[#009688]" />
                                 </div>
                                 <div className="min-w-0 flex-1">
                                     <div className="flex items-center gap-2 flex-wrap">
@@ -63,7 +63,7 @@ export default function LeadVisaForms({ lead, forms = [] }) {
                                     </div>
                                     <p className="text-[12px] text-gray-500 truncate mt-0.5">{f.name}</p>
                                 </div>
-                                <span className="text-[12px] font-semibold text-[#436235] flex-shrink-0">
+                                <span className="text-[12px] font-semibold text-[#009688] flex-shrink-0">
                                     {f.status === "assigned" ? "Fill in" : "View"}
                                 </span>
                             </button>
@@ -100,7 +100,7 @@ function FormEditor({ form, onBack }) {
 
             <div className="flex items-center justify-between gap-4 flex-wrap">
                 <div>
-                    <button type="button" onClick={onBack} className="inline-flex items-center gap-1 text-xs font-semibold text-gray-500 hover:text-[#436235] mb-2">
+                    <button type="button" onClick={onBack} className="inline-flex items-center gap-1 text-xs font-semibold text-gray-500 hover:text-[#009688] mb-2">
                         <ChevronLeft size={14} /> All forms
                     </button>
                     <h1 className="text-2xl font-medium text-[#282728] tracking-tight">{form.code}</h1>
@@ -108,14 +108,14 @@ function FormEditor({ form, onBack }) {
                 </div>
                 {! readOnly && (
                     <button type="button" onClick={submit} disabled={saving}
-                        className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#436235] text-white text-sm font-semibold hover:bg-[#38512c] disabled:opacity-50">
+                        className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#009688] text-white text-sm font-semibold hover:bg-[#38512c] disabled:opacity-50">
                         <Save size={15} /> {saving ? "Submitting…" : "Submit to adviser"}
                     </button>
                 )}
             </div>
 
             {readOnly && (
-                <div className="rounded-xl border border-[#436235]/20 bg-[#436235]/5 px-4 py-3 text-[13px] text-[#436235] font-medium">
+                <div className="rounded-xl border border-[#009688]/20 bg-[#009688]/5 px-4 py-3 text-[13px] text-[#009688] font-medium">
                     You've submitted this form. Your adviser is reviewing your answers — no further action needed.
                 </div>
             )}
@@ -157,7 +157,7 @@ function FormEditor({ form, onBack }) {
                                         className={`w-full rounded-lg border px-3 py-2 text-sm outline-none transition-colors ${
                                             readOnly
                                                 ? "border-gray-100 bg-gray-50 text-gray-500"
-                                                : "border-gray-200 focus:border-[#436235] focus:ring-1 focus:ring-[#436235]"
+                                                : "border-gray-200 focus:border-[#009688] focus:ring-1 focus:ring-[#009688]"
                                         }`}
                                     />
                                 </div>

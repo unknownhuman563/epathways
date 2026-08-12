@@ -124,6 +124,11 @@ class CaseProfileController extends Controller
                     'id' => $l->id,
                     'name' => (trim("{$l->first_name} {$l->last_name}") ?: $l->lead_id).($l->lead_id ? " ({$l->lead_id})" : ''),
                 ])->values(),
+            // Visa catalogue — staff assign a visa to each dependant; it drives
+            // that dependant's document checklist.
+            'visaTypes' => \App\Models\VisaType::where('active', true)
+                ->orderBy('name')->get(['id', 'name'])
+                ->map(fn ($v) => ['id' => $v->id, 'name' => $v->name])->values(),
         ]);
     }
 
@@ -391,12 +396,14 @@ class CaseProfileController extends Controller
     private function loadDependents(Lead $lead): array
     {
         return \App\Models\CaseDependent::where('lead_id', $lead->id)
-            ->with(['documents' => fn ($q) => $q->orderByDesc('created_at'), 'linkedLead'])
+            ->with(['documents' => fn ($q) => $q->orderByDesc('created_at'), 'linkedLead', 'visaType'])
             ->orderBy('created_at')
             ->get()
             ->map(fn (\App\Models\CaseDependent $d) => array_merge([
                 'id' => $d->id,
                 'relationship' => $d->relationship,
+                'visa_type_id' => $d->visa_type_id,
+                'visa_name' => $d->visaType?->name,
                 'family_name' => $d->family_name,
                 'first_name' => $d->first_name,
                 'middle_name' => $d->middle_name,
@@ -418,6 +425,7 @@ class CaseProfileController extends Controller
         return [
             'relationship' => ['required', \Illuminate\Validation\Rule::in(\App\Models\CaseDependent::RELATIONSHIPS)],
             'linked_lead_id' => ['nullable', \Illuminate\Validation\Rule::exists('leads', 'id')],
+            'visa_type_id' => ['nullable', \Illuminate\Validation\Rule::exists('visa_types', 'id')],
             'first_name' => 'nullable|string|max:120',
             'family_name' => 'nullable|string|max:120',
             'middle_name' => 'nullable|string|max:120',
@@ -538,6 +546,32 @@ class CaseProfileController extends Controller
         ])->save();
 
         return back()->with('success', "Document marked {$data['status']}.");
+    }
+
+    /**
+     * Staff note on a dependant's document. Works for documents attached to the
+     * dependant sub-record AND — when the dependant is tied to a case — the
+     * documents on that linked case (read-through), so staff can annotate what
+     * the child submitted on their own case from the Family view.
+     */
+    public function setDependentDocumentNote(Request $request, Lead $lead, \App\Models\CaseDependent $dependent, LeadDocument $document)
+    {
+        $user = $this->guardCase($lead);
+        abort_unless($dependent->lead_id === $lead->id, 404);
+        abort_unless(
+            $document->dependent_id === $dependent->id
+                || ($dependent->linked_lead_id && $document->lead_id === $dependent->linked_lead_id),
+            404
+        );
+        $data = $request->validate(['note' => 'nullable|string|max:500']);
+
+        $document->forceFill([
+            'note' => $data['note'] ?: null,
+            'reviewed_by' => $user->id,
+            'reviewed_at' => now(),
+        ])->save();
+
+        return back()->with('success', 'Note saved.');
     }
 
     public function deleteDependentDocument(Lead $lead, \App\Models\CaseDependent $dependent, LeadDocument $document)

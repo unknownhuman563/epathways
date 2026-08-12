@@ -1336,6 +1336,7 @@ Route::middleware(['auth'])->group(function () {
             Route::delete('/cases/{lead}/dependents/{dependent}', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'deleteDependent'])->name('cases.dependents.destroy');
             Route::post('/cases/{lead}/dependents/{dependent}/documents', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'uploadDependentDocument'])->name('cases.dependents.documents.store');
             Route::post('/cases/{lead}/dependents/{dependent}/documents/{document}/status', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'setDependentDocumentStatus'])->name('cases.dependents.documents.status');
+            Route::post('/cases/{lead}/dependents/{dependent}/documents/{document}/note', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'setDependentDocumentNote'])->name('cases.dependents.documents.note');
             Route::delete('/cases/{lead}/dependents/{dependent}/documents/{document}', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'deleteDependentDocument'])->name('cases.dependents.documents.destroy');
 
             // Build 11.D Phase 2 — Managed agreement endpoints. Each call

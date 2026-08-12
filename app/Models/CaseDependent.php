@@ -16,7 +16,7 @@ class CaseDependent extends Model
     public const RELATIONSHIPS = ['child', 'partner', 'parent', 'sibling', 'other'];
 
     protected $fillable = [
-        'lead_id', 'linked_lead_id', 'relationship', 'family_name', 'first_name', 'middle_name',
+        'lead_id', 'linked_lead_id', 'visa_type_id', 'relationship', 'family_name', 'first_name', 'middle_name',
         'dob', 'gender', 'nationality', 'passport_number', 'passport_expiry',
         'source', 'notes', 'added_by',
     ];
@@ -35,6 +35,36 @@ class CaseDependent extends Model
     public function linkedLead(): BelongsTo
     {
         return $this->belongsTo(Lead::class, 'linked_lead_id');
+    }
+
+    /** The visa assigned to this dependant (by staff) — drives their checklist. */
+    public function visaType(): BelongsTo
+    {
+        return $this->belongsTo(VisaType::class, 'visa_type_id');
+    }
+
+    /**
+     * The checklist items this dependant must satisfy: the assigned visa's
+     * `checklist_items` (same catalogue cases use). Empty when no visa is set —
+     * the UI then prompts that the adviser will set the visa type.
+     *
+     * @return array<int, array{key:string,label:string,required:bool,hint?:string}>
+     */
+    public function checklistItems(): array
+    {
+        if ($this->visa_type_id && $this->visaType && is_array($this->visaType->checklist_items)) {
+            return collect($this->visaType->checklist_items)
+                ->filter(fn ($i) => is_array($i) && ! empty($i['key']) && isset($i['label']))
+                ->values()->all();
+        }
+
+        return [];
+    }
+
+    /** Valid checklist_key values for uploads against this dependant. */
+    public function checklistKeys(): array
+    {
+        return array_column($this->checklistItems(), 'key');
     }
 
     public function documents(): HasMany
@@ -64,7 +94,8 @@ class CaseDependent extends Model
             return $this->linkedCaseChecklist($this->linkedLead);
         }
 
-        $items = \App\Services\Immigration\DependentChecklist::for($this->relationship);
+        // Checklist is driven by the visa assigned to this dependant (by staff).
+        $items = $this->checklistItems();
         $byKey = $this->documents->whereNotNull('checklist_key')->groupBy('checklist_key');
 
         $serialize = fn (LeadDocument $doc) => [
@@ -73,6 +104,7 @@ class CaseDependent extends Model
             'mime' => $doc->mime,
             'size' => $doc->size,
             'status' => $doc->status,
+            'note' => $doc->note,
             'created_at' => optional($doc->created_at)->toIso8601String(),
         ];
 
@@ -80,9 +112,10 @@ class CaseDependent extends Model
         $requiredDone = 0;
         $checklist = [];
         foreach ($items as $item) {
+            $required = (bool) ($item['required'] ?? false);
             $doc = ($byKey[$item['key']] ?? collect())->first(); // newest first
             $satisfied = $doc && $doc->status !== 'Rejected';
-            if ($item['required']) {
+            if ($required) {
                 $requiredTotal++;
                 $requiredDone += $satisfied ? 1 : 0;
             }
@@ -90,7 +123,7 @@ class CaseDependent extends Model
                 'key' => $item['key'],
                 'label' => $item['label'],
                 'hint' => $item['hint'] ?? null,
-                'required' => $item['required'],
+                'required' => $required,
                 'status' => $doc?->status ?? 'Missing',
                 'document' => $doc ? $serialize($doc) : null,
             ];
@@ -105,6 +138,10 @@ class CaseDependent extends Model
             'checklist' => $checklist,
             'other_documents' => $other,
             'progress' => ['required_total' => $requiredTotal, 'required_done' => $requiredDone],
+            // No visa assigned yet → the UI shows an "adviser will set your visa"
+            // prompt instead of an empty checklist.
+            'needs_visa' => empty($items) && ! $this->visa_type_id,
+            'visa_name' => $this->visaType?->name,
         ];
     }
 
@@ -129,6 +166,7 @@ class CaseDependent extends Model
             'mime' => $doc->mime,
             'size' => $doc->size,
             'status' => $doc->status,
+            'note' => $doc->note,
             'created_at' => optional($doc->created_at)->toIso8601String(),
         ];
 
