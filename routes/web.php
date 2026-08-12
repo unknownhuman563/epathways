@@ -133,12 +133,15 @@ Route::middleware('auth')->group(function () {
     Route::post('/dtr/entry', [\App\Http\Controllers\DtrController::class, 'saveEntry'])->name('dtr.entry');
     Route::post('/dtr/pending/toggle', [\App\Http\Controllers\DtrController::class, 'togglePending'])->name('dtr.pending.toggle');
     Route::post('/dtr/leaves', [\App\Http\Controllers\DtrController::class, 'fileLeave'])->name('dtr.leaves.file');
+    Route::get('/dtr/leaves/{id}', [\App\Http\Controllers\DtrController::class, 'showLeave'])->name('dtr.leaves.show');
     Route::post('/dtr/leaves/{id}/review', [\App\Http\Controllers\DtrController::class, 'reviewLeave'])->name('dtr.leaves.review');
     Route::post('/dtr/time-in', [\App\Http\Controllers\DtrController::class, 'timeIn'])->name('dtr.timein');
     Route::post('/dtr/time-out', [\App\Http\Controllers\DtrController::class, 'timeOut'])->name('dtr.timeout');
+    Route::get('/dtr/report', [\App\Http\Controllers\DtrController::class, 'dailyReport'])->name('dtr.report');
 
     Route::get('/admin/dtr', [\App\Http\Controllers\DtrController::class, 'show'])->name('admin.dtr');
     Route::get('/admin/dtr/manage', [\App\Http\Controllers\DtrController::class, 'manage'])->name('admin.dtr.manage');
+    Route::get('/admin/dtr/reports', [\App\Http\Controllers\DtrController::class, 'reports'])->name('admin.dtr.reports');
     Route::get('/admin/dtr/summary', [\App\Http\Controllers\DtrController::class, 'summary'])->name('admin.dtr.summary');
     Route::get('/portal/sales/dtr', [\App\Http\Controllers\DtrController::class, 'show'])->name('portal.sales.dtr');
     Route::get('/portal/education/dtr', [\App\Http\Controllers\DtrController::class, 'show'])->name('portal.education.dtr');

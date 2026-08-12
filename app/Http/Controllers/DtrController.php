@@ -31,9 +31,16 @@ class DtrController extends Controller
         $entries = $rawEntries->map(fn (DtrEntry $e) => $this->computeRow($e, $setting))->values();
 
         // Pending items from earlier days that aren't ticked done yet — the
-        // "carry-forward checklist" the user works through the next day.
+        // "carry-forward checklist". A pending item written on any past day
+        // keeps showing here every day until it's marked done, so nothing gets
+        // lost. Queried straight from the DB (reliable date compare, not capped
+        // by the 60-row recent-entries window above).
         $carried = [];
-        foreach ($rawEntries->where('work_date', '<', $today)->sortBy('work_date') as $e) {
+        $pastPending = DtrEntry::where('user_id', $user->id)
+            ->whereDate('work_date', '<', $today)
+            ->orderBy('work_date')
+            ->get(['id', 'work_date', 'tasks']);
+        foreach ($pastPending as $e) {
             foreach ((array) $e->tasks as $idx => $t) {
                 $pending = trim((string) ($t['pending'] ?? ''));
                 if ($pending !== '' && empty($t['pending_done'])) {
@@ -61,6 +68,18 @@ class DtrController extends Controller
             ->orderByDesc('start_date')->limit(50)->get()
             ->map(fn (DtrLeave $l) => $this->leaveRow($l))->values();
 
+        // Admin/super_admin also see everyone's leaves + the pending queue in
+        // the Leave tab's overview dashboard.
+        $isAdmin = in_array($user->role, ['admin', 'super_admin'], true);
+        $adminLeaves = collect();
+        $pendingLeaves = collect();
+        if ($isAdmin) {
+            $all = DtrLeave::with('user:id,name')->orderByDesc('start_date')->limit(300)->get();
+            $adminLeaves = $all->map(fn (DtrLeave $l) => $this->leaveRow($l))->values();
+            $pendingLeaves = $all->where('status', 'pending')
+                ->map(fn (DtrLeave $l) => $this->leaveRow($l))->values();
+        }
+
         // Holidays for the calendar — country inferred from team / timezone.
         $tz = $setting?->timezone ?? '';
         $team = strtolower((string) ($setting?->team ?? ''));
@@ -73,6 +92,8 @@ class DtrController extends Controller
             'entries' => $entries,
             'carried' => $carried,
             'leaves' => $leaves,
+            'adminLeaves' => $adminLeaves,
+            'adminPendingLeaves' => $pendingLeaves,
             'holidays' => $holidays,
             'leaveTypes' => DtrLeave::TYPES,
             // Earliest date a leave can start — enforces the 1-week advance rule.
@@ -113,56 +134,267 @@ class DtrController extends Controller
         ]);
     }
 
-    /** File a leave request — must start at least a week from today. */
+    /**
+     * File a leave application (the full "Application for Leave" form,
+     * Sections 1–4). Must start at least a week from today, be declared, and
+     * carry the employee's drawn signature.
+     */
     public function fileLeave(Request $request)
     {
-        $this->requireSetting();
+        $setting = $this->requireSetting();
 
         $data = $request->validate([
-            'type' => 'required|string|max:40',
+            'full_name' => 'nullable|string|max:160',
+            'position' => 'nullable|string|max:160',
+            'type' => 'required|string|max:60',
+            'other_specify' => 'nullable|string|max:255',
             'start_date' => 'required|date',
             'end_date' => 'required|date|after_or_equal:start_date',
-            'reason' => 'nullable|string|max:1000',
+            'return_date' => 'nullable|date',
+            'total_days' => 'nullable|numeric|min:0|max:366',
+            'half_day' => 'nullable|in:AM,PM,N/A',
+            'reason' => 'nullable|string|max:2000',
+            'declaration' => 'required|accepted',
+            'employee_signature' => 'required|string|max:2000000', // PNG data URI
         ]);
 
-        $setting = DtrSetting::where('user_id', auth()->id())->first();
-        $minStart = now($setting?->timezone ?: config('app.timezone', 'UTC'))->addDays(7)->startOfDay();
+        $minStart = now($setting->timezone ?: config('app.timezone', 'UTC'))->addDays(7)->startOfDay();
         if (Carbon::parse($data['start_date'])->startOfDay()->lt($minStart)) {
             return back()->withErrors(['start_date' => 'Leave must be filed at least 1 week (7 days) in advance.']);
         }
 
-        DtrLeave::create(array_merge($data, ['user_id' => auth()->id(), 'status' => 'pending']));
+        DtrLeave::create(array_merge($data, [
+            'user_id' => auth()->id(),
+            'status' => 'pending',
+            'declaration' => true,
+            'employee_signed_at' => now(),
+        ]));
 
-        return back()->with('success', 'Leave request submitted — awaiting approval.');
+        return back()->with('success', 'Leave application submitted — awaiting manager approval.');
     }
 
-    /** Admin/super_admin approves or rejects a leave request. */
+    /**
+     * Manager assessment & approval (Section 5). Admin/super_admin records the
+     * decision, working days, operational impact, comments and their drawn
+     * signature. Also accepts the legacy {action:approve|reject} shorthand.
+     */
     public function reviewLeave(Request $request, $id)
     {
         abort_unless(in_array(auth()->user()->role, ['admin', 'super_admin'], true), 403);
 
-        $data = $request->validate(['action' => 'required|in:approve,reject']);
+        // Legacy shorthand from older quick-approve buttons.
+        if ($request->filled('action') && ! $request->filled('decision')) {
+            $request->merge(['decision' => $request->input('action') === 'reject' ? 'Declined' : 'Approved']);
+        }
+
+        $data = $request->validate([
+            'decision' => 'required|in:Approved,Approved in part,Declined,Deferred',
+            'working_days_approved' => 'nullable|string|max:60',
+            'operational_impact' => 'nullable|in:Low,Medium,High',
+            'manager_comments' => 'nullable|string|max:2000',
+            'manager_signature' => 'nullable|string|max:2000000',
+        ]);
+
+        $statusMap = [
+            'Approved' => 'approved',
+            'Approved in part' => 'approved',
+            'Declined' => 'rejected',
+            'Deferred' => 'deferred',
+        ];
+
         $leave = DtrLeave::findOrFail($id);
         $leave->update([
-            'status' => $data['action'] === 'approve' ? 'approved' : 'rejected',
+            'decision' => $data['decision'],
+            'working_days_approved' => $data['working_days_approved'] ?? null,
+            'operational_impact' => $data['operational_impact'] ?? null,
+            'manager_comments' => $data['manager_comments'] ?? null,
+            'manager_signature' => $data['manager_signature'] ?: $leave->manager_signature,
+            'manager_signed_at' => ! empty($data['manager_signature']) ? now() : $leave->manager_signed_at,
+            'status' => $statusMap[$data['decision']],
             'reviewed_by' => auth()->id(),
             'reviewed_at' => now(),
         ]);
 
-        return back()->with('success', "Leave {$leave->status}.");
+        return back()->with('success', "Leave {$data['decision']}.");
     }
 
-    private function leaveRow(DtrLeave $l): array
+    /**
+     * Full leave record incl. signatures — fetched on demand for the detail
+     * view so the (large) signature data URIs stay out of list payloads.
+     * Own leave, or any leave for admin/super_admin.
+     */
+    public function showLeave($id)
     {
-        return [
-            'id' => $l->id,
-            'type' => $l->type,
-            'start_date' => $l->start_date->toDateString(),
-            'end_date' => $l->end_date->toDateString(),
-            'reason' => $l->reason,
-            'status' => $l->status,
-            'user' => $l->relationLoaded('user') && $l->user ? $l->user->name : null,
+        $leave = DtrLeave::with('user:id,name')->findOrFail($id);
+        $isAdmin = in_array(auth()->user()->role, ['admin', 'super_admin'], true);
+        abort_unless($isAdmin || $leave->user_id === auth()->id(), 403);
+
+        return response()->json($this->leaveRow($leave, true));
+    }
+
+    /**
+     * Team Daily Reports — admin/super_admin. For the picked date: every
+     * staffer's submission status + their report (times, tasks, remarks). Plus
+     * per-day submission counts across the month for the calendar indicator.
+     */
+    public function reports(Request $request)
+    {
+        abort_unless(in_array(auth()->user()->role, ['admin', 'super_admin'], true), 403);
+
+        $tz = config('app.timezone', 'UTC');
+        $date = Carbon::parse($request->query('date') ?: now($tz))->toDateString();
+        $month = Carbon::parse($date)->startOfMonth();
+        $monthStart = $month->toDateString();
+        $monthEnd = $month->copy()->endOfMonth()->toDateString();
+
+        $settings = DtrSetting::with('user:id,name')->get();
+        $userIds = $settings->pluck('user_id');
+        $staffCount = $settings->count();
+
+        // Per-day submission counts for the month (calendar indicator).
+        $monthEntries = DtrEntry::whereIn('user_id', $userIds)
+            ->whereBetween('work_date', [$monthStart, $monthEnd])->get();
+        $dayCounts = [];
+        foreach ($monthEntries->groupBy(fn (DtrEntry $e) => $e->work_date->toDateString()) as $d => $rows) {
+            $dayCounts[$d] = $rows->filter(fn (DtrEntry $e) => $this->isSubmitted($e))->count();
+        }
+
+        // Roster for the selected date.
+        $dayEntries = DtrEntry::whereIn('user_id', $userIds)->where('work_date', $date)->get()->keyBy('user_id');
+        $leaves = DtrLeave::where('status', 'approved')
+            ->whereDate('start_date', '<=', $date)->whereDate('end_date', '>=', $date)
+            ->get()->keyBy('user_id');
+
+        $roster = $settings->map(function (DtrSetting $s) use ($dayEntries, $leaves) {
+            $e = $dayEntries->get($s->user_id);
+            $row = $e ? $this->computeRow($e, $s) : [];
+            $leave = $leaves->get($s->user_id);
+
+            return [
+                'user_id' => $s->user_id,
+                'name' => $s->user?->name ?: ($s->label ?: 'Unknown'),
+                'team' => $s->team ?: 'Unassigned',
+                'position' => $s->position,
+                'on_leave' => $leave?->type,
+                'submitted' => $e ? $this->isSubmitted($e) : false,
+                'time_in' => $row['time_in'] ?? null,
+                'time_out' => $row['time_out'] ?? null,
+                'net_hrs' => $row['net_hrs'] ?? null,
+                'variance' => $row['variance'] ?? null,
+                'attendance' => $row['attendance'] ?? null,
+                'tasks' => $row['tasks'] ?? [],
+                'remarks' => $row['remarks'] ?? null,
+                'tasks_count' => $row['tasks_count'] ?? 0,
+                'open_count' => $row['open_count'] ?? 0,
+            ];
+        })->sortBy('name')->values();
+
+        return inertia('admin/DtrReports', [
+            'date' => $date,
+            'today' => now($tz)->toDateString(),
+            'staffCount' => $staffCount,
+            'dayCounts' => $dayCounts,
+            'roster' => $roster,
+        ]);
+    }
+
+    /**
+     * Generate a single day's report as a downloadable PDF — proof of the work
+     * done that day (times, net/variance/attendance, tasks, remarks). A user
+     * can generate their own; admin/super_admin can generate any staffer's.
+     */
+    public function dailyReport(Request $request)
+    {
+        $data = $request->validate([
+            'date' => 'required|date',
+            'user' => 'nullable|integer',
+        ]);
+        $date = Carbon::parse($data['date'])->toDateString();
+
+        $isAdmin = in_array(auth()->user()->role, ['admin', 'super_admin'], true);
+        $targetId = ($isAdmin && ! empty($data['user'])) ? (int) $data['user'] : auth()->id();
+        abort_if(! $isAdmin && ! empty($data['user']) && (int) $data['user'] !== auth()->id(), 403);
+
+        $setting = DtrSetting::with('user:id,name,email')->where('user_id', $targetId)->first();
+        abort_if(! $setting, 404, 'No DTR set up for this user.');
+
+        $entry = DtrEntry::where('user_id', $targetId)->where('work_date', $date)->first();
+        $row = $entry ? $this->computeRow($entry, $setting) : null;
+
+        $fmt = fn ($hhmm) => $hhmm ? Carbon::createFromFormat('H:i', $hhmm)->format('g:i A') : '—';
+        $tasks = collect($row['tasks'] ?? [])
+            ->filter(fn ($t) => trim((string) ($t['task'] ?? '')) !== '' || trim((string) ($t['pending'] ?? '')) !== '')
+            ->map(fn ($t) => ['task' => (string) ($t['task'] ?? ''), 'pending' => (string) ($t['pending'] ?? '')])
+            ->values()->all();
+
+        $payload = [
+            'name' => $setting->user?->name ?: ($setting->label ?: 'Staff'),
+            'position' => $setting->position,
+            'team' => $setting->team,
+            'timezone' => $setting->timezone,
+            'scheduleIn' => $fmt($setting->sched_in),
+            'scheduleOut' => $fmt($setting->sched_out),
+            'date' => $date,
+            'prettyDate' => Carbon::parse($date)->format('l, F j, Y'),
+            'timeIn' => $fmt($row['time_in'] ?? null),
+            'timeOut' => $fmt($row['time_out'] ?? null),
+            'netHrs' => isset($row['net_hrs']) && $row['net_hrs'] !== null ? number_format($row['net_hrs'], 2) : '—',
+            'variance' => isset($row['variance']) && $row['variance'] !== null ? ($row['variance'] >= 0 ? '+' : '').number_format($row['variance'], 2) : '—',
+            'attendance' => $row['attendance'] ?? '—',
+            'remarks' => $row['remarks'] ?? null,
+            'tasks' => $tasks,
+            'generatedAt' => now($setting->timezone ?: config('app.timezone', 'UTC'))->format('M j, Y g:i A'),
         ];
+
+        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('dtr.daily-report', $payload)->setPaper('a4');
+        $slug = \Illuminate\Support\Str::slug($payload['name']);
+
+        return $pdf->download("DTR_{$slug}_{$date}.pdf");
+    }
+
+    /** A day's report counts as "submitted" once clocked out or tasks logged. */
+    private function isSubmitted(DtrEntry $e): bool
+    {
+        if ($e->time_out) {
+            return true;
+        }
+
+        return collect((array) $e->tasks)->contains(fn ($t) => trim((string) ($t['task'] ?? '')) !== '');
+    }
+
+    private function leaveRow(DtrLeave $l, bool $withSignatures = false): array
+    {
+        $row = [
+            'id' => $l->id,
+            'user' => $l->relationLoaded('user') && $l->user ? $l->user->name : null,
+            'full_name' => $l->full_name,
+            'position' => $l->position,
+            'type' => $l->type,
+            'other_specify' => $l->other_specify,
+            'start_date' => optional($l->start_date)->toDateString(),
+            'end_date' => optional($l->end_date)->toDateString(),
+            'return_date' => optional($l->return_date)->toDateString(),
+            'total_days' => $l->total_days,
+            'half_day' => $l->half_day,
+            'reason' => $l->reason,
+            'declaration' => (bool) $l->declaration,
+            'employee_signed_at' => optional($l->employee_signed_at)->toDateString(),
+            'has_employee_signature' => ! empty($l->employee_signature),
+            'status' => $l->status,
+            'decision' => $l->decision,
+            'working_days_approved' => $l->working_days_approved,
+            'operational_impact' => $l->operational_impact,
+            'manager_comments' => $l->manager_comments,
+            'manager_signed_at' => optional($l->manager_signed_at)->toDateString(),
+            'has_manager_signature' => ! empty($l->manager_signature),
+        ];
+
+        if ($withSignatures) {
+            $row['employee_signature'] = $l->employee_signature;
+            $row['manager_signature'] = $l->manager_signature;
+        }
+
+        return $row;
     }
 
     /** Tick / untick a carried-forward pending item as done. */
@@ -314,7 +546,7 @@ class DtrController extends Controller
     /** Create/update a day's entry (times, tasks, remarks). */
     public function saveEntry(Request $request)
     {
-        $this->requireSetting();
+        $setting = $this->requireSetting();
 
         $data = $request->validate([
             'work_date' => 'required|date',
@@ -325,6 +557,12 @@ class DtrController extends Controller
             'tasks.*.pending' => 'nullable|string|max:1000',
             'remarks' => 'nullable|string|max:2000',
         ]);
+
+        // Past days are locked — only the current day (in the user's DTR
+        // timezone) may be written. No one, admin or otherwise, edits a
+        // closed record through this endpoint.
+        $today = now($setting->timezone ?: config('app.timezone', 'UTC'))->toDateString();
+        abort_if($data['work_date'] !== $today, 403, 'Past days are locked and cannot be edited.');
 
         DtrEntry::updateOrCreate(
             ['user_id' => auth()->id(), 'work_date' => $data['work_date']],
