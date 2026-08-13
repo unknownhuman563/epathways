@@ -4,11 +4,11 @@ import { Clock, LogIn, LogOut, Save, Settings, AlertTriangle, CheckCircle, BarCh
 
 const DOW = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
 
-// Tiny autosave indicator next to the Save button.
+// Tiny autosave badge shown next to the "Tasks" heading.
 function SaveStatus({ state }) {
-    if (state === "saving") return <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-gray-400"><Loader2 size={12} className="animate-spin" /> Saving…</span>;
-    if (state === "saved") return <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-600"><Check size={12} /> Saved</span>;
-    if (state === "error") return <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-rose-500"><CloudOff size={12} /> Not saved</span>;
+    if (state === "saving") return <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 text-[10px] font-bold"><Loader2 size={11} className="animate-spin" /> Saving…</span>;
+    if (state === "saved") return <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[10px] font-bold"><Check size={11} /> Saved</span>;
+    if (state === "error") return <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-rose-50 text-rose-600 text-[10px] font-bold"><CloudOff size={11} /> Not saved</span>;
     return null;
 }
 
@@ -928,7 +928,10 @@ function DayEditor({ setting, entry, date, isToday = false, carried = [] }) {
                 or carry it to tomorrow. Only completed + for-tomorrow are saved. */}
             <div>
                 <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-                    <p className="text-[11px] font-bold uppercase tracking-wider text-gray-500">Tasks</p>
+                    <div className="flex items-center gap-2">
+                        <p className="text-[11px] font-bold uppercase tracking-wider text-gray-500">Tasks</p>
+                        {!readOnly && <SaveStatus state={saveState} />}
+                    </div>
                     <div className="flex items-center gap-2 flex-wrap">
                         <div className="flex items-center gap-1.5 text-[10px] font-bold">
                             <span className="px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 tabular-nums">{ongoingCount} to do</span>
@@ -936,12 +939,9 @@ function DayEditor({ setting, entry, date, isToday = false, carried = [] }) {
                             <span className="px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 tabular-nums">{carryCount} for tomorrow</span>
                         </div>
                         {!readOnly && (
-                            <>
-                                <SaveStatus state={saveState} />
-                                <button onClick={() => saveDay()} disabled={saving} className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-[#436235] text-white text-xs font-bold rounded-lg hover:bg-[#375029] disabled:opacity-60 transition-colors shadow-sm">
-                                    <Save size={13} /> {saving ? "Saving…" : "Save today"}
-                                </button>
-                            </>
+                            <button onClick={() => saveDay()} disabled={saving} className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-[#436235] text-white text-xs font-bold rounded-lg hover:bg-[#375029] disabled:opacity-60 transition-colors shadow-sm">
+                                <Save size={13} /> {saving ? "Saving…" : "Save today"}
+                            </button>
                         )}
                     </div>
                 </div>

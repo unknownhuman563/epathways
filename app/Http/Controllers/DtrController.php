@@ -824,7 +824,9 @@ class DtrController extends Controller
             }
         }
 
-        return back()->with('success', 'Saved.');
+        // No flash — the DTR page shows an inline "Saved" badge itself; a global
+        // toast on every autosave would be noise.
+        return back();
     }
 
     /** One-tap clock in — stamps the current time (in the user's DTR timezone). */
