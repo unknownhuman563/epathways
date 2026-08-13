@@ -1254,6 +1254,11 @@ Route::middleware(['auth'])->group(function () {
             Route::post('/assessments/{type}/{id}/ai-review/edit', [ImmigrationController::class, 'aiReviewEdit'])
                 ->where(['type' => 'resident|work|student|visitor|family', 'id' => '[0-9]+'])
                 ->name('assessments.ai-review.edit');
+            // Attributed internal notes on an assessment (intake OR free-assessment
+            // lead). Each note records its author so advisers see who noted what.
+            Route::post('/assessments/{type}/{id}/notes', [ImmigrationController::class, 'assessmentNoteStore'])
+                ->where(['type' => 'resident|work|student|visitor|family|free', 'id' => '[0-9]+'])
+                ->name('assessments.notes.store');
             Route::get('/cases', [ImmigrationController::class, 'cases'])->name('cases');
             // Engagement + Invoice generation workspaces. Declared before the
             // /cases/{lead}/... routes below; both are single-segment literals
