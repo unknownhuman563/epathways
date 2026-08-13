@@ -23,6 +23,7 @@
         .pill { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; }
         .pill.ontime { background: #d1fae5; color: #047857; }
         .pill.late { background: #ffe4e6; color: #be123c; }
+        .pill.flexi { background: #e0e7ff; color: #4338ca; }
         .section-title { font-size: 10px; font-weight: bold; text-transform: uppercase; letter-spacing: 1.5px; color: #6b7280; margin: 0 0 6px; }
         table.tasks { width: 100%; border-collapse: collapse; margin-bottom: 18px; }
         table.tasks th { background: #f3f4f6; border: 1px solid #e5e7eb; padding: 7px 10px; text-align: left; font-size: 9px; text-transform: uppercase; letter-spacing: 1px; color: #6b7280; }
@@ -40,7 +41,11 @@
     <table class="head" width="100%">
         <tr>
             <td>
-                <div class="brand">ePathways.</div>
+                @if(!empty($logo_data))
+                    <img src="{{ $logo_data }}" alt="ePathways" style="height:80px; margin-bottom:4px;">
+                @else
+                    <div class="brand">ePathways.</div>
+                @endif
                 <div class="eyebrow" style="margin-top:4px;">Daily Time &amp; Task Record</div>
                 <h1>Daily Report</h1>
             </td>
@@ -53,9 +58,9 @@
 
     <table class="meta" width="100%">
         <tr><td class="label">Employee</td><td class="value">{{ $name }}</td></tr>
-        <tr><td class="label">Position</td><td>{{ $position ?: '—' }}</td></tr>
+        <tr><td class="label">Position</td><td>{{ $position ?: '—' }} <span class="muted">· {{ $employment }}</span></td></tr>
         <tr><td class="label">Team</td><td>{{ $team ?: '—' }} <span class="muted">({{ $timezone }})</span></td></tr>
-        <tr><td class="label">Schedule</td><td>{{ $scheduleIn }} – {{ $scheduleOut }}</td></tr>
+        <tr><td class="label">Schedule</td><td>{{ $scheduleLabel }}</td></tr>
     </table>
 
     <table class="stats">
@@ -71,27 +76,44 @@
                 <div class="v">
                     @if($attendance === 'Late')<span class="pill late">Late</span>
                     @elseif($attendance === 'On Time')<span class="pill ontime">On Time</span>
+                    @elseif($attendance === 'Flexi')<span class="pill flexi">Flexi</span>
                     @else <span class="muted">—</span>@endif
                 </div>
             </td>
-            <td><div class="k">Tasks Logged</div><div class="v">{{ count($tasks) }}</div></td>
+            <td><div class="k">Tasks Completed</div><div class="v">{{ count($completed) }}</div></td>
         </tr>
     </table>
 
-    <div class="section-title">Tasks &amp; Pending</div>
+    <div class="section-title">Completed tasks</div>
     <table class="tasks">
         <thead>
-            <tr><th class="num">#</th><th>Task completed</th><th>Pending / for tomorrow</th></tr>
+            <tr><th class="num">#</th><th>Task completed</th></tr>
         </thead>
         <tbody>
-            @forelse($tasks as $i => $t)
+            @forelse($completed as $i => $t)
                 <tr>
                     <td class="num">{{ $i + 1 }}</td>
-                    <td>{{ $t['task'] ?: '—' }}</td>
-                    <td>{{ $t['pending'] ?: '—' }}</td>
+                    <td>{{ $t }}</td>
                 </tr>
             @empty
-                <tr><td class="num">—</td><td colspan="2" class="muted">No tasks were logged this day.</td></tr>
+                <tr><td class="num">—</td><td class="muted">No tasks were completed this day.</td></tr>
+            @endforelse
+        </tbody>
+    </table>
+
+    <div class="section-title">Pending / for tomorrow</div>
+    <table class="tasks">
+        <thead>
+            <tr><th class="num">#</th><th>Carried over to the next day</th></tr>
+        </thead>
+        <tbody>
+            @forelse($pending as $i => $t)
+                <tr>
+                    <td class="num">{{ $i + 1 }}</td>
+                    <td>{{ $t }}</td>
+                </tr>
+            @empty
+                <tr><td class="num">—</td><td class="muted">Nothing was carried over.</td></tr>
             @endforelse
         </tbody>
     </table>

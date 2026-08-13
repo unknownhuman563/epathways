@@ -390,18 +390,23 @@ class DtrController extends Controller
         $row = $entry ? $this->computeRow($entry, $setting) : null;
 
         $fmt = fn ($hhmm) => $hhmm ? Carbon::createFromFormat('H:i', $hhmm)->format('g:i A') : '—';
-        $tasks = collect($row['tasks'] ?? [])
-            ->filter(fn ($t) => trim((string) ($t['task'] ?? '')) !== '' || trim((string) ($t['pending'] ?? '')) !== '')
-            ->map(fn ($t) => ['task' => (string) ($t['task'] ?? ''), 'pending' => (string) ($t['pending'] ?? '')])
-            ->values()->all();
+
+        // The record keeps completed work in `task` and for-tomorrow items in
+        // `pending` — surface them as two clean lists in the report.
+        $allTasks = collect($row['tasks'] ?? []);
+        $completed = $allTasks->map(fn ($t) => trim((string) ($t['task'] ?? '')))->filter()->values()->all();
+        $pending = $allTasks->map(fn ($t) => trim((string) ($t['pending'] ?? '')))->filter()->values()->all();
+
+        $isFlexi = $setting->schedule_type === 'flexi';
 
         $payload = [
+            'logo_data' => $this->brandLogoData(),
             'name' => $setting->user?->name ?: ($setting->label ?: 'Staff'),
             'position' => $setting->position,
+            'employment' => $setting->employment_type === 'part_time' ? 'Part-time' : 'Full-time',
             'team' => $setting->team,
             'timezone' => $setting->timezone,
-            'scheduleIn' => $fmt($setting->sched_in),
-            'scheduleOut' => $fmt($setting->sched_out),
+            'scheduleLabel' => $isFlexi ? 'Flexi — no fixed hours' : ($fmt($setting->sched_in).' – '.$fmt($setting->sched_out)),
             'date' => $date,
             'prettyDate' => Carbon::parse($date)->format('l, F j, Y'),
             'timeIn' => $fmt($row['time_in'] ?? null),
@@ -410,7 +415,8 @@ class DtrController extends Controller
             'variance' => isset($row['variance']) && $row['variance'] !== null ? ($row['variance'] >= 0 ? '+' : '').number_format($row['variance'], 2) : '—',
             'attendance' => $row['attendance'] ?? '—',
             'remarks' => $row['remarks'] ?? null,
-            'tasks' => $tasks,
+            'completed' => $completed,
+            'pending' => $pending,
             'generatedAt' => now($setting->timezone ?: config('app.timezone', 'UTC'))->format('M j, Y g:i A'),
         ];
 
@@ -418,6 +424,24 @@ class DtrController extends Controller
         $slug = \Illuminate\Support\Str::slug($payload['name']);
 
         return $pdf->download("DTR_{$slug}_{$date}.pdf");
+    }
+
+    /**
+     * Base64 data URI of the ePathways brand logo for the PDF header. The file
+     * lives at resources/assets/ep_only.* (present on the server, not committed
+     * locally). Returns '' if absent, so the header falls back to the wordmark.
+     */
+    private function brandLogoData(): string
+    {
+        $map = ['png' => 'png', 'jpg' => 'jpeg', 'jpeg' => 'jpeg', 'webp' => 'webp', 'gif' => 'gif', 'svg' => 'svg+xml'];
+        foreach ($map as $ext => $mime) {
+            $path = base_path("resources/assets/ep_only.{$ext}");
+            if (is_file($path)) {
+                return "data:image/{$mime};base64,".base64_encode(file_get_contents($path));
+            }
+        }
+
+        return '';
     }
 
     /** A day's report counts as "submitted" once clocked out or tasks logged. */
@@ -747,6 +771,10 @@ class DtrController extends Controller
             'tasks' => 'nullable|array|max:100',
             'tasks.*.task' => 'nullable|string|max:1000',
             'tasks.*.pending' => 'nullable|string|max:1000',
+            'tasks.*.pending_done' => 'nullable|boolean',
+            'close_carried' => 'nullable|array|max:200',
+            'close_carried.*.entry_id' => 'required|integer',
+            'close_carried.*.index' => 'required|integer|min:0',
             'remarks' => 'nullable|string|max:2000',
         ]);
 
@@ -756,15 +784,39 @@ class DtrController extends Controller
         $today = now($setting->timezone ?: config('app.timezone', 'UTC'))->toDateString();
         abort_if($data['work_date'] !== $today, 403, 'Past days are locked and cannot be edited.');
 
+        // Only completed (task) and for-tomorrow (pending) items are recorded —
+        // the to-do plan stays in the UI and isn't stored.
+        $tasks = array_values(array_map(fn ($t) => [
+            'task' => (string) ($t['task'] ?? ''),
+            'pending' => (string) ($t['pending'] ?? ''),
+            'pending_done' => (bool) ($t['pending_done'] ?? false),
+        ], $data['tasks'] ?? []));
+
         DtrEntry::updateOrCreate(
             ['user_id' => auth()->id(), 'work_date' => $data['work_date']],
             [
                 'time_in' => $data['time_in'] ?? null,
                 'time_out' => $data['time_out'] ?? null,
-                'tasks' => array_values($data['tasks'] ?? []),
+                'tasks' => $tasks,
                 'remarks' => $data['remarks'] ?? null,
             ],
         );
+
+        // Carried-over items resolved today (completed or re-carried) get closed
+        // on their source entry so they stop rolling forward. Scoped to the
+        // signed-in user's own entries.
+        foreach ($data['close_carried'] ?? [] as $c) {
+            $src = DtrEntry::where('user_id', auth()->id())->find($c['entry_id']);
+            if (! $src) {
+                continue;
+            }
+            $t = is_array($src->tasks) ? $src->tasks : [];
+            if (isset($t[$c['index']])) {
+                $t[$c['index']]['pending_done'] = true;
+                $src->tasks = array_values($t);
+                $src->save();
+            }
+        }
 
         return back()->with('success', 'Saved.');
     }
