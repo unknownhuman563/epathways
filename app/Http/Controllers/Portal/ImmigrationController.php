@@ -454,6 +454,12 @@ class ImmigrationController extends Controller
                                                 ?? optional($l->studentConverter)->name,
                         // Short summary of what that edit changed.
                         'updated_desc' => $l->last_activity_desc,
+                        // Conversion provenance — when this lead was converted
+                        // into a case and by whom, so the list shows which cases
+                        // were converted (and can be sorted by it).
+                        'converted_at' => optional($l->immigration_converted_at)?->toIso8601String(),
+                        'converted_by' => optional($l->immigrationConverter)->name
+                                                ?? optional($l->studentConverter)->name,
                         // Custody (Build 12 phase 2) — current owner, how long
                         // they've held it (shown as plain text), and the
                         // staleness colour derived above from last activity.
