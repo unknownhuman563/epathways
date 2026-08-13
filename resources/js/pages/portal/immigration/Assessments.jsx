@@ -26,6 +26,7 @@ const VISA_AVATAR_BG = {
     student:  "bg-purple-500",
     visitor:  "bg-emerald-500",
     family:   "bg-rose-500",
+    free:     "bg-[#009688]",
 };
 
 const VISA_LABEL = {
@@ -34,6 +35,7 @@ const VISA_LABEL = {
     student:  "Student",
     visitor:  "Visitor",
     family:   "Family",
+    free:     "Free Assessment",
 };
 
 // Status buckets — only an explicit "Submitted" counts as Submitted.
