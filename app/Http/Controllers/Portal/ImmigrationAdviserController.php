@@ -6,9 +6,11 @@ use App\Http\Controllers\Controller;
 use App\Http\Controllers\Immigration\CaseProfileController;
 use App\Models\CaseAttestation;
 use App\Models\Lead;
+use App\Models\LeadDocument;
 use App\Models\User;
 use App\Services\Immigration\CaseChecklistService;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 /**
  * The Licensed Immigration Adviser's portal. Separate from the manager's full
@@ -53,28 +55,141 @@ class ImmigrationAdviserController extends Controller
         ]);
     }
 
-    public function cases(Request $request)
+    /** All immigration cases — the exact manager "List of Cases" UI/UX, under the
+     *  adviser chrome. Reuses the manager's payload builder so nothing drifts. */
+    public function cases()
     {
-        $user = $request->user();
-
-        $cases = (clone $this->caseScope($user))
-            ->orderByDesc('updated_at')
-            ->limit(300)
-            ->get(['id', 'lead_id', 'first_name', 'last_name', 'inz_visa_type', 'inz_status', 'immigration_stage', 'updated_at']);
-
-        return inertia('portal/immigration-adviser/Cases', [
-            'cases' => $cases->map(fn ($l) => $this->caseRow($l))->values(),
-        ]);
+        return inertia('portal/immigration-adviser/Cases', array_merge(
+            app(\App\Http\Controllers\Portal\ImmigrationController::class)->casesPayload(),
+            ['pageTitle' => 'Cases', 'pageSubtitle' => 'Every immigration case']
+        ));
     }
 
-    /** Reuse the full case profile under the adviser's chrome + ownership guard. */
+    /** Visa Assessment — the same manager Assessments UI, under adviser chrome. */
+    public function assessments()
+    {
+        return inertia('portal/immigration-adviser/Assessments',
+            app(\App\Http\Controllers\Portal\ImmigrationController::class)->assessmentsPayload()
+        );
+    }
+
+    /** Cases referred to (owned by) this adviser — same UI, scoped to their book. */
+    public function myCases(Request $request)
+    {
+        $user = $request->user();
+        $scope = $user->isAdmin() ? null : fn ($q) => $q->where('current_owner_id', $user->id);
+
+        return inertia('portal/immigration-adviser/Cases', array_merge(
+            app(\App\Http\Controllers\Portal\ImmigrationController::class)->casesPayload($scope),
+            ['pageTitle' => 'My Cases', 'pageSubtitle' => 'Cases referred to you']
+        ));
+    }
+
+    /** Reuse the full case profile under the adviser's chrome. The LIA may open
+     *  any immigration case (they verify advice-bearing content across the book). */
     public function showCase(Lead $lead, CaseChecklistService $checklist)
     {
         $user = auth()->user();
         abort_unless($user instanceof User, 403);
-        abort_unless($user->isAdmin() || $lead->current_owner_id === $user->id, 404);
+        abort_unless($lead->is_immigration_case, 404);
 
         return app(CaseProfileController::class)->show($lead, $checklist, 'portal/immigration-adviser/CaseProfile');
+    }
+
+    /**
+     * Verification queue — documents a manager has marked "Checked" (referred to
+     * the adviser). The LIA makes the final Approve/Reject call, which is what the
+     * client sees. The manager's "Checked" is never shown to the client.
+     */
+    public function verification(Request $request)
+    {
+        $docs = LeadDocument::where('status', LeadDocument::STATUS_CHECKED)
+            ->whereHas('lead', fn ($q) => $q->immigrationCase())
+            ->with('lead:id,lead_id,first_name,last_name,inz_visa_type')
+            ->orderBy('reviewed_at')
+            ->get()
+            ->map(fn (LeadDocument $d) => [
+                'id' => $d->id,
+                'original_name' => $d->original_name,
+                'checklist_key' => $d->checklist_key,
+                'note' => $d->note,
+                'mime' => $d->mime,
+                'size' => $d->size,
+                'checked_at' => optional($d->reviewed_at)->toIso8601String(),
+                'view_url' => "/admin/documents/{$d->id}/download?inline=1",
+                'download_url' => "/admin/documents/{$d->id}/download",
+                'case' => [
+                    'id' => $d->lead->id,
+                    'lead_id' => $d->lead->lead_id,
+                    'name' => trim("{$d->lead->first_name} {$d->lead->last_name}") ?: ($d->lead->lead_id ?: 'Case'),
+                    'visa' => $d->lead->inz_visa_type,
+                ],
+            ])->values();
+
+        return inertia('portal/immigration-adviser/Verification', [
+            'documents' => $docs,
+            'licence' => $this->licence($request->user()),
+        ]);
+    }
+
+    /** The adviser's final Approve/Reject on a checked document. */
+    public function verifyDocument(Request $request, LeadDocument $document)
+    {
+        $user = $request->user();
+        abort_unless($document->lead && $document->lead->is_immigration_case, 404);
+
+        $data = $request->validate([
+            'action' => ['required', Rule::in(['approve', 'reject'])],
+            'note' => 'nullable|string|max:500',
+        ]);
+
+        $status = $data['action'] === 'approve'
+            ? LeadDocument::STATUS_APPROVED
+            : LeadDocument::STATUS_REJECTED;
+
+        $document->forceFill([
+            'status' => $status,
+            'note' => $data['note'] ?: $document->note,
+            'reviewed_by' => $user->id,
+            'reviewed_at' => now(),
+        ])->save();
+
+        if ($status === LeadDocument::STATUS_APPROVED
+            && \App\Services\GoogleDriveService::isConfigured()) {
+            \App\Jobs\PushApprovedDocumentToDrive::dispatch($document->id);
+        }
+
+        $document->lead?->recordStaffActivity($status.' '.($document->original_name ?: 'file'));
+
+        return back()->with('success', $status === LeadDocument::STATUS_APPROVED ? 'Document approved.' : 'Document rejected.');
+    }
+
+    /** Adviser reports — verification throughput + casework at a glance. */
+    public function reports(Request $request)
+    {
+        $user = $request->user();
+        $myIds = (clone $this->caseScope($user))->pluck('id');
+
+        $verified = LeadDocument::whereIn('status', [LeadDocument::STATUS_APPROVED, LeadDocument::STATUS_REJECTED])
+            ->where('reviewed_by', $user->id);
+
+        return inertia('portal/immigration-adviser/Reports', [
+            'stats' => [
+                'total_cases' => Lead::immigrationCase()->count(),
+                'my_cases' => $myIds->count(),
+                'pending_verification' => LeadDocument::where('status', LeadDocument::STATUS_CHECKED)
+                    ->whereHas('lead', fn ($q) => $q->immigrationCase())->count(),
+                'approved_by_me' => (clone $verified)->where('status', LeadDocument::STATUS_APPROVED)->count(),
+                'rejected_by_me' => (clone $verified)->where('status', LeadDocument::STATUS_REJECTED)->count(),
+            ],
+            'byStage' => Lead::immigrationCase()
+                ->selectRaw('immigration_stage as stage, count(*) as total')
+                ->groupBy('immigration_stage')
+                ->get()
+                ->map(fn ($r) => ['stage' => $r->stage ?: 'Unassigned', 'total' => (int) $r->total])
+                ->values(),
+            'licence' => $this->licence($user),
+        ]);
     }
 
     /** Cases awaiting the adviser's verdict or lodgement sign-off. */
@@ -114,6 +229,12 @@ class ImmigrationAdviserController extends Controller
                 'phone' => $user->phone,
             ],
             'licence' => $this->licence($user),
+            // The adviser's e-signature — drawn or uploaded, rendered onto the
+            // documents they sign. Saved via the shared staff-signature endpoint.
+            'signature' => [
+                'data_uri' => $user->signatureDataUri(),
+                'updated_at' => optional($user->signature_updated_at)?->toIso8601String(),
+            ],
         ]);
     }
 
@@ -138,6 +259,7 @@ class ImmigrationAdviserController extends Controller
             'number' => $user->iaa_licence_number,
             'type' => $user->iaa_licence_type,
             'expiry' => optional($user->iaa_licence_expiry)->toDateString(),
+            'verified' => optional($user->iaa_licence_verified_at)->toDateString(),
             'current' => $user->holdsCurrentLicence(),
         ];
     }

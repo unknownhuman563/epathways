@@ -2048,7 +2048,7 @@ function ChecklistTable({ rows, onOpenUpload, onOpenReplace, onDelete }) {
                     <col />
                 </colgroup>
                 <thead>
-                    <tr className="bg-gray-100 border-b border-gray-200 text-[10px] font-bold tracking-[0.16em] uppercase text-gray-500">
+                    <tr className="bg-gray-700 border-b border-gray-700 text-[10px] font-bold tracking-[0.16em] uppercase text-gray-100">
                         <th className="text-left px-4 py-2.5">File name</th>
                         <th className="text-left px-4 py-2.5">Attachment</th>
                         <th className="text-left px-4 py-2.5">Status</th>

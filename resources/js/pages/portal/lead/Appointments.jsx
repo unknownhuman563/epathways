@@ -26,7 +26,7 @@ export default function LeadAppointments({ lead, upcoming = [], past = [] }) {
                 action={
                     <a
                         href="/booking"
-                        className="inline-flex items-center gap-2 px-4 py-2 bg-[#436235] text-white rounded-xl text-xs font-bold uppercase tracking-wider hover:bg-[#385029] transition-colors"
+                        className="inline-flex items-center gap-2 px-4 py-2 bg-[#009688] text-white rounded-xl text-xs font-bold uppercase tracking-wider hover:bg-[#385029] transition-colors"
                     >
                         <Plus size={13} /> Book new
                     </a>
@@ -42,7 +42,7 @@ export default function LeadAppointments({ lead, upcoming = [], past = [] }) {
                             onClick={() => setTab(k)}
                             className={`px-4 py-3 text-xs font-bold uppercase tracking-wider transition-colors border-b-2 ${
                                 tab === k
-                                    ? 'text-[#282728] border-[#436235]'
+                                    ? 'text-[#282728] border-[#009688]'
                                     : 'text-gray-400 border-transparent hover:text-gray-700'
                             }`}
                         >
@@ -61,7 +61,7 @@ export default function LeadAppointments({ lead, upcoming = [], past = [] }) {
                         {rows.map((b) => (
                             <li key={b.id} className="px-6 py-5 flex items-center justify-between gap-4 flex-wrap">
                                 <div className="flex items-center gap-4 min-w-0 flex-1">
-                                    <div className="w-12 h-12 rounded-xl bg-[#436235]/10 text-[#436235] flex items-center justify-center flex-shrink-0">
+                                    <div className="w-12 h-12 rounded-xl bg-[#009688]/10 text-[#009688] flex items-center justify-center flex-shrink-0">
                                         <Calendar size={20} />
                                     </div>
                                     <div className="min-w-0">

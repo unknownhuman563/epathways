@@ -37,7 +37,7 @@ export default function LeadDocumentsPage({
 
             {/* Header */}
             <div>
-                <p className="text-[10px] font-bold text-[#436235] uppercase tracking-[0.32em] mb-1.5">
+                <p className="text-[10px] font-bold text-[#009688] uppercase tracking-[0.32em] mb-1.5">
                     Document submission journey
                 </p>
                 <h1 className="text-2xl sm:text-3xl font-medium text-[#282728] tracking-tight">My documents</h1>
@@ -95,8 +95,8 @@ function SectionProgressStrip({ sections, verifications, currentIdx }) {
     return (
         <section className="bg-white rounded-2xl border border-[#282728]/15 p-5">
             <div className="flex items-center gap-2 mb-4">
-                <CheckCircle2 size={14} className="text-[#436235]" />
-                <p className="text-[10px] font-bold uppercase tracking-[0.32em] text-[#436235]">
+                <CheckCircle2 size={14} className="text-[#009688]" />
+                <p className="text-[10px] font-bold uppercase tracking-[0.32em] text-[#009688]">
                     Your progress
                 </p>
                 <span className="ml-auto text-[11px] font-bold text-[#282728]/60 tabular-nums">
@@ -113,9 +113,9 @@ function SectionProgressStrip({ sections, verifications, currentIdx }) {
                     const isLocked = i > currentIdx;
 
                     const cls = isDone
-                        ? 'bg-[#436235] text-white border-[#436235]'
+                        ? 'bg-[#009688] text-white border-[#009688]'
                         : isCurrent
-                            ? 'bg-white text-[#436235] border-[#436235] ring-2 ring-[#436235]/15'
+                            ? 'bg-white text-[#009688] border-[#009688] ring-2 ring-[#009688]/15'
                             : 'bg-gray-50 text-gray-400 border-gray-200';
 
                     return (
@@ -129,7 +129,7 @@ function SectionProgressStrip({ sections, verifications, currentIdx }) {
                             ) : isLocked ? (
                                 <Lock size={10} />
                             ) : (
-                                <span className="w-4 h-4 rounded-full bg-[#436235] text-white text-[9px] flex items-center justify-center">{i + 1}</span>
+                                <span className="w-4 h-4 rounded-full bg-[#009688] text-white text-[9px] flex items-center justify-center">{i + 1}</span>
                             )}
                             <span className="truncate max-w-[160px]">{s.section}</span>
                         </li>
@@ -162,7 +162,7 @@ function SectionPanel({ section, sectionIndex, state, verification, verStatus, f
     const allFilled = totalUploaded === section.items.length;
 
     const headerSurface = isCurrent
-        ? 'bg-gradient-to-br from-[#436235]/8 to-white border-[#436235]/40'
+        ? 'bg-gradient-to-br from-[#009688]/8 to-white border-[#009688]/40'
         : isDone
             ? 'bg-emerald-50/40 border-emerald-200'
             : 'bg-gray-50 border-gray-200 opacity-70';
@@ -180,7 +180,7 @@ function SectionPanel({ section, sectionIndex, state, verification, verStatus, f
                     isDone
                         ? 'bg-emerald-500 text-white'
                         : isCurrent
-                            ? 'bg-[#436235] text-white ring-4 ring-[#436235]/15'
+                            ? 'bg-[#009688] text-white ring-4 ring-[#009688]/15'
                             : 'bg-gray-200 text-gray-400'
                 }`}>
                     {isDone ? <Check size={18} strokeWidth={3} /> : isLocked ? <Lock size={16} /> : <span className="text-sm font-bold">{sectionIndex + 1}</span>}
@@ -300,7 +300,7 @@ function SubmitForVerificationButton({ lead, sectionKey, disabled, label = 'Subm
             type="button"
             onClick={submit}
             disabled={disabled || submitting}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-[#436235] text-white rounded-xl text-xs font-bold uppercase tracking-wider hover:bg-[#385029] active:scale-[0.99] transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-[#009688] text-white rounded-xl text-xs font-bold uppercase tracking-wider hover:bg-[#385029] active:scale-[0.99] transition-all disabled:opacity-40 disabled:cursor-not-allowed"
         >
             <Send size={13} />
             {submitting ? 'Submitting…' : label}
@@ -348,7 +348,7 @@ function ChecklistItemRow({ item, files, lead, sectionKey, readOnly = false }) {
                     <div className="flex items-center gap-1.5 flex-wrap">
                         <p className="text-sm font-semibold text-[#282728]">{item.name}</p>
                         {isStaffSent && (
-                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-widest bg-[#436235]/10 text-[#436235] border border-[#436235]/20">
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-widest bg-[#009688]/10 text-[#009688] border border-[#009688]/20">
                                 Sent by adviser
                             </span>
                         )}
@@ -409,13 +409,13 @@ function ChecklistItemRow({ item, files, lead, sectionKey, readOnly = false }) {
                             {f.source === 'generated' ? (
                                 <Wand2 size={12} className="text-violet-500 flex-shrink-0" />
                             ) : (
-                                <FileText size={12} className={isStaffSent ? 'text-[#436235] flex-shrink-0' : 'text-gray-400 flex-shrink-0'} />
+                                <FileText size={12} className={isStaffSent ? 'text-[#009688] flex-shrink-0' : 'text-gray-400 flex-shrink-0'} />
                             )}
                             <a
                                 href={`/portal/lead/documents/${f.id}/download?inline=1`}
                                 target="_blank"
                                 rel="noreferrer"
-                                className="flex-1 min-w-0 text-[11px] font-medium text-gray-800 hover:text-[#436235] truncate"
+                                className="flex-1 min-w-0 text-[11px] font-medium text-gray-800 hover:text-[#009688] truncate"
                                 title={`View ${f.original_name}`}
                             >
                                 {f.original_name}
@@ -430,14 +430,14 @@ function ChecklistItemRow({ item, files, lead, sectionKey, readOnly = false }) {
                                 href={`/portal/lead/documents/${f.id}/download?inline=1`}
                                 target="_blank"
                                 rel="noreferrer"
-                                className="inline-flex items-center justify-center w-6 h-6 rounded text-gray-500 hover:text-[#436235] hover:bg-[#436235]/10 transition-colors"
+                                className="inline-flex items-center justify-center w-6 h-6 rounded text-gray-500 hover:text-[#009688] hover:bg-[#009688]/10 transition-colors"
                                 title="View"
                             >
                                 <Eye size={11} />
                             </a>
                             <a
                                 href={`/portal/lead/documents/${f.id}/download`}
-                                className="inline-flex items-center justify-center w-6 h-6 rounded text-gray-500 hover:text-[#436235] hover:bg-[#436235]/10 transition-colors"
+                                className="inline-flex items-center justify-center w-6 h-6 rounded text-gray-500 hover:text-[#009688] hover:bg-[#009688]/10 transition-colors"
                                 title="Download"
                             >
                                 <Download size={11} />
@@ -461,7 +461,7 @@ function AdviserRequestsPanel({ requests }) {
     return (
         <section className="bg-white rounded-2xl border border-[#282728]/15 overflow-hidden">
             <div className="px-6 py-4 border-b border-[#282728]/10 flex items-center gap-2.5">
-                <Inbox size={16} className="text-[#436235]" />
+                <Inbox size={16} className="text-[#009688]" />
                 <h2 className="text-sm font-bold uppercase tracking-[0.18em] text-[#282728]">Also requested by your adviser</h2>
             </div>
             <ul className="divide-y divide-[#282728]/10">
@@ -493,14 +493,14 @@ function SharedByStaffPanel({ shared }) {
     return (
         <section className="bg-white rounded-2xl border border-[#282728]/15 overflow-hidden">
             <div className="px-6 py-4 border-b border-[#282728]/10 flex items-center gap-2.5">
-                <Share2 size={16} className="text-[#436235]" />
+                <Share2 size={16} className="text-[#009688]" />
                 <h2 className="text-sm font-bold uppercase tracking-[0.18em] text-[#282728]">Shared by your adviser</h2>
             </div>
             <ul className="divide-y divide-[#282728]/10">
                 {shared.map((d) => (
                     <li key={d.id} className="p-5 flex items-center justify-between gap-4">
                         <div className="flex items-center gap-3 min-w-0 flex-1">
-                            <div className="w-10 h-10 rounded-xl bg-[#436235]/10 text-[#436235] flex items-center justify-center flex-shrink-0">
+                            <div className="w-10 h-10 rounded-xl bg-[#009688]/10 text-[#009688] flex items-center justify-center flex-shrink-0">
                                 <FileText size={16} />
                             </div>
                             <div className="min-w-0">
@@ -550,7 +550,7 @@ function AgreementsAcknowledgmentBox({ lead }) {
 
     return (
         <div className={`mt-2 rounded-xl border-2 p-4 transition-colors ${
-            isAcknowledged ? 'bg-emerald-50 border-emerald-300' : 'bg-white border-[#436235]/30'
+            isAcknowledged ? 'bg-emerald-50 border-emerald-300' : 'bg-white border-[#009688]/30'
         }`}>
             <label className="flex items-start gap-3 cursor-pointer select-none">
                 <input
@@ -558,7 +558,7 @@ function AgreementsAcknowledgmentBox({ lead }) {
                     checked={isAcknowledged}
                     onChange={toggle}
                     disabled={busy}
-                    className="mt-0.5 w-5 h-5 rounded border-2 border-[#436235] text-[#436235] focus:ring-2 focus:ring-[#436235]/30 cursor-pointer disabled:opacity-50"
+                    className="mt-0.5 w-5 h-5 rounded border-2 border-[#009688] text-[#009688] focus:ring-2 focus:ring-[#009688]/30 cursor-pointer disabled:opacity-50"
                 />
                 <div className="flex-1 min-w-0">
                     <p className="text-sm font-semibold text-[#282728] leading-snug">

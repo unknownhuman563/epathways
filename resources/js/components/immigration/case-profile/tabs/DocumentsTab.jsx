@@ -25,6 +25,7 @@ import { ThreadItem, ThreadComposer } from "@/components/immigration/case-profil
 const STATUS_OPTIONS = [
     { value: "Submitted",   label: "Submitted" },
     { value: "UnderReview", label: "Under review" },
+    { value: "Checked",     label: "Checked (refer to adviser)" },
     { value: "Approved",    label: "Approved" },
     { value: "Rejected",    label: "Rejected" },
 ];
@@ -32,6 +33,7 @@ const STATUS_OPTIONS = [
 const STATUS_TONE = {
     Submitted:   "bg-yellow-50 text-yellow-700 border-yellow-200",
     UnderReview: "bg-blue-50 text-blue-700 border-blue-200",
+    Checked:     "bg-purple-50 text-purple-700 border-purple-200",
     Approved:    "bg-emerald-50 text-emerald-700 border-emerald-200",
     Rejected:    "bg-red-50 text-red-700 border-red-200",
     StaffShared: "bg-gray-50 text-gray-700 border-gray-200",

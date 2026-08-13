@@ -7,7 +7,7 @@ import {
     FileText, ExternalLink, Users, Calendar, ArrowUpDown,
     ArrowUp, ArrowDown, Plus, X, TrendingUp, Copy, MoreHorizontal,
     Archive, Pencil, Mail, Phone, Paperclip, KeyRound,
-    ArrowLeftRight, UserPlus, Loader2, Check, Eye,
+    ArrowLeftRight, UserPlus, Loader2, Check, Eye, Link2,
 } from "lucide-react";
 import { AvatarPhoto } from "@/components/ui/Avatar";
 import CaseFilesModal from "@/components/immigration/CaseFilesModal";
@@ -963,8 +963,16 @@ function CaseRow({ c, meId = null, stages, visaTypes = [], isExpanded, onExpand,
                             </AvatarPhoto>
                         </div>
                         <div className="min-w-0">
-                            <div className="font-semibold text-gray-900 text-sm truncate group-hover/case:text-amber-700 transition-colors">
-                                {c.name}
+                            <div className="flex items-center gap-2 min-w-0">
+                                <span className="font-semibold text-gray-900 text-sm truncate group-hover/case:text-amber-700 transition-colors">
+                                    {c.name}
+                                </span>
+                                {c.converted_at && Date.now() - new Date(c.converted_at).getTime() < 86400000 && (
+                                    <span title={`Converted ${c.converted_by ? `by ${c.converted_by}` : ""}`}
+                                        className="flex-shrink-0 inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider bg-emerald-500 text-white">
+                                        New
+                                    </span>
+                                )}
                             </div>
                             {c.dependents?.length > 0 && (
                                 <div className="mt-1 flex items-center gap-1 flex-wrap" title={`Related: ${c.dependents.map((d) => d.full_name).join(", ")}`}>
@@ -972,6 +980,13 @@ function CaseRow({ c, meId = null, stages, visaTypes = [], isExpanded, onExpand,
                                         <Users size={10} /> {c.dependents.length} dependant{c.dependents.length > 1 ? "s" : ""}
                                     </span>
                                     <span className="text-[10px] text-gray-400 truncate max-w-[160px]">{c.dependents.map((d) => d.full_name).join(", ")}</span>
+                                </div>
+                            )}
+                            {c.tied_to && (
+                                <div className="mt-1 flex items-center gap-1 flex-wrap" title={`This case is included as a dependant on ${c.tied_to.name}'s case`}>
+                                    <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border bg-sky-50 text-sky-700 border-sky-200">
+                                        <Link2 size={10} /> Tied to {c.tied_to.name}
+                                    </span>
                                 </div>
                             )}
                             <AttentionChip openedAt={c.attention_opened_at} />

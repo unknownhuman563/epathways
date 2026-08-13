@@ -70,9 +70,17 @@ class LeadTrackingController extends Controller
         $lead = $this->resolveLead($code);
 
         if (! $lead) {
+            // An immigration case? Its client now uses the secure lead portal —
+            // the public tracker is disabled for cases (Privacy Act). Point them
+            // there rather than a blind "not found".
+            $isCase = Lead::where('tracking_code', strtoupper(trim($code)))
+                ->where('is_immigration_case', true)->exists();
+
             // Friendly "not found" — the same tracker shell with a message,
             // but a real 404 status so it isn't mistaken for a valid page.
-            $payload['error'] = 'We could not find an application with that tracking code. Please double-check it and try again.';
+            $payload['error'] = $isCase
+                ? 'This application is now managed in your secure client portal. Please sign in to your ePathways client portal to view its progress and documents.'
+                : 'We could not find an application with that tracking code. Please double-check it and try again.';
 
             return inertia('track/TrackingPage', $payload)->toResponse($request)->setStatusCode(404);
         }
@@ -643,7 +651,16 @@ class LeadTrackingController extends Controller
 
     private function resolveLead(string $code): ?Lead
     {
-        return Lead::where('tracking_code', strtoupper(trim($code)))->first();
+        // Immigration CASES are excluded from the PUBLIC tracker for privacy —
+        // their clients use the authenticated lead portal (/portal/lead), which
+        // builds the tracker via buildTrackerPayload() directly and never calls
+        // this method. This single chokepoint disables the whole public surface
+        // (view + uploads + edits + program choice + file streaming) for cases.
+        return Lead::where('tracking_code', strtoupper(trim($code)))
+            ->where(function ($q) {
+                $q->where('is_immigration_case', false)->orWhereNull('is_immigration_case');
+            })
+            ->first();
     }
 
     /**
@@ -752,7 +769,9 @@ class LeadTrackingController extends Controller
                 'checklist_key' => $d->checklist_key,
                 'size' => $d->size,
                 'mime' => $d->mime,
-                'status' => $d->status,
+                // Client-safe: the manager's internal "Checked" reads as "Under
+                // review" until the adviser makes the final Approve/Reject call.
+                'status' => LeadDocument::clientStatus($d->status),
                 'source' => $d->source,
                 'created_at' => $d->created_at?->toIso8601String(),
                 // Code-gated private stream (drives the gallery thumbnail
@@ -1196,7 +1215,7 @@ class LeadTrackingController extends Controller
             $status = 'missing';
             if ($docs->contains(fn ($d) => $d->status === LeadDocument::STATUS_APPROVED)) {
                 $status = 'approved';
-            } elseif ($docs->contains(fn ($d) => in_array($d->status, [LeadDocument::STATUS_SUBMITTED, LeadDocument::STATUS_UNDER_REVIEW]))) {
+            } elseif ($docs->contains(fn ($d) => in_array($d->status, [LeadDocument::STATUS_SUBMITTED, LeadDocument::STATUS_UNDER_REVIEW, LeadDocument::STATUS_CHECKED]))) {
                 $status = 'submitted';
             } elseif ($docs->contains(fn ($d) => $d->status === LeadDocument::STATUS_REJECTED)) {
                 $status = 'rejected';
@@ -1264,10 +1283,12 @@ class LeadTrackingController extends Controller
 
             // Status is whichever the "best" doc landed on:
             //   Approved > Submitted/UnderReview > Rejected > none.
+            // A manager's internal "Checked" reads as under-review to the client
+            // (grouped with Submitted/UnderReview) until the adviser decides.
             $status = 'missing';
             if ($docs->contains(fn ($d) => $d->status === LeadDocument::STATUS_APPROVED)) {
                 $status = 'approved';
-            } elseif ($docs->contains(fn ($d) => in_array($d->status, [LeadDocument::STATUS_SUBMITTED, LeadDocument::STATUS_UNDER_REVIEW]))) {
+            } elseif ($docs->contains(fn ($d) => in_array($d->status, [LeadDocument::STATUS_SUBMITTED, LeadDocument::STATUS_UNDER_REVIEW, LeadDocument::STATUS_CHECKED]))) {
                 $status = 'submitted';
             } elseif ($docs->contains(fn ($d) => $d->status === LeadDocument::STATUS_REJECTED)) {
                 $status = 'rejected';
