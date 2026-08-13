@@ -69,6 +69,19 @@ const STAGE_STYLES = {
 const fmtDate = (iso) =>
     iso ? new Date(iso).toLocaleDateString("en-NZ", { day: "numeric", month: "short", year: "numeric" }) : "—";
 
+// Relative "time ago" for the Status column, so the newest submissions read at a glance.
+const timeAgo = (iso) => {
+    if (!iso) return "";
+    const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
+    if (s < 60) return "just now";
+    if (s < 3600) return `${Math.floor(s / 60)}m ago`;
+    if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
+    if (s < 604800) return `${Math.floor(s / 86400)}d ago`;
+    return fmtDate(iso);
+};
+// A submission within the last 24h is flagged "New" so fresh applicants stand out.
+const isRecent = (iso) => !! iso && Date.now() - new Date(iso).getTime() < 86400000;
+
 const initials = (name = "") =>
     name.trim().split(/\s+/).slice(0, 2).map((w) => w[0] || "").join("").toUpperCase() || "—";
 
@@ -241,7 +254,7 @@ export default function ImmigrationAssessments({ intakes = [] }) {
                                     <th className="px-4 py-2.5">Visa</th>
                                     <th className="px-4 py-2.5 w-[220px]">Progress</th>
                                     <th className="px-4 py-2.5">Priority</th>
-                                    <th className="px-4 py-2.5">Submitted</th>
+                                    <th className="px-4 py-2.5">Status</th>
                                     <th className="px-4 py-2.5 text-right">Actions</th>
                                 </tr>
                             </thead>
@@ -399,9 +412,24 @@ function IntakeRow({ intake: i, expanded = false, onToggle }) {
                 <ReadinessChip readiness={i.readiness} pct={i.readiness_pct} reviewed={i.readiness_reviewed} />
             </td>
 
-            {/* Submitted */}
+            {/* Status — draft vs submitted, plus how recently, so new applicants stand out */}
             <td className="px-4 py-3 align-middle">
-                <span className="text-[11px] text-gray-600 tabular-nums">{fmtDate(i.created_at)}</span>
+                {(() => {
+                    const stage = progressOf(i).stage;
+                    const s = STAGE_STYLES[stage];
+                    const fresh = stage === "submitted" && isRecent(i.created_at);
+                    return (
+                        <div className="flex flex-col gap-1 items-start">
+                            <span className="inline-flex items-center gap-1.5">
+                                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${s.pill}`}>{s.label}</span>
+                                {fresh && <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider bg-emerald-500 text-white">New</span>}
+                            </span>
+                            <span className="text-[10.5px] text-gray-500 tabular-nums">
+                                {stage === "draft" ? `Saved ${timeAgo(i.created_at)}` : timeAgo(i.created_at)}
+                            </span>
+                        </div>
+                    );
+                })()}
             </td>
 
             {/* Actions — stops click propagation so action buttons don't
