@@ -8,7 +8,7 @@ import PortalPageHeader from "@/components/portal/PortalPageHeader";
 // from their completed assessment; once generated it's downloadable here. They
 // never upload it — it's produced from their assessment answers.
 
-const ACCENT = "#436235";
+const ACCENT = "#009688";
 
 export default function LeadVisaAssessment({ vif = {} }) {
     const [busy, setBusy] = useState(false);

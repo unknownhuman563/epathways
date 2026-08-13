@@ -14,13 +14,20 @@ const COLS = [
 
 const fmt = (key, v) => (key === "total_hours" || key === "avg_hrs") ? Number(v || 0).toFixed(2) : (v ?? 0);
 
-export default function DtrSummary({ teams = [], total = {}, start = "", end = "", pendingLeaves = [] }) {
+// Per-team colour, mirroring the spreadsheet (NZ = blue, PH = teal). Falls
+// back to a neutral slate for any team we don't have a colour for yet.
+const TEAM_THEMES = {
+    "New Zealand": { header: "bg-indigo-50 text-indigo-800", subtotalRow: "bg-indigo-50/60", subtotalText: "text-indigo-700" },
+    "Philippines": { header: "bg-teal-50 text-teal-800", subtotalRow: "bg-teal-50/60", subtotalText: "text-teal-700" },
+};
+const teamTheme = (team) => TEAM_THEMES[team] || { header: "bg-slate-50 text-slate-700", subtotalRow: "bg-slate-50/60", subtotalText: "text-slate-700" };
+
+export default function DtrSummary({ teams = [], total = {}, start = "", end = "" }) {
     const [range, setRange] = useState({ start, end });
     const apply = (next) => {
         setRange(next);
         router.get("/admin/dtr/summary", next, { preserveState: true, preserveScroll: true, replace: true });
     };
-    const review = (id, action) => router.post(`/dtr/leaves/${id}/review`, { action }, { preserveScroll: true });
 
     return (
         <div className="space-y-6 max-w-[1400px] mx-auto pb-12">
@@ -50,29 +57,6 @@ export default function DtrSummary({ teams = [], total = {}, start = "", end = "
                 </div>
             </div>
 
-            {/* Pending leave requests — awaiting approval */}
-            {pendingLeaves.length > 0 && (
-                <div className="bg-white rounded-2xl border border-amber-200 shadow-sm overflow-hidden">
-                    <div className="px-6 py-4 border-b border-amber-100 bg-amber-50/60">
-                        <h2 className="text-sm font-bold text-amber-800">Leave requests awaiting approval · {pendingLeaves.length}</h2>
-                    </div>
-                    <div className="divide-y divide-gray-100">
-                        {pendingLeaves.map((l) => (
-                            <div key={l.id} className="flex items-center justify-between gap-4 px-6 py-3">
-                                <div className="min-w-0">
-                                    <p className="text-sm font-semibold text-gray-900">{l.user} · <span className="text-gray-600">{l.type}</span></p>
-                                    <p className="text-xs text-gray-500">{l.start_date}{l.end_date !== l.start_date ? ` → ${l.end_date}` : ""}{l.reason ? ` · ${l.reason}` : ""}</p>
-                                </div>
-                                <div className="flex items-center gap-2 shrink-0">
-                                    <button onClick={() => review(l.id, "approve")} className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700 transition-colors">Approve</button>
-                                    <button onClick={() => review(l.id, "reject")} className="px-3 py-1.5 rounded-lg bg-white border border-rose-300 text-rose-600 text-xs font-bold hover:bg-rose-50 transition-colors">Reject</button>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            )}
-
             {/* Table */}
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
                 <div className="overflow-x-auto">
@@ -86,11 +70,13 @@ export default function DtrSummary({ teams = [], total = {}, start = "", end = "
                         </thead>
                         <tbody>
                             {teams.length === 0 ? (
-                                <tr><td colSpan={9} className="px-4 py-12 text-center text-gray-400">No staff have set up a DTR yet.</td></tr>
-                            ) : teams.map((t) => (
+                                <tr><td colSpan={9} className="px-4 py-12 text-center text-gray-400">No DTR records logged in this period.</td></tr>
+                            ) : teams.map((t) => {
+                                const th = teamTheme(t.team);
+                                return (
                                 <React.Fragment key={t.team}>
-                                    <tr className="bg-gray-50/80 border-y border-gray-100">
-                                        <td colSpan={9} className="px-4 py-2 text-[11px] font-bold uppercase tracking-widest text-gray-600">{t.team}</td>
+                                    <tr className={`${th.header} border-y border-gray-100`}>
+                                        <td colSpan={9} className="px-4 py-2 text-[11px] font-bold uppercase tracking-widest">{t.team} team</td>
                                     </tr>
                                     {t.staff.map((s, i) => (
                                         <tr key={s.name + i} className="border-b border-gray-50 hover:bg-gray-50/50">
@@ -103,20 +89,25 @@ export default function DtrSummary({ teams = [], total = {}, start = "", end = "
                                             ))}
                                         </tr>
                                     ))}
-                                    <tr className="bg-[#436235]/5 border-b border-gray-100">
-                                        <td className="px-4 py-2 text-[11px] font-bold text-[#436235]">{t.team} subtotal</td>
+                                    <tr className={`${th.subtotalRow} border-b border-gray-100`}>
+                                        <td className={`px-4 py-2 text-[11px] font-bold ${th.subtotalText}`}>{t.team} subtotal</td>
                                         <td></td>
-                                        {COLS.map(([k]) => <td key={k} className="px-3 py-2 text-right tabular-nums font-bold text-[#436235]">{fmt(k, t.subtotal[k])}</td>)}
+                                        {COLS.map(([k]) => <td key={k} className={`px-3 py-2 text-right tabular-nums font-bold ${th.subtotalText}`}>{fmt(k, t.subtotal[k])}</td>)}
                                     </tr>
                                 </React.Fragment>
-                            ))}
+                                );
+                            })}
                         </tbody>
                         {teams.length > 0 && (
                             <tfoot>
                                 <tr className="bg-gray-900 text-white">
                                     <td className="px-4 py-3 font-bold uppercase tracking-wider text-[11px]">All staff</td>
                                     <td></td>
-                                    {COLS.map(([k]) => <td key={k} className="px-3 py-3 text-right tabular-nums font-bold">{fmt(k, total[k])}</td>)}
+                                    {COLS.map(([k]) => (
+                                        <td key={k} className={`px-3 py-3 text-right tabular-nums font-bold ${k === "late_days" && total[k] > 0 ? "text-rose-300" : k === "days_missing_tasks" && total[k] > 0 ? "text-amber-300" : ""}`}>
+                                            {fmt(k, total[k])}
+                                        </td>
+                                    ))}
                                 </tr>
                             </tfoot>
                         )}

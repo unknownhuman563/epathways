@@ -491,8 +491,8 @@ class LeadController extends Controller
             'has_other_names' => 'nullable|in:Yes,No',
             'other_names' => 'nullable|required_if:has_other_names,Yes|string|max:255',
             'has_passport' => 'nullable|in:Yes,No',
-            'passport_number' => 'nullable|required_if:has_passport,Yes|string|max:60',
-            'passport_expiry' => 'nullable|required_if:has_passport,Yes|date',
+            'passport_number' => 'nullable|string|max:60',
+            'passport_expiry' => 'nullable|date',
             'passport_pdf' => 'nullable|file|mimes:pdf|max:10240',
 
             // Step 3 - Study Plans
@@ -500,8 +500,8 @@ class LeadController extends Controller
             'study_plans.preferred_course' => 'required|string|max:255',
             'study_plans.qualification_level' => 'required|string|max:120',
             'study_plans.has_english_test' => 'nullable|in:Yes,No',
-            'study_plans.english_test_type' => 'nullable|required_if:study_plans.has_english_test,Yes|string|max:120',
-            'study_plans.test_score_overall' => 'nullable|required_if:study_plans.has_english_test,Yes|string|max:20',
+            'study_plans.english_test_type' => 'nullable|string|max:120',
+            'study_plans.test_score_overall' => 'nullable|string|max:20',
 
             // Step 4 - Education
             'education_background' => 'nullable|array',

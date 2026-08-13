@@ -15,13 +15,13 @@ export default function LeadActivities({ upcoming = [], past = [], registeredEve
             {/* Header */}
             <div>
                 <div className="flex items-center gap-4 mb-5">
-                    <span className="text-[10px] font-bold text-[#436235] uppercase tracking-[0.35em]">
+                    <span className="text-[10px] font-bold text-[#009688] uppercase tracking-[0.35em]">
                         Activities
                     </span>
-                    <div className="h-px w-12 bg-[#436235]/50"></div>
+                    <div className="h-px w-12 bg-[#009688]/50"></div>
                 </div>
                 <h1 className="text-3xl sm:text-4xl lg:text-5xl font-medium text-[#282728] tracking-tight leading-[1.1]">
-                    Workshops, seminars <span className="text-[#436235] font-light italic">& events.</span>
+                    Workshops, seminars <span className="text-[#009688] font-light italic">& events.</span>
                 </h1>
                 <p className="text-base text-gray-500 font-light leading-relaxed mt-4 max-w-xl">
                     Free for our clients. Register for what&apos;s coming up, or catch up on what you missed.
@@ -88,7 +88,7 @@ function EventCard({ event, isRegistered, isUpcoming, delay = 0 }) {
             viewport={{ once: true, margin: "-40px" }}
             transition={{ delay, duration: 0.45, ease: "easeOut" }}
             className={`group bg-white rounded-2xl border overflow-hidden hover:shadow-[0_24px_48px_-24px_rgba(40,39,40,0.18)] transition-all ${
-                isRegistered ? "border-[#436235]/40" : "border-[#282728]/15 hover:border-[#436235]/30"
+                isRegistered ? "border-[#009688]/40" : "border-[#282728]/15 hover:border-[#009688]/30"
             }`}
         >
             {/* Banner OR date masthead fallback */}
@@ -100,7 +100,7 @@ function EventCard({ event, isRegistered, isUpcoming, delay = 0 }) {
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
                     />
                     {isRegistered && (
-                        <span className="absolute top-4 right-4 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-[0.18em] bg-white text-[#436235] border border-[#436235]/30">
+                        <span className="absolute top-4 right-4 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-[0.18em] bg-white text-[#009688] border border-[#009688]/30">
                             <Check size={11} strokeWidth={3} /> Registered
                         </span>
                     )}
@@ -111,7 +111,7 @@ function EventCard({ event, isRegistered, isUpcoming, delay = 0 }) {
                         {fmtDay(event.date_from)}
                     </span>
                     <div className="flex flex-col">
-                        <span className="text-[10px] font-bold text-[#436235] uppercase tracking-[0.3em]">
+                        <span className="text-[10px] font-bold text-[#009688] uppercase tracking-[0.3em]">
                             {event.type || "Event"}
                         </span>
                         <span className="text-[11px] font-semibold uppercase tracking-[0.22em] text-gray-400 mt-1">
@@ -119,7 +119,7 @@ function EventCard({ event, isRegistered, isUpcoming, delay = 0 }) {
                         </span>
                     </div>
                     {isRegistered && (
-                        <span className="ml-auto inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-[0.18em] bg-[#436235]/10 text-[#436235] border border-[#436235]/30">
+                        <span className="ml-auto inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-[0.18em] bg-[#009688]/10 text-[#009688] border border-[#009688]/30">
                             <Check size={11} strokeWidth={3} /> Registered
                         </span>
                     )}
@@ -128,7 +128,7 @@ function EventCard({ event, isRegistered, isUpcoming, delay = 0 }) {
 
             {/* Body */}
             <div className="p-7 sm:p-8 flex flex-col min-h-[180px]">
-                <h3 className="text-lg lg:text-xl font-medium text-[#282728] leading-snug tracking-tight mb-3 group-hover:text-[#436235] transition-colors">
+                <h3 className="text-lg lg:text-xl font-medium text-[#282728] leading-snug tracking-tight mb-3 group-hover:text-[#009688] transition-colors">
                     {event.name}
                 </h3>
                 {event.description && (
@@ -153,7 +153,7 @@ function EventCard({ event, isRegistered, isUpcoming, delay = 0 }) {
                 {/* Footer CTA */}
                 {isUpcoming ? (
                     isRegistered ? (
-                        <span className="inline-flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.22em] text-[#436235] border-t border-[#282728]/10 pt-4">
+                        <span className="inline-flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.22em] text-[#009688] border-t border-[#282728]/10 pt-4">
                             <Check size={12} strokeWidth={2.5} /> You&apos;re on the list
                         </span>
                     ) : event.register_href ? (
@@ -161,7 +161,7 @@ function EventCard({ event, isRegistered, isUpcoming, delay = 0 }) {
                             href={event.register_href}
                             target={event.register_href.startsWith("http") ? "_blank" : undefined}
                             rel="noopener noreferrer"
-                            className="inline-flex items-center justify-center gap-2 px-5 py-3 bg-[#436235] text-white rounded-xl text-[11px] font-bold uppercase tracking-[0.22em] hover:bg-[#385029] transition-colors w-fit"
+                            className="inline-flex items-center justify-center gap-2 px-5 py-3 bg-[#009688] text-white rounded-xl text-[11px] font-bold uppercase tracking-[0.22em] hover:bg-[#385029] transition-colors w-fit"
                         >
                             Register <ArrowRight size={12} strokeWidth={2.5} />
                         </a>

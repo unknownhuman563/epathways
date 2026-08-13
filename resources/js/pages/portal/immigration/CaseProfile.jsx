@@ -42,7 +42,7 @@ export default function CaseProfile() {
         process = { started: false, steps: [], payment: null, partner: null },
         threads = [], caseStaff = [], attention = null,
         financials = { record: null, payments: [], totals: {}, referred_by: null },
-        inzForms = [], dependents = [], vif = null,
+        inzForms = [], dependents = [], vif = null, caseOptions = [], tiedTo = null, visaTypes = [],
     } = props;
 
     // Deep-link tab via ?tab=…  — preserved from the legacy
@@ -64,7 +64,7 @@ export default function CaseProfile() {
 
     const tabProps = {
         lead, intake, documents, checklist, checklistGrouped, unstructuredDocuments, checklistProgress,
-        communications, agreements, notes, activity, findings, process, threads, caseStaff, financials, inzForms, dependents, vif,
+        communications, agreements, notes, activity, findings, process, threads, caseStaff, financials, inzForms, dependents, vif, caseOptions, visaTypes,
     };
     const ActiveTab = TABS.find((t) => t.key === activeTab)?.Comp ?? PersonalTab;
 
@@ -74,7 +74,7 @@ export default function CaseProfile() {
         <div className="max-w-[1300px] mx-auto pb-12 space-y-5">
             <Head title={`${fullName} — Case profile`} />
 
-            <CaseProfileHeader lead={lead} intake={intake} attention={attention} />
+            <CaseProfileHeader lead={lead} intake={intake} attention={attention} tiedTo={tiedTo} />
 
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
                 <div className="border-b border-gray-100 overflow-x-auto">

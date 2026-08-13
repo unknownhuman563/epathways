@@ -3,7 +3,7 @@ import { toast } from "sonner";
 import CaseHealthBadge from "@/components/ai/CaseHealthBadge";
 import {
     ArrowLeft, Globe, FileSignature, MessageSquarePlus, FilePlus2,
-    BadgeCheck, Briefcase, Archive, Eye,
+    BadgeCheck, Briefcase, Archive, Eye, Link2,
 } from "lucide-react";
 import { AvatarPhoto } from "@/components/ui/Avatar";
 
@@ -13,7 +13,7 @@ const fmtDate = (iso) =>
 const initials = (name = "") =>
     name.trim().split(/\s+/).slice(0, 2).map((w) => w[0] || "").join("").toUpperCase() || "C";
 
-export default function CaseProfileHeader({ lead = {}, intake = null, attention = null }) {
+export default function CaseProfileHeader({ lead = {}, intake = null, attention = null, tiedTo = null }) {
     const fullName = `${lead.first_name ?? ""} ${lead.last_name ?? ""}`.trim() || lead.lead_id || "Unnamed case";
     const visa = lead.inz_visa_type || intake?.data?.visa_type_label || "Visa type not set";
     const stage = lead.immigration_stage || lead.stage || "Stage not set";
@@ -95,6 +95,15 @@ export default function CaseProfileHeader({ lead = {}, intake = null, attention 
                                         <span className="text-[11px] text-gray-400">
                                             since {fmtDate(lead.immigration_converted_at)}
                                         </span>
+                                    )}
+                                    {tiedTo && (
+                                        <Link
+                                            href={`/portal/immigration/cases/${tiedTo.id}/profile`}
+                                            title={`Included as a dependant on ${tiedTo.name}'s case`}
+                                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-sky-50 border border-sky-200 text-[11px] font-semibold text-sky-700 hover:bg-sky-100 transition-colors"
+                                        >
+                                            <Link2 size={11} /> Tied to {tiedTo.name}
+                                        </Link>
                                     )}
                                 </div>
                             </div>

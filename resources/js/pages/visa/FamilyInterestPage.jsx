@@ -106,6 +106,9 @@ export default function FamilyInterestPage() {
                 else if (!EMAIL_RE.test(data.email)) errs.email = 'Enter a valid email address';
                 if (!data.phone?.trim()) errs.phone = 'Contact number is required';
                 break;
+            case 7:
+                if (!data.declaration_accepted) errs.declaration_accepted = 'You must accept the declaration to continue';
+                break;
             default:
                 break;
         }
@@ -169,7 +172,7 @@ export default function FamilyInterestPage() {
             title: 'Identity',
             render: () => (
                 <>
-                    <SectionTitle title="Section A — Identity information" subtitle="Write N/A if a field doesn't apply." />
+                    <SectionTitle title="Identity information" subtitle="Write N/A if a field doesn't apply." />
                     <FieldGrid>
                         <TextField label="Family name" value={data.family_name} onChange={set('family_name')} required error={errors.family_name} />
                         <TextField label="First name" value={data.first_name} onChange={set('first_name')} required error={errors.first_name} />
@@ -190,7 +193,7 @@ export default function FamilyInterestPage() {
             title: 'NZ Immigration',
             render: () => (
                 <>
-                    <SectionTitle title="Section B — New Zealand immigration history" />
+                    <SectionTitle title="New Zealand immigration history" />
                     <FieldGrid>
                         <TextField label="Country you'll be in when this application is submitted" value={data.current_country} onChange={set('current_country')} />
                         <YesNoField label="Have you previously applied for a NZ visa?" value={data.previous_nz_visa} onChange={set('previous_nz_visa')} />
@@ -207,7 +210,7 @@ export default function FamilyInterestPage() {
             title: 'Visa Details',
             render: () => (
                 <>
-                    <SectionTitle title="Section C — Visa details" />
+                    <SectionTitle title="Visa details" />
                     <FieldGrid>
                         <SelectField label="Are you applying as a partner or dependent child?" value={data.applying_as} onChange={set('applying_as')} options={APPLYING_AS} />
                         <TextField label="What type of visa are you applying for?" value={data.visa_type} onChange={set('visa_type')} />
@@ -236,7 +239,7 @@ export default function FamilyInterestPage() {
             title: 'Character & Health',
             render: () => (
                 <>
-                    <SectionTitle title="Section D — Character" />
+                    <SectionTitle title="Character" />
                     <FieldGrid>
                         <YesNoField label="Convicted of any offence (incl. driving)?" value={data.character_convicted} onChange={set('character_convicted')} />
                         <YesNoField label="Ever removed, deported or refused entry (excl. NZ)?" value={data.character_removed} onChange={set('character_removed')} />
@@ -245,7 +248,7 @@ export default function FamilyInterestPage() {
                         <YesNoField label="Lived in any country 5+ years since 17 (not citizenship)?" value={data.lived_other_country_5y} onChange={set('lived_other_country_5y')} />
                         <YesNoField label="Provided a police certificate with a previous application?" value={data.previous_police_certificate} onChange={set('previous_police_certificate')} />
                     </FieldGrid>
-                    <SectionTitle title="Section E — Health" />
+                    <SectionTitle title="Health" />
                     <FieldGrid>
                         <YesNoField label="Do you have tuberculosis?" value={data.health_tb} onChange={set('health_tb')} />
                         <YesNoField label="Require renal dialysis?" value={data.health_renal} onChange={set('health_renal')} />
@@ -263,7 +266,7 @@ export default function FamilyInterestPage() {
             title: 'Work History',
             render: () => (
                 <>
-                    <SectionTitle title="Section F — Work history" subtitle="Your current work (or last paid work if retired)." />
+                    <SectionTitle title="Work history" subtitle="Your current work (or last paid work if retired)." />
                     <YesNoField label="Are you currently working?" value={data.currently_working} onChange={set('currently_working')} />
                     <FieldGrid>
                         <TextField label="Name of organisation" value={data.current_employer_name} onChange={set('current_employer_name')} />
@@ -281,15 +284,35 @@ export default function FamilyInterestPage() {
             title: 'Contacts & Declaration',
             render: () => (
                 <>
-                    <SectionTitle title="Section G — Other contacts" />
+                    <SectionTitle title="Other contacts" />
                     <TextareaField label="Contacts in New Zealand? (relationship, name, address, phone)" value={data.nz_contacts} onChange={set('nz_contacts')} />
-                    <SectionTitle title="Section H — Declaration" />
-                    <label className="flex items-start gap-2.5 text-[13px] text-gray-700 cursor-pointer mb-4">
-                        <input type="checkbox" className="mt-0.5" checked={data.declaration_accepted} onChange={(e) => setData('declaration_accepted', e.target.checked)} />
-                        <span>I declare the information I have provided is true, correct and complete, and I will inform Immigration New Zealand of any relevant change of circumstances.</span>
+                    <SectionTitle title="Declaration" />
+                    <div className="bg-gray-50/60 border border-gray-100 rounded-2xl p-6 text-sm text-gray-600 leading-relaxed">
+                        <p className="font-bold text-[#282728] mb-2">
+                            I declare that the information I provide is true, correct, and complete.
+                        </p>
+                        <p>
+                            I understand that I must inform Immigration New Zealand of any relevant change of
+                            circumstances. Providing false or misleading information may result in my application
+                            being declined or prosecuted under the Immigration Act 2009.
+                        </p>
+                    </div>
+                    <label className="flex items-start gap-3 mt-6 cursor-pointer">
+                        <input
+                            type="checkbox"
+                            checked={data.declaration_accepted}
+                            onChange={(e) => setData('declaration_accepted', e.target.checked)}
+                            className="mt-1 w-4 h-4"
+                        />
+                        <span className="text-sm font-semibold text-[#282728]">
+                            I confirm the above and accept the declaration.
+                        </span>
                     </label>
+                    {errors.declaration_accepted && (
+                        <p className="text-[11px] text-red-500 mt-1 ml-7">{errors.declaration_accepted}</p>
+                    )}
                     <FieldGrid>
-                        <TextField label="Applicant's name (first + family name)" value={data.signature_name} onChange={set('signature_name')} />
+                        <TextField label="Applicant's name (printed)" value={data.signature_name} onChange={set('signature_name')} />
                         <DateField label="Date" value={data.signature_date} onChange={set('signature_date')} />
                     </FieldGrid>
                 </>
