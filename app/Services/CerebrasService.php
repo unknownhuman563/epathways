@@ -14,11 +14,23 @@ class CerebrasService
 
     private string $model;
 
+    // Eligibility scoring (analyze()) runs on OpenRouter, not Cerebras — the
+    // social/ad-copy generators keep using the Cerebras credentials above.
+    private string $orKey;
+
+    private string $orBaseUrl;
+
+    private string $orModel;
+
     public function __construct()
     {
         $this->apiKey = (string) config('services.cerebras.api_key');
         $this->baseUrl = (string) config('services.cerebras.base_url', 'https://api.cerebras.ai/v1');
         $this->model = (string) config('services.cerebras.model', 'gpt-oss-120b');
+
+        $this->orKey = (string) config('ai.api_key');
+        $this->orBaseUrl = (string) config('ai.base_url', 'https://openrouter.ai/api/v1');
+        $this->orModel = (string) config('ai.default_model', 'google/gemini-2.5-flash');
     }
 
     /** Whether a Cerebras key is configured (else callers fall back to stubs). */
@@ -307,10 +319,10 @@ PROMPT;
         $lead->loadMissing(['studyPlans', 'educationExps', 'tags', 'documents', 'documentRequests']);
 
         $response = Http::withHeaders([
-            'Authorization' => 'Bearer '.$this->apiKey,
+            'Authorization' => 'Bearer '.$this->orKey,
             'Content-Type' => 'application/json',
-        ])->timeout(60)->post("{$this->baseUrl}/chat/completions", [
-            'model' => $this->model,
+        ])->timeout(60)->post("{$this->orBaseUrl}/chat/completions", [
+            'model' => $this->orModel,
             'messages' => [
                 ['role' => 'system', 'content' => $this->buildSystemPrompt()],
                 ['role' => 'user', 'content' => $this->buildUserMessage($lead)],
@@ -319,18 +331,18 @@ PROMPT;
         ]);
 
         if (! $response->successful()) {
-            Log::error('Cerebras API error', [
+            Log::error('OpenRouter analysis API error', [
                 'status' => $response->status(),
                 'body' => $response->body(),
                 'lead_id' => $lead->lead_id,
             ]);
-            throw new \RuntimeException('Cerebras API request failed: '.$response->status());
+            throw new \RuntimeException('OpenRouter API request failed: '.$response->status());
         }
 
         $content = $response->json('choices.0.message.content');
 
         if (! $content) {
-            throw new \RuntimeException('Cerebras API returned empty content');
+            throw new \RuntimeException('OpenRouter API returned empty content');
         }
 
         $jsonString = $this->extractJson($content);
