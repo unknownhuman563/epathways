@@ -241,6 +241,7 @@ class LeadDocumentController extends Controller
             'status' => ['required', Rule::in([
                 LeadDocument::STATUS_SUBMITTED,
                 LeadDocument::STATUS_UNDER_REVIEW,
+                LeadDocument::STATUS_CHECKED,
                 LeadDocument::STATUS_APPROVED,
                 LeadDocument::STATUS_REJECTED,
             ])],

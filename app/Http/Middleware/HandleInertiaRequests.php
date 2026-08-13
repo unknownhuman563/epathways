@@ -112,6 +112,8 @@ class HandleInertiaRequests extends Middleware
             $out['immigration-adviser'] = [
                 'my_cases'             => $myIds->count(),
                 'pending_signoff'      => $myIds->filter(fn ($id) => \App\Models\CaseAttestation::currentVerdict($id) === null || ! \App\Models\CaseAttestation::hasLodgementSignoff($id))->count(),
+                'pending_verification' => \App\Models\LeadDocument::where('status', \App\Models\LeadDocument::STATUS_CHECKED)
+                    ->whereHas('lead', fn ($q) => $q->immigrationCase())->count(),
                 'notifications_unread' => $user->unreadNotifications()->count(),
             ];
         } elseif (str_starts_with($path, 'portal/immigration')) {

@@ -297,9 +297,27 @@ class LeadPortalController extends Controller
                 'nationality' => $d->nationality,
                 'passport_number' => $d->passport_number,
                 'passport_expiry' => optional($d->passport_expiry)->toDateString(),
-            ], $d->checklistData()));
+            ], $this->clientSafeChecklist($d->checklistData())));
 
         return inertia('portal/lead/Family', ['lead' => $this->leadPayload($lead), 'dependents' => $dependents]);
+    }
+
+    /**
+     * Remap a dependant checklist's document statuses to their client-safe form
+     * before it reaches the applicant — the manager's internal "Checked" shows
+     * as "Under review" until the adviser Approves/Rejects.
+     */
+    private function clientSafeChecklist(array $data): array
+    {
+        foreach ($data['checklist'] ?? [] as &$item) {
+            $item['status'] = \App\Models\LeadDocument::clientStatus($item['status'] ?? null);
+            if (! empty($item['document']['status'])) {
+                $item['document']['status'] = \App\Models\LeadDocument::clientStatus($item['document']['status']);
+            }
+        }
+        unset($item);
+
+        return $data;
     }
 
     private function familyRules(): array

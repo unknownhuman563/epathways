@@ -290,6 +290,19 @@ class ImmigrationController extends Controller
      */
     public function cases()
     {
+        return inertia('portal/immigration/Cases', $this->casesPayload());
+    }
+
+    /**
+     * The full Cases-page payload (distribution, priorities, per-case rows).
+     * Extracted so other portals (e.g. the adviser portal) can render the exact
+     * same List of Cases UI. An optional $scope closure narrows the case query
+     * (and its total) — e.g. to a single owner for "My Cases".
+     *
+     * @param  \Closure|null  $scope
+     */
+    public function casesPayload(?\Closure $scope = null): array
+    {
         try {
             // Preload each visa type's checklist so per-case document
             // progress can be measured against the required checklist items
@@ -311,7 +324,7 @@ class ImmigrationController extends Controller
 
             // The full immigration-case count, for an honest "showing X of Y"
             // and to detect the (rare) case where we hit the safety ceiling.
-            $total = Lead::immigrationCase()->count();
+            $total = Lead::immigrationCase()->when($scope, $scope)->count();
 
             // Safety ceiling only — NOT a page size. The old hard `limit(200)`
             // silently dropped the least-recently-active cases: "For Assessment"
@@ -337,6 +350,7 @@ class ImmigrationController extends Controller
                 'owner:id,name,avatar_path',
             ])
                 ->immigrationCase()
+                ->when($scope, $scope)
                 // Newest staff activity first, falling back to the raw
                 // timestamp for rows stamped before the column existed.
                 ->orderByRaw('COALESCE(last_activity_at, updated_at) DESC')
@@ -508,7 +522,7 @@ class ImmigrationController extends Controller
                 ->map(fn ($u) => ['id' => $u->id, 'name' => $u->name, 'avatar_url' => $u->avatar_url])
                 ->values();
 
-            return inertia('portal/immigration/Cases', [
+            return [
                 'cases' => $cases,
                 'distribution' => $distribution,
                 'priorities' => $priorities,
@@ -520,11 +534,11 @@ class ImmigrationController extends Controller
                 // count and warns if the safety ceiling ever truncated the list.
                 'total' => $total,
                 'loaded' => $cases->count(),
-            ]);
+            ];
         } catch (\Throwable $e) {
             Log::error('Immigration cases list failed', ['error' => $e->getMessage()]);
 
-            return inertia('portal/immigration/Cases', [
+            return [
                 'cases' => [],
                 'distribution' => [],
                 'priorities' => ['urgent' => 0, 'high' => 0, 'medium' => 0, 'low' => 0, 'done' => 0, 'none' => 0],
@@ -532,7 +546,7 @@ class ImmigrationController extends Controller
                 'visaTypes' => [],
                 'total' => 0,
                 'loaded' => 0,
-            ]);
+            ];
         }
     }
 
@@ -1463,6 +1477,13 @@ class ImmigrationController extends Controller
     /** Assessments — public ResidentIntake submissions feed for adviser triage. */
     public function assessments()
     {
+        return inertia('portal/immigration/Assessments', $this->assessmentsPayload());
+    }
+
+    /** Assessments-page payload (intakes). Extracted so the adviser portal can
+     *  render the same Visa Assessment UI under its own chrome. */
+    public function assessmentsPayload(): array
+    {
         try {
             // Pre-fetch all Assessments + their Bookings for the intakes we're
             // about to show. Indexed by intakeable id so the normalizer can
@@ -1544,6 +1565,8 @@ class ImmigrationController extends Controller
                     'detail_url' => $visaType === 'resident'
                         ? "/admin/immigration/resident-intakes/{$intake->id}"
                         : "/portal/immigration/intakes/{$visaType}/{$intake->id}",
+                    // JSON of the submitted form, for the "Open" modal.
+                    'data_url' => "/portal/immigration/intakes/{$visaType}/{$intake->id}/data",
                     // Three-step lifecycle: Submitted → Triaged →
                     // Converted to Case. Pay/Book are deliberately
                     // omitted while payment intake stays disabled —
@@ -1601,11 +1624,11 @@ class ImmigrationController extends Controller
 
             $intakes = $rows->sortByDesc('created_at')->values();
 
-            return inertia('portal/immigration/Assessments', ['intakes' => $intakes]);
+            return ['intakes' => $intakes];
         } catch (\Throwable $e) {
             Log::error('Immigration assessments page failed', ['error' => $e->getMessage()]);
 
-            return inertia('portal/immigration/Assessments', ['intakes' => []]);
+            return ['intakes' => []];
         }
     }
 
@@ -1617,6 +1640,253 @@ class ImmigrationController extends Controller
      * every visa type. The frontend reads the intake row + its paired
      * Assessment + Booking and renders a clean property-row layout.
      */
+    /**
+     * The client's submitted visa-interest form as JSON — every filled field,
+     * humanised — for the Assessments "Open" modal. Read-only; no side effects.
+     */
+    public function intakeData(string $type, int $id)
+    {
+        $modelMap = [
+            'resident' => \App\Models\ResidentIntake::class,
+            'work' => \App\Models\WorkIntake::class,
+            'student' => \App\Models\StudentIntake::class,
+            'visitor' => \App\Models\VisitorIntake::class,
+            'family' => \App\Models\FamilyIntake::class,
+        ];
+        abort_unless(isset($modelMap[$type]), 404, 'Unknown intake type.');
+
+        $intake = $modelMap[$type]::findOrFail($id);
+
+        // Internal / non-form columns never shown to the reviewer.
+        $skip = [
+            'id', 'created_at', 'updated_at', 'deleted_at', 'status', 'intake_id',
+            'assessment_id', 'edit_token', 'edit_token_expires_at', 'ip_address',
+            'user_agent', 'first_name', 'last_name', 'family_name', 'email', 'phone',
+            'payment_status', 'payment_amount', 'payment_ref', 'paid', 'paid_at',
+        ];
+
+        // Group EVERY form field into an official-form layout — blanks included
+        // (shown as "—") so the whole assessment form displays consistently for
+        // every submission of the same visa type, not just the filled fields.
+        $grouped = [];
+        foreach ($intake->getAttributes() as $key => $_) {
+            if (in_array($key, $skip, true) || str_ends_with($key, '_path') || str_ends_with($key, '_token')) {
+                continue;
+            }
+            $value = $this->formatIntakeValue($intake->{$key});
+            $provided = ! ($value === null || $value === '');
+            $section = $this->intakeSectionFor($key);
+            $grouped[$section][] = [
+                'key' => $key,
+                'label' => \Illuminate\Support\Str::headline($key),
+                'value' => $provided ? $value : '—',
+                'provided' => $provided,
+            ];
+        }
+
+        // Fixed section order — starts with Personal, ends with the declaration.
+        $order = ['Personal details', 'Location & Status', 'Relationship', 'Employment', 'Education & English', 'Health', 'Character', 'Declaration', 'Other details'];
+        $sections = [];
+        foreach ($order as $title) {
+            if (! empty($grouped[$title])) {
+                $sections[] = ['title' => $title, 'fields' => $grouped[$title]];
+            }
+        }
+
+        $review = \App\Models\AssessmentAiReview::latestFor($intake::class, $intake->id);
+        $flags = $this->adviserFlags($intake);
+
+        return response()->json([
+            'name' => trim(($intake->first_name ?? '').' '.($intake->last_name ?? $intake->family_name ?? '')) ?: 'Applicant',
+            'email' => $intake->email,
+            'phone' => $intake->phone,
+            'reference' => $intake->intake_id,
+            'visa_label' => \App\Support\IntakeVisaTypeMap::label($intake::class),
+            'submitted_at' => optional($intake->created_at)->toIso8601String(),
+            'detail_url' => $type === 'resident'
+                ? "/admin/immigration/resident-intakes/{$intake->id}"
+                : "/portal/immigration/intakes/{$type}/{$intake->id}",
+            'sections' => $sections,
+            // Deterministic adviser-style checks on the actual data (passport /
+            // visa expiry, English level…) — reliable, computed, not AI-guessed.
+            'flags' => $flags,
+            // Overall adviser verdict — completeness + a plain recommendation.
+            'readiness' => $this->intakeReadiness($intake, $flags),
+            // AI review snapshot — softer, adviser-style analysis of the rest.
+            'ai_review' => $this->serializeAiReview($review),
+        ]);
+    }
+
+    /**
+     * An adviser-style overall verdict on the submission: how complete it is and
+     * a plain recommendation on whether it's ready to work up.
+     *
+     * @param  array<int, array{field:string,severity:string,note:string}>  $flags
+     */
+    private function intakeReadiness($intake, array $flags): array
+    {
+        [$filled, $total] = $this->intakeFieldStats($intake);
+        $pct = $total > 0 ? (int) round($filled / $total * 100) : 0;
+        $hasCritical = collect($flags)->contains(fn ($f) => $f['severity'] === 'critical');
+
+        if ($hasCritical) {
+            [$verdict, $tone, $rec] = ['Attention needed', 'red', 'A time-critical issue was found (passport or visa validity). Resolve it before proceeding.'];
+        } elseif ($pct >= 80) {
+            [$verdict, $tone, $rec] = ['Ready to work up', 'emerald', 'The form is largely complete — good to begin the adviser work-up.'];
+        } elseif ($pct >= 55) {
+            [$verdict, $tone, $rec] = ['Nearly there', 'teal', 'Most of the form is answered. Chase the remaining gaps before lodging.'];
+        } elseif ($pct >= 30) {
+            [$verdict, $tone, $rec] = ['Incomplete', 'amber', 'Several key sections are blank. Request the missing information from the applicant.'];
+        } else {
+            [$verdict, $tone, $rec] = ['Very sparse', 'gray', 'Only a little was submitted. Ask the applicant to complete the assessment form.'];
+        }
+
+        return [
+            'filled' => $filled,
+            'total' => $total,
+            'pct' => $pct,
+            'verdict' => $verdict,
+            'tone' => $tone,
+            'recommendation' => $rec,
+        ];
+    }
+
+    /**
+     * Deterministic, adviser-style checks on a submission's actual values —
+     * things a Licensed Immigration Adviser eyeballs first (passport / visa
+     * validity, English level). Each flag references a field label so the form
+     * can highlight it. Reliable (computed), unlike the AI's softer read.
+     *
+     * @return array<int, array{field:string,severity:string,note:string}>
+     */
+    private function adviserFlags($intake): array
+    {
+        $flags = [];
+        $now = now();
+        $date = function ($v) {
+            if (! $v) {
+                return null;
+            }
+            try {
+                return \Illuminate\Support\Carbon::parse($v);
+            } catch (\Throwable $e) {
+                return null;
+            }
+        };
+
+        // Passport validity — the first thing to check before any lodgement.
+        if ($pe = $date($intake->passport_expiry ?? null)) {
+            $m = (int) round($now->diffInMonths($pe));
+            if ($pe->isPast()) {
+                $flags[] = ['field' => 'Passport expiry', 'severity' => 'critical', 'note' => 'Passport has expired — a valid passport is required to lodge.'];
+            } elseif ($m <= 6) {
+                $flags[] = ['field' => 'Passport expiry', 'severity' => 'critical', 'note' => "Passport expires in about {$m} month(s) — likely needs renewal before lodgement."];
+            } elseif ($m <= 12) {
+                $flags[] = ['field' => 'Passport expiry', 'severity' => 'warning', 'note' => "Passport expires in about {$m} month(s) — keep validity in view."];
+            }
+        }
+
+        // Current visa validity — lawful status / timing of the application.
+        foreach (['current_visa_expiry', 'visa_expiry', 'current_nz_visa_expiry'] as $k) {
+            if (! ($d = $date($intake->{$k} ?? null))) {
+                continue;
+            }
+            $m = (int) round($now->diffInMonths($d));
+            $label = \Illuminate\Support\Str::headline($k);
+            if ($d->isPast()) {
+                $flags[] = ['field' => $label, 'severity' => 'critical', 'note' => 'Current visa appears expired — confirm the applicant\'s lawful status.'];
+            } elseif ($m <= 3) {
+                $flags[] = ['field' => $label, 'severity' => 'critical', 'note' => "Current visa expires in about {$m} month(s) — timing is tight, plan lodgement."];
+            } elseif ($m <= 6) {
+                $flags[] = ['field' => $label, 'severity' => 'warning', 'note' => "Current visa expires in about {$m} month(s)."];
+            }
+            break;
+        }
+
+        // English evidence — flag if it reads below the common bar (IELTS 6.5).
+        $eng = $intake->english_evidence ?? $intake->english_test ?? $intake->english_score ?? null;
+        if ($eng && preg_match('/(\d+(?:\.\d+)?)/', (string) $eng, $mm)) {
+            $score = (float) $mm[1];
+            if ($score > 0 && $score < 6.5 && $score <= 9) {
+                $flags[] = ['field' => 'English evidence', 'severity' => 'warning', 'note' => "Reads as {$eng} — may be below the level some categories require (commonly IELTS 6.5)."];
+            }
+        }
+
+        return $flags;
+    }
+
+    /**
+     * [filled, total] over exactly the fields the review modal displays — the
+     * single source of "form completeness" so the list Priority and the modal
+     * verdict never disagree.
+     *
+     * @return array{0:int,1:int}
+     */
+    private function intakeFieldStats($intake): array
+    {
+        $skip = [
+            'id', 'created_at', 'updated_at', 'deleted_at', 'status', 'intake_id',
+            'assessment_id', 'edit_token', 'edit_token_expires_at', 'ip_address',
+            'user_agent', 'first_name', 'last_name', 'family_name', 'email', 'phone',
+            'payment_status', 'payment_amount', 'payment_ref', 'paid', 'paid_at',
+        ];
+        $total = 0;
+        $filled = 0;
+        foreach ($intake->getAttributes() as $key => $_) {
+            if (in_array($key, $skip, true) || str_ends_with($key, '_path') || str_ends_with($key, '_token')) {
+                continue;
+            }
+            $total++;
+            $value = $this->formatIntakeValue($intake->{$key});
+            if (! ($value === null || $value === '')) {
+                $filled++;
+            }
+        }
+
+        return [$filled, $total];
+    }
+
+    /** Which official-form section a submitted field belongs to. */
+    private function intakeSectionFor(string $key): string
+    {
+        return match (true) {
+            str_starts_with($key, 'character_') => 'Character',
+            str_starts_with($key, 'health_') || in_array($key, ['previous_xray', 'previous_medical_cert', 'previous_police_certificate', 'lived_other_country_5y'], true) => 'Health',
+            str_starts_with($key, 'partner_') || str_starts_with($key, 'partnership') || in_array($key, ['applying_as', 'marital_status', 'include_family', 'include_partner', 'bringing_family', 'number_of_children'], true) => 'Relationship',
+            str_starts_with($key, 'current_employer') || str_starts_with($key, 'employment_') || str_contains($key, 'skilled_years') || in_array($key, ['currently_working', 'current_occupation', 'current_start', 'current_end', 'job_title', 'employer', 'annual_income', 'occupation', 'hourly_rate', 'annual_salary', 'salary', 'wage', 'work_experience_years', 'job_offer'], true) => 'Employment',
+            str_starts_with($key, 'education') || str_starts_with($key, 'qualification') || str_starts_with($key, 'english') || in_array($key, ['study_field', 'institution', 'highest_qualification', 'field_of_study', 'nzqa'], true) => 'Education & English',
+            str_starts_with($key, 'declaration') || str_starts_with($key, 'terms') => 'Declaration',
+            in_array($key, ['dob', 'gender', 'national_id', 'country_of_birth', 'place_of_birth', 'country_of_citizenship', 'nationality', 'passport_number', 'passport_expiry', 'issuing_country', 'passport_issuing_country', 'middle_name'], true) => 'Personal details',
+            in_array($key, ['current_country', 'current_address', 'previous_nz_visa', 'current_nz_visa_type', 'current_visa_type', 'current_visa_expiry', 'visa_expiry', 'residence_country', 'nz_arrival_date', 'arrival_date', 'visa_start'], true) => 'Location & Status',
+            default => 'Other details',
+        };
+    }
+
+    /** Humanise a single intake attribute value for display. */
+    private function formatIntakeValue($value): ?string
+    {
+        if (is_bool($value)) {
+            return $value ? 'Yes' : 'No';
+        }
+        if ($value instanceof \Illuminate\Support\Carbon || $value instanceof \DateTimeInterface) {
+            return \Illuminate\Support\Carbon::parse($value)->toFormattedDateString();
+        }
+        if (is_array($value)) {
+            if (array_is_list($value) && collect($value)->every(fn ($v) => is_scalar($v))) {
+                return implode(', ', $value);
+            }
+
+            return collect($value)
+                ->map(fn ($item) => is_array($item)
+                    ? collect($item)->filter(fn ($v) => ! is_null($v) && $v !== '')->map(fn ($v, $k) => \Illuminate\Support\Str::headline($k).': '.(is_scalar($v) ? $v : json_encode($v)))->implode(', ')
+                    : (string) $item)
+                ->filter()
+                ->implode("\n");
+        }
+
+        return $value === null ? null : (string) $value;
+    }
+
     public function showIntake(string $type, int $id)
     {
         $modelMap = [
@@ -1705,32 +1975,20 @@ class ImmigrationController extends Controller
      */
     private function readinessFor($intake, $review = null): array
     {
-        // Plumbing fields don't count toward "did the applicant fill it in".
-        $skip = [
-            'id', 'created_at', 'updated_at', 'deleted_at', 'edit_token', 'token',
-            'booking_id', 'intake_id', 'status', 'intakeable_type', 'intakeable_id',
-            'payment_status', 'payment_session_id', 'payment_amount_cents',
-            'payment_currency', 'paid_at',
-        ];
-        $attrs = collect($intake->getAttributes())->except($skip);
-        $total = $attrs->count();
-        $filled = $attrs->filter(fn ($v) => $v !== null && $v !== '' && $v !== '[]' && $v !== '{}')->count();
+        // SAME completeness + thresholds as the "Overall assessment" verdict in
+        // the review modal, so the list's Priority column and the modal always
+        // agree — "Ready to work up" ⇒ "Ready" priority.
+        [$filled, $total] = $this->intakeFieldStats($intake);
         $pct = $total > 0 ? (int) round($filled / $total * 100) : 0;
 
-        // Count "check"-severity flags from a stored AI review (gaps/inconsistencies).
-        $checks = 0;
-        if ($review) {
-            foreach (array_merge($review->observations ?? [], $review->risks ?? []) as $o) {
-                if (($o['severity'] ?? 'info') === 'check') {
-                    $checks++;
-                }
-            }
-        }
+        // A time-critical issue (passport / visa validity) drops it to needs-info,
+        // matching the modal's "Attention needed" verdict.
+        $hasCritical = collect($this->adviserFlags($intake))->contains(fn ($f) => $f['severity'] === 'critical');
 
         $tier = 'ready';
-        if ($pct < 60 || ($review && $checks >= 3)) {
+        if ($hasCritical || $pct < 55) {
             $tier = 'needs_info';
-        } elseif ($pct < 85 || ($review && $checks >= 1)) {
+        } elseif ($pct < 80) {
             $tier = 'minor';
         }
 

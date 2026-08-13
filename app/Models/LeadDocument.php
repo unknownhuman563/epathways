@@ -13,6 +13,11 @@ class LeadDocument extends Model
 
     public const STATUS_UNDER_REVIEW = 'UnderReview';
 
+    // The manager has reviewed the document and referred it to the Licensed
+    // Immigration Adviser for verification. INTERNAL — never shown to the
+    // client (mapped to "Under review" on client surfaces via clientStatus()).
+    public const STATUS_CHECKED = 'Checked';
+
     public const STATUS_APPROVED = 'Approved';
 
     public const STATUS_REJECTED = 'Rejected';
@@ -39,6 +44,16 @@ class LeadDocument extends Model
         'client_signed_at' => 'datetime',
         'size' => 'integer',
     ];
+
+    /**
+     * Client-safe status. The manager's internal "Checked" (referred to the
+     * adviser) is never exposed to the client — they see "Under review" until
+     * the adviser Approves or Rejects. All other statuses pass through.
+     */
+    public static function clientStatus(?string $status): ?string
+    {
+        return $status === self::STATUS_CHECKED ? self::STATUS_UNDER_REVIEW : $status;
+    }
 
     public function lead()
     {

@@ -769,7 +769,9 @@ class LeadTrackingController extends Controller
                 'checklist_key' => $d->checklist_key,
                 'size' => $d->size,
                 'mime' => $d->mime,
-                'status' => $d->status,
+                // Client-safe: the manager's internal "Checked" reads as "Under
+                // review" until the adviser makes the final Approve/Reject call.
+                'status' => LeadDocument::clientStatus($d->status),
                 'source' => $d->source,
                 'created_at' => $d->created_at?->toIso8601String(),
                 // Code-gated private stream (drives the gallery thumbnail
@@ -1213,7 +1215,7 @@ class LeadTrackingController extends Controller
             $status = 'missing';
             if ($docs->contains(fn ($d) => $d->status === LeadDocument::STATUS_APPROVED)) {
                 $status = 'approved';
-            } elseif ($docs->contains(fn ($d) => in_array($d->status, [LeadDocument::STATUS_SUBMITTED, LeadDocument::STATUS_UNDER_REVIEW]))) {
+            } elseif ($docs->contains(fn ($d) => in_array($d->status, [LeadDocument::STATUS_SUBMITTED, LeadDocument::STATUS_UNDER_REVIEW, LeadDocument::STATUS_CHECKED]))) {
                 $status = 'submitted';
             } elseif ($docs->contains(fn ($d) => $d->status === LeadDocument::STATUS_REJECTED)) {
                 $status = 'rejected';
@@ -1281,10 +1283,12 @@ class LeadTrackingController extends Controller
 
             // Status is whichever the "best" doc landed on:
             //   Approved > Submitted/UnderReview > Rejected > none.
+            // A manager's internal "Checked" reads as under-review to the client
+            // (grouped with Submitted/UnderReview) until the adviser decides.
             $status = 'missing';
             if ($docs->contains(fn ($d) => $d->status === LeadDocument::STATUS_APPROVED)) {
                 $status = 'approved';
-            } elseif ($docs->contains(fn ($d) => in_array($d->status, [LeadDocument::STATUS_SUBMITTED, LeadDocument::STATUS_UNDER_REVIEW]))) {
+            } elseif ($docs->contains(fn ($d) => in_array($d->status, [LeadDocument::STATUS_SUBMITTED, LeadDocument::STATUS_UNDER_REVIEW, LeadDocument::STATUS_CHECKED]))) {
                 $status = 'submitted';
             } elseif ($docs->contains(fn ($d) => $d->status === LeadDocument::STATUS_REJECTED)) {
                 $status = 'rejected';
