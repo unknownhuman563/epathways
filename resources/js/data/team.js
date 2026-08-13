@@ -2,8 +2,6 @@ import DevImg from "@assets/team/Dev.png";
 import DinaImg from "@assets/team/dina.png";
 import EmmaImg from "@assets/team/emma.png";
 import DaiImg from "@assets/team/dai.png";
-import EmilyImg from "@assets/team/emily.png";
-import NovaImg from "@assets/team/nova.png";
 
 // To add a member's WeChat QR: drop the image in resources/assets/team/,
 // import it here (e.g. `import DevWeChat from "@assets/team/dev-wechat.png";`),
@@ -83,40 +81,6 @@ export const team = [
       facebook: "https://facebook.com/epathways", // TODO
       linkedin: "https://linkedin.com/in/hendry-dai", // TODO
       wechatId: "ep-hendry", // TODO
-      wechatQr: null,
-    },
-  },
-  {
-    slug: "emily-dela-pena",
-    name: "Emily Dela Pena",
-    role: "Finance Admin Champion",
-    location: "New Zealand",
-    image: EmilyImg,
-    bio: "Keeping the numbers clear so your journey stays smooth and stress-free.",
-    links: {
-      booking: "https://calendly.com/epathways/emily", // TODO
-      whatsapp: "+64 21 555 0105", // TODO
-      email: "emily@epathways.co.nz", // TODO
-      facebook: "https://facebook.com/epathways", // TODO
-      linkedin: "https://linkedin.com/in/emily-dela-pena", // TODO
-      wechatId: "ep-emily", // TODO
-      wechatQr: null,
-    },
-  },
-  {
-    slug: "nova-palaca",
-    name: "Nova Palaca",
-    role: "Admin Champion",
-    location: "New Zealand",
-    image: NovaImg,
-    bio: "The behind-the-scenes engine keeping every application on track.",
-    links: {
-      booking: "https://calendly.com/epathways/nova", // TODO
-      whatsapp: "+64 21 555 0106", // TODO
-      email: "nova@epathways.co.nz", // TODO
-      facebook: "https://facebook.com/epathways", // TODO
-      linkedin: "https://linkedin.com/in/nova-palaca", // TODO
-      wechatId: "ep-nova", // TODO
       wechatQr: null,
     },
   },
