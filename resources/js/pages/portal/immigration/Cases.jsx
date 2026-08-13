@@ -963,8 +963,16 @@ function CaseRow({ c, meId = null, stages, visaTypes = [], isExpanded, onExpand,
                             </AvatarPhoto>
                         </div>
                         <div className="min-w-0">
-                            <div className="font-semibold text-gray-900 text-sm truncate group-hover/case:text-amber-700 transition-colors">
-                                {c.name}
+                            <div className="flex items-center gap-2 min-w-0">
+                                <span className="font-semibold text-gray-900 text-sm truncate group-hover/case:text-amber-700 transition-colors">
+                                    {c.name}
+                                </span>
+                                {c.converted_at && Date.now() - new Date(c.converted_at).getTime() < 86400000 && (
+                                    <span title={`Converted ${c.converted_by ? `by ${c.converted_by}` : ""}`}
+                                        className="flex-shrink-0 inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider bg-emerald-500 text-white">
+                                        New
+                                    </span>
+                                )}
                             </div>
                             {c.dependents?.length > 0 && (
                                 <div className="mt-1 flex items-center gap-1 flex-wrap" title={`Related: ${c.dependents.map((d) => d.full_name).join(", ")}`}>
