@@ -1697,57 +1697,196 @@ class ImmigrationController extends Controller
      */
     private function freeAssessmentSections(Lead $l): array
     {
-        $field = function (string $label, $val) {
+        $l->loadMissing(['studyPlans', 'educationExps']);
+
+        // One label/value field — blank shown as "—" so every form field appears.
+        $field = function (string $key, string $label, $val) {
             $v = $this->formatIntakeValue($val);
             $prov = ! ($v === null || $v === '');
 
-            return ['key' => \Illuminate\Support\Str::slug($label), 'label' => $label, 'value' => $prov ? $v : '—', 'provided' => $prov];
+            return ['key' => $key, 'label' => $label, 'value' => $prov ? $v : '—', 'provided' => $prov];
         };
-        // Flatten a stored JSON group into label/value fields (skips nested objects).
-        $group = function ($arr) {
-            $arr = is_array($arr) ? $arr : [];
+        // Normalise a stored value (array cast OR raw JSON string) to an array.
+        $asArray = function ($v) {
+            if (is_string($v)) {
+                $d = json_decode($v, true);
+
+                return is_array($d) ? $d : [];
+            }
+
+            return is_array($v) ? $v : [];
+        };
+        // Build a group from an ordered [key => label] schema against a stored
+        // array — every schema field is emitted, blank when the key is missing,
+        // so the whole free-assessment form displays even when unanswered.
+        $mapGroup = function (array $schema, $stored) use ($field, $asArray) {
+            $stored = $asArray($stored);
             $out = [];
-            foreach ($arr as $k => $v) {
-                if (is_array($v) && ! array_is_list($v)) {
-                    continue;
-                }
-                $vv = $this->formatIntakeValue($v);
-                $prov = ! ($vv === null || $vv === '');
-                $out[] = ['key' => $k, 'label' => \Illuminate\Support\Str::headline($k), 'value' => $prov ? $vv : '—', 'provided' => $prov];
+            foreach ($schema as $key => $label) {
+                $out[] = $field($key, $label, $stored[$key] ?? null);
             }
 
             return $out;
         };
 
-        $edu = is_array($l->education_notes) ? $l->education_notes : [];
+        $edu = $asArray($l->education_notes);
+        $plan = $l->studyPlans->first();
 
-        $sections = array_values(array_filter([
-            ['title' => 'Personal details', 'fields' => array_filter([
-                $field('Date of birth', optional($l->dob)->toDateString()),
-                $field('Gender', $l->gender),
-                $field('Marital status', $l->marital_status),
-                $field('Country of birth', $l->country_of_birth),
-                $field('Place of birth', $l->place_of_birth),
-                $field('Citizenship', $l->citizenship),
-                $field('Residence city', $l->residence_city),
-                $field('Residence country', $l->residence_country),
-                $field('Has passport', $l->has_passport),
-                $field('Passport number', $l->passport_number),
-                $field('Passport expiry', optional($l->passport_expiry)->toDateString()),
-            ])],
-            ['title' => 'Study & Education', 'fields' => $group($edu)],
-            ['title' => 'Immigration & Travel', 'fields' => $group($l->immigration_info)],
-            ['title' => 'Character', 'fields' => $group($l->character_info)],
-            ['title' => 'Health', 'fields' => $group($l->health_info)],
-            ['title' => 'Financial', 'fields' => array_merge($group($l->financial_info), $group($l->source_of_funds_info))],
-            ['title' => 'Additional', 'fields' => array_merge($group($l->nz_contacts_info), $group($l->military_info), $group($l->home_ties_info))],
-        ], fn ($s) => ! empty($s['fields'])));
+        $sections = [];
 
-        // Re-index the Personal details fields (array_filter left holes).
-        foreach ($sections as &$s) {
-            $s['fields'] = array_values($s['fields']);
+        $sections[] = ['title' => 'Personal Details', 'fields' => [
+            $field('dob', 'Date of Birth', $l->dob),
+            $field('gender', 'Gender', $l->gender),
+            $field('marital_status', 'Marital Status', $l->marital_status),
+            $field('other_names', 'Other Names Used', $l->other_names),
+            $field('country_of_birth', 'Country of Birth', $l->country_of_birth),
+            $field('place_of_birth', 'Place of Birth', $l->place_of_birth),
+            $field('citizenship', 'Country of Citizenship', $l->citizenship),
+            $field('residence_city', 'City of Residence', $l->residence_city),
+            $field('residence_state', 'State / Region of Residence', $l->residence_state),
+            $field('residence_country', 'Country of Residence', $l->residence_country),
+            $field('has_passport', 'Has a Valid Passport', $l->has_passport),
+            $field('passport_number', 'Passport Number', $l->passport_number),
+            $field('passport_expiry', 'Passport Expiry', $l->passport_expiry),
+        ]];
+
+        $sections[] = ['title' => 'Study Plan', 'fields' => [
+            $field('preferred_course', 'Preferred Course', $plan?->preferred_course),
+            $field('qualification_level', 'Qualification Level', $plan?->qualification_level),
+            $field('preferred_city', 'Preferred City', $plan?->preferred_city),
+            $field('preferred_intake', 'Preferred Intake', $plan?->preferred_intake),
+            $field('has_english_test', 'Has an English Test', $plan?->has_english_test),
+            $field('english_test_type', 'English Test Type', $plan?->english_test_type),
+            $field('test_score_overall', 'Overall Score', $plan?->test_score_overall),
+            $field('test_date', 'Test Date', $plan?->test_date),
+        ]];
+
+        $eduFields = $mapGroup([
+            'high_school_completed' => 'High School Completed',
+            'high_school_level' => 'Highest Level Completed',
+            'high_school_institution' => 'High School Institution',
+            'high_school_start' => 'High School Start',
+            'high_school_end' => 'High School End',
+            'high_school_marks' => 'High School Marks',
+            'has_gap' => 'Has a Study / Work Gap',
+            'gap_length' => 'Gap Length',
+        ], $edu);
+        foreach ($l->educationExps as $i => $ex) {
+            $lvl = $ex->level ?: ('Qualification '.($i + 1));
+            $eduFields[] = $field("edu_{$i}_field", "{$lvl} — Field of Study", $ex->field_of_study);
+            $eduFields[] = $field("edu_{$i}_inst", "{$lvl} — Institution", $ex->institution);
+            $eduFields[] = $field("edu_{$i}_marks", "{$lvl} — Marks", $ex->average_marks);
         }
-        unset($s);
+        $sections[] = ['title' => 'Education', 'fields' => $eduFields];
+
+        $work = $asArray($l->work_info);
+        $workFields = [];
+        if (empty($work)) {
+            $workFields[] = $field('work_none', 'Work Experience', null);
+        } else {
+            foreach ($work as $i => $job) {
+                $n = $i + 1;
+                $workFields[] = $field("work_{$i}_company", "Job {$n} — Company", $job['company_name'] ?? null);
+                $workFields[] = $field("work_{$i}_title", "Job {$n} — Title", $job['job_title'] ?? null);
+                $workFields[] = $field("work_{$i}_start", "Job {$n} — Start", $job['start_date'] ?? null);
+                $workFields[] = $field("work_{$i}_end", "Job {$n} — End", $job['end_date'] ?? null);
+                $workFields[] = $field("work_{$i}_current", "Job {$n} — Current Role", $job['is_current'] ?? null);
+                $workFields[] = $field("work_{$i}_duties", "Job {$n} — Duties", $job['duties'] ?? null);
+            }
+        }
+        $sections[] = ['title' => 'Work Experience', 'fields' => $workFields];
+
+        $sections[] = ['title' => 'Financial', 'fields' => $mapGroup([
+            'can_cover_tuition' => 'Can Cover Tuition',
+            'can_cover_living' => 'Can Cover Living Costs',
+            'funding_source' => 'Funding Source',
+            'estimated_budget' => 'Estimated Budget',
+            'has_sponsors' => 'Has Sponsors',
+            'sponsor_relation' => 'Sponsor Relationship',
+        ], $l->financial_info)];
+
+        $sections[] = ['title' => 'Source of Funds', 'fields' => $mapGroup([
+            'sources' => 'Sources of Funds',
+            'will_self_fund' => 'Will Self-Fund',
+            'will_use_sponsor' => 'Will Use a Sponsor',
+            'sponsor_relation' => 'Sponsor Relationship',
+            'sponsor_nz_based' => 'Sponsor is NZ-Based',
+            'sponsor_nz_resident' => 'Sponsor is a NZ Resident',
+            'sponsor_occupation' => 'Sponsor Occupation',
+            'sponsor_employer' => 'Sponsor Employer',
+            'sponsor_annual_income' => 'Sponsor Annual Income',
+            'sponsor_source_of_funds' => "Sponsor's Source of Funds",
+        ], $l->source_of_funds_info)];
+
+        $sections[] = ['title' => 'Immigration & Travel', 'fields' => $mapGroup([
+            'has_travelled_overseas' => 'Has Travelled Overseas',
+            'overseas_travel_details' => 'Overseas Travel Details',
+            'has_applied_nz_visa' => 'Applied for a NZ Visa Before',
+            'nz_visa_details' => 'NZ Visa Details',
+            'total_nz_time_24_months' => 'Total NZ Time 24 Months or More',
+            'has_applied_other_visa' => 'Applied for Another Country Visa',
+            'other_visa_details' => 'Other Visa Details',
+            'has_visa_refusal' => 'Has a Visa Refusal',
+            'visa_refusal_details' => 'Visa Refusal Details',
+            'submission_country' => 'Country When Submitting',
+        ], $l->immigration_info)];
+
+        $sections[] = ['title' => 'Character', 'fields' => $mapGroup([
+            'has_conviction' => 'Has a Conviction',
+            'under_investigation' => 'Under Investigation',
+            'has_deportation' => 'Has a Deportation',
+            'has_visa_refusal_other' => 'Refused a Visa by Another Country',
+            'lived_5_years_since_17' => 'Lived 5+ Years in Another Country Since 17',
+        ], $l->character_info)];
+
+        $sections[] = ['title' => 'Health', 'fields' => $mapGroup([
+            'has_tuberculosis' => 'Has Tuberculosis',
+            'has_renal_dialysis' => 'Needs Renal Dialysis',
+            'needs_hospital_care' => 'Needs Hospital Care',
+            'needs_residential_care' => 'Needs Residential Care',
+            'is_pregnant' => 'Is Pregnant',
+        ], $l->health_info)];
+
+        $members = $asArray($l->family_info)['members'] ?? [];
+        $famFields = [];
+        if (empty($members) || ! is_array($members)) {
+            $famFields[] = $field('family_none', 'Family Members', null);
+        } else {
+            foreach ($members as $i => $m) {
+                $rel = $m['relation'] ?? ('Member '.($i + 1));
+                $name = trim(($m['first_name'] ?? '').' '.($m['family_name'] ?? ''));
+                $famFields[] = $field("fam_{$i}_name", "{$rel} — Name", $name);
+                $famFields[] = $field("fam_{$i}_dob", "{$rel} — Date of Birth", $m['dob'] ?? null);
+                $famFields[] = $field("fam_{$i}_status", "{$rel} — Partnership Status", $m['partnership_status'] ?? null);
+                $famFields[] = $field("fam_{$i}_residence", "{$rel} — Country of Residence", $m['country_of_residence'] ?? null);
+                $famFields[] = $field("fam_{$i}_occupation", "{$rel} — Occupation", $m['occupation'] ?? null);
+            }
+        }
+        $sections[] = ['title' => 'Family', 'fields' => $famFields];
+
+        $sections[] = ['title' => 'NZ Contacts', 'fields' => $mapGroup([
+            'has_nz_contacts' => 'Has NZ Contacts',
+            'contact_first_name' => 'Contact First Name',
+            'contact_family_name' => 'Contact Family Name',
+            'contact_relationship' => 'Contact Relationship',
+            'contact_address' => 'Contact Address',
+            'contact_number' => 'Contact Number',
+        ], $l->nz_contacts_info)];
+
+        $sections[] = ['title' => 'Military Service', 'fields' => $mapGroup([
+            'military_compulsory' => 'Military Service Was Compulsory',
+            'has_military_service' => 'Has Undertaken Military Service',
+        ], $l->military_info)];
+
+        $sections[] = ['title' => 'Home Ties', 'fields' => $mapGroup([
+            'family_owns_property' => 'Family Owns Property',
+            'property_type' => 'Property Type',
+            'property_location' => 'Property Location',
+            'property_owner' => 'Property Owner',
+            'family_owns_business' => 'Family Owns Business',
+            'business_type' => 'Business Type',
+            'business_involvement' => 'Business Involvement',
+        ], $l->home_ties_info)];
 
         return [$sections];
     }
@@ -1784,6 +1923,7 @@ class ImmigrationController extends Controller
             'flags' => [],
             'readiness' => ['filled' => $filled, 'total' => $total, 'pct' => $pct, 'verdict' => $verdict, 'tone' => $tone, 'recommendation' => $rec],
             'ai_review' => null,
+            'notes' => $this->assessmentNotesFor(\App\Models\Lead::class, $l->id),
         ]);
     }
 
@@ -1804,40 +1944,61 @@ class ImmigrationController extends Controller
 
         $intake = $modelMap[$type]::findOrFail($id);
 
-        // Internal / non-form columns never shown to the reviewer.
+        // Internal / non-form columns never shown to the reviewer. Name, email
+        // and phone live in the modal header, so they're skipped here too.
         $skip = [
             'id', 'created_at', 'updated_at', 'deleted_at', 'status', 'intake_id',
             'assessment_id', 'edit_token', 'edit_token_expires_at', 'ip_address',
             'user_agent', 'first_name', 'last_name', 'family_name', 'email', 'phone',
             'payment_status', 'payment_amount', 'payment_ref', 'paid', 'paid_at',
+            'payment_session_id', 'payment_amount_cents', 'payment_currency', 'booking_id',
+            'terms_accepted',
         ];
 
-        // Group EVERY form field into an official-form layout — blanks included
-        // (shown as "—") so the whole assessment form displays consistently for
-        // every submission of the same visa type, not just the filled fields.
-        $grouped = [];
-        foreach ($intake->getAttributes() as $key => $_) {
-            if (in_array($key, $skip, true) || str_ends_with($key, '_path') || str_ends_with($key, '_token')) {
+        // Mirror the PUBLIC landing-page form for this visa type: identical
+        // section order and field order, with every field shown even when blank
+        // ("—") so the assessment reads like the official form the client filled,
+        // not just the answered fields.
+        $attrs = $intake->getAttributes();
+        $used = [];
+        $sections = [];
+        foreach ($this->intakeSectionSchema($type) as $title => $columns) {
+            $fields = [];
+            foreach ($columns as $col) {
+                if (! array_key_exists($col, $attrs)) {
+                    continue; // column not present on this model — skip defensively
+                }
+                $used[$col] = true;
+                $value = $this->formatIntakeValue($intake->{$col});
+                $provided = ! ($value === null || $value === '');
+                $fields[] = [
+                    'key' => $col,
+                    'label' => $this->intakeFieldLabel($col),
+                    'value' => $provided ? $value : '—',
+                    'provided' => $provided,
+                ];
+            }
+            if (! empty($fields)) {
+                $sections[] = ['title' => $title, 'fields' => $fields];
+            }
+        }
+
+        // Anything submitted that the schema didn't place (a column with no form
+        // field) is appended so nothing is silently dropped — but only when it
+        // actually holds a value, to avoid cluttering with always-empty columns.
+        $extra = [];
+        foreach ($attrs as $key => $_) {
+            if (isset($used[$key]) || in_array($key, $skip, true) || str_ends_with($key, '_path') || str_ends_with($key, '_token')) {
                 continue;
             }
             $value = $this->formatIntakeValue($intake->{$key});
-            $provided = ! ($value === null || $value === '');
-            $section = $this->intakeSectionFor($key);
-            $grouped[$section][] = [
-                'key' => $key,
-                'label' => \Illuminate\Support\Str::headline($key),
-                'value' => $provided ? $value : '—',
-                'provided' => $provided,
-            ];
-        }
-
-        // Fixed section order — starts with Personal, ends with the declaration.
-        $order = ['Personal details', 'Location & Status', 'Relationship', 'Employment', 'Education & English', 'Health', 'Character', 'Declaration', 'Other details'];
-        $sections = [];
-        foreach ($order as $title) {
-            if (! empty($grouped[$title])) {
-                $sections[] = ['title' => $title, 'fields' => $grouped[$title]];
+            if ($value === null || $value === '') {
+                continue;
             }
+            $extra[] = ['key' => $key, 'label' => $this->intakeFieldLabel($key), 'value' => $value, 'provided' => true];
+        }
+        if (! empty($extra)) {
+            $sections[] = ['title' => 'Other details', 'fields' => $extra];
         }
 
         $review = \App\Models\AssessmentAiReview::latestFor($intake::class, $intake->id);
@@ -1861,6 +2022,8 @@ class ImmigrationController extends Controller
             'readiness' => $this->intakeReadiness($intake, $flags),
             // AI review snapshot — softer, adviser-style analysis of the rest.
             'ai_review' => $this->serializeAiReview($review),
+            // Attributed internal notes — who noted what on this assessment.
+            'notes' => $this->assessmentNotesFor($intake::class, $intake->id),
         ]);
     }
 
@@ -1971,6 +2134,31 @@ class ImmigrationController extends Controller
      */
     private function intakeFieldStats($intake): array
     {
+        $attrs = $intake->getAttributes();
+
+        // Prefer the form schema so completeness matches exactly what the review
+        // modal displays (and the list and modal stay in agreement).
+        $type = $this->intakeTypeFor($intake);
+        if ($type && ($schema = $this->intakeSectionSchema($type))) {
+            $total = 0;
+            $filled = 0;
+            foreach ($schema as $columns) {
+                foreach ($columns as $col) {
+                    if (! array_key_exists($col, $attrs)) {
+                        continue;
+                    }
+                    $total++;
+                    $value = $this->formatIntakeValue($intake->{$col});
+                    if (! ($value === null || $value === '')) {
+                        $filled++;
+                    }
+                }
+            }
+
+            return [$filled, $total];
+        }
+
+        // Fallback for any type without a schema — count all form-ish columns.
         $skip = [
             'id', 'created_at', 'updated_at', 'deleted_at', 'status', 'intake_id',
             'assessment_id', 'edit_token', 'edit_token_expires_at', 'ip_address',
@@ -1979,7 +2167,7 @@ class ImmigrationController extends Controller
         ];
         $total = 0;
         $filled = 0;
-        foreach ($intake->getAttributes() as $key => $_) {
+        foreach ($attrs as $key => $_) {
             if (in_array($key, $skip, true) || str_ends_with($key, '_path') || str_ends_with($key, '_token')) {
                 continue;
             }
@@ -1993,20 +2181,287 @@ class ImmigrationController extends Controller
         return [$filled, $total];
     }
 
-    /** Which official-form section a submitted field belongs to. */
-    private function intakeSectionFor(string $key): string
+    /**
+     * Resolve an assessment "notable" (a visa intake OR a free-assessment Lead)
+     * from a type slug + id. Returns [morphType, morphId].
+     */
+    private function assessmentNotable(string $type, int $id): array
     {
-        return match (true) {
-            str_starts_with($key, 'character_') => 'Character',
-            str_starts_with($key, 'health_') || in_array($key, ['previous_xray', 'previous_medical_cert', 'previous_police_certificate', 'lived_other_country_5y'], true) => 'Health',
-            str_starts_with($key, 'partner_') || str_starts_with($key, 'partnership') || in_array($key, ['applying_as', 'marital_status', 'include_family', 'include_partner', 'bringing_family', 'number_of_children'], true) => 'Relationship',
-            str_starts_with($key, 'current_employer') || str_starts_with($key, 'employment_') || str_contains($key, 'skilled_years') || in_array($key, ['currently_working', 'current_occupation', 'current_start', 'current_end', 'job_title', 'employer', 'annual_income', 'occupation', 'hourly_rate', 'annual_salary', 'salary', 'wage', 'work_experience_years', 'job_offer'], true) => 'Employment',
-            str_starts_with($key, 'education') || str_starts_with($key, 'qualification') || str_starts_with($key, 'english') || in_array($key, ['study_field', 'institution', 'highest_qualification', 'field_of_study', 'nzqa'], true) => 'Education & English',
-            str_starts_with($key, 'declaration') || str_starts_with($key, 'terms') => 'Declaration',
-            in_array($key, ['dob', 'gender', 'national_id', 'country_of_birth', 'place_of_birth', 'country_of_citizenship', 'nationality', 'passport_number', 'passport_expiry', 'issuing_country', 'passport_issuing_country', 'middle_name'], true) => 'Personal details',
-            in_array($key, ['current_country', 'current_address', 'previous_nz_visa', 'current_nz_visa_type', 'current_visa_type', 'current_visa_expiry', 'visa_expiry', 'residence_country', 'nz_arrival_date', 'arrival_date', 'visa_start'], true) => 'Location & Status',
-            default => 'Other details',
+        if ($type === 'free') {
+            $lead = Lead::findOrFail($id);
+
+            return [\App\Models\Lead::class, $lead->id];
+        }
+
+        $map = [
+            'resident' => \App\Models\ResidentIntake::class,
+            'work' => \App\Models\WorkIntake::class,
+            'student' => \App\Models\StudentIntake::class,
+            'visitor' => \App\Models\VisitorIntake::class,
+            'family' => \App\Models\FamilyIntake::class,
+        ];
+        abort_unless(isset($map[$type]), 404, 'Unknown assessment type.');
+        $intake = $map[$type]::findOrFail($id);
+
+        return [$map[$type], $intake->id];
+    }
+
+    /** Serialise the attributed internal notes for an assessment, newest first. */
+    private function assessmentNotesFor(string $notableType, int $notableId): array
+    {
+        return \App\Models\AssessmentNote::with('author:id,name,role')
+            ->where('notable_type', $notableType)
+            ->where('notable_id', $notableId)
+            ->latest()
+            ->get()
+            ->map(fn ($n) => [
+                'id' => $n->id,
+                'body' => $n->body,
+                'author' => $n->author_name ?: (optional($n->author)->name ?: 'Staff'),
+                'role' => $n->author_role ?: optional($n->author)->role,
+                'at' => optional($n->created_at)->toIso8601String(),
+            ])
+            ->all();
+    }
+
+    /** Add an attributed internal note to an assessment (intake or free lead). */
+    public function assessmentNoteStore(Request $request, string $type, int $id)
+    {
+        $data = $request->validate(['body' => 'required|string|max:8000']);
+        [$notableType, $notableId] = $this->assessmentNotable($type, $id);
+
+        $user = $request->user();
+        $note = \App\Models\AssessmentNote::create([
+            'notable_type' => $notableType,
+            'notable_id' => $notableId,
+            'user_id' => $user->id,
+            'author_name' => $user->name,
+            'author_role' => $user->role,
+            'body' => $data['body'],
+        ]);
+
+        return response()->json(['note' => [
+            'id' => $note->id,
+            'body' => $note->body,
+            'author' => $user->name,
+            'role' => $user->role,
+            'at' => optional($note->created_at)->toIso8601String(),
+        ]]);
+    }
+
+    /** Resolve the intake type slug from a model instance. */
+    private function intakeTypeFor($intake): ?string
+    {
+        return match ($intake::class) {
+            \App\Models\ResidentIntake::class => 'resident',
+            \App\Models\WorkIntake::class => 'work',
+            \App\Models\StudentIntake::class => 'student',
+            \App\Models\VisitorIntake::class => 'visitor',
+            \App\Models\FamilyIntake::class => 'family',
+            default => null,
         };
+    }
+
+    /**
+     * The section → ordered-columns layout for each visa type, mirroring the
+     * public landing-page intake form so the reviewer sees the same sections in
+     * the same order. Columns absent on a given model are skipped by the caller.
+     *
+     * @return array<string, array<int, string>>
+     */
+    private function intakeSectionSchema(string $type): array
+    {
+        return match ($type) {
+            'resident' => [
+                'Personal Details' => ['dob', 'nationality'],
+                'Passport & Visa' => ['passport_number', 'passport_expiry', 'issuing_country', 'current_visa_type', 'current_visa_other', 'current_visa_expiry', 'nz_arrival_date', 'previous_nz_visa_history'],
+                'Employment' => ['job_title', 'employment_start', 'employment_type', 'hourly_rate'],
+                'Qualifications' => ['highest_qualification', 'institution_name', 'country_of_study', 'nzqa_status', 'nzqa_iqa_reference'],
+                'Work Experience' => ['nz_skilled_years', 'total_skilled_years', 'career_summary'],
+                'English & Family' => ['english_evidence', 'english_test_score', 'english_test_date', 'include_family', 'family_members'],
+                'Documents' => ['documents', 'document_files'],
+                'Additional Information' => ['character_health_disclosure', 'other_notes'],
+            ],
+            'work' => [
+                'Identity' => ['other_names', 'gender', 'dob', 'country_of_birth', 'place_of_birth', 'country_of_citizenship', 'other_citizenships', 'national_id', 'partnership_status', 'current_address'],
+                'NZ Immigration History' => ['current_country', 'previous_nz_visa', 'previous_nz_visa_details', 'previous_nzeta', 'australian_pr', 'travelled_nz', 'last_nz_departure', 'over_24_months'],
+                'NZ Employer' => ['employer_name', 'employer_is_family', 'employer_family_relation', 'self_employed', 'job_start_date', 'hourly_rate', 'supports_dependent_children'],
+                'Character' => ['character_convicted', 'character_investigation', 'character_deported', 'character_visa_refused', 'lived_other_country_5y', 'lived_other_country_details'],
+                'Health' => ['health_tb', 'health_renal', 'health_hospital', 'health_residential', 'health_pregnant'],
+                'Current Employment' => ['currently_working', 'current_job_title', 'current_job_start', 'current_job_country', 'current_job_region', 'current_employer_name', 'current_employer_phone', 'current_employer_email', 'current_job_duties', 'current_employer_address'],
+                'Military & Travel' => ['military_compulsory', 'military_undertaken', 'military_details', 'travelled_internationally'],
+                'Declaration' => ['declaration_accepted', 'signature_name', 'signature_date'],
+            ],
+            'student' => [
+                'Identity' => ['other_names', 'gender', 'dob', 'country_of_birth', 'place_of_birth', 'country_of_citizenship', 'other_citizenships', 'national_id', 'passport_number', 'passport_expiry', 'partnership_status', 'current_address', 'overseas_address'],
+                'NZ Immigration History' => ['current_country', 'travelled_nz', 'last_nz_departure', 'over_24_months'],
+                'Character' => ['character_convicted', 'character_investigation', 'character_deported', 'character_visa_refused', 'lived_other_country_5y', 'lived_other_country_details'],
+                'Health' => ['health_tb', 'health_renal', 'health_hospital', 'health_residential', 'health_pregnant'],
+                'Current Employment' => ['currently_working', 'current_job_title', 'current_job_start', 'current_job_finish', 'current_job_country', 'current_job_region', 'current_employer_name', 'current_employer_phone', 'current_employer_email', 'current_job_duties', 'current_employer_address'],
+                'Study Plan' => ['programmes', 'study_period_from', 'study_period_to', 'school_name', 'has_offer'],
+                'Study Funds & Assets' => ['has_enough_funds', 'tuition_fee_nzd', 'living_expenses_nzd', 'has_sponsor', 'sponsor_relationship', 'sponsor_income_source', 'can_provide_statements', 'has_other_assets', 'other_assets_details'],
+                'Declaration' => ['declaration_accepted', 'signature_name', 'signature_date'],
+            ],
+            'visitor' => [
+                'Identity' => ['other_names', 'gender', 'dob', 'country_of_birth', 'place_of_birth', 'country_of_citizenship', 'passport_number', 'passport_expiry', 'other_citizenships', 'national_id', 'partnership_status', 'current_address', 'town_city', 'region', 'postcode'],
+                'NZ Immigration History' => ['current_country', 'previous_nz_visa', 'previous_nzeta', 'australian_pr', 'travelled_nz', 'last_nz_departure', 'over_24_months'],
+                'Character' => ['character_convicted', 'character_deported', 'character_investigation', 'character_visa_refused', 'lived_other_country_5y', 'previous_police_certificate'],
+                'Health' => ['health_tb', 'health_renal', 'health_hospital', 'health_residential', 'health_pregnant', 'previous_xray', 'previous_inz1007', 'inz_requested_medical'],
+                'Education' => ['has_tertiary', 'qualification_duration', 'qualification_name', 'qualification_completed', 'education_provider'],
+                'Current Employment' => ['currently_working', 'current_job_title', 'current_job_start', 'current_job_finish', 'current_job_country', 'current_job_region', 'current_employer_name', 'current_employer_phone', 'current_employer_email', 'current_job_duties', 'current_employer_address'],
+                'Travel Plan' => ['purpose_of_visit', 'intended_stay_length', 'intended_from', 'intended_to', 'has_leave_permit', 'multi_entry_plans'],
+                'Travel Funds' => ['travel_funds_description', 'can_provide_statements', 'has_other_assets', 'other_assets_details'],
+                'Declaration' => ['declaration_accepted', 'signature_name', 'signature_date'],
+            ],
+            'family' => [
+                'Identity' => ['other_names', 'gender', 'dob', 'partnership_status', 'country_of_birth', 'place_of_birth', 'country_of_citizenship', 'other_citizenships', 'national_id'],
+                'NZ Immigration' => ['current_country', 'previous_nz_visa', 'current_address'],
+                'Visa Details' => ['applying_as', 'visa_type', 'partner_living_together', 'partner_12_months', 'partner_same_period', 'partner_close_relatives', 'child_dependent'],
+                'Character' => ['character_convicted', 'character_removed', 'character_investigation', 'character_visa_refused', 'lived_other_country_5y', 'previous_police_certificate'],
+                'Health' => ['health_tb', 'health_renal', 'health_hospital', 'health_residential', 'health_pregnant', 'previous_xray', 'previous_medical_cert', 'countries_visited_3m'],
+                'Work History' => ['currently_working', 'current_employer_name', 'current_occupation', 'current_employer_phone', 'current_employer_email', 'current_start', 'current_end', 'current_employer_address'],
+                'Contacts & Declaration' => ['nz_contacts', 'declaration_accepted', 'signature_name', 'signature_date'],
+            ],
+            default => [],
+        };
+    }
+
+    /** Friendly label for an intake column (overrides where headline reads poorly). */
+    private function intakeFieldLabel(string $col): string
+    {
+        static $labels = [
+            'dob' => 'Date of Birth',
+            'nationality' => 'Nationality',
+            'national_id' => 'National ID',
+            'country_of_citizenship' => 'Country of Citizenship',
+            'other_citizenships' => 'Other Citizenships',
+            'current_address' => 'Current Physical Address',
+            'overseas_address' => 'Most Recent Overseas Address',
+            'issuing_country' => 'Passport Issuing Country',
+            'current_visa_type' => 'Current NZ Visa Type',
+            'current_visa_other' => 'Visa Type (Other)',
+            'current_visa_expiry' => 'Current Visa Expiry',
+            'nz_arrival_date' => 'NZ Arrival Date',
+            'previous_nz_visa' => 'Previously Applied for a NZ Visa',
+            'previous_nz_visa_details' => 'Previous NZ Visa Details',
+            'previous_nz_visa_history' => 'Previous NZ Visa History',
+            'previous_nzeta' => 'Previously Requested an NZeTA',
+            'australian_pr' => 'Holds Australian PR Visa',
+            'travelled_nz' => 'Ever Travelled to NZ',
+            'last_nz_departure' => 'Last Departure from NZ',
+            'over_24_months' => 'Total NZ Time 24 Months or More',
+            'employer_name' => 'Employer Name',
+            'employer_is_family' => 'Employer is a Family Member',
+            'employer_family_relation' => 'Relationship to Employer',
+            'self_employed' => 'Will be Self-Employed',
+            'job_start_date' => 'Job Start Date',
+            'hourly_rate' => 'Hourly Rate (NZD)',
+            'supports_dependent_children' => 'Supports Dependent Children',
+            'nz_skilled_years' => 'Years of NZ Skilled Work',
+            'total_skilled_years' => 'Total Years Skilled Work',
+            'career_summary' => 'Career Summary',
+            'nzqa_status' => 'NZQA (IQA) Assessment Status',
+            'nzqa_iqa_reference' => 'NZQA IQA Reference',
+            'english_evidence' => 'English Language Evidence',
+            'english_test_score' => 'English Test Score / Band',
+            'english_test_date' => 'English Test Date',
+            'include_family' => 'Family Members to Include',
+            'family_members' => 'Family Members',
+            'documents' => 'Document Checklist',
+            'document_files' => 'Uploaded Documents',
+            'character_convicted' => 'Convicted of an Offence',
+            'character_investigation' => 'Under Investigation / Facing Charges',
+            'character_deported' => 'Expelled / Deported / Refused Entry',
+            'character_removed' => 'Removed / Deported / Refused Entry',
+            'character_visa_refused' => 'Refused a Visa by Any Country',
+            'lived_other_country_5y' => 'Lived in Another Country 5+ Years',
+            'lived_other_country_details' => 'Country and Years',
+            'character_health_disclosure' => 'Character / Health Matters to Disclose',
+            'previous_police_certificate' => 'Previously Provided Police Certificate',
+            'health_tb' => 'Tuberculosis',
+            'health_renal' => 'Receiving Renal Dialysis',
+            'health_hospital' => 'Receiving Hospital Care',
+            'health_residential' => 'Receiving Residential Care',
+            'health_pregnant' => 'Pregnant',
+            'previous_xray' => 'Previously Provided Chest X-ray',
+            'previous_inz1007' => 'Previously Provided General Medical (INZ 1007)',
+            'previous_medical_cert' => 'Previously Provided Medical Certificate',
+            'inz_requested_medical' => 'INZ Requested Medical Info Last Time',
+            'countries_visited_3m' => 'Countries Visited / Lived 3+ Months',
+            'currently_working' => 'Currently Working',
+            'current_job_title' => 'Job Title',
+            'current_occupation' => 'Occupation / Job Title',
+            'current_job_duties' => 'Detailed Job Duties',
+            'current_job_start' => 'Employment Start Date',
+            'current_job_finish' => 'Employment Finish Date',
+            'current_start' => 'Start Date',
+            'current_end' => 'End Date',
+            'current_job_country' => 'Country of Work',
+            'current_job_region' => 'Region of Work',
+            'current_employer_name' => 'Organisation Name',
+            'current_employer_address' => 'Employer Address',
+            'current_employer_phone' => 'Employer Phone',
+            'current_employer_email' => 'Employer Email',
+            'military_compulsory' => 'Military Service Was Compulsory',
+            'military_undertaken' => 'Ever Undertaken Military Service',
+            'military_details' => 'Military Service Details',
+            'travelled_internationally' => 'Ever Travelled Internationally',
+            'has_tertiary' => 'Any Tertiary Education',
+            'qualification_duration' => 'Duration of Study',
+            'qualification_name' => 'Qualification and Major',
+            'qualification_completed' => 'Qualification Completed',
+            'education_provider' => 'Education Provider',
+            'programmes' => 'Programme(s) to Study',
+            'study_period_from' => 'Intended Study From',
+            'study_period_to' => 'Intended Study To',
+            'school_name' => 'School / Institution',
+            'has_offer' => 'Has an Offer of Place',
+            'has_enough_funds' => 'Has Enough Funds',
+            'tuition_fee_nzd' => 'Tuition Fee (NZD)',
+            'living_expenses_nzd' => 'Living Expenses (NZD)',
+            'has_sponsor' => 'Has a Sponsor',
+            'sponsor_relationship' => 'Relationship to Sponsor',
+            'sponsor_income_source' => "Sponsor's Source of Income",
+            'can_provide_statements' => 'Can Provide 6 Months Bank Statements',
+            'has_other_assets' => 'Has Other Assets',
+            'other_assets_details' => 'Assets — Type and Value',
+            'purpose_of_visit' => 'Purpose of Visit',
+            'intended_stay_length' => 'Intended Length of Stay',
+            'intended_from' => 'Intended Arrival',
+            'intended_to' => 'Intended Departure',
+            'has_leave_permit' => 'Has a Leave Permit',
+            'multi_entry_plans' => 'Multi-Entry Plans',
+            'travel_funds_description' => 'Travel Funds',
+            'applying_as' => 'Applying As',
+            'visa_type' => 'Visa Type Applying For',
+            'partner_living_together' => 'Currently Living Together',
+            'partner_12_months' => 'Living Together 12 Months Total',
+            'partner_same_period' => 'Both in NZ Same Period',
+            'partner_close_relatives' => 'Are Close Relatives',
+            'child_dependent' => 'Child is Dependent (19 or Under)',
+            'nz_contacts' => 'Contacts in New Zealand',
+            'declaration_accepted' => 'Declaration Accepted',
+            'signature_name' => 'Applicant Name (Printed)',
+            'signature_date' => 'Date Signed',
+            'job_title' => 'Job Title',
+            'employment_start' => 'Employment Start Date',
+            'employment_type' => 'Employment Type',
+            'highest_qualification' => 'Highest Qualification',
+            'institution_name' => 'Institution Name',
+            'country_of_study' => 'Country of Study',
+            'other_notes' => 'Other Notes for Adviser',
+            'current_country' => "Country When Application is Submitted",
+            'partnership_status' => 'Partnership Status',
+            'other_names' => 'Other Names Used',
+            'country_of_birth' => 'Country of Birth',
+            'place_of_birth' => 'Place of Birth',
+            'passport_number' => 'Passport Number',
+            'passport_expiry' => 'Passport Expiry',
+            'town_city' => 'Town / City',
+            'postcode' => 'Post Code',
+        ];
+
+        return $labels[$col] ?? \Illuminate\Support\Str::headline($col);
     }
 
     /** Humanise a single intake attribute value for display. */
