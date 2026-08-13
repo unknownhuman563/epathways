@@ -1221,6 +1221,9 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/intakes/{type}/{id}/data', [ImmigrationController::class, 'intakeData'])
                 ->where(['type' => 'resident|work|student|visitor|family', 'id' => '[0-9]+'])
                 ->name('intakes.data');
+            // Free-assessment (FA-… Lead) submission JSON for the "Open" modal.
+            Route::get('/assessments/free/{id}/data', [ImmigrationController::class, 'freeAssessmentData'])
+                ->where(['id' => '[0-9]+'])->name('assessments.free.data');
             // Visa Information Form export — A4 PDF download, an inline HTML
             // preview (for the download modal), and an editable Word (.doc).
             Route::get('/intakes/{type}/{id}/pdf', [ImmigrationController::class, 'downloadIntakePdf'])

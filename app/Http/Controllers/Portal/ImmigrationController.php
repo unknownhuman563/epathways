@@ -1622,6 +1622,13 @@ class ImmigrationController extends Controller
                 ->concat($visitor->map(fn ($r) => $normalize($r, 'visitor', $aVisitor->get($r->id), $rvVisitor->get($r->id))))
                 ->concat($family->map(fn ($r) => $normalize($r, 'family', $aFamily->get($r->id), $rvFamily->get($r->id))));
 
+            // Free-assessment submissions live on the Lead (FA-…) with the whole
+            // immigration questionnaire stored as JSON columns — surface them here
+            // too so an adviser reviews them alongside the visa intakes.
+            $free = Lead::whereIn('source', ['free-assessment', 'education-enrolment'])
+                ->latest()->limit(200)->get();
+            $rows = $rows->concat($free->map(fn ($l) => $this->freeAssessmentRow($l)));
+
             $intakes = $rows->sortByDesc('created_at')->values();
 
             return ['intakes' => $intakes];
@@ -1640,6 +1647,146 @@ class ImmigrationController extends Controller
      * every visa type. The frontend reads the intake row + its paired
      * Assessment + Booking and renders a clean property-row layout.
      */
+    /** Assessments-list row for a free-assessment Lead (visa_type "free"). */
+    private function freeAssessmentRow(Lead $l): array
+    {
+        [$sections] = $this->freeAssessmentSections($l);
+        $all = collect($sections)->flatMap(fn ($s) => $s['fields']);
+        $total = $all->count();
+        $filled = $all->where('provided', true)->count();
+        $pct = $total > 0 ? (int) round($filled / $total * 100) : 0;
+        $tier = $pct >= 80 ? 'ready' : ($pct >= 55 ? 'minor' : 'needs_info');
+
+        // A half-filled assessment is saved as a Draft; only the final submit
+        // flips it to Submitted. The frontend buckets Draft vs Submitted off
+        // journey.submitted, so it must reflect the real status — not always true.
+        $isDraft = $l->status === 'Draft';
+
+        return [
+            'id' => $l->id,
+            'assessment_id' => null,
+            'intake_id' => $l->lead_id,
+            'visa_type' => 'free',
+            'name' => trim("{$l->first_name} {$l->last_name}") ?: 'Unknown',
+            'email' => $l->email,
+            'phone' => $l->phone,
+            'status' => $l->status,
+            'created_at' => $l->created_at,
+            'readiness' => $tier,
+            'readiness_pct' => $pct,
+            'readiness_reviewed' => false,
+            'extra' => null,
+            'can_convert' => false,
+            'detail_url' => "/admin/leads/{$l->id}",
+            'data_url' => "/portal/immigration/assessments/free/{$l->id}/data",
+            'journey' => [
+                'submitted' => ! $isDraft,
+                'submitted_at' => $isDraft ? null : $l->created_at,
+                'triaged' => $l->status !== null && ! in_array($l->status, ['Draft', 'Submitted', 'submitted', 'New', 'new'], true),
+                'converted' => (bool) $l->is_immigration_case,
+                'assessment_status' => null,
+            ],
+        ];
+    }
+
+    /**
+     * Build the free-assessment Lead's stored questionnaire into official-form
+     * sections. Returns [sections, filled/total via the caller].
+     *
+     * @return array{0: array<int, array{title:string,fields:array}>}
+     */
+    private function freeAssessmentSections(Lead $l): array
+    {
+        $field = function (string $label, $val) {
+            $v = $this->formatIntakeValue($val);
+            $prov = ! ($v === null || $v === '');
+
+            return ['key' => \Illuminate\Support\Str::slug($label), 'label' => $label, 'value' => $prov ? $v : '—', 'provided' => $prov];
+        };
+        // Flatten a stored JSON group into label/value fields (skips nested objects).
+        $group = function ($arr) {
+            $arr = is_array($arr) ? $arr : [];
+            $out = [];
+            foreach ($arr as $k => $v) {
+                if (is_array($v) && ! array_is_list($v)) {
+                    continue;
+                }
+                $vv = $this->formatIntakeValue($v);
+                $prov = ! ($vv === null || $vv === '');
+                $out[] = ['key' => $k, 'label' => \Illuminate\Support\Str::headline($k), 'value' => $prov ? $vv : '—', 'provided' => $prov];
+            }
+
+            return $out;
+        };
+
+        $edu = is_array($l->education_notes) ? $l->education_notes : [];
+
+        $sections = array_values(array_filter([
+            ['title' => 'Personal details', 'fields' => array_filter([
+                $field('Date of birth', optional($l->dob)->toDateString()),
+                $field('Gender', $l->gender),
+                $field('Marital status', $l->marital_status),
+                $field('Country of birth', $l->country_of_birth),
+                $field('Place of birth', $l->place_of_birth),
+                $field('Citizenship', $l->citizenship),
+                $field('Residence city', $l->residence_city),
+                $field('Residence country', $l->residence_country),
+                $field('Has passport', $l->has_passport),
+                $field('Passport number', $l->passport_number),
+                $field('Passport expiry', optional($l->passport_expiry)->toDateString()),
+            ])],
+            ['title' => 'Study & Education', 'fields' => $group($edu)],
+            ['title' => 'Immigration & Travel', 'fields' => $group($l->immigration_info)],
+            ['title' => 'Character', 'fields' => $group($l->character_info)],
+            ['title' => 'Health', 'fields' => $group($l->health_info)],
+            ['title' => 'Financial', 'fields' => array_merge($group($l->financial_info), $group($l->source_of_funds_info))],
+            ['title' => 'Additional', 'fields' => array_merge($group($l->nz_contacts_info), $group($l->military_info), $group($l->home_ties_info))],
+        ], fn ($s) => ! empty($s['fields'])));
+
+        // Re-index the Personal details fields (array_filter left holes).
+        foreach ($sections as &$s) {
+            $s['fields'] = array_values($s['fields']);
+        }
+        unset($s);
+
+        return [$sections];
+    }
+
+    /** JSON of a free-assessment Lead's submission for the "Open" modal. */
+    public function freeAssessmentData($id)
+    {
+        $l = Lead::findOrFail($id);
+        [$sections] = $this->freeAssessmentSections($l);
+
+        $all = collect($sections)->flatMap(fn ($s) => $s['fields']);
+        $total = $all->count();
+        $filled = $all->where('provided', true)->count();
+        $pct = $total > 0 ? (int) round($filled / $total * 100) : 0;
+        if ($pct >= 80) {
+            [$verdict, $tone, $rec] = ['Ready to work up', 'emerald', 'The questionnaire is largely complete — good to begin the adviser work-up.'];
+        } elseif ($pct >= 55) {
+            [$verdict, $tone, $rec] = ['Nearly there', 'teal', 'Most of the questionnaire is answered. Follow up on the remaining gaps.'];
+        } elseif ($pct >= 30) {
+            [$verdict, $tone, $rec] = ['Incomplete', 'amber', 'Several sections are blank. Follow up with the applicant.'];
+        } else {
+            [$verdict, $tone, $rec] = ['Very sparse', 'gray', 'Only a little was submitted.'];
+        }
+
+        return response()->json([
+            'name' => trim("{$l->first_name} {$l->last_name}") ?: 'Applicant',
+            'email' => $l->email,
+            'phone' => $l->phone,
+            'reference' => $l->lead_id,
+            'visa_label' => 'Free Assessment',
+            'submitted_at' => optional($l->created_at)->toIso8601String(),
+            'detail_url' => "/admin/leads/{$l->id}",
+            'sections' => $sections,
+            'flags' => [],
+            'readiness' => ['filled' => $filled, 'total' => $total, 'pct' => $pct, 'verdict' => $verdict, 'tone' => $tone, 'recommendation' => $rec],
+            'ai_review' => null,
+        ]);
+    }
+
     /**
      * The client's submitted visa-interest form as JSON — every filled field,
      * humanised — for the Assessments "Open" modal. Read-only; no side effects.
