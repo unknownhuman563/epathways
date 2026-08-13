@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { Head, Link, router } from "@inertiajs/react";
-import { Clock, ArrowLeft, Settings, CheckCircle2, CircleDashed, X, Save, Search, Download } from "lucide-react";
+import { Clock, ArrowLeft, Settings, CheckCircle2, CircleDashed, X, Save, Search, Download, History, ArrowRight, Sparkles } from "lucide-react";
 
 // Known teams → their timezone. Picking a team auto-fills the tz so PH/NZ
 // staff can't mismatch them. Add teams here as they're onboarded.
@@ -170,9 +170,80 @@ function ReportModal({ person, onClose }) {
     );
 }
 
+// Audit trail for one staffer's DTR setup — every change to their schedule /
+// timezone / hours, with before → after and who made it.
+function HistoryModal({ person, onClose }) {
+    const [state, setState] = useState({ loading: true, history: [] });
+
+    React.useEffect(() => {
+        let alive = true;
+        fetch(`/admin/dtr/history/${person.id}`, { headers: { Accept: "application/json" } })
+            .then((r) => r.json())
+            .then((d) => { if (alive) setState({ loading: false, history: d.history || [] }); })
+            .catch(() => { if (alive) setState({ loading: false, history: [] }); });
+        return () => { alive = false; };
+    }, [person.id]);
+
+    const val = (v) => (v === null || v === undefined || v === "" ? <span className="text-gray-300 italic">empty</span> : <span className="font-semibold text-gray-800">{v}</span>);
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-start justify-center p-4 sm:p-8 overflow-y-auto bg-black/40 backdrop-blur-sm" onClick={onClose}>
+            <div className="w-full max-w-2xl bg-white rounded-2xl shadow-2xl overflow-hidden my-8" onClick={(e) => e.stopPropagation()}>
+                <div className="px-6 py-4 border-b border-gray-100 bg-gradient-to-br from-gray-50 to-white flex items-start justify-between">
+                    <div>
+                        <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-gray-400 mb-1">DTR change history</p>
+                        <h2 className="text-lg font-bold text-gray-900">{person.name}</h2>
+                        <p className="text-sm text-gray-500 mt-0.5">Every change to their schedule &amp; setup, for audit.</p>
+                    </div>
+                    <button onClick={onClose} className="p-2 rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-700"><X size={18} /></button>
+                </div>
+                <div className="p-6 max-h-[70vh] overflow-y-auto">
+                    {state.loading ? (
+                        <div className="py-12 text-center text-sm text-gray-400">Loading history…</div>
+                    ) : state.history.length === 0 ? (
+                        <div className="py-12 text-center text-sm text-gray-400">No changes recorded yet.</div>
+                    ) : (
+                        <ol className="relative border-l-2 border-gray-100 ml-2 space-y-6">
+                            {state.history.map((h) => (
+                                <li key={h.id} className="ml-6">
+                                    <span className={`absolute -left-[9px] flex items-center justify-center w-4 h-4 rounded-full ring-4 ring-white ${h.action === "created" ? "bg-[#436235]" : "bg-amber-400"}`} />
+                                    <div className="flex flex-wrap items-center gap-2 mb-2">
+                                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wide ${h.action === "created" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
+                                            {h.action === "created" ? <Sparkles size={10} /> : <History size={10} />} {h.action}
+                                        </span>
+                                        <span className="text-xs font-semibold text-gray-700">{h.by}</span>
+                                        <span className="text-[11px] text-gray-400">· {h.at}</span>
+                                    </div>
+                                    <div className="rounded-xl border border-gray-100 bg-gray-50/60 divide-y divide-gray-100 overflow-hidden">
+                                        {h.changes.map((c, i) => (
+                                            <div key={i} className="px-3 py-2 flex flex-wrap items-center gap-2 text-xs">
+                                                <span className="min-w-[110px] font-bold text-gray-500">{c.field}</span>
+                                                {h.action === "created" ? (
+                                                    val(c.to)
+                                                ) : (
+                                                    <span className="inline-flex items-center gap-2">
+                                                        <span className="line-through text-gray-400">{c.from ?? "empty"}</span>
+                                                        <ArrowRight size={12} className="text-gray-300" />
+                                                        {val(c.to)}
+                                                    </span>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+                                </li>
+                            ))}
+                        </ol>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+}
+
 export default function DtrManage({ staff = [] }) {
     const [editing, setEditing] = useState(null);
     const [reportFor, setReportFor] = useState(null);
+    const [historyFor, setHistoryFor] = useState(null);
     const [q, setQ] = useState("");
 
     const filtered = useMemo(() => {
@@ -252,6 +323,11 @@ export default function DtrManage({ staff = [] }) {
                                         <td className="px-3 py-3 text-right">
                                             <div className="inline-flex items-center gap-2 justify-end">
                                                 {ready && (
+                                                    <button onClick={() => setHistoryFor(s)} title="Change history" className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors">
+                                                        <History size={13} /> History
+                                                    </button>
+                                                )}
+                                                {ready && (
                                                     <button onClick={() => setReportFor(s)} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors">
                                                         <Download size={13} /> Report
                                                     </button>
@@ -275,6 +351,7 @@ export default function DtrManage({ staff = [] }) {
 
             {editing && <SetupModal person={editing} onClose={() => setEditing(null)} />}
             {reportFor && <ReportModal person={reportFor} onClose={() => setReportFor(null)} />}
+            {historyFor && <HistoryModal person={historyFor} onClose={() => setHistoryFor(null)} />}
         </div>
     );
 }

@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { Head, Link, router } from "@inertiajs/react";
-import { ArrowLeft, ChevronLeft, ChevronRight, ChevronDown, CheckCircle2, CircleDashed, CalendarDays, Clock, AlertTriangle, Download } from "lucide-react";
+import { ArrowLeft, ChevronLeft, ChevronRight, ChevronDown, CheckCircle2, CircleDashed, CalendarDays, Clock, AlertTriangle, Download, Pencil, Trash2, Plus, X, Save } from "lucide-react";
 
 const DOW = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
 const pad = (n) => String(n).padStart(2, "0");
@@ -71,19 +71,68 @@ function ReportCalendar({ date, today, dayCounts, staffCount, onPick }) {
     );
 }
 
-// One staffer's row — expands to show their full report for the day.
+// One staffer's row — expands to show their full report for the day, with
+// admin edit / delete of that day's record.
 function RosterRow({ r, date }) {
     const [open, setOpen] = useState(false);
+    const [editing, setEditing] = useState(false);
+    const [saving, setSaving] = useState(false);
+    const [form, setForm] = useState(null);
     const filled = (r.tasks || []).filter((t) => (t.task || "").trim() || (t.pending || "").trim());
+
+    const startEdit = () => {
+        setForm({
+            time_in: r.time_in || "",
+            time_out: r.time_out || "",
+            remarks: r.remarks || "",
+            tasks: (r.tasks || []).length
+                ? (r.tasks || []).map((t) => ({ task: t.task || "", pending: t.pending || "", pending_done: !!t.pending_done }))
+                : [{ task: "", pending: "", pending_done: false }],
+        });
+        setEditing(true);
+        setOpen(true);
+    };
+    const setTask = (i, key, val) => setForm((f) => ({ ...f, tasks: f.tasks.map((t, j) => (j === i ? { ...t, [key]: val } : t)) }));
+    const addTask = () => setForm((f) => ({ ...f, tasks: [...f.tasks, { task: "", pending: "", pending_done: false }] }));
+    const removeTask = (i) => setForm((f) => ({ ...f, tasks: f.tasks.filter((_, j) => j !== i) }));
+
+    const save = () => {
+        setSaving(true);
+        router.post("/admin/dtr/entry", {
+            user_id: r.user_id,
+            work_date: date,
+            time_in: form.time_in || null,
+            time_out: form.time_out || null,
+            remarks: form.remarks || null,
+            tasks: form.tasks.filter((t) => (t.task || "").trim() || (t.pending || "").trim()),
+        }, {
+            preserveScroll: true,
+            onSuccess: () => setEditing(false),
+            onFinish: () => setSaving(false),
+        });
+    };
+
+    const destroy = () => {
+        if (!window.confirm(`Delete ${r.name}'s DTR record for this day? This cannot be undone.`)) return;
+        router.delete("/admin/dtr/entry", {
+            data: { user_id: r.user_id, work_date: date },
+            preserveScroll: true,
+            onSuccess: () => { setEditing(false); setOpen(false); },
+        });
+    };
+
+    const hasRecord = r.submitted || r.time_in || (r.tasks || []).length > 0;
     const chip = r.on_leave
         ? <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-indigo-100 text-indigo-700">On leave · {r.on_leave}</span>
         : r.submitted
             ? <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-100 text-emerald-700"><CheckCircle2 size={11} /> Submitted</span>
             : <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-100 text-amber-700"><CircleDashed size={11} /> Not submitted</span>;
 
+    const inputCls = "w-full rounded-lg border border-gray-200 px-2.5 py-1.5 text-sm text-gray-800 focus:border-[#436235] focus:ring-1 focus:ring-[#436235] outline-none";
+
     return (
         <>
-            <tr onClick={() => (r.submitted || r.time_in) && setOpen((o) => !o)} className={`${(r.submitted || r.time_in) ? "cursor-pointer hover:bg-gray-50/60" : ""}`}>
+            <tr onClick={() => hasRecord && !editing && setOpen((o) => !o)} className={`${hasRecord && !editing ? "cursor-pointer hover:bg-gray-50/60" : ""}`}>
                 <td className="px-4 py-3">
                     <p className="font-semibold text-gray-800">{r.name}</p>
                     <p className="text-[11px] text-gray-400">{r.team}</p>
@@ -97,37 +146,98 @@ function RosterRow({ r, date }) {
                         : <span className="text-gray-300">—</span>}
                 </td>
                 <td className="px-3 py-3 tabular-nums text-gray-600">{r.tasks_count}</td>
-                <td className="px-3 py-3 text-right text-gray-300">{(r.submitted || r.time_in) ? <ChevronDown size={14} className={`transition-transform ${open ? "rotate-180" : ""}`} /> : null}</td>
+                <td className="px-3 py-3">
+                    <div className="flex items-center justify-end gap-1">
+                        <button onClick={(e) => { e.stopPropagation(); startEdit(); }} title={hasRecord ? "Edit this day" : "Add a record for this day"} className="p-1.5 rounded-md text-gray-400 hover:text-[#436235] hover:bg-emerald-50 transition-colors"><Pencil size={14} /></button>
+                        {hasRecord && (
+                            <button onClick={(e) => { e.stopPropagation(); destroy(); }} title="Delete this day" className="p-1.5 rounded-md text-gray-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"><Trash2 size={14} /></button>
+                        )}
+                        {hasRecord
+                            ? <ChevronDown size={14} className={`text-gray-300 transition-transform ${open ? "rotate-180" : ""}`} />
+                            : <span className="w-3.5" />}
+                    </div>
+                </td>
             </tr>
             {open && (
                 <tr>
                     <td colSpan={7} className="p-0 bg-gray-50/50 border-t border-gray-100">
                         <div className="p-5 space-y-4">
-                            <div className="rounded-xl border border-gray-200 overflow-hidden bg-white">
-                                <div className="grid grid-cols-[36px_1fr_1fr] bg-gray-50 border-b border-gray-200 text-[10px] font-bold uppercase tracking-wider text-gray-500">
-                                    <div className="px-2 py-2 text-center">#</div>
-                                    <div className="px-3 py-2 border-l border-gray-200">Task completed</div>
-                                    <div className="px-3 py-2 border-l border-gray-200">Pending / for tomorrow</div>
-                                </div>
-                                {filled.length === 0 ? (
-                                    <div className="px-3 py-4 text-center text-xs text-gray-400">No tasks logged.</div>
-                                ) : filled.map((t, i) => (
-                                    <div key={i} className="grid grid-cols-[36px_1fr_1fr] border-b border-gray-100 last:border-b-0">
-                                        <div className="flex items-center justify-center text-[11px] text-gray-400 tabular-nums">{i + 1}</div>
-                                        <div className="px-3 py-2 text-sm text-gray-800 border-l border-gray-100">{t.task || <span className="text-gray-300">—</span>}</div>
-                                        <div className="px-3 py-2 text-sm text-gray-800 border-l border-gray-100">{t.pending || <span className="text-gray-300">—</span>}</div>
+                            {editing ? (
+                                <div className="space-y-4">
+                                    <div className="flex flex-wrap items-end gap-4">
+                                        <div>
+                                            <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1">Time in</label>
+                                            <input type="time" value={form.time_in} onChange={(e) => setForm((f) => ({ ...f, time_in: e.target.value }))} className={inputCls} />
+                                        </div>
+                                        <div>
+                                            <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1">Time out</label>
+                                            <input type="time" value={form.time_out} onChange={(e) => setForm((f) => ({ ...f, time_out: e.target.value }))} className={inputCls} />
+                                        </div>
                                     </div>
-                                ))}
-                            </div>
-                            <div className="flex items-end justify-between gap-3">
-                                <div>
-                                    <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1">Remarks</p>
-                                    <p className="text-sm text-gray-700">{r.remarks || <span className="text-gray-300">—</span>}</p>
+                                    <div className="rounded-xl border border-gray-200 overflow-hidden bg-white">
+                                        <div className="grid grid-cols-[36px_1fr_1fr_36px] bg-gray-50 border-b border-gray-200 text-[10px] font-bold uppercase tracking-wider text-gray-500">
+                                            <div className="px-2 py-2 text-center">#</div>
+                                            <div className="px-3 py-2 border-l border-gray-200">Task completed</div>
+                                            <div className="px-3 py-2 border-l border-gray-200">Pending / for tomorrow</div>
+                                            <div className="border-l border-gray-200" />
+                                        </div>
+                                        {form.tasks.map((t, i) => (
+                                            <div key={i} className="grid grid-cols-[36px_1fr_1fr_36px] border-b border-gray-100 last:border-b-0 items-center">
+                                                <div className="flex items-center justify-center text-[11px] text-gray-400 tabular-nums">{i + 1}</div>
+                                                <div className="px-2 py-1.5 border-l border-gray-100"><input value={t.task} onChange={(e) => setTask(i, "task", e.target.value)} placeholder="Task completed" className={inputCls} /></div>
+                                                <div className="px-2 py-1.5 border-l border-gray-100"><input value={t.pending} onChange={(e) => setTask(i, "pending", e.target.value)} placeholder="Pending / for tomorrow" className={inputCls} /></div>
+                                                <div className="flex items-center justify-center border-l border-gray-100">
+                                                    <button onClick={() => removeTask(i)} className="p-1 rounded text-gray-300 hover:text-rose-600 hover:bg-rose-50"><X size={14} /></button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                        <button onClick={addTask} className="w-full flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-semibold text-[#436235] hover:bg-emerald-50 transition-colors"><Plus size={13} /> Add row</button>
+                                    </div>
+                                    <div>
+                                        <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1">Remarks</label>
+                                        <textarea value={form.remarks} onChange={(e) => setForm((f) => ({ ...f, remarks: e.target.value }))} rows={2} className={inputCls} />
+                                    </div>
+                                    <div className="flex items-center justify-end gap-2">
+                                        <button onClick={() => setEditing(false)} disabled={saving} className="px-4 py-2 text-xs font-bold text-gray-600 rounded-lg hover:bg-gray-100 transition-colors disabled:opacity-50">Cancel</button>
+                                        <button onClick={save} disabled={saving} className="inline-flex items-center gap-2 px-4 py-2 bg-[#436235] text-white text-xs font-bold rounded-lg hover:bg-[#375029] transition-colors disabled:opacity-50">
+                                            <Save size={13} /> {saving ? "Saving…" : "Save changes"}
+                                        </button>
+                                    </div>
                                 </div>
-                                <a href={`/dtr/report?date=${date}&user=${r.user_id}`} className="inline-flex items-center gap-2 px-4 py-2 bg-[#436235] text-white text-xs font-bold rounded-lg hover:bg-[#375029] transition-colors shrink-0">
-                                    <Download size={13} /> Generate report
-                                </a>
-                            </div>
+                            ) : (
+                                <>
+                                    <div className="rounded-xl border border-gray-200 overflow-hidden bg-white">
+                                        <div className="grid grid-cols-[36px_1fr_1fr] bg-gray-50 border-b border-gray-200 text-[10px] font-bold uppercase tracking-wider text-gray-500">
+                                            <div className="px-2 py-2 text-center">#</div>
+                                            <div className="px-3 py-2 border-l border-gray-200">Task completed</div>
+                                            <div className="px-3 py-2 border-l border-gray-200">Pending / for tomorrow</div>
+                                        </div>
+                                        {filled.length === 0 ? (
+                                            <div className="px-3 py-4 text-center text-xs text-gray-400">No tasks logged.</div>
+                                        ) : filled.map((t, i) => (
+                                            <div key={i} className="grid grid-cols-[36px_1fr_1fr] border-b border-gray-100 last:border-b-0">
+                                                <div className="flex items-center justify-center text-[11px] text-gray-400 tabular-nums">{i + 1}</div>
+                                                <div className="px-3 py-2 text-sm text-gray-800 border-l border-gray-100">{t.task || <span className="text-gray-300">—</span>}</div>
+                                                <div className="px-3 py-2 text-sm text-gray-800 border-l border-gray-100">{t.pending || <span className="text-gray-300">—</span>}</div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    <div className="flex items-end justify-between gap-3">
+                                        <div>
+                                            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1">Remarks</p>
+                                            <p className="text-sm text-gray-700">{r.remarks || <span className="text-gray-300">—</span>}</p>
+                                        </div>
+                                        <div className="flex items-center gap-2 shrink-0">
+                                            <button onClick={startEdit} className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 text-xs font-bold rounded-lg hover:border-[#436235] hover:text-[#436235] transition-colors">
+                                                <Pencil size={13} /> Edit
+                                            </button>
+                                            <a href={`/dtr/report?date=${date}&user=${r.user_id}`} className="inline-flex items-center gap-2 px-4 py-2 bg-[#436235] text-white text-xs font-bold rounded-lg hover:bg-[#375029] transition-colors">
+                                                <Download size={13} /> Generate report
+                                            </a>
+                                        </div>
+                                    </div>
+                                </>
+                            )}
                         </div>
                     </td>
                 </tr>

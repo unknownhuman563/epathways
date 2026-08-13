@@ -141,7 +141,10 @@ Route::middleware('auth')->group(function () {
 
     Route::get('/admin/dtr', [\App\Http\Controllers\DtrController::class, 'show'])->name('admin.dtr');
     Route::get('/admin/dtr/manage', [\App\Http\Controllers\DtrController::class, 'manage'])->name('admin.dtr.manage');
+    Route::get('/admin/dtr/history/{user}', [\App\Http\Controllers\DtrController::class, 'settingHistory'])->name('admin.dtr.history');
     Route::get('/admin/dtr/reports', [\App\Http\Controllers\DtrController::class, 'reports'])->name('admin.dtr.reports');
+    Route::post('/admin/dtr/entry', [\App\Http\Controllers\DtrController::class, 'adminUpdateEntry'])->name('admin.dtr.entry.update');
+    Route::delete('/admin/dtr/entry', [\App\Http\Controllers\DtrController::class, 'adminDeleteEntry'])->name('admin.dtr.entry.delete');
     Route::get('/admin/dtr/summary', [\App\Http\Controllers\DtrController::class, 'summary'])->name('admin.dtr.summary');
     Route::get('/portal/sales/dtr', [\App\Http\Controllers\DtrController::class, 'show'])->name('portal.sales.dtr');
     Route::get('/portal/education/dtr', [\App\Http\Controllers\DtrController::class, 'show'])->name('portal.education.dtr');
