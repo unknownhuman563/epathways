@@ -932,6 +932,9 @@ Route::middleware(['auth'])->group(function () {
     // tabs. Replaces the two separate sidebar entries.
     Route::middleware('portal:admin,education,immigration')->group(function () {
         Route::get('/admin/user-reviews', [UserReviewController::class, 'adminUnifiedIndex'])->name('admin.user-reviews');
+        // Interim manual import of a Google review (until the Business Profile
+        // API access is approved). Same moderation queue as everything else.
+        Route::post('/admin/user-reviews/google', [UserReviewController::class, 'adminStoreGoogle'])->name('admin.user-reviews.google');
     });
 
     // Department portals — each staff member reaches only their own portal

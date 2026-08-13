@@ -138,6 +138,19 @@ return [
         'default_duration' => (int) env('GOOGLE_CALENDAR_DURATION_MIN', 30),
     ],
 
+    // Google Business Profile — pulls our own Google reviews into the site's
+    // moderation queue via the My Business API v4. Dormant until credentials are
+    // set (access is gated behind Google's approval; until then reviews are
+    // imported by hand). OAuth uses a one-time refresh token from an account
+    // that manages the Business Profile; account/location identify the listing.
+    'google_business' => [
+        'client_id' => env('GOOGLE_BUSINESS_CLIENT_ID'),
+        'client_secret' => env('GOOGLE_BUSINESS_CLIENT_SECRET'),
+        'refresh_token' => env('GOOGLE_BUSINESS_REFRESH_TOKEN'),
+        'account_id' => env('GOOGLE_BUSINESS_ACCOUNT_ID'),
+        'location_id' => env('GOOGLE_BUSINESS_LOCATION_ID'),
+    ],
+
     // n8n workflow that powers the Social MVP (stats, variant generation,
     // approve / reject / schedule, accounts, quick posts). Proxied
     // server-side by AiAdsWebhookController so OpenRouter / Zernio keys
