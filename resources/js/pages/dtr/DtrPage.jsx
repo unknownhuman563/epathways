@@ -701,7 +701,9 @@ const compute = (timeIn, timeOut, s) => {
         net = Math.round((worked >= brkAfter ? worked - brk : worked) * 100) / 100;
         variance = Math.round((net - std) * 100) / 100;
     }
-    if (inM != null && s?.sched_in) {
+    if (s?.schedule_type === "flexi") {
+        attendance = inM != null ? "Flexi" : null;
+    } else if (inM != null && s?.sched_in) {
         attendance = inM <= toMinutes(s.sched_in) + grace ? "On Time" : "Late";
     }
     return { net, variance, attendance };
@@ -854,7 +856,7 @@ function DayEditor({ setting, entry, date, isToday = false, carried = [] }) {
                     <div className="p-4">
                         <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1.5">Attendance</p>
                         {live.attendance
-                            ? <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-bold ${live.attendance === "Late" ? "bg-rose-100 text-rose-700" : "bg-emerald-100 text-emerald-700"}`}>{live.attendance === "Late" ? <AlertTriangle size={11} /> : <CheckCircle size={11} />} {live.attendance}</span>
+                            ? <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-bold ${live.attendance === "Late" ? "bg-rose-100 text-rose-700" : live.attendance === "Flexi" ? "bg-indigo-100 text-indigo-700" : "bg-emerald-100 text-emerald-700"}`}>{live.attendance === "Late" ? <AlertTriangle size={11} /> : live.attendance === "Flexi" ? <Clock size={11} /> : <CheckCircle size={11} />} {live.attendance}</span>
                             : <p className="text-lg font-bold text-gray-300">—</p>}
                     </div>
                     <div className="p-4">
@@ -1047,8 +1049,8 @@ function DailyRecord({ setting, entries, carried = [], leaves = [], leaveTypes =
                                         </td>
                                         <td className="px-3 py-2.5">
                                             {e.attendance ? (
-                                                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold ${e.attendance === "Late" ? "bg-rose-100 text-rose-700" : "bg-emerald-100 text-emerald-700"}`}>
-                                                    {e.attendance === "Late" ? <AlertTriangle size={10} /> : <CheckCircle size={10} />} {e.attendance}
+                                                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold ${e.attendance === "Late" ? "bg-rose-100 text-rose-700" : e.attendance === "Flexi" ? "bg-indigo-100 text-indigo-700" : "bg-emerald-100 text-emerald-700"}`}>
+                                                    {e.attendance === "Late" ? <AlertTriangle size={10} /> : e.attendance === "Flexi" ? <Clock size={10} /> : <CheckCircle size={10} />} {e.attendance}
                                                 </span>
                                             ) : <span className="text-gray-300">—</span>}
                                         </td>

@@ -45,8 +45,10 @@ function SetupModal({ person, onClose }) {
     const [f, setF] = useState({
         label: setting?.label || `${person.name} · DTR`,
         position: setting?.position || "",
+        employment_type: setting?.employment_type || "full_time",
         team: setting?.team || "",
         timezone: setting?.timezone || "Asia/Manila",
+        schedule_type: setting?.schedule_type || "fixed",
         sched_in: setting?.sched_in || "09:00",
         sched_out: setting?.sched_out || "18:00",
         break_hours: setting?.break_hours ?? 1,
@@ -55,6 +57,7 @@ function SetupModal({ person, onClose }) {
         grace_mins: setting?.grace_mins ?? 10,
         break_after: setting?.break_after ?? 6,
     });
+    const isFlexi = f.schedule_type === "flexi";
     const [saving, setSaving] = useState(false);
     const [otherTeam, setOtherTeam] = useState(!!setting?.team && !KNOWN_TEAMS.includes(setting.team));
     const set = (k) => (e) => setF((p) => ({ ...p, [k]: e.target.value }));
@@ -92,6 +95,12 @@ function SetupModal({ person, onClose }) {
                 <div className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
                     <Field label="DTR name"><input className={input} value={f.label} onChange={set("label")} placeholder="e.g. Angelika · DTR" /></Field>
                     <Field label="Position"><input className={input} value={f.position} onChange={set("position")} /></Field>
+                    <Field label="Employment" hint="Part-timers just carry a lower std hrs / day">
+                        <select className={input} value={f.employment_type} onChange={set("employment_type")}>
+                            <option value="full_time">Full-time</option>
+                            <option value="part_time">Part-time</option>
+                        </select>
+                    </Field>
                     <Field label="Team" hint="Sets their holidays & default timezone">
                         <select className={input} value={otherTeam ? "__other" : f.team} onChange={onTeamChange}>
                             <option value="">Select team…</option>
@@ -108,14 +117,31 @@ function SetupModal({ person, onClose }) {
                             {tzOptions.map((t) => <option key={t} value={t}>{t.replace(/_/g, " ")}</option>)}
                         </select>
                     </Field>
-                    <Field label="Sched. in" hint="When their duty starts"><input type="time" className={input} value={f.sched_in} onChange={set("sched_in")} /></Field>
-                    <Field label="Sched. out" hint="When they're done for the day"><input type="time" className={input} value={f.sched_out} onChange={set("sched_out")} /></Field>
+                    <Field label="Schedule type" hint={isFlexi ? "Any hours — never marked late" : "Follows the clock-in / out times"}>
+                        <select className={input} value={f.schedule_type} onChange={set("schedule_type")}>
+                            <option value="fixed">Fixed — follows a set time</option>
+                            <option value="flexi">Flexi — clock in/out anytime</option>
+                        </select>
+                    </Field>
+
+                    {isFlexi ? (
+                        <div className="md:col-span-2 lg:col-span-3 rounded-xl border border-indigo-100 bg-indigo-50/60 px-4 py-3 text-[12px] text-indigo-800 leading-relaxed">
+                            <span className="font-bold">Flexi time.</span> No fixed clock-in — {person.name.split(" ")[0]} can time in and out whenever, and won't be flagged late. They work toward the <span className="font-bold">Std hrs / day</span> target below, but it isn't strictly enforced.
+                        </div>
+                    ) : (
+                        <>
+                            <Field label="Sched. in" hint="When their duty starts"><input type="time" className={input} value={f.sched_in} onChange={set("sched_in")} /></Field>
+                            <Field label="Sched. out" hint="When they're done for the day"><input type="time" className={input} value={f.sched_out} onChange={set("sched_out")} /></Field>
+                        </>
+                    )}
 
                     <Field label="Break (hrs)"><input type="number" step="0.25" min="0" className={input} value={f.break_hours} onChange={set("break_hours")} /></Field>
                     <Field label="Break after (hrs)" hint="Break is deducted once they work past this"><input type="number" step="0.5" min="0" className={input} value={f.break_after} onChange={set("break_after")} /></Field>
-                    <Field label="Std hrs / day"><input type="number" step="0.5" min="0" className={input} value={f.std_hours} onChange={set("std_hours")} /></Field>
+                    <Field label="Std hrs / day" hint={isFlexi ? "Daily target (not enforced for flexi)" : undefined}><input type="number" step="0.5" min="0" className={input} value={f.std_hours} onChange={set("std_hours")} /></Field>
 
-                    <Field label="Grace (mins)" hint="Late is counted after this"><input type="number" step="1" min="0" className={input} value={f.grace_mins} onChange={set("grace_mins")} /></Field>
+                    {!isFlexi && (
+                        <Field label="Grace (mins)" hint="Late is counted after this"><input type="number" step="1" min="0" className={input} value={f.grace_mins} onChange={set("grace_mins")} /></Field>
+                    )}
                     <Field label="Reports to"><input className={input} value={f.reports_to} onChange={set("reports_to")} /></Field>
                 </div>
 
@@ -305,14 +331,21 @@ export default function DtrManage({ staff = [] }) {
                                 return (
                                     <tr key={s.id} className="hover:bg-gray-50/60">
                                         <td className="px-4 py-3">
-                                            <p className="font-semibold text-gray-800">{s.name}</p>
+                                            <p className="font-semibold text-gray-800 flex items-center gap-1.5">
+                                                {s.name}
+                                                {set?.employment_type === "part_time" && <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-sky-100 text-sky-700">PART-TIME</span>}
+                                            </p>
                                             <p className="text-[11px] text-gray-400">{s.email}</p>
                                         </td>
                                         <td className="px-3 py-3 text-gray-500">{roleName(s.role)}</td>
                                         <td className="px-3 py-3 text-gray-500">{set?.position || "—"}</td>
                                         <td className="px-3 py-3 text-gray-500">{set?.team || "—"}</td>
-                                        <td className="px-3 py-3 text-gray-500 whitespace-nowrap">{set ? `${to12h(set.sched_in)} – ${to12h(set.sched_out)}` : "—"}</td>
-                                        <td className="px-3 py-3 text-right tabular-nums text-gray-500">{set ? `${Number(set.std_hours).toFixed(1)}h / ${set.grace_mins}m` : "—"}</td>
+                                        <td className="px-3 py-3 text-gray-500 whitespace-nowrap">
+                                            {!set ? "—" : set.schedule_type === "flexi"
+                                                ? <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold bg-indigo-100 text-indigo-700">Flexi</span>
+                                                : `${to12h(set.sched_in)} – ${to12h(set.sched_out)}`}
+                                        </td>
+                                        <td className="px-3 py-3 text-right tabular-nums text-gray-500">{set ? (set.schedule_type === "flexi" ? `${Number(set.std_hours).toFixed(1)}h` : `${Number(set.std_hours).toFixed(1)}h / ${set.grace_mins}m`) : "—"}</td>
                                         <td className="px-3 py-3">
                                             {ready ? (
                                                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-100 text-emerald-700"><CheckCircle2 size={11} /> Set up</span>

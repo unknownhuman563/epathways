@@ -594,10 +594,12 @@ class DtrController extends Controller
             'user_id' => 'required|integer|exists:users,id',
             'label' => 'nullable|string|max:120',
             'position' => 'nullable|string|max:120',
+            'employment_type' => 'nullable|in:full_time,part_time',
             'team' => 'nullable|string|max:120',
             'timezone' => 'required|string|max:64',
             'sched_in' => 'nullable|string|max:8',
             'sched_out' => 'nullable|string|max:8',
+            'schedule_type' => 'nullable|in:fixed,flexi',
             'break_hours' => 'nullable|numeric|min:0|max:24',
             'reports_to' => 'nullable|string|max:120',
             'std_hours' => 'nullable|numeric|min:0|max:24',
@@ -612,6 +614,15 @@ class DtrController extends Controller
         $userId = $data['user_id'];
         unset($data['user_id']);
         $data['is_complete'] = true;
+        $data['employment_type'] = $data['employment_type'] ?? 'full_time';
+        $data['schedule_type'] = $data['schedule_type'] ?? 'fixed';
+
+        // Flexi has no fixed schedule — clear the clock-in/grace fields so a
+        // stale time never gets used to flag lateness that doesn't apply.
+        if ($data['schedule_type'] === 'flexi') {
+            $data['sched_in'] = null;
+            $data['sched_out'] = null;
+        }
 
         // Snapshot the before-state so we can audit exactly what changed.
         $existing = DtrSetting::where('user_id', $userId)->first();
@@ -627,8 +638,10 @@ class DtrController extends Controller
     private const SETTING_FIELDS = [
         'label' => 'DTR name',
         'position' => 'Position',
+        'employment_type' => 'Employment',
         'team' => 'Team',
         'timezone' => 'Time zone',
+        'schedule_type' => 'Schedule type',
         'sched_in' => 'Sched. in',
         'sched_out' => 'Sched. out',
         'break_hours' => 'Break (hrs)',
@@ -636,6 +649,14 @@ class DtrController extends Controller
         'std_hours' => 'Std hrs / day',
         'grace_mins' => 'Grace (mins)',
         'reports_to' => 'Reports to',
+    ];
+
+    /** Pretty labels for coded setup values, shown in the change history. */
+    private const SETTING_VALUE_LABELS = [
+        'full_time' => 'Full-time',
+        'part_time' => 'Part-time',
+        'fixed' => 'Fixed schedule',
+        'flexi' => 'Flexi time',
     ];
 
     /**
@@ -694,8 +715,8 @@ class DtrController extends Controller
                 'at' => optional($h->created_at)->timezone($tz)->format('M j, Y g:i A'),
                 'changes' => collect($h->changes ?? [])->map(fn ($c, $field) => [
                     'field' => self::SETTING_FIELDS[$field] ?? $field,
-                    'from' => $c['from'] ?? null,
-                    'to' => $c['to'] ?? null,
+                    'from' => self::SETTING_VALUE_LABELS[$c['from'] ?? ''] ?? ($c['from'] ?? null),
+                    'to' => self::SETTING_VALUE_LABELS[$c['to'] ?? ''] ?? ($c['to'] ?? null),
                 ])->values()->all(),
             ])->values();
 
@@ -805,7 +826,10 @@ class DtrController extends Controller
             $variance = round($net - $stdHours, 2);
         }
 
-        if ($e->time_in && $s && $s->sched_in) {
+        if ($s && $s->schedule_type === 'flexi') {
+            // Flexi has no fixed clock-in — never Late. Any clock-in is fine.
+            $attendance = $e->time_in ? 'Flexi' : null;
+        } elseif ($e->time_in && $s && $s->sched_in) {
             $attendance = $this->toMinutes($e->time_in) <= ($this->toMinutes($s->sched_in) + $graceMins)
                 ? 'On Time' : 'Late';
         }
