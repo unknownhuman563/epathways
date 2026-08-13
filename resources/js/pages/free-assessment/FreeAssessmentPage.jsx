@@ -304,8 +304,9 @@ export default function FreeAssessment({ programs = [] }) {
                 if (!data.citizenship.trim()) errs.citizenship = 'Citizenship is required';
                 if (!data.residence_country.trim()) errs.residence_country = 'Country of residence is required';
                 if (data.has_other_names === 'Yes' && !data.other_names.trim()) errs.other_names = 'Please provide your other name(s)';
-                // Passport details are optional — even when the applicant has one,
-                // they can fill it later, so nothing here is required.
+                // When they hold a passport, only the expiry date is required —
+                // the number and the PDF copy can be supplied later.
+                if (data.has_passport === 'Yes' && !data.passport_expiry) errs.passport_expiry = 'Passport expiry date is required';
                 break;
             case 3:
                 if (!data.study_plans.preferred_course.trim()) errs['study_plans.preferred_course'] = 'Preferred course is required';
@@ -938,7 +939,7 @@ export function StepPersonal({ data, setData, errors }) {
                                 <Field label="Passport Number (optional)" error={errors.passport_number}>
                                     <input type="text" className="w-full bg-transparent border-b border-gray-200 py-3 text-[#282728] focus:outline-none focus:border-[#009688] transition-colors" value={data.passport_number} onChange={e => setData('passport_number', e.target.value)} />
                                 </Field>
-                                <Field label="Expiry Date (optional)" error={errors.passport_expiry}>
+                                <Field label="Expiry Date *" error={errors.passport_expiry}>
                                     <input type="date" className="w-full bg-transparent border-b border-gray-200 py-3 text-[#282728] focus:outline-none focus:border-[#009688] transition-colors" value={data.passport_expiry} onChange={e => setData('passport_expiry', e.target.value)} />
                                 </Field>
                                 <div className="col-span-full">
@@ -2029,33 +2030,34 @@ function Field({ label, error, children }) {
 
 export function SuccessMessage({ leadId }) {
     return (
-        <div className="min-h-screen bg-white flex items-center justify-center p-6 font-urbanist">
-            <div className="max-w-[480px] w-full bg-white rounded-[3rem] shadow-[0_64px_128px_-24px_rgba(40,39,40,0.08)] p-16 text-center border border-[#282728]/5">
+        <div className="min-h-screen bg-[#F1F2F4] flex items-center justify-center p-6 font-urbanist">
+            <div className="max-w-[420px] w-full bg-white rounded-2xl shadow-sm border border-gray-100 p-8 sm:p-10 text-center">
                 <motion.div
                     initial={{ scale: 0.8, opacity: 0 }}
                     animate={{ scale: 1, opacity: 1 }}
-                    className="w-24 h-24 bg-[#282728] rounded-[2.5rem] flex items-center justify-center text-white mx-auto mb-10 shadow-2xl shadow-[#282728]/20"
+                    className="w-16 h-16 bg-[#009688] rounded-full flex items-center justify-center text-white mx-auto mb-6"
                 >
-                    <CheckCircle size={48} />
+                    <CheckCircle size={32} />
                 </motion.div>
-                <h2 className="text-xl sm:text-2xl font-bold text-[#282728] mb-6">Success</h2>
-                <p className="text-gray-500 text-sm leading-[2] mb-12 font-medium px-4">
-                    Your profile has been securely received. Our AI is now analyzing your eligibility. View your results using the link below.
+                <h2 className="text-2xl font-bold text-[#282728] mb-2">Thank you!</h2>
+                <p className="text-gray-500 text-sm leading-relaxed mb-6">
+                    Your assessment has been submitted. We're reviewing your eligibility now — you can check your result any time.
                 </p>
-                <div className="bg-gray-50/50 rounded-2xl p-8 mb-8 border border-gray-100/50">
-                    <p className="text-sm font-black text-gray-300 uppercase tracking-[0.4em] mb-3 text-center">Protocol ID</p>
-                    <p className="text-lg font-mono font-black text-[#282728]">{leadId || '---'}</p>
-                </div>
+                {leadId && (
+                    <p className="text-xs text-gray-400 mb-6">
+                        Reference <span className="font-mono font-semibold text-gray-600">{leadId}</span>
+                    </p>
+                )}
                 {leadId && (
                     <a
                         href={`/assessment-result/${leadId}`}
-                        className="inline-block w-full bg-[#009688] text-white py-6 rounded-2xl text-xs font-black uppercase tracking-[0.4em] shadow-2xl shadow-[#009688]/10 hover:bg-[#00796b] transition-all active:scale-95 mb-4"
+                        className="block w-full bg-[#009688] text-white py-3.5 rounded-xl text-sm font-semibold hover:bg-[#00796b] transition-colors mb-3"
                     >
-                        View Assessment Result
+                        View my result
                     </a>
                 )}
-                <a href="/" className="inline-block w-full bg-[#282728] text-white py-6 rounded-2xl text-xs font-black uppercase tracking-[0.4em] shadow-2xl shadow-[#282728]/10 hover:bg-black transition-all active:scale-95">
-                    Return to Portal
+                <a href="/" className="block w-full bg-gray-100 text-gray-700 py-3.5 rounded-xl text-sm font-semibold hover:bg-gray-200 transition-colors">
+                    Back to home
                 </a>
             </div>
         </div>

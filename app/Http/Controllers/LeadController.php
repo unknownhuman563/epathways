@@ -492,7 +492,7 @@ class LeadController extends Controller
             'other_names' => 'nullable|required_if:has_other_names,Yes|string|max:255',
             'has_passport' => 'nullable|in:Yes,No',
             'passport_number' => 'nullable|string|max:60',
-            'passport_expiry' => 'nullable|date',
+            'passport_expiry' => 'nullable|required_if:has_passport,Yes|date',
             'passport_pdf' => 'nullable|file|mimes:pdf|max:10240',
 
             // Step 3 - Study Plans
@@ -896,7 +896,7 @@ class LeadController extends Controller
             'other_names' => 'nullable|string|max:255',
             'has_passport' => 'nullable|in:Yes,No',
             'passport_number' => 'nullable|string|max:60',
-            'passport_expiry' => 'nullable|date',
+            'passport_expiry' => 'nullable|required_if:has_passport,Yes|date',
             'passport_pdf' => 'nullable|file|mimes:pdf|max:10240',
             // Study plans (sent by the full /register page).
             'study_plans' => 'nullable|array',
