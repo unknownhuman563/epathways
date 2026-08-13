@@ -978,7 +978,8 @@ function DayEditor({ setting, entry, date, isToday = false, carried = [], openSh
                 {readOnly ? (
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                         <ReadOnlyList title="Completed" tone="emerald" icon={<CheckCircle size={12} />} items={doneItems} empty="No tasks were completed this day." />
-                        <ReadOnlyList title="Pending / for tomorrow" tone="amber" icon={<CalendarClock size={12} />} items={carryItems} empty="Nothing was carried over." />
+                        {/* On a closed day, leftover to-dos count as carried forward. */}
+                        <ReadOnlyList title="Pending / for tomorrow" tone="amber" icon={<CalendarClock size={12} />} items={[...carryItems, ...todoItems]} empty="Nothing was carried over." />
                     </div>
                 ) : (
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

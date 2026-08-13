@@ -43,12 +43,21 @@ class DtrController extends Controller
             ->get(['id', 'work_date', 'tasks']);
         foreach ($pastPending as $e) {
             foreach ((array) $e->tasks as $idx => $t) {
+                if (! empty($t['pending_done'])) {
+                    continue;
+                }
                 $pending = trim((string) ($t['pending'] ?? ''));
-                if ($pending !== '' && empty($t['pending_done'])) {
+                $task = trim((string) ($t['task'] ?? ''));
+                // Explicit "for tomorrow" items (pending) roll forward — and so
+                // do to-do items that were never finished or carried, so a plan
+                // you didn't get to isn't lost: it reappears as tomorrow's to-do.
+                $text = $pending !== '' ? $pending
+                    : (($t['status'] ?? '') === 'todo' && $task !== '' ? $task : '');
+                if ($text !== '') {
                     $carried[] = [
                         'entry_id' => $e->id,
                         'index' => $idx,
-                        'text' => $pending,
+                        'text' => $text,
                         'date' => $e->work_date->toDateString(),
                     ];
                 }
@@ -327,11 +336,33 @@ class DtrController extends Controller
 
         $date = Carbon::parse($data['work_date'])->toDateString();
 
-        $tasks = array_values(array_map(fn ($t) => [
-            'task' => (string) ($t['task'] ?? ''),
-            'pending' => (string) ($t['pending'] ?? ''),
-            'pending_done' => (bool) ($t['pending_done'] ?? false),
-        ], $data['tasks'] ?? []));
+        // Preserve each row's original status when the admin didn't change its
+        // text (e.g. they only fixed the clock-out time) so a to-do isn't
+        // silently converted to completed. Fall back to inferring from the field.
+        $existing = DtrEntry::where('user_id', $data['user_id'])->where('work_date', $date)->first();
+        $existingTasks = $existing && is_array($existing->tasks) ? array_values($existing->tasks) : [];
+        $incoming = array_values($data['tasks'] ?? []);
+
+        $tasks = [];
+        foreach ($incoming as $i => $t) {
+            $task = (string) ($t['task'] ?? '');
+            $pending = (string) ($t['pending'] ?? '');
+            $status = null;
+            if (isset($existingTasks[$i])
+                && (string) ($existingTasks[$i]['task'] ?? '') === $task
+                && (string) ($existingTasks[$i]['pending'] ?? '') === $pending) {
+                $status = $existingTasks[$i]['status'] ?? null;
+            }
+            if (! in_array($status, ['todo', 'done', 'carry'], true)) {
+                $status = trim($pending) !== '' ? 'carry' : 'done';
+            }
+            $tasks[] = [
+                'task' => $task,
+                'pending' => $pending,
+                'status' => $status,
+                'pending_done' => (bool) ($t['pending_done'] ?? false),
+            ];
+        }
 
         DtrEntry::updateOrCreate(
             ['user_id' => $data['user_id'], 'work_date' => $date],
@@ -394,9 +425,19 @@ class DtrController extends Controller
         // The record keeps completed work in `task` and for-tomorrow items in
         // `pending` — surface them as two clean lists in the report.
         $allTasks = collect($row['tasks'] ?? []);
+        // Completed = done tasks (to-do items are never counted as completed).
         $completed = $allTasks->filter(fn ($t) => ($t['status'] ?? '') !== 'todo')
             ->map(fn ($t) => trim((string) ($t['task'] ?? '')))->filter()->values()->all();
-        $pending = $allTasks->map(fn ($t) => trim((string) ($t['pending'] ?? '')))->filter()->values()->all();
+        // Pending/for-tomorrow = explicit carry items PLUS any unfinished to-do
+        // (a plan the day ended on rolls into the next day's to-do).
+        $pending = $allTasks->map(function ($t) {
+            $p = trim((string) ($t['pending'] ?? ''));
+            if ($p !== '') {
+                return $p;
+            }
+
+            return ($t['status'] ?? '') === 'todo' ? trim((string) ($t['task'] ?? '')) : '';
+        })->filter()->values()->all();
 
         $isFlexi = $setting->schedule_type === 'flexi';
 
@@ -909,7 +950,7 @@ class DtrController extends Controller
             'tasks' => $tasks,
             'remarks' => $e->remarks,
             'tasks_count' => collect($tasks)->filter(fn ($t) => trim((string) ($t['task'] ?? '')) !== '' && ($t['status'] ?? '') !== 'todo')->count(),
-            'open_count' => collect($tasks)->filter(fn ($t) => trim((string) ($t['pending'] ?? '')) !== '')->count(),
+            'open_count' => collect($tasks)->filter(fn ($t) => trim((string) ($t['pending'] ?? '')) !== '' || (($t['status'] ?? '') === 'todo' && trim((string) ($t['task'] ?? '')) !== ''))->count(),
         ];
     }
 
