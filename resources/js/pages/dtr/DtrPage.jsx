@@ -777,8 +777,13 @@ function DayEditor({ setting, entry, date, isToday = false, carried = [] }) {
         // Yesterday's (and earlier) unfinished carry-overs land in "to do" and
         // keep coming back here every day until completed or re-carried.
         (isToday ? carried : []).forEach((c) => rows.push(mk(c.text || "", "todo", { entry_id: c.entry_id, index: c.index }, c.date)));
-        // This day's recorded work, split by field: task → completed, pending → carry.
+        // This day's stored rows. New rows carry a status; legacy rows are split
+        // by field (task → completed, pending → carry).
         (entry?.tasks || []).forEach((r) => {
+            const st = r.status;
+            if (st === "todo") { rows.push(mk(r.task || "", "todo")); return; }
+            if (st === "done") { if (String(r.task ?? "").trim()) rows.push(mk(r.task, "done")); return; }
+            if (st === "carry") { if (String(r.pending ?? "").trim()) rows.push(mk(r.pending, "carry")); return; }
             if (String(r.task ?? "").trim()) rows.push(mk(r.task, "done"));
             if (String(r.pending ?? "").trim()) rows.push(mk(r.pending, "carry"));
         });
@@ -806,18 +811,22 @@ function DayEditor({ setting, entry, date, isToday = false, carried = [] }) {
     const addTodo = () => setTasks((p) => p.some((t) => t.status === "todo" && !t.text.trim()) ? p : [...p, mk("", "todo")]);
     const stampNow = () => new Date().toLocaleTimeString("en-GB", { timeZone: setting.timezone || "UTC", hour: "2-digit", minute: "2-digit", hour12: false });
 
+    // What actually gets persisted: completed + for-tomorrow always, plus fresh
+    // to-do rows (no source) so a typed plan survives a refresh. Carried to-dos
+    // (source set) aren't persisted — their source keeps them alive.
+    const persistable = (t) => t.text.trim() && (t.status === "done" || t.status === "carry" || (t.status === "todo" && !t.source));
+
     const saveDay = (override = {}) => {
         setSaving(true);
         setSaveState("saving");
-        const recorded = tasks.filter((t) => (t.status === "done" || t.status === "carry") && t.text.trim());
+        const recorded = tasks.filter(persistable);
         router.post("/dtr/entry", {
             work_date: date,
             time_in: (override.time_in ?? timeIn) || null,
             time_out: (override.time_out ?? timeOut) || null,
-            // Only completed + for-tomorrow are recorded — the to-do plan isn't.
             tasks: recorded.map((t) => t.status === "carry"
-                ? { task: "", pending: t.text.trim(), pending_done: false }
-                : { task: t.text.trim(), pending: "", pending_done: false }),
+                ? { task: "", pending: t.text.trim(), status: "carry", pending_done: false }
+                : { task: t.text.trim(), pending: "", status: t.status, pending_done: false }),
             // Carried items resolved today → close them on their source entry so
             // they stop rolling forward.
             close_carried: tasks.filter((t) => t.source && (t.status === "done" || t.status === "carry")).map((t) => t.source),
@@ -833,12 +842,12 @@ function DayEditor({ setting, entry, date, isToday = false, carried = [] }) {
     const clockIn = () => { const t = stampNow(); setTimeIn(t); saveDay({ time_in: t }); };
     const clockOut = () => { const t = stampNow(); setTimeOut(t); saveDay({ time_out: t }); };
 
-    // Autosave — whenever the recorded payload changes (a task completed or
-    // carried, its text edited, remarks, or clock times), debounce a save so
-    // nothing is lost. The to-do plan isn't in this signature, so simply
-    // planning a task doesn't trigger a write — only recorded changes do.
+    // Autosave — whenever anything persistable changes (a planned/completed/
+    // carried task, its text, remarks, or clock times), debounce a save so
+    // nothing is lost on refresh. Empty rows carry no text, so merely opening a
+    // blank line doesn't trigger a write.
     const recordSig = JSON.stringify({
-        t: tasks.filter((t) => (t.status === "done" || t.status === "carry") && t.text.trim()).map((t) => [t.status, t.text.trim()]),
+        t: tasks.filter(persistable).map((t) => [t.status, t.text.trim()]),
         c: tasks.filter((t) => t.source && (t.status === "done" || t.status === "carry")).map((t) => t.source),
         r: remarks, in: timeIn, out: timeOut,
     });
@@ -1009,7 +1018,7 @@ function DayEditor({ setting, entry, date, isToday = false, carried = [] }) {
                     </div>
                 )}
                 <p className="text-[11px] text-gray-400 mt-2 flex items-start gap-1.5">
-                    <ListChecks size={12} className="mt-0.5 shrink-0" /> Only completed and for-tomorrow tasks are saved to your record — the to-do plan isn't. For-tomorrow items roll into tomorrow's to-do list until you finish them.
+                    <ListChecks size={12} className="mt-0.5 shrink-0" /> Everything here autosaves as you type. Only completed and for-tomorrow tasks appear in your daily report; for-tomorrow items roll into tomorrow's to-do list until you finish them.
                 </p>
             </div>
 
