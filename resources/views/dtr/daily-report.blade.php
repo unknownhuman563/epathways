@@ -70,7 +70,7 @@
             <td><div class="k">Net Hours</div><div class="v">{{ $netHrs }}</div></td>
         </tr>
         <tr>
-            <td><div class="k">Variance</div><div class="v {{ str_starts_with($variance, '-') ? 'neg' : ($variance === '—' ? '' : 'pos') }}">{{ $variance }}</div></td>
+            <td><div class="k">Variance{{ $flexi ? ' · target' : '' }}</div><div class="v {{ $flexi ? '' : (str_starts_with($variance, '-') ? 'neg' : ($variance === '—' ? '' : 'pos')) }}">{{ $variance }}</div></td>
             <td>
                 <div class="k">Attendance</div>
                 <div class="v">

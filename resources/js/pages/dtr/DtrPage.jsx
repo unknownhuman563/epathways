@@ -762,7 +762,7 @@ function exportCsv(entries, setting) {
 // Editor for a single day — reused for Today (clock-driven, read-only times)
 // and for editing/backfilling a past day (editable times). Keyed by date so
 // each instance mounts fresh from its own entry.
-function DayEditor({ setting, entry, date, isToday = false, carried = [] }) {
+function DayEditor({ setting, entry, date, isToday = false, carried = [], openShift = null, openShiftClosable = false }) {
     const [timeIn, setTimeIn] = useState(entry?.time_in || "");
     const [timeOut, setTimeOut] = useState(entry?.time_out || "");
     const [remarks, setRemarks] = useState(entry?.remarks || "");
@@ -841,6 +841,10 @@ function DayEditor({ setting, entry, date, isToday = false, carried = [] }) {
     };
     const clockIn = () => { const t = stampNow(); setTimeIn(t); saveDay({ time_in: t }); };
     const clockOut = () => { const t = stampNow(); setTimeOut(t); saveDay({ time_out: t }); };
+    // Closes the most recent open shift server-side (handles the overnight case:
+    // clocked in yesterday, never clocked out). The backend computes the
+    // cross-midnight net; the whole shift stays on the day it started.
+    const closeOpenShift = () => router.post("/dtr/time-out", {}, { preserveScroll: true });
 
     // Autosave — whenever anything persistable changes (a planned/completed/
     // carried task, its text, remarks, or clock times), debounce a save so
@@ -866,10 +870,35 @@ function DayEditor({ setting, entry, date, isToday = false, carried = [] }) {
     const readOnly = !isToday;
 
     const input = "w-full px-3 py-2 rounded-lg border border-gray-200 text-sm outline-none focus:ring-2 focus:ring-[#436235]/30 focus:border-[#436235]";
-    const varTone = live.variance == null ? "" : live.variance >= 0 ? "text-emerald-600" : "text-rose-600";
+    // Flexi has no enforced daily target, so variance is informational — show it
+    // neutral rather than a red/green surplus/deficit.
+    const isFlexi = setting.schedule_type === "flexi";
+    const varTone = live.variance == null ? "" : isFlexi ? "text-gray-600" : live.variance >= 0 ? "text-emerald-600" : "text-rose-600";
 
     return (
         <div className="p-6 space-y-5">
+            {/* Overnight open shift — clocked in on an earlier day, never clocked
+                out. Surfaced here because today's card looks fresh otherwise. */}
+            {isToday && openShift && (
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-2xl bg-amber-50 border border-amber-200 px-5 py-4">
+                    <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-600 flex items-center justify-center shrink-0"><AlertTriangle size={18} /></div>
+                        <div>
+                            <p className="text-sm font-bold text-amber-900">Still clocked in from {openShift.work_date}</p>
+                            <p className="text-xs text-amber-700">
+                                Clocked in at {to12h(openShift.time_in)} and never clocked out.
+                                {openShiftClosable ? " Clock out to close that shift." : " Ask an admin to correct this record."}
+                            </p>
+                        </div>
+                    </div>
+                    {openShiftClosable && (
+                        <button onClick={closeOpenShift} className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-amber-600 text-white text-sm font-bold hover:bg-amber-700 transition-colors shrink-0 whitespace-nowrap">
+                            <LogOut size={16} /> Clock out that shift
+                        </button>
+                    )}
+                </div>
+            )}
+
             {isToday && (
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-2xl bg-gradient-to-br from-[#436235]/[0.06] to-transparent border border-gray-100 px-5 py-4">
                     <div className="flex items-center gap-3">
@@ -886,7 +915,7 @@ function DayEditor({ setting, entry, date, isToday = false, carried = [] }) {
                         </div>
                     </div>
                     <div className="flex items-center gap-2">
-                        <button onClick={clockIn} disabled={!!timeIn} className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#436235] text-white text-sm font-bold hover:bg-[#375029] disabled:opacity-40 disabled:cursor-not-allowed transition-colors shadow-sm"><LogIn size={16} /> Clock in</button>
+                        <button onClick={clockIn} disabled={!!timeIn || !!openShift} title={openShift ? "Clock out your open shift first" : undefined} className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#436235] text-white text-sm font-bold hover:bg-[#375029] disabled:opacity-40 disabled:cursor-not-allowed transition-colors shadow-sm"><LogIn size={16} /> Clock in</button>
                         <button onClick={clockOut} disabled={!timeIn || !!timeOut} className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white border border-gray-200 text-gray-700 text-sm font-bold hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"><LogOut size={16} /> Clock out</button>
                     </div>
                 </div>
@@ -908,7 +937,7 @@ function DayEditor({ setting, entry, date, isToday = false, carried = [] }) {
                         <p className="text-lg font-bold text-gray-900">{live.net != null ? live.net.toFixed(2) : "—"}</p>
                     </div>
                     <div className="p-4">
-                        <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1.5">Variance</p>
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1.5">Variance{isFlexi ? " · target" : ""}</p>
                         <p className={`text-lg font-bold ${varTone || "text-gray-900"}`}>{live.variance != null ? (live.variance >= 0 ? "+" : "") + live.variance.toFixed(2) : "—"}</p>
                     </div>
                     <div className="p-4">
@@ -1051,6 +1080,19 @@ function DailyRecord({ setting, entries, carried = [], leaves = [], leaveTypes =
     const todayEntry = entries.find((e) => e.work_date === today);
     const past = entries.filter((e) => e.work_date !== today);
 
+    // An overnight shift left open: clocked in on an earlier day, never clocked
+    // out. entries are newest-first, so the first match is the most recent one.
+    const openShift = entries.find((e) => e.time_in && !e.time_out && e.work_date < today) || null;
+    // The clock-out endpoint only reaches back one day, so a shift from
+    // yesterday can be closed in one tap; anything older needs an admin fix.
+    const yesterday = (() => {
+        const d = new Date(today + "T00:00:00");
+        d.setDate(d.getDate() - 1);
+        const p = (n) => String(n).padStart(2, "0");
+        return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+    })();
+    const openShiftClosable = !!openShift && openShift.work_date >= yesterday;
+
     return (
         <>
             {/* Header */}
@@ -1102,7 +1144,7 @@ function DailyRecord({ setting, entries, carried = [], leaves = [], leaveTypes =
                     <Clock size={16} className="text-[#436235]" />
                     <h2 className="text-base font-bold text-gray-900">Today — {today}</h2>
                 </div>
-                <DayEditor key={today} setting={setting} entry={todayEntry} date={today} isToday carried={carried} />
+                <DayEditor key={today} setting={setting} entry={todayEntry} date={today} isToday carried={carried} openShift={openShift} openShiftClosable={openShiftClosable} />
             </div>
 
             {/* Recent entries */}

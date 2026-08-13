@@ -408,6 +408,7 @@ class DtrController extends Controller
             'team' => $setting->team,
             'timezone' => $setting->timezone,
             'scheduleLabel' => $isFlexi ? 'Flexi — no fixed hours' : ($fmt($setting->sched_in).' – '.$fmt($setting->sched_out)),
+            'flexi' => $isFlexi,
             'date' => $date,
             'prettyDate' => Carbon::parse($date)->format('l, F j, Y'),
             'timeIn' => $fmt($row['time_in'] ?? null),
