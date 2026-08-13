@@ -1263,28 +1263,62 @@ class ImmigrationController extends Controller
      * The Assessment + intake are still progressed so the row leaves the
      * triage queue.
      */
-    public function convertAssessmentToCase($id)
+    public function convertAssessmentToCase(\Illuminate\Http\Request $request, $id)
     {
         try {
-            // Prefer Assessment ID (post-Phase-B route + frontend). If
-            // that fails, treat the id as a legacy ResidentIntake ID and
-            // resolve its paired Assessment for backward compat with the
-            // old `/assessments/{intakeId}/convert-to-case` URL.
-            $assessment = Assessment::with(['visaType', 'intakeable'])->find($id);
-            if (! $assessment) {
-                $residentIntake = ResidentIntake::find($id);
-                if ($residentIntake) {
-                    $assessment = Assessment::with(['visaType', 'intakeable'])
-                        ->where('intakeable_type', ResidentIntake::class)
-                        ->where('intakeable_id', $residentIntake->id)
-                        ->first();
+            $typeMap = [
+                'resident' => ResidentIntake::class,
+                'work' => \App\Models\WorkIntake::class,
+                'student' => \App\Models\StudentIntake::class,
+                'visitor' => \App\Models\VisitorIntake::class,
+                'family' => \App\Models\FamilyIntake::class,
+            ];
+            $assessment = null;
+
+            // PREFERRED, UNAMBIGUOUS resolution: the caller names the exact
+            // intake (type + id). We resolve its paired Assessment through the
+            // morph link — NEVER by treating the intake id as an Assessment id.
+            // The old code did `Assessment::find($id)` where $id could be an
+            // intake id, so when the two id sequences overlapped it converted an
+            // unrelated applicant's case (e.g. a resident intake with no paired
+            // Assessment). Resolving by (type, id) removes that collision.
+            $intakeType = $request->input('intake_type');
+            $intakeId = $request->input('intake_id');
+            if ($intakeType && $intakeId && isset($typeMap[$intakeType])) {
+                $cls = $typeMap[$intakeType];
+                $intakeModel = $cls::find($intakeId);
+                if (! $intakeModel) {
+                    return back()->with('error', 'Could not find this submission.');
                 }
-                // Legacy path — the resident intake exists but no
-                // Assessment was ever created (pre-Phase-A submission +
-                // backfill not yet run). Fall back to the original
-                // intake-only flow so the convert button isn't a dead end.
-                if (! $assessment && $residentIntake) {
-                    return $this->convertResidentIntakeWithoutAssessment($residentIntake);
+                $assessment = Assessment::with(['visaType', 'intakeable'])
+                    ->where('intakeable_type', $cls)
+                    ->where('intakeable_id', $intakeModel->id)
+                    ->first();
+                // Resident intake with no Assessment yet — intake-only path.
+                if (! $assessment && $cls === ResidentIntake::class) {
+                    return $this->convertResidentIntakeWithoutAssessment($intakeModel);
+                }
+                if (! $assessment) {
+                    Log::warning('Convert-to-case: intake has no paired Assessment.', ['type' => $intakeType, 'id' => $intakeId]);
+
+                    return back()->with('error', 'This submission has no assessment to convert yet.');
+                }
+            }
+
+            // LEGACY fallback for older callers that only put an id in the URL.
+            if (! $assessment) {
+                $assessment = Assessment::with(['visaType', 'intakeable'])->find($id);
+                if (! $assessment) {
+                    $residentIntake = ResidentIntake::find($id);
+                    if ($residentIntake) {
+                        $assessment = Assessment::with(['visaType', 'intakeable'])
+                            ->where('intakeable_type', ResidentIntake::class)
+                            ->where('intakeable_id', $residentIntake->id)
+                            ->first();
+                    }
+                    if (! $assessment && $residentIntake) {
+                        return $this->convertResidentIntakeWithoutAssessment($residentIntake);
+                    }
                 }
             }
 

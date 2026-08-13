@@ -457,12 +457,12 @@ function IntakeRow({ intake: i, expanded = false, onToggle }) {
                             type="button"
                             onClick={() => {
                                 if (! confirm("Convert this assessment to an immigration case? A lead will be created (or matched on email) and flagged as a case.")) return;
-                                // Post the Assessment ID (canonical from
-                                // Phase B). The controller still accepts
-                                // a ResidentIntake.id for backward compat
-                                // if assessment_id is missing.
+                                // Always name the exact intake (type + id) so the
+                                // server resolves THIS submission's assessment via
+                                // the morph link — never by guessing an Assessment
+                                // id from the url, which converted the wrong case.
                                 const id = i.assessment_id ?? i.id;
-                                router.post(`/portal/immigration/assessments/${id}/convert-to-case`, {}, { preserveScroll: true });
+                                router.post(`/portal/immigration/assessments/${id}/convert-to-case`, { intake_type: i.visa_type, intake_id: i.id }, { preserveScroll: true });
                             }}
                             className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider bg-amber-600 text-white hover:bg-amber-700 transition-colors"
                         >
@@ -779,7 +779,7 @@ function IntakeViewModal({ intake: i, data, loading, onClose }) {
                 <div className="px-6 py-3 border-t border-gray-100 flex items-center justify-end gap-2">
                     {i.can_convert && (
                         <button type="button"
-                            onClick={() => { if (confirm("Convert this assessment to an immigration case? A case will be created (or matched on email).")) router.post(`/portal/immigration/assessments/${i.assessment_id ?? i.id}/convert-to-case`, {}, { preserveScroll: true, onSuccess: onClose }); }}
+                            onClick={() => { if (confirm("Convert this assessment to an immigration case? A case will be created (or matched on email).")) router.post(`/portal/immigration/assessments/${i.assessment_id ?? i.id}/convert-to-case`, { intake_type: i.visa_type, intake_id: i.id }, { preserveScroll: true, onSuccess: onClose }); }}
                             className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[#009688] text-white text-sm font-semibold hover:bg-[#00796b]">
                             <ArrowRightCircle size={15} /> Refer / Convert to case
                         </button>
