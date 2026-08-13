@@ -25,13 +25,13 @@ export default function LeadChecklist({ lead, documentChecklist = {}, sectionVer
             <section className="bg-white rounded-2xl border border-[#282728]/15 p-6">
                 <div className="flex items-center justify-between gap-4 mb-3">
                     <div>
-                        <p className="text-[10px] font-bold uppercase tracking-[0.32em] text-[#436235] mb-1">Overall progress</p>
+                        <p className="text-[10px] font-bold uppercase tracking-[0.32em] text-[#009688] mb-1">Overall progress</p>
                         <p className="text-2xl font-medium text-[#282728] tabular-nums">{verifiedSections} / {CHECKLIST.length} <span className="text-base text-[#282728]/50">sections verified</span></p>
                     </div>
-                    <span className="text-3xl font-medium text-[#436235] tabular-nums">{pct}%</span>
+                    <span className="text-3xl font-medium text-[#009688] tabular-nums">{pct}%</span>
                 </div>
                 <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                    <div className="h-full bg-[#436235] rounded-full transition-all duration-700" style={{ width: `${pct}%` }} />
+                    <div className="h-full bg-[#009688] rounded-full transition-all duration-700" style={{ width: `${pct}%` }} />
                 </div>
             </section>
 
@@ -46,7 +46,7 @@ export default function LeadChecklist({ lead, documentChecklist = {}, sectionVer
                         <section key={section.key} className={`bg-white rounded-2xl border ${isLocked ? 'border-gray-200 opacity-70' : 'border-[#282728]/15'} overflow-hidden`}>
                             <div className="px-5 py-4 border-b border-[#282728]/10 flex items-center justify-between gap-3 flex-wrap">
                                 <div className="flex items-center gap-2.5">
-                                    {isLocked ? <Lock size={14} className="text-gray-400" /> : <Check size={14} className="text-[#436235]" />}
+                                    {isLocked ? <Lock size={14} className="text-gray-400" /> : <Check size={14} className="text-[#009688]" />}
                                     <h3 className="text-sm font-bold uppercase tracking-[0.18em] text-[#282728]">{section.section}</h3>
                                 </div>
                                 <div className="flex items-center gap-2">

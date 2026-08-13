@@ -1160,7 +1160,13 @@ Route::middleware(['auth'])->group(function () {
         Route::middleware('portal:admin,immigration_adviser')->prefix('immigration-adviser')->name('portal.immigration-adviser.')->group(function () {
             Route::get('/dashboard', [\App\Http\Controllers\Portal\ImmigrationAdviserController::class, 'dashboard'])->name('dashboard');
             Route::get('/cases', [\App\Http\Controllers\Portal\ImmigrationAdviserController::class, 'cases'])->name('cases');
+            Route::get('/my-cases', [\App\Http\Controllers\Portal\ImmigrationAdviserController::class, 'myCases'])->name('my-cases');
+            Route::get('/assessments', [\App\Http\Controllers\Portal\ImmigrationAdviserController::class, 'assessments'])->name('assessments');
             Route::get('/cases/{lead}', [\App\Http\Controllers\Portal\ImmigrationAdviserController::class, 'showCase'])->name('cases.show');
+            // Document verification queue — manager-checked docs the LIA approves/rejects.
+            Route::get('/verification', [\App\Http\Controllers\Portal\ImmigrationAdviserController::class, 'verification'])->name('verification');
+            Route::post('/verification/{document}', [\App\Http\Controllers\Portal\ImmigrationAdviserController::class, 'verifyDocument'])->name('verification.verify');
+            Route::get('/reports', [\App\Http\Controllers\Portal\ImmigrationAdviserController::class, 'reports'])->name('reports');
             Route::get('/sign-off', [\App\Http\Controllers\Portal\ImmigrationAdviserController::class, 'signOff'])->name('sign-off');
             Route::get('/notifications', [\App\Http\Controllers\NotificationController::class, 'index'])->name('notifications');
             Route::get('/profile', [\App\Http\Controllers\Portal\ImmigrationAdviserController::class, 'profile'])->name('profile');
@@ -1211,6 +1217,10 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/intakes/{type}/{id}', [ImmigrationController::class, 'showIntake'])
                 ->where(['type' => 'work|student|visitor', 'id' => '[0-9]+'])
                 ->name('intakes.show');
+            // Submitted visa-interest form as JSON — the Assessments "Open" modal.
+            Route::get('/intakes/{type}/{id}/data', [ImmigrationController::class, 'intakeData'])
+                ->where(['type' => 'resident|work|student|visitor|family', 'id' => '[0-9]+'])
+                ->name('intakes.data');
             // Visa Information Form export — A4 PDF download, an inline HTML
             // preview (for the download modal), and an editable Word (.doc).
             Route::get('/intakes/{type}/{id}/pdf', [ImmigrationController::class, 'downloadIntakePdf'])
@@ -1342,6 +1352,7 @@ Route::middleware(['auth'])->group(function () {
             Route::delete('/cases/{lead}/dependents/{dependent}', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'deleteDependent'])->name('cases.dependents.destroy');
             Route::post('/cases/{lead}/dependents/{dependent}/documents', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'uploadDependentDocument'])->name('cases.dependents.documents.store');
             Route::post('/cases/{lead}/dependents/{dependent}/documents/{document}/status', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'setDependentDocumentStatus'])->name('cases.dependents.documents.status');
+            Route::post('/cases/{lead}/dependents/{dependent}/documents/{document}/note', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'setDependentDocumentNote'])->name('cases.dependents.documents.note');
             Route::delete('/cases/{lead}/dependents/{dependent}/documents/{document}', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'deleteDependentDocument'])->name('cases.dependents.documents.destroy');
 
             // Build 11.D Phase 2 — Managed agreement endpoints. Each call

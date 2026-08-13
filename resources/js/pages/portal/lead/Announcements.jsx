@@ -13,13 +13,13 @@ export default function LeadAnnouncements({ facebookLives = [], news = [] }) {
             {/* Header */}
             <div>
                 <div className="flex items-center gap-4 mb-5">
-                    <span className="text-[10px] font-bold text-[#436235] uppercase tracking-[0.35em]">
+                    <span className="text-[10px] font-bold text-[#009688] uppercase tracking-[0.35em]">
                         Announcements
                     </span>
-                    <div className="h-px w-12 bg-[#436235]/50"></div>
+                    <div className="h-px w-12 bg-[#009688]/50"></div>
                 </div>
                 <h1 className="text-3xl sm:text-4xl lg:text-5xl font-medium text-[#282728] tracking-tight leading-[1.1]">
-                    Sessions & news <span className="text-[#436235] font-light italic">curated for you.</span>
+                    Sessions & news <span className="text-[#009688] font-light italic">curated for you.</span>
                 </h1>
                 <p className="text-base text-gray-500 font-light leading-relaxed mt-4 max-w-xl">
                     Live conversations with our advisers, plus the latest from NZ immigration coverage.
@@ -44,7 +44,7 @@ export default function LeadAnnouncements({ facebookLives = [], news = [] }) {
                                 whileInView={{ opacity: 1, y: 0 }}
                                 viewport={{ once: true, margin: "-40px" }}
                                 transition={{ delay: i * 0.05, duration: 0.45 }}
-                                className="group bg-white rounded-2xl border border-[#282728]/15 overflow-hidden hover:border-[#436235]/40 hover:shadow-[0_24px_48px_-24px_rgba(40,39,40,0.15)] transition-all"
+                                className="group bg-white rounded-2xl border border-[#282728]/15 overflow-hidden hover:border-[#009688]/40 hover:shadow-[0_24px_48px_-24px_rgba(40,39,40,0.15)] transition-all"
                             >
                                 {s.image_url ? (
                                     <div className="aspect-video overflow-hidden bg-[#282728] relative">
@@ -57,7 +57,7 @@ export default function LeadAnnouncements({ facebookLives = [], news = [] }) {
                                         <div className="absolute top-4 left-4">
                                             <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-[0.18em] ${
                                                 s.is_upcoming
-                                                    ? "bg-[#436235] text-white"
+                                                    ? "bg-[#009688] text-white"
                                                     : "bg-white text-[#282728]"
                                             }`}>
                                                 {s.is_upcoming ? "Upcoming" : "Past episode"}
@@ -73,7 +73,7 @@ export default function LeadAnnouncements({ facebookLives = [], news = [] }) {
                                         <div className="absolute top-4 left-4">
                                             <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-[0.18em] ${
                                                 s.is_upcoming
-                                                    ? "bg-[#436235] text-white"
+                                                    ? "bg-[#009688] text-white"
                                                     : "bg-white text-[#282728]"
                                             }`}>
                                                 {s.is_upcoming ? "Upcoming" : "Past episode"}
@@ -85,7 +85,7 @@ export default function LeadAnnouncements({ facebookLives = [], news = [] }) {
                                     <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-gray-400 mb-2.5 flex items-center gap-1.5">
                                         <Calendar size={11} /> {fmtDate(s.session_date)}
                                     </p>
-                                    <h3 className="text-base lg:text-lg font-medium text-[#282728] leading-snug tracking-tight mb-2 group-hover:text-[#436235] transition-colors line-clamp-2">
+                                    <h3 className="text-base lg:text-lg font-medium text-[#282728] leading-snug tracking-tight mb-2 group-hover:text-[#009688] transition-colors line-clamp-2">
                                         {s.title}
                                     </h3>
                                     {s.description && (
@@ -93,7 +93,7 @@ export default function LeadAnnouncements({ facebookLives = [], news = [] }) {
                                             {s.description}
                                         </p>
                                     )}
-                                    <span className="mt-4 inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.22em] text-[#282728] group-hover:text-[#436235] transition-colors">
+                                    <span className="mt-4 inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.22em] text-[#282728] group-hover:text-[#009688] transition-colors">
                                         Open on Facebook <ExternalLink size={11} strokeWidth={2.5} />
                                     </span>
                                 </div>
@@ -124,16 +124,16 @@ export default function LeadAnnouncements({ facebookLives = [], news = [] }) {
                                 className="group block p-6 hover:bg-[#f7f8f6] transition-colors"
                             >
                                 <div className="flex items-center gap-3 mb-2 text-[10px] font-bold uppercase tracking-[0.22em]">
-                                    {n.tag && <span className="text-[#436235]">{n.tag}</span>}
+                                    {n.tag && <span className="text-[#009688]">{n.tag}</span>}
                                     {n.tag && n.source && <span className="text-gray-300">·</span>}
                                     {n.source && <span className="text-gray-400">{n.source}</span>}
                                     <span className="ml-auto text-gray-400 normal-case tracking-widest text-[10px] font-semibold">
                                         {fmtDate(n.published_at)}
                                     </span>
                                 </div>
-                                <h3 className="text-base lg:text-lg font-medium text-[#282728] leading-snug tracking-tight group-hover:text-[#436235] transition-colors flex items-start justify-between gap-4">
+                                <h3 className="text-base lg:text-lg font-medium text-[#282728] leading-snug tracking-tight group-hover:text-[#009688] transition-colors flex items-start justify-between gap-4">
                                     <span>{n.title}</span>
-                                    <ArrowRight size={14} strokeWidth={2.5} className="flex-shrink-0 mt-1 text-gray-300 group-hover:text-[#436235] group-hover:translate-x-0.5 transition-all" />
+                                    <ArrowRight size={14} strokeWidth={2.5} className="flex-shrink-0 mt-1 text-gray-300 group-hover:text-[#009688] group-hover:translate-x-0.5 transition-all" />
                                 </h3>
                             </motion.a>
                         ))}
@@ -158,7 +158,7 @@ export default function LeadAnnouncements({ facebookLives = [], news = [] }) {
 function SectionHeader({ eyebrow, title }) {
     return (
         <div className="mb-6">
-            <p className="text-[10px] font-bold text-[#436235] uppercase tracking-[0.32em] mb-1.5">
+            <p className="text-[10px] font-bold text-[#009688] uppercase tracking-[0.32em] mb-1.5">
                 {eyebrow}
             </p>
             <h2 className="text-2xl font-medium text-[#282728] tracking-tight">{title}</h2>

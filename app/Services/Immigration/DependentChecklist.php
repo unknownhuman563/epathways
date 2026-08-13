@@ -12,15 +12,16 @@ namespace App\Services\Immigration;
  */
 class DependentChecklist
 {
-    /** Dependent child visa. */
+    /** Dependent child — mirrors the applicant document checklist. */
     public const CHILD = [
-        ['key' => 'child.passport', 'label' => "Child's passport (bio page)", 'required' => true],
-        ['key' => 'child.birth_certificate', 'label' => 'Full birth certificate (showing both parents)', 'required' => true],
-        ['key' => 'child.photo', 'label' => 'Passport-style photo', 'required' => true],
-        ['key' => 'child.relationship_evidence', 'label' => 'Evidence of relationship to the principal applicant', 'required' => true],
-        ['key' => 'child.custody_consent', 'label' => 'Custody / consent from any non-accompanying parent', 'required' => true],
-        ['key' => 'child.medical', 'label' => 'Medical / chest x-ray certificate (if required)', 'required' => false],
-        ['key' => 'child.school_enrolment', 'label' => 'School enrolment / offer (if school age)', 'required' => false],
+        ['key' => 'child.cv', 'label' => 'Curriculum Vitae', 'required' => true, 'hint' => 'Current CV summarising education and work history.'],
+        ['key' => 'child.passport', 'label' => 'Passport (PDF format)', 'required' => true, 'hint' => 'Clear colour scan of the current, valid passport in PDF format.'],
+        ['key' => 'child.face_image', 'label' => 'Face image', 'required' => true, 'hint' => 'Recent passport-style photo — plain background, full face.'],
+        ['key' => 'child.birth_certificate', 'label' => 'Birth Certificate', 'required' => true, 'hint' => 'Full birth certificate.'],
+        ['key' => 'child.marriage_certificate', 'label' => 'Marriage Certificate', 'required' => false, 'hint' => 'Official marriage certificate, if married. If applicable.'],
+        ['key' => 'child.graduate_certificate', 'label' => 'Graduate Certificate', 'required' => true, 'hint' => 'Completed qualification certificate (diploma / degree).'],
+        ['key' => 'child.transcript', 'label' => 'Transcript of Record', 'required' => true, 'hint' => 'Official academic transcript from the previous school.'],
+        ['key' => 'child.english_test', 'label' => 'PTE / IELTS Result', 'required' => true, 'hint' => 'English test result (PTE Academic, IELTS, or accepted equivalent).'],
     ];
 
     /** Partner included in a temporary-entry application. */

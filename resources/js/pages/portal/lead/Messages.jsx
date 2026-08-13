@@ -27,7 +27,7 @@ export default function LeadMessages({ messages = { data: [], links: [] } }) {
 
             {rows.length === 0 ? (
                 <section className="bg-white rounded-2xl border border-[#282728]/15 p-10 sm:p-12 text-center">
-                    <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-[#436235]/10 text-[#436235] mb-4">
+                    <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-[#009688]/10 text-[#009688] mb-4">
                         <MessageSquare size={22} />
                     </div>
                     <h3 className="text-xl font-medium tracking-tight text-[#282728] mb-2">No messages yet</h3>
@@ -42,7 +42,7 @@ export default function LeadMessages({ messages = { data: [], links: [] } }) {
                         return (
                             <div key={m.id} className="px-5 sm:px-6 py-4">
                                 <button onClick={() => setOpenId(open ? null : m.id)} className="w-full flex items-start gap-3.5 text-left">
-                                    <span className="mt-0.5 w-10 h-10 rounded-xl bg-[#436235]/10 text-[#436235] flex items-center justify-center shrink-0">
+                                    <span className="mt-0.5 w-10 h-10 rounded-xl bg-[#009688]/10 text-[#009688] flex items-center justify-center shrink-0">
                                         <Mail size={16} />
                                     </span>
                                     <div className="min-w-0 flex-1">
@@ -53,7 +53,7 @@ export default function LeadMessages({ messages = { data: [], links: [] } }) {
                                     <ChevronDown size={15} className={`text-[#282728]/30 shrink-0 mt-1 transition-transform ${open ? "rotate-180" : ""}`} />
                                 </button>
                                 {open && (
-                                    <div className="mt-3 ml-[3.4rem] rounded-xl bg-[#436235]/[0.04] border border-[#282728]/10 p-4">
+                                    <div className="mt-3 ml-[3.4rem] rounded-xl bg-[#009688]/[0.04] border border-[#282728]/10 p-4">
                                         <p className="text-sm text-[#282728]/85 font-light leading-relaxed whitespace-pre-wrap break-words">{m.body}</p>
                                     </div>
                                 )}

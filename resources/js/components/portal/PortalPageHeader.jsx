@@ -5,7 +5,7 @@ export default function PortalPageHeader({ eyebrow, title, description, action =
         <header className="flex items-end justify-between gap-4 flex-wrap mb-6">
             <div>
                 {eyebrow && (
-                    <p className="text-[10px] font-bold text-[#436235] uppercase tracking-[0.32em] mb-1.5">
+                    <p className="text-[10px] font-bold text-[#009688] uppercase tracking-[0.32em] mb-1.5">
                         {eyebrow}
                     </p>
                 )}

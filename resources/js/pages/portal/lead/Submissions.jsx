@@ -31,13 +31,13 @@ export default function LeadSubmissions({ submissions = [] }) {
             {/* Header */}
             <div>
                 <div className="flex items-center gap-4 mb-5">
-                    <span className="text-[10px] font-bold text-[#436235] uppercase tracking-[0.35em]">
+                    <span className="text-[10px] font-bold text-[#009688] uppercase tracking-[0.35em]">
                         Your record
                     </span>
-                    <div className="h-px w-12 bg-[#436235]/50"></div>
+                    <div className="h-px w-12 bg-[#009688]/50"></div>
                 </div>
                 <h1 className="text-3xl sm:text-4xl lg:text-5xl font-medium text-[#282728] tracking-tight leading-[1.1]">
-                    My submissions <span className="text-[#436235] font-light italic">& activity.</span>
+                    My submissions <span className="text-[#009688] font-light italic">& activity.</span>
                 </h1>
                 <p className="text-base text-gray-500 font-light leading-relaxed mt-4 max-w-xl">
                     Every form you&apos;ve signed against ePathways, in one place — with the current status of each.
@@ -55,7 +55,7 @@ export default function LeadSubmissions({ submissions = [] }) {
                     <div className="mt-7 flex flex-wrap items-center justify-center gap-2">
                         <a
                             href="/free-assessment"
-                            className="inline-flex items-center gap-2 px-5 py-3 bg-[#436235] text-white rounded-xl text-[11px] font-bold uppercase tracking-[0.22em] hover:bg-[#385029] transition-colors"
+                            className="inline-flex items-center gap-2 px-5 py-3 bg-[#009688] text-white rounded-xl text-[11px] font-bold uppercase tracking-[0.22em] hover:bg-[#385029] transition-colors"
                         >
                             Start assessment <ArrowRight size={12} strokeWidth={2.5} />
                         </a>
@@ -92,12 +92,12 @@ function SubmissionItem({ item, delay }) {
         >
             {/* Dot on the timeline rail */}
             <span className="absolute -left-8 sm:-left-12 top-6 w-6 sm:w-10 flex items-center justify-center">
-                <span className="w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-white border-2 border-[#282728]/20 flex items-center justify-center text-[#436235]">
+                <span className="w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-white border-2 border-[#282728]/20 flex items-center justify-center text-[#009688]">
                     <Icon size={12} strokeWidth={2.25} />
                 </span>
             </span>
 
-            <article className="bg-white rounded-2xl border border-[#282728]/15 hover:border-[#436235]/40 hover:shadow-[0_24px_48px_-24px_rgba(40,39,40,0.15)] transition-all p-6 sm:p-7">
+            <article className="bg-white rounded-2xl border border-[#282728]/15 hover:border-[#009688]/40 hover:shadow-[0_24px_48px_-24px_rgba(40,39,40,0.15)] transition-all p-6 sm:p-7">
                 <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-3">
                     <div className="flex-1 min-w-0">
                         <h3 className="text-base lg:text-lg font-medium text-[#282728] leading-snug tracking-tight">
@@ -133,7 +133,7 @@ function SubmissionItem({ item, delay }) {
                     {item.cta_label && item.cta_href && (
                         <Link
                             href={item.cta_href}
-                            className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.22em] text-[#282728] hover:text-[#436235] border-b border-[#282728]/30 hover:border-[#436235] pb-1 transition-colors"
+                            className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.22em] text-[#282728] hover:text-[#009688] border-b border-[#282728]/30 hover:border-[#009688] pb-1 transition-colors"
                         >
                             {item.cta_label} <ChevronRight size={12} strokeWidth={2.5} />
                         </Link>

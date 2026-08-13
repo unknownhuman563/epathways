@@ -1,9 +1,10 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect, useRef } from "react";
 import { Head, Link, router } from "@inertiajs/react";
 import {
     ChevronRight, ChevronDown, ClipboardCheck, FileEdit, Globe, Send, Search,
     Users, Briefcase, GraduationCap, Plane, Heart,
     Check, FileText, UserCheck, ArrowRightCircle, AlertTriangle,
+    X, Mail, Phone, ExternalLink, Loader2,
 } from "lucide-react";
 import PortalPageHeader from "@/components/portal/PortalPageHeader";
 import { AiAssessmentReviewModal } from "@/components/immigration/AiAssessmentReview";
@@ -236,7 +237,6 @@ export default function ImmigrationAssessments({ intakes = [] }) {
                                     <th className="px-2 py-2.5 w-8"></th>
                                     <th className="px-4 py-2.5">Applicant</th>
                                     <th className="px-4 py-2.5">Visa</th>
-                                    <th className="px-4 py-2.5">Contact</th>
                                     <th className="px-4 py-2.5 w-[220px]">Progress</th>
                                     <th className="px-4 py-2.5">Priority</th>
                                     <th className="px-4 py-2.5">Submitted</th>
@@ -320,6 +320,23 @@ function IntakeRow({ intake: i, expanded = false, onToggle }) {
     const { stage, pct } = progressOf(i);
     const stageStyle     = STAGE_STYLES[stage];
     const [aiOpen, setAiOpen] = useState(false);
+    const [viewOpen, setViewOpen] = useState(false);
+    const [data, setData] = useState(null);
+    const [loading, setLoading] = useState(false);
+
+    const openModal = () => {
+        setViewOpen(true);
+        if (data) return;
+        // Prefer the server-provided URL; fall back to constructing it so a
+        // stale payload (loaded before data_url existed) still works.
+        const url = i.data_url || `/portal/immigration/intakes/${i.visa_type}/${i.id}/data`;
+        setLoading(true);
+        fetch(url, { headers: { Accept: "application/json" }, credentials: "same-origin" })
+            .then((r) => (r.ok ? r.json() : null))
+            .then((d) => setData(d))
+            .catch(() => {})
+            .finally(() => setLoading(false));
+    };
 
     return (
         <>
@@ -342,8 +359,10 @@ function IntakeRow({ intake: i, expanded = false, onToggle }) {
                     </span>
                     <div className="min-w-0">
                         <p className="text-[13px] font-semibold text-gray-900 truncate">{i.name}</p>
-                        {i.intake_id && (
-                            <p className="text-[10px] text-gray-500 font-mono mt-0.5">{i.intake_id}</p>
+                        {i.email && <p className="text-[11px] text-gray-600 truncate max-w-[240px]">{i.email}</p>}
+                        {i.phone && <p className="text-[10.5px] text-gray-400 truncate max-w-[240px]">{i.phone}</p>}
+                        {!i.email && !i.phone && i.intake_id && (
+                            <p className="text-[10px] text-gray-400 font-mono mt-0.5">{i.intake_id}</p>
                         )}
                     </div>
                 </div>
@@ -355,12 +374,6 @@ function IntakeRow({ intake: i, expanded = false, onToggle }) {
                 {i.extra && (
                     <p className="text-[10px] text-gray-400 truncate max-w-[200px] mt-0.5">{i.extra}</p>
                 )}
-            </td>
-
-            {/* Contact */}
-            <td className="px-4 py-3 align-middle">
-                {i.email && <p className="text-[11.5px] text-gray-700 truncate max-w-[220px]">{i.email}</p>}
-                {i.phone && <p className="text-[10.5px] text-gray-400 truncate max-w-[220px]">{i.phone}</p>}
             </td>
 
             {/* Progress */}
@@ -426,40 +439,261 @@ function IntakeRow({ intake: i, expanded = false, onToggle }) {
                             <Globe size={10} /> Convert
                         </button>
                     )}
-                    {i.detail_url ? (
-                        // Resident gets the dedicated detail page;
-                        // Work/Student/Visitor fall back to the leads
-                        // index search-by-email until per-type detail
-                        // pages land.
-                        <Link
-                            href={i.detail_url}
-                            title={i.visa_type === "resident"
-                                ? undefined
-                                : "Detail view coming soon — open as lead"}
-                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider text-gray-600 hover:text-gray-900 hover:bg-gray-100 transition-colors"
-                        >
-                            Open <ChevronRight size={10} />
-                        </Link>
-                    ) : (
-                        <span
-                            className="inline-flex items-center px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider text-gray-400 bg-gray-50 cursor-not-allowed"
-                            title="No contact email on this submission"
-                        >
-                            —
-                        </span>
-                    )}
+                    <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); openModal(); }}
+                        className="inline-flex items-center gap-1 px-3 py-1.5 rounded-md text-[10px] font-bold uppercase tracking-wider text-white bg-gray-900 hover:bg-black transition-colors"
+                    >
+                        Open <ChevronRight size={10} />
+                    </button>
                 </div>
             </td>
         </tr>
 
+        {viewOpen && (
+            <IntakeViewModal intake={i} data={data} loading={loading} onClose={() => setViewOpen(false)} />
+        )}
+
         {expanded && (
             <tr className="bg-gray-50/60 border-b border-gray-100">
-                <td colSpan={8} className="px-6 py-5">
+                <td colSpan={7} className="px-6 py-5">
                     <JourneyRow intake={i} />
                 </td>
             </tr>
         )}
         </>
+    );
+}
+
+const normKey = (s) => (s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+const SEV_RANK = { critical: 3, high: 3, warning: 2, medium: 2, info: 1 };
+
+// How a flagged field is highlighted on the official form, by AI severity.
+const FIELD_SEV = {
+    critical: { border: "border-red-400",   value: "text-red-700",   label: "text-red-600",   note: "text-red-600" },
+    high:     { border: "border-red-400",   value: "text-red-700",   label: "text-red-600",   note: "text-red-600" },
+    warning:  { border: "border-amber-400", value: "text-amber-700", label: "text-amber-600", note: "text-amber-600" },
+    medium:   { border: "border-amber-400", value: "text-amber-700", label: "text-amber-600", note: "text-amber-600" },
+    info:     { border: "border-blue-300",  value: "text-blue-700",  label: "text-blue-600",  note: "text-blue-600" },
+};
+
+// Verdict tone → colours for the overall-assessment card.
+const VERDICT_TONE = {
+    emerald: { bg: "bg-emerald-50", text: "text-emerald-700", border: "border-emerald-200", bar: "bg-emerald-500" },
+    teal:    { bg: "bg-[#009688]/10", text: "text-[#009688]", border: "border-[#009688]/30", bar: "bg-[#009688]" },
+    amber:   { bg: "bg-amber-50", text: "text-amber-700", border: "border-amber-200", bar: "bg-amber-500" },
+    red:     { bg: "bg-red-50", text: "text-red-700", border: "border-red-200", bar: "bg-red-500" },
+    gray:    { bg: "bg-gray-50", text: "text-gray-600", border: "border-gray-200", bar: "bg-gray-400" },
+};
+// Drop AI observations that merely restate a blank field — the blanks already
+// show as "—" on the form, so they add nothing here.
+const substantiveObs = (o) => o && o.note && !/not\s*(provided|submitted|supplied|given|available)|missing|blank|no\s+\w+\s+(provided|given)/i.test(o.note);
+
+function assessCsrf() {
+    const xsrf = decodeURIComponent((document.cookie.match(/XSRF-TOKEN=([^;]+)/) || [])[1] || "");
+    const meta = document.querySelector('meta[name="csrf-token"]')?.getAttribute("content") || "";
+    return xsrf ? { "X-XSRF-TOKEN": xsrf, "X-CSRF-TOKEN": meta } : { "X-CSRF-TOKEN": meta };
+}
+
+// Applicant review modal: LEFT = the submitted visa-assessment form in an
+// official, sectioned layout — the AI runs automatically and highlights the
+// fields it flags (red/amber). RIGHT = the adviser's panel: notes + actions.
+function IntakeViewModal({ intake: i, data, loading, onClose }) {
+    const fmtDate = (iso) => (iso ? new Date(iso).toLocaleDateString("en-NZ", { day: "numeric", month: "long", year: "numeric" }) : "");
+    const sections = data?.sections || [];
+
+    const [review, setReview] = useState(null);
+    const [aiRunning, setAiRunning] = useState(false);
+    const [note, setNote] = useState("");
+    const [savingNote, setSavingNote] = useState(false);
+    const [savedTick, setSavedTick] = useState(false);
+    const triedRef = useRef(false);
+    const base = `/portal/immigration/assessments/${i.visa_type}/${i.id}/ai-review`;
+
+    // Lock the page behind the modal so scrolling a pane doesn't scroll the list.
+    useEffect(() => {
+        const prev = document.body.style.overflow;
+        document.body.style.overflow = "hidden";
+        return () => { document.body.style.overflow = prev; };
+    }, []);
+
+    // The notes box shows ONLY what the adviser has actually saved — never the
+    // AI's auto-drafted note (which lands in adviser_note until the adviser edits).
+    const adviserNoteOf = (r) => (r && r.edited_by ? (r.adviser_note || "") : "");
+
+    // Adopt the review that shipped with the intake data.
+    useEffect(() => {
+        if (data?.ai_review) { setReview(data.ai_review); setNote(adviserNoteOf(data.ai_review)); }
+    }, [data]);
+
+    // Run the AI automatically the first time — no manual button needed.
+    useEffect(() => {
+        if (loading || !data || review || aiRunning || triedRef.current) return;
+        triedRef.current = true;
+        setAiRunning(true);
+        fetch(base, { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json", Accept: "application/json", "X-Requested-With": "XMLHttpRequest", ...assessCsrf() } })
+            .then((r) => (r.ok ? r.json() : null))
+            .then((d) => { if (d?.review) { setReview(d.review); setNote(adviserNoteOf(d.review)); } })
+            .catch(() => {})
+            .finally(() => setAiRunning(false));
+    }, [loading, data, review, aiRunning, base]);
+
+    const flags = data?.flags || [];
+    const readiness = data?.readiness || null;
+    const observations = (review?.observations || []).filter(substantiveObs);
+    const risks = (review?.risks || []).filter(substantiveObs);
+    // Deterministic checks first, then the AI's substantive read — both mark the form.
+    const allMarks = [...flags, ...observations];
+    // Real issues only (blanks are excluded — they already show as "—").
+    const points = [...flags, ...observations, ...risks.map((r) => ({ field: r.area, severity: r.severity, note: r.note }))]
+        .filter((p) => p && p.note);
+
+    // Highest-severity mark for a field (fuzzy name match), or null.
+    const markFor = (label) => {
+        const nl = normKey(label);
+        if (!nl) return null;
+        const hits = allMarks.filter((o) => { const nf = normKey(o.field); return nf && (nf.includes(nl) || nl.includes(nf)) && nf.length > 2; });
+        if (!hits.length) return null;
+        return [...hits].sort((a, b) => (SEV_RANK[b.severity] || 1) - (SEV_RANK[a.severity] || 1))[0];
+    };
+
+    const saveNote = () => {
+        if (!review) return;
+        setSavingNote(true);
+        fetch(`${base}/edit`, { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json", Accept: "application/json", "X-Requested-With": "XMLHttpRequest", ...assessCsrf() }, body: JSON.stringify({ adviser_note: note }) })
+            .then((r) => (r.ok ? r.json() : null))
+            .then((d) => { if (d?.review) setReview(d.review); setSavedTick(true); setTimeout(() => setSavedTick(false), 1500); })
+            .catch(() => {})
+            .finally(() => setSavingNote(false));
+    };
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40" onClick={onClose}>
+            <div className="w-[94vw] max-w-[1440px] h-[92vh] rounded-2xl bg-white shadow-xl flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
+                {/* Header */}
+                <div className="px-6 py-4 border-b border-gray-100 flex items-start justify-between gap-4">
+                    <div className="min-w-0">
+                        <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[#009688] mb-1">Visa assessment</p>
+                        <h2 className="text-lg font-bold text-gray-900 truncate">{data?.name || i.name}</h2>
+                        <div className="flex items-center gap-3 flex-wrap mt-1 text-[12px] text-gray-500">
+                            <span>{data?.visa_label || VISA_LABEL[i.visa_type] || i.visa_type}</span>
+                            {(data?.reference || i.intake_id) && <span className="font-mono text-gray-400">{data?.reference || i.intake_id}</span>}
+                            {data?.submitted_at && <span>· Submitted {fmtDate(data.submitted_at)}</span>}
+                            {(data?.email || i.email) && <span className="inline-flex items-center gap-1"><Mail size={12} /> {data?.email || i.email}</span>}
+                            {(data?.phone || i.phone) && <span className="inline-flex items-center gap-1"><Phone size={12} /> {data?.phone || i.phone}</span>}
+                        </div>
+                    </div>
+                    <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-700 flex-shrink-0"><X size={18} /></button>
+                </div>
+
+                {/* Body — two panes */}
+                <div className="flex-1 min-h-0 flex flex-col lg:flex-row overflow-hidden">
+                    {/* LEFT — official form, AI auto-highlights flagged fields */}
+                    <div className="lg:flex-1 min-w-0 overflow-y-auto overscroll-contain p-6 border-b lg:border-b-0 lg:border-r border-gray-100 bg-gray-100">
+                        {loading ? (
+                            <div className="flex items-center justify-center gap-2 py-16 text-gray-400 text-sm">
+                                <Loader2 size={18} className="animate-spin" /> Loading submission…
+                            </div>
+                        ) : sections.length === 0 ? (
+                            <div className="text-center py-14">
+                                <FileText size={24} className="mx-auto text-gray-300" />
+                                <p className="mt-3 text-sm text-gray-600">No form details to show for this submission.</p>
+                            </div>
+                        ) : (
+                            <div className="space-y-6">
+                                {sections.map((sec) => {
+                                    const secMarked = sec.fields.some((f) => markFor(f.label));
+                                    return (
+                                        <section key={sec.title} className="rounded-2xl border border-gray-100 bg-white shadow-sm p-5">
+                                            <div className="flex items-center gap-2 mb-4 pb-2 border-b border-gray-100">
+                                                <h3 className="text-[14px] font-bold text-gray-900">{sec.title}</h3>
+                                                {secMarked && <AlertTriangle size={12} className="text-amber-500" title="AI flagged an item in this section" />}
+                                            </div>
+                                            <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-4">
+                                                {sec.fields.map((f) => {
+                                                    const m = markFor(f.label);
+                                                    const sev = m ? (FIELD_SEV[m.severity] || FIELD_SEV.info) : null;
+                                                    return (
+                                                        <div key={f.key} className={`min-w-0 ${sev ? `pl-3 border-l-2 ${sev.border}` : ""}`}>
+                                                            <dt className={`text-[12px] font-medium mb-0.5 ${sev ? sev.label : "text-gray-500"}`}>{f.label}</dt>
+                                                            <dd className={`text-[13px] whitespace-pre-line break-words ${f.provided === false ? "text-gray-300" : sev ? `font-semibold ${sev.value}` : "text-gray-800"}`}>{f.value}</dd>
+                                                            {m && <p className={`text-[11px] mt-0.5 ${sev.note}`}>{m.note}</p>}
+                                                        </div>
+                                                    );
+                                                })}
+                                            </dl>
+                                        </section>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </div>
+
+                    {/* RIGHT — adviser panel: points to check + notes + actions */}
+                    <div className="lg:w-[360px] flex-shrink-0 overflow-y-auto overscroll-contain p-5 bg-gray-100 space-y-4">
+                        {/* Overall assessment — the adviser-style verdict */}
+                        {(() => {
+                            const t = VERDICT_TONE[readiness?.tone] || VERDICT_TONE.gray;
+                            return (
+                                <div className={`rounded-xl border p-4 ${t.border} ${t.bg}`}>
+                                    <div className="flex items-center gap-2 mb-1.5">
+                                        <Sparkles size={14} className={t.text} />
+                                        <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500">Overall assessment</span>
+                                        {aiRunning && <Loader2 size={12} className="animate-spin text-indigo-400 ml-auto" />}
+                                    </div>
+                                    {readiness ? (
+                                        <>
+                                            <p className={`text-[15px] font-bold ${t.text}`}>{readiness.verdict}</p>
+                                            <p className="text-[12.5px] text-gray-700 mt-1 leading-relaxed">{readiness.recommendation}</p>
+                                            <div className="mt-3">
+                                                <div className="flex items-center justify-between text-[10.5px] text-gray-500 mb-1">
+                                                    <span>Form completeness</span>
+                                                    <span className="font-bold text-gray-700">{readiness.pct}% · {readiness.filled}/{readiness.total}</span>
+                                                </div>
+                                                <div className="h-2 rounded-full bg-white/70 overflow-hidden border border-black/5">
+                                                    <div className={`h-full ${t.bar}`} style={{ width: `${readiness.pct}%` }} />
+                                                </div>
+                                            </div>
+                                        </>
+                                    ) : (
+                                        <p className="text-[12px] text-gray-500">Assessing…</p>
+                                    )}
+                                    <p className="text-[10px] text-gray-400 mt-3 leading-snug">Internal &amp; indicative — not immigration advice. The licensed adviser decides.</p>
+                                </div>
+                            );
+                        })()}
+
+                        {/* Adviser internal notes */}
+                        <div className="rounded-xl border border-gray-200 bg-white p-4">
+                            <div className="flex items-center justify-between mb-2">
+                                <span className="text-[11px] font-bold uppercase tracking-wider text-gray-500">Internal notes</span>
+                                <button type="button" onClick={saveNote} disabled={savingNote || !review}
+                                    className="inline-flex items-center gap-1 text-[10.5px] font-semibold text-[#009688] hover:text-[#00796b] disabled:text-gray-300">
+                                    {savedTick ? <Check size={11} className="text-emerald-500" /> : savingNote ? <Loader2 size={11} className="animate-spin" /> : null}
+                                    {savedTick ? "Saved" : "Save"}
+                                </button>
+                            </div>
+                            <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={5}
+                                placeholder="Add a note for this applicant…"
+                                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-[13px] outline-none focus:border-[#009688] focus:ring-1 focus:ring-[#009688] resize-y" />
+                        </div>
+
+                    </div>
+                </div>
+
+                {/* Footer */}
+                <div className="px-6 py-3 border-t border-gray-100 flex items-center justify-end gap-2">
+                    {i.can_convert && (
+                        <button type="button"
+                            onClick={() => { if (confirm("Convert this assessment to an immigration case? A case will be created (or matched on email).")) router.post(`/portal/immigration/assessments/${i.assessment_id ?? i.id}/convert-to-case`, {}, { preserveScroll: true, onSuccess: onClose }); }}
+                            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[#009688] text-white text-sm font-semibold hover:bg-[#00796b]">
+                            <ArrowRightCircle size={15} /> Refer / Convert to case
+                        </button>
+                    )}
+                    <button type="button" onClick={onClose} className="px-4 py-2 rounded-lg text-sm font-semibold text-gray-600 hover:bg-gray-50">Done</button>
+                </div>
+            </div>
+        </div>
     );
 }
 

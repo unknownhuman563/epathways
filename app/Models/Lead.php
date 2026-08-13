@@ -467,6 +467,15 @@ class Lead extends Model
         return $this->hasMany(CaseDependent::class);
     }
 
+    /**
+     * When THIS case is itself a dependant tied to a parent's case, the linking
+     * record (whose ->lead is the parent case). Null for a standalone case.
+     */
+    public function tiedAsDependent()
+    {
+        return $this->hasOne(CaseDependent::class, 'linked_lead_id');
+    }
+
     /** Staff member this lead is currently assigned to (or null). */
     public function assignee()
     {

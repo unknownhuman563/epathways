@@ -27,6 +27,7 @@ export default function DashboardLayout({
     subtitle = null,
     accent = "bg-gray-900",
     settingsHref = null,
+    footerNav = [],
 }) {
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const { url, props } = usePage();
@@ -245,6 +246,23 @@ export default function DashboardLayout({
             </div>
 
             <div className="px-3 py-3 mt-auto border-t border-gray-50 flex flex-col gap-0.5">
+                {footerNav.map((item) => {
+                    const active = item.href && (url === item.href || url.startsWith(item.href + "/") || url.startsWith(item.href + "?"));
+                    return (
+                        <Link
+                            key={item.href}
+                            href={item.href}
+                            className={`flex items-center gap-3 px-3 py-2 text-[13px] font-medium rounded-lg transition-colors ${
+                                active
+                                    ? "bg-gray-100 text-gray-900"
+                                    : "text-gray-600 hover:text-gray-900 hover:bg-gray-50"
+                            }`}
+                        >
+                            <span className="text-gray-500">{item.icon}</span>
+                            {item.name}
+                        </Link>
+                    );
+                })}
                 {settingsHref && (
                     <Link
                         href={settingsHref}
