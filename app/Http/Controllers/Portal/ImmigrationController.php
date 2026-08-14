@@ -775,6 +775,7 @@ class ImmigrationController extends Controller
                 'documents' => \App\Services\Immigration\EngagementDocumentGenerator::catalogue(),
                 'generated' => $generated,
                 'signers' => $this->signingAdvisers(),
+                'default_signer_id' => $this->defaultSignerId(),
                 'me_id' => auth()->id(),
             ]);
         } catch (\Throwable $e) {
@@ -785,6 +786,7 @@ class ImmigrationController extends Controller
                 'documents' => \App\Services\Immigration\EngagementDocumentGenerator::catalogue(),
                 'generated' => [],
                 'signers' => $this->signingAdvisers(),
+                'default_signer_id' => $this->defaultSignerId(),
                 'me_id' => auth()->id(),
             ]);
         }
@@ -821,6 +823,25 @@ class ImmigrationController extends Controller
                 'licence_expiry' => optional($u->iaa_licence_expiry)->toDateString(),
             ])
             ->values();
+    }
+
+    /**
+     * The signer pre-selected in the engagement modal: the practice's licensed
+     * adviser named in config('immigration.signing_adviser') (e.g. Hendry Dai),
+     * matched case-insensitively against the licensed advisers. Null when the
+     * name isn't found — the modal then falls back to the current user / first.
+     */
+    private function defaultSignerId(): ?int
+    {
+        $name = trim((string) config('immigration.signing_adviser'));
+        if ($name === '') {
+            return null;
+        }
+
+        return User::whereNotNull('iaa_licence_number')
+            ->where('iaa_licence_number', '!=', '')
+            ->whereRaw('LOWER(name) = ?', [strtolower($name)])
+            ->value('id');
     }
 
     /**

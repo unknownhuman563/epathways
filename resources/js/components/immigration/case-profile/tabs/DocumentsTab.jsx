@@ -4,7 +4,7 @@ import { router } from "@inertiajs/react";
 import { toast } from "sonner";
 import {
     FileText, Download, Upload, Eye, Check, Loader2,
-    Send, X as XIcon, AlertCircle, Paperclip,
+    Send, X as XIcon, AlertCircle, Paperclip, ChevronDown, ChevronRight, Plus, MessageSquare,
 } from "lucide-react";
 import CaseFilesModal from "@/components/immigration/CaseFilesModal";
 import { ThreadItem, ThreadComposer } from "@/components/immigration/case-profile/threads";
@@ -22,12 +22,14 @@ import { ThreadItem, ThreadComposer } from "@/components/immigration/case-profil
 // current visa-type checklist, or with no key at all) are folded under
 // an "Other" group at the bottom so nothing is hidden.
 
+// Display labels only — the stored status values stay "Approved" / "Rejected"
+// (logic + client mapping depend on them); we just present them more softly.
 const STATUS_OPTIONS = [
     { value: "Submitted",   label: "Submitted" },
     { value: "UnderReview", label: "Under review" },
     { value: "Checked",     label: "Checked (refer to adviser)" },
-    { value: "Approved",    label: "Approved" },
-    { value: "Rejected",    label: "Rejected" },
+    { value: "Approved",    label: "Accepted / Satisfactory" },
+    { value: "Rejected",    label: "Required attention" },
 ];
 
 const STATUS_TONE = {
@@ -62,6 +64,16 @@ export default function DocumentsTab({
     // "File history" modal — every file on the case with its status, kept
     // separate from the checklist table below.
     const [filesOpen, setFilesOpen] = useState(false);
+    // Collapsible document sections — a Set of collapsed category names.
+    const [collapsedCats, setCollapsedCats] = useState(() => new Set());
+    const toggleCat = (cat) => setCollapsedCats((prev) => {
+        const next = new Set(prev);
+        next.has(cat) ? next.delete(cat) : next.add(cat);
+        return next;
+    });
+    // "Request a document" modal — a free-text ad-hoc request not tied to a
+    // checklist slot.
+    const [requestOpen, setRequestOpen] = useState(false);
 
     // Build a checklist-keyed map of uploaded documents (latest wins per key).
     // Orphans (no matching checklist entry) get collected separately.
@@ -243,39 +255,53 @@ export default function DocumentsTab({
                     <table className="w-full text-sm">
                         <thead>
                             <tr className="bg-gray-50 border-b border-gray-100 text-[10.5px] font-bold uppercase tracking-wider text-gray-500">
-                                <th className="text-left px-4 py-2.5 w-[36%]">Document</th>
-                                <th className="text-left px-4 py-2.5 w-[24%]">Attachment</th>
-                                <th className="text-left px-4 py-2.5 w-[18%]">Status</th>
-                                <th className="text-left px-4 py-2.5 w-[22%]">Notes</th>
+                                <th className="text-left px-4 py-2.5 w-[30%]">Document</th>
+                                <th className="text-left px-4 py-2.5 w-[22%]">Attachment</th>
+                                <th className="text-left px-4 py-2.5 w-[14%]">Status</th>
+                                <th className="text-left px-4 py-2.5 w-[18%]">Reviewed by</th>
+                                <th className="text-left px-4 py-2.5 w-[16%]">Notes</th>
                             </tr>
                         </thead>
                         <tbody>
                             {groupedRows.map(([category, groupRows]) => {
                                 const approved = groupRows.filter((r) => r.document?.status === "Approved").length;
                                 const checklistRows = groupRows.filter((r) => r.kind === "checklist");
+                                const collapsed = collapsedCats.has(category);
                                 return (
                                     <Fragment key={category}>
                                         <tr className="bg-gray-200 border-y border-gray-300">
-                                            <td colSpan={4} className="px-4 py-2">
+                                            <td colSpan={5} className="px-4 py-2">
                                                 <div className="flex items-center gap-2">
                                                     {checklistRows.length > 0 && (
                                                         <SectionSelectAll leadId={lead.id} rows={checklistRows} />
                                                     )}
-                                                    <span className="text-[11px] font-bold uppercase tracking-wider text-gray-700">
-                                                        {category}
-                                                    </span>
-                                                    <span className="text-[10.5px] font-semibold text-gray-500">
-                                                        {approved}/{groupRows.length}
-                                                    </span>
+                                                    {/* Click the header to collapse/expand the section. */}
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => toggleCat(category)}
+                                                        className="flex items-center gap-1.5 group"
+                                                        title={collapsed ? "Expand section" : "Collapse section"}
+                                                    >
+                                                        {collapsed
+                                                            ? <ChevronRight size={13} className="text-gray-500 group-hover:text-gray-900" />
+                                                            : <ChevronDown size={13} className="text-gray-500 group-hover:text-gray-900" />}
+                                                        <span className="text-[11px] font-bold uppercase tracking-wider text-gray-700 group-hover:text-gray-900">
+                                                            {category}
+                                                        </span>
+                                                        <span className="text-[10.5px] font-semibold text-gray-500">
+                                                            {approved}/{groupRows.length}
+                                                        </span>
+                                                    </button>
                                                 </div>
                                             </td>
                                         </tr>
-                                        {groupRows.map((row) => (
+                                        {! collapsed && groupRows.map((row) => (
                                             <Row
                                                 key={row.key}
                                                 row={row}
                                                 leadId={lead.id}
                                                 docThreads={row.document ? (threadsByDoc.get(row.document.id) || []) : []}
+                                                threadsByDoc={threadsByDoc}
                                                 caseStaff={caseStaff}
                                                 vif={isVifLabel(row.label) ? vif : null}
                                             />
@@ -288,6 +314,26 @@ export default function DocumentsTab({
                 </div>
             </div>
 
+            {/* Request a document — an ad-hoc request for something not on the
+                checklist. Emails the client and logs a document request. */}
+            <div className="flex items-center justify-between gap-3 rounded-xl border border-dashed border-gray-200 bg-gray-50/50 px-4 py-3">
+                <div className="min-w-0">
+                    <p className="text-[13px] font-semibold text-gray-800">Need something else?</p>
+                    <p className="text-[11px] text-gray-500 mt-0.5">Request a document from the client that isn't on the checklist.</p>
+                </div>
+                <button
+                    type="button"
+                    onClick={() => setRequestOpen(true)}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-gray-900 text-white text-[12px] font-semibold hover:bg-black flex-shrink-0"
+                >
+                    <Plus size={14} /> Request a document
+                </button>
+            </div>
+
+            {requestOpen && (
+                <RequestAnyDocument leadId={lead.id} onClose={() => setRequestOpen(false)} />
+            )}
+
             {filesOpen && (
                 <CaseFilesModal
                     leadId={lead.id}
@@ -299,7 +345,7 @@ export default function DocumentsTab({
     );
 }
 
-function Row({ row, leadId, docThreads = [], caseStaff = [], vif = null }) {
+function Row({ row, leadId, docThreads = [], threadsByDoc = new Map(), caseStaff = [], vif = null }) {
     const doc = row.document;
     const [status, setStatus] = useState(doc?.status || "");
     const [note, setNote] = useState(doc?.note || "");
@@ -307,6 +353,8 @@ function Row({ row, leadId, docThreads = [], caseStaff = [], vif = null }) {
     const [savingNote, setSavingNote] = useState(false);
     const [savedNote, setSavedNote] = useState(false);
     const [rejectOpen, setRejectOpen] = useState(false);
+    // Which attached file is open in the in-window preview popup (with comments).
+    const [previewDoc, setPreviewDoc] = useState(null);
 
     const persist = (nextStatus, nextNote, kind) => {
         if (! doc) return;
@@ -420,15 +468,14 @@ function Row({ row, leadId, docThreads = [], caseStaff = [], vif = null }) {
                                         <span className="text-[10px] text-gray-400 tabular-nums">{formatBytes(d.size)}</span>
                                     ) : null}
                                 </span>
-                                <a
-                                    href={`/admin/documents/${d.id}/download?inline=1`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    title="View in browser"
+                                <button
+                                    type="button"
+                                    onClick={() => setPreviewDoc(d)}
+                                    title="View & comment"
                                     className="inline-flex items-center justify-center p-1.5 rounded-md border border-gray-200 bg-white text-gray-600 hover:text-gray-900 hover:bg-gray-50"
                                 >
                                     <Eye size={12} />
-                                </a>
+                                </button>
                                 <a
                                     href={`/admin/documents/${d.id}/download`}
                                     title="Download"
@@ -490,6 +537,25 @@ function Row({ row, leadId, docThreads = [], caseStaff = [], vif = null }) {
                 )}
             </td>
 
+            {/* Reviewed by — who made the Accept/Required-attention decision, and when */}
+            <td className="px-4 py-3">
+                {row.document?.reviewed_by ? (
+                    <div className="min-w-0">
+                        <p className="text-[12px] font-semibold text-gray-800 truncate" title={row.document.reviewed_by}>
+                            {row.document.reviewed_by}
+                        </p>
+                        {row.document.reviewed_by_role && (
+                            <p className="text-[10px] text-gray-400 capitalize">{String(row.document.reviewed_by_role).replace(/_/g, " ")}</p>
+                        )}
+                        {row.document.reviewed_at && (
+                            <p className="text-[10px] text-gray-400 tabular-nums">{formatDate(row.document.reviewed_at)}</p>
+                        )}
+                    </div>
+                ) : (
+                    <span className="text-[11px] text-gray-300">—</span>
+                )}
+            </td>
+
             {/* Notes — inline-editable, saves on blur */}
             <td className="px-4 py-3">
                 {doc ? (
@@ -527,7 +593,7 @@ function Row({ row, leadId, docThreads = [], caseStaff = [], vif = null }) {
             nowhere else. A composer appears only when there's a file to anchor to. */}
         {doc && (
             <tr className="border-b border-gray-50 last:border-b-0">
-                <td colSpan={4} className="px-4 pb-3 pt-0">
+                <td colSpan={5} className="px-4 pb-3 pt-0">
                     <div className="ml-6 space-y-1.5">
                         {docThreads.map((t) => (
                             <ThreadItem key={t.id} thread={t} leadId={leadId} />
@@ -543,7 +609,89 @@ function Row({ row, leadId, docThreads = [], caseStaff = [], vif = null }) {
                 </td>
             </tr>
         )}
+        {previewDoc && (
+            <DocPreviewModal
+                doc={previewDoc}
+                label={row.label}
+                leadId={leadId}
+                caseStaff={caseStaff}
+                threads={threadsByDoc.get(previewDoc.id) || []}
+                onClose={() => setPreviewDoc(null)}
+            />
+        )}
         </Fragment>
+    );
+}
+
+// In-window document preview popup with a comment box — the "view" button opens
+// this instead of navigating away, so staff (or the adviser) can read the file
+// and drop a comment on it in one place. Comments are the document's thread
+// (attribution + history for free), so they also show on the row below.
+function DocPreviewModal({ doc, label, leadId, caseStaff = [], threads = [], onClose }) {
+    useEffect(() => {
+        const onKey = (e) => { if (e.key === "Escape") onClose(); };
+        const prev = document.body.style.overflow;
+        document.body.style.overflow = "hidden";
+        window.addEventListener("keydown", onKey);
+        return () => { document.body.style.overflow = prev; window.removeEventListener("keydown", onKey); };
+    }, [onClose]);
+
+    const inlineUrl = `/admin/documents/${doc.id}/download?inline=1`;
+    const isPdf = (doc.mime || "").includes("pdf");
+    const isImage = (doc.mime || "").startsWith("image/");
+
+    return createPortal(
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/40" onClick={onClose}>
+            <div className="w-[94vw] max-w-[1150px] h-[88vh] rounded-2xl bg-white shadow-xl flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
+                <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between gap-4">
+                    <div className="min-w-0">
+                        <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-gray-400 mb-0.5">{label}</p>
+                        <h3 className="text-sm font-semibold text-gray-900 truncate">{doc.original_name}</h3>
+                    </div>
+                    <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-700 flex-shrink-0"><XIcon size={18} /></button>
+                </div>
+
+                <div className="flex-1 min-h-0 flex flex-col lg:flex-row overflow-hidden">
+                    {/* Preview */}
+                    <div className="lg:flex-1 min-h-0 bg-gray-100 border-b lg:border-b-0 lg:border-r border-gray-100 flex flex-col">
+                        {isImage ? (
+                            <div className="flex-1 overflow-auto p-4 flex items-start justify-center">
+                                <img src={inlineUrl} alt={doc.original_name} className="max-w-full h-auto rounded-lg shadow-sm" />
+                            </div>
+                        ) : isPdf ? (
+                            <iframe src={inlineUrl} title={doc.original_name} className="flex-1 w-full border-0" />
+                        ) : (
+                            <div className="flex-1 flex flex-col items-center justify-center text-center p-8">
+                                <FileText size={40} className="text-gray-300" />
+                                <p className="mt-3 text-sm text-gray-600">No inline preview for this file type.</p>
+                                <a href={`/admin/documents/${doc.id}/download`} className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 text-gray-700 text-[12px] font-semibold hover:bg-white"><Download size={13} /> Download to view</a>
+                            </div>
+                        )}
+                        <div className="flex items-center gap-1.5 px-4 py-2 border-t border-gray-200 bg-white">
+                            <a href={inlineUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-gray-200 text-gray-600 text-[11px] font-semibold hover:bg-gray-50"><Eye size={12} /> Open in tab</a>
+                            <a href={`/admin/documents/${doc.id}/download`} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-gray-200 text-gray-600 text-[11px] font-semibold hover:bg-gray-50"><Download size={12} /> Download</a>
+                        </div>
+                    </div>
+
+                    {/* Comments */}
+                    <div className="lg:w-[360px] flex-shrink-0 overflow-y-auto overscroll-contain p-4 bg-gray-50">
+                        <p className="text-[11px] font-bold uppercase tracking-wider text-gray-500 mb-2 inline-flex items-center gap-1.5"><MessageSquare size={12} /> Comments</p>
+                        <div className="space-y-1.5 mb-3">
+                            {threads.length === 0 && <p className="text-[12px] text-gray-400">No comments yet. Add the first below.</p>}
+                            {threads.map((t) => <ThreadItem key={t.id} thread={t} leadId={leadId} />)}
+                        </div>
+                        <ThreadComposer
+                            leadId={leadId}
+                            caseStaff={caseStaff}
+                            fixedAnchor={{ anchor_type: "document", anchor_id: doc.id }}
+                            compact
+                            placeholder="Add a comment…"
+                        />
+                    </div>
+                </div>
+            </div>
+        </div>,
+        document.body,
     );
 }
 
@@ -884,6 +1032,94 @@ function RequestFromClient({ leadId, rowLabel, rowRequired }) {
                 document.body,
             )}
         </>
+    );
+}
+
+// Ad-hoc document request — a free-text label (not tied to a checklist slot),
+// emailed to the client and logged as a LeadDocumentRequest via the same
+// endpoint the per-row request uses.
+function RequestAnyDocument({ leadId, onClose }) {
+    const [label, setLabel] = useState("");
+    const [message, setMessage] = useState("");
+    const [required, setRequired] = useState(true);
+    const [submitting, setSubmitting] = useState(false);
+
+    useEffect(() => {
+        const onKey = (e) => { if (e.key === "Escape") onClose(); };
+        window.addEventListener("keydown", onKey);
+        return () => window.removeEventListener("keydown", onKey);
+    }, [onClose]);
+
+    const send = () => {
+        if (submitting) return;
+        if (! label.trim()) { toast.error("Give the document a name"); return; }
+        setSubmitting(true);
+        router.post(
+            `/admin/leads/${leadId}/documents/requests`,
+            { items: [{ label: label.trim(), description: message.trim() || null, required }] },
+            {
+                preserveScroll: true,
+                preserveState: true,
+                onSuccess: () => { toast.success("Request sent to client"); onClose(); },
+                onError: (errs) => toast.error(Object.values(errs)[0] || "Request failed"),
+                onFinish: () => setSubmitting(false),
+            },
+        );
+    };
+
+    return createPortal(
+        <div className="fixed inset-0 z-[60] bg-black/40 flex items-center justify-center p-4" role="dialog" aria-modal="true" onClick={onClose}>
+            <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full" onClick={(e) => e.stopPropagation()}>
+                <header className="px-5 py-4 border-b border-gray-100 flex items-start justify-between gap-3">
+                    <h2 className="text-sm font-bold text-gray-900 inline-flex items-center gap-2">
+                        <Plus size={14} className="text-gray-500" /> Request a document
+                    </h2>
+                    <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-700"><XIcon size={16} /></button>
+                </header>
+                <div className="px-5 py-4 space-y-3">
+                    <div>
+                        <label className="block text-[11px] font-semibold text-gray-700 uppercase tracking-wider mb-1">Document name</label>
+                        <input
+                            type="text"
+                            value={label}
+                            onChange={(e) => setLabel(e.target.value)}
+                            maxLength={120}
+                            placeholder="e.g. Employment contract"
+                            className="w-full text-xs px-3 py-2 border border-gray-200 rounded-md focus:outline-none focus:border-gray-900"
+                            autoFocus
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-[11px] font-semibold text-gray-700 uppercase tracking-wider mb-1">Message (optional)</label>
+                        <textarea
+                            value={message}
+                            onChange={(e) => setMessage(e.target.value)}
+                            rows={3}
+                            maxLength={500}
+                            placeholder="Any instructions for the client…"
+                            className="w-full text-xs px-3 py-2 border border-gray-200 rounded-md focus:outline-none focus:border-gray-900 resize-none"
+                        />
+                    </div>
+                    <label className="inline-flex items-center gap-2 text-[12px] text-gray-700 cursor-pointer">
+                        <input type="checkbox" checked={required} onChange={(e) => setRequired(e.target.checked)} className="rounded border-gray-300" />
+                        Required document
+                    </label>
+                </div>
+                <footer className="px-5 py-3 border-t border-gray-100 flex items-center justify-end gap-2">
+                    <button type="button" onClick={onClose} className="px-3 py-1.5 text-xs font-semibold text-gray-600 hover:text-gray-900">Cancel</button>
+                    <button
+                        type="button"
+                        onClick={send}
+                        disabled={submitting}
+                        className="inline-flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-semibold bg-gray-900 text-white hover:bg-black disabled:opacity-50"
+                    >
+                        {submitting ? <Loader2 size={11} className="animate-spin" /> : <Send size={11} />}
+                        Send request
+                    </button>
+                </footer>
+            </div>
+        </div>,
+        document.body,
     );
 }
 
