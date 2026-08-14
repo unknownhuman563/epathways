@@ -363,18 +363,17 @@ class MessageTemplateController extends Controller
      */
     private function brandingOptions(): array
     {
-        $default = config('email_branding.default', []);
-
         return collect(config('email_branding', []))
-            ->map(function ($cfg, $key) use ($default) {
-                $banner = ($cfg['banner'] ?? null) && is_file(public_path($cfg['banner'])) ? $cfg['banner'] : ($default['banner'] ?? null);
-                $footer = ($cfg['footer'] ?? null) && is_file(public_path($cfg['footer'])) ? $cfg['footer'] : ($default['footer'] ?? null);
+            ->map(function ($cfg, $key) {
+                // Resolver prefers an admin-uploaded image, then the file asset,
+                // then the default — same order the email itself uses.
+                $assets = \App\Models\EmailBranding::resolveAssets($key);
 
                 return [
                     'value' => $key,
                     'label' => $cfg['label'] ?? ucfirst($key),
-                    'banner_url' => $banner && is_file(public_path($banner)) ? asset($banner) : null,
-                    'footer_url' => $footer && is_file(public_path($footer)) ? asset($footer) : null,
+                    'banner_url' => $assets['bannerUrl'],
+                    'footer_url' => $assets['footerUrl'],
                 ];
             })
             ->values()->all();

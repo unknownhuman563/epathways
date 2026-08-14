@@ -20,14 +20,12 @@
         $bannerRel = ($bannerImage ?? null) && Storage::disk('public')->exists($bannerImage) ? $bannerImage : null;
         $footerRel = ($footerImage ?? null) && Storage::disk('public')->exists($footerImage) ? $footerImage : null;
 
-        // Per-portal branding preset (config/email_branding.php). A per-template
-        // uploaded banner/footer still wins; otherwise use the portal's preset
-        // asset if the file exists, else the global default artwork.
-        $brandCfg = config('email_branding.'.($branding ?? 'default')) ?: config('email_branding.default', []);
-        $brandBannerRel = ($brandCfg['banner'] ?? null) && is_file(public_path($brandCfg['banner'])) ? $brandCfg['banner'] : 'images/email/team-header.png';
-        $brandFooterAbs = ($brandCfg['footer'] ?? null) && is_file(public_path($brandCfg['footer'])) ? public_path($brandCfg['footer']) : public_path('images/coffee-cta.png');
+        // Per-department branding: admin-uploaded image (EmailBranding) → config
+        // file asset → default artwork. A per-template uploaded banner/footer
+        // still wins over all of it.
+        $brandAssets = \App\Models\EmailBranding::resolveAssets($branding ?? 'default');
 
-        $footerPath = $footerRel ? Storage::disk('public')->path($footerRel) : $brandFooterAbs;
+        $footerPath = $footerRel ? Storage::disk('public')->path($footerRel) : $brandAssets['footerPath'];
 
         $siteHost = preg_replace('#^https?://#', '', $siteUrl);
         $phone = config('services.contact.phone');
@@ -35,12 +33,14 @@
         $facebook = config('services.contact.facebook');
         $messenger = config('services.contact.messenger');
         $contactEmail = config('services.contact.email');
-        $bookingUrl = config('services.contact.booking_url') ?: $siteUrl.'/booking';
+        // Per-department CTA links (BOOK NOW destination + CALL number baked on).
+        $bookingUrl = $brandAssets['bookingUrl'];
+        $callNumber = $brandAssets['callNumber'];
 
-        $banner = $bannerRel ? $abs(Storage::disk('public')->url($bannerRel)) : $siteUrl.'/'.ltrim($brandBannerRel, '/');
+        $banner = $bannerRel ? $abs(Storage::disk('public')->url($bannerRel)) : $brandAssets['bannerUrl'];
         // Footer buttons are baked in, then the composite is served from a URL.
         $footer = is_file($footerPath)
-            ? app(\App\Services\EmailFooterComposer::class)->composeUrl($footerPath, 'BOOK NOW', $phone ? 'CALL '.$phone : null)
+            ? app(\App\Services\EmailFooterComposer::class)->composeUrl($footerPath, 'BOOK NOW', $callNumber ? 'CALL '.$callNumber : null)
             : null;
     @endphp
 
