@@ -43,12 +43,21 @@ class DtrController extends Controller
             ->get(['id', 'work_date', 'tasks']);
         foreach ($pastPending as $e) {
             foreach ((array) $e->tasks as $idx => $t) {
+                if (! empty($t['pending_done'])) {
+                    continue;
+                }
                 $pending = trim((string) ($t['pending'] ?? ''));
-                if ($pending !== '' && empty($t['pending_done'])) {
+                $task = trim((string) ($t['task'] ?? ''));
+                // Explicit "for tomorrow" items (pending) roll forward — and so
+                // do to-do items that were never finished or carried, so a plan
+                // you didn't get to isn't lost: it reappears as tomorrow's to-do.
+                $text = $pending !== '' ? $pending
+                    : (($t['status'] ?? '') === 'todo' && $task !== '' ? $task : '');
+                if ($text !== '') {
                     $carried[] = [
                         'entry_id' => $e->id,
                         'index' => $idx,
-                        'text' => $pending,
+                        'text' => $text,
                         'date' => $e->work_date->toDateString(),
                     ];
                 }
@@ -327,11 +336,33 @@ class DtrController extends Controller
 
         $date = Carbon::parse($data['work_date'])->toDateString();
 
-        $tasks = array_values(array_map(fn ($t) => [
-            'task' => (string) ($t['task'] ?? ''),
-            'pending' => (string) ($t['pending'] ?? ''),
-            'pending_done' => (bool) ($t['pending_done'] ?? false),
-        ], $data['tasks'] ?? []));
+        // Preserve each row's original status when the admin didn't change its
+        // text (e.g. they only fixed the clock-out time) so a to-do isn't
+        // silently converted to completed. Fall back to inferring from the field.
+        $existing = DtrEntry::where('user_id', $data['user_id'])->where('work_date', $date)->first();
+        $existingTasks = $existing && is_array($existing->tasks) ? array_values($existing->tasks) : [];
+        $incoming = array_values($data['tasks'] ?? []);
+
+        $tasks = [];
+        foreach ($incoming as $i => $t) {
+            $task = (string) ($t['task'] ?? '');
+            $pending = (string) ($t['pending'] ?? '');
+            $status = null;
+            if (isset($existingTasks[$i])
+                && (string) ($existingTasks[$i]['task'] ?? '') === $task
+                && (string) ($existingTasks[$i]['pending'] ?? '') === $pending) {
+                $status = $existingTasks[$i]['status'] ?? null;
+            }
+            if (! in_array($status, ['todo', 'done', 'carry'], true)) {
+                $status = trim($pending) !== '' ? 'carry' : 'done';
+            }
+            $tasks[] = [
+                'task' => $task,
+                'pending' => $pending,
+                'status' => $status,
+                'pending_done' => (bool) ($t['pending_done'] ?? false),
+            ];
+        }
 
         DtrEntry::updateOrCreate(
             ['user_id' => $data['user_id'], 'work_date' => $date],
@@ -390,18 +421,35 @@ class DtrController extends Controller
         $row = $entry ? $this->computeRow($entry, $setting) : null;
 
         $fmt = fn ($hhmm) => $hhmm ? Carbon::createFromFormat('H:i', $hhmm)->format('g:i A') : '—';
-        $tasks = collect($row['tasks'] ?? [])
-            ->filter(fn ($t) => trim((string) ($t['task'] ?? '')) !== '' || trim((string) ($t['pending'] ?? '')) !== '')
-            ->map(fn ($t) => ['task' => (string) ($t['task'] ?? ''), 'pending' => (string) ($t['pending'] ?? '')])
-            ->values()->all();
+
+        // The record keeps completed work in `task` and for-tomorrow items in
+        // `pending` — surface them as two clean lists in the report.
+        $allTasks = collect($row['tasks'] ?? []);
+        // Completed = done tasks (to-do items are never counted as completed).
+        $completed = $allTasks->filter(fn ($t) => ($t['status'] ?? '') !== 'todo')
+            ->map(fn ($t) => trim((string) ($t['task'] ?? '')))->filter()->values()->all();
+        // Pending/for-tomorrow = explicit carry items PLUS any unfinished to-do
+        // (a plan the day ended on rolls into the next day's to-do).
+        $pending = $allTasks->map(function ($t) {
+            $p = trim((string) ($t['pending'] ?? ''));
+            if ($p !== '') {
+                return $p;
+            }
+
+            return ($t['status'] ?? '') === 'todo' ? trim((string) ($t['task'] ?? '')) : '';
+        })->filter()->values()->all();
+
+        $isFlexi = $setting->schedule_type === 'flexi';
 
         $payload = [
+            'logo_data' => $this->brandLogoData(),
             'name' => $setting->user?->name ?: ($setting->label ?: 'Staff'),
             'position' => $setting->position,
+            'employment' => $setting->employment_type === 'part_time' ? 'Part-time' : 'Full-time',
             'team' => $setting->team,
             'timezone' => $setting->timezone,
-            'scheduleIn' => $fmt($setting->sched_in),
-            'scheduleOut' => $fmt($setting->sched_out),
+            'scheduleLabel' => $isFlexi ? 'Flexi — no fixed hours' : ($fmt($setting->sched_in).' – '.$fmt($setting->sched_out)),
+            'flexi' => $isFlexi,
             'date' => $date,
             'prettyDate' => Carbon::parse($date)->format('l, F j, Y'),
             'timeIn' => $fmt($row['time_in'] ?? null),
@@ -410,7 +458,8 @@ class DtrController extends Controller
             'variance' => isset($row['variance']) && $row['variance'] !== null ? ($row['variance'] >= 0 ? '+' : '').number_format($row['variance'], 2) : '—',
             'attendance' => $row['attendance'] ?? '—',
             'remarks' => $row['remarks'] ?? null,
-            'tasks' => $tasks,
+            'completed' => $completed,
+            'pending' => $pending,
             'generatedAt' => now($setting->timezone ?: config('app.timezone', 'UTC'))->format('M j, Y g:i A'),
         ];
 
@@ -418,6 +467,24 @@ class DtrController extends Controller
         $slug = \Illuminate\Support\Str::slug($payload['name']);
 
         return $pdf->download("DTR_{$slug}_{$date}.pdf");
+    }
+
+    /**
+     * Base64 data URI of the ePathways brand logo for the PDF header. The file
+     * lives at resources/assets/ep_only.* (present on the server, not committed
+     * locally). Returns '' if absent, so the header falls back to the wordmark.
+     */
+    private function brandLogoData(): string
+    {
+        $map = ['png' => 'png', 'jpg' => 'jpeg', 'jpeg' => 'jpeg', 'webp' => 'webp', 'gif' => 'gif', 'svg' => 'svg+xml'];
+        foreach ($map as $ext => $mime) {
+            $path = base_path("resources/assets/ep_only.{$ext}");
+            if (is_file($path)) {
+                return "data:image/{$mime};base64,".base64_encode(file_get_contents($path));
+            }
+        }
+
+        return '';
     }
 
     /** A day's report counts as "submitted" once clocked out or tasks logged. */
@@ -594,10 +661,12 @@ class DtrController extends Controller
             'user_id' => 'required|integer|exists:users,id',
             'label' => 'nullable|string|max:120',
             'position' => 'nullable|string|max:120',
+            'employment_type' => 'nullable|in:full_time,part_time',
             'team' => 'nullable|string|max:120',
             'timezone' => 'required|string|max:64',
             'sched_in' => 'nullable|string|max:8',
             'sched_out' => 'nullable|string|max:8',
+            'schedule_type' => 'nullable|in:fixed,flexi',
             'break_hours' => 'nullable|numeric|min:0|max:24',
             'reports_to' => 'nullable|string|max:120',
             'std_hours' => 'nullable|numeric|min:0|max:24',
@@ -612,6 +681,15 @@ class DtrController extends Controller
         $userId = $data['user_id'];
         unset($data['user_id']);
         $data['is_complete'] = true;
+        $data['employment_type'] = $data['employment_type'] ?? 'full_time';
+        $data['schedule_type'] = $data['schedule_type'] ?? 'fixed';
+
+        // Flexi has no fixed schedule — clear the clock-in/grace fields so a
+        // stale time never gets used to flag lateness that doesn't apply.
+        if ($data['schedule_type'] === 'flexi') {
+            $data['sched_in'] = null;
+            $data['sched_out'] = null;
+        }
 
         // Snapshot the before-state so we can audit exactly what changed.
         $existing = DtrSetting::where('user_id', $userId)->first();
@@ -627,8 +705,10 @@ class DtrController extends Controller
     private const SETTING_FIELDS = [
         'label' => 'DTR name',
         'position' => 'Position',
+        'employment_type' => 'Employment',
         'team' => 'Team',
         'timezone' => 'Time zone',
+        'schedule_type' => 'Schedule type',
         'sched_in' => 'Sched. in',
         'sched_out' => 'Sched. out',
         'break_hours' => 'Break (hrs)',
@@ -636,6 +716,14 @@ class DtrController extends Controller
         'std_hours' => 'Std hrs / day',
         'grace_mins' => 'Grace (mins)',
         'reports_to' => 'Reports to',
+    ];
+
+    /** Pretty labels for coded setup values, shown in the change history. */
+    private const SETTING_VALUE_LABELS = [
+        'full_time' => 'Full-time',
+        'part_time' => 'Part-time',
+        'fixed' => 'Fixed schedule',
+        'flexi' => 'Flexi time',
     ];
 
     /**
@@ -694,8 +782,8 @@ class DtrController extends Controller
                 'at' => optional($h->created_at)->timezone($tz)->format('M j, Y g:i A'),
                 'changes' => collect($h->changes ?? [])->map(fn ($c, $field) => [
                     'field' => self::SETTING_FIELDS[$field] ?? $field,
-                    'from' => $c['from'] ?? null,
-                    'to' => $c['to'] ?? null,
+                    'from' => self::SETTING_VALUE_LABELS[$c['from'] ?? ''] ?? ($c['from'] ?? null),
+                    'to' => self::SETTING_VALUE_LABELS[$c['to'] ?? ''] ?? ($c['to'] ?? null),
                 ])->values()->all(),
             ])->values();
 
@@ -726,6 +814,11 @@ class DtrController extends Controller
             'tasks' => 'nullable|array|max:100',
             'tasks.*.task' => 'nullable|string|max:1000',
             'tasks.*.pending' => 'nullable|string|max:1000',
+            'tasks.*.status' => 'nullable|in:todo,done,carry',
+            'tasks.*.pending_done' => 'nullable|boolean',
+            'close_carried' => 'nullable|array|max:200',
+            'close_carried.*.entry_id' => 'required|integer',
+            'close_carried.*.index' => 'required|integer|min:0',
             'remarks' => 'nullable|string|max:2000',
         ]);
 
@@ -735,17 +828,47 @@ class DtrController extends Controller
         $today = now($setting->timezone ?: config('app.timezone', 'UTC'))->toDateString();
         abort_if($data['work_date'] !== $today, 403, 'Past days are locked and cannot be edited.');
 
+        // Completed (task) and for-tomorrow (pending) items are the record; to-do
+        // rows are stored too (status=todo) so the plan survives a refresh, but
+        // they're kept out of every count/report/carry-over below.
+        $tasks = array_values(array_map(fn ($t) => [
+            'task' => (string) ($t['task'] ?? ''),
+            'pending' => (string) ($t['pending'] ?? ''),
+            'status' => in_array($t['status'] ?? '', ['todo', 'done', 'carry'], true)
+                ? $t['status']
+                : (trim((string) ($t['pending'] ?? '')) !== '' ? 'carry' : 'done'),
+            'pending_done' => (bool) ($t['pending_done'] ?? false),
+        ], $data['tasks'] ?? []));
+
         DtrEntry::updateOrCreate(
             ['user_id' => auth()->id(), 'work_date' => $data['work_date']],
             [
                 'time_in' => $data['time_in'] ?? null,
                 'time_out' => $data['time_out'] ?? null,
-                'tasks' => array_values($data['tasks'] ?? []),
+                'tasks' => $tasks,
                 'remarks' => $data['remarks'] ?? null,
             ],
         );
 
-        return back()->with('success', 'Saved.');
+        // Carried-over items resolved today (completed or re-carried) get closed
+        // on their source entry so they stop rolling forward. Scoped to the
+        // signed-in user's own entries.
+        foreach ($data['close_carried'] ?? [] as $c) {
+            $src = DtrEntry::where('user_id', auth()->id())->find($c['entry_id']);
+            if (! $src) {
+                continue;
+            }
+            $t = is_array($src->tasks) ? $src->tasks : [];
+            if (isset($t[$c['index']])) {
+                $t[$c['index']]['pending_done'] = true;
+                $src->tasks = array_values($t);
+                $src->save();
+            }
+        }
+
+        // No flash — the DTR page shows an inline "Saved" badge itself; a global
+        // toast on every autosave would be noise.
+        return back();
     }
 
     /** One-tap clock in — stamps the current time (in the user's DTR timezone). */
@@ -805,7 +928,10 @@ class DtrController extends Controller
             $variance = round($net - $stdHours, 2);
         }
 
-        if ($e->time_in && $s && $s->sched_in) {
+        if ($s && $s->schedule_type === 'flexi') {
+            // Flexi has no fixed clock-in — never Late. Any clock-in is fine.
+            $attendance = $e->time_in ? 'Flexi' : null;
+        } elseif ($e->time_in && $s && $s->sched_in) {
             $attendance = $this->toMinutes($e->time_in) <= ($this->toMinutes($s->sched_in) + $graceMins)
                 ? 'On Time' : 'Late';
         }
@@ -823,8 +949,8 @@ class DtrController extends Controller
             'attendance' => $attendance,
             'tasks' => $tasks,
             'remarks' => $e->remarks,
-            'tasks_count' => collect($tasks)->filter(fn ($t) => trim((string) ($t['task'] ?? '')) !== '')->count(),
-            'open_count' => collect($tasks)->filter(fn ($t) => trim((string) ($t['pending'] ?? '')) !== '')->count(),
+            'tasks_count' => collect($tasks)->filter(fn ($t) => trim((string) ($t['task'] ?? '')) !== '' && ($t['status'] ?? '') !== 'todo')->count(),
+            'open_count' => collect($tasks)->filter(fn ($t) => trim((string) ($t['pending'] ?? '')) !== '' || (($t['status'] ?? '') === 'todo' && trim((string) ($t['task'] ?? '')) !== ''))->count(),
         ];
     }
 

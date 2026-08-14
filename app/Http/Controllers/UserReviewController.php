@@ -18,25 +18,25 @@ class UserReviewController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'name'       => 'required|string|max:255',
-            'email'      => 'nullable|email|max:255',
-            'mode'       => 'required|in:questions,paragraph',
-            'rating'     => 'nullable|integer|min:1|max:5',
-            'answer_1'   => 'nullable|required_if:mode,questions|string|max:5000',
-            'answer_2'   => 'nullable|required_if:mode,questions|string|max:5000',
-            'answer_3'   => 'nullable|required_if:mode,questions|string|max:5000',
-            'paragraph'  => 'nullable|required_if:mode,paragraph|string|max:5000',
+            'name' => 'required|string|max:255',
+            'email' => 'nullable|email|max:255',
+            'mode' => 'required|in:questions,paragraph',
+            'rating' => 'nullable|integer|min:1|max:5',
+            'answer_1' => 'nullable|required_if:mode,questions|string|max:5000',
+            'answer_2' => 'nullable|required_if:mode,questions|string|max:5000',
+            'answer_3' => 'nullable|required_if:mode,questions|string|max:5000',
+            'paragraph' => 'nullable|required_if:mode,paragraph|string|max:5000',
             // 'immigration' default keeps the existing behaviour for the
             // immigration page that hasn't been updated to pass it explicitly.
             'department' => ['nullable', Rule::in(UserReview::DEPARTMENTS)],
             // Visa category (immigration side) and programme level
             // (education side). Both optional — a cross-dept review (the
             // client used services from both teams) fills both.
-            'visa_type'    => 'nullable|string|max:120',
+            'visa_type' => 'nullable|string|max:120',
             'program_type' => 'nullable|string|max:120',
             // Optional headshot. Capped at 4MB — anything bigger is almost
             // certainly an un-resized phone photo and would slow the page.
-            'photo'        => 'nullable|image|mimes:jpeg,png,jpg,webp|max:4096',
+            'photo' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:4096',
         ]);
 
         try {
@@ -48,10 +48,10 @@ class UserReviewController extends Controller
             unset($validated['photo']);
 
             $payload = array_merge($validated, [
-                'review_id'    => 'UR-' . strtoupper(uniqid()),
-                'status'       => 'New',
+                'review_id' => 'UR-'.strtoupper(uniqid()),
+                'status' => 'New',
                 'is_published' => false,
-                'department'   => $validated['department'] ?? UserReview::DEPT_IMMIGRATION,
+                'department' => $validated['department'] ?? UserReview::DEPT_IMMIGRATION,
             ]);
 
             if ($photoFile) {
@@ -64,11 +64,12 @@ class UserReviewController extends Controller
 
             return redirect()->back()->with([
                 'review_success' => true,
-                'review_id'      => $review->review_id,
+                'review_id' => $review->review_id,
             ]);
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error('User review storage failed', ['error' => $e->getMessage()]);
+
             return redirect()->back()->withErrors([
                 'error' => 'Failed to submit review. Please try again.',
             ]);
@@ -95,25 +96,27 @@ class UserReviewController extends Controller
             ->limit(60)
             ->get()
             ->map(fn (UserReview $r) => [
-                'id'           => $r->id,
-                'review_id'    => $r->review_id,
-                'name'         => $r->name,
-                'mode'         => $r->mode,
-                'answer_1'     => $r->answer_1,
-                'answer_2'     => $r->answer_2,
-                'answer_3'     => $r->answer_3,
-                'paragraph'    => $r->paragraph,
-                'rating'       => $r->rating,
-                'visa_type'    => $r->visa_type,
+                'id' => $r->id,
+                'review_id' => $r->review_id,
+                'name' => $r->name,
+                'mode' => $r->mode,
+                'answer_1' => $r->answer_1,
+                'answer_2' => $r->answer_2,
+                'answer_3' => $r->answer_3,
+                'paragraph' => $r->paragraph,
+                'rating' => $r->rating,
+                'visa_type' => $r->visa_type,
                 'program_type' => $r->program_type,
-                'department'   => $r->department,
-                'photo_url'    => $r->photo_url,
-                'is_featured'  => $r->is_featured,
-                'created_at'   => $r->created_at,
+                'department' => $r->department,
+                'photo_url' => $r->photo_url,
+                'is_featured' => $r->is_featured,
+                'source' => $r->source,
+                // Google reviews show their real date; on-site ones use created_at.
+                'created_at' => $r->review_date ?: $r->created_at,
             ]);
 
         $stats = [
-            'count'   => (int) (clone $base)->count(),
+            'count' => (int) (clone $base)->count(),
             'average' => round(
                 (float) (clone $base)->whereNotNull('rating')->avg('rating'),
                 1
@@ -151,8 +154,9 @@ class UserReviewController extends Controller
     public function adminIndex(string $department = UserReview::DEPT_IMMIGRATION)
     {
         $reviews = UserReview::department($department)->latest()->get();
+
         return inertia($this->deptPagePath($department, 'UserReviews'), [
-            'reviews'    => $reviews,
+            'reviews' => $reviews,
             'department' => $department,
         ]);
     }
@@ -175,14 +179,14 @@ class UserReviewController extends Controller
         // Department-scoped staff (education / immigration) only see their
         // own + cross-department ('both') reviews; admins see everything.
         $restrict = null;
-        $page     = 'admin/UserReviewsAll';
-        if ($user && !$user->isAdmin()) {
+        $page = 'admin/UserReviewsAll';
+        if ($user && ! $user->isAdmin()) {
             if ($user->role === 'education') {
-                $page     = 'portal/education/UserReviewsAll';
+                $page = 'portal/education/UserReviewsAll';
                 $restrict = 'education';
             }
             if ($user->role === 'immigration') {
-                $page     = 'portal/immigration/UserReviewsAll';
+                $page = 'portal/immigration/UserReviewsAll';
                 $restrict = 'immigration';
             }
         }
@@ -193,7 +197,7 @@ class UserReviewController extends Controller
             ->get();
 
         return inertia($page, [
-            'reviews'              => $reviews,
+            'reviews' => $reviews,
             'restrictedDepartment' => $restrict,
         ]);
     }
@@ -201,10 +205,52 @@ class UserReviewController extends Controller
     public function adminShow($id, string $department = UserReview::DEPT_IMMIGRATION)
     {
         $review = UserReview::department($department)->findOrFail($id);
+
         return inertia($this->deptPagePath($department, 'UserReviewDetails'), [
-            'review'     => $review,
+            'review' => $review,
             'department' => $department,
         ]);
+    }
+
+    /**
+     * Manually import a Google review (interim path until the Business Profile
+     * API access is approved). Creates a `source=google` review that flows
+     * through the very same moderation queue + carousel as everything else, so
+     * nothing here is thrown away once the API sync lands.
+     */
+    public function adminStoreGoogle(Request $request)
+    {
+        $validated = $request->validate([
+            'name' => 'required|string|max:255',
+            'rating' => 'required|integer|min:1|max:5',
+            'paragraph' => 'required|string|max:5000',
+            'department' => ['required', Rule::in(UserReview::DEPARTMENTS)],
+            'visa_type' => 'nullable|string|max:120',
+            'program_type' => 'nullable|string|max:120',
+            'external_photo_url' => 'nullable|url|max:1024',
+            'review_date' => 'nullable|date',
+            'publish' => 'sometimes|boolean',
+        ]);
+
+        $publish = (bool) ($validated['publish'] ?? true);
+
+        $review = UserReview::create([
+            'review_id' => 'GR-'.strtoupper(uniqid()),
+            'name' => $validated['name'],
+            'mode' => 'paragraph',
+            'paragraph' => $validated['paragraph'],
+            'rating' => $validated['rating'],
+            'department' => $validated['department'],
+            'visa_type' => $validated['visa_type'] ?? null,
+            'program_type' => $validated['program_type'] ?? null,
+            'source' => UserReview::SOURCE_GOOGLE,
+            'external_photo_url' => $validated['external_photo_url'] ?? null,
+            'review_date' => $validated['review_date'] ?? now(),
+            'status' => $publish ? 'Approved' : 'New',
+            'is_published' => $publish,
+        ]);
+
+        return back()->with('success', "Google review {$review->review_id} imported.");
     }
 
     /**
@@ -215,11 +261,11 @@ class UserReviewController extends Controller
     {
         $validated = $request->validate([
             'is_published' => 'sometimes|boolean',
-            'is_featured'  => 'sometimes|boolean',
-            'status'       => ['sometimes', Rule::in(['New', 'Reviewing', 'Approved', 'Rejected'])],
-            'visa_type'    => 'sometimes|nullable|string|max:120',
+            'is_featured' => 'sometimes|boolean',
+            'status' => ['sometimes', Rule::in(['New', 'Reviewing', 'Approved', 'Rejected'])],
+            'visa_type' => 'sometimes|nullable|string|max:120',
             'program_type' => 'sometimes|nullable|string|max:120',
-            'department'   => ['sometimes', Rule::in(UserReview::DEPARTMENTS)],
+            'department' => ['sometimes', Rule::in(UserReview::DEPARTMENTS)],
         ]);
 
         try {
@@ -229,6 +275,7 @@ class UserReviewController extends Controller
             return back()->with('success', "Review {$review->review_id} updated.");
         } catch (\Throwable $e) {
             Log::error('User review admin update failed', ['id' => $id, 'error' => $e->getMessage()]);
+
             return back()->with('error', 'Could not update that review. Please try again.');
         }
     }

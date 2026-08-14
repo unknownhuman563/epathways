@@ -7,8 +7,8 @@ use Illuminate\Database\Eloquent\Model;
 class DtrSetting extends Model
 {
     protected $fillable = [
-        'user_id', 'label', 'position', 'team', 'timezone',
-        'sched_in', 'sched_out', 'break_hours', 'reports_to',
+        'user_id', 'label', 'position', 'employment_type', 'team', 'timezone',
+        'sched_in', 'sched_out', 'schedule_type', 'break_hours', 'reports_to',
         'std_hours', 'grace_mins', 'break_after', 'is_complete',
     ];
 

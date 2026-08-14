@@ -1,34 +1,29 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Head, Link, router } from "@inertiajs/react";
-import { Clock, LogIn, LogOut, Save, Settings, AlertTriangle, CheckCircle, BarChart3, Download, ChevronDown, ListChecks, ChevronLeft, ChevronRight, Plus, CalendarDays, FileSignature, Eraser, X, Check } from "lucide-react";
+import { Clock, LogIn, LogOut, Save, Settings, AlertTriangle, CheckCircle, BarChart3, Download, ChevronDown, ListChecks, ChevronLeft, ChevronRight, Plus, CalendarDays, FileSignature, Eraser, X, Check, ArrowRight, Undo2, CalendarClock, Loader2, CloudOff } from "lucide-react";
 
 const DOW = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
 
-// Carried-forward pending items from earlier days — the checklist to close.
-function CarriedChecklist({ carried }) {
-    const [items, setItems] = useState(carried);
-    useEffect(() => setItems(carried), [carried]);
-    if (!items.length) return null;
+// Tiny autosave badge shown next to the "Tasks" heading.
+function SaveStatus({ state }) {
+    if (state === "saving") return <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 text-[10px] font-bold"><Loader2 size={11} className="animate-spin" /> Saving…</span>;
+    if (state === "saved") return <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[10px] font-bold"><Check size={11} /> Saved</span>;
+    if (state === "error") return <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-rose-50 text-rose-600 text-[10px] font-bold"><CloudOff size={11} /> Not saved</span>;
+    return null;
+}
 
-    const done = (it) => {
-        setItems((p) => p.filter((x) => !(x.entry_id === it.entry_id && x.index === it.index)));
-        router.post("/dtr/pending/toggle", { entry_id: it.entry_id, index: it.index, done: true }, { preserveScroll: true, preserveState: true });
-    };
-
+// Read-only list of recorded tasks for a closed day (Completed / For tomorrow).
+function ReadOnlyList({ title, tone, icon, items, empty }) {
+    const filled = items.filter((t) => t.text.trim());
+    const head = tone === "amber" ? "border-amber-200 bg-amber-50 text-amber-700" : "border-emerald-200 bg-emerald-50 text-emerald-700";
+    const box = tone === "amber" ? "border-amber-200 divide-amber-50" : "border-emerald-200 divide-emerald-50";
     return (
-        <div className="bg-amber-50/70 border border-amber-200 rounded-2xl p-5">
-            <div className="flex items-center gap-2 mb-3">
-                <ListChecks size={16} className="text-amber-700" />
-                <h2 className="text-sm font-bold text-amber-800">Carry-over checklist — {items.length} pending item{items.length === 1 ? "" : "s"} to close</h2>
-            </div>
-            <div className="space-y-1.5">
-                {items.map((it) => (
-                    <label key={`${it.entry_id}-${it.index}`} className="flex items-start gap-2.5 px-3 py-2 rounded-lg bg-white border border-amber-100 hover:border-amber-300 cursor-pointer transition-colors">
-                        <input type="checkbox" onChange={() => done(it)} className="mt-0.5 accent-emerald-600" />
-                        <span className="text-sm text-gray-800 flex-1">{it.text}</span>
-                        <span className="text-[10px] text-gray-400 whitespace-nowrap">from {it.date}</span>
-                    </label>
-                ))}
+        <div className={`rounded-xl border overflow-hidden self-start ${box.split(" ")[0]}`}>
+            <div className={`px-3 py-2.5 border-b flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider ${head}`}>{icon} {title}</div>
+            <div className={`divide-y ${box.split(" ")[1]}`}>
+                {filled.length === 0 ? (
+                    <p className="px-3 py-3 text-xs text-gray-400">{empty}</p>
+                ) : filled.map((t, i) => <div key={i} className="px-3 py-2 text-sm text-gray-800">{t.text}</div>)}
             </div>
         </div>
     );
@@ -670,9 +665,6 @@ function LeaveTab({ leaves = [], leaveTypes = [], minLeaveDate = "", canManage =
     );
 }
 
-const MIN_TASK_ROWS = 5; // starting rows; users add more as needed
-const blankTasks = () => Array.from({ length: MIN_TASK_ROWS }, () => ({ task: "", pending: "" }));
-
 const toMinutes = (hhmm) => {
     if (!hhmm) return null;
     const [h, m] = String(hhmm).split(":").map(Number);
@@ -701,7 +693,9 @@ const compute = (timeIn, timeOut, s) => {
         net = Math.round((worked >= brkAfter ? worked - brk : worked) * 100) / 100;
         variance = Math.round((net - std) * 100) / 100;
     }
-    if (inM != null && s?.sched_in) {
+    if (s?.schedule_type === "flexi") {
+        attendance = inM != null ? "Flexi" : null;
+    } else if (inM != null && s?.sched_in) {
         attendance = inM <= toMinutes(s.sched_in) + grace ? "On Time" : "Late";
     }
     return { net, variance, attendance };
@@ -768,36 +762,107 @@ function exportCsv(entries, setting) {
 // Editor for a single day — reused for Today (clock-driven, read-only times)
 // and for editing/backfilling a past day (editable times). Keyed by date so
 // each instance mounts fresh from its own entry.
-function DayEditor({ setting, entry, date, isToday = false, carried = [] }) {
+function DayEditor({ setting, entry, date, isToday = false, carried = [], openShift = null, openShiftClosable = false }) {
     const [timeIn, setTimeIn] = useState(entry?.time_in || "");
     const [timeOut, setTimeOut] = useState(entry?.time_out || "");
     const [remarks, setRemarks] = useState(entry?.remarks || "");
+    const uidRef = useRef(0);
+    const mk = (text, status, source = null, from = null) => ({ uid: uidRef.current++, text, status, source, from });
+    // A task item is one of three states: `todo` (planned / ongoing — not
+    // recorded), `done` (completed — recorded), `carry` (pending for tomorrow —
+    // recorded and rolls forward). The stored entry keeps only done (in `task`)
+    // and carry (in `pending`); to-do lives only in the UI.
     const [tasks, setTasks] = useState(() => {
-        const rows = (entry?.tasks || []).map((r) => ({ task: r.task || "", pending: r.pending || "" }));
-        while (rows.length < MIN_TASK_ROWS) rows.push({ task: "", pending: "" });
+        const rows = [];
+        // Yesterday's (and earlier) unfinished carry-overs land in "to do" and
+        // keep coming back here every day until completed or re-carried.
+        (isToday ? carried : []).forEach((c) => rows.push(mk(c.text || "", "todo", { entry_id: c.entry_id, index: c.index }, c.date)));
+        // This day's stored rows. New rows carry a status; legacy rows are split
+        // by field (task → completed, pending → carry).
+        (entry?.tasks || []).forEach((r) => {
+            const st = r.status;
+            if (st === "todo") { rows.push(mk(r.task || "", "todo")); return; }
+            if (st === "done") { if (String(r.task ?? "").trim()) rows.push(mk(r.task, "done")); return; }
+            if (st === "carry") { if (String(r.pending ?? "").trim()) rows.push(mk(r.pending, "carry")); return; }
+            if (String(r.task ?? "").trim()) rows.push(mk(r.task, "done"));
+            if (String(r.pending ?? "").trim()) rows.push(mk(r.pending, "carry"));
+        });
+        rows.push(mk("", "todo")); // a blank line to type the next plan into
         return rows;
     });
     const [saving, setSaving] = useState(false);
+    const [saveState, setSaveState] = useState("idle"); // idle | saving | saved | error
+    const firstAutoSave = useRef(true);
 
     const live = compute(timeIn, timeOut, setting);
-    const filledTasks = tasks.filter((t) => t.task.trim()).length;
-    const filledOpen = tasks.filter((t) => t.pending.trim()).length;
-    const setTask = (i, k) => (e) => setTasks((p) => p.map((r, idx) => idx === i ? { ...r, [k]: e.target.value } : r));
-    const addRow = () => setTasks((p) => [...p, { task: "", pending: "" }]);
+    const todoItems = tasks.filter((t) => t.status === "todo");
+    const doneItems = tasks.filter((t) => t.status === "done");
+    const carryItems = tasks.filter((t) => t.status === "carry");
+    const ongoingCount = todoItems.filter((t) => t.text.trim()).length;
+    const doneCount = doneItems.filter((t) => t.text.trim()).length;
+    const carryCount = carryItems.filter((t) => t.text.trim()).length;
+    const setText = (uid) => (e) => setTasks((p) => p.map((t) => t.uid === uid ? { ...t, text: e.target.value } : t));
+    const move = (uid, status) => setTasks((p) => {
+        const next = p.map((t) => t.uid === uid ? { ...t, status } : t);
+        if (!next.some((t) => t.status === "todo" && !t.text.trim())) next.push(mk("", "todo"));
+        return next;
+    });
+    const removeTask = (uid) => setTasks((p) => p.filter((t) => t.uid !== uid));
+    const addTodo = () => setTasks((p) => p.some((t) => t.status === "todo" && !t.text.trim()) ? p : [...p, mk("", "todo")]);
     const stampNow = () => new Date().toLocaleTimeString("en-GB", { timeZone: setting.timezone || "UTC", hour: "2-digit", minute: "2-digit", hour12: false });
+
+    // What actually gets persisted: completed + for-tomorrow always, plus fresh
+    // to-do rows (no source) so a typed plan survives a refresh. Carried to-dos
+    // (source set) aren't persisted — their source keeps them alive.
+    const persistable = (t) => t.text.trim() && (t.status === "done" || t.status === "carry" || (t.status === "todo" && !t.source));
 
     const saveDay = (override = {}) => {
         setSaving(true);
+        setSaveState("saving");
+        const recorded = tasks.filter(persistable);
         router.post("/dtr/entry", {
             work_date: date,
             time_in: (override.time_in ?? timeIn) || null,
             time_out: (override.time_out ?? timeOut) || null,
-            tasks: tasks.filter((t) => t.task.trim() || t.pending.trim()),
+            tasks: recorded.map((t) => t.status === "carry"
+                ? { task: "", pending: t.text.trim(), status: "carry", pending_done: false }
+                : { task: t.text.trim(), pending: "", status: t.status, pending_done: false }),
+            // Carried items resolved today → close them on their source entry so
+            // they stop rolling forward.
+            close_carried: tasks.filter((t) => t.source && (t.status === "done" || t.status === "carry")).map((t) => t.source),
             remarks: remarks || null,
-        }, { preserveScroll: true, preserveState: true, onFinish: () => setSaving(false) });
+        }, {
+            preserveScroll: true,
+            preserveState: true,
+            onSuccess: () => setSaveState("saved"),
+            onError: () => setSaveState("error"),
+            onFinish: () => setSaving(false),
+        });
     };
     const clockIn = () => { const t = stampNow(); setTimeIn(t); saveDay({ time_in: t }); };
     const clockOut = () => { const t = stampNow(); setTimeOut(t); saveDay({ time_out: t }); };
+    // Closes the most recent open shift server-side (handles the overnight case:
+    // clocked in yesterday, never clocked out). The backend computes the
+    // cross-midnight net; the whole shift stays on the day it started.
+    const closeOpenShift = () => router.post("/dtr/time-out", {}, { preserveScroll: true });
+
+    // Autosave — whenever anything persistable changes (a planned/completed/
+    // carried task, its text, remarks, or clock times), debounce a save so
+    // nothing is lost on refresh. Empty rows carry no text, so merely opening a
+    // blank line doesn't trigger a write.
+    const recordSig = JSON.stringify({
+        t: tasks.filter(persistable).map((t) => [t.status, t.text.trim()]),
+        c: tasks.filter((t) => t.source && (t.status === "done" || t.status === "carry")).map((t) => t.source),
+        r: remarks, in: timeIn, out: timeOut,
+    });
+    useEffect(() => {
+        if (!isToday) return;
+        if (firstAutoSave.current) { firstAutoSave.current = false; return; }
+        setSaveState("saving");
+        const id = setTimeout(() => saveDay(), 700);
+        return () => clearTimeout(id);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [recordSig]);
 
     // Past days are locked — nobody edits a closed record, not even an admin
     // or super_admin. Only "today" stays editable so people can clock in and
@@ -805,11 +870,35 @@ function DayEditor({ setting, entry, date, isToday = false, carried = [] }) {
     const readOnly = !isToday;
 
     const input = "w-full px-3 py-2 rounded-lg border border-gray-200 text-sm outline-none focus:ring-2 focus:ring-[#436235]/30 focus:border-[#436235]";
-    const varTone = live.variance == null ? "" : live.variance >= 0 ? "text-emerald-600" : "text-rose-600";
-    const tid = (i) => `dtr-task-${date}-${i}`;
+    // Flexi has no enforced daily target, so variance is informational — show it
+    // neutral rather than a red/green surplus/deficit.
+    const isFlexi = setting.schedule_type === "flexi";
+    const varTone = live.variance == null ? "" : isFlexi ? "text-gray-600" : live.variance >= 0 ? "text-emerald-600" : "text-rose-600";
 
     return (
         <div className="p-6 space-y-5">
+            {/* Overnight open shift — clocked in on an earlier day, never clocked
+                out. Surfaced here because today's card looks fresh otherwise. */}
+            {isToday && openShift && (
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-2xl bg-amber-50 border border-amber-200 px-5 py-4">
+                    <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-600 flex items-center justify-center shrink-0"><AlertTriangle size={18} /></div>
+                        <div>
+                            <p className="text-sm font-bold text-amber-900">Still clocked in from {openShift.work_date}</p>
+                            <p className="text-xs text-amber-700">
+                                Clocked in at {to12h(openShift.time_in)} and never clocked out.
+                                {openShiftClosable ? " Clock out to close that shift." : " Ask an admin to correct this record."}
+                            </p>
+                        </div>
+                    </div>
+                    {openShiftClosable && (
+                        <button onClick={closeOpenShift} className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-amber-600 text-white text-sm font-bold hover:bg-amber-700 transition-colors shrink-0 whitespace-nowrap">
+                            <LogOut size={16} /> Clock out that shift
+                        </button>
+                    )}
+                </div>
+            )}
+
             {isToday && (
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-2xl bg-gradient-to-br from-[#436235]/[0.06] to-transparent border border-gray-100 px-5 py-4">
                     <div className="flex items-center gap-3">
@@ -826,7 +915,7 @@ function DayEditor({ setting, entry, date, isToday = false, carried = [] }) {
                         </div>
                     </div>
                     <div className="flex items-center gap-2">
-                        <button onClick={clockIn} disabled={!!timeIn} className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#436235] text-white text-sm font-bold hover:bg-[#375029] disabled:opacity-40 disabled:cursor-not-allowed transition-colors shadow-sm"><LogIn size={16} /> Clock in</button>
+                        <button onClick={clockIn} disabled={!!timeIn || !!openShift} title={openShift ? "Clock out your open shift first" : undefined} className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#436235] text-white text-sm font-bold hover:bg-[#375029] disabled:opacity-40 disabled:cursor-not-allowed transition-colors shadow-sm"><LogIn size={16} /> Clock in</button>
                         <button onClick={clockOut} disabled={!timeIn || !!timeOut} className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white border border-gray-200 text-gray-700 text-sm font-bold hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"><LogOut size={16} /> Clock out</button>
                     </div>
                 </div>
@@ -848,13 +937,13 @@ function DayEditor({ setting, entry, date, isToday = false, carried = [] }) {
                         <p className="text-lg font-bold text-gray-900">{live.net != null ? live.net.toFixed(2) : "—"}</p>
                     </div>
                     <div className="p-4">
-                        <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1.5">Variance</p>
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1.5">Variance{isFlexi ? " · target" : ""}</p>
                         <p className={`text-lg font-bold ${varTone || "text-gray-900"}`}>{live.variance != null ? (live.variance >= 0 ? "+" : "") + live.variance.toFixed(2) : "—"}</p>
                     </div>
                     <div className="p-4">
                         <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1.5">Attendance</p>
                         {live.attendance
-                            ? <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-bold ${live.attendance === "Late" ? "bg-rose-100 text-rose-700" : "bg-emerald-100 text-emerald-700"}`}>{live.attendance === "Late" ? <AlertTriangle size={11} /> : <CheckCircle size={11} />} {live.attendance}</span>
+                            ? <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-bold ${live.attendance === "Late" ? "bg-rose-100 text-rose-700" : live.attendance === "Flexi" ? "bg-indigo-100 text-indigo-700" : "bg-emerald-100 text-emerald-700"}`}>{live.attendance === "Late" ? <AlertTriangle size={11} /> : live.attendance === "Flexi" ? <Clock size={11} /> : <CheckCircle size={11} />} {live.attendance}</span>
                             : <p className="text-lg font-bold text-gray-300">—</p>}
                     </div>
                     <div className="p-4">
@@ -864,65 +953,103 @@ function DayEditor({ setting, entry, date, isToday = false, carried = [] }) {
                 </div>
             </div>
 
-            {/* Carried-over pending from previous days — only when there are any.
-                Lives inside today's Tasks & Pending so it's worked here. */}
-            {isToday && carried.length > 0 && <CarriedChecklist carried={carried} />}
-
-            {/* Task grid */}
+            {/* Task board — plan in "To do", then arrow each item into Completed
+                or carry it to tomorrow. Only completed + for-tomorrow are saved. */}
             <div>
-                <div className="flex items-center justify-between mb-2">
-                    <p className="text-[11px] font-bold uppercase tracking-wider text-gray-500">Tasks & pending</p>
-                    <div className="flex items-center gap-1.5 text-[10px] font-bold">
-                        <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 tabular-nums">{filledTasks} tasks</span>
-                        <span className="px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 tabular-nums">{filledOpen} open</span>
+                <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                    <div className="flex items-center gap-2">
+                        <p className="text-[11px] font-bold uppercase tracking-wider text-gray-500">Tasks</p>
+                        {!readOnly && <SaveStatus state={saveState} />}
+                    </div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                        <div className="flex items-center gap-1.5 text-[10px] font-bold">
+                            <span className="px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 tabular-nums">{ongoingCount} to do</span>
+                            <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 tabular-nums">{doneCount} done</span>
+                            <span className="px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 tabular-nums">{carryCount} for tomorrow</span>
+                        </div>
+                        {!readOnly && (
+                            <button onClick={() => saveDay()} disabled={saving} className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-[#436235] text-white text-xs font-bold rounded-lg hover:bg-[#375029] disabled:opacity-60 transition-colors shadow-sm">
+                                <Save size={13} /> {saving ? "Saving…" : "Save today"}
+                            </button>
+                        )}
                     </div>
                 </div>
+
                 {readOnly ? (
-                    <div className="rounded-xl border border-gray-200 overflow-hidden">
-                        <div className="grid grid-cols-[36px_1fr_1fr] bg-gray-50 border-b border-gray-200 text-[10px] font-bold uppercase tracking-wider text-gray-500">
-                            <div className="px-2 py-2.5 text-center">#</div>
-                            <div className="px-3 py-2.5 border-l border-gray-200">Task completed</div>
-                            <div className="px-3 py-2.5 border-l border-gray-200">Pending / for tomorrow</div>
-                        </div>
-                        {tasks.filter((t) => t.task.trim() || t.pending.trim()).length === 0 ? (
-                            <div className="px-3 py-4 text-center text-xs text-gray-400">No tasks were logged this day.</div>
-                        ) : tasks.filter((t) => t.task.trim() || t.pending.trim()).map((row, i) => (
-                            <div key={i} className="grid grid-cols-[36px_1fr_1fr] border-b border-gray-100 last:border-b-0">
-                                <div className="flex items-center justify-center text-[11px] text-gray-400 tabular-nums">{i + 1}</div>
-                                <div className="px-3 py-2 text-sm text-gray-800 border-l border-gray-100">{row.task || <span className="text-gray-300">—</span>}</div>
-                                <div className="px-3 py-2 text-sm text-gray-800 border-l border-gray-100">{row.pending || <span className="text-gray-300">—</span>}</div>
-                            </div>
-                        ))}
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                        <ReadOnlyList title="Completed" tone="emerald" icon={<CheckCircle size={12} />} items={doneItems} empty="No tasks were completed this day." />
+                        {/* On a closed day, leftover to-dos count as carried forward. */}
+                        <ReadOnlyList title="Pending / for tomorrow" tone="amber" icon={<CalendarClock size={12} />} items={[...carryItems, ...todoItems]} empty="Nothing was carried over." />
                     </div>
                 ) : (
-                    <div className="rounded-xl border border-gray-200 overflow-hidden">
-                        <div className="grid grid-cols-[36px_1fr_1fr] bg-gray-50 border-b border-gray-200 text-[10px] font-bold uppercase tracking-wider text-gray-500">
-                            <div className="px-2 py-2.5 text-center">#</div>
-                            <div className="px-3 py-2.5 border-l border-gray-200">Task completed</div>
-                            <div className="px-3 py-2.5 border-l border-gray-200">Pending / for tomorrow</div>
-                        </div>
-                        {tasks.map((row, i) => (
-                            <div key={i} className="grid grid-cols-[36px_1fr_1fr] border-b border-gray-100 last:border-b-0 hover:bg-gray-50/40 transition-colors">
-                                <div className="flex items-center justify-center text-[11px] text-gray-400 tabular-nums">{i + 1}</div>
-                                <input
-                                    id={tid(i)}
-                                    onKeyDown={(e) => {
-                                        if (e.key !== "Enter") return;
-                                        e.preventDefault();
-                                        if (i === tasks.length - 1) { addRow(); requestAnimationFrame(() => document.getElementById(tid(i + 1))?.focus()); }
-                                        else document.getElementById(tid(i + 1))?.focus();
-                                    }}
-                                    className="px-3 py-2 text-sm bg-transparent border-l border-gray-100 outline-none focus:bg-[#436235]/[0.05]"
-                                    placeholder="What did you work on?" value={row.task} onChange={setTask(i, "task")}
-                                />
-                                <input className="px-3 py-2 text-sm bg-transparent border-l border-gray-100 outline-none focus:bg-[#436235]/[0.05]" placeholder="Anything carried over?" value={row.pending} onChange={setTask(i, "pending")} />
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                        {/* To do / ongoing — includes yesterday's carry-overs */}
+                        <div className="rounded-xl border border-gray-200 overflow-hidden self-start">
+                            <div className="px-3 py-2.5 bg-gray-50 border-b border-gray-200 flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-gray-500">
+                                <ListChecks size={12} /> To do / ongoing
                             </div>
-                        ))}
-                        <button type="button" onClick={addRow} className="w-full flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-bold text-[#436235] hover:bg-[#436235]/[0.05] border-t border-gray-100 transition-colors">
-                            <Plus size={13} /> Add line
-                        </button>
+                            <div className="divide-y divide-gray-100">
+                                {todoItems.map((t) => (
+                                    <div key={t.uid} className="flex items-center gap-1 px-2 py-1.5 hover:bg-gray-50/60 transition-colors">
+                                        {t.source && <span title={`Carried from ${t.from}`} className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0 ml-1" />}
+                                        <input
+                                            className="flex-1 min-w-0 px-2 py-1.5 text-sm bg-transparent outline-none placeholder:text-gray-300"
+                                            placeholder="Plan a task for today…" value={t.text} onChange={setText(t.uid)}
+                                            onKeyDown={(e) => { if (e.key === "Enter" && t.text.trim()) { e.preventDefault(); addTodo(); } }}
+                                        />
+                                        <button type="button" onClick={() => t.text.trim() && move(t.uid, "done")} title="Mark completed" className="p-1.5 rounded-lg text-emerald-600 hover:bg-emerald-50 transition-colors"><ArrowRight size={15} /></button>
+                                        <button type="button" onClick={() => t.text.trim() && move(t.uid, "carry")} title="Carry to tomorrow" className="p-1.5 rounded-lg text-amber-600 hover:bg-amber-50 transition-colors"><CalendarClock size={15} /></button>
+                                        <button type="button" onClick={() => removeTask(t.uid)} title="Remove" className="p-1.5 rounded-lg text-gray-300 hover:text-rose-500 hover:bg-rose-50 transition-colors"><X size={13} /></button>
+                                    </div>
+                                ))}
+                            </div>
+                            <button type="button" onClick={addTodo} className="w-full flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-bold text-[#436235] hover:bg-[#436235]/[0.05] border-t border-gray-100 transition-colors">
+                                <Plus size={13} /> Add task
+                            </button>
+                        </div>
+
+                        {/* Completed + For tomorrow */}
+                        <div className="space-y-4">
+                            <div className="rounded-xl border border-emerald-200 overflow-hidden">
+                                <div className="px-3 py-2.5 bg-emerald-50 border-b border-emerald-200 flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-emerald-700">
+                                    <CheckCircle size={12} /> Completed
+                                </div>
+                                <div className="divide-y divide-emerald-50">
+                                    {doneItems.length === 0 ? (
+                                        <p className="px-3 py-3 text-xs text-gray-400">Finish a task and it lands here.</p>
+                                    ) : doneItems.map((t) => (
+                                        <div key={t.uid} className="flex items-center gap-1.5 px-2 py-1.5">
+                                            <CheckCircle size={14} className="text-emerald-500 shrink-0 ml-1" />
+                                            <input className="flex-1 min-w-0 px-1 py-1.5 text-sm bg-transparent outline-none" value={t.text} onChange={setText(t.uid)} />
+                                            <button type="button" onClick={() => move(t.uid, "todo")} title="Move back to to do" className="p-1.5 rounded-lg text-gray-400 hover:bg-gray-100 transition-colors"><Undo2 size={14} /></button>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div className="rounded-xl border border-amber-200 overflow-hidden">
+                                <div className="px-3 py-2.5 bg-amber-50 border-b border-amber-200 flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-amber-700">
+                                    <CalendarClock size={12} /> For tomorrow
+                                </div>
+                                <div className="divide-y divide-amber-50">
+                                    {carryItems.length === 0 ? (
+                                        <p className="px-3 py-3 text-xs text-gray-400">Carry an unfinished task here — it keeps showing until it's done.</p>
+                                    ) : carryItems.map((t) => (
+                                        <div key={t.uid} className="flex items-center gap-1.5 px-2 py-1.5">
+                                            <CalendarClock size={14} className="text-amber-500 shrink-0 ml-1" />
+                                            <input className="flex-1 min-w-0 px-1 py-1.5 text-sm bg-transparent outline-none" value={t.text} onChange={setText(t.uid)} />
+                                            <button type="button" onClick={() => move(t.uid, "done")} title="Mark completed" className="p-1.5 rounded-lg text-emerald-600 hover:bg-emerald-50 transition-colors"><ArrowRight size={15} /></button>
+                                            <button type="button" onClick={() => move(t.uid, "todo")} title="Move back to to do" className="p-1.5 rounded-lg text-gray-400 hover:bg-gray-100 transition-colors"><Undo2 size={14} /></button>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 )}
+                <p className="text-[11px] text-gray-400 mt-2 flex items-start gap-1.5">
+                    <ListChecks size={12} className="mt-0.5 shrink-0" /> Everything here autosaves as you type. Only completed and for-tomorrow tasks appear in your daily report; for-tomorrow items roll into tomorrow's to-do list until you finish them.
+                </p>
             </div>
 
             <div>
@@ -932,7 +1059,7 @@ function DayEditor({ setting, entry, date, isToday = false, carried = [] }) {
                     : <textarea rows={2} className={`${input} resize-y`} value={remarks} onChange={(e) => setRemarks(e.target.value)} placeholder="Anything worth noting…" />}
             </div>
 
-            {readOnly ? (
+            {readOnly && (
                 <div className="flex items-center justify-between gap-3">
                     <span className="inline-flex items-center gap-2 text-xs font-semibold text-gray-400">
                         <Clock size={13} /> Closed record — view only
@@ -940,12 +1067,6 @@ function DayEditor({ setting, entry, date, isToday = false, carried = [] }) {
                     <a href={`/dtr/report?date=${date}`} className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#436235] text-white text-sm font-bold rounded-xl hover:bg-[#375029] transition-colors">
                         <Download size={15} /> Generate daily report
                     </a>
-                </div>
-            ) : (
-                <div className="flex justify-end">
-                    <button onClick={() => saveDay()} disabled={saving} className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#436235] text-white text-sm font-bold rounded-xl hover:bg-[#375029] disabled:opacity-60 transition-colors">
-                        <Save size={15} /> {saving ? "Saving…" : "Save today"}
-                    </button>
                 </div>
             )}
         </div>
@@ -959,6 +1080,19 @@ function DailyRecord({ setting, entries, carried = [], leaves = [], leaveTypes =
 
     const todayEntry = entries.find((e) => e.work_date === today);
     const past = entries.filter((e) => e.work_date !== today);
+
+    // An overnight shift left open: clocked in on an earlier day, never clocked
+    // out. entries are newest-first, so the first match is the most recent one.
+    const openShift = entries.find((e) => e.time_in && !e.time_out && e.work_date < today) || null;
+    // The clock-out endpoint only reaches back one day, so a shift from
+    // yesterday can be closed in one tap; anything older needs an admin fix.
+    const yesterday = (() => {
+        const d = new Date(today + "T00:00:00");
+        d.setDate(d.getDate() - 1);
+        const p = (n) => String(n).padStart(2, "0");
+        return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+    })();
+    const openShiftClosable = !!openShift && openShift.work_date >= yesterday;
 
     return (
         <>
@@ -1011,7 +1145,7 @@ function DailyRecord({ setting, entries, carried = [], leaves = [], leaveTypes =
                     <Clock size={16} className="text-[#436235]" />
                     <h2 className="text-base font-bold text-gray-900">Today — {today}</h2>
                 </div>
-                <DayEditor key={today} setting={setting} entry={todayEntry} date={today} isToday carried={carried} />
+                <DayEditor key={today} setting={setting} entry={todayEntry} date={today} isToday carried={carried} openShift={openShift} openShiftClosable={openShiftClosable} />
             </div>
 
             {/* Recent entries */}
@@ -1047,8 +1181,8 @@ function DailyRecord({ setting, entries, carried = [], leaves = [], leaveTypes =
                                         </td>
                                         <td className="px-3 py-2.5">
                                             {e.attendance ? (
-                                                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold ${e.attendance === "Late" ? "bg-rose-100 text-rose-700" : "bg-emerald-100 text-emerald-700"}`}>
-                                                    {e.attendance === "Late" ? <AlertTriangle size={10} /> : <CheckCircle size={10} />} {e.attendance}
+                                                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold ${e.attendance === "Late" ? "bg-rose-100 text-rose-700" : e.attendance === "Flexi" ? "bg-indigo-100 text-indigo-700" : "bg-emerald-100 text-emerald-700"}`}>
+                                                    {e.attendance === "Late" ? <AlertTriangle size={10} /> : e.attendance === "Flexi" ? <Clock size={10} /> : <CheckCircle size={10} />} {e.attendance}
                                                 </span>
                                             ) : <span className="text-gray-300">—</span>}
                                         </td>
