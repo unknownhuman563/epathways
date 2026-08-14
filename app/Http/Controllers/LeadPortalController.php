@@ -183,8 +183,9 @@ class LeadPortalController extends Controller
         [$type, $intake] = $this->leadIntake($lead);
         $cards = [];
 
-        // 1. Visa Assessment — based on the visa set to the client. Always open
-        //    so the client can assess or edit their answers at any time.
+        // 1. Visa Assessment — based on the visa set to the client. If they've
+        //    taken it, open the editable form + VIF; if not, send them to the
+        //    landing-page assessment form for their visa so they can complete it.
         $hasIntake = (bool) ($type && $intake);
         $visaLabel = $intake
             ? \App\Support\IntakeVisaTypeMap::label($intake::class)
@@ -193,11 +194,15 @@ class LeadPortalController extends Controller
         $cards[] = [
             'key' => 'visa',
             'title' => $visaLabel ? "Visa Assessment — {$visaLabel}" : 'Visa Assessment',
-            'subtitle' => 'Your visa information form and assessment answers. Edit anytime to keep it current.',
+            'subtitle' => $hasIntake
+                ? 'Your visa information form and assessment answers. Edit anytime to keep it current.'
+                : 'Complete the assessment form for your visa — it flows straight onto your case.',
             'available' => true,
             'status' => $hasIntake ? "{$visaPct}% complete" : 'Get started',
-            'href' => '/portal/lead/visa-assessment',
-            'cta' => 'Open',
+            'href' => $hasIntake
+                ? '/portal/lead/visa-assessment'
+                : ($this->assessmentFormUrlFor($lead) ?? '/portal/lead/visa-assessment'),
+            'cta' => $hasIntake ? 'Open' : 'Take assessment',
         ];
 
         // 2. Free Assessment — the initial eligibility questionnaire. Always open.
@@ -264,6 +269,31 @@ class LeadPortalController extends Controller
         ]);
     }
 
+    /**
+     * The public landing-page assessment form URL for the client's visa, keyed
+     * off their VisaType category. Returns null when the visa can't be mapped
+     * (caller falls back to the in-portal assessment page).
+     */
+    private function assessmentFormUrlFor(Lead $lead): ?string
+    {
+        if (! $lead->inz_visa_type) {
+            return null;
+        }
+        $category = \App\Models\VisaType::where('name', $lead->inz_visa_type)->value('category');
+        if (! $category) {
+            return null;
+        }
+
+        return match (strtolower($category)) {
+            'resident' => '/resident-interest',
+            'work' => '/work-interest',
+            'student' => '/student-interest',
+            'visitor' => '/visitor-interest',
+            'partnership', 'family' => '/family-interest',
+            default => null,
+        };
+    }
+
     /** Resolve the lead's assessment intake (authoritative FK path). */
     private function leadIntake(Lead $lead)
     {
@@ -303,11 +333,18 @@ class LeadPortalController extends Controller
         [$type, $intake] = $this->leadIntake($lead);
         $doc = \App\Models\LeadDocument::where('lead_id', $lead->id)->where('source_variant', 'vif')->latest()->first();
 
+        // The finished VIF is a licensed deliverable — the client may generate it
+        // from their assessment, but it is only DOWNLOADABLE once the adviser's
+        // verification marks it Approved. Until then it sits with the adviser.
+        $approved = $doc && $doc->status === \App\Models\LeadDocument::STATUS_APPROVED;
+
         return [
             'available' => $type !== null && $intake !== null, // has a work/student/visitor assessment
             'generated' => (bool) $doc,
             'generated_at' => optional($doc?->created_at)->toIso8601String(),
-            'download_url' => $doc ? '/portal/lead/vif' : null,
+            'status' => $doc?->status,           // Submitted | Checked | Approved | Rejected
+            'approved' => $approved,             // gate for the download button
+            'download_url' => $approved ? '/portal/lead/vif' : null,
         ];
     }
 
@@ -343,6 +380,11 @@ class LeadPortalController extends Controller
         \Illuminate\Support\Facades\Storage::disk('local')->put($path, $bytes);
 
         // Replaces any prior VIF; checklist_key 'svf' satisfies the VIF checklist item.
+        // The VIF is referred straight to the licensed adviser for verification —
+        // it lands in the adviser's queue as 'Checked' (not a client "Submitted"
+        // upload). Regenerating after an edit re-refers it, invalidating any prior
+        // approval so the adviser re-checks the changed details. Clears the prior
+        // reviewer stamp so a re-referred form doesn't look already-verified.
         \App\Models\LeadDocument::updateOrCreate(
             ['lead_id' => $lead->id, 'source_variant' => 'vif'],
             [
@@ -352,7 +394,9 @@ class LeadPortalController extends Controller
                 'mime' => 'application/pdf',
                 'size' => strlen($bytes),
                 'source' => 'generated',
-                'status' => 'Submitted',
+                'status' => \App\Models\LeadDocument::STATUS_CHECKED,
+                'reviewed_by' => null,
+                'reviewed_at' => now(), // referral time — orders it into the queue
             ],
         );
     }
@@ -424,6 +468,10 @@ class LeadPortalController extends Controller
             return $lead;
         }
         $doc = \App\Models\LeadDocument::where('lead_id', $lead->id)->where('source_variant', 'vif')->latest()->firstOrFail();
+        // Strict gate: the VIF is released to the client only after the licensed
+        // adviser has verified it (status Approved). A generated-but-unverified
+        // form is never downloadable — it is still with the adviser for review.
+        abort_unless($doc->status === \App\Models\LeadDocument::STATUS_APPROVED, 403, 'Your Visa Information Form is awaiting adviser approval.');
         abort_unless($doc->file_path && \Illuminate\Support\Facades\Storage::disk('local')->exists($doc->file_path), 404);
 
         return response()->file(\Illuminate\Support\Facades\Storage::disk('local')->path($doc->file_path), [

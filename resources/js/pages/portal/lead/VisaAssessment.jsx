@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Head, Link, router } from "@inertiajs/react";
 import { toast } from "sonner";
-import { FileText, Sparkles, Download, CheckCircle2, Clock, Save, ChevronLeft } from "lucide-react";
+import { FileText, Sparkles, Download, CheckCircle2, Clock, Save, ChevronLeft, Lock, ShieldCheck, AlertTriangle } from "lucide-react";
 import PortalPageHeader from "@/components/portal/PortalPageHeader";
 import { ASSESSMENT_SECTIONS, fieldKind } from "@/data/assessmentSections";
 
@@ -59,9 +59,7 @@ export default function LeadVisaAssessment({ vif = {}, assessment = null }) {
 
                             {vif.generated ? (
                                 <div className="mt-4 flex items-center gap-2 flex-wrap">
-                                    <span className="inline-flex items-center gap-1.5 text-[12px] font-semibold px-2.5 py-1 rounded-lg border" style={{ color: ACCENT, backgroundColor: `${ACCENT}1a`, borderColor: `${ACCENT}4d` }}>
-                                        <CheckCircle2 size={14} /> Ready
-                                    </span>
+                                    <VifStatusPill vif={vif} />
                                     {vif.generated_at && (
                                         <span className="inline-flex items-center gap-1 text-[11px] text-gray-400">
                                             <Clock size={12} /> Updated {new Date(vif.generated_at).toLocaleDateString()}
@@ -72,17 +70,29 @@ export default function LeadVisaAssessment({ vif = {}, assessment = null }) {
                                 <p className="mt-3 text-[12px] text-gray-500">Not generated yet — click below to create it.</p>
                             )}
 
+                            {/* Approval gate note — the finished form is released only
+                                after the licensed adviser has checked it. */}
+                            {vif.generated && !vif.approved && (
+                                <p className="mt-3 text-[12px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 leading-snug">
+                                    Your form has been sent to your licensed adviser for review. You'll be able to download it here once they've approved it.
+                                </p>
+                            )}
+
                             <div className="mt-5 flex items-center gap-2 flex-wrap">
                                 <button type="button" onClick={generate} disabled={busy}
                                     className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-white text-sm font-semibold disabled:opacity-50"
                                     style={{ backgroundColor: ACCENT }}>
                                     <Sparkles size={15} /> {busy ? "Generating…" : vif.generated ? "Regenerate" : "Generate my form"}
                                 </button>
-                                {vif.generated && vif.download_url && (
+                                {vif.approved && vif.download_url ? (
                                     <a href={vif.download_url} target="_blank" rel="noopener noreferrer"
                                         className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-gray-200 text-gray-700 text-sm font-semibold hover:bg-gray-50">
                                         <Download size={15} /> Download
                                     </a>
+                                ) : vif.generated && (
+                                    <span className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-gray-200 text-gray-400 text-sm font-semibold cursor-not-allowed" title="Available once your adviser approves the form">
+                                        <Lock size={14} /> Download locked
+                                    </span>
                                 )}
                             </div>
                         </div>
@@ -94,6 +104,21 @@ export default function LeadVisaAssessment({ vif = {}, assessment = null }) {
             {assessment && <AssessmentEditor assessment={assessment} />}
         </div>
     );
+}
+
+// Reflects where the VIF is in the adviser's review — "Ready" only ever means
+// adviser-Approved, never merely generated.
+function VifStatusPill({ vif }) {
+    const chip = (label, Icon, color) => (
+        <span className="inline-flex items-center gap-1.5 text-[12px] font-semibold px-2.5 py-1 rounded-lg border"
+            style={{ color, backgroundColor: `${color}1a`, borderColor: `${color}4d` }}>
+            <Icon size={14} /> {label}
+        </span>
+    );
+    if (vif.approved) return chip("Approved — ready to download", ShieldCheck, "#059669");
+    if (vif.status === "Rejected") return chip("Needs attention", AlertTriangle, "#dc2626");
+    // Submitted or Checked — sitting with the adviser.
+    return chip("Awaiting adviser approval", Clock, "#d97706");
 }
 
 function AssessmentEditor({ assessment }) {
