@@ -272,7 +272,6 @@ export default function DocumentsTab({
                                                 leadId={lead.id}
                                                 docThreads={row.document ? (threadsByDoc.get(row.document.id) || []) : []}
                                                 caseStaff={caseStaff}
-                                                isVif={isVifLabel(row.label)}
                                                 vif={isVifLabel(row.label) ? vif : null}
                                             />
                                         ))}
@@ -295,7 +294,7 @@ export default function DocumentsTab({
     );
 }
 
-function Row({ row, leadId, docThreads = [], caseStaff = [], isVif = false, vif = null }) {
+function Row({ row, leadId, docThreads = [], caseStaff = [], vif = null }) {
     const doc = row.document;
     const [status, setStatus] = useState(doc?.status || "");
     const [note, setNote] = useState(doc?.note || "");
@@ -384,13 +383,10 @@ function Row({ row, leadId, docThreads = [], caseStaff = [], isVif = false, vif 
                             {row.label}
                             {row.required && <span className="ml-1 text-red-500">*</span>}
                         </p>
-                        {doc && ! isVif && (
+                        {doc && (
                             <p className="text-[10.5px] text-gray-400 mt-0.5">
                                 uploaded {formatDate(doc.created_at)}
                             </p>
-                        )}
-                        {isVif && (
-                            <p className="text-[10.5px] text-gray-400 mt-0.5">System-generated from the visa assessment</p>
                         )}
                     </div>
                 </div>
@@ -399,22 +395,15 @@ function Row({ row, leadId, docThreads = [], caseStaff = [], isVif = false, vif 
             {/* Attachment column — filename + View + Download for uploaded;
                 Upload button (opens file picker) for empty slots. On the Visa
                 Information Form row, the ePathways VIF generator (Preview / PDF /
-                Word) is surfaced inline above the upload controls. */}
+                Word) is surfaced inline ABOVE the upload controls — staff can use
+                the system-generated VIF or upload their own; both stay available. */}
             <td className="px-4 py-3">
-                {isVif ? (
-                    // The VIF is system-only: show the generator when an assessment
-                    // exists, otherwise prompt for one. Any file a staffer uploaded
-                    // here in the past is intentionally not shown (superseded by the
-                    // system VIF); it is hidden, not deleted.
-                    vif ? (
+                {vif && (
+                    <div className="mb-2">
                         <VifButtons vif={vif} />
-                    ) : (
-                        <span className="inline-flex items-start gap-1.5 text-[12px] text-amber-600 max-w-[280px]">
-                            <AlertCircle size={13} className="flex-shrink-0 mt-0.5" />
-                            Needs assessment — the VIF is generated once the client completes their visa assessment.
-                        </span>
-                    )
-                ) : doc ? (
+                    </div>
+                )}
+                {doc ? (
                     <div className="flex items-center gap-1.5 flex-wrap">
                         <span className="flex flex-col min-w-0 max-w-[160px]">
                             <span className="text-[11px] text-gray-700 truncate" title={doc.original_name}>
@@ -469,17 +458,7 @@ function Row({ row, leadId, docThreads = [], caseStaff = [], isVif = false, vif 
 
             {/* Status dropdown — disabled when nothing's been uploaded yet */}
             <td className="px-4 py-3">
-                {isVif ? (
-                    vif ? (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold border bg-[#009688]/10 text-[#00796b] border-[#009688]/30">
-                            System VIF
-                        </span>
-                    ) : (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold border bg-amber-50 text-amber-700 border-amber-200">
-                            Awaiting assessment
-                        </span>
-                    )
-                ) : doc ? (
+                {doc ? (
                     <div className="flex items-center gap-1.5">
                         <select
                             value={status || ""}
@@ -502,7 +481,7 @@ function Row({ row, leadId, docThreads = [], caseStaff = [], isVif = false, vif 
 
             {/* Notes — inline-editable, saves on blur */}
             <td className="px-4 py-3">
-                {doc && ! isVif ? (
+                {doc ? (
                     <div className="relative">
                         <input
                             type="text"
@@ -534,9 +513,8 @@ function Row({ row, leadId, docThreads = [], caseStaff = [], isVif = false, vif 
             )}
         </tr>
         {/* Build 12 phase 6 — threads anchored to THIS document render here and
-            nowhere else. A composer appears only when there's a file to anchor to.
-            Suppressed on the system-only VIF row (its uploaded file is hidden). */}
-        {doc && ! isVif && (
+            nowhere else. A composer appears only when there's a file to anchor to. */}
+        {doc && (
             <tr className="border-b border-gray-50 last:border-b-0">
                 <td colSpan={4} className="px-4 pb-3 pt-0">
                     <div className="ml-6 space-y-1.5">
