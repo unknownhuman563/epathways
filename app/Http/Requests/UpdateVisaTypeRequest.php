@@ -68,7 +68,7 @@ class UpdateVisaTypeRequest extends FormRequest
             // here is stripped by validate(), which would silently drop the
             // grouping from every item the moment a visa is saved.
             'checklist_items.*.category' => 'nullable|string|max:60',
-            'checklist_items.*.hint' => 'nullable|string|max:200',
+            'checklist_items.*.hint' => 'nullable|string|max:500',
             'checklist_items.*.required' => 'sometimes|boolean',
             // File-naming metadata used to auto-rename uploads:
             // "NN - CODE - FirstnameLASTNAME<suffix>".

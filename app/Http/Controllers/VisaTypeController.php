@@ -111,7 +111,7 @@ class VisaTypeController extends Controller
             // here is stripped by validate(), which would silently drop the
             // grouping from every item the moment a visa is saved.
             'checklist_items.*.category' => 'nullable|string|max:60',
-            'checklist_items.*.hint' => 'nullable|string|max:200',
+            'checklist_items.*.hint' => 'nullable|string|max:500',
             'checklist_items.*.required' => 'sometimes|boolean',
             'checklist_items.*.file_code' => 'nullable|string|max:20',
             'checklist_items.*.file_suffix' => 'nullable|string|max:40',
