@@ -88,6 +88,40 @@ class HandleInertiaRequests extends Middleware
             'notifications' => [
                 'unread_count' => $request->user()?->unreadNotifications()->count() ?? 0,
             ],
+            // Staff-preview state for the client portal — non-null only when an
+            // admin is browsing /portal/lead without a lead of their own.
+            'leadPortalPreview' => fn () => $this->leadPortalPreview($request),
+        ];
+    }
+
+    /** Client-portal preview banner data (admins viewing a sample client). */
+    private function leadPortalPreview(Request $request): ?array
+    {
+        $user = $request->user();
+        if (! $user || ! str_starts_with($request->path(), 'portal/lead')) {
+            return null;
+        }
+        if ($user->lead || ! $user->isAtLeast('admin')) {
+            return null;
+        }
+
+        $currentId = session('lead_portal_preview_id');
+        $current = $currentId ? \App\Models\Lead::find($currentId) : null;
+        $name = fn ($l) => trim("{$l->first_name} {$l->last_name}") ?: $l->lead_id;
+
+        $candidates = \App\Models\Lead::query()
+            ->whereHas('portalUser')
+            ->latest()
+            ->limit(30)
+            ->get(['id', 'lead_id', 'first_name', 'last_name'])
+            ->map(fn ($l) => ['id' => $l->id, 'name' => $name($l)])
+            ->values();
+
+        return [
+            'active' => true,
+            'name' => $current ? $name($current) : 'sample client',
+            'current_id' => $current?->id,
+            'candidates' => $candidates,
         ];
     }
 

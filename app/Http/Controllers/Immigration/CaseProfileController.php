@@ -69,9 +69,16 @@ class CaseProfileController extends Controller
         $hasVifItem = collect($checklistItems)
             ->contains(fn ($i) => preg_match('/visa information form/i', (string) ($i['label'] ?? '')));
 
+        // Deterministic assessment completeness (never AI-guessed). The AI note
+        // about WHAT is missing is fetched on demand via assessmentAiNote().
+        $completeness = ($intakeType && $intake)
+            ? \App\Support\AssessmentFormSchema::statsFromArray($intake, $intakeType)
+            : null;
+
         return Inertia::render($page, [
             'lead' => $this->serializeLead($lead),
             'intake' => $intake ? ['type' => $intakeType, 'data' => $intake] : null,
+            'assessmentCompleteness' => $completeness,
             'documents' => $this->loadDocuments($lead),
             // The Visa Information Form (official assessment PDF) — surfaced only
             // when the case's visa checklist connects a VIF item.
@@ -1295,6 +1302,30 @@ class CaseProfileController extends Controller
      * @param  array<string, mixed>|null  $intake
      * @return array<string, mixed>|null
      */
+    /** On-demand OpenRouter note on what's still missing from the assessment. */
+    public function assessmentAiNote(Lead $lead)
+    {
+        $this->ensureCanViewCases(auth()->user());
+        abort_unless($lead->is_immigration_case, 404);
+
+        [$type, $intake] = $this->resolveIntake($lead);
+        if (! $type || ! $intake) {
+            return response()->json(['note' => null]);
+        }
+
+        $missing = \App\Support\AssessmentFormSchema::missingFromArray($intake, $type);
+        $stats = \App\Support\AssessmentFormSchema::statsFromArray($intake, $type);
+
+        if (empty($missing)) {
+            return response()->json(['note' => 'The assessment is fully completed — nothing outstanding to chase.']);
+        }
+
+        $labels = array_map(fn ($k) => \Illuminate\Support\Str::headline($k), $missing);
+        $note = app(\App\Services\CerebrasService::class)->assessmentGapNote($labels, $stats['pct']);
+
+        return response()->json(['note' => $note]);
+    }
+
     private function resolveVif(?string $type, ?array $intake): ?array
     {
         if (! $type || ! in_array($type, ['resident', 'work', 'student', 'visitor', 'family'], true) || empty($intake['id'])) {

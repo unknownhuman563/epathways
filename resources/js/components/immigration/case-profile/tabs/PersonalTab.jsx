@@ -1,6 +1,7 @@
+import { useState } from "react";
 import { useForm } from "@inertiajs/react";
 import { toast } from "sonner";
-import { User, Save, ClipboardList, Eye, Download, FileText } from "lucide-react";
+import { User, Save, ClipboardList, Eye, Download, FileText, Sparkles, Loader2 } from "lucide-react";
 import { ASSESSMENT_SECTIONS, formatAssessmentValue } from "@/data/assessmentSections";
 
 // Case Profile "Personal" tab — edit the applicant's personal details, then
@@ -18,7 +19,7 @@ const VISA_LABEL = {
     student: "Student Visa", visitor: "Visitor Visa", family: "Family Visa (Partner / Child)",
 };
 
-export default function PersonalTab({ lead = {}, intake = null }) {
+export default function PersonalTab({ lead = {}, intake = null, assessmentCompleteness = null }) {
     const { data, setData, post, processing, errors } = useForm({
         first_name:        lead.first_name || "",
         middle_name:       lead.middle_name || "",
@@ -121,7 +122,7 @@ export default function PersonalTab({ lead = {}, intake = null }) {
         </form>
 
         {intake?.data ? (
-            <AssessmentSubmission intake={intake} />
+            <AssessmentSubmission intake={intake} leadId={lead.id} completeness={assessmentCompleteness} />
         ) : (
             <div className="max-w-4xl text-center py-10 border border-dashed border-gray-200 rounded-xl bg-gray-50/50">
                 <ClipboardList size={26} className="mx-auto text-gray-300" />
@@ -138,7 +139,7 @@ export default function PersonalTab({ lead = {}, intake = null }) {
 // Read-only render of the applicant's full visa-assessment submission, grouped
 // into the same sections (per visa type) as the Visa Assessment "Open" modal,
 // with Preview / PDF / Word download of the official form.
-function AssessmentSubmission({ intake }) {
+function AssessmentSubmission({ intake, leadId, completeness = null }) {
     const { type, data } = intake;
     const sections = ASSESSMENT_SECTIONS[type] || [];
     const base = `/portal/immigration/intakes/${type}/${data.id}`;
@@ -146,8 +147,57 @@ function AssessmentSubmission({ intake }) {
         ? new Date(data.created_at).toLocaleDateString("en-NZ", { day: "numeric", month: "short", year: "numeric" })
         : null;
 
+    // AI "what's missing" note — fetched on demand (OpenRouter), never on load.
+    const [aiNote, setAiNote] = useState(null);
+    const [aiBusy, setAiBusy] = useState(false);
+    const [aiTried, setAiTried] = useState(false);
+    const fetchAiNote = () => {
+        if (aiBusy) return;
+        setAiBusy(true); setAiTried(true);
+        fetch(`/portal/immigration/cases/${leadId}/assessment-ai-note`, {
+            headers: { Accept: "application/json", "X-Requested-With": "XMLHttpRequest" },
+            credentials: "same-origin",
+        })
+            .then((r) => (r.ok ? r.json() : null))
+            .then((d) => setAiNote(d?.note || "No note available."))
+            .catch(() => setAiNote("Could not reach the assistant."))
+            .finally(() => setAiBusy(false));
+    };
+
+    const pct = completeness?.pct ?? null;
+    const tone = pct === null ? "gray" : pct >= 80 ? "emerald" : pct >= 50 ? "amber" : "rose";
+    const BAR = { emerald: "bg-emerald-500", amber: "bg-amber-500", rose: "bg-rose-500", gray: "bg-gray-300" }[tone];
+
     return (
         <div className="space-y-5">
+            {/* Completeness — deterministic %, with an on-demand AI "what's missing" note */}
+            {completeness && (
+                <div className="rounded-2xl border border-gray-100 bg-white shadow-sm p-5">
+                    <div className="flex items-center justify-between gap-3 flex-wrap mb-2">
+                        <h3 className="text-[13px] font-bold text-gray-900">Assessment completeness</h3>
+                        <span className="text-[12px] font-bold text-gray-700 tabular-nums">{pct}% · {completeness.filled}/{completeness.total}</span>
+                    </div>
+                    <div className="h-2 rounded-full bg-gray-100 overflow-hidden">
+                        <div className={`h-full rounded-full ${BAR}`} style={{ width: `${pct}%` }} />
+                    </div>
+                    <div className="mt-3">
+                        {!aiTried ? (
+                            <button type="button" onClick={fetchAiNote}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-indigo-200 text-indigo-600 text-[11px] font-bold uppercase tracking-wider hover:bg-indigo-50">
+                                <Sparkles size={12} /> AI: what's missing
+                            </button>
+                        ) : aiBusy ? (
+                            <p className="inline-flex items-center gap-1.5 text-[12px] text-gray-400"><Loader2 size={13} className="animate-spin" /> Thinking…</p>
+                        ) : (
+                            <div className="rounded-lg bg-indigo-50/60 border border-indigo-100 p-3">
+                                <p className="text-[12.5px] text-gray-700 leading-relaxed">{aiNote}</p>
+                                <p className="text-[10px] text-gray-400 mt-1.5">Internal &amp; indicative — not immigration advice.</p>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
+
             <div className="flex items-start justify-between gap-3 flex-wrap">
                 <div>
                     <h3 className="text-xs font-bold uppercase tracking-wider text-gray-500 inline-flex items-center gap-2">

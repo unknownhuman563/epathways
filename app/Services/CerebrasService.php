@@ -314,6 +314,51 @@ PROMPT;
         return "Write the ad copy for this brief:\n\n".json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
     }
 
+    /**
+     * A short, internal "what's still missing" note for case staff, given the
+     * blank assessment fields. Runs on OpenRouter. Strictly indicative — it never
+     * gives immigration advice, only names the information still to be gathered.
+     * Returns null on any failure so callers degrade gracefully.
+     *
+     * @param  array<int, string>  $missingLabels
+     */
+    public function assessmentGapNote(array $missingLabels, int $pct): ?string
+    {
+        if (empty($this->orKey) || empty($missingLabels)) {
+            return null;
+        }
+
+        $system = 'You are an internal assistant for New Zealand immigration case workers. '
+            .'You are given the fields a client has left blank on their visa assessment. '
+            .'Write ONE short, plain sentence (max 40 words) telling the case worker what to chase from the client. '
+            .'Group related gaps naturally. Do NOT give immigration advice, eligibility opinions, or legal guidance — only state what information is still needed.';
+
+        try {
+            $response = Http::withHeaders([
+                'Authorization' => 'Bearer '.$this->orKey,
+                'Content-Type' => 'application/json',
+            ])->timeout(30)->post("{$this->orBaseUrl}/chat/completions", [
+                'model' => $this->orModel,
+                'messages' => [
+                    ['role' => 'system', 'content' => $system],
+                    ['role' => 'user', 'content' => "Assessment is {$pct}% complete. Blank fields: ".implode(', ', $missingLabels)],
+                ],
+                'temperature' => 0.3,
+            ]);
+
+            if (! $response->successful()) {
+                return null;
+            }
+            $text = trim((string) $response->json('choices.0.message.content'));
+
+            return $text !== '' ? $text : null;
+        } catch (\Throwable $e) {
+            Log::warning('assessmentGapNote failed', ['error' => $e->getMessage()]);
+
+            return null;
+        }
+    }
+
     public function analyze(Lead $lead): array
     {
         $lead->loadMissing(['studyPlans', 'educationExps', 'tags', 'documents', 'documentRequests']);

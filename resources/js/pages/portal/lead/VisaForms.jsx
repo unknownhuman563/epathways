@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Head, router } from "@inertiajs/react";
+import { Head, Link, router } from "@inertiajs/react";
 import { toast } from "sonner";
 import { FileSpreadsheet, FileText, CheckCircle2, Clock, Save, ChevronLeft } from "lucide-react";
 import PortalPageHeader from "@/components/portal/PortalPageHeader";
@@ -26,6 +26,9 @@ export default function LeadVisaForms({ lead, forms = [] }) {
     return (
         <div className="space-y-6 max-w-4xl mx-auto pb-12">
             <Head title="Visa Forms" />
+            <Link href="/portal/lead/forms" className="inline-flex items-center gap-1 text-[13px] font-semibold text-gray-500 hover:text-gray-900">
+                <ChevronLeft size={15} /> Back to Forms
+            </Link>
             <PortalPageHeader
                 eyebrow="Application"
                 title="Visa Forms"

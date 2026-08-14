@@ -1305,6 +1305,9 @@ Route::middleware(['auth'])->group(function () {
             // Edit the applicant's personal details from the Case Profile "Personal" tab.
             Route::post('/cases/{lead}/personal', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'updatePersonal'])
                 ->name('cases.personal');
+            // On-demand AI note (OpenRouter) on what's missing from the assessment.
+            Route::get('/cases/{lead}/assessment-ai-note', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'assessmentAiNote'])
+                ->name('cases.assessment-ai-note');
 
             // Build 12 phase 3 — case-assist findings. Dismiss carries a
             // required reason; re-evaluate queues a refresh (never on page load).
@@ -1559,7 +1562,7 @@ Route::middleware(['auth'])->group(function () {
 
         // Lead Portal — external client-facing dashboard. Each lead-role user
         // is scoped to their own Lead record.
-        Route::middleware('portal:lead')->prefix('lead')->name('portal.lead.')->group(function () {
+        Route::middleware(['portal:lead', \App\Http\Middleware\BlockLeadPortalPreviewWrites::class])->prefix('lead')->name('portal.lead.')->group(function () {
             Route::get('/dashboard', [App\Http\Controllers\LeadPortalController::class, 'dashboard'])->name('dashboard');
             Route::get('/submissions', [App\Http\Controllers\LeadPortalController::class, 'submissions'])->name('submissions');
             Route::get('/activities', [App\Http\Controllers\LeadPortalController::class, 'activities'])->name('activities');
@@ -1576,7 +1579,9 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/visa-forms/{id}/preview', [App\Http\Controllers\LeadPortalController::class, 'visaFormPreview'])->name('visa-forms.preview');
             Route::post('/visa-forms/{id}', [App\Http\Controllers\LeadPortalController::class, 'visaFormSubmit'])->name('visa-forms.submit');
             // Visa Information Form — client generates from their assessment.
+            Route::get('/forms', [App\Http\Controllers\LeadPortalController::class, 'forms'])->name('forms');
             Route::get('/visa-assessment', [App\Http\Controllers\LeadPortalController::class, 'visaAssessment'])->name('visa-assessment');
+            Route::post('/visa-assessment', [App\Http\Controllers\LeadPortalController::class, 'updateAssessment'])->name('visa-assessment.update');
             Route::post('/vif', [App\Http\Controllers\LeadPortalController::class, 'generateVif'])->name('vif.generate');
             Route::get('/vif', [App\Http\Controllers\LeadPortalController::class, 'downloadVif'])->name('vif.download');
             // My Family — dependants the principal adds + their documents.
@@ -1603,6 +1608,9 @@ Route::middleware(['auth'])->group(function () {
             // Engagement Agreement terms" — sets / clears the timestamp.
             Route::post('/documents/agreements/acknowledge', [LeadDocumentController::class, 'leadAcknowledgeAgreements'])->name('documents.agreements.acknowledge');
             Route::get('/documents/{docId}/download', [LeadDocumentController::class, 'download'])->name('documents.download');
+            // Client edits their own uploads from the portal (private, owner-scoped).
+            Route::post('/documents/{docId}/replace', [LeadDocumentController::class, 'leadReplace'])->name('documents.replace');
+            Route::delete('/documents/{docId}', [LeadDocumentController::class, 'leadDestroy'])->name('documents.destroy');
         });
     });
 });

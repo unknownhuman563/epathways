@@ -169,6 +169,71 @@ class LeadPortalController extends Controller
     }
 
     /**
+     * Forms hub — three cards, always shown: the client's Visa Assessment (for
+     * the visa set on their case), their Free Assessment, and INZ Forms (which
+     * only become available once an adviser generates them).
+     */
+    public function forms()
+    {
+        $lead = $this->resolveLeadOrLogout();
+        if (! $lead instanceof Lead) {
+            return $lead;
+        }
+
+        [$type, $intake] = $this->leadIntake($lead);
+        $cards = [];
+
+        // 1. Visa Assessment — based on the visa set to the client. Always open
+        //    so the client can assess or edit their answers at any time.
+        $hasIntake = (bool) ($type && $intake);
+        $visaLabel = $intake
+            ? \App\Support\IntakeVisaTypeMap::label($intake::class)
+            : ($lead->inz_visa_type ?: null);
+        $visaPct = $hasIntake ? \App\Support\AssessmentFormSchema::stats($intake, $type)['pct'] : null;
+        $cards[] = [
+            'key' => 'visa',
+            'title' => $visaLabel ? "Visa Assessment — {$visaLabel}" : 'Visa Assessment',
+            'subtitle' => 'Your visa information form and assessment answers. Edit anytime to keep it current.',
+            'available' => true,
+            'status' => $hasIntake ? "{$visaPct}% complete" : 'Get started',
+            'href' => '/portal/lead/visa-assessment',
+            'cta' => 'Open',
+        ];
+
+        // 2. Free Assessment — the initial eligibility questionnaire. Always open.
+        $hasFree = str_starts_with((string) $lead->lead_id, 'FA-')
+            || in_array($lead->source, ['free-assessment', 'education-enrolment'], true)
+            || ! empty($lead->immigration_info);
+        $cards[] = [
+            'key' => 'free',
+            'title' => 'Free Assessment',
+            'subtitle' => 'The initial questionnaire you completed to check your eligibility.',
+            'available' => true,
+            'status' => $hasFree ? 'Completed' : 'Not started',
+            'href' => $hasFree ? "/assessment-result/{$lead->lead_id}" : '/free-assessment',
+            'cta' => $hasFree ? 'View result' : 'Start',
+        ];
+
+        // 3. INZ Forms — only available once an adviser has generated them.
+        $inzCount = \App\Models\CaseFormAssignment::where('lead_id', $lead->id)->count();
+        $inzAvailable = $inzCount > 0;
+        $cards[] = [
+            'key' => 'inz',
+            'title' => 'INZ Forms',
+            'subtitle' => 'Official Immigration New Zealand forms prepared by your adviser.',
+            'available' => $inzAvailable,
+            'status' => $inzAvailable ? ($inzCount.' form'.($inzCount > 1 ? 's' : '').' ready') : 'Not available yet',
+            'href' => $inzAvailable ? '/portal/lead/visa-forms' : null,
+            'cta' => 'Open',
+        ];
+
+        return inertia('portal/lead/Forms', [
+            'lead' => $this->leadPayload($lead),
+            'cards' => $cards,
+        ]);
+    }
+
+    /**
      * Visa Information Form — the client generates the official VIF from their
      * completed assessment; it then becomes downloadable here and satisfies the
      * VIF checklist item. The client never uploads it (it's produced, not provided).
@@ -180,9 +245,22 @@ class LeadPortalController extends Controller
             return $lead;
         }
 
+        [$type, $intake] = $this->leadIntake($lead);
+        $assessment = null;
+        if ($type && $intake) {
+            $assessment = [
+                'type' => $type,
+                'values' => $this->assessmentValues($intake, $type),
+                'stats' => \App\Support\AssessmentFormSchema::stats($intake, $type),
+                'save_url' => '/portal/lead/visa-assessment',
+            ];
+        }
+
         return inertia('portal/lead/VisaAssessment', [
             'lead' => $this->leadPayload($lead),
             'vif' => $this->leadVif($lead),
+            // The client's editable assessment (null when the case has no intake).
+            'assessment' => $assessment,
         ]);
     }
 
@@ -194,14 +272,29 @@ class LeadPortalController extends Controller
         }
         $assessment = \App\Models\Assessment::whereNotNull('intakeable_type')->find($lead->assessment_id);
         $intake = $assessment?->intakeable;
-        $type = $intake ? match ($intake::class) {
-            \App\Models\WorkIntake::class => 'work',
-            \App\Models\StudentIntake::class => 'student',
-            \App\Models\VisitorIntake::class => 'visitor',
-            default => null,
-        } : null;
+        $type = $intake ? \App\Support\AssessmentFormSchema::typeForClass($intake::class) : null;
 
         return [$type, $type ? $intake : null];
+    }
+
+    /** The intake's current values for the schema fields, shaped for form inputs. */
+    private function assessmentValues($intake, string $type): array
+    {
+        $out = [];
+        foreach (\App\Support\AssessmentFormSchema::fields($type) as $key) {
+            if (! array_key_exists($key, $intake->getAttributes())) {
+                continue;
+            }
+            $v = $intake->{$key};
+            if ($v instanceof \DateTimeInterface) {
+                $v = \Illuminate\Support\Carbon::parse($v)->toDateString();
+            } elseif (is_bool($v)) {
+                $v = $v ? 'Yes' : 'No';
+            }
+            $out[$key] = $v;
+        }
+
+        return $out;
     }
 
     /** VIF availability + generated state for the client portal. */
@@ -228,6 +321,14 @@ class LeadPortalController extends Controller
         [$type, $intake] = $this->leadIntake($lead);
         abort_unless($intake, 422, 'No completed assessment to generate a Visa Information Form from.');
 
+        $this->buildAndStoreVif($lead, $intake);
+
+        return back()->with('success', 'Your Visa Information Form has been generated.');
+    }
+
+    /** Build the VIF PDF from an intake and store it as the lead's VIF document. */
+    private function buildAndStoreVif(Lead $lead, $intake): void
+    {
         $vif = \App\Support\VisaInformationForm::build($intake->toArray());
         $bytes = \Barryvdh\DomPDF\Facade\Pdf::loadView('pdf.intake', [
             'applicant' => $vif['applicant'] ?: 'Applicant',
@@ -254,8 +355,65 @@ class LeadPortalController extends Controller
                 'status' => 'Submitted',
             ],
         );
+    }
 
-        return back()->with('success', 'Your Visa Information Form has been generated.');
+    /**
+     * Client edits their assessment from the portal. Saves the allowed fields
+     * back to the intake, regenerates the VIF (it's derived from the assessment),
+     * and notifies all case staff. Only assessment fields are writable.
+     */
+    public function updateAssessment(\Illuminate\Http\Request $request)
+    {
+        $lead = $this->resolveLeadOrLogout();
+        if (! $lead instanceof Lead) {
+            return $lead;
+        }
+        [$type, $intake] = $this->leadIntake($lead);
+        abort_unless($type && $intake, 422, 'There is no assessment to edit on this case.');
+
+        $data = $request->validate([
+            'field_values' => 'present|array',
+            'field_values.*' => 'nullable',
+        ]);
+
+        $allowed = array_flip(\App\Support\AssessmentFormSchema::fields($type));
+        $fillable = array_flip($intake->getFillable());
+        $casts = $intake->getCasts();
+
+        foreach ($data['field_values'] as $key => $value) {
+            // Only assessment fields the model itself allows may be written.
+            if (! isset($allowed[$key]) || ! isset($fillable[$key])) {
+                continue;
+            }
+            if ($value === '') {
+                $value = null;
+            }
+            if (in_array($casts[$key] ?? null, ['bool', 'boolean'], true)) {
+                $value = in_array(strtolower((string) $value), ['yes', '1', 'true', 'on'], true);
+            }
+            $intake->{$key} = $value;
+        }
+        $intake->save();
+
+        // The VIF is derived from the assessment — keep it in lockstep.
+        $this->buildAndStoreVif($lead, $intake);
+
+        // Notify all case staff that the client changed their assessment / VIF.
+        try {
+            $pct = \App\Support\AssessmentFormSchema::stats($intake, $type)['pct'];
+            $recipients = \App\Models\User::whereIn('role', array_merge(['immigration'], \App\Models\User::IMMIGRATION_ROLES, ['admin', 'super_admin']))->get();
+            if ($lead->immigration_assignee && ($owner = \App\Models\User::find($lead->immigration_assignee))) {
+                $recipients = $recipients->push($owner);
+            }
+            $recipients = $recipients->unique('id')->values();
+            if ($recipients->isNotEmpty()) {
+                \Illuminate\Support\Facades\Notification::send($recipients, new \App\Notifications\ClientUpdatedAssessment($lead, $pct));
+            }
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('Client assessment-update notify failed', ['lead_id' => $lead->id, 'error' => $e->getMessage()]);
+        }
+
+        return back()->with('success', 'Your assessment has been updated and your Visa Information Form regenerated.');
     }
 
     /** Stream the client's generated VIF. */
@@ -708,11 +866,49 @@ class LeadPortalController extends Controller
         $user = Auth::user();
         $lead = $user?->lead;
 
-        if (! $lead) {
-            Auth::logout();
-            return redirect('/login')->withErrors([
-                'email' => 'Portal account is not linked to a lead record. Please contact ePathways.',
-            ]);
+        if ($lead) {
+            return $lead;
+        }
+
+        // Staff preview — an admin/super-admin can browse the client portal to see
+        // its features, using a sample client as context. Read-only: all writes are
+        // blocked by the BlockLeadPortalPreviewWrites middleware on this group.
+        if ($user && $user->isAtLeast('admin') && ($preview = $this->previewLead())) {
+            return $preview;
+        }
+
+        Auth::logout();
+
+        return redirect('/login')->withErrors([
+            'email' => 'Portal account is not linked to a lead record. Please contact ePathways.',
+        ]);
+    }
+
+    /** Whether the current viewer is a staff member previewing the client portal. */
+    private function isPreview(): bool
+    {
+        $user = Auth::user();
+
+        return $user && ! $user->lead && $user->isAtLeast('admin');
+    }
+
+    /** The client whose portal a staff previewer is currently viewing. */
+    private function previewLead(): ?Lead
+    {
+        $id = request('preview_lead') ?: session('lead_portal_preview_id');
+        if ($id && ($lead = Lead::find($id))) {
+            session(['lead_portal_preview_id' => $lead->id]);
+
+            return $lead;
+        }
+
+        // Default to a client who actually has a portal account, then any case.
+        $lead = Lead::whereHas('portalUser')->latest()->first()
+            ?? Lead::where('is_immigration_case', true)->latest()->first()
+            ?? Lead::latest()->first();
+
+        if ($lead) {
+            session(['lead_portal_preview_id' => $lead->id]);
         }
 
         return $lead;
