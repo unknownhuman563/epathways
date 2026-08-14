@@ -1522,13 +1522,30 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications');
         });
 
-        // Finance portal — placeholder dashboard + cross-portal Task Board
-        // filtered to department='finance'. Sidebar is intentionally lean
-        // (Dashboard + Task Board only) until the payments/invoices data
-        // model lands.
+        // Finance portal — dashboard, cross-portal Task Board (department='finance'),
+        // and the Accounts Receivable / Accounts Payable ledger.
         Route::middleware('portal:finance')->prefix('finance')->name('portal.finance.')->group(function () {
             Route::get('/dashboard', [\App\Http\Controllers\Portal\FinanceController::class, 'dashboard'])->name('dashboard');
             Route::get('/tasks', [\App\Http\Controllers\Portal\FinanceController::class, 'tasks'])->name('tasks');
+
+            // Accounts Receivable
+            Route::get('/receivables', [\App\Http\Controllers\Portal\FinanceReceivableController::class, 'index'])->name('receivables');
+            Route::post('/receivables', [\App\Http\Controllers\Portal\FinanceReceivableController::class, 'store'])->name('receivables.store');
+            Route::put('/receivables/{receivable}', [\App\Http\Controllers\Portal\FinanceReceivableController::class, 'update'])->name('receivables.update');
+            Route::delete('/receivables/{receivable}', [\App\Http\Controllers\Portal\FinanceReceivableController::class, 'destroy'])->name('receivables.destroy');
+            Route::post('/receivables/{receivable}/payments', [\App\Http\Controllers\Portal\FinanceReceivableController::class, 'recordPayment'])->name('receivables.payments.store');
+            Route::delete('/receivables/{receivable}/payments/{payment}', [\App\Http\Controllers\Portal\FinanceReceivableController::class, 'deletePayment'])->name('receivables.payments.destroy');
+
+            // Accounts Payable
+            Route::get('/payables', [\App\Http\Controllers\Portal\FinancePayableController::class, 'index'])->name('payables');
+            Route::post('/payables', [\App\Http\Controllers\Portal\FinancePayableController::class, 'store'])->name('payables.store');
+            Route::put('/payables/{payable}', [\App\Http\Controllers\Portal\FinancePayableController::class, 'update'])->name('payables.update');
+            Route::delete('/payables/{payable}', [\App\Http\Controllers\Portal\FinancePayableController::class, 'destroy'])->name('payables.destroy');
+            Route::post('/payables/{payable}/payments', [\App\Http\Controllers\Portal\FinancePayableController::class, 'recordPayment'])->name('payables.payments.store');
+            Route::delete('/payables/{payable}/payments/{payment}', [\App\Http\Controllers\Portal\FinancePayableController::class, 'deletePayment'])->name('payables.payments.destroy');
+
+            // Reports — income statement, aging, collections
+            Route::get('/reports', [\App\Http\Controllers\Portal\FinanceReportController::class, 'index'])->name('reports');
         });
 
         // Lead Portal — external client-facing dashboard. Each lead-role user

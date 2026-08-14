@@ -82,6 +82,9 @@ class CommunicationService
                 $template->footer_image,
                 $template->from_email,
                 $template->from_name,
+                $template->cc,
+                $template->bcc,
+                $template->branding,
             );
         }
 
@@ -244,7 +247,7 @@ class CommunicationService
         return $res['ok'];
     }
 
-    private function sendEmail(Lead $lead, string $subject, string $body, ?string $key, array $attachments = [], ?int $campaignId = null, ?string $bannerImage = null, ?string $footerImage = null, ?string $fromEmail = null, ?string $fromName = null): MessageLog
+    private function sendEmail(Lead $lead, string $subject, string $body, ?string $key, array $attachments = [], ?int $campaignId = null, ?string $bannerImage = null, ?string $footerImage = null, ?string $fromEmail = null, ?string $fromName = null, ?string $cc = null, ?string $bcc = null, ?string $branding = null): MessageLog
     {
         if (empty($lead->email)) {
             return $this->log([
@@ -266,7 +269,7 @@ class CommunicationService
 
         try {
             Mail::to($lead->email)->queue(
-                new TemplatedMessage($subject, $body, $attachments, $bannerImage, $footerImage, $log->id, $fromEmail, $fromName)
+                new TemplatedMessage($subject, $body, $attachments, $bannerImage, $footerImage, $log->id, $fromEmail, $fromName, $cc, $bcc, $branding)
             );
         } catch (\Throwable $e) {
             Log::error('CommunicationService email failed', ['lead_id' => $lead->id, 'error' => $e->getMessage()]);

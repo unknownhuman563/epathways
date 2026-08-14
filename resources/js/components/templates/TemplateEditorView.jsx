@@ -33,6 +33,7 @@ export default function TemplateEditorView({
     standardVariables = [],
     basePath = "/admin/message-templates",
     departmentOptions = null,
+    brandingOptions = [],
     fixedDepartment = null,
     defaultChannel = null,
     defaultFolderId = null,
@@ -53,6 +54,11 @@ export default function TemplateEditorView({
         from_name: template?.from_name ?? "",
         email_body: template?.email_body ?? "",
         sms_body: template?.sms_body ?? "",
+        // Branding preset defaults to the portal you're working in, so a new
+        // template automatically uses its own banner/CTA.
+        branding: template?.branding ?? (fixedDepartment || "default"),
+        cc: template?.cc ?? "",
+        bcc: template?.bcc ?? "",
         banner_image: null,
         footer_image: null,
         remove_banner: false,
@@ -90,6 +96,10 @@ export default function TemplateEditorView({
         if (removed) return null;
         return field === "banner_image" ? template?.banner_image_url : template?.footer_image_url;
     };
+    // The selected branding preset's live preview — shown in a slot when no
+    // custom image overrides it, so picking Education shows Education's art.
+    const brandingOpt = brandingOptions.find((o) => o.value === data.branding) || {};
+    const presetPreview = (field) => (field === "banner_image" ? brandingOpt.banner_url : brandingOpt.footer_url);
     // Admin (cross-department) context supplies departmentOptions — show the
     // selector on both create and edit so scope (shared / a department) is
     // changeable. Portal staff never get options, so it stays hidden for them.
@@ -144,7 +154,24 @@ export default function TemplateEditorView({
     };
 
     const sendTest = () => {
-        router.post(`${basePath}/${template.id}/test`, { email: testEmail || null }, { preserveScroll: true });
+        // Save the template first so the test reflects unsaved edits (Cc/Bcc,
+        // body, branding…) — the test endpoint sends the SAVED template.
+        const fire = () => router.post(`${basePath}/${template.id}/test`, { email: testEmail || null }, { preserveScroll: true });
+        const hasFile = data.banner_image instanceof File || data.footer_image instanceof File;
+
+        if (hasFile) {
+            form.transform((d) => ({
+                ...d,
+                is_active: d.is_active ? 1 : 0,
+                remove_banner: d.remove_banner ? 1 : 0,
+                remove_footer: d.remove_footer ? 1 : 0,
+                _method: "put",
+            }));
+            form.post(`${basePath}/${template.id}`, { preserveScroll: true, forceFormData: true, onSuccess: fire });
+        } else {
+            form.transform((d) => d);
+            form.put(`${basePath}/${template.id}`, { preserveScroll: true, onSuccess: fire });
+        }
     };
 
     const smsLen = data.sms_body.length;
@@ -223,6 +250,19 @@ export default function TemplateEditorView({
                                 </label>
                                 <p className="col-span-2 text-[11px] text-gray-400 -mt-2">Blank = default sender. The address must be verified in your mail provider (Brevo).</p>
                             </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <label className="block">
+                                    <span className="block text-xs font-semibold text-gray-600 mb-1">Cc <span className="text-gray-400 font-normal">(optional)</span></span>
+                                    <input value={data.cc} onChange={(e) => setData("cc", e.target.value)} placeholder="team@epathways.co.nz, other@…" className={inp} />
+                                    {errors.cc && <span className="text-xs text-rose-600">{errors.cc}</span>}
+                                </label>
+                                <label className="block">
+                                    <span className="block text-xs font-semibold text-gray-600 mb-1">Bcc <span className="text-gray-400 font-normal">(optional)</span></span>
+                                    <input value={data.bcc} onChange={(e) => setData("bcc", e.target.value)} placeholder="records@epathways.co.nz" className={inp} />
+                                    {errors.bcc && <span className="text-xs text-rose-600">{errors.bcc}</span>}
+                                </label>
+                                <p className="col-span-2 text-[11px] text-gray-400 -mt-2">Comma-separated. These addresses are copied on every send of this template.</p>
+                            </div>
                             <label className="block">
                                 <span className="block text-xs font-semibold text-gray-600 mb-1">Body</span>
                                 <RichTextEditor value={data.email_body} onChange={(html) => setData("email_body", html)} />
@@ -233,8 +273,15 @@ export default function TemplateEditorView({
                                 Left blank, the email uses the default ePathways
                                 banner and consultation footer. */}
                             <div className="pt-3 border-t border-gray-100">
-                                <p className="text-xs font-semibold text-gray-600 mb-1">Branding images <span className="text-gray-400 font-normal">(optional)</span></p>
-                                <p className="text-[11px] text-gray-400 mb-3">Blank = the default ePathways banner &amp; footer are used. The body sits between them.</p>
+                                <label className="block mb-3">
+                                    <span className="block text-xs font-semibold text-gray-600 mb-1">Branding</span>
+                                    <select value={data.branding} onChange={(e) => setData("branding", e.target.value)} className={inp}>
+                                        {brandingOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                                    </select>
+                                    <span className="block text-[11px] text-gray-400 mt-1">Which portal's banner &amp; CTA image to use. Defaults to your current portal.</span>
+                                </label>
+                                <p className="text-xs font-semibold text-gray-600 mb-1">Custom images <span className="text-gray-400 font-normal">(optional — override the branding above)</span></p>
+                                <p className="text-[11px] text-gray-400 mb-3">Leave blank to use the selected branding's banner &amp; footer. The body sits between them.</p>
                                 <div className="grid grid-cols-2 gap-4">
                                     {[
                                         { field: "banner_image", label: "Banner (top)", hint: "Wide header, ~600px" },
@@ -254,6 +301,13 @@ export default function TemplateEditorView({
                                                             <X size={13} />
                                                         </button>
                                                     </div>
+                                                ) : presetPreview(field) ? (
+                                                    <label className="relative block border border-gray-200 rounded-lg overflow-hidden bg-gray-50 cursor-pointer group">
+                                                        <img src={presetPreview(field)} alt={label} className="w-full h-24 object-cover" />
+                                                        <span className="absolute bottom-1 left-1 bg-black/60 text-white text-[9px] font-bold px-1.5 py-0.5 rounded">{brandingOpt.label}</span>
+                                                        <span className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/40 text-white opacity-0 group-hover:opacity-100 text-[11px] font-bold transition-all">Upload to override</span>
+                                                        <input type="file" accept="image/*" onChange={pickImage(field)} className="hidden" />
+                                                    </label>
                                                 ) : (
                                                     <label className="flex flex-col items-center justify-center gap-1 h-24 border border-dashed border-gray-300 rounded-lg cursor-pointer text-gray-400 hover:border-gray-400 hover:text-gray-500 transition-colors">
                                                         <ImagePlus size={18} />

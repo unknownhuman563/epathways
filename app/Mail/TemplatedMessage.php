@@ -5,8 +5,8 @@ namespace App\Mail;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Mail\Mailable;
-use Illuminate\Mail\Mailables\Attachment;
 use Illuminate\Mail\Mailables\Address;
+use Illuminate\Mail\Mailables\Attachment;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Mail\Mailables\Headers;
@@ -41,6 +41,11 @@ class TemplatedMessage extends Mailable implements ShouldQueue
         public ?int $logId = null,
         public ?string $fromEmail = null,
         public ?string $fromName = null,
+        // Named *List to avoid clashing with Mailable's inherited $cc/$bcc
+        // (array-typed) properties — PHP forbids redeclaring with a new type.
+        public ?string $ccList = null,
+        public ?string $bccList = null,
+        public ?string $branding = null,
     ) {}
 
     public function envelope(): Envelope
@@ -53,8 +58,24 @@ class TemplatedMessage extends Mailable implements ShouldQueue
         return new Envelope(
             from: $this->fromEmail ? new Address($this->fromEmail, $this->fromName ?: null) : null,
             replyTo: $replyTo ? [new Address($replyTo)] : [],
+            cc: $this->addressList($this->ccList),
+            bcc: $this->addressList($this->bccList),
             subject: $this->subjectLine,
         );
+    }
+
+    /** Parse a comma/semicolon-separated string into valid Address objects. */
+    private function addressList(?string $raw): array
+    {
+        if (! $raw) {
+            return [];
+        }
+
+        return collect(preg_split('/[,;]+/', $raw))
+            ->map(fn ($e) => trim($e))
+            ->filter(fn ($e) => filter_var($e, FILTER_VALIDATE_EMAIL))
+            ->map(fn ($e) => new Address($e))
+            ->values()->all();
     }
 
     /**
@@ -75,9 +96,10 @@ class TemplatedMessage extends Mailable implements ShouldQueue
             view: 'emails.branded',
             with: [
                 'subjectLine' => $this->subjectLine,
-                'bodyHtml'    => $this->bodyHtml(),
+                'bodyHtml' => $this->bodyHtml(),
                 'bannerImage' => $this->bannerImage,
                 'footerImage' => $this->footerImage,
+                'branding' => $this->branding,
             ],
         );
     }

@@ -69,6 +69,7 @@ class MessageTemplateController extends Controller
             'standardVariables' => self::STANDARD_VARIABLES,
             'basePath' => $ctx['basePath'],
             'departmentOptions' => $ctx['departmentOptions'],
+            'brandingOptions' => $this->brandingOptions(),
             'fixedDepartment' => $ctx['department'],
             'defaultChannel' => $request->query('channel'),
             // Carried through the New-template form so a template created from
@@ -100,6 +101,7 @@ class MessageTemplateController extends Controller
             'standardVariables' => self::STANDARD_VARIABLES,
             'basePath' => $ctx['basePath'],
             'departmentOptions' => $ctx['departmentOptions'],
+            'brandingOptions' => $this->brandingOptions(),
             'fixedDepartment' => $ctx['department'],
             'defaultChannel' => null,
         ]);
@@ -353,6 +355,31 @@ class MessageTemplateController extends Controller
         // no-op — fully shared
     }
 
+    /**
+     * Email branding presets for the editor's picker (Default + each portal),
+     * each carrying the banner + CTA preview URLs that would actually be used
+     * (a portal without its own asset resolves to the default artwork), so the
+     * editor can show a live preview of the selected branding.
+     */
+    private function brandingOptions(): array
+    {
+        $default = config('email_branding.default', []);
+
+        return collect(config('email_branding', []))
+            ->map(function ($cfg, $key) use ($default) {
+                $banner = ($cfg['banner'] ?? null) && is_file(public_path($cfg['banner'])) ? $cfg['banner'] : ($default['banner'] ?? null);
+                $footer = ($cfg['footer'] ?? null) && is_file(public_path($cfg['footer'])) ? $cfg['footer'] : ($default['footer'] ?? null);
+
+                return [
+                    'value' => $key,
+                    'label' => $cfg['label'] ?? ucfirst($key),
+                    'banner_url' => $banner && is_file(public_path($banner)) ? asset($banner) : null,
+                    'footer_url' => $footer && is_file(public_path($footer)) ? asset($footer) : null,
+                ];
+            })
+            ->values()->all();
+    }
+
     /** Admin-only department picker: a blank shared option plus each portal. */
     private function departmentOptions(): array
     {
@@ -374,6 +401,11 @@ class MessageTemplateController extends Controller
             // mail provider). Null = the app default MAIL_FROM.
             'from_email' => ['nullable', 'email', 'max:255'],
             'from_name' => ['nullable', 'string', 'max:120'],
+            // Per-portal banner/CTA preset (config/email_branding.php).
+            'branding' => ['nullable', Rule::in(array_keys(config('email_branding', ['default' => []])))],
+            // Comma-separated addresses copied on every send.
+            'cc' => ['nullable', 'string', 'max:1000'],
+            'bcc' => ['nullable', 'string', 'max:1000'],
             // Rich HTML from the editor is more verbose than the old Markdown.
             'email_body' => ['nullable', 'string', 'max:65000'],
             'sms_body' => ['nullable', 'string', 'max:1600'],
