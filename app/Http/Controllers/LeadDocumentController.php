@@ -1132,6 +1132,69 @@ class LeadDocumentController extends Controller
         }
     }
 
+    /** Client removes one of their OWN uploaded files from the portal. */
+    public function leadDestroy(Request $request, $docId)
+    {
+        $lead = $request->user()?->lead;
+        abort_unless($lead, 403);
+
+        $doc = LeadDocument::where('id', $docId)->where('lead_id', $lead->id)->first();
+        if (! $doc) {
+            return back()->with('error', 'Document not found.');
+        }
+        // Approved docs are locked; staff-generated docs are never client-removable.
+        if ($doc->status === LeadDocument::STATUS_APPROVED) {
+            return back()->with('error', 'This document has been approved and can no longer be removed.');
+        }
+        if ($doc->source === 'generated') {
+            return back()->with('error', 'This document was prepared for you and cannot be removed.');
+        }
+
+        if ($doc->file_path) {
+            Storage::disk(self::DISK)->delete($doc->file_path);
+            Storage::disk('public')->delete($doc->file_path); // legacy fallback
+        }
+        $doc->delete();
+
+        return back()->with('success', 'Document removed.');
+    }
+
+    /** Client replaces one of their OWN uploads with a fresh file. */
+    public function leadReplace(Request $request, $docId)
+    {
+        $lead = $request->user()?->lead;
+        abort_unless($lead, 403);
+
+        $doc = LeadDocument::where('id', $docId)->where('lead_id', $lead->id)->first();
+        if (! $doc) {
+            return back()->with('error', 'Document not found.');
+        }
+        if ($doc->status === LeadDocument::STATUS_APPROVED) {
+            return back()->with('error', 'This document has been approved and can no longer be replaced.');
+        }
+
+        $request->validate(['file' => 'required|'.UploadValidation::document()]);
+        $file = $request->file('file');
+        [$path, $displayName] = $this->storeChecklistFile($file, $lead, $doc->checklist_key ?? 'other');
+
+        $oldPath = $doc->file_path;
+        $doc->update([
+            'file_path' => $path,
+            'original_name' => $displayName,
+            'mime' => $file->getMimeType(),
+            'size' => $file->getSize(),
+            'status' => LeadDocument::STATUS_SUBMITTED,
+            'note' => null,
+        ]);
+
+        if ($oldPath && $oldPath !== $path) {
+            Storage::disk(self::DISK)->delete($oldPath);
+            Storage::disk('public')->delete($oldPath);
+        }
+
+        return back()->with('success', 'Document replaced.');
+    }
+
     /**
      * Lead flips a checklist section into "in_review" so staff knows to
      * verify it. Lead can only do this for their own lead record.

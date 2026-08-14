@@ -29,6 +29,20 @@ const fmtBytes = (bytes) => {
  *   3. Journey — full-width vertical timeline (priority)
  *   4. Information + Documents — 2-column row underneath
  */
+// Document endpoints switch to the authenticated lead-portal routes when the
+// tracker is embedded in the lead portal — the public /track/{code} endpoints
+// are disabled for immigration cases (privacy). Shared via context so the deep
+// row/modal components don't each need the base threaded through.
+const DocApiContext = React.createContext(null);
+function useDocApi() {
+    return React.useContext(DocApiContext) || {
+        view: (d) => d.url || `/admin/documents/${d.id}/download?inline=1`,
+        uploadUrl: () => '#',
+        itemUrl: (id) => `#${id}`,
+        replaceUrl: (id) => `#${id}`,
+    };
+}
+
 export default function TrackingPage({
     code = null,
     lead = null,
@@ -56,6 +70,22 @@ export default function TrackingPage({
 }) {
     const [input, setInput] = useState(code || '');
     const flash = usePage().props.flash || {};
+
+    // Route document operations to the portal (private, owner-scoped) when
+    // embedded, or to the public tracker endpoints otherwise.
+    const docApi = useMemo(() => (embedded ? {
+        embedded: true,
+        view: (d) => `/portal/lead/documents/${d.id}/download?inline=1`,
+        uploadUrl: (key) => `/portal/lead/documents/checklist/${key}/upload`,
+        itemUrl: (id) => `/portal/lead/documents/${id}`,
+        replaceUrl: (id) => `/portal/lead/documents/${id}/replace`,
+    } : {
+        embedded: false,
+        view: (d) => d.url || `/admin/documents/${d.id}/download?inline=1`,
+        uploadUrl: () => `/track/${code}/document`,
+        itemUrl: (id) => `/track/${code}/document/${id}`,
+        replaceUrl: (id) => `/track/${code}/document/${id}`,
+    }), [embedded, code]);
 
     // URL-synced tab + filter state. Reads initial values from
     // ?tab=, ?section=, ?status= on first render and writes back via
@@ -97,6 +127,7 @@ export default function TrackingPage({
     };
 
     return (
+        <DocApiContext.Provider value={docApi}>
         <div className={embedded ? 'font-sans' : 'min-h-screen bg-white font-urbanist flex flex-col'}>
             <Head title={embedded ? 'Application Tracker — ePathways' : 'Track Your Application — ePathways'} />
             {!embedded && <Navbar />}
@@ -312,6 +343,7 @@ export default function TrackingPage({
 
             {!embedded && <Footer />}
         </div>
+        </DocApiContext.Provider>
     );
 }
 
@@ -1473,16 +1505,18 @@ function DocumentsHubTab({
 }) {
     const checklist = visa?.checklist || [];
 
-    // Index uploaded docs by checklist_key so requirement rows can show
-    // their fulfilled state inline. Most recent wins per key.
+    // Index uploaded docs by checklist_key. A key can hold SEVERAL files (the
+    // client can "Upload another" without replacing the first), so we keep the
+    // full list per key, oldest first, and treat the latest as the row's status.
     const docsByKey = useMemo(() => {
         const map = new Map();
         for (const d of documents) {
             if (! d.checklist_key) continue;
-            const prev = map.get(d.checklist_key);
-            if (! prev || new Date(d.created_at) > new Date(prev.created_at)) {
-                map.set(d.checklist_key, d);
-            }
+            if (! map.has(d.checklist_key)) map.set(d.checklist_key, []);
+            map.get(d.checklist_key).push(d);
+        }
+        for (const arr of map.values()) {
+            arr.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
         }
         return map;
     }, [documents]);
@@ -1495,7 +1529,9 @@ function DocumentsHubTab({
     // file (if any) so the row stays put + shows the file after upload.
     // State: missing | submitted | review | approved | rejected.
     const buildRow = (it) => {
-        const doc = docsByKey.get(it.key) || null;
+        const docs = docsByKey.get(it.key) || [];
+        // The latest upload drives the row's status/state; all files display.
+        const doc = docs.length ? docs[docs.length - 1] : null;
         // Prefer the explicit Section field; fall back to splitting a legacy
         // "Section · Name" label for visas saved before the split.
         const parsed = it.category
@@ -1516,6 +1552,7 @@ function DocumentsHubTab({
             hint: it.hint || '',
             required: it.required !== false,
             doc,
+            docs,
             state,
             rejectedDoc: state === 'rejected' ? doc : null,
         };
@@ -1892,10 +1929,11 @@ function UploadsTable({ documents, onOpenReplace, onDelete }) {
 }
 
 function UploadRow({ doc, onOpenReplace, onDelete }) {
+    const docApi = useDocApi();
     const sizeKb = doc.size ? `${(doc.size / 1024).toFixed(0)} KB` : null;
     // Public tracker: use the file's public storage URL. Fall back to the
     // staff download route only if no public URL is available.
-    const viewUrl = doc.url || `/admin/documents/${doc.id}/download?inline=1`;
+    const viewUrl = docApi.view(doc);
     return (
         <tr className="border-t border-gray-50 align-top hover:bg-gray-50/40">
             {/* File */}
@@ -1971,8 +2009,9 @@ function UploadRow({ doc, onOpenReplace, onDelete }) {
 }
 
 function UploadMobileCard({ doc, onOpenReplace, onDelete }) {
+    const docApi = useDocApi();
     const sizeKb = doc.size ? `${(doc.size / 1024).toFixed(0)} KB` : null;
-    const viewUrl = doc.url || `/admin/documents/${doc.id}/download?inline=1`;
+    const viewUrl = docApi.view(doc);
     return (
         <div className="border border-gray-200 bg-white px-3.5 py-3">
             <div className="flex items-start gap-3">
@@ -2072,6 +2111,7 @@ function ChecklistTable({ rows, onOpenUpload, onOpenReplace, onDelete }) {
 }
 
 function ChecklistRow({ row, onOpenUpload, onOpenReplace, onDelete }) {
+    const docApi = useDocApi();
     const doc = row.doc;
     const isRejected = row.state === 'rejected';
     const hasFile = doc && ! isRejected;
@@ -2111,43 +2151,40 @@ function ChecklistRow({ row, onOpenUpload, onOpenReplace, onDelete }) {
                 </div>
             </td>
 
-            {/* Attachment — the file attached for this case */}
+            {/* Attachment — every file uploaded for this item, stacked. */}
             <td className="px-4 py-3">
-                {doc ? (
-                    <span className="inline-flex items-center gap-1.5 text-[12px] text-gray-700 min-w-0 max-w-full">
-                        <FileText size={12} className="text-gray-400 flex-shrink-0" />
-                        <span className="truncate" title={doc.original_name}>{doc.original_name}</span>
-                    </span>
+                {row.docs.length ? (
+                    <div className="flex flex-col gap-1.5 min-w-0">
+                        {row.docs.map((d) => {
+                            const url = docApi.view(d);
+                            return (
+                                <span key={d.id} className="inline-flex items-center gap-1.5 text-[12px] text-gray-700 min-w-0 max-w-full">
+                                    <FileText size={12} className="text-gray-400 flex-shrink-0" />
+                                    <a href={url} target="_blank" rel="noopener noreferrer" className="truncate hover:underline" title={d.original_name}>{d.original_name}</a>
+                                    {d.is_editable && (
+                                        <button type="button" onClick={() => onDelete(d)} title="Remove this file" className="text-gray-300 hover:text-red-600 flex-shrink-0">
+                                            <Trash2 size={11} />
+                                        </button>
+                                    )}
+                                </span>
+                            );
+                        })}
+                    </div>
                 ) : (
                     <span className="text-[12px] text-gray-400 italic">No file attached</span>
                 )}
             </td>
 
-            {/* Status */}
+            {/* Status — reflects the latest upload for this item */}
             <td className="px-4 py-3">{statusBadge}</td>
 
-            {/* Actions — view / upload another / replace */}
+            {/* Actions — add more files (never replaces existing ones) */}
             <td className="px-4 py-3">
                 <div className="flex items-center gap-1.5 flex-wrap">
                     {hasFile ? (
-                        <>
-                            <a href={viewUrl} target="_blank" rel="noopener noreferrer" title="View" className={trackBtn}>
-                                <Eye size={12} />
-                            </a>
-                            <button type="button" onClick={() => onOpenUpload(row)} className={trackBtn}>
-                                <Plus size={12} /> Upload another
-                            </button>
-                            {doc.is_editable && (
-                                <button type="button" onClick={() => onOpenReplace(doc)} className={trackBtn}>
-                                    <Upload size={12} /> Replace
-                                </button>
-                            )}
-                            {doc.is_editable && (
-                                <button type="button" onClick={() => onDelete(doc)} title="Remove" className={`${trackBtn} hover:text-red-600`}>
-                                    <Trash2 size={12} />
-                                </button>
-                            )}
-                        </>
+                        <button type="button" onClick={() => onOpenUpload(row)} className={trackBtn}>
+                            <Plus size={12} /> Upload another
+                        </button>
                     ) : (
                         <button
                             type="button"
@@ -2166,6 +2203,7 @@ function ChecklistRow({ row, onOpenUpload, onOpenReplace, onDelete }) {
 // ── Requirement rows ───────────────────────────────────────────────────────
 
 function RequirementRow({ row, onOpenUpload, onOpenReplace, onDelete }) {
+    const docApi = useDocApi();
     const doc = row.doc;
     const isRejected = row.state === 'rejected';
     const hasFile = doc && ! isRejected;         // an accepted / pending file
@@ -2215,41 +2253,36 @@ function RequirementRow({ row, onOpenUpload, onOpenReplace, onDelete }) {
                     <p className="text-[11px] text-gray-500 mt-0.5">{row.hint}</p>
                 ) : null}
 
-                {/* The uploaded file stays right here under its checklist row. */}
-                {hasFile && (
-                    <div className="mt-2 flex items-center gap-2 border border-gray-100 bg-gray-50/70 px-2.5 py-1.5">
-                        <FileText size={13} className="text-gray-400 flex-shrink-0" />
-                        <span className="text-[12px] text-[#282728] truncate flex-1 min-w-0" title={doc.original_name}>
-                            {doc.original_name}
-                        </span>
-                        <a
-                            href={viewUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            title="View"
-                            className="inline-flex items-center justify-center p-1 border border-gray-200 bg-white text-gray-600 hover:text-[#282728] hover:bg-gray-50"
-                        >
-                            <Eye size={11} />
-                        </a>
-                        {doc.is_editable && (
-                            <>
-                                <button
-                                    type="button"
-                                    onClick={() => onOpenReplace(doc)}
-                                    title="Replace"
-                                    className="inline-flex items-center justify-center p-1 border border-gray-200 bg-white text-gray-600 hover:text-[#282728] hover:bg-gray-50"
-                                >
-                                    <Upload size={11} />
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => onDelete(doc)}
-                                    title="Remove"
-                                    className="inline-flex items-center justify-center p-1 border border-gray-200 bg-white text-gray-600 hover:text-red-600 hover:bg-gray-50"
-                                >
-                                    <X size={11} />
-                                </button>
-                            </>
+                {/* Every uploaded file stays here under its checklist row — a new
+                    upload is added to the list, it never replaces the first. */}
+                {row.docs.length > 0 && (
+                    <div className="mt-2 space-y-1.5">
+                        {row.docs.map((d) => {
+                            const url = docApi.view(d);
+                            return (
+                                <div key={d.id} className="flex items-center gap-2 border border-gray-100 bg-gray-50/70 px-2.5 py-1.5">
+                                    <FileText size={13} className="text-gray-400 flex-shrink-0" />
+                                    <span className="text-[12px] text-[#282728] truncate flex-1 min-w-0" title={d.original_name}>
+                                        {d.original_name}
+                                    </span>
+                                    <a href={url} target="_blank" rel="noopener noreferrer" title="View"
+                                        className="inline-flex items-center justify-center p-1 border border-gray-200 bg-white text-gray-600 hover:text-[#282728] hover:bg-gray-50">
+                                        <Eye size={11} />
+                                    </a>
+                                    {d.is_editable && (
+                                        <button type="button" onClick={() => onDelete(d)} title="Remove"
+                                            className="inline-flex items-center justify-center p-1 border border-gray-200 bg-white text-gray-600 hover:text-red-600 hover:bg-gray-50">
+                                            <X size={11} />
+                                        </button>
+                                    )}
+                                </div>
+                            );
+                        })}
+                        {hasFile && (
+                            <button type="button" onClick={() => onOpenUpload(row)}
+                                className="text-[10px] font-bold uppercase tracking-wide inline-flex items-center gap-1 text-gray-600 border border-gray-200 bg-white px-2.5 py-1 hover:bg-gray-50">
+                                <Plus size={11} /> Upload another
+                            </button>
                         )}
                     </div>
                 )}
@@ -2723,6 +2756,7 @@ function ChecklistPicker({ sections, allEmpty, search, onSearchChange, showSearc
  * moving it into a modal cleans that up.
  */
 function DocUploadModal({ open, onClose, code, lead = null, visa = null, documents = [], initialDocType = null }) {
+    const docApi = useDocApi();
     const [docType, setDocType] = useState(null);
     const [search, setSearch] = useState('');
     const { data, setData, post, processing, errors, reset } = useForm({
@@ -2804,7 +2838,7 @@ function DocUploadModal({ open, onClose, code, lead = null, visa = null, documen
         e.preventDefault();
         if (!data.files.length || !docType) return;
 
-        post(`/track/${code}/document`, {
+        post(docApi.uploadUrl(data.checklist_key), {
             forceFormData: true,
             preserveScroll: true,
             onSuccess: () => close(),
@@ -3001,6 +3035,7 @@ function DocUploadModal({ open, onClose, code, lead = null, visa = null, documen
  * the document type while the doc is still in Submitted state.
  */
 function DocEditModal({ code, doc, onClose }) {
+    const docApi = useDocApi();
     const { data, setData, post, processing, errors, reset } = useForm({
         file: null,
         checklist_key: '',
@@ -3021,7 +3056,7 @@ function DocEditModal({ code, doc, onClose }) {
 
     const submit = (e) => {
         e.preventDefault();
-        post(`/track/${code}/document/${doc.id}`, {
+        post(docApi.replaceUrl(doc.id), {
             forceFormData: true,
             preserveScroll: true,
             onSuccess: () => close(),
@@ -3097,6 +3132,7 @@ function DocEditModal({ code, doc, onClose }) {
  * the right, Cancel on the left.
  */
 function DocDeleteModal({ code, doc, onClose }) {
+    const docApi = useDocApi();
     const { delete: destroy, processing } = useForm();
 
     useEffect(() => {
@@ -3109,7 +3145,7 @@ function DocDeleteModal({ code, doc, onClose }) {
     if (!doc) return null;
 
     const confirm = () => {
-        destroy(`/track/${code}/document/${doc.id}`, {
+        destroy(docApi.itemUrl(doc.id), {
             preserveScroll: true,
             onSuccess: () => onClose(),
         });
