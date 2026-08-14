@@ -524,6 +524,10 @@ Route::middleware(['auth'])->group(function () {
 
         Route::get('/admin/activity-logs', [ActivityLogController::class, 'index'])->name('admin.activity-logs');
 
+        // Per-department email branding (banner + CTA) — admin-managed presets.
+        Route::get('/admin/email-branding', [\App\Http\Controllers\EmailBrandingController::class, 'index'])->name('admin.email-branding');
+        Route::post('/admin/email-branding/{department}', [\App\Http\Controllers\EmailBrandingController::class, 'update'])->name('admin.email-branding.update');
+
         // Message templates — staff-editable email/SMS templates.
         Route::get('/admin/message-templates', [\App\Http\Controllers\MessageTemplateController::class, 'index'])->name('admin.message-templates');
         Route::get('/admin/message-templates/create', [\App\Http\Controllers\MessageTemplateController::class, 'create'])->name('admin.message-templates.create');
@@ -889,6 +893,11 @@ Route::middleware(['auth'])->group(function () {
                 Route::put('/email-templates/{id}', [$c, 'update'])->name('email-templates.update');
                 Route::delete('/email-templates/{id}', [$c, 'destroy'])->name('email-templates.destroy');
                 Route::post('/email-templates/{id}/test', [$c, 'sendTest'])->name('email-templates.test');
+
+                // Per-department email branding — same page/chrome as this portal.
+                $b = \App\Http\Controllers\EmailBrandingController::class;
+                Route::get('/email-branding', [$b, 'index'])->name('email-branding');
+                Route::post('/email-branding/{department}', [$b, 'update'])->name('email-branding.update');
             });
     }
 

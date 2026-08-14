@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { Head, Link, router } from "@inertiajs/react";
 import {
     MessageSquare, Plus, Mail, Smartphone, Folder, FolderPlus,
-    ChevronRight, Pencil, Trash2, FolderInput, X, CornerUpLeft,
+    ChevronRight, Pencil, Trash2, FolderInput, X, CornerUpLeft, Image as ImageIcon,
 } from "lucide-react";
 
 const fmtDate = (iso) => (iso ? new Date(iso).toLocaleDateString("en-US", { day: "2-digit", month: "short", year: "numeric" }) : "—");
@@ -88,6 +88,9 @@ export default function TemplateListView({ templates = [], folders = [], basePat
         ? `${basePath}/create?folder_id=${currentFolderId}${activeTab !== "all" ? `&channel=${activeTab}` : ""}`
         : (activeTab === "all" ? `${basePath}/create` : `${basePath}/create?channel=${activeTab}`);
 
+    // Email Branding lives alongside templates in the same scope (admin or portal).
+    const brandingHref = basePath.replace("message-templates", "email-branding").replace("email-templates", "email-branding");
+
     return (
         <div className="space-y-6 max-w-5xl mx-auto">
             <Head title="Message Templates" />
@@ -102,6 +105,9 @@ export default function TemplateListView({ templates = [], folders = [], basePat
                     </p>
                 </div>
                 <div className="flex items-center gap-2">
+                    <Link href={brandingHref} className="px-4 py-2 bg-white border border-gray-200 text-gray-700 text-sm font-semibold rounded-xl hover:bg-gray-50 flex items-center gap-2">
+                        <ImageIcon size={15} /> Email branding
+                    </Link>
                     {currentFolderId === null && (
                         <button
                             type="button"

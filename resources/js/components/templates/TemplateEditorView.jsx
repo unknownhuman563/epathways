@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Head, Link, router, useForm } from "@inertiajs/react";
-import { ArrowLeft, Save, Trash2, Send, Mail, Smartphone, ImagePlus, X, AlertTriangle } from "lucide-react";
+import { ArrowLeft, Save, Trash2, Send, Mail, Smartphone, ImagePlus, X, AlertTriangle, Loader2 } from "lucide-react";
 import RichTextEditor from "@/components/templates/RichTextEditor";
 
 const inp = "w-full px-3 py-2 rounded-lg border border-gray-200 text-sm outline-none focus:ring-2 focus:ring-gray-300 focus:border-gray-300";
@@ -18,6 +18,23 @@ const SYSTEM_TEMPLATE_KEYS = [
     "program_proposal",
     "consultancy_agreement",
 ];
+
+// Live preview of a branding preset's banner/CTA, with a loading spinner while
+// the (possibly newly-selected) image fetches — so switching branding gives
+// clear feedback. Clicking it uploads a custom override.
+function PresetPreview({ url, label, onPick }) {
+    const [loading, setLoading] = useState(true);
+    useEffect(() => { setLoading(true); }, [url]);
+    return (
+        <label className="relative block border border-gray-200 rounded-lg overflow-hidden bg-gray-50 cursor-pointer group">
+            {loading && <span className="absolute inset-0 z-10 flex items-center justify-center bg-gray-50"><Loader2 size={18} className="animate-spin text-gray-400" /></span>}
+            <img src={url} alt={label} onLoad={() => setLoading(false)} onError={() => setLoading(false)} className="w-full h-24 object-cover" />
+            <span className="absolute bottom-1 left-1 bg-black/60 text-white text-[9px] font-bold px-1.5 py-0.5 rounded">{label}</span>
+            <span className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/40 text-white opacity-0 group-hover:opacity-100 text-[11px] font-bold transition-all">Upload to override</span>
+            <input type="file" accept="image/*" onChange={onPick} className="hidden" />
+        </label>
+    );
+}
 
 /**
  * Shared template editor, reused by the admin area and every department
@@ -54,9 +71,10 @@ export default function TemplateEditorView({
         from_name: template?.from_name ?? "",
         email_body: template?.email_body ?? "",
         sms_body: template?.sms_body ?? "",
-        // Branding preset defaults to the portal you're working in, so a new
-        // template automatically uses its own banner/CTA.
-        branding: template?.branding ?? (fixedDepartment || "default"),
+        // Branding preset defaults to the template's own Department (a Sales
+        // template → Sales branding), falling back to the portal you're in for a
+        // brand-new template. Shared/global → default ePathways artwork.
+        branding: template?.branding ?? ((template?.department ?? fixedDepartment ?? "") || "default"),
         cc: template?.cc ?? "",
         bcc: template?.bcc ?? "",
         banner_image: null,
@@ -203,7 +221,7 @@ export default function TemplateEditorView({
                         {showDeptSelector && (
                             <label className="block">
                                 <span className="block text-xs font-semibold text-gray-600 mb-1">Department</span>
-                                <select value={data.department} onChange={(e) => setData("department", e.target.value)} className={inp}>
+                                <select value={data.department} onChange={(e) => { const v = e.target.value; setData("department", v); setData("branding", v || "default"); }} className={inp}>
                                     {departmentOptions.map((o) => (
                                         <option key={o.value} value={o.value}>{o.label}</option>
                                     ))}
@@ -302,12 +320,7 @@ export default function TemplateEditorView({
                                                         </button>
                                                     </div>
                                                 ) : presetPreview(field) ? (
-                                                    <label className="relative block border border-gray-200 rounded-lg overflow-hidden bg-gray-50 cursor-pointer group">
-                                                        <img src={presetPreview(field)} alt={label} className="w-full h-24 object-cover" />
-                                                        <span className="absolute bottom-1 left-1 bg-black/60 text-white text-[9px] font-bold px-1.5 py-0.5 rounded">{brandingOpt.label}</span>
-                                                        <span className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/40 text-white opacity-0 group-hover:opacity-100 text-[11px] font-bold transition-all">Upload to override</span>
-                                                        <input type="file" accept="image/*" onChange={pickImage(field)} className="hidden" />
-                                                    </label>
+                                                    <PresetPreview url={presetPreview(field)} label={brandingOpt.label} onPick={pickImage(field)} />
                                                 ) : (
                                                     <label className="flex flex-col items-center justify-center gap-1 h-24 border border-dashed border-gray-300 rounded-lg cursor-pointer text-gray-400 hover:border-gray-400 hover:text-gray-500 transition-colors">
                                                         <ImagePlus size={18} />

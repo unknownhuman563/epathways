@@ -959,7 +959,6 @@ function DayEditor({ setting, entry, date, isToday = false, carried = [], openSh
                 <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
                     <div className="flex items-center gap-2">
                         <p className="text-[11px] font-bold uppercase tracking-wider text-gray-500">Tasks</p>
-                        {!readOnly && <SaveStatus state={saveState} />}
                     </div>
                     <div className="flex items-center gap-2 flex-wrap">
                         <div className="flex items-center gap-1.5 text-[10px] font-bold">

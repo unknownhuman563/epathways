@@ -187,7 +187,7 @@ return [
         'facebook' => env('CONTACT_FACEBOOK', 'https://www.facebook.com/epathwaysnz'),
         'email' => env('CONTACT_EMAIL', 'hello@epathways.ph'),
         // Where the email "Book now" CTA points. Overridable per environment.
-        'booking_url' => env('BOOKING_URL', 'https://staging.epathways.co.nz/booking'),
+        'booking_url' => env('BOOKING_URL', 'https://epathways.co.nz/booking'),
         // Sender for event-registration emails (must be verified in Brevo).
         // Used by the built-in fallback; the template carries its own from_email.
         'event_from_email' => env('EVENT_FROM_EMAIL', 'hello@epathways.ph'),
