@@ -63,6 +63,10 @@ export default function Home({ events = [], programGroups = [], activePromos = [
         </section>
 
         <WhyUs />
+        {/* Video-only testimonial marquee — auto-scrolls like the trusted-partner
+            logos; sits under the "We stand with you" header where the tabbed
+            "We know the path ahead" block used to be. */}
+        <VideoTestimonials testimonials={videoTestimonials} variant="marquee" />
         <ProcessSteps />
 
         {/* Student Visa Timeline Section — moved above Visa Approvals so
