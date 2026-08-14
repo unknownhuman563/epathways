@@ -96,6 +96,24 @@ class ImmigrationAdviserController extends Controller
         return app(CaseProfileController::class)->show($lead, $checklist, 'portal/immigration-adviser/CaseProfile');
     }
 
+    /** Engagement workspace — reuses the manager builder under adviser chrome. */
+    public function engagement()
+    {
+        return app(ImmigrationController::class)->engagement('portal/immigration-adviser/Engagement');
+    }
+
+    /** Invoice workspace — reuses the manager builder under adviser chrome. */
+    public function invoice()
+    {
+        return app(ImmigrationController::class)->invoice('portal/immigration-adviser/Invoice');
+    }
+
+    /** INZ Forms workspace — reuses the manager builder under adviser chrome. */
+    public function inzForms()
+    {
+        return app(ImmigrationController::class)->inzForms('portal/immigration-adviser/InzForms');
+    }
+
     /**
      * Verification queue — documents a manager has marked "Checked" (referred to
      * the adviser). The LIA makes the final Approve/Reject call, which is what the
