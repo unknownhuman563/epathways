@@ -22,10 +22,11 @@ import VisaApprovedShowcase from "./VisaApprovedShowcase";
 import PromoBanner from "@/components/ui/PromoBanner";
 import PromoModal from "@/components/ui/PromoModal";
 import ReviewsSection from "@/components/ui/ReviewsSection";
+import VideoTestimonials from "@/components/ui/VideoTestimonials";
 
 import HeroVideo from "@assets/Hero/02 - client epathway intro (1).mp4";
 
-export default function Home({ events = [], programGroups = [], activePromos = [], reviews = [], reviewStats = { count: 0, average: 0 }, visaApprovals = [] }) {
+export default function Home({ events = [], programGroups = [], activePromos = [], reviews = [], reviewStats = { count: 0, average: 0 }, visaApprovals = [], videoTestimonials = [] }) {
   return (
     <>
       <div className="bg-white" style={{ overflowX: 'clip' }}>
@@ -90,6 +91,8 @@ export default function Home({ events = [], programGroups = [], activePromos = [
             intro="Real voices from people across our immigration and education journeys. Every review here was submitted by a real client and approved by our team."
             showWriteCta={false}
         />
+
+        <VideoTestimonials testimonials={videoTestimonials} />
 
         {/* CTA Section */}
         <CTASection />

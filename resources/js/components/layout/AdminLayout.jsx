@@ -63,6 +63,7 @@ const ADMIN_NAV = [
     // Single User Reviews page — tabs between Immigration and Education
     // inside the page so staff doesn't have to bounce between sidebar links.
     { name: "User Reviews", href: "/admin/user-reviews", icon: <Star size={20} /> },
+    { name: "Video Testimonials", href: "/admin/video-testimonials", icon: <Video size={20} /> },
     {
         name: "Email",
         icon: <Mail size={20} />,

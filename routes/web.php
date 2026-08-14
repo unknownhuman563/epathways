@@ -528,6 +528,12 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/admin/email-branding', [\App\Http\Controllers\EmailBrandingController::class, 'index'])->name('admin.email-branding');
         Route::post('/admin/email-branding/{department}', [\App\Http\Controllers\EmailBrandingController::class, 'update'])->name('admin.email-branding.update');
 
+        // Landing-page video testimonials (Facebook links).
+        Route::get('/admin/video-testimonials', [\App\Http\Controllers\VideoTestimonialController::class, 'index'])->name('admin.video-testimonials');
+        Route::post('/admin/video-testimonials', [\App\Http\Controllers\VideoTestimonialController::class, 'store'])->name('admin.video-testimonials.store');
+        Route::put('/admin/video-testimonials/{testimonial}', [\App\Http\Controllers\VideoTestimonialController::class, 'update'])->name('admin.video-testimonials.update');
+        Route::delete('/admin/video-testimonials/{testimonial}', [\App\Http\Controllers\VideoTestimonialController::class, 'destroy'])->name('admin.video-testimonials.destroy');
+
         // Message templates — staff-editable email/SMS templates.
         Route::get('/admin/message-templates', [\App\Http\Controllers\MessageTemplateController::class, 'index'])->name('admin.message-templates');
         Route::get('/admin/message-templates/create', [\App\Http\Controllers\MessageTemplateController::class, 'create'])->name('admin.message-templates.create');
