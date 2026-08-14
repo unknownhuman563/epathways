@@ -222,6 +222,32 @@ export const ASSESSMENT_SECTIONS = {
     ],
 };
 
+// Which input a field should render as when the client edits their assessment.
+const DATE_RE = /(_date$|_expiry$|_start$|_finish$|_from$|_to$|^dob$|last_nz_departure|nz_arrival_date)/;
+const TEXTAREA_RE = /(details|summary|duties|disclosure|notes|_address$|description|programmes|countries_visited|other_names)/;
+const YESNO_KEYS = new Set([
+    "character_convicted", "character_investigation", "character_deported", "character_removed", "character_visa_refused",
+    "lived_other_country_5y",
+    "health_tb", "health_renal", "health_hospital", "health_residential", "health_pregnant",
+    "previous_nz_visa", "previous_nzeta", "previous_police_certificate", "previous_xray", "previous_inz1007", "previous_medical_cert",
+    "australian_pr", "travelled_nz", "over_24_months", "travelled_internationally",
+    "employer_is_family", "self_employed", "supports_dependent_children",
+    "military_compulsory", "military_undertaken",
+    "currently_working", "include_family",
+    "has_offer", "has_enough_funds", "has_sponsor", "has_other_assets", "can_provide_statements",
+    "has_tertiary", "qualification_completed", "inz_requested_medical",
+    "has_leave_permit", "multi_entry_plans",
+    "partner_living_together", "partner_12_months", "partner_same_period", "partner_close_relatives", "child_dependent",
+    "declaration_accepted",
+]);
+
+export function fieldKind(key) {
+    if (YESNO_KEYS.has(key)) return "yesno";
+    if (DATE_RE.test(key)) return "date";
+    if (TEXTAREA_RE.test(key)) return "textarea";
+    return "text";
+}
+
 // Humanise a stored intake value for read-only display (mirrors the server's
 // formatIntakeValue): booleans → Yes/No, lists → comma-joined, objects → count.
 export function formatAssessmentValue(v) {

@@ -68,15 +68,18 @@ export default function DocumentsTab({
     const items = checklist.items || [];
     const knownKeys = new Set(items.map((i) => i.key));
 
+    // A checklist key can hold several files (the client can "Upload another"
+    // without replacing the first), so keep the full list per key, oldest first.
     const docsByKey = useMemo(() => {
         const map = new Map();
         for (const d of documents) {
             const key = d.checklist_key;
             if (! key) continue;
-            const existing = map.get(key);
-            if (! existing || new Date(d.created_at) > new Date(existing.created_at)) {
-                map.set(key, d);
-            }
+            if (! map.has(key)) map.set(key, []);
+            map.get(key).push(d);
+        }
+        for (const arr of map.values()) {
+            arr.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
         }
         return map;
     }, [documents]);
@@ -100,7 +103,9 @@ export default function DocumentsTab({
             category: item.category || (hasCategoryPrefix ? split[0] : categoryFromKey(item.key)) || "Other",
             required: !! item.required,
             hidden:   !! item.hidden,
-            document: docsByKey.get(item.key) || null,
+            // The latest upload drives status/notes/threads; all files display.
+            document: (docsByKey.get(item.key) || []).slice(-1)[0] || null,
+            documents: docsByKey.get(item.key) || [],
         };
     });
 
@@ -404,37 +409,43 @@ function Row({ row, leadId, docThreads = [], caseStaff = [], vif = null }) {
                     </div>
                 )}
                 {doc ? (
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="flex flex-col min-w-0 max-w-[160px]">
-                            <span className="text-[11px] text-gray-700 truncate" title={doc.original_name}>
-                                {doc.original_name}
-                            </span>
-                            {doc.size ? (
-                                <span className="text-[10px] text-gray-400 tabular-nums">{formatBytes(doc.size)}</span>
-                            ) : null}
-                        </span>
-                        <a
-                            href={`/admin/documents/${doc.id}/download?inline=1`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            title="View in browser"
-                            className="inline-flex items-center justify-center p-1.5 rounded-md border border-gray-200 bg-white text-gray-600 hover:text-gray-900 hover:bg-gray-50"
-                        >
-                            <Eye size={12} />
-                        </a>
-                        <a
-                            href={`/admin/documents/${doc.id}/download`}
-                            title="Download"
-                            className="inline-flex items-center justify-center p-1.5 rounded-md border border-gray-200 bg-white text-gray-600 hover:text-gray-900 hover:bg-gray-50"
-                        >
-                            <Download size={12} />
-                        </a>
+                    <div className="flex flex-col gap-1.5">
+                        {(row.documents && row.documents.length ? row.documents : [doc]).map((d) => (
+                            <div key={d.id} className="flex items-center gap-1.5 flex-wrap">
+                                <span className="flex flex-col min-w-0 max-w-[160px]">
+                                    <span className="text-[11px] text-gray-700 truncate" title={d.original_name}>
+                                        {d.original_name}
+                                    </span>
+                                    {d.size ? (
+                                        <span className="text-[10px] text-gray-400 tabular-nums">{formatBytes(d.size)}</span>
+                                    ) : null}
+                                </span>
+                                <a
+                                    href={`/admin/documents/${d.id}/download?inline=1`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    title="View in browser"
+                                    className="inline-flex items-center justify-center p-1.5 rounded-md border border-gray-200 bg-white text-gray-600 hover:text-gray-900 hover:bg-gray-50"
+                                >
+                                    <Eye size={12} />
+                                </a>
+                                <a
+                                    href={`/admin/documents/${d.id}/download`}
+                                    title="Download"
+                                    className="inline-flex items-center justify-center p-1.5 rounded-md border border-gray-200 bg-white text-gray-600 hover:text-gray-900 hover:bg-gray-50"
+                                >
+                                    <Download size={12} />
+                                </a>
+                            </div>
+                        ))}
                         {row.kind === "checklist" && (
-                            <UploadSlot
-                                leadId={leadId}
-                                checklistKey={row.key}
-                                label="Replace"
-                            />
+                            <div>
+                                <UploadSlot
+                                    leadId={leadId}
+                                    checklistKey={row.key}
+                                    label="Upload another"
+                                />
+                            </div>
                         )}
                     </div>
                 ) : (
