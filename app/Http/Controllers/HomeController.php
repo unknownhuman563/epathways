@@ -25,18 +25,25 @@ class HomeController extends Controller
             'reviewStats' => $allReviews['stats'],
             'videoTestimonials' => VideoTestimonial::published()->ordered()->get()
                 ->map(fn (VideoTestimonial $t) => $t->toPublicArray())->all(),
-            // Featured approval first, then latest 11 for the home showcase
-            // (Sheree-style card + a horizontal strip of thumbnails). The
-            // full gallery on /visa-approved fetches the whole published set.
-            'visaApprovals' => VisaApproval::published()
-                ->orderByDesc('is_featured')
-                ->orderByDesc('approved_at')
-                ->orderByDesc('id')
-                ->limit(12)
-                ->get()
-                ->map(fn (VisaApproval $v) => $v->toPublicArray())
-                ->all(),
+            // Featured approval first, then latest few for the home showcase.
+            // Split by category: student milestones + artist success stories.
+            'visaApprovals' => $this->approvalsByCategory('student'),
+            'artistApprovals' => $this->approvalsByCategory('artist'),
         ]);
+    }
+
+    /** Published visa approvals for one category (student | artist). */
+    private function approvalsByCategory(string $category): array
+    {
+        return VisaApproval::published()
+            ->where('category', $category)
+            ->orderByDesc('is_featured')
+            ->orderByDesc('approved_at')
+            ->orderByDesc('id')
+            ->limit(12)
+            ->get()
+            ->map(fn (VisaApproval $v) => $v->toPublicArray())
+            ->all();
     }
 
     /** Upcoming / ongoing events for the "News & Announcements" strip. */

@@ -26,7 +26,7 @@ import VideoTestimonials from "@/components/ui/VideoTestimonials";
 
 import HeroVideo from "@assets/Hero/02 - client epathway intro (1).mp4";
 
-export default function Home({ events = [], programGroups = [], activePromos = [], reviews = [], reviewStats = { count: 0, average: 0 }, visaApprovals = [], videoTestimonials = [] }) {
+export default function Home({ events = [], programGroups = [], activePromos = [], reviews = [], reviewStats = { count: 0, average: 0 }, visaApprovals = [], artistApprovals = [], videoTestimonials = [] }) {
   return (
     <>
       <div className="bg-white" style={{ overflowX: 'clip' }}>
@@ -70,6 +70,19 @@ export default function Home({ events = [], programGroups = [], activePromos = [
         <StudentVisaTimeline />
 
         <VisaApprovedShowcase visaApprovals={visaApprovals} />
+
+        {/* Artists we've helped — only renders when there are published artist entries */}
+        <VisaApprovedShowcase
+            visaApprovals={artistApprovals}
+            eyebrow="Success Stories"
+            titlePre="Artists We've Helped"
+            titleHi="Bring to New Zealand"
+            intro="Celebrating the artists and performers we've supported in bringing unforgettable concerts, shows, and live experiences to audiences across New Zealand."
+            cardSubtitle="New Zealand Artist ePathways"
+            viewAllHref="/visa-approved?category=artist"
+            allowLegacy={false}
+            hideIfEmpty
+        />
 
         {/* In-Demand Programs Section */}
         <InDemandPrograms programGroups={programGroups} />

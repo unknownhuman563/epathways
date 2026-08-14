@@ -27,7 +27,6 @@ import BrandBanner   from "@assets/banner/team_immigration.png";
 import DevImg         from "@assets/team/Dev.png";
 import DaiImg         from "@assets/team/dai.png";
 import EmmaImg        from "@assets/team/emma.png";
-import EmilyImg       from "@assets/team/emily.png";
 import TarunImg       from "@assets/team/tarun.png";
 import LicensedBadge  from "@assets/banner/licensed.png";
 // Services/* imports removed — used only by the deleted topVisas list.
@@ -42,11 +41,11 @@ const services = []; // Removed in favor of ImmigrationServices component
 
 const consultants = [
     {
-        // Emily — staff (not an IAA-licensed adviser). No role, no licence,
+        // Emma — staff (not an IAA-licensed adviser). No role, no licence,
         // no badge.
-        name: "Emily Dela Pena",
-        bio: "Dedicated finance and administration champion ensuring smooth operations and a seamless client experience at ePathways.",
-        img: EmilyImg,
+        name: "Emma Ceballo",
+        bio: "Making sure every client feels supported from the first hello to arrival day, with a seamless experience at ePathways.",
+        img: EmmaImg,
         licensed: false,
     },
     {

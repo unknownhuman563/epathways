@@ -295,10 +295,15 @@ Route::get('/leave-review', function () {
 
 Route::get('/activities', [EventController::class, 'activities']);
 
-Route::get('/visa-approved', function () {
+Route::get('/visa-approved', function (\Illuminate\Http\Request $request) {
     // Full published gallery — the admin CRUD lives at /admin/visa-approvals.
+    // ?category=artist shows the artists section; anything else = students.
+    $category = $request->query('category') === 'artist' ? 'artist' : 'student';
+
     return inertia('visa/VisaApproved', [
+        'category' => $category,
         'visaApprovals' => \App\Models\VisaApproval::published()
+            ->where('category', $category)
             ->orderByDesc('is_featured')
             ->orderByDesc('approved_at')
             ->orderByDesc('id')

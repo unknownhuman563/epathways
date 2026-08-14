@@ -32,9 +32,10 @@ class VisaApprovalController extends Controller
             ->get()
             ->map(function (VisaApproval $v) {
                 $arr = $v->toPublicArray();
-                $arr['lead']         = $v->lead ? ['id' => $v->lead->id, 'name' => trim(($v->lead->first_name ?? '').' '.($v->lead->last_name ?? '')), 'email' => $v->lead->email] : null;
-                $arr['created_by']   = $v->creator?->name;
-                $arr['created_at']   = $v->created_at?->toIso8601String();
+                $arr['lead'] = $v->lead ? ['id' => $v->lead->id, 'name' => trim(($v->lead->first_name ?? '').' '.($v->lead->last_name ?? '')), 'email' => $v->lead->email] : null;
+                $arr['created_by'] = $v->creator?->name;
+                $arr['created_at'] = $v->created_at?->toIso8601String();
+
                 return $arr;
             });
 
@@ -47,7 +48,7 @@ class VisaApprovalController extends Controller
     public function store(Request $request)
     {
         $data = $this->validated($request);
-        $approval = new VisaApproval();
+        $approval = new VisaApproval;
         $this->fill($approval, $data, $request);
         $approval->created_by = Auth::id();
         $approval->save();
@@ -79,7 +80,10 @@ class VisaApprovalController extends Controller
     {
         $approval = VisaApproval::findOrFail($id);
         if ($approval->image_path && Storage::disk('public')->exists($approval->image_path)) {
-            try { Storage::disk('public')->delete($approval->image_path); } catch (\Throwable $e) { /* noop */ }
+            try {
+                Storage::disk('public')->delete($approval->image_path);
+            } catch (\Throwable $e) { /* noop */
+            }
         }
         $approval->delete();
 
@@ -105,9 +109,9 @@ class VisaApprovalController extends Controller
             ->select('id', 'first_name', 'last_name', 'email', 'lead_id', 'citizenship', 'country_of_birth', 'is_immigration_case', 'is_student')
             ->where(function ($w) use ($q) {
                 $w->where('first_name', 'like', "%{$q}%")
-                  ->orWhere('last_name', 'like', "%{$q}%")
-                  ->orWhere('email', 'like', "%{$q}%")
-                  ->orWhere('lead_id', 'like', "%{$q}%");
+                    ->orWhere('last_name', 'like', "%{$q}%")
+                    ->orWhere('email', 'like', "%{$q}%")
+                    ->orWhere('lead_id', 'like', "%{$q}%");
             })
             ->orderByDesc('id')
             ->limit(12)
@@ -116,12 +120,13 @@ class VisaApprovalController extends Controller
         return response()->json([
             'results' => $rows->map(function (Lead $l) {
                 $kind = $l->is_immigration_case ? 'case' : ($l->is_student ? 'student' : 'lead');
+
                 return [
-                    'id'      => $l->id,
-                    'name'    => trim(($l->first_name ?? '').' '.($l->last_name ?? '')) ?: ($l->lead_id ?? 'Unnamed'),
-                    'email'   => $l->email,
+                    'id' => $l->id,
+                    'name' => trim(($l->first_name ?? '').' '.($l->last_name ?? '')) ?: ($l->lead_id ?? 'Unnamed'),
+                    'email' => $l->email,
                     'lead_id' => $l->lead_id,
-                    'kind'    => $kind,
+                    'kind' => $kind,
                     // Suggested origin country — the admin can override.
                     'country' => $l->citizenship ?: $l->country_of_birth,
                 ];
@@ -134,29 +139,31 @@ class VisaApprovalController extends Controller
     private function validated(Request $request): array
     {
         return $request->validate([
-            'lead_id'      => ['nullable', 'integer', Rule::exists('leads', 'id')],
+            'lead_id' => ['nullable', 'integer', Rule::exists('leads', 'id')],
             'display_name' => ['required', 'string', 'max:180'],
-            'country'      => ['nullable', 'string', 'max:100'],
+            'country' => ['nullable', 'string', 'max:100'],
+            'category' => ['nullable', Rule::in(VisaApproval::CATEGORIES)],
             // month + year come in as two integers from the form; we assemble
             // into a first-of-month date in fill(). Both optional so an
             // approval without an exact date still saves.
             'approved_month' => ['nullable', 'integer', 'between:1,12'],
-            'approved_year'  => ['nullable', 'integer', 'between:2000,2100'],
-            'caption'      => ['nullable', 'string', 'max:500'],
-            'is_featured'  => ['sometimes', 'boolean'],
+            'approved_year' => ['nullable', 'integer', 'between:2000,2100'],
+            'caption' => ['nullable', 'string', 'max:500'],
+            'is_featured' => ['sometimes', 'boolean'],
             'is_published' => ['sometimes', 'boolean'],
-            'image'        => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'], // 5MB
+            'image' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'], // 5MB
             'remove_image' => ['sometimes', 'boolean'],
         ]);
     }
 
     private function fill(VisaApproval $approval, array $data, Request $request): void
     {
-        $approval->lead_id      = $data['lead_id']      ?? null;
+        $approval->lead_id = $data['lead_id'] ?? null;
         $approval->display_name = $data['display_name'];
-        $approval->country      = $data['country']      ?? null;
-        $approval->caption      = $data['caption']      ?? null;
-        $approval->is_featured  = (bool) ($data['is_featured']  ?? false);
+        $approval->country = $data['country'] ?? null;
+        $approval->category = $data['category'] ?? 'student';
+        $approval->caption = $data['caption'] ?? null;
+        $approval->is_featured = (bool) ($data['is_featured'] ?? false);
         $approval->is_published = (bool) ($data['is_published'] ?? true);
 
         if (! empty($data['approved_month']) && ! empty($data['approved_year'])) {
@@ -170,11 +177,17 @@ class VisaApprovalController extends Controller
         if ($request->hasFile('image')) {
             // Delete previous file so we don't accumulate orphans.
             if ($approval->image_path && Storage::disk('public')->exists($approval->image_path)) {
-                try { Storage::disk('public')->delete($approval->image_path); } catch (\Throwable $e) { /* noop */ }
+                try {
+                    Storage::disk('public')->delete($approval->image_path);
+                } catch (\Throwable $e) { /* noop */
+                }
             }
             $approval->image_path = $request->file('image')->store('visa-approvals', 'public');
         } elseif (! empty($data['remove_image']) && $approval->image_path) {
-            try { Storage::disk('public')->delete($approval->image_path); } catch (\Throwable $e) { /* noop */ }
+            try {
+                Storage::disk('public')->delete($approval->image_path);
+            } catch (\Throwable $e) { /* noop */
+            }
             $approval->image_path = null;
         }
     }

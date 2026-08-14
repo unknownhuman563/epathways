@@ -16,10 +16,13 @@ use Illuminate\Support\Facades\Storage;
  */
 class VisaApproval extends Model
 {
+    public const CATEGORIES = ['student', 'artist'];
+
     protected $fillable = [
         'lead_id',
         'display_name',
         'country',
+        'category',
         'approved_at',
         'image_path',
         'caption',
@@ -29,9 +32,9 @@ class VisaApproval extends Model
     ];
 
     protected $casts = [
-        'approved_at'   => 'date',
-        'is_featured'   => 'boolean',
-        'is_published'  => 'boolean',
+        'approved_at' => 'date',
+        'is_featured' => 'boolean',
+        'is_published' => 'boolean',
     ];
 
     public function lead(): BelongsTo
@@ -56,7 +59,10 @@ class VisaApproval extends Model
      */
     public function getImageUrlAttribute(): ?string
     {
-        if (! $this->image_path) return null;
+        if (! $this->image_path) {
+            return null;
+        }
+
         return Storage::disk('public')->url($this->image_path);
     }
 
@@ -66,16 +72,17 @@ class VisaApproval extends Model
     public function toPublicArray(): array
     {
         return [
-            'id'            => $this->id,
-            'display_name'  => $this->display_name,
-            'country'       => $this->country,
-            'approved_at'   => $this->approved_at?->toDateString(),
-            'approved_label'=> $this->approved_at?->format('F Y'),
-            'batch_label'   => $this->approved_at ? ($this->approved_at->format('Y') . ' Batch') : null,
-            'image_url'     => $this->image_url,
-            'caption'       => $this->caption,
-            'is_featured'   => (bool) $this->is_featured,
-            'is_published'  => (bool) $this->is_published,
+            'id' => $this->id,
+            'display_name' => $this->display_name,
+            'country' => $this->country,
+            'category' => $this->category ?: 'student',
+            'approved_at' => $this->approved_at?->toDateString(),
+            'approved_label' => $this->approved_at?->format('F Y'),
+            'batch_label' => $this->approved_at ? ($this->approved_at->format('Y').' Batch') : null,
+            'image_url' => $this->image_url,
+            'caption' => $this->caption,
+            'is_featured' => (bool) $this->is_featured,
+            'is_published' => (bool) $this->is_published,
         ];
     }
 }
