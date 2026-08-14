@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Head, Link, router, usePage } from "@inertiajs/react";
+import { toast } from "sonner";
 import {
     Search, UserCheck, UserX, Mail, Clock, Copy, Check, ExternalLink,
     KeyRound, ShieldOff, X, Eye, EyeOff, RefreshCw, AlertTriangle,
@@ -67,7 +68,14 @@ export default function PortalInvitations({ invitations = [] }) {
 
     const post = (url, leadId) => {
         setSavingId(leadId);
-        router.post(url, {}, { preserveScroll: true, onFinish: () => setSavingId(null) });
+        router.post(url, {}, {
+            preserveScroll: true,
+            // Surface the server's specific reason (e.g. email collision, already
+            // active) instead of silently doing nothing when the action is
+            // rejected via withErrors(['error' => ...]).
+            onError: (errors) => toast.error(errors?.error || "That action couldn't be completed. Please try again."),
+            onFinish: () => setSavingId(null),
+        });
     };
 
     const copyLink = (url, leadId) => {
