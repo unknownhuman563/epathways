@@ -42,6 +42,8 @@ class EmailBrandingController extends Controller
                 'footer_url' => $assets['footerUrl'],
                 'has_custom_banner' => (bool) ($row && $row->banner_path),
                 'has_custom_footer' => (bool) ($row && $row->footer_path),
+                'hide_banner' => (bool) ($row?->hide_banner),
+                'hide_footer' => (bool) ($row?->hide_footer),
                 'booking_url' => $row?->booking_url ?? '',
                 'call_number' => $row?->call_number ?? '',
                 // The effective values in use (incl. the global fallback) for the hints.
@@ -65,6 +67,8 @@ class EmailBrandingController extends Controller
             'remove_footer' => ['nullable', 'boolean'],
             'booking_url' => ['nullable', 'string', 'url', 'max:500'],
             'call_number' => ['nullable', 'string', 'max:40'],
+            'hide_banner' => ['nullable', 'boolean'],
+            'hide_footer' => ['nullable', 'boolean'],
         ]);
 
         $row = EmailBranding::firstOrNew(['department' => $department]);
@@ -76,6 +80,13 @@ class EmailBrandingController extends Controller
         }
         if ($request->has('call_number')) {
             $row->call_number = $request->input('call_number') ?: null;
+        }
+        // Hide toggles — turn a banner/CTA off entirely for this department.
+        if ($request->has('hide_banner')) {
+            $row->hide_banner = $request->boolean('hide_banner');
+        }
+        if ($request->has('hide_footer')) {
+            $row->hide_footer = $request->boolean('hide_footer');
         }
 
         foreach (['banner', 'footer'] as $field) {

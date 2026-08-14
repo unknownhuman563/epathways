@@ -39,7 +39,7 @@
 
         $banner = $bannerRel ? $abs(Storage::disk('public')->url($bannerRel)) : $brandAssets['bannerUrl'];
         // Footer buttons are baked in, then the composite is served from a URL.
-        $footer = is_file($footerPath)
+        $footer = $footerPath && is_file($footerPath)
             ? app(\App\Services\EmailFooterComposer::class)->composeUrl($footerPath, 'BOOK NOW', $callNumber ? 'CALL '.$callNumber : null)
             : null;
     @endphp

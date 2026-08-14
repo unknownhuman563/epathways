@@ -13,7 +13,12 @@ use Illuminate\Support\Str;
  */
 class EmailBranding extends Model
 {
-    protected $fillable = ['department', 'banner_path', 'footer_path', 'booking_url', 'call_number'];
+    protected $fillable = ['department', 'banner_path', 'footer_path', 'booking_url', 'call_number', 'hide_banner', 'hide_footer'];
+
+    protected $casts = [
+        'hide_banner' => 'boolean',
+        'hide_footer' => 'boolean',
+    ];
 
     public function getBannerUrlAttribute(): ?string
     {
@@ -51,8 +56,14 @@ class EmailBranding extends Model
         $default = config('email_branding.default', []);
         $row = static::where('department', $key)->first();
 
+        // Hidden = the email renders no banner / no CTA for this department.
+        $bannerHidden = (bool) ($row?->hide_banner);
+        $footerHidden = (bool) ($row?->hide_footer);
+
         // Banner (URL only) — DB upload → config asset → default artwork.
-        if ($row && $row->banner_path && Storage::disk('public')->exists($row->banner_path)) {
+        if ($bannerHidden) {
+            $bannerUrl = null;
+        } elseif ($row && $row->banner_path && Storage::disk('public')->exists($row->banner_path)) {
             $bannerUrl = self::abs(Storage::disk('public')->url($row->banner_path));
         } elseif (($cfg['banner'] ?? null) && is_file(public_path($cfg['banner']))) {
             $bannerUrl = self::absPublic($cfg['banner']);
@@ -64,7 +75,10 @@ class EmailBranding extends Model
 
         // Footer/CTA — needs both a URL (preview) and a filesystem path (the
         // email bakes the BOOK NOW / CALL buttons onto the pixels).
-        if ($row && $row->footer_path && Storage::disk('public')->exists($row->footer_path)) {
+        if ($footerHidden) {
+            $footerPath = null;
+            $footerUrl = null;
+        } elseif ($row && $row->footer_path && Storage::disk('public')->exists($row->footer_path)) {
             $footerPath = Storage::disk('public')->path($row->footer_path);
             $footerUrl = self::abs(Storage::disk('public')->url($row->footer_path));
         } elseif (($cfg['footer'] ?? null) && is_file(public_path($cfg['footer']))) {

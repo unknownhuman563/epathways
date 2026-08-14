@@ -1,6 +1,6 @@
 import { Head, Link, router } from "@inertiajs/react";
 import { useState } from "react";
-import { ArrowLeft, ImagePlus, Trash2, Loader2, Mail, Save, MousePointerClick } from "lucide-react";
+import { ArrowLeft, ImagePlus, Trash2, Loader2, Mail, Save, MousePointerClick, Eye, EyeOff } from "lucide-react";
 
 const input = "w-full px-2.5 py-1.5 rounded-lg border border-gray-200 text-xs outline-none focus:ring-2 focus:ring-gray-300 focus:border-gray-300";
 
@@ -38,48 +38,70 @@ function LinksForm({ dept, bookingUrl, callNumber, effectiveBooking, effectiveCa
 
 // One banner/CTA slot for a department. Uploading or removing posts straight to
 // the branding endpoint (multipart) and Inertia refreshes the previews.
-function Slot({ dept, field, label, hint, url, isCustom }) {
+function Slot({ dept, field, label, hint, url, isCustom, hidden }) {
     const [busy, setBusy] = useState(false);
 
+    const post = (payload) => {
+        setBusy(true);
+        router.post(`/admin/email-branding/${dept}`, payload, {
+            forceFormData: true, preserveScroll: true, onFinish: () => setBusy(false),
+        });
+    };
     const upload = (e) => {
         const file = e.target.files?.[0];
         if (!file) return;
-        setBusy(true);
-        router.post(`/admin/email-branding/${dept}`, { [field]: file }, {
-            forceFormData: true, preserveScroll: true, onFinish: () => setBusy(false),
-        });
+        post({ [field]: file, [`hide_${field}`]: 0 }); // uploading un-hides
     };
-    const remove = () => {
-        if (!window.confirm(`Remove the ${label.toLowerCase()} for ${dept}? It will fall back to the default.`)) return;
-        setBusy(true);
-        router.post(`/admin/email-branding/${dept}`, { [`remove_${field}`]: 1 }, {
-            forceFormData: true, preserveScroll: true, onFinish: () => setBusy(false),
-        });
+    const removeUpload = () => {
+        if (!window.confirm(`Remove the uploaded ${label.toLowerCase()} for ${dept}? It falls back to the default.`)) return;
+        post({ [`remove_${field}`]: 1 });
     };
+    const setHidden = (v) => post({ [`hide_${field}`]: v ? 1 : 0 });
+
+    const status = hidden ? "None" : (isCustom ? "Custom" : "Default");
+    const statusTone = hidden ? "text-rose-500" : (isCustom ? "text-emerald-600" : "text-gray-300");
 
     return (
         <div>
             <div className="flex items-center justify-between mb-1">
                 <span className="text-[11px] font-semibold text-gray-500">{label}</span>
-                {isCustom
-                    ? <span className="text-[9px] font-bold uppercase tracking-wide text-emerald-600">Custom</span>
-                    : <span className="text-[9px] font-bold uppercase tracking-wide text-gray-300">Default</span>}
+                <span className={`text-[9px] font-bold uppercase tracking-wide ${statusTone}`}>{status}</span>
             </div>
-            <label className="relative block border border-gray-200 rounded-lg overflow-hidden bg-gray-50 cursor-pointer group">
-                {busy && <span className="absolute inset-0 z-10 flex items-center justify-center bg-gray-50/80"><Loader2 size={18} className="animate-spin text-gray-400" /></span>}
-                {url
-                    ? <img src={url} alt={label} className="w-full h-24 object-cover" />
-                    : <span className="flex items-center justify-center h-24 text-gray-300"><ImagePlus size={20} /></span>}
-                <span className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/40 text-white opacity-0 group-hover:opacity-100 text-[11px] font-bold transition-all">Upload image</span>
-                <input type="file" accept="image/*" onChange={upload} className="hidden" />
-            </label>
-            <div className="flex items-center justify-between mt-1">
+
+            {hidden ? (
+                <div className="flex flex-col items-center justify-center h-24 border border-dashed border-gray-200 rounded-lg bg-gray-50 text-gray-400 gap-1">
+                    <EyeOff size={16} />
+                    <span className="text-[10px]">Not shown in emails</span>
+                </div>
+            ) : (
+                <label className="relative block border border-gray-200 rounded-lg overflow-hidden bg-gray-50 cursor-pointer group">
+                    {busy && <span className="absolute inset-0 z-10 flex items-center justify-center bg-gray-50/80"><Loader2 size={18} className="animate-spin text-gray-400" /></span>}
+                    {url
+                        ? <img src={url} alt={label} className="w-full h-24 object-cover" />
+                        : <span className="flex items-center justify-center h-24 text-gray-300"><ImagePlus size={20} /></span>}
+                    <span className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/40 text-white opacity-0 group-hover:opacity-100 text-[11px] font-bold transition-all">Upload image</span>
+                    <input type="file" accept="image/*" onChange={upload} className="hidden" />
+                </label>
+            )}
+
+            <div className="flex items-center justify-between mt-1 gap-2">
                 <span className="text-[10px] text-gray-400">{hint}</span>
-                {isCustom && (
-                    <button type="button" onClick={remove} className="inline-flex items-center gap-1 text-[10px] font-bold text-gray-400 hover:text-rose-600">
-                        <Trash2 size={11} /> Remove
-                    </button>
-                )}
+                <div className="flex items-center gap-2.5 shrink-0">
+                    {isCustom && !hidden && (
+                        <button type="button" onClick={removeUpload} className="inline-flex items-center gap-1 text-[10px] font-bold text-gray-400 hover:text-rose-600">
+                            <Trash2 size={11} /> Remove
+                        </button>
+                    )}
+                    {hidden ? (
+                        <button type="button" onClick={() => setHidden(false)} className="inline-flex items-center gap-1 text-[10px] font-bold text-gray-400 hover:text-gray-700">
+                            <Eye size={11} /> Show
+                        </button>
+                    ) : (
+                        <button type="button" onClick={() => setHidden(true)} className="inline-flex items-center gap-1 text-[10px] font-bold text-gray-400 hover:text-rose-600">
+                            <EyeOff size={11} /> Hide
+                        </button>
+                    )}
+                </div>
             </div>
         </div>
     );
@@ -102,8 +124,8 @@ export default function EmailBranding({ items = [] }) {
                 {items.map((d) => (
                     <div key={d.key} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 space-y-4">
                         <h3 className="text-sm font-bold text-gray-900">{d.label}</h3>
-                        <Slot dept={d.key} field="banner" label="Banner (top)" hint="Wide header, ~600px" url={d.banner_url} isCustom={d.has_custom_banner} />
-                        <Slot dept={d.key} field="footer" label="CTA image" hint="Above the contact block" url={d.footer_url} isCustom={d.has_custom_footer} />
+                        <Slot dept={d.key} field="banner" label="Banner (top)" hint="Wide header, ~600px" url={d.banner_url} isCustom={d.has_custom_banner} hidden={d.hide_banner} />
+                        <Slot dept={d.key} field="footer" label="CTA image" hint="Above the contact block" url={d.footer_url} isCustom={d.has_custom_footer} hidden={d.hide_footer} />
                         <LinksForm dept={d.key} bookingUrl={d.booking_url} callNumber={d.call_number} effectiveBooking={d.effective_booking_url} effectiveCall={d.effective_call_number} />
                     </div>
                 ))}
