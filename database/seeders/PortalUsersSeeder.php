@@ -57,6 +57,24 @@ class PortalUsersSeeder extends Seeder
             ],
         );
 
-        $this->command->info('Department portal users seeded ('.implode(', ', User::PORTAL_ROLES).', immigration_manager, immigration_adviser).');
+        // The practice's named Licensed Immigration Adviser — Hendry Dai. He is
+        // the default signing adviser on engagements (config('immigration.signing_adviser'))
+        // and the LIA named across the engagement/complaints templates. Seeded
+        // with a current IAA licence so the signer default resolves; production
+        // uses his real licence details.
+        User::updateOrCreate(
+            ['email' => env('SIGNING_ADVISER_SEED_EMAIL', 'hendry@epathways.co.nz')],
+            [
+                'name' => 'Hendry Dai',
+                'password' => bcrypt($password),
+                'role' => User::ROLE_IMMIGRATION_ADVISER,
+                'iaa_licence_number' => env('SIGNING_ADVISER_LICENCE', '202100888'),
+                'iaa_licence_type' => 'full',
+                'iaa_licence_expiry' => now()->addYear()->toDateString(),
+                'iaa_licence_verified_at' => now(),
+            ],
+        );
+
+        $this->command->info('Department portal users seeded ('.implode(', ', User::PORTAL_ROLES).', immigration_manager, immigration_adviser, Hendry Dai LIA).');
     }
 }

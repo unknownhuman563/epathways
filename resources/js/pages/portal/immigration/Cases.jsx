@@ -13,6 +13,17 @@ import { AvatarPhoto } from "@/components/ui/Avatar";
 import CaseFilesModal from "@/components/immigration/CaseFilesModal";
 import { priorityRing, priorityRank } from "@/utils/priority";
 
+// This board is shared by the manager (/portal/immigration) and the adviser
+// (/portal/immigration-adviser) portals. Route the case-profile link to the
+// current portal so opening a case keeps its own sidebar chrome.
+const caseProfileHref = (id, tab) => {
+    const onAdviser = typeof window !== "undefined" && window.location.pathname.startsWith("/portal/immigration-adviser");
+    const base = onAdviser
+        ? `/portal/immigration-adviser/cases/${id}`
+        : `/portal/immigration/cases/${id}/profile`;
+    return tab ? `${base}?tab=${tab}` : base;
+};
+
 /**
  * Distribution palette — colour per immigration stage. Kept distinct from
  * the global app palette so the bar chart reads as its own object. Order
@@ -647,7 +658,7 @@ function CreateCaseModal({ stages, visaTypes, editing = null, onClose }) {
                                 <DocStat label="Rejected" value={editing?.docs_rejected ?? 0} tone="rose" />
                             </div>
                             <Link
-                                href={`/portal/immigration/cases/${editing?.id}/profile?tab=documents`}
+                                href={caseProfileHref(editing?.id, "documents")}
                                 className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-gray-900 text-white text-xs font-bold hover:bg-black transition-colors"
                             >
                                 <FileText size={13} /> Manage documents
@@ -951,7 +962,7 @@ function CaseRow({ c, meId = null, stages, visaTypes = [], isExpanded, onExpand,
                 {/* Case (avatar + name) */}
                 <td className="px-3 py-2.5">
                     <Link
-                        href={`/portal/immigration/cases/${c.id}/profile`}
+                        href={caseProfileHref(c.id)}
                         className="flex items-center gap-2.5 min-w-[200px] group/case"
                     >
                         <div
@@ -1091,7 +1102,7 @@ function CaseRow({ c, meId = null, stages, visaTypes = [], isExpanded, onExpand,
                                 key: 'docs',
                                 label: 'Open documents',
                                 icon: FileText,
-                                href: `/portal/immigration/cases/${c.id}/profile?tab=documents`,
+                                href: caseProfileHref(c.id, "documents"),
                             },
                             {
                                 key: 'files',
@@ -1103,7 +1114,7 @@ function CaseRow({ c, meId = null, stages, visaTypes = [], isExpanded, onExpand,
                                 key: 'open',
                                 label: 'Open case',
                                 icon: ExternalLink,
-                                href: `/portal/immigration/cases/${c.id}/profile`,
+                                href: caseProfileHref(c.id),
                             },
                             {
                                 key: 'handoff',

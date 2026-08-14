@@ -1855,10 +1855,10 @@ const UPLOAD_STATUS_TONE = {
 };
 
 const UPLOAD_STATUS_LABEL = {
-    Approved:    'Approved',
+    Approved:    'Accepted / Satisfactory',
     UnderReview: 'Under review',
     Submitted:   'Submitted',
-    Rejected:    'Needs attention',
+    Rejected:    'Required attention',
 };
 
 // Lower index = higher priority (sorted to top).

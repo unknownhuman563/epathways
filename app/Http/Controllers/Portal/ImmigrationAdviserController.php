@@ -79,10 +79,9 @@ class ImmigrationAdviserController extends Controller
         $user = $request->user();
         $scope = $user->isAdmin() ? null : fn ($q) => $q->where('current_owner_id', $user->id);
 
-        return inertia('portal/immigration-adviser/Cases', array_merge(
-            app(\App\Http\Controllers\Portal\ImmigrationController::class)->casesPayload($scope),
-            ['pageTitle' => 'My Cases', 'pageSubtitle' => 'Cases referred to you']
-        ));
+        return inertia('portal/immigration-adviser/MyCases',
+            app(\App\Http\Controllers\Portal\ImmigrationController::class)->casesPayload($scope)
+        );
     }
 
     /** Reuse the full case profile under the adviser's chrome. The LIA may open
@@ -133,7 +132,17 @@ class ImmigrationAdviserController extends Controller
                 'note' => $d->note,
                 'mime' => $d->mime,
                 'size' => $d->size,
+                // A system-generated Visa Information Form referred straight to
+                // the adviser — flagged so the queue can badge it distinctly.
+                'is_vif' => $d->source_variant === 'vif',
                 'checked_at' => optional($d->reviewed_at)->toIso8601String(),
+                // Whether the file actually exists on disk — a stale row with no
+                // backing file makes the preview 404, so the modal shows a
+                // graceful "unavailable" state instead of the raw error page.
+                'has_file' => (bool) $d->file_path && (
+                    \Illuminate\Support\Facades\Storage::disk('local')->exists($d->file_path)
+                    || \Illuminate\Support\Facades\Storage::disk('public')->exists($d->file_path)
+                ),
                 'view_url' => "/admin/documents/{$d->id}/download?inline=1",
                 'download_url' => "/admin/documents/{$d->id}/download",
                 'case' => [

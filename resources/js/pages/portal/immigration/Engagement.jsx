@@ -95,7 +95,7 @@ function DeleteCaseDocsButton({ caseId, caseName, count }) {
  * IAA standard docs), preview each live, then generate. The Written
  * Agreement's fees are pulled from the case's visa on the Visas page.
  */
-export default function Engagement({ cases = [], documents = [], generated = [], signers = [], me_id = null }) {
+export default function Engagement({ cases = [], documents = [], generated = [], signers = [], default_signer_id = null, me_id = null }) {
     const [modalOpen, setModalOpen] = useState(false);
 
     return (
@@ -279,6 +279,7 @@ export default function Engagement({ cases = [], documents = [], generated = [],
                     cases={cases}
                     documents={documents}
                     signers={signers}
+                    defaultSignerId={default_signer_id}
                     meId={me_id}
                     onClose={() => setModalOpen(false)}
                 />
@@ -287,7 +288,7 @@ export default function Engagement({ cases = [], documents = [], generated = [],
     );
 }
 
-function NewEngagementModal({ cases, documents, signers = [], meId, onClose }) {
+function NewEngagementModal({ cases, documents, signers = [], defaultSignerId = null, meId, onClose }) {
     const [caseSearch, setCaseSearch] = useState("");
     const [selectedCase, setSelectedCase] = useState(null);
     const [selectedTypes, setSelectedTypes] = useState(documents.map((d) => d.key));
@@ -304,8 +305,10 @@ function NewEngagementModal({ cases, documents, signers = [], meId, onClose }) {
     // Fees are stored excluding GST; this decides whether the agreement
     // quotes that figure or the GST-inclusive RRP.
     const [includeGst, setIncludeGst] = useState(false);
-    // Default the signing adviser to the current user when they're eligible.
+    // Default the signing adviser to the practice's designated LIA (Hendry) when
+    // present; otherwise the current user if they're eligible; otherwise first.
     const [signerId, setSignerId] = useState(() => {
+        if (defaultSignerId && signers.some((s) => s.id === defaultSignerId)) return defaultSignerId;
         if (meId && signers.some((s) => s.id === meId)) return meId;
         return signers[0]?.id ?? null;
     });
