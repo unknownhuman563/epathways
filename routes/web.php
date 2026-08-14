@@ -932,6 +932,9 @@ Route::middleware(['auth'])->group(function () {
     // tabs. Replaces the two separate sidebar entries.
     Route::middleware('portal:admin,education,immigration')->group(function () {
         Route::get('/admin/user-reviews', [UserReviewController::class, 'adminUnifiedIndex'])->name('admin.user-reviews');
+        // Interim manual import of a Google review (until the Business Profile
+        // API access is approved). Same moderation queue as everything else.
+        Route::post('/admin/user-reviews/google', [UserReviewController::class, 'adminStoreGoogle'])->name('admin.user-reviews.google');
     });
 
     // Department portals — each staff member reaches only their own portal
@@ -1164,6 +1167,9 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/assessments', [\App\Http\Controllers\Portal\ImmigrationAdviserController::class, 'assessments'])->name('assessments');
             Route::get('/cases/{lead}', [\App\Http\Controllers\Portal\ImmigrationAdviserController::class, 'showCase'])->name('cases.show');
             // Document verification queue — manager-checked docs the LIA approves/rejects.
+            Route::get('/engagement', [\App\Http\Controllers\Portal\ImmigrationAdviserController::class, 'engagement'])->name('engagement');
+            Route::get('/invoice', [\App\Http\Controllers\Portal\ImmigrationAdviserController::class, 'invoice'])->name('invoice');
+            Route::get('/inz-forms', [\App\Http\Controllers\Portal\ImmigrationAdviserController::class, 'inzForms'])->name('inz-forms');
             Route::get('/verification', [\App\Http\Controllers\Portal\ImmigrationAdviserController::class, 'verification'])->name('verification');
             Route::post('/verification/{document}', [\App\Http\Controllers\Portal\ImmigrationAdviserController::class, 'verifyDocument'])->name('verification.verify');
             Route::get('/reports', [\App\Http\Controllers\Portal\ImmigrationAdviserController::class, 'reports'])->name('reports');
@@ -1221,16 +1227,19 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/intakes/{type}/{id}/data', [ImmigrationController::class, 'intakeData'])
                 ->where(['type' => 'resident|work|student|visitor|family', 'id' => '[0-9]+'])
                 ->name('intakes.data');
+            // Free-assessment (FA-… Lead) submission JSON for the "Open" modal.
+            Route::get('/assessments/free/{id}/data', [ImmigrationController::class, 'freeAssessmentData'])
+                ->where(['id' => '[0-9]+'])->name('assessments.free.data');
             // Visa Information Form export — A4 PDF download, an inline HTML
             // preview (for the download modal), and an editable Word (.doc).
             Route::get('/intakes/{type}/{id}/pdf', [ImmigrationController::class, 'downloadIntakePdf'])
-                ->where(['type' => 'work|student|visitor', 'id' => '[0-9]+'])
+                ->where(['type' => 'resident|work|student|visitor|family', 'id' => '[0-9]+'])
                 ->name('intakes.pdf');
             Route::get('/intakes/{type}/{id}/preview', [ImmigrationController::class, 'previewIntakePdf'])
-                ->where(['type' => 'work|student|visitor', 'id' => '[0-9]+'])
+                ->where(['type' => 'resident|work|student|visitor|family', 'id' => '[0-9]+'])
                 ->name('intakes.preview');
             Route::get('/intakes/{type}/{id}/word', [ImmigrationController::class, 'downloadIntakeWord'])
-                ->where(['type' => 'work|student|visitor', 'id' => '[0-9]+'])
+                ->where(['type' => 'resident|work|student|visitor|family', 'id' => '[0-9]+'])
                 ->name('intakes.word');
             // Convert a visa-interest submission to an immigration case.
             // The {id} route param is Assessment.id (post-Phase-B
@@ -1251,6 +1260,11 @@ Route::middleware(['auth'])->group(function () {
             Route::post('/assessments/{type}/{id}/ai-review/edit', [ImmigrationController::class, 'aiReviewEdit'])
                 ->where(['type' => 'resident|work|student|visitor|family', 'id' => '[0-9]+'])
                 ->name('assessments.ai-review.edit');
+            // Attributed internal notes on an assessment (intake OR free-assessment
+            // lead). Each note records its author so advisers see who noted what.
+            Route::post('/assessments/{type}/{id}/notes', [ImmigrationController::class, 'assessmentNoteStore'])
+                ->where(['type' => 'resident|work|student|visitor|family|free', 'id' => '[0-9]+'])
+                ->name('assessments.notes.store');
             Route::get('/cases', [ImmigrationController::class, 'cases'])->name('cases');
             // Engagement + Invoice generation workspaces. Declared before the
             // /cases/{lead}/... routes below; both are single-segment literals

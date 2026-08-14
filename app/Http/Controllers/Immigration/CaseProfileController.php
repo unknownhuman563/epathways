@@ -61,13 +61,21 @@ class CaseProfileController extends Controller
 
         [$intakeType, $intake] = $this->resolveIntake($lead);
 
+        // The VIF is only offered on visas whose checklist actually connects a
+        // "Visa Information Form" item — so a visa type that doesn't ask for one
+        // never shows a stray generator. (The generator itself can build for any
+        // intake type; this gates WHERE it appears.)
+        $checklistItems = $checklist->withStatuses($lead);
+        $hasVifItem = collect($checklistItems)
+            ->contains(fn ($i) => preg_match('/visa information form/i', (string) ($i['label'] ?? '')));
+
         return Inertia::render($page, [
             'lead' => $this->serializeLead($lead),
             'intake' => $intake ? ['type' => $intakeType, 'data' => $intake] : null,
             'documents' => $this->loadDocuments($lead),
-            // The Visa Information Form (official assessment PDF), auto-available
-            // in Documents when the case took a work/student/visitor assessment.
-            'vif' => $this->resolveVif($intakeType, $intake),
+            // The Visa Information Form (official assessment PDF) — surfaced only
+            // when the case's visa checklist connects a VIF item.
+            'vif' => $hasVifItem ? $this->resolveVif($intakeType, $intake) : null,
             // Build 11.D Phase 4 — checklist resolution delegated to
             // CaseChecklistService. `items` is the flat list (kept for
             // backward-compat with the existing table view); `grouped`
@@ -76,7 +84,7 @@ class CaseProfileController extends Controller
             // drives the "X of Y required approved" header.
             'checklist' => array_merge(
                 $checklist->sourceFor($lead),
-                ['items' => $checklist->withStatuses($lead)],
+                ['items' => $checklistItems],
             ),
             'checklistGrouped' => $checklist->groupedByCategory($lead),
             'unstructuredDocuments' => $checklist->unstructuredDocuments($lead),
@@ -1289,8 +1297,8 @@ class CaseProfileController extends Controller
      */
     private function resolveVif(?string $type, ?array $intake): ?array
     {
-        if (! $type || ! in_array($type, ['work', 'student', 'visitor'], true) || empty($intake['id'])) {
-            return null; // resident intakes / sales-converted cases have no VIF
+        if (! $type || ! in_array($type, ['resident', 'work', 'student', 'visitor', 'family'], true) || empty($intake['id'])) {
+            return null; // sales-converted cases with no intake have no VIF
         }
         $id = $intake['id'];
 
@@ -1315,52 +1323,63 @@ class CaseProfileController extends Controller
      */
     protected function resolveIntake(Lead $lead): array
     {
-        $assessment = null;
-
-        // 1. Authoritative link, stamped at conversion time — the case points
-        //    at the EXACT assessment it came from.
-        if ($lead->assessment_id) {
-            $assessment = Assessment::whereNotNull('intakeable_type')->find($lead->assessment_id);
-        }
-
         $wantLast = strtolower(trim((string) $lead->last_name));
         $wantFirst = strtolower(trim((string) $lead->first_name));
 
-        // 2. Legacy fallback (cases converted before the FK existed): match by
-        //    email, but prefer the assessment whose intake name matches this
-        //    lead — email alone is ambiguous when applicants share one.
-        if (! $assessment && $lead->email) {
-            $candidates = Assessment::where('applicant_email', $lead->email)
-                ->whereNotNull('intakeable_type')
-                ->latest('id')
-                ->get();
+        // Whether an assessment's intake belongs to this applicant (name match).
+        $nameMatches = function ($a) use ($wantLast, $wantFirst) {
+            $i = $a->intakeable;
+            if (! $i) {
+                return false;
+            }
+            $iLast = strtolower(trim((string) ($i->last_name ?? $i->family_name ?? '')));
+            $iFirst = strtolower(trim((string) ($i->first_name ?? '')));
 
-            $assessment = $candidates->first(function ($a) use ($wantLast, $wantFirst) {
-                $i = $a->intakeable;
-                if (! $i) {
-                    return false;
-                }
-                $iLast = strtolower(trim((string) ($i->last_name ?? $i->family_name ?? '')));
-                $iFirst = strtolower(trim((string) ($i->first_name ?? '')));
+            return $wantLast !== '' && $iLast === $wantLast && ($wantFirst === '' || $iFirst === $wantFirst);
+        };
 
-                return $wantLast !== '' && $iLast === $wantLast && ($wantFirst === '' || $iFirst === $wantFirst);
-            });
+        // Collect every assessment that could belong to this case, then use the
+        // NEWEST. This matters when the applicant switches visa type and takes a
+        // fresh assessment: the `assessment_id` stamped at the original
+        // conversion still points at the OLD visa, so we must also consider newer
+        // submissions (by email / name) and prefer the most recent one — that's
+        // the assessment (and VIF) staff expect to see now.
+        $candidates = collect();
+
+        // 1. The authoritative link stamped at conversion time.
+        if ($lead->assessment_id) {
+            $a = Assessment::whereNotNull('intakeable_type')->with('intakeable')->find($lead->assessment_id);
+            if ($a) {
+                $candidates->push($a);
+            }
         }
 
-        // 3. Name match — covers a case with no email (or no email match),
-        //    e.g. a staff-created case. Uses the assessment's own applicant
-        //    name and only links when the match is unambiguous.
-        if (! $assessment && $wantFirst !== '' && $wantLast !== '') {
+        // 2. Email matches (name-filtered — a shared email points at several people).
+        if ($lead->email) {
+            $byEmail = Assessment::where('applicant_email', $lead->email)
+                ->whereNotNull('intakeable_type')
+                ->with('intakeable')
+                ->latest('id')
+                ->get()
+                ->filter($nameMatches);
+            $candidates = $candidates->concat($byEmail);
+        }
+
+        // 3. Name-only match — covers a case with no email, only when unambiguous.
+        if ($candidates->isEmpty() && $wantFirst !== '' && $wantLast !== '') {
             $byName = Assessment::whereNotNull('intakeable_type')
+                ->with('intakeable')
                 ->whereRaw('LOWER(TRIM(applicant_last_name)) = ?', [$wantLast])
                 ->whereRaw('LOWER(TRIM(applicant_first_name)) = ?', [$wantFirst])
                 ->latest('id')
                 ->get();
-
             if ($byName->count() === 1) {
-                $assessment = $byName->first();
+                $candidates = $candidates->concat($byName);
             }
         }
+
+        // Newest wins — a freshly taken assessment supersedes the stamped one.
+        $assessment = $candidates->unique('id')->sortByDesc('id')->first();
 
         if (! $assessment) {
             return [null, null];
@@ -1376,6 +1395,7 @@ class CaseProfileController extends Controller
             WorkIntake::class => 'work',
             StudentIntake::class => 'student',
             VisitorIntake::class => 'visitor',
+            \App\Models\FamilyIntake::class => 'family',
             default => null,
         };
 

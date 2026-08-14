@@ -47,7 +47,7 @@ export default function AssessmentTab({ lead, intake }) {
 
     return (
         <div className="space-y-5">
-            {type !== "resident" && data.id && (
+            {data.id && (
                 <IntakeDownloadModal
                     open={downloadOpen}
                     onClose={() => setDownloadOpen(false)}
@@ -65,8 +65,8 @@ export default function AssessmentTab({ lead, intake }) {
                     </p>
                 </div>
                 <div className="flex items-center gap-2">
-                    {/* Preview + download (PDF / Word) — work/student/visitor intakes. */}
-                    {type !== "resident" && data.id && (
+                    {/* Preview + download (PDF / Word) — all visa types. */}
+                    {data.id && (
                         <button
                             type="button"
                             onClick={() => setDownloadOpen(true)}

@@ -142,7 +142,7 @@ function RosterRow({ r, date }) {
                 <td className="px-3 py-3 tabular-nums font-semibold text-gray-800">{r.net_hrs != null ? Number(r.net_hrs).toFixed(2) : "—"}</td>
                 <td className="px-3 py-3">
                     {r.attendance
-                        ? <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold ${r.attendance === "Late" ? "bg-rose-100 text-rose-700" : "bg-emerald-100 text-emerald-700"}`}>{r.attendance === "Late" ? <AlertTriangle size={10} /> : <CheckCircle2 size={10} />} {r.attendance}</span>
+                        ? <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold ${r.attendance === "Late" ? "bg-rose-100 text-rose-700" : r.attendance === "Flexi" ? "bg-indigo-100 text-indigo-700" : "bg-emerald-100 text-emerald-700"}`}>{r.attendance === "Late" ? <AlertTriangle size={10} /> : r.attendance === "Flexi" ? <Clock size={10} /> : <CheckCircle2 size={10} />} {r.attendance}</span>
                         : <span className="text-gray-300">—</span>}
                 </td>
                 <td className="px-3 py-3 tabular-nums text-gray-600">{r.tasks_count}</td>

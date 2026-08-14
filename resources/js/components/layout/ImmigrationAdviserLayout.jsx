@@ -2,6 +2,7 @@ import DashboardLayout from "./DashboardLayout";
 import { usePage } from "@inertiajs/react";
 import {
     LayoutDashboard, Globe, UserCheck, BadgeCheck, LineChart, User, ClipboardCheck,
+    FileSignature, ReceiptText, FileText,
 } from "lucide-react";
 
 // Portal for the Licensed Immigration Adviser (LIA). Distinct from the manager's
@@ -20,6 +21,11 @@ export default function ImmigrationAdviserLayout({ children }) {
         { name: "My Cases", href: "/portal/immigration-adviser/my-cases", icon: <UserCheck size={20} />, badge: badges.my_cases, badgeTone: "default" },
         { name: "Verification", href: "/portal/immigration-adviser/verification", icon: <BadgeCheck size={20} />, badge: badges.pending_verification, badgeTone: "teal" },
         { name: "Reports", href: "/portal/immigration-adviser/reports", icon: <LineChart size={20} /> },
+
+        { name: "Documents", section: true },
+        { name: "Engagement", href: "/portal/immigration-adviser/engagement", icon: <FileSignature size={20} /> },
+        { name: "Invoice", href: "/portal/immigration-adviser/invoice", icon: <ReceiptText size={20} /> },
+        { name: "INZ Forms", href: "/portal/immigration-adviser/inz-forms", icon: <FileText size={20} /> },
 
         { name: "Account", section: true },
         { name: "My Profile", href: "/portal/immigration-adviser/profile", icon: <User size={20} /> },

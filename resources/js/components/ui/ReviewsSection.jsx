@@ -1,9 +1,7 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Star, ArrowRight, PenTool } from "react-feather";
+import { Star, ArrowRight, PenTool, ChevronLeft, ChevronRight } from "react-feather";
 import ReviewModal from "./ReviewModal";
-
-const PAGE_SIZE = 6;
 
 // Human-readable "x days/weeks/months ago". No external date lib — keeps
 // the bundle lean and the rendering deterministic.
@@ -137,7 +135,7 @@ function ReviewCard({ review, compact = false }) {
             <div className="relative mt-6 flex items-center gap-2">
                 <span className="w-1.5 h-1.5 rounded-full bg-[#7a9d68]" />
                 <p className="text-[10px] text-gray-400 font-bold uppercase tracking-[0.2em]">
-                    {timeAgo(review.created_at)}{review.is_featured ? " · Featured" : ""}
+                    {timeAgo(review.created_at)}{review.source === "google" ? " · Google" : ""}{review.is_featured ? " · Featured" : ""}
                 </p>
             </div>
         </motion.article>
@@ -169,14 +167,16 @@ export default function ReviewsSection({
     compact = false,
 }) {
     const [modalOpen, setModalOpen] = useState(false);
-    const [visible, setVisible] = useState(PAGE_SIZE);
+    const [page, setPage] = useState(0);            // carousel page (groups of 3)
+    const [expanded, setExpanded] = useState(false); // "see all" — show every review
 
-    // Filter chips were removed — visitors see the full list, with each
-    // card carrying its own visa/programme tags. The 'filter' state is
-    // kept (unused by UI) so any downstream consumer relying on it stays
-    // intact, defaulting to "all".
-    const shown = reviews.slice(0, visible);
-    const hasMore = reviews.length > visible;
+    // Three cards per view by default; the arrows page through in threes, and
+    // "See all" drops the pager and lays every review out in the grid.
+    const PER_PAGE = 3;
+    const pageCount = Math.max(1, Math.ceil(reviews.length / PER_PAGE));
+    const canPage = !expanded && reviews.length > PER_PAGE;
+    const shown = expanded ? reviews : reviews.slice(page * PER_PAGE, page * PER_PAGE + PER_PAGE);
+    const go = (d) => setPage((p) => (p + d + pageCount) % pageCount);
 
     return (
         <section
@@ -204,23 +204,63 @@ export default function ReviewsSection({
                 </div>
 
                 {/* ── Grid / empty state */}
-                {shown.length > 0 ? (
+                {reviews.length > 0 ? (
                     <>
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-5">
-                            {shown.map((r) => (
-                                <ReviewCard key={r.id} review={r} compact={compact} />
-                            ))}
+                        <div className="relative">
+                            {/* Carousel arrows — only when there's more than one page */}
+                            {canPage && (
+                                <>
+                                    <button
+                                        type="button"
+                                        aria-label="Previous reviews"
+                                        onClick={() => go(-1)}
+                                        className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-1 sm:-translate-x-3 lg:-translate-x-6 z-10 w-10 h-10 rounded-full bg-white shadow-lg border border-gray-200 flex items-center justify-center text-gray-700 hover:text-[#436235] hover:border-[#436235] transition-colors"
+                                    >
+                                        <ChevronLeft size={18} strokeWidth={2.5} />
+                                    </button>
+                                    <button
+                                        type="button"
+                                        aria-label="More reviews"
+                                        onClick={() => go(1)}
+                                        className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-1 sm:translate-x-3 lg:translate-x-6 z-10 w-10 h-10 rounded-full bg-white shadow-lg border border-gray-200 flex items-center justify-center text-gray-700 hover:text-[#436235] hover:border-[#436235] transition-colors"
+                                    >
+                                        <ChevronRight size={18} strokeWidth={2.5} />
+                                    </button>
+                                </>
+                            )}
+
+                            <div key={expanded ? "all" : page} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-5">
+                                {shown.map((r) => (
+                                    <ReviewCard key={r.id} review={r} compact={compact} />
+                                ))}
+                            </div>
                         </div>
 
-                        {hasMore && (
-                            <div className="mt-12 text-center">
+                        {/* Page dots — only while paging (hidden once expanded) */}
+                        {canPage && (
+                            <div className="mt-8 flex items-center justify-center gap-2">
+                                {Array.from({ length: pageCount }).map((_, i) => (
+                                    <button
+                                        key={i}
+                                        type="button"
+                                        aria-label={`Go to page ${i + 1}`}
+                                        onClick={() => setPage(i)}
+                                        className={`h-2 rounded-full transition-all ${i === page ? "w-6 bg-[#436235]" : "w-2 bg-gray-300 hover:bg-gray-400"}`}
+                                    />
+                                ))}
+                            </div>
+                        )}
+
+                        {/* See all / Show less — reveals every review at once */}
+                        {reviews.length > PER_PAGE && (
+                            <div className="mt-10 text-center">
                                 <button
                                     type="button"
-                                    onClick={() => setVisible((v) => v + PAGE_SIZE)}
+                                    onClick={() => { setExpanded((v) => !v); setPage(0); }}
                                     className="inline-flex items-center gap-2.5 text-[11px] font-bold uppercase tracking-[0.22em] text-[#282728] border border-gray-200 hover:border-[#436235] hover:text-[#436235] px-6 py-3 rounded-xl bg-white transition-colors"
                                 >
-                                    Show more reviews
-                                    <ArrowRight size={13} strokeWidth={2.5} />
+                                    {expanded ? "Show less" : `See all ${reviews.length} reviews`}
+                                    <ArrowRight size={13} strokeWidth={2.5} className={expanded ? "-rotate-90" : ""} />
                                 </button>
                             </div>
                         )}
@@ -229,7 +269,7 @@ export default function ReviewsSection({
                             no card, no copy, no rating chip. Hidden on /home
                             (showWriteCta=false) where reviews are read-only. */}
                         {showWriteCta && (
-                            <div className="mt-12 flex justify-center">
+                            <div className="mt-10 flex justify-center">
                                 <button
                                     type="button"
                                     onClick={() => setModalOpen(true)}

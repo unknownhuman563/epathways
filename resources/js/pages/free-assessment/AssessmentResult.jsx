@@ -41,7 +41,7 @@ export default function AssessmentResult({ lead_id, first_name, status, analysis
                             Eligibility Analysis
                         </h2>
                         <p className="text-gray-500 text-xs font-bold uppercase tracking-[0.3em]">
-                            Protocol: {lead_id}
+                            Reference: {lead_id}
                         </p>
                     </div>
                 </div>
@@ -179,7 +179,7 @@ function ProcessingState({ leadId, firstName }) {
                 <h2 className="text-2xl font-black text-[#282728] uppercase tracking-tighter mb-4">Analyzing Your Profile</h2>
                 {firstName && <p className="text-gray-500 text-sm font-medium mb-2">Hi {firstName}, we're reviewing your submission.</p>}
                 <p className="text-gray-300 text-xs font-bold uppercase tracking-[0.2em] mb-8">This usually takes less than a minute</p>
-                <p className="text-gray-300 text-[10px] font-bold uppercase tracking-[0.3em]">Protocol: {leadId}</p>
+                <p className="text-gray-300 text-[10px] font-bold uppercase tracking-[0.3em]">Reference: {leadId}</p>
                 <button
                     onClick={() => window.location.reload()}
                     className="mt-8 px-8 py-4 bg-[#282728] text-white rounded-xl text-[10px] font-black uppercase tracking-[0.3em] hover:bg-black transition-all"
@@ -206,7 +206,7 @@ function FailedState({ leadId, firstName }) {
                 <p className="text-gray-500 text-sm font-medium mb-8 max-w-md text-center">
                     Your submission was received successfully, but the automated analysis could not be completed. Our team will review your profile manually and contact you.
                 </p>
-                <p className="text-gray-300 text-[10px] font-bold uppercase tracking-[0.3em] mb-8">Protocol: {leadId}</p>
+                <p className="text-gray-300 text-[10px] font-bold uppercase tracking-[0.3em] mb-8">Reference: {leadId}</p>
                 <a href="/" className="px-8 py-4 bg-[#282728] text-white rounded-xl text-[10px] font-black uppercase tracking-[0.3em] hover:bg-black transition-all">
                     Return to Portal
                 </a>
