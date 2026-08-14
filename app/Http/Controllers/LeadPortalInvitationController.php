@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers;
 
-use App\Mail\LeadPortalCredentials;
 use App\Mail\LeadPortalInvitation;
 use App\Models\Lead;
 use App\Models\User;
@@ -37,22 +36,22 @@ class LeadPortalInvitationController extends Controller
             ->orderByDesc('portal_invitation_requested_at')
             ->get()
             ->map(fn (Lead $l) => [
-                'id'           => $l->id,
-                'lead_id'      => $l->lead_id,
-                'name'         => trim("{$l->first_name} {$l->last_name}") ?: 'Unknown',
-                'email'        => $l->email,
-                'status'       => $l->portal_invitation_status,
+                'id' => $l->id,
+                'lead_id' => $l->lead_id,
+                'name' => trim("{$l->first_name} {$l->last_name}") ?: 'Unknown',
+                'email' => $l->email,
+                'status' => $l->portal_invitation_status,
                 'requested_at' => $l->portal_invitation_requested_at,
                 'requested_by' => optional(User::find($l->portal_invitation_requested_by))->name,
-                'approved_at'  => $l->portal_invitation_approved_at,
-                'approved_by'  => optional(User::find($l->portal_invitation_approved_by))->name,
-                'accepted_at'  => $l->portal_invitation_accepted_at,
-                'expires_at'   => $l->portal_invitation_expires_at,
-                'has_account'  => (bool) $l->portalUser,
+                'approved_at' => $l->portal_invitation_approved_at,
+                'approved_by' => optional(User::find($l->portal_invitation_approved_by))->name,
+                'accepted_at' => $l->portal_invitation_accepted_at,
+                'expires_at' => $l->portal_invitation_expires_at,
+                'has_account' => (bool) $l->portalUser,
                 // Which pipeline the person belongs to, for the page tabs. A
                 // converted immigration case takes priority over a student
                 // conversion; otherwise it's still a plain lead.
-                'type'         => $l->is_immigration_case ? 'case' : ($l->is_student ? 'student' : 'lead'),
+                'type' => $l->is_immigration_case ? 'case' : ($l->is_student ? 'student' : 'lead'),
             ]);
 
         return inertia('admin/PortalInvitations', [
@@ -78,14 +77,14 @@ class LeadPortalInvitationController extends Controller
         }
 
         $lead->update([
-            'portal_invitation_status'       => 'pending',
+            'portal_invitation_status' => 'pending',
             'portal_invitation_requested_by' => Auth::id(),
             'portal_invitation_requested_at' => now(),
             // Clear any prior approval audit so this is a fresh request
-            'portal_invitation_approved_by'  => null,
-            'portal_invitation_approved_at'  => null,
-            'portal_invitation_token'        => null,
-            'portal_invitation_expires_at'   => null,
+            'portal_invitation_approved_by' => null,
+            'portal_invitation_approved_at' => null,
+            'portal_invitation_token' => null,
+            'portal_invitation_expires_at' => null,
         ]);
 
         return back()->with('success', "Portal access requested for {$lead->first_name}. Awaiting admin approval.");
@@ -107,17 +106,18 @@ class LeadPortalInvitationController extends Controller
         try {
             DB::transaction(function () use ($lead, $plainToken) {
                 $lead->update([
-                    'portal_invitation_status'      => 'sent',
+                    'portal_invitation_status' => 'sent',
                     'portal_invitation_approved_by' => Auth::id(),
                     'portal_invitation_approved_at' => now(),
-                    'portal_invitation_token'       => hash('sha256', $plainToken),
-                    'portal_invitation_expires_at'  => now()->addDays(self::TOKEN_TTL_DAYS),
+                    'portal_invitation_token' => hash('sha256', $plainToken),
+                    'portal_invitation_expires_at' => now()->addDays(self::TOKEN_TTL_DAYS),
                 ]);
 
                 Mail::to($lead->email)->send(new LeadPortalInvitation($lead, $plainToken));
             });
         } catch (\Throwable $e) {
             Log::error('Lead portal invitation approval failed', ['lead_id' => $id, 'error' => $e->getMessage()]);
+
             return back()->withErrors(['error' => 'Could not send the invitation. Check the mail log.']);
         }
 
@@ -126,9 +126,9 @@ class LeadPortalInvitationController extends Controller
         $setupUrl = route('lead-portal.setup', ['token' => $plainToken]);
 
         return back()->with([
-            'success'                  => "Invitation sent to {$lead->email}.",
-            'invitation_link'          => $setupUrl,
-            'invitation_link_lead_id'  => $lead->lead_id,
+            'success' => "Invitation sent to {$lead->email}.",
+            'invitation_link' => $setupUrl,
+            'invitation_link_lead_id' => $lead->lead_id,
         ]);
     }
 
@@ -143,7 +143,7 @@ class LeadPortalInvitationController extends Controller
         }
 
         $lead->update([
-            'portal_invitation_status'      => 'none',
+            'portal_invitation_status' => 'none',
             'portal_invitation_requested_by' => null,
             'portal_invitation_requested_at' => null,
         ]);
@@ -167,12 +167,12 @@ class LeadPortalInvitationController extends Controller
             if ($lead->portalUser) {
                 $lead->portalUser->update([
                     'password' => Hash::make(Str::random(64)),
-                    'role'     => 'revoked_lead',
+                    'role' => 'revoked_lead',
                 ]);
             }
             $lead->update([
-                'portal_invitation_status'     => 'revoked',
-                'portal_invitation_token'      => null,
+                'portal_invitation_status' => 'revoked',
+                'portal_invitation_token' => null,
                 'portal_invitation_expires_at' => null,
             ]);
         });
@@ -192,10 +192,10 @@ class LeadPortalInvitationController extends Controller
 
         return inertia('lead-portal/SetupAccount', [
             'token' => $token,
-            'lead'  => [
+            'lead' => [
                 'first_name' => $lead->first_name,
-                'last_name'  => $lead->last_name,
-                'email'      => $lead->email,
+                'last_name' => $lead->last_name,
+                'email' => $lead->email,
             ],
         ]);
     }
@@ -218,27 +218,29 @@ class LeadPortalInvitationController extends Controller
         try {
             $user = DB::transaction(function () use ($lead, $request) {
                 $user = User::create([
-                    'name'     => trim("{$lead->first_name} {$lead->last_name}") ?: 'Lead',
-                    'email'    => $lead->email,
+                    'name' => trim("{$lead->first_name} {$lead->last_name}") ?: 'Lead',
+                    'email' => $lead->email,
                     'password' => $request->password,
-                    'role'     => User::ROLE_LEAD,
-                    'lead_id'  => $lead->id,
+                    'role' => User::ROLE_LEAD,
+                    'lead_id' => $lead->id,
                 ]);
 
                 $lead->update([
-                    'portal_invitation_status'        => 'accepted',
-                    'portal_invitation_token'         => null,
-                    'portal_invitation_expires_at'    => null,
-                    'portal_invitation_accepted_at'   => now(),
+                    'portal_invitation_status' => 'accepted',
+                    'portal_invitation_token' => null,
+                    'portal_invitation_expires_at' => null,
+                    'portal_invitation_accepted_at' => now(),
                 ]);
 
                 return $user;
             });
 
             Auth::login($user);
+
             return redirect('/portal/lead/dashboard');
         } catch (\Throwable $e) {
             Log::error('Lead portal setup failed', ['lead_id' => $lead->id, 'error' => $e->getMessage()]);
+
             return back()->withErrors(['password' => 'Could not set up your account. Please try the link again.']);
         }
     }
@@ -272,48 +274,69 @@ class LeadPortalInvitationController extends Controller
         try {
             DB::transaction(function () use ($lead, $plainPassword) {
                 User::create([
-                    'name'     => trim("{$lead->first_name} {$lead->last_name}") ?: 'Lead',
-                    'email'    => $lead->email,
+                    'name' => trim("{$lead->first_name} {$lead->last_name}") ?: 'Lead',
+                    'email' => $lead->email,
                     'password' => $plainPassword, // cast as hashed on save
-                    'role'     => User::ROLE_LEAD,
-                    'lead_id'  => $lead->id,
+                    'role' => User::ROLE_LEAD,
+                    'lead_id' => $lead->id,
                 ]);
 
                 $lead->update([
-                    'portal_invitation_status'       => 'accepted',
-                    'portal_invitation_approved_by'  => $lead->portal_invitation_approved_by ?: Auth::id(),
-                    'portal_invitation_approved_at'  => $lead->portal_invitation_approved_at ?: now(),
-                    'portal_invitation_token'        => null,
-                    'portal_invitation_expires_at'   => null,
-                    'portal_invitation_accepted_at'  => now(),
+                    'portal_invitation_status' => 'accepted',
+                    'portal_invitation_approved_by' => $lead->portal_invitation_approved_by ?: Auth::id(),
+                    'portal_invitation_approved_at' => $lead->portal_invitation_approved_at ?: now(),
+                    'portal_invitation_token' => null,
+                    'portal_invitation_expires_at' => null,
+                    'portal_invitation_accepted_at' => now(),
                 ]);
             });
         } catch (\Throwable $e) {
             Log::error('Lead portal generateCredentials failed', ['lead_id' => $id, 'error' => $e->getMessage()]);
+
             return back()->withErrors(['error' => 'Could not generate credentials. Please try again.']);
         }
 
-        // Email the client their login details directly. Best-effort: the
-        // account is already created, and the password is still shown once in
-        // the admin modal below, so a mail failure never loses the credential —
-        // the admin can copy it and send it by hand.
-        $emailSent = false;
+        // Email the client their login details using the team-editable
+        // `send_portal_credentials` template (Immigration Email folder), filling
+        // {{portal_username}} + {{password}}. Best-effort: the account already
+        // exists and the password is still shown once in the admin modal below,
+        // so a mail failure never loses the credential.
+        // 'sent' = queued for delivery · 'no_template' = template missing/inactive
+        // · 'failed' = a real send error. Distinguishing these keeps the toast honest.
+        $emailState = 'failed';
         try {
-            Mail::to($lead->email)->send(new LeadPortalCredentials($lead, $plainPassword));
-            $emailSent = true;
+            $result = app(\App\Services\CommunicationService::class)->sendTemplated(
+                'send_portal_credentials',
+                $lead,
+                ['portal_username' => $lead->email, 'password' => $plainPassword],
+                'immigration',
+            );
+            $log = $result['email'] ?? null;
+            if (! $log) {
+                $emailState = 'no_template';
+            } elseif ($log->status === \App\Models\MessageLog::STATUS_FAILED) {
+                $emailState = 'failed';
+            } else {
+                $emailState = 'sent';
+            }
         } catch (\Throwable $e) {
             Log::warning('Lead portal credentials email failed', ['lead_id' => $lead->id, 'error' => $e->getMessage()]);
         }
 
+        $emailSent = $emailState === 'sent';
+        $notice = match ($emailState) {
+            'sent' => "Login details emailed to {$lead->email}. Copy the password below too — it won't be shown again.",
+            'no_template' => "Account created for {$lead->email}. The credentials email template (send_portal_credentials) isn't set up here, so copy the password below and send it manually.",
+            default => "Account created for {$lead->email}, but the email could not be sent. Copy the password below and send it to the client manually.",
+        };
+
         return back()->with([
-            'success' => $emailSent
-                ? "Login details emailed to {$lead->email}. Copy the password below too — it won't be shown again."
-                : "Account created for {$lead->email}, but the email could not be sent. Copy the password below and send it to the client manually.",
-            'generated_credentials'      => [
-                'email'    => $lead->email,
+            'success' => $notice,
+            'generated_credentials' => [
+                'email' => $lead->email,
                 'password' => $plainPassword,
-                'lead_id'  => $lead->lead_id,
-                'name'     => trim("{$lead->first_name} {$lead->last_name}"),
+                'lead_id' => $lead->lead_id,
+                'name' => trim("{$lead->first_name} {$lead->last_name}"),
                 'email_sent' => $emailSent,
             ],
         ]);
@@ -337,29 +360,30 @@ class LeadPortalInvitationController extends Controller
         try {
             $lead->portalUser->update([
                 'password' => $plainPassword, // cast as hashed on save
-                'role'     => User::ROLE_LEAD, // re-enable if previously revoked
+                'role' => User::ROLE_LEAD, // re-enable if previously revoked
             ]);
 
             // If the account was revoked, mark it accepted again so it shows
             // in the Active section instead of Revoked.
             if ($lead->portal_invitation_status === 'revoked') {
                 $lead->update([
-                    'portal_invitation_status'       => 'accepted',
-                    'portal_invitation_accepted_at'  => now(),
+                    'portal_invitation_status' => 'accepted',
+                    'portal_invitation_accepted_at' => now(),
                 ]);
             }
         } catch (\Throwable $e) {
             Log::error('Lead portal resetPassword failed', ['lead_id' => $id, 'error' => $e->getMessage()]);
+
             return back()->withErrors(['error' => 'Could not reset the password. Please try again.']);
         }
 
         return back()->with([
-            'success'                  => "Password reset for {$lead->email}. Copy now — the new password will not be shown again.",
-            'generated_credentials'    => [
-                'email'    => $lead->email,
+            'success' => "Password reset for {$lead->email}. Copy now — the new password will not be shown again.",
+            'generated_credentials' => [
+                'email' => $lead->email,
                 'password' => $plainPassword,
-                'lead_id'  => $lead->lead_id,
-                'name'     => trim("{$lead->first_name} {$lead->last_name}"),
+                'lead_id' => $lead->lead_id,
+                'name' => trim("{$lead->first_name} {$lead->last_name}"),
             ],
         ]);
     }
@@ -415,10 +439,10 @@ class LeadPortalInvitationController extends Controller
      */
     private function generateReadablePassword(): string
     {
-        $upper  = 'ABCDEFGHJKLMNPQRSTUVWXYZ'; // no I, O
-        $lower  = 'abcdefghjkmnpqrstuvwxyz';  // no i, l, o
+        $upper = 'ABCDEFGHJKLMNPQRSTUVWXYZ'; // no I, O
+        $lower = 'abcdefghjkmnpqrstuvwxyz';  // no i, l, o
         $digits = '23456789';                 // no 0, 1
-        $alphabet = $upper . $lower . $digits;
+        $alphabet = $upper.$lower.$digits;
 
         // Guarantee at least one of each character class
         $chars = [
@@ -430,6 +454,7 @@ class LeadPortalInvitationController extends Controller
             $chars[] = $alphabet[random_int(0, strlen($alphabet) - 1)];
         }
         shuffle($chars);
+
         return implode('', $chars);
     }
 
