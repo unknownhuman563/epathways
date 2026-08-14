@@ -1503,6 +1503,7 @@ class CaseProfileController extends Controller
     {
         return LeadDocument::where('lead_id', $lead->id)
             ->whereNull('dependent_id') // dependants' docs live under the Family tab
+            ->with('reviewer:id,name,role')
             ->orderByDesc('created_at')
             ->get()
             ->map(fn (LeadDocument $d) => [
@@ -1515,7 +1516,11 @@ class CaseProfileController extends Controller
                 'source' => $d->source,
                 'source_variant' => $d->source_variant,
                 'note' => $d->note,
-                'reviewed_at' => $d->reviewed_at,
+                'reviewed_at' => optional($d->reviewed_at)->toIso8601String(),
+                // Who made the last Approve/Reject/Checked decision, so the
+                // Documents tab can attribute the verdict to the adviser/staffer.
+                'reviewed_by' => optional($d->reviewer)->name,
+                'reviewed_by_role' => optional($d->reviewer)->role,
                 'created_at' => $d->created_at,
             ])
             ->all();
