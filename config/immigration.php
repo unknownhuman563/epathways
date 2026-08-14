@@ -78,4 +78,17 @@ return [
         'adviser' => null,
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Default signing adviser
+    |--------------------------------------------------------------------------
+    |
+    | The licensed adviser pre-selected as the signer when staff create an
+    | engagement. Matched by name (case-insensitive) against the licensed
+    | advisers list; falls back to the current user / first licensed adviser
+    | when no match exists. Set to the practice's LIA.
+    |
+    */
+    'signing_adviser' => env('IMMIGRATION_SIGNING_ADVISER', 'Hendry Dai'),
+
 ];
