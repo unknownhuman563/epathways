@@ -255,8 +255,10 @@ class LeadPortalInvitationController extends Controller
     {
         $lead = Lead::with('portalUser')->findOrFail($id);
 
-        if (! $lead->email) {
-            return back()->withErrors(['error' => 'This lead has no email on file. Add one before generating credentials.']);
+        // No valid email → no login can exist (email is the username) and there's
+        // nowhere to send the credentials, so block it outright.
+        if (! filter_var($lead->email, FILTER_VALIDATE_EMAIL)) {
+            return back()->withErrors(['error' => 'This lead has no valid email on file — credentials can’t be generated or emailed. Add an email first.']);
         }
         if ($lead->portalUser) {
             return back()->withErrors(['error' => 'This lead already has an account. Use Reset password instead.']);
