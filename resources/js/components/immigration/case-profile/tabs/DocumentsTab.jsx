@@ -178,9 +178,13 @@ export default function DocumentsTab({
     const reqApproved = checklistProgress.required_approved ?? 0;
     const pct = reqTotal > 0 ? Math.round((reqApproved / reqTotal) * 100) : 0;
 
+    // The VIF generator lives inline on the "Visa Information Form" checklist
+    // row; only fall back to the standalone card when no such row exists.
+    const hasVifRow = !! vif && allRows.some((r) => r.kind === "checklist" && isVifLabel(r.label));
+
     return (
         <div className="space-y-4">
-            {vif && <VifCard vif={vif} />}
+            {vif && ! hasVifRow && <VifCard vif={vif} />}
             <div className="flex items-end justify-between gap-3 flex-wrap">
                 <div className="min-w-0">
                     <h2 className="text-base font-bold text-gray-900">Documents</h2>
@@ -268,6 +272,8 @@ export default function DocumentsTab({
                                                 leadId={lead.id}
                                                 docThreads={row.document ? (threadsByDoc.get(row.document.id) || []) : []}
                                                 caseStaff={caseStaff}
+                                                isVif={isVifLabel(row.label)}
+                                                vif={isVifLabel(row.label) ? vif : null}
                                             />
                                         ))}
                                     </Fragment>
@@ -289,7 +295,7 @@ export default function DocumentsTab({
     );
 }
 
-function Row({ row, leadId, docThreads = [], caseStaff = [] }) {
+function Row({ row, leadId, docThreads = [], caseStaff = [], isVif = false, vif = null }) {
     const doc = row.document;
     const [status, setStatus] = useState(doc?.status || "");
     const [note, setNote] = useState(doc?.note || "");
@@ -378,19 +384,37 @@ function Row({ row, leadId, docThreads = [], caseStaff = [] }) {
                             {row.label}
                             {row.required && <span className="ml-1 text-red-500">*</span>}
                         </p>
-                        {doc && (
+                        {doc && ! isVif && (
                             <p className="text-[10.5px] text-gray-400 mt-0.5">
                                 uploaded {formatDate(doc.created_at)}
                             </p>
+                        )}
+                        {isVif && (
+                            <p className="text-[10.5px] text-gray-400 mt-0.5">System-generated from the visa assessment</p>
                         )}
                     </div>
                 </div>
             </td>
 
             {/* Attachment column — filename + View + Download for uploaded;
-                Upload button (opens file picker) for empty slots. */}
+                Upload button (opens file picker) for empty slots. On the Visa
+                Information Form row, the ePathways VIF generator (Preview / PDF /
+                Word) is surfaced inline above the upload controls. */}
             <td className="px-4 py-3">
-                {doc ? (
+                {isVif ? (
+                    // The VIF is system-only: show the generator when an assessment
+                    // exists, otherwise prompt for one. Any file a staffer uploaded
+                    // here in the past is intentionally not shown (superseded by the
+                    // system VIF); it is hidden, not deleted.
+                    vif ? (
+                        <VifButtons vif={vif} />
+                    ) : (
+                        <span className="inline-flex items-start gap-1.5 text-[12px] text-amber-600 max-w-[280px]">
+                            <AlertCircle size={13} className="flex-shrink-0 mt-0.5" />
+                            Needs assessment — the VIF is generated once the client completes their visa assessment.
+                        </span>
+                    )
+                ) : doc ? (
                     <div className="flex items-center gap-1.5 flex-wrap">
                         <span className="flex flex-col min-w-0 max-w-[160px]">
                             <span className="text-[11px] text-gray-700 truncate" title={doc.original_name}>
@@ -445,7 +469,17 @@ function Row({ row, leadId, docThreads = [], caseStaff = [] }) {
 
             {/* Status dropdown — disabled when nothing's been uploaded yet */}
             <td className="px-4 py-3">
-                {doc ? (
+                {isVif ? (
+                    vif ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold border bg-[#009688]/10 text-[#00796b] border-[#009688]/30">
+                            System VIF
+                        </span>
+                    ) : (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold border bg-amber-50 text-amber-700 border-amber-200">
+                            Awaiting assessment
+                        </span>
+                    )
+                ) : doc ? (
                     <div className="flex items-center gap-1.5">
                         <select
                             value={status || ""}
@@ -468,7 +502,7 @@ function Row({ row, leadId, docThreads = [], caseStaff = [] }) {
 
             {/* Notes — inline-editable, saves on blur */}
             <td className="px-4 py-3">
-                {doc ? (
+                {doc && ! isVif ? (
                     <div className="relative">
                         <input
                             type="text"
@@ -500,8 +534,9 @@ function Row({ row, leadId, docThreads = [], caseStaff = [] }) {
             )}
         </tr>
         {/* Build 12 phase 6 — threads anchored to THIS document render here and
-            nowhere else. A composer appears only when there's a file to anchor to. */}
-        {doc && (
+            nowhere else. A composer appears only when there's a file to anchor to.
+            Suppressed on the system-only VIF row (its uploaded file is hidden). */}
+        {doc && ! isVif && (
             <tr className="border-b border-gray-50 last:border-b-0">
                 <td colSpan={4} className="px-4 pb-3 pt-0">
                     <div className="ml-6 space-y-1.5">
@@ -868,6 +903,31 @@ function RequestFromClient({ leadId, rowLabel, rowRequired }) {
 // when the JSON doesn't carry an explicit category field.
 // VIF — the official Visa Information Form built from the case's assessment.
 // Always reflects the latest intake; downloaded on demand (not stored).
+// The generate actions for the ePathways VIF — filled from the case's visa
+// assessment. Reused inside the "Visa Information Form" checklist row so the
+// generator lives right where that requirement is fulfilled.
+function VifButtons({ vif }) {
+    return (
+        <div className="flex items-center gap-1.5 flex-wrap">
+            <a href={vif.preview_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 text-gray-700 text-[11px] font-semibold hover:bg-white">
+                <Eye size={12} /> Preview
+            </a>
+            <a href={vif.pdf_url} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#009688] text-white text-[11px] font-semibold hover:bg-[#00796b]">
+                <Download size={12} /> PDF
+            </a>
+            <a href={vif.word_url} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#009688]/30 text-[#009688] text-[11px] font-semibold hover:bg-[#009688]/5">
+                <Download size={12} /> Word
+            </a>
+        </div>
+    );
+}
+
+// True when a checklist row is the Visa Information Form slot — the VIF
+// generator is surfaced inline on that row rather than as a separate card.
+const isVifLabel = (label) => /visa information form/i.test(label || "");
+
+// Standalone fallback card — only shown when the checklist has no VIF row to
+// host the generator (e.g. a visa type whose checklist omits it).
 function VifCard({ vif }) {
     return (
         <div className="rounded-xl border border-[#009688]/25 bg-[#009688]/5 p-4 flex items-center gap-3 flex-wrap">
@@ -878,17 +938,7 @@ function VifCard({ vif }) {
                 <div className="text-sm font-bold text-gray-900">Visa Information Form (Assessment)</div>
                 <p className="text-[12px] text-gray-500">Official ePathways VIF, filled from this case's visa assessment.</p>
             </div>
-            <div className="flex items-center gap-1.5 flex-shrink-0">
-                <a href={vif.preview_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 text-gray-700 text-[11px] font-semibold hover:bg-white">
-                    <Eye size={12} /> Preview
-                </a>
-                <a href={vif.pdf_url} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#009688] text-white text-[11px] font-semibold hover:bg-[#00796b]">
-                    <Download size={12} /> PDF
-                </a>
-                <a href={vif.word_url} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#009688]/30 text-[#009688] text-[11px] font-semibold hover:bg-[#009688]/5">
-                    <Download size={12} /> Word
-                </a>
-            </div>
+            <VifButtons vif={vif} />
         </div>
     );
 }

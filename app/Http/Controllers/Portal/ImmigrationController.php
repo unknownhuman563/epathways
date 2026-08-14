@@ -681,7 +681,7 @@ class ImmigrationController extends Controller
      * standards), preview them live, and generate. The Written Agreement's
      * fees come from the case's visa on the Visas page.
      */
-    public function engagement()
+    public function engagement(string $page = 'portal/immigration/Engagement')
     {
         try {
             // Visa fee lookup so the picker can flag cases whose visa has
@@ -770,7 +770,7 @@ class ImmigrationController extends Controller
                 })
                 ->values();
 
-            return inertia('portal/immigration/Engagement', [
+            return inertia($page, [
                 'cases' => $cases,
                 'documents' => \App\Services\Immigration\EngagementDocumentGenerator::catalogue(),
                 'generated' => $generated,
@@ -780,7 +780,7 @@ class ImmigrationController extends Controller
         } catch (\Throwable $e) {
             Log::error('Immigration engagement page failed', ['error' => $e->getMessage()]);
 
-            return inertia('portal/immigration/Engagement', [
+            return inertia($page, [
                 'cases' => [],
                 'documents' => \App\Services\Immigration\EngagementDocumentGenerator::catalogue(),
                 'generated' => [],
@@ -826,7 +826,7 @@ class ImmigrationController extends Controller
     /**
      * Invoice generation workspace — pick a case and generate its invoice.
      */
-    public function invoice()
+    public function invoice(string $page = 'portal/immigration/Invoice')
     {
         try {
             // Visa fees drive the invoice's default line items, so the
@@ -944,7 +944,7 @@ class ImmigrationController extends Controller
                 })
                 ->values();
 
-            return inertia('portal/immigration/Invoice', [
+            return inertia($page, [
                 'cases' => $cases,
                 'generated' => $generated,
                 'suggestions' => $suggestions,
@@ -953,7 +953,7 @@ class ImmigrationController extends Controller
         } catch (\Throwable $e) {
             Log::error('Immigration invoice page failed', ['error' => $e->getMessage()]);
 
-            return inertia('portal/immigration/Invoice', ['cases' => [], 'generated' => [], 'suggestions' => [], 'nextNumber' => null]);
+            return inertia($page, ['cases' => [], 'generated' => [], 'suggestions' => [], 'nextNumber' => null]);
         }
     }
 
@@ -2790,9 +2790,11 @@ class ImmigrationController extends Controller
     private function intakeVifData(string $type, int $id): array
     {
         $modelMap = [
+            'resident' => \App\Models\ResidentIntake::class,
             'work' => \App\Models\WorkIntake::class,
             'student' => \App\Models\StudentIntake::class,
             'visitor' => \App\Models\VisitorIntake::class,
+            'family' => \App\Models\FamilyIntake::class,
         ];
         if (! isset($modelMap[$type])) {
             abort(404, 'Unknown intake type.');
@@ -3308,7 +3310,7 @@ class ImmigrationController extends Controller
     }
 
     /** INZ form catalogue + version register (upload official PDFs, map fields). */
-    public function inzForms()
+    public function inzForms(string $page = 'portal/immigration/InzForms')
     {
         $forms = \App\Models\InzForm::with(['versions' => fn ($q) => $q->orderByDesc('is_current')->orderByDesc('id')])
             ->orderBy('category')->orderBy('code')
@@ -3346,7 +3348,7 @@ class ImmigrationController extends Controller
             'form_count' => $forms->where('category', $c->name)->count(),
         ]);
 
-        return inertia('portal/immigration/InzForms', [
+        return inertia($page, [
             'forms' => $forms,
             'categories' => $categories,
             'visaTypes' => $visaTypes,

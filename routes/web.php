@@ -1167,6 +1167,9 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/assessments', [\App\Http\Controllers\Portal\ImmigrationAdviserController::class, 'assessments'])->name('assessments');
             Route::get('/cases/{lead}', [\App\Http\Controllers\Portal\ImmigrationAdviserController::class, 'showCase'])->name('cases.show');
             // Document verification queue — manager-checked docs the LIA approves/rejects.
+            Route::get('/engagement', [\App\Http\Controllers\Portal\ImmigrationAdviserController::class, 'engagement'])->name('engagement');
+            Route::get('/invoice', [\App\Http\Controllers\Portal\ImmigrationAdviserController::class, 'invoice'])->name('invoice');
+            Route::get('/inz-forms', [\App\Http\Controllers\Portal\ImmigrationAdviserController::class, 'inzForms'])->name('inz-forms');
             Route::get('/verification', [\App\Http\Controllers\Portal\ImmigrationAdviserController::class, 'verification'])->name('verification');
             Route::post('/verification/{document}', [\App\Http\Controllers\Portal\ImmigrationAdviserController::class, 'verifyDocument'])->name('verification.verify');
             Route::get('/reports', [\App\Http\Controllers\Portal\ImmigrationAdviserController::class, 'reports'])->name('reports');
@@ -1230,13 +1233,13 @@ Route::middleware(['auth'])->group(function () {
             // Visa Information Form export — A4 PDF download, an inline HTML
             // preview (for the download modal), and an editable Word (.doc).
             Route::get('/intakes/{type}/{id}/pdf', [ImmigrationController::class, 'downloadIntakePdf'])
-                ->where(['type' => 'work|student|visitor', 'id' => '[0-9]+'])
+                ->where(['type' => 'resident|work|student|visitor|family', 'id' => '[0-9]+'])
                 ->name('intakes.pdf');
             Route::get('/intakes/{type}/{id}/preview', [ImmigrationController::class, 'previewIntakePdf'])
-                ->where(['type' => 'work|student|visitor', 'id' => '[0-9]+'])
+                ->where(['type' => 'resident|work|student|visitor|family', 'id' => '[0-9]+'])
                 ->name('intakes.preview');
             Route::get('/intakes/{type}/{id}/word', [ImmigrationController::class, 'downloadIntakeWord'])
-                ->where(['type' => 'work|student|visitor', 'id' => '[0-9]+'])
+                ->where(['type' => 'resident|work|student|visitor|family', 'id' => '[0-9]+'])
                 ->name('intakes.word');
             // Convert a visa-interest submission to an immigration case.
             // The {id} route param is Assessment.id (post-Phase-B
