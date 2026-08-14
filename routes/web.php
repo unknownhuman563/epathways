@@ -893,6 +893,11 @@ Route::middleware(['auth'])->group(function () {
                 Route::put('/email-templates/{id}', [$c, 'update'])->name('email-templates.update');
                 Route::delete('/email-templates/{id}', [$c, 'destroy'])->name('email-templates.destroy');
                 Route::post('/email-templates/{id}/test', [$c, 'sendTest'])->name('email-templates.test');
+
+                // Per-department email branding — same page/chrome as this portal.
+                $b = \App\Http\Controllers\EmailBrandingController::class;
+                Route::get('/email-branding', [$b, 'index'])->name('email-branding');
+                Route::post('/email-branding/{department}', [$b, 'update'])->name('email-branding.update');
             });
     }
 

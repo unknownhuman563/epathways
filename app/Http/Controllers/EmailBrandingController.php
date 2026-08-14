@@ -3,18 +3,45 @@
 namespace App\Http\Controllers;
 
 use App\Models\EmailBranding;
+use App\Models\MessageTemplate;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 
 /**
- * Admin management of per-department email branding (banner + CTA). Uploads
- * override the file-based defaults in config/email_branding.php.
+ * Manage per-department email branding (banner + CTA + button links). Reachable
+ * from the admin area and every department portal — the page renders under the
+ * matching chrome, and branding is a shared library (like the templates), so any
+ * portal staff member can manage it. External leads never reach these routes
+ * (portal:* / admin middleware).
  */
 class EmailBrandingController extends Controller
 {
-    private function guard(): void
+    /**
+     * Resolve the component + base paths from the ROUTE, so the same page renders
+     * under admin chrome or the acting portal's chrome.
+     *
+     * @return array{component: string, basePath: string, templatesPath: string}
+     */
+    private function context(Request $request): array
     {
-        abort_unless(in_array(auth()->user()->role, ['admin', 'super_admin'], true), 403);
+        $name = (string) $request->route()?->getName();
+
+        if (str_starts_with($name, 'portal.')) {
+            $dept = explode('.', $name)[1] ?? '';
+            if (in_array($dept, MessageTemplate::DEPARTMENTS, true)) {
+                return [
+                    'component' => "portal/{$dept}/EmailBranding",
+                    'basePath' => "/portal/{$dept}/email-branding",
+                    'templatesPath' => "/portal/{$dept}/email-templates",
+                ];
+            }
+        }
+
+        return [
+            'component' => 'admin/EmailBranding',
+            'basePath' => '/admin/email-branding',
+            'templatesPath' => '/admin/message-templates',
+        ];
     }
 
     /** The manageable departments (Default + each portal), from the config map. */
@@ -25,9 +52,9 @@ class EmailBrandingController extends Controller
             ->values()->all();
     }
 
-    public function index()
+    public function index(Request $request)
     {
-        $this->guard();
+        $ctx = $this->context($request);
 
         $rows = EmailBranding::get()->keyBy('department');
 
@@ -46,18 +73,20 @@ class EmailBrandingController extends Controller
                 'hide_footer' => (bool) ($row?->hide_footer),
                 'booking_url' => $row?->booking_url ?? '',
                 'call_number' => $row?->call_number ?? '',
-                // The effective values in use (incl. the global fallback) for the hints.
                 'effective_booking_url' => $assets['bookingUrl'],
                 'effective_call_number' => $assets['callNumber'],
             ];
         })->values();
 
-        return inertia('admin/EmailBranding', ['items' => $items]);
+        return inertia($ctx['component'], [
+            'items' => $items,
+            'basePath' => $ctx['basePath'],
+            'templatesPath' => $ctx['templatesPath'],
+        ]);
     }
 
     public function update(Request $request, string $department)
     {
-        $this->guard();
         abort_unless(array_key_exists($department, config('email_branding', [])), 404);
 
         $request->validate([
