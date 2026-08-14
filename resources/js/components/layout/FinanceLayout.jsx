@@ -1,8 +1,11 @@
 import DashboardLayout from "./DashboardLayout";
-import { Clock, LayoutDashboard, ClipboardList } from "lucide-react";
+import { Clock, LayoutDashboard, ClipboardList, ArrowDownCircle, ArrowUpCircle, FileBarChart } from "lucide-react";
 
 const FINANCE_NAV = [
     { name: "Dashboard", href: "/portal/finance/dashboard", icon: <LayoutDashboard size={20} /> },
+    { name: "Receivables", href: "/portal/finance/receivables", icon: <ArrowDownCircle size={20} /> },
+    { name: "Payables", href: "/portal/finance/payables", icon: <ArrowUpCircle size={20} /> },
+    { name: "Reports", href: "/portal/finance/reports", icon: <FileBarChart size={20} /> },
     { name: "Task Board", href: "/portal/finance/tasks", icon: <ClipboardList size={20} /> },
     { name: "Daily Time Record", href: "/portal/finance/dtr", icon: <Clock size={20} /> },
 ];
