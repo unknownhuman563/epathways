@@ -80,6 +80,9 @@ class CaseProfileController extends Controller
             'intake' => $intake ? ['type' => $intakeType, 'data' => $intake] : null,
             'assessmentCompleteness' => $completeness,
             'documents' => $this->loadDocuments($lead),
+            // Ad-hoc document requests sent to the client (what was asked for,
+            // when, by whom, and whether it's been fulfilled yet).
+            'documentRequests' => $this->loadDocumentRequests($lead),
             // The Visa Information Form (official assessment PDF) — surfaced only
             // when the case's visa checklist connects a VIF item.
             'vif' => $hasVifItem ? $this->resolveVif($intakeType, $intake) : null,
@@ -1543,6 +1546,29 @@ class CaseProfileController extends Controller
                 'reviewed_by' => optional($d->reviewer)->name,
                 'reviewed_by_role' => optional($d->reviewer)->role,
                 'created_at' => $d->created_at,
+            ])
+            ->all();
+    }
+
+    /**
+     * Ad-hoc document requests sent to the client — what was asked for, when,
+     * by whom, and whether a file has since come in against it (fulfilled).
+     */
+    private function loadDocumentRequests(Lead $lead): array
+    {
+        return $lead->documentRequests()
+            ->with(['requester:id,name', 'latestDocument:id,request_id,status,original_name'])
+            ->orderByDesc('created_at')
+            ->get()
+            ->map(fn (\App\Models\LeadDocumentRequest $r) => [
+                'id' => $r->id,
+                'label' => $r->label,
+                'description' => $r->description,
+                'required' => (bool) $r->required,
+                'requested_by' => optional($r->requester)->name,
+                'requested_at' => optional($r->requested_at ?? $r->created_at)->toIso8601String(),
+                'fulfilled' => (bool) $r->latestDocument,
+                'fulfilled_name' => optional($r->latestDocument)->original_name,
             ])
             ->all();
     }

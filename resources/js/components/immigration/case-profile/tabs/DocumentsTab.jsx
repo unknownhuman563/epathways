@@ -45,6 +45,7 @@ const STATUS_TONE = {
 export default function DocumentsTab({
     lead,
     documents = [],
+    documentRequests = [],
     checklist = { items: [] },
     checklistProgress = { required_total: 0, required_approved: 0, total: 0, approved: 0 },
     threads = [],
@@ -319,19 +320,32 @@ export default function DocumentsTab({
             </div>
 
             {/* Request a document — an ad-hoc request for something not on the
-                checklist. Emails the client and logs a document request. */}
-            <div className="flex items-center justify-between gap-3 rounded-xl border border-dashed border-gray-200 bg-gray-50/50 px-4 py-3">
-                <div className="min-w-0">
-                    <p className="text-[13px] font-semibold text-gray-800">Need something else?</p>
-                    <p className="text-[11px] text-gray-500 mt-0.5">Request a document from the client that isn't on the checklist.</p>
+                checklist. Emails the client and logs a document request. Below
+                the button, the requests already sent (and whether they've been
+                fulfilled) are listed so staff can see what was asked for. */}
+            <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50/50 px-4 py-3">
+                <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                        <p className="text-[13px] font-semibold text-gray-800">Need something else?</p>
+                        <p className="text-[11px] text-gray-500 mt-0.5">Request a document from the client that isn't on the checklist.</p>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={() => setRequestOpen(true)}
+                        className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-gray-900 text-white text-[12px] font-semibold hover:bg-black flex-shrink-0"
+                    >
+                        <Plus size={14} /> Request a document
+                    </button>
                 </div>
-                <button
-                    type="button"
-                    onClick={() => setRequestOpen(true)}
-                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-gray-900 text-white text-[12px] font-semibold hover:bg-black flex-shrink-0"
-                >
-                    <Plus size={14} /> Request a document
-                </button>
+
+                {documentRequests.length > 0 && (
+                    <div className="mt-3 pt-3 border-t border-gray-200 space-y-1.5">
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Requested from client ({documentRequests.length})</p>
+                        {documentRequests.map((r) => (
+                            <RequestRow key={r.id} req={r} leadId={lead.id} />
+                        ))}
+                    </div>
+                )}
             </div>
 
             {requestOpen && (
@@ -1120,6 +1134,57 @@ function RequestFromClient({ leadId, rowLabel, rowRequired }) {
                 document.body,
             )}
         </>
+    );
+}
+
+// One sent request — what was asked for, when/by whom, whether it's arrived,
+// and a control to withdraw it.
+function RequestRow({ req, leadId }) {
+    const [busy, setBusy] = useState(false);
+    const cancel = () => {
+        if (busy) return;
+        setBusy(true);
+        router.delete(`/admin/leads/${leadId}/documents/requests/${req.id}`, {
+            preserveScroll: true,
+            preserveState: true,
+            onSuccess: () => toast.success("Request removed"),
+            onError: (e) => toast.error(Object.values(e)[0] || "Could not remove"),
+            onFinish: () => setBusy(false),
+        });
+    };
+    const fmt = (iso) => (iso ? new Date(iso).toLocaleDateString("en-NZ", { day: "numeric", month: "short" }) : "");
+
+    return (
+        <div className="flex items-center gap-2 bg-white rounded-lg border border-gray-100 px-3 py-2">
+            <FileText size={13} className="text-gray-400 flex-shrink-0" />
+            <div className="min-w-0 flex-1">
+                <p className="text-[12px] font-medium text-gray-800 truncate">
+                    {req.label}{req.required && <span className="text-rose-500"> *</span>}
+                </p>
+                {req.description && <p className="text-[10.5px] text-gray-400 truncate">{req.description}</p>}
+                <p className="text-[10px] text-gray-400">
+                    Requested {fmt(req.requested_at)}{req.requested_by ? ` · ${req.requested_by}` : ""}
+                </p>
+            </div>
+            {req.fulfilled ? (
+                <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                    <Check size={10} /> Received
+                </span>
+            ) : (
+                <span className="inline-flex items-center text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
+                    Waiting
+                </span>
+            )}
+            <button
+                type="button"
+                onClick={cancel}
+                disabled={busy}
+                title="Withdraw this request"
+                className="p-1 rounded-md text-gray-300 hover:text-rose-600 disabled:opacity-50"
+            >
+                {busy ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
+            </button>
+        </div>
     );
 }
 

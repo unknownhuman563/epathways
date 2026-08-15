@@ -1219,32 +1219,29 @@ class ImmigrationController extends Controller
             ]);
         }
 
-        // Optional email to the client — DISABLED for now (kept for when the
-        // decline-notification copy is signed off). The `notify` flag is still
-        // accepted and the document/note are recorded; only the send is paused.
-        // To re-enable, uncomment the block below.
-        //
-        // if (! empty($data['notify']) && $lead->email) {
-        //     try {
-        //         $name = trim((string) $lead->first_name) ?: 'there';
-        //         $lines = ["Dear {$name},", '', 'We are writing with an update on your visa application. Immigration New Zealand has declined the application.'];
-        //         if (! empty($data['note'])) {
-        //             $lines[] = '';
-        //             $lines[] = $data['note'];
-        //         }
-        //         if ($doc) {
-        //             $lines[] = '';
-        //             $lines[] = 'A related document has been shared to your client portal, where you can view it securely.';
-        //         }
-        //         $lines[] = '';
-        //         $lines[] = 'Please contact us if you would like to discuss the next steps.';
-        //         $body = nl2br(e(implode("\n", $lines)));
-        //         app(\App\Services\CommunicationService::class)
-        //             ->sendRaw('email', $lead, 'An update on your visa application', $body);
-        //     } catch (\Throwable $e) {
-        //         Log::warning('Decline email failed', ['lead_id' => $lead->id, 'error' => $e->getMessage()]);
-        //     }
-        // }
+        // Optional email to the client — factual status update; the letter (if
+        // any) is available securely in their portal, not attached.
+        if (! empty($data['notify']) && $lead->email) {
+            try {
+                $name = trim((string) $lead->first_name) ?: 'there';
+                $lines = ["Dear {$name},", '', 'We are writing with an update on your visa application. Immigration New Zealand has declined the application.'];
+                if (! empty($data['note'])) {
+                    $lines[] = '';
+                    $lines[] = $data['note'];
+                }
+                if ($doc) {
+                    $lines[] = '';
+                    $lines[] = 'A related document has been shared to your client portal, where you can view it securely.';
+                }
+                $lines[] = '';
+                $lines[] = 'Please contact us if you would like to discuss the next steps.';
+                $body = nl2br(e(implode("\n", $lines)));
+                app(\App\Services\CommunicationService::class)
+                    ->sendRaw('email', $lead, 'An update on your visa application', $body);
+            } catch (\Throwable $e) {
+                Log::warning('Decline email failed', ['lead_id' => $lead->id, 'error' => $e->getMessage()]);
+            }
+        }
 
         $lead->recordStaffActivity('Marked visa declined'.($doc ? ' + shared decline letter' : ''));
         \App\Jobs\EvaluateCaseFindings::dispatch($lead->id);
