@@ -515,13 +515,6 @@ function Row({ row, leadId, docThreads = [], threadsByDoc = new Map(), caseStaff
                             label="Upload"
                             empty
                         />
-                        {row.kind === "checklist" && (
-                            <RequestFromClient
-                                leadId={leadId}
-                                rowLabel={row.label}
-                                rowRequired={row.required}
-                            />
-                        )}
                     </div>
                 )}
             </td>
@@ -601,24 +594,44 @@ function Row({ row, leadId, docThreads = [], threadsByDoc = new Map(), caseStaff
                 />
             )}
         </tr>
-        {/* Build 12 phase 6 — threads anchored to THIS document render here and
-            nowhere else. A composer appears only when there's a file to anchor to. */}
+        {/* Comments render full-width below the row. They're per FILE — a
+            checklist slot can hold several uploads (e.g. two Passport.pdf), and
+            each keeps its own thread, labelled by filename when there's more
+            than one. */}
         {doc && (
             <tr className="border-b border-gray-50 last:border-b-0">
                 <td colSpan={5} className="px-4 pb-3 pt-0">
-                    <div className="ml-6 space-y-1.5">
-                        {docThreads.map((t) => (
-                            <ThreadItem key={t.id} thread={t} leadId={leadId} />
-                        ))}
-                        <ThreadComposer
-                            leadId={leadId}
-                            caseStaff={caseStaff}
-                            fixedAnchor={{ anchor_type: "document", anchor_id: doc.id }}
-                            compact
-                            plain
-                            placeholder={`Comment on ${row.label}…`}
-                        />
-                    </div>
+                    {(() => {
+                        const files = row.documents && row.documents.length ? row.documents : [doc];
+                        const multi = files.length > 1;
+                        return (
+                            <div className="ml-6 space-y-3">
+                                {files.map((d) => {
+                                    const dThreads = threadsByDoc.get(d.id) || [];
+                                    return (
+                                        <div key={d.id} className="space-y-1.5">
+                                            {multi && (
+                                                <p className="text-[10.5px] font-semibold text-gray-500 inline-flex items-center gap-1.5 border-l-2 border-gray-200 pl-2">
+                                                    <FileText size={11} className="text-gray-400" /> {d.original_name}
+                                                </p>
+                                            )}
+                                            {dThreads.map((t) => (
+                                                <ThreadItem key={t.id} thread={t} leadId={leadId} />
+                                            ))}
+                                            <ThreadComposer
+                                                leadId={leadId}
+                                                caseStaff={caseStaff}
+                                                fixedAnchor={{ anchor_type: "document", anchor_id: d.id }}
+                                                compact
+                                                plain
+                                                placeholder={multi ? `Comment on ${d.original_name}…` : `Comment on ${row.label}…`}
+                                            />
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        );
+                    })()}
                 </td>
             </tr>
         )}
@@ -1285,18 +1298,74 @@ function RequestAnyDocument({ leadId, onClose }) {
 // assessment. Reused inside the "Visa Information Form" checklist row so the
 // generator lives right where that requirement is fulfilled.
 function VifButtons({ vif }) {
+    // Preview stays visible; the PDF / Word downloads live in a ⋮ menu to keep
+    // the row tidy.
     return (
         <div className="flex items-center gap-1.5 flex-wrap">
-            <a href={vif.preview_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 text-gray-700 text-[11px] font-semibold hover:bg-white">
-                <Eye size={12} /> Preview
+            <a href={vif.preview_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#009688]/30 text-[#009688] text-[11px] font-semibold hover:bg-[#009688]/5">
+                <Eye size={12} /> Preview VIF
             </a>
-            <a href={vif.pdf_url} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#009688] text-white text-[11px] font-semibold hover:bg-[#00796b]">
-                <Download size={12} /> PDF
-            </a>
-            <a href={vif.word_url} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#009688]/30 text-[#009688] text-[11px] font-semibold hover:bg-[#009688]/5">
-                <Download size={12} /> Word
-            </a>
+            <DownloadMenu items={[
+                { label: "Download PDF", href: vif.pdf_url },
+                { label: "Download Word", href: vif.word_url },
+            ]} />
         </div>
+    );
+}
+
+// A ⋮ menu of download links (portal-rendered so it escapes the scrollable
+// table). Used for the VIF's PDF / Word exports.
+function DownloadMenu({ items = [] }) {
+    const [open, setOpen] = useState(false);
+    const [coords, setCoords] = useState({ top: 0, left: 0 });
+    const btnRef = useRef(null);
+    const MENU_W = 176;
+
+    useEffect(() => {
+        if (! open) return;
+        const place = () => {
+            const r = btnRef.current?.getBoundingClientRect();
+            if (r) setCoords({ top: r.bottom + 4, left: Math.max(8, Math.min(r.left, window.innerWidth - MENU_W - 8)) });
+        };
+        place();
+        window.addEventListener("scroll", place, true);
+        window.addEventListener("resize", place);
+        return () => { window.removeEventListener("scroll", place, true); window.removeEventListener("resize", place); };
+    }, [open]);
+
+    return (
+        <>
+            <button
+                ref={btnRef}
+                type="button"
+                onClick={() => setOpen((o) => !o)}
+                title="Download options"
+                className="inline-flex items-center justify-center p-1.5 rounded-lg border border-gray-200 bg-white text-gray-600 hover:text-gray-900 hover:bg-gray-50"
+            >
+                <MoreVertical size={13} />
+            </button>
+            {open && createPortal(
+                <>
+                    <div className="fixed inset-0 z-[59]" onClick={() => setOpen(false)} />
+                    <div
+                        style={{ position: "fixed", top: coords.top, left: coords.left, width: MENU_W }}
+                        className="z-[60] bg-white rounded-lg shadow-xl border border-gray-100 py-1"
+                    >
+                        {items.map((it) => (
+                            <a
+                                key={it.label}
+                                href={it.href}
+                                onClick={() => setOpen(false)}
+                                className="flex items-center gap-2 px-3 py-1.5 text-[12px] text-gray-700 hover:bg-gray-50"
+                            >
+                                <Download size={13} className="text-gray-400" /> {it.label}
+                            </a>
+                        ))}
+                    </div>
+                </>,
+                document.body,
+            )}
+        </>
     );
 }
 
