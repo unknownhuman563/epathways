@@ -606,19 +606,42 @@ function Row({ row, leadId, docThreads = [], threadsByDoc = new Map(), caseStaff
         {doc && (
             <tr className="border-b border-gray-50 last:border-b-0">
                 <td colSpan={5} className="px-4 pb-3 pt-0">
-                    <div className="ml-6 space-y-1.5">
-                        {docThreads.map((t) => (
-                            <ThreadItem key={t.id} thread={t} leadId={leadId} />
-                        ))}
-                        <ThreadComposer
-                            leadId={leadId}
-                            caseStaff={caseStaff}
-                            fixedAnchor={{ anchor_type: "document", anchor_id: doc.id }}
-                            compact
-                            plain
-                            placeholder={`Comment on ${row.label}…`}
-                        />
-                    </div>
+                    {/* Comments are per FILE, not per row — a checklist slot can
+                        hold several uploads (e.g. two Passport.pdf), and each
+                        keeps its own thread. When there's more than one file we
+                        label each block with its filename so it's clear which
+                        upload a comment belongs to. */}
+                    {(() => {
+                        const files = row.documents && row.documents.length ? row.documents : [doc];
+                        const multi = files.length > 1;
+                        return (
+                            <div className="ml-6 space-y-3">
+                                {files.map((d) => {
+                                    const dThreads = threadsByDoc.get(d.id) || [];
+                                    return (
+                                        <div key={d.id} className="space-y-1.5">
+                                            {multi && (
+                                                <p className="text-[10.5px] font-semibold text-gray-500 inline-flex items-center gap-1.5 border-l-2 border-gray-200 pl-2">
+                                                    <FileText size={11} className="text-gray-400" /> {d.original_name}
+                                                </p>
+                                            )}
+                                            {dThreads.map((t) => (
+                                                <ThreadItem key={t.id} thread={t} leadId={leadId} />
+                                            ))}
+                                            <ThreadComposer
+                                                leadId={leadId}
+                                                caseStaff={caseStaff}
+                                                fixedAnchor={{ anchor_type: "document", anchor_id: d.id }}
+                                                compact
+                                                plain
+                                                placeholder={multi ? `Comment on ${d.original_name}…` : `Comment on ${row.label}…`}
+                                            />
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        );
+                    })()}
                 </td>
             </tr>
         )}
