@@ -1450,6 +1450,7 @@ function DetailField({ label, value }) {
 
 function StagePicker({ caseId, stages, value, fallback, open, onToggle, onClose }) {
     const [saving, setSaving] = useState(false);
+    const [declineOpen, setDeclineOpen] = useState(false);
     const [coords, setCoords] = useState({ top: 0, left: 0, openUp: false });
     const triggerRef = useRef(null);
     const menuRef = useRef(null);
@@ -1497,6 +1498,13 @@ function StagePicker({ caseId, stages, value, fallback, open, onToggle, onClose 
     const chipClass = value ? stageChipClass(value) : 'bg-gray-100 text-gray-500 border-gray-200 border-dashed';
 
     const select = (stage) => {
+        // Declining a visa is more than a stage flip — it opens a modal to
+        // attach the decline letter, add a note, and email the client.
+        if (stage === "Decline Visa") {
+            onClose();
+            setDeclineOpen(true);
+            return;
+        }
         setSaving(true);
         onClose();
         router.post(
@@ -1568,7 +1576,114 @@ function StagePicker({ caseId, stages, value, fallback, open, onToggle, onClose 
                 </div>,
                 document.body
             )}
+
+            {declineOpen && (
+                <DeclineVisaModal caseId={caseId} onClose={() => setDeclineOpen(false)} />
+            )}
         </>
+    );
+}
+
+// ─── Decline Visa modal ─────────────────────────────────────────────────
+// Opens when a case is moved to "Decline Visa". Attaches an optional decline
+// letter (shared to the client), an optional note, and optionally emails the
+// client. Posts to the decline endpoint which does the stage move + record.
+function DeclineVisaModal({ caseId, onClose }) {
+    const [file, setFile] = useState(null);
+    const [note, setNote] = useState("");
+    const [notify, setNotify] = useState(true);
+    const [saving, setSaving] = useState(false);
+
+    useEffect(() => {
+        const onKey = (e) => { if (e.key === "Escape") onClose(); };
+        window.addEventListener("keydown", onKey);
+        return () => window.removeEventListener("keydown", onKey);
+    }, [onClose]);
+
+    const submit = () => {
+        if (saving) return;
+        setSaving(true);
+        router.post(
+            `/portal/immigration/cases/${caseId}/decline`,
+            { document: file, note, notify: notify ? 1 : 0 },
+            {
+                forceFormData: true,
+                preserveScroll: true,
+                onSuccess: () => { toast.success("Case moved to Decline Visa"); onClose(); },
+                onError: (e) => toast.error(Object.values(e)[0] || "Could not save"),
+                onFinish: () => setSaving(false),
+            }
+        );
+    };
+
+    return createPortal(
+        <div className="fixed inset-0 z-[70] bg-black/40 flex items-center justify-center p-4" role="dialog" aria-modal="true" onClick={onClose}>
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg" onClick={(e) => e.stopPropagation()}>
+                <header className="px-5 py-4 border-b border-gray-100 flex items-start justify-between gap-3">
+                    <div>
+                        <h2 className="text-sm font-bold text-gray-900 inline-flex items-center gap-2">
+                            <AlertTriangle size={15} className="text-rose-500" /> Decline visa
+                        </h2>
+                        <p className="text-[11px] text-gray-500 mt-0.5">Attach the decline letter and note. Both are optional.</p>
+                    </div>
+                    <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-700"><X size={16} /></button>
+                </header>
+
+                <div className="px-5 py-4 space-y-4">
+                    {/* Document upload */}
+                    <div>
+                        <label className="block text-[11px] font-semibold text-gray-700 uppercase tracking-wider mb-1.5">Decline letter (optional)</label>
+                        <label className="flex items-center gap-2 px-3 py-2.5 rounded-lg border border-dashed border-gray-300 cursor-pointer hover:border-gray-400 text-[12px] text-gray-600">
+                            <Paperclip size={14} className="text-gray-400" />
+                            <span className="truncate">{file ? file.name : "Choose a file (PDF, DOC, image)"}</span>
+                            <input
+                                type="file"
+                                accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                                className="hidden"
+                                onChange={(e) => setFile(e.target.files?.[0] || null)}
+                            />
+                        </label>
+                        {file && (
+                            <button type="button" onClick={() => setFile(null)} className="mt-1 text-[11px] text-gray-400 hover:text-rose-600">Remove file</button>
+                        )}
+                        <p className="text-[10px] text-gray-400 mt-1">Shared to the client's portal and shown on the Documents tab.</p>
+                    </div>
+
+                    {/* Note */}
+                    <div>
+                        <label className="block text-[11px] font-semibold text-gray-700 uppercase tracking-wider mb-1.5">Note to include (optional)</label>
+                        <textarea
+                            value={note}
+                            onChange={(e) => setNote(e.target.value)}
+                            rows={4}
+                            maxLength={2000}
+                            placeholder="Any message for the record and the client email…"
+                            className="w-full text-sm px-3 py-2 border border-gray-200 rounded-md focus:outline-none focus:border-gray-900 resize-none"
+                        />
+                    </div>
+
+                    {/* Email toggle */}
+                    <label className="inline-flex items-center gap-2 text-[12px] text-gray-700 cursor-pointer">
+                        <input type="checkbox" checked={notify} onChange={(e) => setNotify(e.target.checked)} className="rounded border-gray-300" />
+                        <Mail size={13} className="text-gray-400" /> Email the client this update
+                    </label>
+                </div>
+
+                <footer className="px-5 py-3 border-t border-gray-100 flex items-center justify-end gap-2">
+                    <button type="button" onClick={onClose} className="px-3 py-1.5 text-xs font-semibold text-gray-600 hover:text-gray-900">Cancel</button>
+                    <button
+                        type="button"
+                        onClick={submit}
+                        disabled={saving}
+                        className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-md text-xs font-semibold bg-rose-600 text-white hover:bg-rose-700 disabled:opacity-50"
+                    >
+                        {saving ? <Loader2 size={12} className="animate-spin" /> : <AlertTriangle size={12} />}
+                        Confirm decline
+                    </button>
+                </footer>
+            </div>
+        </div>,
+        document.body
     );
 }
 

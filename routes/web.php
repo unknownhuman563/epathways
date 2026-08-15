@@ -1300,6 +1300,9 @@ Route::middleware(['auth'])->group(function () {
             // Inline stage update from the Cases table — mirrors the
             // EducationController dashboard-field pattern.
             Route::post('/cases/{id}/stage', [ImmigrationController::class, 'updateCaseStage'])->name('cases.stage');
+            // Decline outcome — moves to "Decline Visa" with an optional shared
+            // decline letter, note, and client email.
+            Route::post('/cases/{id}/decline', [ImmigrationController::class, 'declineVisa'])->name('cases.decline');
             // Inline visa-type update from the Cases table.
             Route::post('/cases/{id}/visa', [ImmigrationController::class, 'updateCaseVisa'])->name('cases.visa');
             // Inline priority update from the Cases table's expanded row.
@@ -1359,6 +1362,9 @@ Route::middleware(['auth'])->group(function () {
                 ->name('cases.threads.store');
             Route::post('/cases/{lead}/threads/{thread}/resolve', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'resolveThread'])
                 ->name('cases.threads.resolve');
+            // Edit a comment's wording — author (or admin) only.
+            Route::patch('/cases/{lead}/threads/{thread}', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'updateThread'])
+                ->name('cases.threads.update');
 
             // Case financials — fees/invoice record + payment ledger (replaces the
             // spreadsheet money columns). Figures are human-entered; totals derived.

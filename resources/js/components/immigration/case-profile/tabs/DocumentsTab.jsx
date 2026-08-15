@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import {
     FileText, Download, Upload, Eye, Check, Loader2,
     Send, X as XIcon, AlertCircle, Paperclip, ChevronDown, ChevronRight, Plus, MessageSquare,
+    MoreVertical, Trash2,
 } from "lucide-react";
 import CaseFilesModal from "@/components/immigration/CaseFilesModal";
 import { ThreadItem, ThreadComposer } from "@/components/immigration/case-profile/threads";
@@ -44,6 +45,7 @@ const STATUS_TONE = {
 export default function DocumentsTab({
     lead,
     documents = [],
+    documentRequests = [],
     checklist = { items: [] },
     checklistProgress = { required_total: 0, required_approved: 0, total: 0, approved: 0 },
     threads = [],
@@ -129,20 +131,23 @@ export default function DocumentsTab({
         const isEngagement = variant.startsWith("engagement:");
         const isInvoice = variant.startsWith("invoice:");
         const isInz = variant.startsWith("inz:");
+        const isDecline = variant === "decline";
         const isGenerated = d.source === "generated";
         return {
             kind:     "orphan",
             key:      `orphan-${d.id}`,
             label:    d.original_name,
-            category: isInvoice
-                ? "Invoices"
-                : isEngagement
-                    ? "Engagement documents"
-                    : isInz
-                        ? "INZ forms (generated)"
-                        : isGenerated
-                            ? "Generated documents"
-                            : "Other (no checklist match)",
+            category: isDecline
+                ? "Visa outcome"
+                : isInvoice
+                    ? "Invoices"
+                    : isEngagement
+                        ? "Engagement documents"
+                        : isInz
+                            ? "INZ forms (generated)"
+                            : isGenerated
+                                ? "Generated documents"
+                                : "Other (no checklist match)",
             required: false,
             document: d,
         };
@@ -315,19 +320,32 @@ export default function DocumentsTab({
             </div>
 
             {/* Request a document — an ad-hoc request for something not on the
-                checklist. Emails the client and logs a document request. */}
-            <div className="flex items-center justify-between gap-3 rounded-xl border border-dashed border-gray-200 bg-gray-50/50 px-4 py-3">
-                <div className="min-w-0">
-                    <p className="text-[13px] font-semibold text-gray-800">Need something else?</p>
-                    <p className="text-[11px] text-gray-500 mt-0.5">Request a document from the client that isn't on the checklist.</p>
+                checklist. Emails the client and logs a document request. Below
+                the button, the requests already sent (and whether they've been
+                fulfilled) are listed so staff can see what was asked for. */}
+            <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50/50 px-4 py-3">
+                <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                        <p className="text-[13px] font-semibold text-gray-800">Need something else?</p>
+                        <p className="text-[11px] text-gray-500 mt-0.5">Request a document from the client that isn't on the checklist.</p>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={() => setRequestOpen(true)}
+                        className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-gray-900 text-white text-[12px] font-semibold hover:bg-black flex-shrink-0"
+                    >
+                        <Plus size={14} /> Request a document
+                    </button>
                 </div>
-                <button
-                    type="button"
-                    onClick={() => setRequestOpen(true)}
-                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-gray-900 text-white text-[12px] font-semibold hover:bg-black flex-shrink-0"
-                >
-                    <Plus size={14} /> Request a document
-                </button>
+
+                {documentRequests.length > 0 && (
+                    <div className="mt-3 pt-3 border-t border-gray-200 space-y-1.5">
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Requested from client ({documentRequests.length})</p>
+                        {documentRequests.map((r) => (
+                            <RequestRow key={r.id} req={r} leadId={lead.id} />
+                        ))}
+                    </div>
+                )}
             </div>
 
             {requestOpen && (
@@ -476,13 +494,7 @@ function Row({ row, leadId, docThreads = [], threadsByDoc = new Map(), caseStaff
                                 >
                                     <Eye size={12} />
                                 </button>
-                                <a
-                                    href={`/admin/documents/${d.id}/download`}
-                                    title="Download"
-                                    className="inline-flex items-center justify-center p-1.5 rounded-md border border-gray-200 bg-white text-gray-600 hover:text-gray-900 hover:bg-gray-50"
-                                >
-                                    <Download size={12} />
-                                </a>
+                                <FileMenu doc={d} leadId={leadId} />
                             </div>
                         ))}
                         {row.kind === "checklist" && (
@@ -603,7 +615,8 @@ function Row({ row, leadId, docThreads = [], threadsByDoc = new Map(), caseStaff
                             caseStaff={caseStaff}
                             fixedAnchor={{ anchor_type: "document", anchor_id: doc.id }}
                             compact
-                            placeholder={`Ask about ${row.label}…`}
+                            plain
+                            placeholder={`Comment on ${row.label}…`}
                         />
                     </div>
                 </td>
@@ -620,6 +633,94 @@ function Row({ row, leadId, docThreads = [], threadsByDoc = new Map(), caseStaff
             />
         )}
         </Fragment>
+    );
+}
+
+// Per-file actions menu (⋮) — Download + Delete, tucked away to keep the
+// attachment cell tidy. Portal-rendered so the dropdown escapes the scrollable
+// table. Delete asks for a second click to confirm (destructive, irreversible).
+function FileMenu({ doc, leadId }) {
+    const [open, setOpen] = useState(false);
+    const [confirming, setConfirming] = useState(false);
+    const [busy, setBusy] = useState(false);
+    const [coords, setCoords] = useState({ top: 0, left: 0 });
+    const btnRef = useRef(null);
+    const MENU_W = 168;
+
+    useEffect(() => {
+        if (! open) return;
+        const place = () => {
+            const r = btnRef.current?.getBoundingClientRect();
+            if (r) setCoords({ top: r.bottom + 4, left: Math.max(8, Math.min(r.right - MENU_W, window.innerWidth - MENU_W - 8)) });
+        };
+        place();
+        window.addEventListener("scroll", place, true);
+        window.addEventListener("resize", place);
+        return () => { window.removeEventListener("scroll", place, true); window.removeEventListener("resize", place); };
+    }, [open]);
+
+    const close = () => { setOpen(false); setConfirming(false); };
+
+    const del = () => {
+        setBusy(true);
+        router.delete(`/admin/leads/${leadId}/documents/${doc.id}`, {
+            preserveScroll: true,
+            preserveState: true,
+            only: ["documents"],
+            onSuccess: () => toast.success("Document deleted"),
+            onError: (e) => toast.error(Object.values(e)[0] || "Could not delete"),
+            onFinish: () => { setBusy(false); close(); },
+        });
+    };
+
+    return (
+        <>
+            <button
+                ref={btnRef}
+                type="button"
+                onClick={() => setOpen((o) => !o)}
+                title="More"
+                className="inline-flex items-center justify-center p-1.5 rounded-md border border-gray-200 bg-white text-gray-600 hover:text-gray-900 hover:bg-gray-50"
+            >
+                <MoreVertical size={12} />
+            </button>
+            {open && createPortal(
+                <>
+                    <div className="fixed inset-0 z-[59]" onClick={close} />
+                    <div
+                        style={{ position: "fixed", top: coords.top, left: coords.left, width: MENU_W }}
+                        className="z-[60] bg-white rounded-lg shadow-xl border border-gray-100 py-1"
+                    >
+                        <a
+                            href={`/admin/documents/${doc.id}/download`}
+                            onClick={close}
+                            className="flex items-center gap-2 px-3 py-1.5 text-[12px] text-gray-700 hover:bg-gray-50"
+                        >
+                            <Download size={13} className="text-gray-400" /> Download
+                        </a>
+                        {! confirming ? (
+                            <button
+                                type="button"
+                                onClick={() => setConfirming(true)}
+                                className="w-full text-left flex items-center gap-2 px-3 py-1.5 text-[12px] text-rose-600 hover:bg-rose-50"
+                            >
+                                <Trash2 size={13} /> Delete
+                            </button>
+                        ) : (
+                            <button
+                                type="button"
+                                onClick={del}
+                                disabled={busy}
+                                className="w-full text-left flex items-center gap-2 px-3 py-1.5 text-[12px] font-semibold text-white bg-rose-600 hover:bg-rose-700 disabled:opacity-50"
+                            >
+                                {busy ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />} Click to confirm
+                            </button>
+                        )}
+                    </div>
+                </>,
+                document.body,
+            )}
+        </>
     );
 }
 
@@ -685,6 +786,7 @@ function DocPreviewModal({ doc, label, leadId, caseStaff = [], threads = [], onC
                             caseStaff={caseStaff}
                             fixedAnchor={{ anchor_type: "document", anchor_id: doc.id }}
                             compact
+                            plain
                             placeholder="Add a comment…"
                         />
                     </div>
@@ -1032,6 +1134,57 @@ function RequestFromClient({ leadId, rowLabel, rowRequired }) {
                 document.body,
             )}
         </>
+    );
+}
+
+// One sent request — what was asked for, when/by whom, whether it's arrived,
+// and a control to withdraw it.
+function RequestRow({ req, leadId }) {
+    const [busy, setBusy] = useState(false);
+    const cancel = () => {
+        if (busy) return;
+        setBusy(true);
+        router.delete(`/admin/leads/${leadId}/documents/requests/${req.id}`, {
+            preserveScroll: true,
+            preserveState: true,
+            onSuccess: () => toast.success("Request removed"),
+            onError: (e) => toast.error(Object.values(e)[0] || "Could not remove"),
+            onFinish: () => setBusy(false),
+        });
+    };
+    const fmt = (iso) => (iso ? new Date(iso).toLocaleDateString("en-NZ", { day: "numeric", month: "short" }) : "");
+
+    return (
+        <div className="flex items-center gap-2 bg-white rounded-lg border border-gray-100 px-3 py-2">
+            <FileText size={13} className="text-gray-400 flex-shrink-0" />
+            <div className="min-w-0 flex-1">
+                <p className="text-[12px] font-medium text-gray-800 truncate">
+                    {req.label}{req.required && <span className="text-rose-500"> *</span>}
+                </p>
+                {req.description && <p className="text-[10.5px] text-gray-400 truncate">{req.description}</p>}
+                <p className="text-[10px] text-gray-400">
+                    Requested {fmt(req.requested_at)}{req.requested_by ? ` · ${req.requested_by}` : ""}
+                </p>
+            </div>
+            {req.fulfilled ? (
+                <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                    <Check size={10} /> Received
+                </span>
+            ) : (
+                <span className="inline-flex items-center text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
+                    Waiting
+                </span>
+            )}
+            <button
+                type="button"
+                onClick={cancel}
+                disabled={busy}
+                title="Withdraw this request"
+                className="p-1 rounded-md text-gray-300 hover:text-rose-600 disabled:opacity-50"
+            >
+                {busy ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
+            </button>
+        </div>
     );
 }
 
