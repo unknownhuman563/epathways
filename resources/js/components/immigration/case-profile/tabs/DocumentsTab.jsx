@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import {
     FileText, Download, Upload, Eye, Check, Loader2,
     Send, X as XIcon, AlertCircle, Paperclip, ChevronDown, ChevronRight, Plus, MessageSquare,
+    MoreVertical, Trash2,
 } from "lucide-react";
 import CaseFilesModal from "@/components/immigration/CaseFilesModal";
 import { ThreadItem, ThreadComposer } from "@/components/immigration/case-profile/threads";
@@ -129,20 +130,23 @@ export default function DocumentsTab({
         const isEngagement = variant.startsWith("engagement:");
         const isInvoice = variant.startsWith("invoice:");
         const isInz = variant.startsWith("inz:");
+        const isDecline = variant === "decline";
         const isGenerated = d.source === "generated";
         return {
             kind:     "orphan",
             key:      `orphan-${d.id}`,
             label:    d.original_name,
-            category: isInvoice
-                ? "Invoices"
-                : isEngagement
-                    ? "Engagement documents"
-                    : isInz
-                        ? "INZ forms (generated)"
-                        : isGenerated
-                            ? "Generated documents"
-                            : "Other (no checklist match)",
+            category: isDecline
+                ? "Visa outcome"
+                : isInvoice
+                    ? "Invoices"
+                    : isEngagement
+                        ? "Engagement documents"
+                        : isInz
+                            ? "INZ forms (generated)"
+                            : isGenerated
+                                ? "Generated documents"
+                                : "Other (no checklist match)",
             required: false,
             document: d,
         };
@@ -476,13 +480,7 @@ function Row({ row, leadId, docThreads = [], threadsByDoc = new Map(), caseStaff
                                 >
                                     <Eye size={12} />
                                 </button>
-                                <a
-                                    href={`/admin/documents/${d.id}/download`}
-                                    title="Download"
-                                    className="inline-flex items-center justify-center p-1.5 rounded-md border border-gray-200 bg-white text-gray-600 hover:text-gray-900 hover:bg-gray-50"
-                                >
-                                    <Download size={12} />
-                                </a>
+                                <FileMenu doc={d} leadId={leadId} />
                             </div>
                         ))}
                         {row.kind === "checklist" && (
@@ -603,7 +601,8 @@ function Row({ row, leadId, docThreads = [], threadsByDoc = new Map(), caseStaff
                             caseStaff={caseStaff}
                             fixedAnchor={{ anchor_type: "document", anchor_id: doc.id }}
                             compact
-                            placeholder={`Ask about ${row.label}…`}
+                            plain
+                            placeholder={`Comment on ${row.label}…`}
                         />
                     </div>
                 </td>
@@ -620,6 +619,94 @@ function Row({ row, leadId, docThreads = [], threadsByDoc = new Map(), caseStaff
             />
         )}
         </Fragment>
+    );
+}
+
+// Per-file actions menu (⋮) — Download + Delete, tucked away to keep the
+// attachment cell tidy. Portal-rendered so the dropdown escapes the scrollable
+// table. Delete asks for a second click to confirm (destructive, irreversible).
+function FileMenu({ doc, leadId }) {
+    const [open, setOpen] = useState(false);
+    const [confirming, setConfirming] = useState(false);
+    const [busy, setBusy] = useState(false);
+    const [coords, setCoords] = useState({ top: 0, left: 0 });
+    const btnRef = useRef(null);
+    const MENU_W = 168;
+
+    useEffect(() => {
+        if (! open) return;
+        const place = () => {
+            const r = btnRef.current?.getBoundingClientRect();
+            if (r) setCoords({ top: r.bottom + 4, left: Math.max(8, Math.min(r.right - MENU_W, window.innerWidth - MENU_W - 8)) });
+        };
+        place();
+        window.addEventListener("scroll", place, true);
+        window.addEventListener("resize", place);
+        return () => { window.removeEventListener("scroll", place, true); window.removeEventListener("resize", place); };
+    }, [open]);
+
+    const close = () => { setOpen(false); setConfirming(false); };
+
+    const del = () => {
+        setBusy(true);
+        router.delete(`/admin/leads/${leadId}/documents/${doc.id}`, {
+            preserveScroll: true,
+            preserveState: true,
+            only: ["documents"],
+            onSuccess: () => toast.success("Document deleted"),
+            onError: (e) => toast.error(Object.values(e)[0] || "Could not delete"),
+            onFinish: () => { setBusy(false); close(); },
+        });
+    };
+
+    return (
+        <>
+            <button
+                ref={btnRef}
+                type="button"
+                onClick={() => setOpen((o) => !o)}
+                title="More"
+                className="inline-flex items-center justify-center p-1.5 rounded-md border border-gray-200 bg-white text-gray-600 hover:text-gray-900 hover:bg-gray-50"
+            >
+                <MoreVertical size={12} />
+            </button>
+            {open && createPortal(
+                <>
+                    <div className="fixed inset-0 z-[59]" onClick={close} />
+                    <div
+                        style={{ position: "fixed", top: coords.top, left: coords.left, width: MENU_W }}
+                        className="z-[60] bg-white rounded-lg shadow-xl border border-gray-100 py-1"
+                    >
+                        <a
+                            href={`/admin/documents/${doc.id}/download`}
+                            onClick={close}
+                            className="flex items-center gap-2 px-3 py-1.5 text-[12px] text-gray-700 hover:bg-gray-50"
+                        >
+                            <Download size={13} className="text-gray-400" /> Download
+                        </a>
+                        {! confirming ? (
+                            <button
+                                type="button"
+                                onClick={() => setConfirming(true)}
+                                className="w-full text-left flex items-center gap-2 px-3 py-1.5 text-[12px] text-rose-600 hover:bg-rose-50"
+                            >
+                                <Trash2 size={13} /> Delete
+                            </button>
+                        ) : (
+                            <button
+                                type="button"
+                                onClick={del}
+                                disabled={busy}
+                                className="w-full text-left flex items-center gap-2 px-3 py-1.5 text-[12px] font-semibold text-white bg-rose-600 hover:bg-rose-700 disabled:opacity-50"
+                            >
+                                {busy ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />} Click to confirm
+                            </button>
+                        )}
+                    </div>
+                </>,
+                document.body,
+            )}
+        </>
     );
 }
 
@@ -685,6 +772,7 @@ function DocPreviewModal({ doc, label, leadId, caseStaff = [], threads = [], onC
                             caseStaff={caseStaff}
                             fixedAnchor={{ anchor_type: "document", anchor_id: doc.id }}
                             compact
+                            plain
                             placeholder="Add a comment…"
                         />
                     </div>

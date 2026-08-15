@@ -1163,6 +1163,96 @@ class ImmigrationController extends Controller
     }
 
     /**
+     * Move a case to "Decline Visa" with the decline record: an optional decline
+     * letter (shared to the client) and an optional note, plus an optional email
+     * to the client. The document is stored as a StaffShared LeadDocument so it
+     * appears BOTH on the staff Documents tab and in the client's portal.
+     */
+    public function declineVisa(\Illuminate\Http\Request $request, $id)
+    {
+        $lead = Lead::immigrationCase()->findOrFail($id);
+
+        $data = $request->validate([
+            'note' => ['nullable', 'string', 'max:2000'],
+            'document' => ['nullable', 'file', 'mimes:pdf,doc,docx,jpg,jpeg,png', 'max:10240'],
+            'notify' => ['nullable', 'boolean'],
+        ]);
+
+        $stage = 'Decline Visa';
+
+        // Mirror updateCaseStage: when the case is on the process chain, jump it
+        // through the steps; otherwise write the column directly with history.
+        $steps = app(\App\Services\Immigration\CaseStepService::class);
+        $movedViaChain = $steps->hasChain($lead) && $steps->jumpToStage($lead, $stage, auth()->user());
+        if (! $movedViaChain && ($lead->immigration_stage ?? null) !== $stage) {
+            $lead->immigration_stage = $stage;
+            $lead->stage_updated_at = now();
+            $lead->stage_updated_by = auth()->id();
+            $lead->pushStageHistory('immigration', $stage, $lead->immigration_assignee);
+        }
+
+        // Record the decline outcome + optional details on the case.
+        $lead->has_been_declined_visa = true;
+        if (! empty($data['note'])) {
+            $lead->declined_visa_details = $data['note'];
+        }
+        $lead->save();
+
+        // Optional decline letter — StaffShared so it surfaces on the Documents
+        // tab and in the client portal's "shared with you" list.
+        $doc = null;
+        if ($request->hasFile('document')) {
+            $file = $request->file('document');
+            $path = $file->store("lead-documents/{$lead->id}", 'local');
+            $doc = \App\Models\LeadDocument::create([
+                'lead_id' => $lead->id,
+                'checklist_key' => null,
+                'original_name' => $file->getClientOriginalName() ?: 'Visa decline letter',
+                'file_path' => $path,
+                'mime' => $file->getClientMimeType(),
+                'size' => $file->getSize(),
+                'source' => 'upload',
+                'source_variant' => 'decline',
+                'status' => \App\Models\LeadDocument::STATUS_STAFF_SHARED,
+                'uploaded_by' => auth()->id(),
+                'note' => $data['note'] ?? null,
+            ]);
+        }
+
+        // Optional email to the client — DISABLED for now (kept for when the
+        // decline-notification copy is signed off). The `notify` flag is still
+        // accepted and the document/note are recorded; only the send is paused.
+        // To re-enable, uncomment the block below.
+        //
+        // if (! empty($data['notify']) && $lead->email) {
+        //     try {
+        //         $name = trim((string) $lead->first_name) ?: 'there';
+        //         $lines = ["Dear {$name},", '', 'We are writing with an update on your visa application. Immigration New Zealand has declined the application.'];
+        //         if (! empty($data['note'])) {
+        //             $lines[] = '';
+        //             $lines[] = $data['note'];
+        //         }
+        //         if ($doc) {
+        //             $lines[] = '';
+        //             $lines[] = 'A related document has been shared to your client portal, where you can view it securely.';
+        //         }
+        //         $lines[] = '';
+        //         $lines[] = 'Please contact us if you would like to discuss the next steps.';
+        //         $body = nl2br(e(implode("\n", $lines)));
+        //         app(\App\Services\CommunicationService::class)
+        //             ->sendRaw('email', $lead, 'An update on your visa application', $body);
+        //     } catch (\Throwable $e) {
+        //         Log::warning('Decline email failed', ['lead_id' => $lead->id, 'error' => $e->getMessage()]);
+        //     }
+        // }
+
+        $lead->recordStaffActivity('Marked visa declined'.($doc ? ' + shared decline letter' : ''));
+        \App\Jobs\EvaluateCaseFindings::dispatch($lead->id);
+
+        return back()->with('success', 'Case moved to Decline Visa.');
+    }
+
+    /**
      * Inline priority update from the Cases table's expanded row.
      */
     public function updateCasePriority(\Illuminate\Http\Request $request, $id)

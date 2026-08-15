@@ -737,6 +737,9 @@ class CaseProfileController extends Controller
      */
     private function loadThreads(Lead $lead): array
     {
+        $userId = auth()->id();
+        $isAdmin = (bool) (auth()->user()?->isAtLeast('admin'));
+
         return \App\Models\CaseThread::query()
             ->where('lead_id', $lead->id)
             ->with(['author:id,name', 'addressedTo:id,name', 'resolver:id,name'])
@@ -756,6 +759,8 @@ class CaseProfileController extends Controller
                 'resolved_at' => optional($t->resolved_at)->toIso8601String(),
                 'resolved_by' => $t->resolver?->name,
                 'created_at' => optional($t->created_at)->toIso8601String(),
+                // The author (or an admin) may edit the wording of their own comment.
+                'can_edit' => ($t->author_id && $t->author_id === $userId) || $isAdmin,
             ])
             ->all();
     }
@@ -1102,6 +1107,22 @@ class CaseProfileController extends Controller
         }
 
         return back()->with('success', 'Thread resolved.');
+    }
+
+    /** Edit a comment/thread's wording — author (or admin) only. */
+    public function updateThread(Request $request, Lead $lead, \App\Models\CaseThread $thread)
+    {
+        $user = $this->guardCase($lead);
+        abort_unless($thread->lead_id === $lead->id, 404);
+        abort_unless(
+            ($thread->author_id && $thread->author_id === $user->id) || $user->isAtLeast('admin'),
+            403,
+        );
+
+        $data = $request->validate(['body' => ['required', 'string', 'max:2000']]);
+        $thread->update(['body' => $data['body']]);
+
+        return back()->with('success', 'Comment updated.');
     }
 
     /** Start (instantiate) the step chain for a case. */
