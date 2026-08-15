@@ -260,12 +260,11 @@ export default function DocumentsTab({
                     <table className="w-full text-sm">
                         <thead>
                             <tr className="bg-gray-50 border-b border-gray-100 text-[10.5px] font-bold uppercase tracking-wider text-gray-500">
-                                <th className="text-left px-4 py-2.5 w-[22%]">Document</th>
-                                <th className="text-left px-4 py-2.5 w-[16%]">Attachment</th>
-                                <th className="text-left px-4 py-2.5 w-[24%]">Comments</th>
-                                <th className="text-left px-4 py-2.5 w-[12%]">Status</th>
-                                <th className="text-left px-4 py-2.5 w-[14%]">Reviewed by</th>
-                                <th className="text-left px-4 py-2.5 w-[12%]">Notes</th>
+                                <th className="text-left px-4 py-2.5 w-[30%]">Document</th>
+                                <th className="text-left px-4 py-2.5 w-[22%]">Attachment</th>
+                                <th className="text-left px-4 py-2.5 w-[14%]">Status</th>
+                                <th className="text-left px-4 py-2.5 w-[18%]">Reviewed by</th>
+                                <th className="text-left px-4 py-2.5 w-[16%]">Notes</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -276,7 +275,7 @@ export default function DocumentsTab({
                                 return (
                                     <Fragment key={category}>
                                         <tr className="bg-gray-200 border-y border-gray-300">
-                                            <td colSpan={6} className="px-4 py-2">
+                                            <td colSpan={5} className="px-4 py-2">
                                                 <div className="flex items-center gap-2">
                                                     {checklistRows.length > 0 && (
                                                         <SectionSelectAll leadId={lead.id} rows={checklistRows} />
@@ -520,45 +519,6 @@ function Row({ row, leadId, docThreads = [], threadsByDoc = new Map(), caseStaff
                 )}
             </td>
 
-            {/* Comments — per file, right beside the attachment. A checklist slot
-                can hold several uploads and each keeps its own thread, labelled by
-                filename when there's more than one. */}
-            <td className="px-4 py-3">
-                {doc ? (() => {
-                    const files = row.documents && row.documents.length ? row.documents : [doc];
-                    const multi = files.length > 1;
-                    return (
-                        <div className="space-y-2.5">
-                            {files.map((d) => {
-                                const dThreads = threadsByDoc.get(d.id) || [];
-                                return (
-                                    <div key={d.id} className="space-y-1.5">
-                                        {multi && (
-                                            <p className="text-[10px] font-semibold text-gray-500 inline-flex items-center gap-1 border-l-2 border-gray-200 pl-1.5 truncate max-w-full">
-                                                <FileText size={10} className="text-gray-400 flex-shrink-0" /> {d.original_name}
-                                            </p>
-                                        )}
-                                        {dThreads.map((t) => (
-                                            <ThreadItem key={t.id} thread={t} leadId={leadId} />
-                                        ))}
-                                        <ThreadComposer
-                                            leadId={leadId}
-                                            caseStaff={caseStaff}
-                                            fixedAnchor={{ anchor_type: "document", anchor_id: d.id }}
-                                            compact
-                                            plain
-                                            placeholder="Add a comment…"
-                                        />
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    );
-                })() : (
-                    <span className="text-[11px] text-gray-300">—</span>
-                )}
-            </td>
-
             {/* Status dropdown — disabled when nothing's been uploaded yet */}
             <td className="px-4 py-3">
                 {doc ? (
@@ -634,6 +594,47 @@ function Row({ row, leadId, docThreads = [], threadsByDoc = new Map(), caseStaff
                 />
             )}
         </tr>
+        {/* Comments render full-width below the row. They're per FILE — a
+            checklist slot can hold several uploads (e.g. two Passport.pdf), and
+            each keeps its own thread, labelled by filename when there's more
+            than one. */}
+        {doc && (
+            <tr className="border-b border-gray-50 last:border-b-0">
+                <td colSpan={5} className="px-4 pb-3 pt-0">
+                    {(() => {
+                        const files = row.documents && row.documents.length ? row.documents : [doc];
+                        const multi = files.length > 1;
+                        return (
+                            <div className="ml-6 space-y-3">
+                                {files.map((d) => {
+                                    const dThreads = threadsByDoc.get(d.id) || [];
+                                    return (
+                                        <div key={d.id} className="space-y-1.5">
+                                            {multi && (
+                                                <p className="text-[10.5px] font-semibold text-gray-500 inline-flex items-center gap-1.5 border-l-2 border-gray-200 pl-2">
+                                                    <FileText size={11} className="text-gray-400" /> {d.original_name}
+                                                </p>
+                                            )}
+                                            {dThreads.map((t) => (
+                                                <ThreadItem key={t.id} thread={t} leadId={leadId} />
+                                            ))}
+                                            <ThreadComposer
+                                                leadId={leadId}
+                                                caseStaff={caseStaff}
+                                                fixedAnchor={{ anchor_type: "document", anchor_id: d.id }}
+                                                compact
+                                                plain
+                                                placeholder={multi ? `Comment on ${d.original_name}…` : `Comment on ${row.label}…`}
+                                            />
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        );
+                    })()}
+                </td>
+            </tr>
+        )}
         {previewDoc && (
             <DocPreviewModal
                 doc={previewDoc}
