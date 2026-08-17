@@ -28,7 +28,17 @@ const legacyImages = Object.keys(imageFiles).map((path) => {
  * `visaApprovals` prop). Falls back to the legacy bundled images if
  * no DB rows exist yet.
  */
-export default function VisaApprovedShowcase({ visaApprovals = [] }) {
+export default function VisaApprovedShowcase({
+    visaApprovals = [],
+    eyebrow = "Success Stories",
+    titlePre = "Visa Approved",
+    titleHi = "Milestones",
+    intro = "Every approval is a step towards a new life. We celebrate the success of our clients who have successfully obtained their New Zealand visas through ePathways.",
+    cardSubtitle = "New Zealand Student ePathways",
+    viewAllHref = "/visa-approved",
+    allowLegacy = true,   // fall back to the bundled sample images (student only)
+    hideIfEmpty = false,  // artist section: render nothing when there's no data
+}) {
     const initialItems = 4; // 1 row of 4 on desktop
 
     // Adapter — DB approvals → shape the card expects.
@@ -40,8 +50,10 @@ export default function VisaApprovedShowcase({ visaApprovals = [] }) {
         batch:   v.batch_label || 'Approved',
     })).filter((v) => v.src); // only render entries with a photo
 
-    const source = fromDb.length > 0 ? fromDb : legacyImages;
+    const source = fromDb.length > 0 ? fromDb : (allowLegacy ? legacyImages : []);
     const displayedImages = source.slice(0, initialItems);
+
+    if (hideIfEmpty && source.length === 0) return null;
 
     return (
         <section className="py-16 sm:py-20 md:py-24 bg-white font-urbanist overflow-hidden">
@@ -49,15 +61,14 @@ export default function VisaApprovedShowcase({ visaApprovals = [] }) {
                 {/* Section Header */}
                 <div className="mb-12 sm:mb-16 md:mb-20">
                     <div className="flex items-center gap-2 mb-4">
-                        <span className="text-[10px] font-bold text-[#436235] uppercase tracking-[0.3em]">Success Stories</span>
+                        <span className="text-[10px] font-bold text-[#436235] uppercase tracking-[0.3em]">{eyebrow}</span>
                         <div className="h-px w-8 bg-[#436235]"></div>
                     </div>
                     <h2 className="text-3xl sm:text-4xl md:text-5xl font-black text-[#282728] leading-tight mb-4 sm:mb-6">
-                        Visa Approved <span className="text-[#436235]">Milestones</span>
+                        {titlePre} <span className="text-[#436235]">{titleHi}</span>
                     </h2>
                     <p className="text-gray-600 text-sm sm:text-base font-light leading-relaxed">
-                        Every approval is a step towards a new life. We celebrate the success of our clients who
-                        have successfully obtained their New Zealand visas through ePathways.
+                        {intro}
                     </p>
                 </div>
 
@@ -89,7 +100,7 @@ export default function VisaApprovedShowcase({ visaApprovals = [] }) {
                                         <div className="flex items-end justify-between mb-4">
                                             <div>
                                                 <h3 className="text-lg md:text-xl font-bold text-white mb-1 tracking-tight">Visa Approved</h3>
-                                                <p className="text-[10px] text-gray-500 font-medium uppercase tracking-widest">New Zealand Student ePathways</p>
+                                                <p className="text-[10px] text-gray-500 font-medium uppercase tracking-widest">{cardSubtitle}</p>
                                             </div>
                                             <div className="text-right">
                                                 <span className="text-base md:text-lg font-black text-white">100%</span>
@@ -117,8 +128,8 @@ export default function VisaApprovedShowcase({ visaApprovals = [] }) {
                 {/* View More Button */}
                 {source.length > initialItems && (
                     <div className="flex justify-center">
-                        <Link 
-                            href="/visa-approved"
+                        <Link
+                            href={viewAllHref}
                             className="group flex flex-col items-center gap-4 text-[#282728] transition-all hover:text-[#436235]"
                         >
                             <span className="text-xs font-bold uppercase tracking-[0.4em]">View All Success Stories</span>

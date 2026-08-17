@@ -23,8 +23,9 @@ const legacyImages = Object.keys(imageFiles).map((path) => {
     };
 }).sort((a, b) => (a.id > b.id ? 1 : -1));
 
-export default function VisaApproved({ visaApprovals = [] }) {
+export default function VisaApproved({ visaApprovals = [], category = 'student' }) {
     const [filter, setFilter] = useState('all');
+    const isArtist = category === 'artist';
 
     // DB adapter — only rows with an actual image render.
     const fromDb = (visaApprovals || []).map((v) => ({
@@ -35,7 +36,8 @@ export default function VisaApproved({ visaApprovals = [] }) {
         batch:   v.batch_label || 'Approved',
     })).filter((v) => v.src);
 
-    const approvedImages = fromDb.length > 0 ? fromDb : legacyImages;
+    // Legacy bundled samples are student-only; the artist gallery shows just its data.
+    const approvedImages = fromDb.length > 0 ? fromDb : (isArtist ? [] : legacyImages);
 
     // Build filter chips dynamically from the actual data so we never
     // show a chip that would filter to an empty set.
@@ -71,15 +73,18 @@ export default function VisaApproved({ visaApprovals = [] }) {
                 
                 <div className="relative z-10 text-center px-4">
                     <div className="flex items-center justify-center gap-2 mb-4">
-                        <span className="text-[10px] font-bold text-[#436235] uppercase tracking-[0.3em]">Visa Approvals</span>
+                        <span className="text-[10px] font-bold text-[#436235] uppercase tracking-[0.3em]">{isArtist ? 'Artists' : 'Visa Approvals'}</span>
                         <div className="h-px w-8 bg-[#436235]"></div>
                     </div>
                     <h1 className="text-4xl md:text-6xl font-black text-[#282728] mb-4">
-                        All <span className="text-[#436235]">Success Stories</span>
+                        {isArtist
+                            ? <>Artists We've <span className="text-[#436235]">Helped</span></>
+                            : <>All <span className="text-[#436235]">Success Stories</span></>}
                     </h1>
                     <p className="text-lg text-gray-600 max-w-2xl mx-auto font-light leading-relaxed">
-                        Every approval is a step towards a new life. We celebrate the success of our clients who
-                        have successfully obtained their New Zealand visas through ePathways.
+                        {isArtist
+                            ? "Celebrating the artists and performers we've supported in bringing unforgettable concerts, shows, and live experiences to audiences across New Zealand."
+                            : "Every approval is a step towards a new life. We celebrate the success of our clients who have successfully obtained their New Zealand visas through ePathways."}
                     </p>
                 </div>
             </section>

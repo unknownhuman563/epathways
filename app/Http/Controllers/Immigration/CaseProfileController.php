@@ -80,6 +80,9 @@ class CaseProfileController extends Controller
             'intake' => $intake ? ['type' => $intakeType, 'data' => $intake] : null,
             'assessmentCompleteness' => $completeness,
             'documents' => $this->loadDocuments($lead),
+            // Ad-hoc document requests sent to the client (what was asked for,
+            // when, by whom, and whether it's been fulfilled yet).
+            'documentRequests' => $this->loadDocumentRequests($lead),
             // The Visa Information Form (official assessment PDF) — surfaced only
             // when the case's visa checklist connects a VIF item.
             'vif' => $hasVifItem ? $this->resolveVif($intakeType, $intake) : null,
@@ -737,6 +740,9 @@ class CaseProfileController extends Controller
      */
     private function loadThreads(Lead $lead): array
     {
+        $userId = auth()->id();
+        $isAdmin = (bool) (auth()->user()?->isAtLeast('admin'));
+
         return \App\Models\CaseThread::query()
             ->where('lead_id', $lead->id)
             ->with(['author:id,name', 'addressedTo:id,name', 'resolver:id,name'])
@@ -756,6 +762,8 @@ class CaseProfileController extends Controller
                 'resolved_at' => optional($t->resolved_at)->toIso8601String(),
                 'resolved_by' => $t->resolver?->name,
                 'created_at' => optional($t->created_at)->toIso8601String(),
+                // The author (or an admin) may edit the wording of their own comment.
+                'can_edit' => ($t->author_id && $t->author_id === $userId) || $isAdmin,
             ])
             ->all();
     }
@@ -1102,6 +1110,22 @@ class CaseProfileController extends Controller
         }
 
         return back()->with('success', 'Thread resolved.');
+    }
+
+    /** Edit a comment/thread's wording — author (or admin) only. */
+    public function updateThread(Request $request, Lead $lead, \App\Models\CaseThread $thread)
+    {
+        $user = $this->guardCase($lead);
+        abort_unless($thread->lead_id === $lead->id, 404);
+        abort_unless(
+            ($thread->author_id && $thread->author_id === $user->id) || $user->isAtLeast('admin'),
+            403,
+        );
+
+        $data = $request->validate(['body' => ['required', 'string', 'max:2000']]);
+        $thread->update(['body' => $data['body']]);
+
+        return back()->with('success', 'Comment updated.');
     }
 
     /** Start (instantiate) the step chain for a case. */
@@ -1522,6 +1546,29 @@ class CaseProfileController extends Controller
                 'reviewed_by' => optional($d->reviewer)->name,
                 'reviewed_by_role' => optional($d->reviewer)->role,
                 'created_at' => $d->created_at,
+            ])
+            ->all();
+    }
+
+    /**
+     * Ad-hoc document requests sent to the client — what was asked for, when,
+     * by whom, and whether a file has since come in against it (fulfilled).
+     */
+    private function loadDocumentRequests(Lead $lead): array
+    {
+        return $lead->documentRequests()
+            ->with(['requester:id,name', 'latestDocument:id,request_id,status,original_name'])
+            ->orderByDesc('created_at')
+            ->get()
+            ->map(fn (\App\Models\LeadDocumentRequest $r) => [
+                'id' => $r->id,
+                'label' => $r->label,
+                'description' => $r->description,
+                'required' => (bool) $r->required,
+                'requested_by' => optional($r->requester)->name,
+                'requested_at' => optional($r->requested_at ?? $r->created_at)->toIso8601String(),
+                'fulfilled' => (bool) $r->latestDocument,
+                'fulfilled_name' => optional($r->latestDocument)->original_name,
             ])
             ->all();
     }

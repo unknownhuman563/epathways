@@ -180,6 +180,11 @@ function Row({ item, onEdit, onDelete, onToggleFeatured }) {
             <td className="px-4 py-3">
                 <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-sm font-semibold text-gray-900">{item.display_name}</span>
+                    {item.category === 'artist' && (
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-purple-50 text-purple-700 border border-purple-100">
+                            Artist
+                        </span>
+                    )}
                     {item.is_featured && (
                         <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-amber-50 text-amber-700 border border-amber-100">
                             <Star size={9} strokeWidth={2.5} /> Featured
@@ -280,6 +285,7 @@ function ApprovalModal({ editing, onClose, onSaved }) {
         country: null,
     });
     const [country, setCountry]     = useState(editing?.country || '');
+    const [category, setCategory]   = useState(editing?.category || 'student');
     const [month, setMonth]         = useState(seedMonth);
     const [year, setYear]           = useState(seedYear);
     const [caption, setCaption]     = useState(editing?.caption || '');
@@ -329,6 +335,7 @@ function ApprovalModal({ editing, onClose, onSaved }) {
         if (person.lead_id) form.append('lead_id', person.lead_id);
         form.append('display_name',    person.name.trim());
         form.append('country',         country.trim());
+        form.append('category',        category);
         form.append('approved_month',  month);
         form.append('approved_year',   year);
         form.append('caption',         caption.trim());
@@ -392,6 +399,21 @@ function ApprovalModal({ editing, onClose, onSaved }) {
                         <p className="text-[10.5px] text-gray-400 mt-1.5">
                             Pick a Lead, Case or Student from the CRM — or type a name if this person isn't in the system.
                         </p>
+                    </div>
+
+                    {/* Category — which home-page section this shows in */}
+                    <div>
+                        <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-500 mb-1.5">
+                            Category
+                        </label>
+                        <select
+                            value={category}
+                            onChange={(e) => setCategory(e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white outline-none focus:border-amber-500"
+                        >
+                            <option value="student">Student / Client — Visa Approved Milestones</option>
+                            <option value="artist">Artist — Artists We've Helped Bring to NZ</option>
+                        </select>
                     </div>
 
                     {/* Country + Month + Year row */}

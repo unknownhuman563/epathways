@@ -295,10 +295,15 @@ Route::get('/leave-review', function () {
 
 Route::get('/activities', [EventController::class, 'activities']);
 
-Route::get('/visa-approved', function () {
+Route::get('/visa-approved', function (\Illuminate\Http\Request $request) {
     // Full published gallery — the admin CRUD lives at /admin/visa-approvals.
+    // ?category=artist shows the artists section; anything else = students.
+    $category = $request->query('category') === 'artist' ? 'artist' : 'student';
+
     return inertia('visa/VisaApproved', [
+        'category' => $category,
         'visaApprovals' => \App\Models\VisaApproval::published()
+            ->where('category', $category)
             ->orderByDesc('is_featured')
             ->orderByDesc('approved_at')
             ->orderByDesc('id')
@@ -527,6 +532,12 @@ Route::middleware(['auth'])->group(function () {
         // Per-department email branding (banner + CTA) — admin-managed presets.
         Route::get('/admin/email-branding', [\App\Http\Controllers\EmailBrandingController::class, 'index'])->name('admin.email-branding');
         Route::post('/admin/email-branding/{department}', [\App\Http\Controllers\EmailBrandingController::class, 'update'])->name('admin.email-branding.update');
+
+        // Landing-page video testimonials (Facebook links).
+        Route::get('/admin/video-testimonials', [\App\Http\Controllers\VideoTestimonialController::class, 'index'])->name('admin.video-testimonials');
+        Route::post('/admin/video-testimonials', [\App\Http\Controllers\VideoTestimonialController::class, 'store'])->name('admin.video-testimonials.store');
+        Route::put('/admin/video-testimonials/{testimonial}', [\App\Http\Controllers\VideoTestimonialController::class, 'update'])->name('admin.video-testimonials.update');
+        Route::delete('/admin/video-testimonials/{testimonial}', [\App\Http\Controllers\VideoTestimonialController::class, 'destroy'])->name('admin.video-testimonials.destroy');
 
         // Message templates — staff-editable email/SMS templates.
         Route::get('/admin/message-templates', [\App\Http\Controllers\MessageTemplateController::class, 'index'])->name('admin.message-templates');
@@ -1291,6 +1302,9 @@ Route::middleware(['auth'])->group(function () {
             // Inline stage update from the Cases table — mirrors the
             // EducationController dashboard-field pattern.
             Route::post('/cases/{id}/stage', [ImmigrationController::class, 'updateCaseStage'])->name('cases.stage');
+            // Decline outcome — moves to "Decline Visa" with an optional shared
+            // decline letter, note, and client email.
+            Route::post('/cases/{id}/decline', [ImmigrationController::class, 'declineVisa'])->name('cases.decline');
             // Inline visa-type update from the Cases table.
             Route::post('/cases/{id}/visa', [ImmigrationController::class, 'updateCaseVisa'])->name('cases.visa');
             // Inline priority update from the Cases table's expanded row.
@@ -1350,6 +1364,9 @@ Route::middleware(['auth'])->group(function () {
                 ->name('cases.threads.store');
             Route::post('/cases/{lead}/threads/{thread}/resolve', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'resolveThread'])
                 ->name('cases.threads.resolve');
+            // Edit a comment's wording — author (or admin) only.
+            Route::patch('/cases/{lead}/threads/{thread}', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'updateThread'])
+                ->name('cases.threads.update');
 
             // Case financials — fees/invoice record + payment ledger (replaces the
             // spreadsheet money columns). Figures are human-entered; totals derived.

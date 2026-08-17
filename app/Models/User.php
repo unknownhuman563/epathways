@@ -33,6 +33,10 @@ class User extends Authenticatable
     /** Role for an external Lead who logs in to the Leads Portal. */
     public const ROLE_LEAD = 'lead';
 
+    /** A previously-active Lead account whose portal access was revoked. The
+     *  User row is kept (history/linked records) but can no longer log in. */
+    public const ROLE_REVOKED_LEAD = 'revoked_lead';
+
     /** Department portals a non-admin user can be assigned to. */
     public const PORTAL_ROLES = ['sales', 'education', 'english', 'immigration', 'accommodation', 'finance', 'agent'];
 

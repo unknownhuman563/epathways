@@ -167,7 +167,7 @@ class LeadPortalInvitationController extends Controller
             if ($lead->portalUser) {
                 $lead->portalUser->update([
                     'password' => Hash::make(Str::random(64)),
-                    'role' => 'revoked_lead',
+                    'role' => User::ROLE_REVOKED_LEAD,
                 ]);
             }
             $lead->update([
@@ -260,12 +260,21 @@ class LeadPortalInvitationController extends Controller
         if (! filter_var($lead->email, FILTER_VALIDATE_EMAIL)) {
             return back()->withErrors(['error' => 'This lead has no valid email on file — credentials can’t be generated or emailed. Add an email first.']);
         }
-        if ($lead->portalUser) {
-            return back()->withErrors(['error' => 'This lead already has an account. Use Reset password instead.']);
+
+        $existing = $lead->portalUser;
+        // A previously-revoked account is stored as role 'revoked_lead'. Generate
+        // should reactivate it in place (new password + re-enable login) rather
+        // than fail — so revoke → request again → generate works end to end.
+        $isRevoked = $existing && $existing->role === User::ROLE_REVOKED_LEAD;
+
+        if ($existing && ! $isRevoked) {
+            return back()->withErrors(['error' => 'This lead already has an active account. Use Reset password instead.']);
         }
-        // Prevent collision with a non-lead account using the same email.
-        if (User::where('email', $lead->email)->exists()) {
-            return back()->withErrors(['error' => "A user with email {$lead->email} already exists in the system."]);
+        // Prevent collision with a *different* account using the same email. When
+        // reactivating the lead's own revoked account this is skipped, since that
+        // row legitimately owns the address.
+        if (! $existing && User::where('email', $lead->email)->exists()) {
+            return back()->withErrors(['error' => "A user with email {$lead->email} already exists in the system. It isn’t linked to this lead, so it must be removed or reassigned first."]);
         }
 
         // Generated login password = first name + last 4 digits of the
@@ -274,14 +283,24 @@ class LeadPortalInvitationController extends Controller
         $plainPassword = $this->credentialPassword($lead);
 
         try {
-            DB::transaction(function () use ($lead, $plainPassword) {
-                User::create([
-                    'name' => trim("{$lead->first_name} {$lead->last_name}") ?: 'Lead',
-                    'email' => $lead->email,
-                    'password' => $plainPassword, // cast as hashed on save
-                    'role' => User::ROLE_LEAD,
-                    'lead_id' => $lead->id,
-                ]);
+            DB::transaction(function () use ($lead, $plainPassword, $existing) {
+                if ($existing) {
+                    // Reactivate the revoked account in place — keeps history and
+                    // any linked records tied to the same User id.
+                    $existing->update([
+                        'name' => trim("{$lead->first_name} {$lead->last_name}") ?: 'Lead',
+                        'password' => $plainPassword, // cast as hashed on save
+                        'role' => User::ROLE_LEAD,
+                    ]);
+                } else {
+                    User::create([
+                        'name' => trim("{$lead->first_name} {$lead->last_name}") ?: 'Lead',
+                        'email' => $lead->email,
+                        'password' => $plainPassword, // cast as hashed on save
+                        'role' => User::ROLE_LEAD,
+                        'lead_id' => $lead->id,
+                    ]);
+                }
 
                 $lead->update([
                     'portal_invitation_status' => 'accepted',

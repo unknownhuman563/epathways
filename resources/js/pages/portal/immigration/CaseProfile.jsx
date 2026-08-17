@@ -34,7 +34,7 @@ const VALID_TABS = new Set(TABS.map((t) => t.key));
 export default function CaseProfile() {
     const { props } = usePage();
     const {
-        lead = {}, intake = null, documents = [], checklist = { items: [] },
+        lead = {}, intake = null, documents = [], documentRequests = [], checklist = { items: [] },
         checklistGrouped = {}, unstructuredDocuments = [],
         checklistProgress = { required_total: 0, required_approved: 0, total: 0, approved: 0 },
         communications = [], agreements = [], notes = [], activity = [],
@@ -64,7 +64,7 @@ export default function CaseProfile() {
     }, [activeTab]);
 
     const tabProps = {
-        lead, intake, documents, checklist, checklistGrouped, unstructuredDocuments, checklistProgress,
+        lead, intake, documents, documentRequests, checklist, checklistGrouped, unstructuredDocuments, checklistProgress,
         communications, agreements, notes, activity, findings, process, threads, caseStaff, financials, inzForms, dependents, vif, caseOptions, visaTypes,
         assessmentCompleteness,
     };
