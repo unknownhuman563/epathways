@@ -1536,6 +1536,40 @@ class ImmigrationController extends Controller
     }
 
     /** Assessments — public ResidentIntake submissions feed for adviser triage. */
+    /**
+     * Delete an assessment submission — its intake row and paired Assessment.
+     * Blocked when the assessment has already been converted to a live case
+     * (the case must be removed/unconverted first).
+     */
+    public function destroyIntake(\Illuminate\Http\Request $request)
+    {
+        $typeMap = [
+            'resident' => ResidentIntake::class,
+            'work' => \App\Models\WorkIntake::class,
+            'student' => \App\Models\StudentIntake::class,
+            'visitor' => \App\Models\VisitorIntake::class,
+            'family' => \App\Models\FamilyIntake::class,
+        ];
+
+        $data = $request->validate([
+            'intake_type' => ['required', \Illuminate\Validation\Rule::in(array_keys($typeMap))],
+            'intake_id' => ['required', 'integer'],
+        ]);
+
+        $cls = $typeMap[$data['intake_type']];
+        $intake = $cls::findOrFail($data['intake_id']);
+        $assessment = Assessment::where('intakeable_type', $cls)->where('intakeable_id', $intake->id)->first();
+
+        if ($assessment && Lead::where('is_immigration_case', true)->where('assessment_id', $assessment->id)->exists()) {
+            return back()->with('error', 'This assessment is already a case — delete or unconvert the case first.');
+        }
+
+        $assessment?->delete();
+        $intake->delete();
+
+        return back()->with('success', 'Assessment deleted.');
+    }
+
     public function assessments()
     {
         return inertia('portal/immigration/Assessments', $this->assessmentsPayload());

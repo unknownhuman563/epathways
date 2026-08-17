@@ -4,7 +4,7 @@ import {
     ChevronRight, ChevronDown, ClipboardCheck, FileEdit, Globe, Send, Search,
     Users, Briefcase, GraduationCap, Plane, Heart,
     Check, FileText, UserCheck, ArrowRightCircle, AlertTriangle,
-    X, Mail, Phone, ExternalLink, Loader2, MessageCircle, User,
+    X, Mail, Phone, ExternalLink, Loader2, MessageCircle, User, Trash2,
 } from "lucide-react";
 import PortalPageHeader from "@/components/portal/PortalPageHeader";
 import { AiAssessmentReviewModal } from "@/components/immigration/AiAssessmentReview";
@@ -475,6 +475,20 @@ function IntakeRow({ intake: i, expanded = false, onToggle }) {
                         className="inline-flex items-center gap-1 px-3 py-1.5 rounded-md text-[10px] font-bold uppercase tracking-wider text-white bg-gray-900 hover:bg-black transition-colors"
                     >
                         Open <ChevronRight size={10} />
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => {
+                            if (! confirm(`Delete ${i.name || "this"} assessment? This permanently removes the submission.`)) return;
+                            router.delete("/portal/immigration/assessments", {
+                                data: { intake_type: i.visa_type, intake_id: i.id },
+                                preserveScroll: true,
+                            });
+                        }}
+                        title="Delete this assessment"
+                        className="inline-flex items-center justify-center p-1.5 rounded-md border border-rose-200 text-rose-500 hover:bg-rose-50 transition-colors"
+                    >
+                        <Trash2 size={11} />
                     </button>
                 </div>
             </td>

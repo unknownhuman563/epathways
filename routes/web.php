@@ -1256,6 +1256,8 @@ Route::middleware(['auth'])->group(function () {
             // ResidentIntake.id for backward compat — any pre-Phase-B
             // bookmark that POSTed an intake id still resolves cleanly.
             Route::post('/assessments/{id}/convert-to-case', [ImmigrationController::class, 'convertAssessmentToCase'])->name('assessments.convert');
+            // Delete an assessment submission (intake + paired Assessment).
+            Route::delete('/assessments', [ImmigrationController::class, 'destroyIntake'])->name('assessments.destroy');
             // AI completeness/consistency review of an intake (internal, indicative
             // — NOT eligibility advice). GET returns the last stored review; POST
             // runs a fresh one. Immigration-staff only (route group).
