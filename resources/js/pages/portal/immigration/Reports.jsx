@@ -1,11 +1,20 @@
 import { useState } from "react";
-import { Head, Link, router } from "@inertiajs/react";
+import { Head, router } from "@inertiajs/react";
+import { toast } from "sonner";
 import {
-    Layers, Clock, CheckCircle2, XCircle, TrendingUp,
-    UserPlus, Handshake, Plane, ThumbsUp, Download, Share2, Lock,
-    AlertTriangle, ArrowRight, Users, CalendarRange,
+    Layers, TrendingUp, UserPlus, Handshake, Plane, ThumbsUp, XCircle, CheckCircle2,
+    CalendarRange, Activity as ActivityIcon, FileText, BadgeCheck, Send, Clock, Globe,
+    HelpCircle, Target, Inbox, Save, RotateCcw, Award, Ban,
 } from "lucide-react";
 import PortalPageHeader from "@/components/portal/PortalPageHeader";
+
+// Weekly management report — the slide-deck format (Pipeline position → Intake &
+// engagements → Submissions & RFIs → Decision outcomes → Conclusion), followed
+// by the retained analytics blocks (Activity, 6-month trend, Cases by stage,
+// Year-to-date outcomes). All figures come from live case data for the chosen
+// period; nothing is generated.
+
+const TEAL = "#0f766e";
 
 const PRESETS = [
     { key: "today", label: "Today" },
@@ -23,16 +32,13 @@ const stageColor = (stage) =>
         : stage === "Unassigned" ? "bg-gray-300"
         : "bg-gray-700";
 
-const SEV = {
-    high:   { dot: "bg-rose-500", chip: "bg-rose-50 text-rose-700 border-rose-200", label: "High" },
-    medium: { dot: "bg-amber-500", chip: "bg-amber-50 text-amber-700 border-amber-200", label: "Medium" },
-    low:    { dot: "bg-gray-400", chip: "bg-gray-50 text-gray-600 border-gray-200", label: "Low" },
-};
+const fmtDate = (iso) => (iso ? new Date(iso).toLocaleDateString("en-NZ", { day: "numeric", month: "short" }) : "");
 
 export default function ImmigrationReports({
-    range = { preset: "two_weeks", label: "Last 2 weeks" }, kpis = {}, activity = {},
-    stageDistribution = [], totalCases = 0, trend = [], ytd = {},
-    attention = [], workload = [], generated_at, generated_by,
+    range = { preset: "two_weeks", label: "Last 2 weeks" },
+    pipeline = {}, namedIntake = {}, submissions = {}, outcomes = {}, conclusion = {},
+    activity = {}, stageDistribution = [], totalCases = 0, trend = [], ytd = {},
+    generated_at, generated_by,
 }) {
     const [from, setFrom] = useState(range.from || "");
     const [to, setTo] = useState(range.to || "");
@@ -42,15 +48,14 @@ export default function ImmigrationReports({
     const applyCustom = () => go({ preset: "custom", from, to });
 
     const maxStage = Math.max(1, ...stageDistribution.map((s) => s.count || 0));
-    const maxWorkload = Math.max(1, ...workload.map((w) => w.count || 0));
-    const attnHigh = attention.filter((a) => a.severity === "high").length;
+    const pool = pipeline.pre_lodgement || { paid: 0, awaiting: 0, total: 0 };
 
     return (
-        <div className="space-y-5 max-w-[1180px] mx-auto pb-14">
-            <Head title="Analytics — Immigration" />
-            <PortalPageHeader eyebrow="Analytics" title="Immigration analytics" description="Caseload health, what needs attention, and outcomes — for the period you choose." />
+        <div className="space-y-6 max-w-[1180px] mx-auto pb-16">
+            <Head title="Immigration report" />
+            <PortalPageHeader eyebrow="Updates and reporting" title="Immigration report" description="Pipeline, intake, submissions and outcomes for the period you choose — straight from live case data." />
 
-            {/* Range control + actions */}
+            {/* Range control */}
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm px-4 py-2.5 flex items-center justify-between gap-3 flex-wrap">
                 <div className="flex items-center gap-1 flex-wrap">
                     {PRESETS.map((p) => (
@@ -66,13 +71,12 @@ export default function ImmigrationReports({
                         </button>
                     ))}
                 </div>
-                <div className="flex items-center gap-2">
-                    <DisabledAction icon={<Download size={13} />} label="Export PDF" />
-                    <DisabledAction icon={<Share2 size={13} />} label="Share" />
-                </div>
+                <p className="text-[11px] text-gray-400">
+                    Showing <span className="font-semibold text-gray-600">{range.label}</span>
+                    {range.days ? <span className="text-gray-300"> · {range.days} days</span> : null}
+                </p>
             </div>
 
-            {/* Custom range inputs — only when Custom is active */}
             {range.preset === "custom" && (
                 <div className="bg-white rounded-2xl border border-gray-100 shadow-sm px-4 py-3 flex items-center gap-3 flex-wrap">
                     <span className="text-[11px] font-bold uppercase tracking-wider text-gray-400 inline-flex items-center gap-1.5"><CalendarRange size={13} /> From</span>
@@ -83,116 +87,94 @@ export default function ImmigrationReports({
                 </div>
             )}
 
-            {/* Showing-period line */}
-            <p className="text-[11px] text-gray-400 px-1 -mt-1">
-                Showing <span className="font-semibold text-gray-600">{range.label}</span>
-                {range.days ? <span className="text-gray-300"> · {range.days} days</span> : null}
-            </p>
+            {/* ── 01 · Pipeline position ─────────────────────────────────── */}
+            <DeckHeader n="01" eyebrow="Updates and reporting" title="Pipeline position" />
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                <StatCard icon={<UserPlus size={16} />} value={pipeline.new_clients ?? 0} label="New clients" hint="Opened this period" />
+                <StatCard icon={<ActivityIcon size={16} />} value={pipeline.in_progress ?? 0} label="In progress" hint="Active, pre-INZ" />
+                <StatCard icon={<FileText size={16} />} value={pipeline.for_quotation ?? 0} label="For quotation" hint="Awaiting pricing / invoice" />
+                <StatCard icon={<BadgeCheck size={16} />} value={pipeline.endorsed_dev ?? 0} label="Endorsed for assessment" hint="With Dev" />
+                <StatCard icon={<Send size={16} />} value={pipeline.endorsed_hendry ?? 0} label="Endorsed to Hendry" hint="With Hendry" />
+                <StatCard icon={<Handshake size={16} />} value={pipeline.agreements_sent ?? 0} label="Agreements sent" hint="Awaiting signature" />
+                <StatCard icon={<Clock size={16} />} value={pipeline.with_inz ?? 0} label="With INZ" hint="Awaiting decision" tone="dark" />
+                <StatCard icon={<Inbox size={16} />} value={pool.total} label="Pre-lodgement pool" hint={`${pool.paid} paid · ${pool.awaiting} awaiting`} />
+            </div>
+            <div className="rounded-2xl bg-teal-50/60 border border-teal-100 px-5 py-3.5">
+                <p className="text-[12.5px] text-teal-900 leading-relaxed">
+                    <span className="font-bold">Pre-lodgement pool:</span> {pool.total} file{pool.total === 1 ? "" : "s"} —{" "}
+                    <span className="font-semibold">{pool.paid} invoiced and paid</span> and {pool.awaiting} awaiting engagement and invoice. Movement out of this pool is the constraint on next period's lodgement count.
+                </p>
+            </div>
 
-            {/* ── NEEDS ATTENTION — the headline ── */}
-            <section className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-                <div className="px-5 py-3.5 border-b border-gray-100 flex items-center justify-between gap-3 flex-wrap">
-                    <div className="flex items-center gap-2.5">
-                        <span className="w-8 h-8 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center"><AlertTriangle size={15} /></span>
-                        <div>
-                            <h2 className="text-sm font-bold uppercase tracking-[0.14em] text-gray-800">Needs attention</h2>
-                            <p className="text-[11px] text-gray-400 mt-0.5">
-                                {attention.length === 0 ? "Nothing flagged" : <><span className="font-semibold text-gray-600 tabular-nums">{attention.length}</span> case{attention.length === 1 ? "" : "s"} to chase{attnHigh > 0 && <> · <span className="text-rose-600 font-semibold">{attnHigh} high priority</span></>}</>}
-                            </p>
-                        </div>
+            {/* ── 02 · Intake and engagements — named detail ─────────────── */}
+            <DeckHeader n="02" eyebrow="Updates and reporting" title="Intake and engagements — named detail" />
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <NamedCard icon={<UserPlus size={17} />} title="New client records" count={(namedIntake.new_clients || []).length} meta="opened this period" items={namedIntake.new_clients} showDate />
+                <NamedCard icon={<Send size={17} />} title="Agreements issued" count={(namedIntake.agreements_issued || []).length} meta="in this period" items={namedIntake.agreements_issued} showDate />
+                <NamedCard icon={<BadgeCheck size={17} />} title="Endorsed to Dev" count={(namedIntake.endorsed_dev || []).length} meta="in this period" items={namedIntake.endorsed_dev} showDate />
+                <NamedCard icon={<Handshake size={17} />} title="Engagement signed" count={(namedIntake.engagement_signed || []).length} meta="in this period" items={namedIntake.engagement_signed} showDate />
+            </div>
+
+            {/* ── 03 · Submissions and information requests ──────────────── */}
+            <DeckHeader n="03" eyebrow="Updates and reporting" title="Submissions and information requests" />
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <NamedCard icon={<Plane size={17} />} title="Lodged with INZ" count={(submissions.lodged || []).length} meta="in this period" items={submissions.lodged} showDate />
+                <div className="space-y-4">
+                    <NamedCard icon={<HelpCircle size={17} />} title="Requests for Information" count={(submissions.rfis || []).length} meta="open" items={submissions.rfis} showAssignee empty="No open information requests." tone="amber" />
+                    <NamedCard icon={<Layers size={17} />} title="Also under assessment" count={(submissions.also_assessing || []).length} meta="interim / in principle" items={submissions.also_assessing} showAssignee />
+                </div>
+            </div>
+
+            {/* ── 04 · Decision outcomes ─────────────────────────────────── */}
+            <DeckHeader n="04" eyebrow="Updates and reporting" title="Decision outcomes" />
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <OutcomeCard icon={<Award size={18} />} value={(outcomes.approved || []).length} label="Visas approved" hint={outcomes.approved?.length ? outcomes.approved.map((o) => o.visa).filter(Boolean).slice(0, 2).join(", ") : "None in the period"} tone="emerald" />
+                <OutcomeCard icon={<Clock size={18} />} value={(outcomes.interim || []).length} label="Interim visa granted" hint={outcomes.interim?.[0]?.visa || "—"} tone="teal" />
+                <OutcomeCard icon={<Ban size={18} />} value={(outcomes.declined || []).length} label="Visa declined" hint={outcomes.declined?.[0]?.visa || "—"} tone="rose" />
+            </div>
+            <section className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 sm:p-6">
+                <div className="flex items-center gap-2.5 mb-4">
+                    <span className="w-8 h-8 rounded-lg bg-teal-50 text-teal-700 flex items-center justify-center"><Target size={15} /></span>
+                    <div>
+                        <h3 className="text-sm font-bold uppercase tracking-[0.14em] text-gray-800">What is sitting with INZ</h3>
+                        <p className="text-[11px] text-gray-400 mt-0.5">{pipeline.with_inz ?? 0} files awaiting a decision, by state</p>
                     </div>
                 </div>
-
-                {attention.length === 0 ? (
-                    <div className="px-5 py-8 text-sm text-emerald-700 flex items-center gap-2">
-                        <CheckCircle2 size={16} /> Nothing needs attention right now — the active caseload is clean.
-                    </div>
+                {(outcomes.with_inz_breakdown || []).length === 0 ? (
+                    <p className="text-[12px] text-gray-400">Nothing with INZ right now.</p>
                 ) : (
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-left">
-                            <thead>
-                                <tr className="bg-gray-50/60 border-b border-gray-100 text-[10px] font-bold text-gray-500 uppercase tracking-wider">
-                                    <th className="px-5 py-2.5 w-6"></th>
-                                    <th className="px-3 py-2.5">Case</th>
-                                    <th className="px-3 py-2.5">Stage</th>
-                                    <th className="px-3 py-2.5">Owner</th>
-                                    <th className="px-3 py-2.5">Idle</th>
-                                    <th className="px-3 py-2.5">Why</th>
-                                    <th className="px-3 py-2.5 text-right pr-5"></th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-50">
-                                {attention.map((a) => {
-                                    const sev = SEV[a.severity] || SEV.low;
-                                    return (
-                                        <tr key={a.id} className="text-sm hover:bg-gray-50/40">
-                                            <td className="px-5 py-3"><span className={`block w-2 h-2 rounded-full ${sev.dot}`} title={sev.label} /></td>
-                                            <td className="px-3 py-3 font-semibold text-gray-900">{a.name}</td>
-                                            <td className="px-3 py-3 text-[12px] text-gray-600">{a.stage || <span className="text-gray-300">—</span>}</td>
-                                            <td className="px-3 py-3 text-[12px] text-gray-600">{a.owner || <span className="text-amber-600 font-medium">Unassigned</span>}</td>
-                                            <td className="px-3 py-3 text-[12px] text-gray-500 tabular-nums">{a.idle_days != null ? `${a.idle_days}d` : "—"}</td>
-                                            <td className="px-3 py-3">
-                                                <div className="flex flex-wrap gap-1">
-                                                    {a.reasons.map((r, i) => (
-                                                        <span key={i} className={`inline-block text-[10.5px] font-medium px-1.5 py-0.5 rounded border ${sev.chip}`}>{r}</span>
-                                                    ))}
-                                                </div>
-                                            </td>
-                                            <td className="px-3 py-3 text-right pr-5">
-                                                <Link href={a.link} className="inline-flex items-center gap-1 text-[11px] font-semibold text-gray-600 hover:text-gray-900">
-                                                    Open <ArrowRight size={12} />
-                                                </Link>
-                                            </td>
-                                        </tr>
-                                    );
-                                })}
-                            </tbody>
-                        </table>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-2">
+                        {outcomes.with_inz_breakdown.map((b) => (
+                            <div key={b.stage} className="flex items-center gap-3 py-1">
+                                <span className="text-lg font-bold text-teal-700 tabular-nums w-8 text-right">{b.count}</span>
+                                <span className="text-[13px] text-gray-700">{b.stage}</span>
+                            </div>
+                        ))}
                     </div>
                 )}
             </section>
 
-            {/* KPI row */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                <Kpi icon={<Layers size={16} />} label="Active cases" value={kpis.active_cases ?? 0} hint="excludes decided" />
-                <Kpi icon={<Clock size={16} />} label="With INZ" value={kpis.with_inz ?? 0} hint="awaiting decision" />
-                <Kpi icon={<AlertTriangle size={16} />} label="Needs attention" value={attention.length} hint="cases to chase" />
-                <Kpi icon={<TrendingUp size={16} />} label="Approval rate" value={`${kpis.approval_rate ?? 0}%`} accent />
+            {/* ── 05 · Conclusion ────────────────────────────────────────── */}
+            <DeckHeader n="05" eyebrow="Updates and reporting" title="Conclusion" />
+            <ConclusionEditor key={conclusion.note_key} conclusion={conclusion} />
+
+            {/* ══ Retained analytics ═════════════════════════════════════ */}
+            <div className="pt-2">
+                <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-gray-400 px-1 mb-3">Analytics</p>
             </div>
 
-            {/* Activity in period + adviser workload */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                <section className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 sm:p-6">
-                    <h2 className="text-sm font-bold uppercase tracking-[0.14em] text-gray-800 mb-4">Activity — {range.label?.toLowerCase()}</h2>
-                    <ul className="divide-y divide-gray-50">
-                        <ActivityRow icon={<UserPlus size={15} />} label="New clients onboarded" value={activity.new_clients ?? 0} />
-                        <ActivityRow icon={<CheckCircle2 size={15} />} label="Files endorsed" value={activity.files_endorsed ?? 0} />
-                        <ActivityRow icon={<Handshake size={15} />} label="Agreements signed" value={activity.agreements_signed ?? 0} />
-                        <ActivityRow icon={<Plane size={15} />} label="Applications lodged" value={activity.apps_lodged ?? 0} />
-                        <ActivityRow icon={<ThumbsUp size={15} />} label="Visas approved" value={activity.visas_approved ?? 0} accent />
-                        <ActivityRow icon={<XCircle size={15} />} label="Visas declined" value={activity.visas_declined ?? 0} />
-                    </ul>
-                </section>
-
-                <section className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 sm:p-6">
-                    <h2 className="text-sm font-bold uppercase tracking-[0.14em] text-gray-800 mb-4 inline-flex items-center gap-2"><Users size={15} className="text-gray-400" /> Adviser workload</h2>
-                    {workload.length === 0 ? (
-                        <p className="text-sm text-gray-400 py-6 text-center">No active cases assigned.</p>
-                    ) : (
-                        <ul className="space-y-2.5">
-                            {workload.map((w) => (
-                                <li key={w.owner} className="flex items-center gap-3">
-                                    <span className="w-32 text-[12px] font-medium text-gray-700 truncate flex-shrink-0">{w.owner}</span>
-                                    <div className="flex-1 h-5 rounded-md bg-gray-50 overflow-hidden">
-                                        <div className={`h-full rounded-md ${w.owner === "Unassigned" ? "bg-amber-400" : "bg-gray-700"}`} style={{ width: `${Math.max(4, Math.round((w.count / maxWorkload) * 100))}%` }} />
-                                    </div>
-                                    <span className="w-8 text-right text-sm font-bold text-gray-900 tabular-nums">{w.count}</span>
-                                </li>
-                            ))}
-                        </ul>
-                    )}
-                </section>
-            </div>
+            {/* Activity in period */}
+            <section className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 sm:p-6">
+                <h2 className="text-sm font-bold uppercase tracking-[0.14em] text-gray-800 mb-4">Activity — {range.label?.toLowerCase()}</h2>
+                <ul className="divide-y divide-gray-50">
+                    <ActivityRow icon={<UserPlus size={15} />} label="New clients onboarded" value={activity.new_clients ?? 0} />
+                    <ActivityRow icon={<CheckCircle2 size={15} />} label="Files endorsed" value={activity.files_endorsed ?? 0} />
+                    <ActivityRow icon={<Handshake size={15} />} label="Agreements signed" value={activity.agreements_signed ?? 0} />
+                    <ActivityRow icon={<Plane size={15} />} label="Applications lodged" value={activity.apps_lodged ?? 0} />
+                    <ActivityRow icon={<ThumbsUp size={15} />} label="Visas approved" value={activity.visas_approved ?? 0} accent />
+                    <ActivityRow icon={<XCircle size={15} />} label="Visas declined" value={activity.visas_declined ?? 0} />
+                </ul>
+            </section>
 
             {/* Trend — new cases vs approvals over 6 months */}
             <section className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 sm:p-6">
@@ -211,15 +193,13 @@ export default function ImmigrationReports({
 
             {/* Cases by stage */}
             <section className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 sm:p-6">
-                <div className="flex items-center justify-between gap-3 mb-5">
-                    <div className="flex items-center gap-2.5">
-                        <span className="w-8 h-8 rounded-lg bg-gray-100 text-gray-700 flex items-center justify-center"><Layers size={15} /></span>
-                        <div>
-                            <h2 className="text-sm font-bold uppercase tracking-[0.14em] text-gray-800">Cases by stage</h2>
-                            <p className="text-[11px] text-gray-400 mt-0.5">
-                                <span className="font-semibold text-gray-600 tabular-nums">{totalCases}</span> immigration cases across the pipeline
-                            </p>
-                        </div>
+                <div className="flex items-center gap-2.5 mb-5">
+                    <span className="w-8 h-8 rounded-lg bg-gray-100 text-gray-700 flex items-center justify-center"><Layers size={15} /></span>
+                    <div>
+                        <h2 className="text-sm font-bold uppercase tracking-[0.14em] text-gray-800">Cases by stage</h2>
+                        <p className="text-[11px] text-gray-400 mt-0.5">
+                            <span className="font-semibold text-gray-600 tabular-nums">{totalCases}</span> immigration cases across the pipeline
+                        </p>
                     </div>
                 </div>
                 <ul className="space-y-2.5">
@@ -284,15 +264,138 @@ export default function ImmigrationReports({
 
 // ── Sub-components ──────────────────────────────────────────────────────
 
-function Kpi({ icon, label, value, hint, accent = false }) {
+function DeckHeader({ n, eyebrow, title }) {
+    return (
+        <div className="flex items-center gap-3 pt-2">
+            <span className="w-11 h-11 rounded-full text-white flex items-center justify-center text-sm font-bold flex-shrink-0" style={{ backgroundColor: TEAL }}>{n}</span>
+            <div>
+                <p className="text-[10px] font-bold uppercase tracking-[0.24em]" style={{ color: TEAL }}>Section · {eyebrow}</p>
+                <h2 className="text-xl font-semibold text-gray-900 tracking-tight">{title}</h2>
+            </div>
+        </div>
+    );
+}
+
+function StatCard({ icon, value, label, hint, tone = "teal" }) {
+    const iconCls = tone === "dark" ? "text-white" : "text-white";
+    const iconBg = tone === "dark" ? "#374151" : TEAL;
     return (
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
-            <div className="flex items-center gap-2 text-gray-400">
-                <span className={`w-6 h-6 rounded-md flex items-center justify-center ${accent ? "bg-emerald-50 text-emerald-600" : "bg-gray-100 text-gray-500"}`}>{icon}</span>
-                <span className="text-[10px] font-bold uppercase tracking-[0.16em]">{label}</span>
+            <div className="flex items-center gap-3">
+                <span className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${iconCls}`} style={{ backgroundColor: iconBg }}>{icon}</span>
+                <span className="text-3xl font-bold tabular-nums text-gray-900">{value}</span>
             </div>
-            <p className={`text-3xl font-bold tabular-nums mt-2.5 ${accent ? "text-emerald-600" : "text-gray-900"}`}>{value}</p>
+            <p className="text-[13px] font-bold text-gray-800 mt-3">{label}</p>
             {hint && <p className="text-[11px] text-gray-400 mt-0.5">{hint}</p>}
+        </div>
+    );
+}
+
+function NamedCard({ icon, title, count, meta, items = [], showDate = false, showAssignee = false, tone = "teal", empty = "None in this period" }) {
+    const bg = tone === "amber" ? "bg-amber-50 text-amber-600" : "bg-teal-50 text-teal-700";
+    const metaCol = tone === "amber" ? "text-amber-600" : "text-teal-700";
+    return (
+        <section className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+            <div className="flex items-start gap-3 mb-3">
+                <span className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${bg}`}>{icon}</span>
+                <div className="min-w-0">
+                    <h3 className="text-sm font-bold text-gray-900">{title}</h3>
+                    <p className={`text-[11px] font-bold uppercase tracking-wider mt-0.5 ${metaCol}`}>{count} · {meta}</p>
+                </div>
+            </div>
+            {(!items || items.length === 0) ? (
+                <p className="text-[12px] text-gray-400">{empty}</p>
+            ) : (
+                <ul className="space-y-1.5">
+                    {items.map((it) => (
+                        <li key={it.id} className="text-[12.5px] text-gray-700 flex items-start gap-2">
+                            <span className="mt-1.5 w-1 h-1 rounded-full bg-gray-300 flex-shrink-0" />
+                            <span className="min-w-0">
+                                <span className="font-medium text-gray-800">{it.name}</span>
+                                {it.visa && <span className="text-gray-500"> — {it.visa}</span>}
+                                {showAssignee && it.assignee && <span className="text-gray-400"> · Waiting on {it.assignee}</span>}
+                                {showDate && it.date && <span className="text-gray-400"> · {fmtDate(it.date)}</span>}
+                            </span>
+                        </li>
+                    ))}
+                </ul>
+            )}
+        </section>
+    );
+}
+
+function OutcomeCard({ icon, value, label, hint, tone = "teal" }) {
+    const map = {
+        emerald: { bg: "bg-emerald-50", text: "text-emerald-600", card: "bg-white border-gray-100" },
+        teal:    { bg: "bg-teal-50", text: "text-teal-700", card: "bg-white border-gray-100" },
+        rose:    { bg: "bg-rose-50", text: "text-rose-600", card: "bg-rose-50/40 border-rose-100" },
+    }[tone];
+    const zero = value === 0;
+    return (
+        <div className={`rounded-2xl border shadow-sm p-5 ${map.card}`}>
+            <span className={`w-10 h-10 rounded-xl flex items-center justify-center ${zero ? "bg-gray-100 text-gray-400" : `${map.bg} ${map.text}`}`}>{icon}</span>
+            <p className={`text-3xl font-bold tabular-nums mt-3 ${zero ? "text-gray-400" : map.text}`}>{zero ? "None" : value}</p>
+            <p className="text-[13px] font-bold text-gray-800 mt-0.5">{label}</p>
+            {hint && <p className="text-[11px] text-gray-400 mt-0.5 truncate" title={hint}>{hint}</p>}
+        </div>
+    );
+}
+
+function ConclusionEditor({ conclusion = {} }) {
+    const [note, setNote] = useState(conclusion.note ?? conclusion.auto ?? "");
+    const [saving, setSaving] = useState(false);
+    const stats = conclusion.stats || {};
+    const dirty = note !== (conclusion.note ?? conclusion.auto ?? "");
+
+    const save = () => {
+        setSaving(true);
+        router.post("/portal/immigration/reports/note", { note_key: conclusion.note_key, note }, {
+            preserveScroll: true,
+            preserveState: true,
+            onSuccess: () => toast.success("Conclusion saved"),
+            onError: (e) => toast.error(Object.values(e)[0] || "Could not save"),
+            onFinish: () => setSaving(false),
+        });
+    };
+
+    return (
+        <section className="rounded-2xl border border-gray-100 shadow-sm overflow-hidden" style={{ backgroundColor: "#0f5c55" }}>
+            <div className="p-5 sm:p-6 text-white">
+                <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-teal-200 mb-2">Auto summary · editable</p>
+                <textarea
+                    value={note}
+                    onChange={(e) => setNote(e.target.value)}
+                    rows={4}
+                    className="w-full bg-white/10 border border-white/20 rounded-xl px-4 py-3 text-[14px] leading-relaxed text-white placeholder-teal-200/60 focus:outline-none focus:border-white/50 resize-y"
+                    placeholder="Write the period's commentary…"
+                />
+                <div className="flex items-center gap-2 mt-3">
+                    <button type="button" onClick={save} disabled={saving || !dirty}
+                        className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-white text-teal-800 text-[12px] font-bold hover:bg-teal-50 disabled:opacity-50">
+                        <Save size={13} /> {saving ? "Saving…" : "Save"}
+                    </button>
+                    <button type="button" onClick={() => setNote(conclusion.auto ?? "")}
+                        className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-white/25 text-teal-100 text-[12px] font-semibold hover:bg-white/10">
+                        <RotateCcw size={13} /> Reset to auto
+                    </button>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-6 pt-5 border-t border-white/15">
+                    <ConcStat value={stats.lodged ?? 0} label="Visas lodged" />
+                    <ConcStat value={stats.approved ?? 0} label="Approved" />
+                    <ConcStat value={stats.declined ?? 0} label="Declined" />
+                    <ConcStat value={stats.new_records ?? 0} label="New records" />
+                </div>
+            </div>
+        </section>
+    );
+}
+
+function ConcStat({ value, label }) {
+    return (
+        <div>
+            <p className="text-3xl font-bold tabular-nums text-teal-100">{value}</p>
+            <p className="text-[11px] text-teal-200/80 mt-0.5">{label}</p>
         </div>
     );
 }
@@ -372,13 +475,5 @@ function Donut({ pct }) {
             <text x="70" y="68" textAnchor="middle" fontSize="26" fontWeight="700" fill="#111827">{pct}%</text>
             <text x="70" y="86" textAnchor="middle" fontSize="8" letterSpacing="1.5" fontWeight="700" fill="#9ca3af">APPROVAL</text>
         </svg>
-    );
-}
-
-function DisabledAction({ icon, label }) {
-    return (
-        <button type="button" disabled title="Coming soon" className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-[11px] font-bold uppercase tracking-wider text-gray-400 bg-gray-50 border border-gray-200 cursor-not-allowed">
-            <Lock size={11} /> {icon} {label}
-        </button>
     );
 }

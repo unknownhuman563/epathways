@@ -1441,6 +1441,7 @@ Route::middleware(['auth'])->group(function () {
 
             // REPORTS
             Route::get('/reports', [ImmigrationController::class, 'reports'])->name('reports');
+            Route::post('/reports/note', [ImmigrationController::class, 'saveReportNote'])->name('reports.note');
 
             // ACCOUNT
             Route::get('/profile', [ImmigrationController::class, 'profile'])->name('profile');

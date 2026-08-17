@@ -3098,7 +3098,97 @@ class ImmigrationController extends Controller
             'approval_rate' => $decided > 0 ? (int) round($approved / $decided * 100) : 0,
         ];
 
+        // ─────────────────────────────────────────────────────────────────
+        // Weekly management report (the slide-deck format).
+        // ─────────────────────────────────────────────────────────────────
+        $withInzStages = ['Visa Lodged', 'Interim Visa Issued', 'Request for Information', 'Approved in Principle'];
+
+        // Named-detail rows. Pass which date column labels the row.
+        $named = function ($query, string $dateField = 'stage_updated_at') {
+            return $query
+                ->get(['id', 'first_name', 'last_name', 'inz_visa_type', 'stage_updated_at', 'immigration_converted_at', 'immigration_assignee'])
+                ->map(fn ($l) => [
+                    'id' => $l->id,
+                    'name' => trim("{$l->first_name} {$l->last_name}") ?: 'Case',
+                    'visa' => $l->inz_visa_type,
+                    'assignee' => $l->immigration_assignee,
+                    'date' => optional($l->{$dateField})->toIso8601String(),
+                ])->values();
+        };
+        $inCase = fn () => Lead::immigrationCase();
+
+        // Pipeline position — mostly current snapshots (new_clients is in-window).
+        // "For quotation" = the pricing/invoice stage; "on hold" is omitted.
+        $pipeline = [
+            'new_clients' => $inCase()->whereBetween('immigration_converted_at', [$from, $to])->count(),
+            'in_progress' => $inCase()->whereNotIn('immigration_stage', array_merge($withInzStages, $terminalStages))
+                ->where(fn ($q) => $q->whereNotNull('immigration_stage'))->count(),
+            'for_quotation' => $count('For Agreement & Invoice'),
+            'endorsed_dev' => $inCase()->where('immigration_assignee', 'Dev')->count(),
+            'endorsed_hendry' => $inCase()->where('immigration_assignee', 'Hendry')->count(),
+            'agreements_sent' => $count('Agreement Sent'),
+            'with_inz' => $count($withInzStages),
+            'pre_lodgement' => [
+                'paid' => $count('Invoice Paid'),
+                'awaiting' => $count('For Agreement & Invoice'),
+                'total' => $count('Invoice Paid') + $count('For Agreement & Invoice'),
+            ],
+        ];
+
+        // Intake & engagements — named, movements within the window.
+        $namedIntake = [
+            'new_clients' => $named($inCase()->whereBetween('immigration_converted_at', [$from, $to])->orderBy('immigration_converted_at'), 'immigration_converted_at'),
+            'agreements_issued' => $named($inCase()->where('immigration_stage', 'Agreement Sent')->whereBetween('stage_updated_at', [$from, $to])),
+            'endorsed_dev' => $named($inCase()->where('immigration_assignee', 'Dev')->whereBetween('stage_updated_at', [$from, $to])),
+            'engagement_signed' => $named($inCase()->where('immigration_stage', 'Agreement Signed')->whereBetween('stage_updated_at', [$from, $to])),
+        ];
+
+        // Submissions & information requests.
+        $submissions = [
+            'lodged' => $named($inCase()->where('immigration_stage', 'Visa Lodged')->whereBetween('stage_updated_at', [$from, $to])),
+            'rfis' => $named($inCase()->where('immigration_stage', 'Request for Information')),          // current open
+            'also_assessing' => $named($inCase()->whereIn('immigration_stage', ['Approved in Principle', 'Interim Visa Issued'])),
+        ];
+
+        // Decision outcomes — within the window; plus the with-INZ breakdown.
+        $outcomes = [
+            'approved' => $named($inCase()->where('immigration_stage', 'Approved Visa')->whereBetween('stage_updated_at', [$from, $to])),
+            'interim' => $named($inCase()->where('immigration_stage', 'Interim Visa Issued')->whereBetween('stage_updated_at', [$from, $to])),
+            'declined' => $named($inCase()->where('immigration_stage', 'Decline Visa')->whereBetween('stage_updated_at', [$from, $to])),
+            'with_inz_breakdown' => collect($withInzStages)
+                ->map(fn ($s) => ['stage' => $s, 'count' => $count($s)])
+                ->push(['stage' => 'Unassigned INZ status', 'count' => 0])
+                ->filter(fn ($r) => $r['count'] > 0)
+                ->values(),
+        ];
+
+        // Conclusion — auto factual summary (no interpretation), editable per period.
+        $noteKey = 'imm_report_note:'.$from->toDateString().':'.$to->toDateString();
+        $autoSummary = sprintf(
+            '%d application%s lodged with INZ and %d new client record%s opened this period. %d approved, %d declined. %d file%s currently sit with INZ awaiting a decision.',
+            $activity['apps_lodged'], $activity['apps_lodged'] === 1 ? '' : 's',
+            $pipeline['new_clients'], $pipeline['new_clients'] === 1 ? '' : 's',
+            $activity['visas_approved'], $activity['visas_declined'],
+            $pipeline['with_inz'], $pipeline['with_inz'] === 1 ? '' : 's',
+        );
+        $conclusion = [
+            'auto' => $autoSummary,
+            'note' => \App\Models\Setting::get($noteKey),
+            'note_key' => $noteKey,
+            'stats' => [
+                'lodged' => $activity['apps_lodged'],
+                'approved' => $activity['visas_approved'],
+                'declined' => $activity['visas_declined'],
+                'new_records' => $pipeline['new_clients'],
+            ],
+        ];
+
         return inertia('portal/immigration/Reports', [
+            'pipeline' => $pipeline,
+            'namedIntake' => $namedIntake,
+            'submissions' => $submissions,
+            'outcomes' => $outcomes,
+            'conclusion' => $conclusion,
             'range' => [
                 'preset' => $preset,
                 'from' => $from->toDateString(),
@@ -3118,6 +3208,22 @@ class ImmigrationController extends Controller
             'generated_at' => now()->toIso8601String(),
             'generated_by' => optional(auth()->user())->name,
         ]);
+    }
+
+    /**
+     * Save (or clear) the editable conclusion commentary for a report period.
+     * Keyed by the period so each week keeps its own note.
+     */
+    public function saveReportNote(Request $request)
+    {
+        $data = $request->validate([
+            'note_key' => ['required', 'string', 'starts_with:imm_report_note:', 'max:120'],
+            'note' => ['nullable', 'string', 'max:4000'],
+        ]);
+
+        \App\Models\Setting::set($data['note_key'], $data['note'] ?: null, 'string', 'Immigration report note', 'immigration');
+
+        return back()->with('success', 'Report note saved.');
     }
 
     /**
