@@ -1409,10 +1409,11 @@ class LeadDocumentController extends Controller
         }
 
         // A bulk download assembles the case file for lodgement, so it ships
-        // APPROVED documents only by default — nothing unreviewed, pending or
-        // rejected belongs in that bundle. `?status=Submitted` (etc.) narrows
-        // to another single state for the File history's filtered download.
-        $status = $request->query('status', LeadDocument::STATUS_APPROVED);
+        // APPROVED documents only by default. `?status=all` (or ?all=1) bundles
+        // EVERY document on the case; `?status=Submitted` (etc.) narrows to
+        // another single state for the File history's filtered download.
+        $statusParam = $request->query('status', LeadDocument::STATUS_APPROVED);
+        $wantAll = $statusParam === 'all' || $request->boolean('all');
 
         $allowed = [
             LeadDocument::STATUS_SUBMITTED,
@@ -1422,18 +1423,18 @@ class LeadDocumentController extends Controller
             LeadDocument::STATUS_STAFF_SHARED,
         ];
 
-        if (! in_array($status, $allowed, true)) {
-            $status = LeadDocument::STATUS_APPROVED;
-        }
+        $status = in_array($statusParam, $allowed, true) ? $statusParam : LeadDocument::STATUS_APPROVED;
 
         $docs = $lead->documents()
-            ->where('status', $status)
+            ->when(! $wantAll, fn ($q) => $q->where('status', $status))
             ->orderBy('created_at')
             ->get();
 
         if ($docs->isEmpty()) {
             return back()->withErrors([
-                'error' => "This case has no {$status} documents to download.",
+                'error' => $wantAll
+                    ? 'This case has no documents to download.'
+                    : "This case has no {$status} documents to download.",
             ]);
         }
 
