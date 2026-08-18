@@ -578,6 +578,20 @@ class Lead extends Model
     }
 
     /**
+     * The bearer token for the standalone engagement-signing link. Generated
+     * lazily the first time the engagement pack is emailed. Grants access to
+     * ONLY this lead's engagement documents (see EngagementSigningController).
+     */
+    public function ensureEngagementSigningToken(): string
+    {
+        if (empty($this->engagement_signing_token)) {
+            $this->forceFill(['engagement_signing_token' => \Illuminate\Support\Str::random(48)])->save();
+        }
+
+        return $this->engagement_signing_token;
+    }
+
+    /**
      * Boot hook: every new lead gets a tracking_code automatically. We
      * only generate one if the caller hasn't provided one (so seeders and
      * the backfill migration can pass their own).

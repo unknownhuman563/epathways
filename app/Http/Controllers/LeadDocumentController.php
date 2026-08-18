@@ -496,6 +496,8 @@ class LeadDocumentController extends Controller
             'fee_tier' => ['nullable', Rule::in(\App\Models\VisaType::FEE_TIERS)],
             'fee_location' => ['nullable', Rule::in(\App\Models\VisaType::FEE_LOCATIONS)],
             'include_gst' => 'sometimes|boolean',
+            // Manual override for the (GST-exclusive) professional fee.
+            'professional_fee' => 'nullable|numeric|min:0|max:9999999',
         ]);
 
         $overrides = [];
@@ -511,8 +513,25 @@ class LeadDocumentController extends Controller
         if (! empty($data['include_gst'])) {
             $overrides['include_gst'] = true;
         }
+        if (isset($data['professional_fee']) && $data['professional_fee'] !== null && $data['professional_fee'] !== '') {
+            $overrides['professional_fee'] = (float) $data['professional_fee'];
+        }
 
         try {
+            // Replace-per-type: remove the previous UNSIGNED copies of each type
+            // first so regenerating a draft doesn't stack duplicates. Signed
+            // documents are never touched (their signature must be preserved).
+            LeadDocument::where('lead_id', $lead->id)
+                ->whereIn('source_variant', array_map(fn ($t) => "engagement:{$t}", $data['types']))
+                ->whereNull('client_signed_at')
+                ->get()
+                ->each(function (LeadDocument $old) {
+                    if ($old->file_path && Storage::disk(self::DISK)->exists($old->file_path)) {
+                        Storage::disk(self::DISK)->delete($old->file_path);
+                    }
+                    $old->delete();
+                });
+
             // Keep the created document id per type so the notification can
             // deep-link each icon straight to its generated PDF.
             $generatedDocIds = [];
@@ -521,18 +540,26 @@ class LeadDocumentController extends Controller
                 $generatedDocIds[$t] = $doc->id;
             }
 
+            // Record the (ex-GST) professional fee this pack was generated at, so
+            // the Generated Documents table can show a total per engagement.
+            $feeVisa = \App\Models\VisaType::where('name', $lead->inz_visa_type)->first();
+            $feeTotal = $overrides['professional_fee']
+                ?? optional($feeVisa)?->professionalFeeFor($overrides['fee_tier'] ?? 'normal', $overrides['fee_location'] ?? 'onshore');
+            $lead->forceFill(['engagement_fee_total' => $feeTotal])->save();
+
             $n = count($data['types']);
             $message = "{$n} engagement document(s) generated for {$lead->first_name} {$lead->last_name}.";
 
-            // Optionally email the client that their documents are now
-            // available on their application tracker.
+            // Optionally email the client that their documents are now available
+            // on the scoped signing page. Sending marks the pack as no longer a
+            // draft (records engagement_sent_at, which reveals the client link).
             if (! empty($data['notify'])) {
                 if (empty($lead->email)) {
                     $message .= ' Email not sent — no email on file.';
-                } elseif (empty($lead->tracking_code)) {
-                    $message .= ' Email not sent — no tracking code on file.';
                 } else {
-                    Mail::to($lead->email)->send(new \App\Mail\EngagementDocumentsReady($lead, $data['types'], $generatedDocIds));
+                    $token = $lead->ensureEngagementSigningToken();
+                    Mail::to($lead->email)->send(new \App\Mail\EngagementDocumentsReady($lead, $data['types'], $generatedDocIds, $token));
+                    $lead->forceFill(['engagement_sent_at' => now()])->save();
                     $message .= " Client notified at {$lead->email}.";
                 }
             }
@@ -547,6 +574,36 @@ class LeadDocumentController extends Controller
 
             return back()->withErrors(['error' => 'Could not generate the documents: '.$e->getMessage()]);
         }
+    }
+
+    /**
+     * Email the client the engagement signing link (from the manage-draft
+     * modal). Marks the pack as sent so its client link is revealed and the
+     * Draft status clears.
+     */
+    public function sendEngagement(Request $request, $leadId)
+    {
+        $lead = Lead::findOrFail($leadId);
+
+        if (empty($lead->email)) {
+            return back()->withErrors(['error' => 'No email on file for this client.']);
+        }
+
+        $typeMap = LeadDocument::where('lead_id', $lead->id)
+            ->where('source_variant', 'like', 'engagement:%')
+            ->get()
+            ->mapWithKeys(fn (LeadDocument $d) => [str_replace('engagement:', '', $d->source_variant) => $d->id])
+            ->all();
+
+        if (empty($typeMap)) {
+            return back()->withErrors(['error' => 'No engagement documents to send.']);
+        }
+
+        $token = $lead->ensureEngagementSigningToken();
+        Mail::to($lead->email)->send(new \App\Mail\EngagementDocumentsReady($lead, array_keys($typeMap), $typeMap, $token));
+        $lead->forceFill(['engagement_sent_at' => now()])->save();
+
+        return back()->with('success', "Engagement sent to {$lead->email}.");
     }
 
     /**
@@ -774,6 +831,10 @@ class LeadDocumentController extends Controller
             }
             if (filter_var($request->query('include_gst'), FILTER_VALIDATE_BOOLEAN)) {
                 $opts['include_gst'] = true;
+            }
+            $profFee = $request->query('professional_fee');
+            if ($profFee !== null && $profFee !== '' && is_numeric($profFee)) {
+                $opts['professional_fee'] = (float) $profFee;
             }
             $html = app(EngagementDocumentGenerator::class)->renderHtml($lead, $engageType, $opts);
 

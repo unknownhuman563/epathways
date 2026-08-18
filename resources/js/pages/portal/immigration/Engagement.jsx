@@ -1,9 +1,10 @@
 import React, { useState, useMemo, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { Head, router, Link } from "@inertiajs/react";
 import { toast } from "sonner";
 import {
     FileSignature, Search, Plus, X, Download, Check,
-    FileText, Loader2, Mail, Eye, Trash2, ExternalLink,
+    FileText, Loader2, Mail, Eye, Trash2, ExternalLink, Copy, Link2, ScrollText, Send as SendIcon, CheckCircle2,
 } from "lucide-react";
 import { AvatarPhoto } from "@/components/ui/Avatar";
 
@@ -58,6 +59,33 @@ const fmtDate = (iso) => {
     });
 };
 
+// The client's scoped engagement link — open in a new tab or copy to share.
+function ClientLink({ url }) {
+    const abs = typeof window !== "undefined" ? `${window.location.origin}${url}` : url;
+    const copy = async () => {
+        try {
+            await navigator.clipboard.writeText(abs);
+            toast.success("Client link copied");
+        } catch {
+            toast.error("Could not copy the link");
+        }
+    };
+    return (
+        <div className="inline-flex items-center gap-1 rounded-md border border-gray-200 bg-gray-50 pl-2 pr-1 py-0.5 max-w-full">
+            <Link2 size={11} className="text-gray-400 shrink-0" />
+            <span className="text-[11px] text-gray-500 truncate max-w-[140px]" title={abs}>{url}</span>
+            <a href={url} target="_blank" rel="noopener noreferrer" title="Open client link"
+                className="w-5 h-5 rounded flex items-center justify-center text-gray-500 hover:text-gray-900 hover:bg-gray-200 transition-colors">
+                <ExternalLink size={11} />
+            </a>
+            <button type="button" onClick={copy} title="Copy client link"
+                className="w-5 h-5 rounded flex items-center justify-center text-gray-500 hover:text-gray-900 hover:bg-gray-200 transition-colors">
+                <Copy size={11} />
+            </button>
+        </div>
+    );
+}
+
 /**
  * Delete a case's whole generated engagement pack in one call. Confirms
  * first (naming the case + document count), then removes the stored files
@@ -97,6 +125,8 @@ function DeleteCaseDocsButton({ caseId, caseName, count }) {
  */
 export default function Engagement({ cases = [], documents = [], generated = [], signers = [], default_signer_id = null, me_id = null }) {
     const [modalOpen, setModalOpen] = useState(false);
+    const [auditFor, setAuditFor] = useState(null);   // { case_name, audit } for the audit-trail modal
+    const [manageFor, setManageFor] = useState(null); // the draft row being managed
 
     return (
         <div className="space-y-5 max-w-[1400px] mx-auto pb-12">
@@ -138,18 +168,20 @@ export default function Engagement({ cases = [], documents = [], generated = [],
                                 slack instead of leaving a gap before Created. */}
                             <colgroup>
                                 <col className="w-[56px]" />
-                                <col className="w-[190px]" />
-                                <col className="w-[180px]" />
+                                <col className="w-[230px]" />
                                 <col />
+                                <col className="w-[120px]" />
+                                <col className="w-[130px]" />
                                 <col className="w-[150px]" />
                                 <col className="w-[90px]" />
                             </colgroup>
                             <thead>
                                 <tr className="bg-slate-800 text-[10px] font-bold text-white uppercase tracking-wider">
                                     <th className="px-4 py-2.5">Profile</th>
-                                    <th className="px-3 py-2.5">Name</th>
-                                    <th className="px-3 py-2.5">Contacts</th>
-                                    <th className="px-3 py-2.5">Documents</th>
+                                    <th className="px-3 py-2.5">Name &amp; contacts</th>
+                                    <th className="px-3 py-2.5">Documents &amp; link</th>
+                                    <th className="px-3 py-2.5">Total amount</th>
+                                    <th className="px-3 py-2.5">Signed</th>
                                     <th className="px-3 py-2.5">Created</th>
                                     <th className="px-3 py-2.5 text-right pr-4">Actions</th>
                                 </tr>
@@ -168,7 +200,7 @@ export default function Engagement({ cases = [], documents = [], generated = [],
                                                 </div>
                                             </Link>
                                         </td>
-                                        {/* Name */}
+                                        {/* Name & contacts */}
                                         <td className="px-3 py-3">
                                             <Link
                                                 href={`/portal/immigration/cases/${c.case_id}/profile`}
@@ -176,57 +208,69 @@ export default function Engagement({ cases = [], documents = [], generated = [],
                                             >
                                                 {c.case_name}
                                             </Link>
-                                            {c.case_ref && (
-                                                <div className="text-[10px] text-gray-400 font-mono mt-0.5">{c.case_ref}</div>
+                                            <div className="mt-0.5">
+                                                {c.email && <div className="text-[10.5px] text-gray-500 truncate max-w-[210px]">{c.email}</div>}
+                                                {c.phone && <div className="text-[10.5px] text-gray-400 truncate max-w-[210px]">{c.phone}</div>}
+                                                {! c.email && ! c.phone && <div className="text-[10px] text-gray-300">No contact</div>}
+                                            </div>
+                                        </td>
+                                        {/* Documents & link — a count of what was
+                                            generated plus the client's scoped
+                                            engagement link (open + copy), instead
+                                            of listing every file. */}
+                                        <td className="px-3 py-3">
+                                            <div className="space-y-1.5">
+                                                <span className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-gray-800">
+                                                    <FileText size={12} className="text-gray-400" />
+                                                    {c.doc_count} document{c.doc_count === 1 ? "" : "s"}
+                                                </span>
+                                                {c.is_draft ? (
+                                                    <button type="button" onClick={() => setManageFor(c)}
+                                                        className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-gray-600 hover:text-gray-900 border border-gray-200 rounded-md px-2 py-1 hover:bg-gray-50">
+                                                        <Eye size={12} /> View / manage draft
+                                                    </button>
+                                                ) : c.signing_url ? (
+                                                    <ClientLink url={c.signing_url} />
+                                                ) : (
+                                                    <div className="text-[11px] text-gray-300">No client link</div>
+                                                )}
+                                            </div>
+                                        </td>
+                                        {/* Total amount — the ex-GST agreement fee */}
+                                        <td className="px-3 py-3 whitespace-nowrap">
+                                            {c.fee_total != null ? (
+                                                <>
+                                                    <div className="text-[13px] font-bold text-gray-900 tabular-nums">
+                                                        ${Number(c.fee_total).toLocaleString("en-NZ", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                    </div>
+                                                    <div className="text-[10px] text-gray-400">ex GST</div>
+                                                </>
+                                            ) : (
+                                                <span className="text-[11px] text-gray-300">—</span>
                                             )}
-                                            <div className="text-[10px] text-gray-400 mt-1">
-                                                {c.documents.length} document{c.documents.length === 1 ? '' : 's'}
-                                            </div>
                                         </td>
-                                        {/* Contacts */}
+                                        {/* Signed / draft status */}
                                         <td className="px-3 py-3">
-                                            {c.email && <div className="text-[11px] text-gray-600 truncate max-w-[220px]">{c.email}</div>}
-                                            {c.phone && <div className="text-[11px] text-gray-500 truncate max-w-[220px] mt-0.5">{c.phone}</div>}
-                                            {! c.email && ! c.phone && <span className="text-[11px] text-gray-300">—</span>}
-                                        </td>
-                                        {/* Documents — pills sized to their content
-                                            and wrapped inline, so a five-document
-                                            pack is a couple of lines rather than
-                                            five full-width rows. */}
-                                        <td className="px-3 py-3">
-                                            <div className="flex flex-wrap gap-1">
-                                                {c.documents.map((d) => (
-                                                    <span
-                                                        key={d.id}
-                                                        className="inline-flex items-center gap-1 rounded-md border border-gray-200 bg-gray-50 pl-1.5 pr-0.5 py-0.5"
-                                                    >
-                                                        <FileText size={11} className="text-gray-400 shrink-0" />
-                                                        <span className="text-[11px] font-semibold text-gray-800 whitespace-nowrap">
-                                                            {d.type_label}
-                                                        </span>
-                                                        {d.signed && (
-                                                            <Check size={11} className="text-emerald-600 shrink-0" title="Signed by the client" />
-                                                        )}
-                                                        <span className="text-[10px] text-gray-400 tabular-nums whitespace-nowrap">{fmtSize(d.size)}</span>
-                                                        <a
-                                                            href={d.view_url}
-                                                            target="_blank"
-                                                            rel="noopener noreferrer"
-                                                            title="View"
-                                                            className="w-5 h-5 rounded flex items-center justify-center text-gray-500 hover:text-gray-900 hover:bg-gray-200 transition-colors"
-                                                        >
-                                                            <Eye size={11} />
-                                                        </a>
-                                                        <a
-                                                            href={d.download_url}
-                                                            title="Download"
-                                                            className="w-5 h-5 rounded flex items-center justify-center text-gray-500 hover:text-gray-900 hover:bg-gray-200 transition-colors"
-                                                        >
-                                                            <Download size={11} />
-                                                        </a>
+                                            {c.signed ? (
+                                                <div>
+                                                    <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                                        <Check size={11} /> Signed
                                                     </span>
-                                                ))}
-                                            </div>
+                                                    {(c.signer_name || c.signed_at) && (
+                                                        <div className="text-[10px] text-gray-400 mt-1">
+                                                            {c.signer_name}{c.signer_name && c.signed_at ? " · " : ""}{c.signed_at ? fmtDate(c.signed_at) : ""}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            ) : c.is_draft ? (
+                                                <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
+                                                    Draft
+                                                </span>
+                                            ) : (
+                                                <span className="inline-flex items-center text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-gray-50 text-gray-500 border border-gray-200">
+                                                    Not signed
+                                                </span>
+                                            )}
                                         </td>
                                         {/* Created — latest generation for this case */}
                                         <td className="px-3 py-3 whitespace-nowrap">
@@ -241,24 +285,14 @@ export default function Engagement({ cases = [], documents = [], generated = [],
                                             delete the case's whole pack. */}
                                         <td className="px-3 py-3 pr-4 whitespace-nowrap">
                                             <div className="flex items-center justify-end gap-1">
-                                                {c.tracking_code ? (
-                                                    <a
-                                                        href={`/track/${c.tracking_code}`}
-                                                        target="_blank"
-                                                        rel="noopener noreferrer"
-                                                        title="Open the client's application tracker"
-                                                        className="w-7 h-7 rounded-lg border border-gray-200 flex items-center justify-center text-gray-500 hover:border-gray-900 hover:text-gray-900 transition-colors"
-                                                    >
-                                                        <ExternalLink size={13} />
-                                                    </a>
-                                                ) : (
-                                                    <span
-                                                        title="No tracking code on this case"
-                                                        className="w-7 h-7 rounded-lg border border-gray-100 flex items-center justify-center text-gray-300"
-                                                    >
-                                                        <ExternalLink size={13} />
-                                                    </span>
-                                                )}
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setAuditFor({ caseName: c.case_name, audit: c.audit })}
+                                                    title="Audit trail"
+                                                    className="w-7 h-7 rounded-lg border border-gray-200 flex items-center justify-center text-gray-500 hover:border-gray-900 hover:text-gray-900 transition-colors"
+                                                >
+                                                    <ScrollText size={13} />
+                                                </button>
                                                 <DeleteCaseDocsButton
                                                     caseId={c.case_id}
                                                     caseName={c.case_name}
@@ -284,7 +318,237 @@ export default function Engagement({ cases = [], documents = [], generated = [],
                     onClose={() => setModalOpen(false)}
                 />
             )}
+
+            {auditFor && (
+                <AuditTrailModal caseName={auditFor.caseName} audit={auditFor.audit} onClose={() => setAuditFor(null)} />
+            )}
+
+            {manageFor && (
+                <DraftManageModal row={manageFor} signers={signers} documents={documents} onClose={() => setManageFor(null)} />
+            )}
         </div>
+    );
+}
+
+// Manage a DRAFT engagement — preview on the left, editable settings on the
+// right. "Save changes" regenerates the pack (still a draft); "Send to email"
+// emails the client the signing link and clears the draft state.
+function DraftManageModal({ row, signers = [], documents = [], onClose }) {
+    const currentTypes = (row.documents || []).map((d) => d.type_key).filter(Boolean);
+    const [selectedTypes, setSelectedTypes] = useState(
+        currentTypes.length ? currentTypes : documents.map((d) => d.key)
+    );
+    const [signerId, setSignerId] = useState(row.signer_id ?? signers[0]?.id ?? null);
+    const [feeLocation, setFeeLocation] = useState("onshore");
+    const [includeGst, setIncludeGst] = useState(false);
+    const [feeOverride, setFeeOverride] = useState("");
+    const [busy, setBusy] = useState(null); // 'save' | 'send'
+
+    const previewType = selectedTypes.includes("written_agreement") ? "written_agreement" : (selectedTypes[0] || "written_agreement");
+    const previewUrl = `/admin/leads/${row.case_id}/generate/engage_${previewType}/preview?fee_location=${feeLocation}&include_gst=${includeGst ? 1 : 0}${signerId ? `&signer=${signerId}` : ""}${feeOverride !== "" ? `&professional_fee=${encodeURIComponent(feeOverride)}` : ""}`;
+
+    const toggleType = (k) => setSelectedTypes((s) => (s.includes(k) ? s.filter((x) => x !== k) : [...s, k]));
+
+    const saveChanges = () => {
+        if (busy || selectedTypes.length === 0) return;
+        setBusy("save");
+        router.post(`/admin/leads/${row.case_id}/engagement/generate`, {
+            types: selectedTypes, notify: false, signer_id: signerId,
+            fee_tier: "normal", fee_location: feeLocation, include_gst: includeGst,
+            professional_fee: feeOverride !== "" ? Number(feeOverride) : null,
+        }, {
+            preserveScroll: true,
+            onSuccess: () => { toast.success("Draft updated"); onClose(); },
+            onError: () => toast.error("Could not save changes."),
+            onFinish: () => setBusy(null),
+        });
+    };
+
+    const sendEmail = () => {
+        if (busy) return;
+        setBusy("send");
+        router.post(`/admin/leads/${row.case_id}/engagement/send`, {}, {
+            preserveScroll: true,
+            onSuccess: () => { toast.success("Engagement sent to the client"); onClose(); },
+            onError: (e) => toast.error(Object.values(e)[0] || "Could not send."),
+            onFinish: () => setBusy(null),
+        });
+    };
+
+    return createPortal(
+        <div className="fixed inset-0 z-[60] bg-black/50 flex items-center justify-center p-3" onClick={onClose}>
+            <div className="w-[96vw] max-w-[1200px] h-[92vh] max-h-[calc(100vh-1.5rem)] bg-white rounded-2xl shadow-xl flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
+                <div className="px-5 py-3.5 border-b border-gray-100 flex items-center justify-between gap-3 flex-shrink-0">
+                    <div className="min-w-0">
+                        <h2 className="text-sm font-bold text-gray-900 truncate">Manage draft — {row.case_name}</h2>
+                        <p className="text-[11px] text-gray-500">Not yet sent to the client</p>
+                    </div>
+                    <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-700"><X size={18} /></button>
+                </div>
+
+                <div className="flex-1 min-h-0 flex flex-col lg:flex-row overflow-hidden">
+                    {/* Preview */}
+                    <div className="flex-1 min-w-0 min-h-[280px] bg-gray-100 border-b lg:border-b-0 lg:border-r border-gray-100">
+                        <iframe key={previewUrl} src={previewUrl} title="Engagement preview" className="w-full h-full border-0" />
+                    </div>
+
+                    {/* Settings */}
+                    <div className="lg:w-[360px] flex-shrink-0 overflow-y-auto p-5 space-y-4">
+                        <p className="text-[11px] font-bold uppercase tracking-wider text-gray-500">Settings</p>
+
+                        <div>
+                            <label className="block text-[11px] font-semibold text-gray-600 mb-1">Signing adviser</label>
+                            <select value={signerId ?? ""} onChange={(e) => setSignerId(Number(e.target.value) || null)}
+                                className="w-full text-[13px] px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-gray-900">
+                                {signers.map((s) => <option key={s.id} value={s.id}>{s.name}{s.licence_current === false ? " (licence expired)" : ""}</option>)}
+                            </select>
+                        </div>
+
+                        <div>
+                            <label className="block text-[11px] font-semibold text-gray-600 mb-1">Documents</label>
+                            <div className="space-y-1">
+                                {documents.map((d) => (
+                                    <label key={d.key} className="flex items-center gap-2 text-[12.5px] text-gray-700 cursor-pointer">
+                                        <input type="checkbox" checked={selectedTypes.includes(d.key)} onChange={() => toggleType(d.key)} className="rounded border-gray-300" />
+                                        {d.label}
+                                    </label>
+                                ))}
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2">
+                            <div>
+                                <label className="block text-[11px] font-semibold text-gray-600 mb-1">Location</label>
+                                <select value={feeLocation} onChange={(e) => setFeeLocation(e.target.value)}
+                                    className="w-full text-[13px] px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-gray-900">
+                                    <option value="onshore">Onshore</option>
+                                    <option value="offshore">Offshore</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-[11px] font-semibold text-gray-600 mb-1">GST</label>
+                                <select value={includeGst ? "incl" : "excl"} onChange={(e) => setIncludeGst(e.target.value === "incl")}
+                                    className="w-full text-[13px] px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-gray-900">
+                                    <option value="excl">Exclusive</option>
+                                    <option value="incl">Inclusive</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label className="block text-[11px] font-semibold text-gray-600 mb-1">Agreement fee (ex GST) — leave blank for the visa fee</label>
+                            <input type="number" min="0" step="0.01" value={feeOverride} onChange={(e) => setFeeOverride(e.target.value)} placeholder="Visa default"
+                                className="w-full text-[13px] px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-gray-900" />
+                        </div>
+
+                        <div className="pt-2 space-y-2 border-t border-gray-100">
+                            <button type="button" onClick={saveChanges} disabled={!!busy || selectedTypes.length === 0}
+                                className="w-full inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg border border-gray-300 text-gray-700 text-[13px] font-bold hover:bg-gray-50 disabled:opacity-50">
+                                {busy === "save" ? <Loader2 size={14} className="animate-spin" /> : <FileText size={14} />} Save changes
+                            </button>
+                            <button type="button" onClick={sendEmail} disabled={!!busy || !row.email}
+                                title={row.email ? "" : "No client email on file"}
+                                className="w-full inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg bg-gray-900 text-white text-[13px] font-bold hover:bg-black disabled:opacity-50">
+                                {busy === "send" ? <Loader2 size={14} className="animate-spin" /> : <SendIcon size={14} />} Send to client email
+                            </button>
+                            {!row.email && <p className="text-[11px] text-amber-600">No email on file for this client.</p>}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>,
+        document.body,
+    );
+}
+
+// Signing audit trail for a case's engagement — who sent it, who signed, when.
+function AuditTrailModal({ caseName, audit = {}, onClose }) {
+    const signed = audit.status === "Signed";
+    const fmt = (iso) => {
+        if (!iso) return "—";
+        const d = new Date(iso);
+        return `${d.toLocaleDateString("en-NZ", { year: "numeric", month: "2-digit", day: "2-digit" })}\n${d.toLocaleTimeString("en-NZ", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false })}`;
+    };
+
+    return createPortal(
+        <div className="fixed inset-0 z-[60] bg-black/40 flex items-center justify-center p-4 overflow-y-auto" role="dialog" aria-modal="true" onClick={onClose}>
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg my-8" onClick={(e) => e.stopPropagation()}>
+                <header className="px-6 py-4 border-b border-gray-100 flex items-center justify-between gap-3">
+                    <h2 className="text-lg font-semibold text-gray-900">Audit trail</h2>
+                    <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-700"><X size={18} /></button>
+                </header>
+
+                <div className="p-6 space-y-5">
+                    {/* Details */}
+                    <section className="rounded-xl border border-gray-200">
+                        <div className="px-4 py-2.5 border-b border-gray-100 text-[13px] font-semibold text-gray-800">Details</div>
+                        <dl className="divide-y divide-gray-50">
+                            <Row label="File name" value={audit.file_name || `${caseName} — Engagement`} />
+                            <Row label="Status" value={
+                                <span className="inline-flex items-center gap-1.5">
+                                    <span className={`w-2 h-2 rounded-full ${signed ? "bg-emerald-500" : "bg-amber-500"}`} />
+                                    {signed ? "Signed" : "Awaiting signature"}
+                                </span>
+                            } />
+                            <Row label="Status timestamp" value={<span className="whitespace-pre-line tabular-nums">{fmt(audit.status_at)} UTC</span>} />
+                        </dl>
+                    </section>
+
+                    {/* Activity */}
+                    <section className="rounded-xl border border-gray-200">
+                        <div className="px-4 py-2.5 border-b border-gray-100 text-[13px] font-semibold text-gray-800">Activity</div>
+                        <ul className="divide-y divide-gray-50">
+                            <Activity
+                                icon={<SendIcon size={16} />} tag="Sent"
+                                body={<><span className="font-medium text-gray-800">{audit.sent_by_email || audit.sent_by || "Staff"}</span> sent a signature request to:<br /><span className="text-gray-700">• {audit.client_name}{audit.client_email ? ` (${audit.client_email})` : ""}</span></>}
+                                at={fmt(audit.sent_at)}
+                            />
+                            {signed && (
+                                <Activity
+                                    icon={<FileSignature size={16} />} tag="Signed"
+                                    body={<><span className="font-semibold text-gray-900">Signed</span> by {audit.signer_name || audit.client_name}{audit.client_email ? ` (${audit.client_email})` : ""}</>}
+                                    at={fmt(audit.signed_at)}
+                                />
+                            )}
+                            {signed && (
+                                <Activity
+                                    icon={<CheckCircle2 size={16} />} tag="Completed"
+                                    body={<>This document has been signed and is <span className="font-semibold">complete</span>.</>}
+                                    at={fmt(audit.signed_at)}
+                                />
+                            )}
+                        </ul>
+                    </section>
+
+                    <p className="text-[11px] text-gray-400 leading-relaxed">
+                        The email address indicated for the signer may be associated with the account used to access the signing link. Timestamps are shown in UTC.
+                    </p>
+                </div>
+            </div>
+        </div>,
+        document.body,
+    );
+}
+
+function Row({ label, value }) {
+    return (
+        <div className="px-4 py-3 flex items-start gap-4">
+            <dt className="w-32 flex-shrink-0 text-[10px] font-bold uppercase tracking-wider text-gray-400 pt-0.5">{label}</dt>
+            <dd className="text-[13px] text-gray-800 min-w-0">{value}</dd>
+        </div>
+    );
+}
+
+function Activity({ icon, tag, body, at }) {
+    return (
+        <li className="px-4 py-3.5 flex items-start gap-3">
+            <div className="w-14 flex-shrink-0 flex flex-col items-center text-gray-400">
+                <span>{icon}</span>
+                <span className="text-[9px] font-bold uppercase tracking-wider mt-1">{tag}</span>
+            </div>
+            <p className="flex-1 text-[12.5px] text-gray-700 leading-snug min-w-0">{body}</p>
+            <span className="text-[11px] text-gray-500 tabular-nums whitespace-pre-line text-right flex-shrink-0">{at} UTC</span>
+        </li>
     );
 }
 
@@ -305,6 +569,8 @@ function NewEngagementModal({ cases, documents, signers = [], defaultSignerId = 
     // Fees are stored excluding GST; this decides whether the agreement
     // quotes that figure or the GST-inclusive RRP.
     const [includeGst, setIncludeGst] = useState(false);
+    // Manual override for the (ex-GST) professional fee. "" = use the visa's fee.
+    const [feeOverride, setFeeOverride] = useState("");
     // Default the signing adviser to the practice's designated LIA (Hendry) when
     // present; otherwise the current user if they're eligible; otherwise first.
     const [signerId, setSignerId] = useState(() => {
@@ -364,6 +630,9 @@ function NewEngagementModal({ cases, documents, signers = [], defaultSignerId = 
         if (!hasDiscounted && feeTier === "discounted") setFeeTier("normal");
     }, [hasDiscounted, feeTier]);
 
+    // The ex-GST fee actually used — the manual override if set, else the visa's.
+    const effectiveFee = feeOverride !== "" ? Number(feeOverride) : quotedFee;
+
     // The fee a location would quote at the current tier + GST setting — shown
     // in the location dropdown so onshore vs offshore prices are both visible
     // before switching.
@@ -385,21 +654,29 @@ function NewEngagementModal({ cases, documents, signers = [], defaultSignerId = 
     const missingSignature = writtenSelected && selectedSigner && !selectedSigner.has_signature;
 
     const previewUrl = selectedCase && previewType
-        ? `/admin/leads/${selectedCase.id}/generate/engage_${previewType}/preview?fee_tier=${feeTier}&fee_location=${feeLocation}&include_gst=${includeGst ? 1 : 0}${signerId ? `&signer=${signerId}` : ""}`
+        ? `/admin/leads/${selectedCase.id}/generate/engage_${previewType}/preview?fee_tier=${feeTier}&fee_location=${feeLocation}&include_gst=${includeGst ? 1 : 0}${signerId ? `&signer=${signerId}` : ""}${feeOverride !== "" ? `&professional_fee=${encodeURIComponent(feeOverride)}` : ""}`
         : null;
 
-    const generate = () => {
+    // sendEmail=false → "Save as draft": generates the pack but does NOT email
+    // the client. sendEmail=true → also emails the scoped signing link.
+    const generate = (sendEmail) => {
         if (!selectedCase || selectedTypes.length === 0) return;
+        const who = selectedCase.name || "the client";
+        const msg = sendEmail
+            ? `Generate ${selectedTypes.length} document${selectedTypes.length === 1 ? "" : "s"} and EMAIL the signing link to ${who}?`
+            : `Generate ${selectedTypes.length} document${selectedTypes.length === 1 ? "" : "s"} as a draft (the client will NOT be emailed)?`;
+        if (!window.confirm(`${msg}\n\nAre you sure you want to proceed?`)) return;
         setSubmitting(true);
         router.post(
             `/admin/leads/${selectedCase.id}/engagement/generate`,
             {
                 types: selectedTypes,
-                notify: notify && !!selectedCase.email,
+                notify: !!sendEmail && !!selectedCase.email,
                 signer_id: signerId,
                 fee_tier: feeTier,
                 fee_location: feeLocation,
                 include_gst: includeGst,
+                professional_fee: feeOverride !== "" ? Number(feeOverride) : null,
             },
             {
                 preserveScroll: true,
@@ -542,17 +819,29 @@ function NewEngagementModal({ cases, documents, signers = [], defaultSignerId = 
                                 </div>
                             </div>
 
-                            {/* The resulting fee, so the two dropdowns above
-                                can stay short without hiding what they do. */}
-                            {quotedFee != null && (
-                                <div
-                                    className="flex items-baseline justify-between rounded-lg px-3 py-2 text-white"
-                                    style={{ backgroundColor: BRAND_TEAL }}
-                                >
-                                    <span className="text-[11px] text-white/80">Agreement fee</span>
-                                    <span className="text-sm font-bold tabular-nums">
-                                        ${fmtFee(includeGst ? quotedFee * (1 + GST_RATE) : quotedFee)}
-                                    </span>
+                            {/* The resulting fee — editable. The input is the
+                                ex-GST professional fee sent as an override. */}
+                            {writtenSelected && (
+                                <div className="rounded-lg px-3 py-2 text-white" style={{ backgroundColor: BRAND_TEAL }}>
+                                    <div className="flex items-center justify-between gap-2">
+                                        <span className="text-[11px] text-white/80">Agreement fee <span className="text-white/50">(ex GST)</span></span>
+                                        <div className="flex items-center gap-1">
+                                            <span className="text-sm font-bold">$</span>
+                                            <input
+                                                type="number" min="0" step="0.01"
+                                                value={effectiveFee ?? ""}
+                                                onChange={(e) => setFeeOverride(e.target.value)}
+                                                placeholder="0.00"
+                                                className="w-24 bg-white/15 rounded px-2 py-0.5 text-sm font-bold text-white text-right tabular-nums placeholder-white/40 focus:outline-none focus:bg-white/25"
+                                            />
+                                        </div>
+                                    </div>
+                                    {includeGst && effectiveFee != null && effectiveFee !== "" && (
+                                        <p className="text-[10.5px] text-white/70 text-right mt-0.5">incl. GST ${fmtFee(Number(effectiveFee) * (1 + GST_RATE))}</p>
+                                    )}
+                                    {feeOverride !== "" && (
+                                        <button type="button" onClick={() => setFeeOverride("")} className="text-[10px] text-white/70 hover:text-white underline mt-0.5">Reset to visa fee</button>
+                                    )}
                                 </div>
                             )}
 
@@ -666,42 +955,42 @@ function NewEngagementModal({ cases, documents, signers = [], defaultSignerId = 
                 {/* Footer */}
                 <div className="px-5 py-3 border-t border-gray-100 flex items-center justify-between gap-4 flex-shrink-0">
                     <div className="min-w-0">
-                        {/* Email the client that their documents are ready in the tracker */}
-                        <label className={`flex items-center gap-2 ${selectedCase && !selectedCase.email ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}>
-                            <button
-                                type="button"
-                                onClick={() => setNotify((v) => !v)}
-                                disabled={selectedCase && !selectedCase.email}
-                                className={`w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 ${notify && !(selectedCase && !selectedCase.email) ? "bg-gray-900 border-gray-900" : "bg-white border-gray-300"}`}
-                            >
-                                {notify && !(selectedCase && !selectedCase.email) && <Check size={12} className="text-white" strokeWidth={3} />}
-                            </button>
-                            <span className="text-xs text-gray-600 flex items-center gap-1.5 min-w-0">
-                                <Mail size={13} className="text-gray-400 flex-shrink-0" />
-                                <span className="truncate">
-                                    Email the client that their documents are available in the application tracker
-                                    {selectedCase && (selectedCase.email
-                                        ? <span className="text-gray-400"> · {selectedCase.email}</span>
-                                        : <span className="text-amber-600"> · no email on file</span>)}
-                                </span>
-                            </span>
-                        </label>
+                        <p className="text-[12px] text-gray-600 flex items-center gap-1.5">
+                            <Mail size={13} className="text-gray-400 flex-shrink-0" />
+                            {selectedCase && !selectedCase.email
+                                ? <span className="text-amber-600">No client email — draft only</span>
+                                : <span className="text-gray-500"><span className="font-semibold text-gray-700">Generate &amp; email</span> sends the client the signing link{selectedCase?.email ? ` · ${selectedCase.email}` : ""}</span>}
+                        </p>
                         <p className="text-[11px] text-gray-400 mt-1">
-                            {selectedTypes.length} document{selectedTypes.length === 1 ? "" : "s"} selected
+                            {selectedTypes.length} document{selectedTypes.length === 1 ? "" : "s"} selected · <span className="font-semibold text-gray-500">Save as draft</span> does not email the client
                         </p>
                     </div>
-                    <div className="flex items-center gap-2 flex-shrink-0">
-                        <button onClick={onClose} className="px-4 py-2 text-sm font-semibold text-gray-600 hover:text-gray-800">Cancel</button>
-                        <button
-                            onClick={generate}
-                            disabled={!selectedCase || selectedTypes.length === 0 || submitting
-                                || (selectedSigner && selectedSigner.licence_current === false)}
-                            className="px-4 py-2 bg-gray-900 text-white text-sm font-semibold rounded-xl hover:bg-black transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                            {submitting ? <Loader2 size={14} className="animate-spin" /> : <FileSignature size={14} />}
-                            Generate {selectedTypes.length > 0 ? `(${selectedTypes.length})` : ""}
-                        </button>
-                    </div>
+                    {(() => {
+                        const disabled = !selectedCase || selectedTypes.length === 0 || submitting
+                            || (selectedSigner && selectedSigner.licence_current === false);
+                        return (
+                            <div className="flex items-center gap-2 flex-shrink-0">
+                                <button onClick={onClose} className="px-4 py-2 text-sm font-semibold text-gray-600 hover:text-gray-800">Cancel</button>
+                                <button
+                                    onClick={() => generate(false)}
+                                    disabled={disabled}
+                                    className="px-4 py-2 border border-gray-300 text-gray-700 text-sm font-semibold rounded-xl hover:bg-gray-50 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    {submitting ? <Loader2 size={14} className="animate-spin" /> : <FileText size={14} />}
+                                    Save as draft
+                                </button>
+                                <button
+                                    onClick={() => generate(true)}
+                                    disabled={disabled || !selectedCase?.email}
+                                    title={selectedCase && !selectedCase.email ? "No email on file for this client" : ""}
+                                    className="px-4 py-2 bg-gray-900 text-white text-sm font-semibold rounded-xl hover:bg-black transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    {submitting ? <Loader2 size={14} className="animate-spin" /> : <FileSignature size={14} />}
+                                    Generate &amp; email
+                                </button>
+                            </div>
+                        );
+                    })()}
                 </div>
             </div>
         </div>

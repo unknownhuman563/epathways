@@ -727,9 +727,9 @@ class ImmigrationController extends Controller
                 ->values();
 
             $generated = LeadDocument::with([
-                'lead:id,first_name,last_name,lead_id,tracking_code,email,phone',
+                'lead:id,first_name,last_name,lead_id,tracking_code,email,phone,engagement_signing_token,engagement_sent_at,engagement_fee_total',
                 'lead.faceImage',
-                'uploader:id,name',
+                'uploader:id,name,email',
             ])
                 ->where('source_variant', 'like', 'engagement:%')
                 ->orderByDesc('created_at')
@@ -743,6 +743,20 @@ class ImmigrationController extends Controller
                     $first = $docs->first(); // newest first (ordered desc)
                     $lead = $first->lead;
 
+                    // The scoped client link for this engagement pack. Ensure the
+                    // token exists so staff can copy/open the link even before the
+                    // notification email was sent.
+                    $token = $lead?->engagement_signing_token;
+                    if ($lead && ! $token) {
+                        $token = $lead->ensureEngagementSigningToken();
+                    }
+
+                    // Signed = the Written Agreement in this pack is signed.
+                    $waDoc = $docs->first(fn ($d) => $d->source_variant === 'engagement:written_agreement');
+                    $signedAt = optional($waDoc)->client_signed_at;
+                    // Draft until the pack's signing link has been emailed.
+                    $isDraft = $lead ? ! $lead->engagement_sent_at : true;
+
                     return [
                         'case_id' => $first->lead_id,
                         'case_name' => $lead ? trim("{$lead->first_name} {$lead->last_name}") : '—',
@@ -755,8 +769,37 @@ class ImmigrationController extends Controller
                         'phone' => $lead?->phone,
                         'latest_created_at' => optional($first->created_at)?->toIso8601String(),
                         'latest_by' => $first->uploader?->name,
+                        // Draft = generated but not yet emailed. Drafts withhold
+                        // the client link and are edited/sent from the manage modal.
+                        'is_draft' => $isDraft,
+                        // The (ex-GST) agreement fee the pack was generated at.
+                        'fee_total' => $lead?->engagement_fee_total !== null ? (float) $lead->engagement_fee_total : null,
+                        // Consolidated summary the table shows instead of every file.
+                        'doc_count' => $docs->count(),
+                        // Link only once the pack has actually been sent to the client.
+                        'signing_url' => (! $isDraft && $token) ? '/engagement/'.$token : null,
+                        'signer_id' => optional($waDoc)->engagement_signer_id,
+                        'sent_at' => optional($lead?->engagement_sent_at)?->toIso8601String(),
+                        'signed' => (bool) $signedAt,
+                        'signed_at' => optional($signedAt)?->toIso8601String(),
+                        'signer_name' => optional($waDoc)->client_signer_name,
+                        // Audit trail for the Written Agreement — who sent it, who
+                        // signed, and when (drives the Audit trail modal).
+                        'audit' => [
+                            'file_name' => optional($waDoc)->original_name ?: 'Engagement pack',
+                            'status' => $signedAt ? 'Signed' : 'Awaiting signature',
+                            'status_at' => optional($signedAt ?: optional($waDoc)->created_at ?: $first->created_at)?->toIso8601String(),
+                            'sent_by' => optional(optional($waDoc)->uploader ?: $first->uploader)->name,
+                            'sent_by_email' => optional(optional($waDoc)->uploader ?: $first->uploader)->email,
+                            'sent_at' => optional(optional($waDoc)->created_at ?: $first->created_at)?->toIso8601String(),
+                            'client_name' => $lead ? (trim("{$lead->first_name} {$lead->last_name}") ?: 'Client') : 'Client',
+                            'client_email' => $lead?->email,
+                            'signer_name' => optional($waDoc)->client_signer_name,
+                            'signed_at' => optional($signedAt)?->toIso8601String(),
+                        ],
                         'documents' => $docs->map(fn ($d) => [
                             'id' => $d->id,
+                            'type_key' => str_replace('engagement:', '', (string) $d->source_variant),
                             'type_label' => \App\Services\Immigration\EngagementDocumentGenerator::DOCS[str_replace('engagement:', '', $d->source_variant)]['label']
                                 ?? 'Document',
                             'size' => $d->size,
