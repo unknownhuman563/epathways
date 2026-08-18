@@ -348,6 +348,17 @@ Route::middleware(['throttle:tracker', 'tracker.enabled'])->group(function () {
     Route::get('/track/{code}/agreements/{token}/signed', [\App\Http\Controllers\Tracker\TrackerAgreementController::class, 'signedConfirmation'])->name('track.agreements.signed');
 });
 
+// Standalone engagement-signing surface. The per-lead token
+// (leads.engagement_signing_token) is the bearer credential; it grants access
+// to ONLY that lead's engagement-pack documents (not the whole case), so it is
+// independent of the tracker on/off toggle. Rate-limited like the tracker.
+Route::middleware(['throttle:tracker'])->group(function () {
+    Route::get('/engagement/{token}', [\App\Http\Controllers\EngagementSigningController::class, 'show'])->name('engagement.sign.show');
+    Route::get('/engagement/{token}/documents/{doc}/download', [\App\Http\Controllers\EngagementSigningController::class, 'download'])->name('engagement.sign.download');
+    Route::get('/engagement/{token}/documents/{doc}/preview', [\App\Http\Controllers\EngagementSigningController::class, 'preview'])->name('engagement.sign.preview');
+    Route::post('/engagement/{token}/documents/{doc}/sign', [\App\Http\Controllers\EngagementSigningController::class, 'sign'])->name('engagement.sign');
+});
+
 // Public Registration & Assessment Routes
 // Public "Quick Registration" — short marketing lead-capture form (a trimmed
 // Free Assessment). Exact /register; the {event_code} variants below are the
@@ -827,6 +838,9 @@ Route::middleware(['auth'])->group(function () {
         // + IAA standards) for a case in one call — the Engagement workspace.
         Route::post('/admin/leads/{id}/engagement/generate', [LeadDocumentController::class, 'generateEngagement'])
             ->name('admin.leads.engagement.generate');
+        // Email the client the engagement signing link (from the manage-draft modal).
+        Route::post('/admin/leads/{id}/engagement/send', [LeadDocumentController::class, 'sendEngagement'])
+            ->name('admin.leads.engagement.send');
         // Delete a case's whole generated engagement pack (one row = one case).
         Route::delete('/admin/leads/{id}/engagement/documents', [LeadDocumentController::class, 'destroyEngagementDocs'])
             ->name('admin.leads.engagement.destroy');
@@ -1067,6 +1081,7 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/leads', [\App\Http\Controllers\Portal\AgentController::class, 'leads'])->name('leads');
             Route::post('/leads', [\App\Http\Controllers\Portal\AgentController::class, 'storeLead'])->name('leads.store');
             Route::post('/leads/{id}/info', [\App\Http\Controllers\Portal\AgentController::class, 'updateLeadInfo'])->name('leads.info');
+            Route::get('/profile', [\App\Http\Controllers\Portal\AgentController::class, 'profile'])->name('profile');
         });
 
         // Other portals — each has its own controller + dedicated dashboard

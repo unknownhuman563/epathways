@@ -1,20 +1,45 @@
-import { useRef, useState, useEffect } from "react";
+import { useMemo, useRef, useState, useEffect } from "react";
 import { router } from "@inertiajs/react";
-import { PenTool, Upload, Trash2, Check, Eraser } from "lucide-react";
+import { PenTool, Upload, Trash2, Check, Eraser, Type } from "lucide-react";
+
+// Render a typed name into a script-font signature image (data URL).
+function renderNameSignature(name) {
+    const text = (name || "").trim();
+    if (!text || typeof document === "undefined") return "";
+    const canvas = document.createElement("canvas");
+    canvas.width = 560;
+    canvas.height = 170;
+    const ctx = canvas.getContext("2d");
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = "#111827";
+    ctx.textBaseline = "middle";
+    ctx.textAlign = "center";
+    const fontAt = (px) => `italic ${px}px "Segoe Script","Brush Script MT","Snell Roundhand","Apple Chancery","Comic Sans MS",cursive`;
+    let size = 66;
+    ctx.font = fontAt(size);
+    while (size > 22 && ctx.measureText(text).width > 520) {
+        size -= 4;
+        ctx.font = fontAt(size);
+    }
+    ctx.fillText(text, 280, 90);
+    return canvas.toDataURL("image/png");
+}
 
 /**
- * Staff e-signature card. Staff either draw a signature on the canvas or
- * upload an image; it's saved to their account and rendered onto the
- * engagement documents they sign.
+ * Staff e-signature card. Staff auto-generate a signature from their name,
+ * draw one on the canvas, or upload an image; it's saved to their account and
+ * rendered onto the documents they sign.
  *
  * Props:
  *   signature  — { data_uri, updated_at } | null (current saved signature)
  *   saveUrl    — POST endpoint (accepts signature_data OR signature_image)
  *   deleteUrl  — DELETE endpoint
+ *   name       — the user's full name (for the auto-generated signature)
  *   accent     — tailwind bg-* for the primary button (default dark gray)
  */
-export default function SignatureCard({ signature, saveUrl, deleteUrl, accent = "bg-gray-900" }) {
-    const [mode, setMode] = useState("draw"); // draw | upload
+export default function SignatureCard({ signature, saveUrl, deleteUrl, name = "", accent = "bg-gray-900" }) {
+    const [mode, setMode] = useState(name ? "auto" : "draw"); // auto | draw | upload
+    const autoData = useMemo(() => renderNameSignature(name), [name]);
     const [saving, setSaving] = useState(false);
     const [hasDrawing, setHasDrawing] = useState(false);
     const [uploadFile, setUploadFile] = useState(null);
@@ -88,6 +113,15 @@ export default function SignatureCard({ signature, saveUrl, deleteUrl, accent = 
         });
     };
 
+    const saveAuto = () => {
+        if (!autoData) return;
+        setSaving(true);
+        router.post(saveUrl, { signature_data: autoData }, {
+            preserveScroll: true,
+            onFinish: () => setSaving(false),
+        });
+    };
+
     const saveUpload = () => {
         if (!uploadFile) return;
         setSaving(true);
@@ -144,6 +178,7 @@ export default function SignatureCard({ signature, saveUrl, deleteUrl, accent = 
             {/* Mode tabs */}
             <div className="flex items-center gap-2 mb-3">
                 {[
+                    { key: "auto", label: "Auto-generated", icon: <Type size={13} /> },
                     { key: "draw", label: "Draw", icon: <PenTool size={13} /> },
                     { key: "upload", label: "Upload", icon: <Upload size={13} /> },
                 ].map((t) => (
@@ -157,7 +192,25 @@ export default function SignatureCard({ signature, saveUrl, deleteUrl, accent = 
                 ))}
             </div>
 
-            {mode === "draw" ? (
+            {mode === "auto" ? (
+                <div>
+                    <div className="rounded-xl border-2 border-dashed border-gray-200 bg-white h-[170px] flex items-center justify-center overflow-hidden">
+                        {autoData
+                            ? <img src={autoData} alt="Signature preview" className="max-h-[130px] max-w-[85%] object-contain" />
+                            : <p className="text-xs text-gray-400 px-4 text-center">Add your name to your profile to auto-generate a signature.</p>}
+                    </div>
+                    <div className="flex items-center justify-between mt-3">
+                        <p className="text-[10.5px] text-gray-400">Generated from your name{name ? `: ${name}` : ""}.</p>
+                        <button
+                            onClick={saveAuto}
+                            disabled={!autoData || saving}
+                            className={`px-4 py-1.5 ${accent} text-white rounded-lg text-[11px] font-bold uppercase tracking-wider hover:opacity-90 disabled:opacity-40`}
+                        >
+                            {saving ? "Saving…" : "Save signature"}
+                        </button>
+                    </div>
+                </div>
+            ) : mode === "draw" ? (
                 <div>
                     <div className="rounded-xl border-2 border-dashed border-gray-200 bg-white overflow-hidden">
                         <canvas
