@@ -57,6 +57,7 @@ export default function ImmigrationProfile({ user, signature }) {
 
             <SignatureCard
                 signature={signature}
+                name={user?.name}
                 saveUrl="/portal/immigration/profile/signature"
                 deleteUrl="/portal/immigration/profile/signature"
             />

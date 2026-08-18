@@ -45,6 +45,7 @@ export default function AdviserProfile({ adviser = {}, licence = {}, signature =
             {/* Adviser e-signature — drawn or uploaded. Shared staff endpoint. */}
             <SignatureCard
                 signature={signature}
+                name={adviser.name}
                 saveUrl="/portal/immigration/profile/signature"
                 deleteUrl="/portal/immigration/profile/signature"
             />

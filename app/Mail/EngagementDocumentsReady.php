@@ -61,23 +61,30 @@ class EngagementDocumentsReady extends Mailable implements ShouldQueue
      * @param  array<string,int>  $docIds  Map of doc key => generated LeadDocument id,
      *                                     so each card deep-links to its PDF.
      */
-    public function __construct(public Lead $lead, array $types = [], array $docIds = [])
+    public function __construct(public Lead $lead, array $types = [], array $docIds = [], ?string $token = null)
     {
         $this->firstName = $lead->first_name ?: 'there';
         $base = rtrim(config('app.url'), '/');
-        $this->trackUrl = $base.'/track/'.$lead->tracking_code;
+
+        // The scoped engagement-signing link is the primary CTA. It shows ONLY
+        // the engagement pack (view + sign the Written Agreement), not the whole
+        // tracker. Falls back to the tracker only if somehow no token exists.
+        $token = $token ?: $lead->engagement_signing_token;
+        $this->trackUrl = $token
+            ? $base.'/engagement/'.$token
+            : $base.'/track/'.$lead->tracking_code;
 
         // Preserve the catalogue order, keep only the generated types, and
         // fall back to the full standard pack when nothing was passed.
         $order = array_keys(EngagementDocumentGenerator::DOCS);
         $selected = array_values(array_intersect($order, $types)) ?: $order;
 
-        $this->cards = array_map(function ($key) use ($docIds, $base, $lead) {
+        $this->cards = array_map(function ($key) use ($docIds, $base, $token) {
             $card = self::CARDS[$key];
-            // Deep-link straight to the generated PDF when we know its id;
-            // otherwise fall back to the tracker page.
-            $card['url'] = isset($docIds[$key])
-                ? $base.'/track/'.$lead->tracking_code.'/documents/'.$docIds[$key].'/download'
+            // Deep-link straight to the generated PDF (through the scoped token)
+            // when we know its id; otherwise fall back to the engagement page.
+            $card['url'] = ($token && isset($docIds[$key]))
+                ? $base.'/engagement/'.$token.'/documents/'.$docIds[$key].'/download'
                 : $this->trackUrl;
 
             return $card;
