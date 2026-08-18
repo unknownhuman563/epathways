@@ -7,6 +7,7 @@ import {
     FileText, Loader2, Mail, Eye, Trash2, ExternalLink, Copy, Link2, ScrollText, Send as SendIcon, CheckCircle2,
 } from "lucide-react";
 import { AvatarPhoto } from "@/components/ui/Avatar";
+import { confirmDialog } from "@/components/ui/ConfirmDialog";
 
 // Initials fallback for the profile avatar when there's no face image.
 const rowInitials = (name = "") =>
@@ -94,8 +95,13 @@ function ClientLink({ url }) {
 function DeleteCaseDocsButton({ caseId, caseName, count }) {
     const [busy, setBusy] = useState(false);
 
-    const remove = () => {
-        if (! confirm(`Delete all ${count} engagement document${count === 1 ? '' : 's'} for ${caseName}? This removes the files permanently.`)) return;
+    const remove = async () => {
+        const ok = await confirmDialog({
+            title: "Delete engagement documents?",
+            message: `Delete all ${count} engagement document${count === 1 ? '' : 's'} for ${caseName}? This removes the files permanently.`,
+            confirmText: "Delete", tone: "danger",
+        });
+        if (! ok) return;
         setBusy(true);
         router.delete(`/admin/leads/${caseId}/engagement/documents`, {
             preserveScroll: true,
@@ -127,6 +133,17 @@ export default function Engagement({ cases = [], documents = [], generated = [],
     const [modalOpen, setModalOpen] = useState(false);
     const [auditFor, setAuditFor] = useState(null);   // { case_name, audit } for the audit-trail modal
     const [manageFor, setManageFor] = useState(null); // the draft row being managed
+    const [preselectedCase, setPreselectedCase] = useState(null);
+
+    // Deep-link from a case profile's "Generate Engagement" button:
+    // /portal/immigration/cases/engagement?case={id} opens the modal preselected.
+    useEffect(() => {
+        if (typeof window === "undefined") return;
+        const caseId = new URLSearchParams(window.location.search).get("case");
+        if (!caseId) return;
+        const c = cases.find((x) => String(x.id) === String(caseId));
+        if (c) { setPreselectedCase(c); setModalOpen(true); }
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
     return (
         <div className="space-y-5 max-w-[1400px] mx-auto pb-12">
@@ -181,7 +198,7 @@ export default function Engagement({ cases = [], documents = [], generated = [],
                                     <th className="px-3 py-2.5">Name &amp; contacts</th>
                                     <th className="px-3 py-2.5">Documents &amp; link</th>
                                     <th className="px-3 py-2.5">Total amount</th>
-                                    <th className="px-3 py-2.5">Signed</th>
+                                    <th className="px-3 py-2.5">Status</th>
                                     <th className="px-3 py-2.5">Created</th>
                                     <th className="px-3 py-2.5 text-right pr-4">Actions</th>
                                 </tr>
@@ -267,8 +284,8 @@ export default function Engagement({ cases = [], documents = [], generated = [],
                                                     Draft
                                                 </span>
                                             ) : (
-                                                <span className="inline-flex items-center text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-gray-50 text-gray-500 border border-gray-200">
-                                                    Not signed
+                                                <span className="inline-flex items-center text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+                                                    Sent
                                                 </span>
                                             )}
                                         </td>
@@ -315,7 +332,8 @@ export default function Engagement({ cases = [], documents = [], generated = [],
                     signers={signers}
                     defaultSignerId={default_signer_id}
                     meId={me_id}
-                    onClose={() => setModalOpen(false)}
+                    initialCase={preselectedCase}
+                    onClose={() => { setModalOpen(false); setPreselectedCase(null); }}
                 />
             )}
 
@@ -552,9 +570,9 @@ function Activity({ icon, tag, body, at }) {
     );
 }
 
-function NewEngagementModal({ cases, documents, signers = [], defaultSignerId = null, meId, onClose }) {
+function NewEngagementModal({ cases, documents, signers = [], defaultSignerId = null, meId, onClose, initialCase = null }) {
     const [caseSearch, setCaseSearch] = useState("");
-    const [selectedCase, setSelectedCase] = useState(null);
+    const [selectedCase, setSelectedCase] = useState(initialCase);
     const [selectedTypes, setSelectedTypes] = useState(documents.map((d) => d.key));
     const [previewType, setPreviewType] = useState(documents[0]?.key ?? null);
     const [submitting, setSubmitting] = useState(false);
@@ -659,13 +677,18 @@ function NewEngagementModal({ cases, documents, signers = [], defaultSignerId = 
 
     // sendEmail=false → "Save as draft": generates the pack but does NOT email
     // the client. sendEmail=true → also emails the scoped signing link.
-    const generate = (sendEmail) => {
+    const generate = async (sendEmail) => {
         if (!selectedCase || selectedTypes.length === 0) return;
         const who = selectedCase.name || "the client";
-        const msg = sendEmail
-            ? `Generate ${selectedTypes.length} document${selectedTypes.length === 1 ? "" : "s"} and EMAIL the signing link to ${who}?`
-            : `Generate ${selectedTypes.length} document${selectedTypes.length === 1 ? "" : "s"} as a draft (the client will NOT be emailed)?`;
-        if (!window.confirm(`${msg}\n\nAre you sure you want to proceed?`)) return;
+        const n = selectedTypes.length;
+        const ok = await confirmDialog({
+            title: sendEmail ? "Generate & email engagement?" : "Save engagement as draft?",
+            message: sendEmail
+                ? `Generate ${n} document${n === 1 ? "" : "s"} and email the signing link to ${who}.`
+                : `Generate ${n} document${n === 1 ? "" : "s"} as a draft. The client will NOT be emailed.`,
+            confirmText: sendEmail ? "Generate & email" : "Save as draft",
+        });
+        if (!ok) return;
         setSubmitting(true);
         router.post(
             `/admin/leads/${selectedCase.id}/engagement/generate`,

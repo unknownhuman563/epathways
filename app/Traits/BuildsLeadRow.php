@@ -70,6 +70,10 @@ trait BuildsLeadRow
                 ->pluck('name')->filter()->values()->all(),
             'course' => optional($l->studyPlans->first())->preferred_course,
             'highest_qualification' => $l->highest_qualification,
+            // Visa the applicant chose on the /register form (or later
+            // captured by staff). Drives the Agent portal's "Visa" column
+            // and any pipeline view that wants to segment by visa.
+            'visa' => $l->inz_visa_type,
             'source' => $sourceLabel,
             'source_key' => $l->source,
             'status' => $l->status ?: 'New',
