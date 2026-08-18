@@ -69,6 +69,24 @@ class AgentController extends Controller
         ]);
     }
 
+    /** Agent's own account page — mirrors the pattern used by sales /
+     *  education / immigration portals. The referral link is exposed too
+     *  so the agent can copy it from here as well as the dashboard. */
+    public function profile()
+    {
+        $me = Auth::user();
+        $code = $me?->ensureReferralCode();
+
+        return inertia('portal/agent/Profile', [
+            'portal' => 'agent',
+            'user' => $me?->only(['id', 'name', 'email', 'role', 'phone']),
+            'referral' => $code ? [
+                'code' => $code,
+                'url' => url('/register?ref='.$code),
+            ] : null,
+        ]);
+    }
+
     /** The agent's own leads list (add + edit-info only). */
     public function leads()
     {
