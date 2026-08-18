@@ -83,6 +83,9 @@ class CaseProfileController extends Controller
             // Ad-hoc document requests sent to the client (what was asked for,
             // when, by whom, and whether it's been fulfilled yet).
             'documentRequests' => $this->loadDocumentRequests($lead),
+            // Engagement generation from the case profile header (signers, the
+            // doc catalogue, and whether the pack was already emailed).
+            'engagement' => $this->engagementMeta($lead),
             // The Visa Information Form (official assessment PDF) — surfaced only
             // when the case's visa checklist connects a VIF item.
             'vif' => $hasVifItem ? $this->resolveVif($intakeType, $intake) : null,
@@ -1554,6 +1557,39 @@ class CaseProfileController extends Controller
      * Ad-hoc document requests sent to the client — what was asked for, when,
      * by whom, and whether a file has since come in against it (fulfilled).
      */
+    /**
+     * Data for the case-profile "Generate Engagement" button + modal: the
+     * licensed signers, the document catalogue, the default signer, and whether
+     * the engagement pack has already been emailed to the client.
+     */
+    private function engagementMeta(Lead $lead): array
+    {
+        $signers = \App\Models\User::whereNotNull('iaa_licence_number')
+            ->where('iaa_licence_number', '!=', '')
+            ->orderBy('name')
+            ->get(['id', 'name', 'iaa_licence_number', 'iaa_licence_expiry', 'signature_path'])
+            ->map(fn ($u) => [
+                'id' => $u->id,
+                'name' => $u->name,
+                'licence_current' => $u->holdsCurrentLicence(),
+                'has_signature' => $u->hasSignature(),
+            ])
+            ->values();
+
+        $defaultName = strtolower(trim((string) config('immigration.signing_adviser')));
+        $default = $signers->first(fn ($s) => strtolower($s['name']) === $defaultName)['id']
+            ?? ($signers[0]['id'] ?? null);
+
+        return [
+            'sent' => (bool) $lead->engagement_sent_at,
+            'sent_at' => optional($lead->engagement_sent_at)?->toIso8601String(),
+            'has_email' => ! empty($lead->email),
+            'documents' => \App\Services\Immigration\EngagementDocumentGenerator::catalogue(),
+            'signers' => $signers,
+            'default_signer_id' => $default,
+        ];
+    }
+
     private function loadDocumentRequests(Lead $lead): array
     {
         return $lead->documentRequests()

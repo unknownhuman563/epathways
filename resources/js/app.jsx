@@ -19,6 +19,7 @@ import RoleLayout from './components/layout/RoleLayout';
 import FlashToaster from './components/ui/FlashToaster';
 import FloatingContact from './components/ui/FloatingContact';
 import MobileStickyCTA from './components/ui/MobileStickyCTA';
+import { ConfirmHost } from './components/ui/ConfirmDialog';
 
 // Map portal-path prefix → layout component. Pages under
 // resources/js/pages/portal/<role>/ are automatically wrapped.
@@ -77,6 +78,7 @@ createInertiaApp({
         <FlashToaster />
         <FloatingContact />
         <MobileStickyCTA />
+        <ConfirmHost />
         <Toaster position="top-right" richColors closeButton />
       </>
     )

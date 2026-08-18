@@ -3,7 +3,7 @@ import { Head, useForm, usePage } from "@inertiajs/react";
 import { createPortal } from "react-dom";
 import {
     Plus, Search, X, Users as UsersIcon, Mail, Phone, MapPin,
-    GraduationCap, Pencil, AlertCircle, Info, Upload, FileText,
+    GraduationCap, Pencil, AlertCircle, Info, Upload, FileText, Stamp,
 } from "lucide-react";
 import Avatar from "@/components/ui/Avatar";
 
@@ -112,6 +112,7 @@ export default function AgentLeads({ leads = [], programs = [] }) {
                                 <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Location</th>
                                 <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Education</th>
                                 <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Program</th>
+                                <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Visa</th>
                                 <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
                                 <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Added</th>
                                 <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider text-right pr-8">Edit</th>
@@ -120,7 +121,7 @@ export default function AgentLeads({ leads = [], programs = [] }) {
                         <tbody className="divide-y divide-gray-50">
                             {filtered.length === 0 ? (
                                 <tr>
-                                    <td colSpan={8} className="px-6 py-16 text-center text-gray-400">
+                                    <td colSpan={9} className="px-6 py-16 text-center text-gray-400">
                                         <UsersIcon className="w-10 h-10 mx-auto mb-3 text-gray-200" />
                                         <p className="font-semibold">No leads yet</p>
                                         <p className="text-sm mt-1">Add your first recruited lead to get started.</p>
@@ -152,6 +153,11 @@ export default function AgentLeads({ leads = [], programs = [] }) {
                                     </td>
                                     <td className="px-6 py-4 text-sm text-gray-700">
                                         {l.course ? <span className="inline-flex items-center gap-1.5"><GraduationCap size={13} className="text-gray-400" />{l.course}</span> : <span className="text-gray-300">—</span>}
+                                    </td>
+                                    <td className="px-6 py-4 text-sm text-gray-700">
+                                        {l.visa
+                                            ? <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-teal-50 border border-teal-100 text-teal-700 text-[11px] font-semibold"><Stamp size={11} />{l.visa}</span>
+                                            : <span className="text-gray-300">—</span>}
                                     </td>
                                     <td className="px-6 py-4"><StatusPill value={l.status} /></td>
                                     <td className="px-6 py-4 text-sm text-gray-600">{fmtDate(l.created_at)}</td>
