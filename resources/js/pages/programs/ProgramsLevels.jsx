@@ -83,7 +83,7 @@ export default function ProgramsLevels({ programs = [], activePromos = [] }) {
 
     // Search control — rendered on the right of the first category title.
     const searchBar = (
-        <div className="relative w-[300px] lg:w-[380px]">
+        <div className="relative w-full md:w-[300px] lg:w-[380px]">
             <input
                 type="text"
                 placeholder="Search programs..."
