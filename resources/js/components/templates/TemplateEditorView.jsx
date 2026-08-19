@@ -345,7 +345,10 @@ export default function TemplateEditorView({
                                 </label>
                                 <p className="col-span-2 text-[11px] text-gray-400 -mt-2">Comma-separated. These addresses are copied on every send of this template.</p>
                             </div>
-                            <label className="block">
+                            {/* Plain div, NOT a <label>: a label forwards clicks to its first
+                                control (the Customize button), which would open the builder
+                                whenever the editor canvas is clicked. */}
+                            <div className="block">
                                 <div className="flex items-center justify-between mb-1">
                                     <span className="block text-xs font-semibold text-gray-600">Body</span>
                                     <div className="flex items-center gap-3">
@@ -367,7 +370,7 @@ export default function TemplateEditorView({
                                         <span className="block text-[11px] text-gray-400 mt-1">Format with the toolbar, or use <strong>Customize email body</strong> for a drag-and-drop design.</span>
                                     </>
                                 )}
-                            </label>
+                            </div>
 
                             {/* Optional branding — banner header + footer CTA image.
                                 Left blank, the email uses the default ePathways
