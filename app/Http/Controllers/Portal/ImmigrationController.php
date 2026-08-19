@@ -751,8 +751,11 @@ class ImmigrationController extends Controller
                         $token = $lead->ensureEngagementSigningToken();
                     }
 
-                    // Signed = the Written Agreement in this pack is signed.
-                    $waDoc = $docs->first(fn ($d) => $d->source_variant === 'engagement:written_agreement');
+                    // Signed = the Written Agreement in this pack is signed. Prefer
+                    // a signed copy if one exists so a stray unsigned duplicate
+                    // (e.g. from a re-draft) never hides a completed signature.
+                    $waCandidates = $docs->filter(fn ($d) => $d->source_variant === 'engagement:written_agreement');
+                    $waDoc = $waCandidates->first(fn ($d) => $d->client_signed_at) ?: $waCandidates->first();
                     $signedAt = optional($waDoc)->client_signed_at;
                     // Draft until the pack's signing link has been emailed.
                     $isDraft = $lead ? ! $lead->engagement_sent_at : true;

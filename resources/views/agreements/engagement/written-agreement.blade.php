@@ -10,8 +10,8 @@
     <table class="data">
         <tr><td class="label">Name</td><td>D Immigration Consultancy Limited T/A ePathways Migration</td></tr>
         <tr><td class="label">Address</td><td>21 Vazey Way, Hobsonville, Auckland, New Zealand</td></tr>
-        <tr><td class="label">Phone</td><td>+64 21 120 3363 (Hendry), +64 22 188 2800 (Dev)</td></tr>
-        <tr><td class="label">Email</td><td>hendry@epathways.co.nz, dev@epathways.co.nz</td></tr>
+        <tr><td class="label">Phone</td><td>{{ $contact['phone'] }}</td></tr>
+        <tr><td class="label">Email</td><td>{{ $contact['email'] }}</td></tr>
     </table>
     <p class="muted">hereinafter referred to as 'We', 'Us', 'Our'</p>
     <p>And</p>
