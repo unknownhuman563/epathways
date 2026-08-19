@@ -208,11 +208,11 @@ class BookingController extends Controller
         try {
             $lead = app(LeadIntakeService::class)->ingest('booking', [
                 'first_name' => $booking->first_name,
-                'last_name'  => $booking->last_name,
-                'email'      => $booking->email,
-                'phone'      => $booking->phone,
-                'country'    => $booking->current_country,
-                'stage'      => 'Booking',
+                'last_name' => $booking->last_name,
+                'email' => $booking->email,
+                'phone' => $booking->phone,
+                'country' => $booking->current_country,
+                'stage' => 'Booking',
             ], $request);
 
             // Land on the booking-confirmed stage. Non-regressing: never pull a
@@ -320,7 +320,36 @@ class BookingController extends Controller
 
             $validated['lead_id'] = $lead->id;
             $validated['payment_status'] = Booking::PAYMENT_UNPAID;
-            $booking = Booking::create($validated);
+
+            // Idempotency guard. A double-clicked button, a slow-response retry,
+            // or a booking widget that re-fires its completion event must NOT
+            // create a second identical booking. Reuse an existing booking for
+            // the same lead + service + slot and return it WITHOUT re-running the
+            // calendar/email side-effects. The DB unique index is the hard
+            // backstop for the concurrent-submit race below.
+            if ($existing = $this->findDuplicateBooking($lead->id, $validated)) {
+                return response()->json([
+                    'message' => 'Booking already recorded',
+                    'booking_id' => $existing->id,
+                    'duplicate' => true,
+                ], 200);
+            }
+
+            try {
+                $booking = Booking::create($validated);
+            } catch (\Illuminate\Database\QueryException $e) {
+                // Two near-simultaneous submits raced past the check above; the
+                // unique index rejected the loser. Reuse the row that won instead
+                // of erroring the visitor.
+                if ($dup = $this->findDuplicateBooking($lead->id, $validated)) {
+                    return response()->json([
+                        'message' => 'Booking already recorded',
+                        'booking_id' => $dup->id,
+                        'duplicate' => true,
+                    ], 200);
+                }
+                throw $e;
+            }
 
             // Map the key intake scalars onto the lead for pipeline use.
             if ($intakeData) {
@@ -402,6 +431,36 @@ class BookingController extends Controller
 
             return response()->json(['message' => 'Could not create booking. Please try again.'], 500);
         }
+    }
+
+    /**
+     * Find an existing booking that a repeat submit would duplicate: same lead,
+     * same service, same chosen slot. For slot-less enquiries (no date/time) only
+     * a recent identical submit counts as a duplicate, so a genuine later
+     * re-enquiry can still book. Returns the matching booking or null.
+     */
+    private function findDuplicateBooking(int $leadId, array $data): ?Booking
+    {
+        $date = $data['appointment_date'] ?? null;
+        $time = $data['appointment_time'] ?? null;
+
+        $query = Booking::where('lead_id', $leadId)
+            ->where('service_type', $data['service_type'] ?? null);
+
+        if ($date || $time) {
+            // whereDate normalises the comparison so a stored "2026-08-19 00:00:00"
+            // still matches the submitted "2026-08-19" on every DB driver.
+            $query->when(
+                $date,
+                fn ($q) => $q->whereDate('appointment_date', $date),
+                fn ($q) => $q->whereNull('appointment_date'),
+            )->where('appointment_time', $time);
+        } else {
+            $query->whereNull('appointment_date')->whereNull('appointment_time')
+                ->where('created_at', '>=', now()->subMinutes(10));
+        }
+
+        return $query->latest('id')->first();
     }
 
     public function update(Request $request, $id)
