@@ -40,6 +40,10 @@
     table.items th.num, table.items td.num { text-align: right; }
     table.items td { padding: 12px 8px; border-bottom: 1px solid #e2e2e2; font-size: 9.5pt; vertical-align: top; }
     table.items tr.total td { border-bottom: 0; border-top: 1px solid #333; font-weight: 700; font-size: 10pt; padding-top: 10px; }
+    table.items tr.subtotal td { border-bottom: 0; border-top: 1px solid #999; font-weight: 700; font-size: 9.5pt; padding-top: 8px; }
+    /* Per-applicant section heading on a family invoice. */
+    .applicant-head { font-size: 10pt; font-weight: 700; margin: 22px 0 0 0; color: #0f766e; }
+    .applicant-head .visa { font-weight: 400; color: #555; }
 
     /* ---- Payment block ---- */
     .pay { margin-top: 24px; font-size: 9.5pt; }
@@ -107,32 +111,77 @@
 </table>
 
 {{-- ---------- LINE ITEMS ---------- --}}
-<table class="items">
-    <thead>
-        <tr>
-            <th style="width: 58%;">Description</th>
-            <th class="num" style="width: 12%;">Quantity</th>
-            <th class="num" style="width: 15%;">Unit Price</th>
-            <th class="num" style="width: 15%;">Amount NZD</th>
-        </tr>
-    </thead>
-    <tbody>
-        @foreach($items as $item)
-            <tr>
-                <td>{{ $item['description'] }}</td>
-                <td class="num">{{ number_format($item['quantity'], 2) }}</td>
-                <td class="num">{{ number_format($item['unit_price'], 2) }}</td>
-                <td class="num">{{ number_format($item['amount'], 2) }}</td>
+@if(!empty($groups))
+    {{-- Family invoice: one section per applicant (principal, partner, then
+        children), each with its own consulting fee + disbursement and subtotal,
+        followed by a single grand total. --}}
+    @foreach($groups as $g)
+        <div class="applicant-head">{{ $g['name'] }} <span class="visa">— {{ $g['visa'] }}</span></div>
+        <table class="items" style="margin-top: 4px;">
+            <thead>
+                <tr>
+                    <th style="width: 58%;">Description</th>
+                    <th class="num" style="width: 12%;">Quantity</th>
+                    <th class="num" style="width: 15%;">Unit Price</th>
+                    <th class="num" style="width: 15%;">Amount NZD</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach($g['items'] as $item)
+                    <tr>
+                        <td>{{ $item['description'] }}</td>
+                        <td class="num">{{ number_format($item['quantity'], 2) }}</td>
+                        <td class="num">{{ number_format($item['unit_price'], 2) }}</td>
+                        <td class="num">{{ number_format($item['amount'], 2) }}</td>
+                    </tr>
+                @endforeach
+                <tr class="subtotal">
+                    <td></td>
+                    <td></td>
+                    <td class="num">Subtotal NZD</td>
+                    <td class="num">{{ number_format($g['subtotal'], 2) }}</td>
+                </tr>
+            </tbody>
+        </table>
+    @endforeach
+    <table class="items" style="margin-top: 8px;">
+        <tbody>
+            <tr class="total">
+                <td style="width: 58%;"></td>
+                <td style="width: 12%;"></td>
+                <td class="num" style="width: 15%;">TOTAL NZD</td>
+                <td class="num" style="width: 15%;">{{ number_format($total, 2) }}</td>
             </tr>
-        @endforeach
-        <tr class="total">
-            <td></td>
-            <td></td>
-            <td class="num">TOTAL NZD</td>
-            <td class="num">{{ number_format($total, 2) }}</td>
-        </tr>
-    </tbody>
-</table>
+        </tbody>
+    </table>
+@else
+    <table class="items">
+        <thead>
+            <tr>
+                <th style="width: 58%;">Description</th>
+                <th class="num" style="width: 12%;">Quantity</th>
+                <th class="num" style="width: 15%;">Unit Price</th>
+                <th class="num" style="width: 15%;">Amount NZD</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach($items as $item)
+                <tr>
+                    <td>{{ $item['description'] }}</td>
+                    <td class="num">{{ number_format($item['quantity'], 2) }}</td>
+                    <td class="num">{{ number_format($item['unit_price'], 2) }}</td>
+                    <td class="num">{{ number_format($item['amount'], 2) }}</td>
+                </tr>
+            @endforeach
+            <tr class="total">
+                <td></td>
+                <td></td>
+                <td class="num">TOTAL NZD</td>
+                <td class="num">{{ number_format($total, 2) }}</td>
+            </tr>
+        </tbody>
+    </table>
+@endif
 
 {{-- ---------- PAYMENT DETAILS ---------- --}}
 <div class="pay">

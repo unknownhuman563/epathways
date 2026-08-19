@@ -361,6 +361,16 @@ class EngagementDocumentGenerator
     }
 
     /**
+     * The case's family group (principal + costed dependants), ordered
+     * partner → children → other. Each entry: name, visa name, VisaType model.
+     * Public so the invoice generator can render a section per applicant.
+     */
+    public function familyApplicants(Lead $lead): array
+    {
+        return $this->buildApplicants($lead);
+    }
+
+    /**
      * The money totals for an engagement — our professional fees (summed across
      * the family, or the manual override), GST, the INZ disbursements, and the
      * grand total. Raw numbers (nulls where unset) so callers can store or
