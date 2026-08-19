@@ -8,6 +8,7 @@ use App\Models\TemplateFolder;
 use App\Models\User;
 use App\Services\CommunicationService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
@@ -54,9 +55,12 @@ class MessageTemplateController extends Controller
                 'is_active' => $t->is_active, 'folder_id' => $t->folder_id,
                 'updated_at' => optional($t->updated_at)?->toIso8601String(),
             ]),
-            'folders' => TemplateFolder::orderBy('name')->get(['id', 'name']),
+            'folders' => TemplateFolder::orderBy('name')->get(['id', 'name', 'department']),
             'basePath' => $ctx['basePath'],
             'scopeLabel' => $ctx['scopeLabel'],
+            // Drives the department tab strip + the "Move to department" picker
+            // ('' = shared, then one entry per portal department).
+            'departmentOptions' => $ctx['departmentOptions'],
         ]);
     }
 
@@ -64,13 +68,20 @@ class MessageTemplateController extends Controller
     {
         $ctx = $this->context($request);
 
+        // When "New template" is opened from inside a department tab, seed the
+        // department picker to that tab (admin only — portals force their own).
+        $defaultDepartment = $request->query('department');
+        if (! in_array($defaultDepartment, array_merge([''], MessageTemplate::DEPARTMENTS), true)) {
+            $defaultDepartment = null;
+        }
+
         return inertia($ctx['editorComponent'], [
             'template' => null,
             'standardVariables' => self::STANDARD_VARIABLES,
             'basePath' => $ctx['basePath'],
             'departmentOptions' => $ctx['departmentOptions'],
             'brandingOptions' => $this->brandingOptions(),
-            'fixedDepartment' => $ctx['department'],
+            'fixedDepartment' => $ctx['department'] ?? $defaultDepartment,
             'defaultChannel' => $request->query('channel'),
             // Carried through the New-template form so a template created from
             // inside a folder is saved into that folder.
@@ -107,6 +118,58 @@ class MessageTemplateController extends Controller
         ]);
     }
 
+    /**
+     * Open the editor pre-filled from an existing template so a whole set can be
+     * cloned for another department without re-authoring each one. Everything
+     * copies EXCEPT the key — it's left blank so the user assigns a fresh,
+     * unique one (nothing is written until they save through store()). Uploaded
+     * banner/footer images are not carried (they're per-template files); the
+     * branding preset is, which drives the artwork for the common case.
+     */
+    public function duplicate(Request $request, $id)
+    {
+        $ctx = $this->context($request);
+        $source = MessageTemplate::findOrFail($id);
+        $this->authorizeTemplate($ctx['department'], $source);
+
+        // A template-shaped payload with no id + blank key → the editor treats it
+        // as a create (POST), not an update.
+        $emailBody = $source->email_body;
+        if ($emailBody && ! preg_match('/<[a-z][\s\S]*>/i', $emailBody)) {
+            $emailBody = Str::markdown($emailBody);
+        }
+
+        $prefill = [
+            'id' => null,
+            'key' => '',
+            'name' => $source->name.' (copy)',
+            'description' => $source->description,
+            'department' => $source->department,
+            'folder_id' => $source->folder_id,
+            'channels' => $source->channels ?? [],
+            'email_subject' => $source->email_subject,
+            'email_body' => $emailBody,
+            'from_email' => $source->from_email,
+            'from_name' => $source->from_name,
+            'branding' => $source->branding,
+            'cc' => $source->cc,
+            'bcc' => $source->bcc,
+            'sms_body' => $source->sms_body,
+            'is_active' => $source->is_active,
+        ];
+
+        return inertia($ctx['editorComponent'], [
+            'template' => $prefill,
+            'standardVariables' => self::STANDARD_VARIABLES,
+            'basePath' => $ctx['basePath'],
+            'departmentOptions' => $ctx['departmentOptions'],
+            'brandingOptions' => $this->brandingOptions(),
+            'fixedDepartment' => $ctx['department'],
+            'defaultChannel' => null,
+            'duplicatedFrom' => $source->name,
+        ]);
+    }
+
     public function store(Request $request)
     {
         $ctx = $this->context($request);
@@ -137,21 +200,35 @@ class MessageTemplateController extends Controller
         $template = MessageTemplate::findOrFail($id);
         $this->authorizeTemplate($ctx['department'], $template);
 
-        // Key stays immutable (code references it). Department is editable in the
-        // admin cross-department context only — portal staff keep their own.
-        $data = $request->validate([...$this->bodyRules(), ...$this->imageRules()]);
-
-        // Department is editable from every portal now. Guard key+department
-        // uniqueness when moving a template between scopes.
+        // A keyless draft (from a folder duplicate) is being finalised — its key
+        // is set now. An already-keyed template keeps its key immutable (code
+        // references it). Department is editable from every portal.
+        $isDraft = empty($template->key);
         $department = $this->resolveStoreDepartment($request, $ctx['department']);
-        $clash = MessageTemplate::where('key', $template->key)
-            ->where('department', $department)
-            ->where('id', '!=', $template->id)
-            ->exists();
-        if ($clash) {
-            return back()->withErrors([
-                'department' => "A '{$template->key}' template already exists in that scope.",
-            ]);
+
+        $rules = [...$this->bodyRules(), ...$this->imageRules()];
+        if ($isDraft) {
+            $rules['key'] = [
+                'required', 'string', 'max:80', 'regex:/^[a-z0-9_]+$/',
+                Rule::unique('message_templates', 'key')
+                    ->where(fn ($q) => $q->where('department', $department))
+                    ->ignore($template->id),
+            ];
+        }
+        $data = $request->validate($rules, ['key.regex' => 'Key must be lowercase letters, numbers and underscores only.']);
+
+        if (! $isDraft) {
+            // Guard key+department uniqueness when moving an existing template.
+            $clash = MessageTemplate::where('key', $template->key)
+                ->where('department', $department)
+                ->where('id', '!=', $template->id)
+                ->exists();
+            if ($clash) {
+                return back()->withErrors([
+                    'department' => "A '{$template->key}' template already exists in that scope.",
+                ]);
+            }
+            unset($data['key']); // never change an existing key
         }
         $data['department'] = $department;
 
@@ -173,9 +250,29 @@ class MessageTemplateController extends Controller
     }
 
     /**
-     * Create a folder. Optionally move a set of templates into it in the same
-     * step — the "select templates → group into a new folder" flow. Folders
-     * are shared/global, so no department scoping here.
+     * Bulk-delete the selected templates (soft delete, like the single destroy).
+     * Backs the "Delete" action that only appears once templates are selected.
+     */
+    public function destroyMany(Request $request)
+    {
+        $this->context($request);
+
+        $data = $request->validate([
+            'ids' => ['required', 'array'],
+            'ids.*' => ['integer', 'exists:message_templates,id'],
+        ]);
+
+        $count = MessageTemplate::whereIn('id', $data['ids'])->count();
+        MessageTemplate::whereIn('id', $data['ids'])->delete();
+
+        return back()->with('success', "{$count} template".($count === 1 ? '' : 's').' deleted.');
+    }
+
+    /**
+     * Create a folder inside a department tab ('' = the Shared tab). Optionally
+     * move a set of templates into it in the same step — the "select templates →
+     * group into a new folder" flow. Members inherit the folder's department so
+     * a folder never mixes departments (any that would clash on key stay out).
      */
     public function storeFolder(Request $request)
     {
@@ -183,20 +280,37 @@ class MessageTemplateController extends Controller
 
         $data = $request->validate([
             'name' => ['required', 'string', 'max:120'],
+            'department' => ['nullable', Rule::in(array_merge([''], MessageTemplate::DEPARTMENTS))],
             'template_ids' => ['array'],
             'template_ids.*' => ['integer', 'exists:message_templates,id'],
         ]);
 
+        $department = (string) ($data['department'] ?? '');
+
         $folder = TemplateFolder::create([
             'name' => $data['name'],
+            'department' => $department,
             'created_by' => $request->user()->id,
         ]);
 
+        $skipped = 0;
         if (! empty($data['template_ids'])) {
-            MessageTemplate::whereIn('id', $data['template_ids'])->update(['folder_id' => $folder->id]);
+            $templates = MessageTemplate::whereIn('id', $data['template_ids'])->get();
+            [, $skippedIds] = $this->applyDepartmentToTemplates($templates, $department);
+            $skipped = count($skippedIds);
+            // Only the templates that could take the folder's department join it.
+            $movableIds = array_diff($data['template_ids'], $skippedIds);
+            if (! empty($movableIds)) {
+                MessageTemplate::whereIn('id', $movableIds)->update(['folder_id' => $folder->id]);
+            }
         }
 
-        return back()->with('success', 'Folder created.');
+        $msg = 'Folder created.';
+        if ($skipped > 0) {
+            $msg .= " {$skipped} template(s) were left out — the same key already exists in that department.";
+        }
+
+        return back()->with('success', $msg);
     }
 
     public function updateFolder(Request $request, $id)
@@ -209,6 +323,129 @@ class MessageTemplateController extends Controller
         ]));
 
         return back()->with('success', 'Folder renamed.');
+    }
+
+    /**
+     * Move a whole folder into a department tab. Its templates follow so the
+     * folder stays single-department; any template whose key already exists in
+     * the target department is ejected to the root instead of clashing.
+     */
+    public function moveFolderDepartment(Request $request, $id)
+    {
+        $this->context($request);
+        $folder = TemplateFolder::findOrFail($id);
+
+        $data = $request->validate([
+            'department' => ['nullable', Rule::in(array_merge([''], MessageTemplate::DEPARTMENTS))],
+        ]);
+        $department = (string) ($data['department'] ?? '');
+
+        [, $skippedIds] = $this->applyDepartmentToTemplates($folder->templates()->get(), $department);
+        if (! empty($skippedIds)) {
+            MessageTemplate::whereIn('id', $skippedIds)->update(['folder_id' => null]);
+        }
+        $folder->update(['department' => $department]);
+
+        $label = $department === '' ? 'Shared' : ucfirst($department);
+        $msg = "Folder moved to {$label}.";
+        if (! empty($skippedIds)) {
+            $msg .= ' '.count($skippedIds).' template(s) with a clashing key were moved out to the root instead.';
+        }
+
+        return back()->with('success', $msg);
+    }
+
+    /**
+     * Clone a folder AND every template inside it into another department in one
+     * step — so a whole set can be reused for another team without rebuilding the
+     * folder and duplicating each template by hand. The originals are untouched:
+     * a brand-new folder and brand-new template rows are created.
+     *
+     * Each cloned template is a KEYLESS DRAFT — its key is left blank (NULL) and
+     * it's created inactive, so you assign a fresh, department-specific key
+     * before it can be used (exactly like the single-template duplicate leaves
+     * the key blank). This also sidesteps any key clash with existing templates.
+     * Uploaded banner/footer images aren't copied (per-template files — the
+     * branding preset carries the look).
+     */
+    public function duplicateFolder(Request $request, $id)
+    {
+        $this->context($request);
+        $source = TemplateFolder::with('templates')->findOrFail($id);
+
+        $data = $request->validate([
+            'department' => ['nullable', Rule::in(array_merge([''], MessageTemplate::DEPARTMENTS))],
+        ]);
+        $department = (string) ($data['department'] ?? '');
+        $sameDept = $source->department === $department;
+
+        $copied = 0;
+        DB::transaction(function () use ($source, $department, $sameDept, $request, &$copied) {
+            $newFolder = TemplateFolder::create([
+                'name' => $sameDept ? $source->name.' (copy)' : $source->name,
+                'department' => $department,
+                'created_by' => $request->user()->id,
+            ]);
+
+            foreach ($source->templates as $t) {
+                MessageTemplate::create([
+                    'key' => null,          // keyless draft — user sets the key
+                    'department' => $department,
+                    'folder_id' => $newFolder->id,
+                    'name' => $t->name,
+                    'description' => $t->description,
+                    'channels' => $t->channels,
+                    'email_subject' => $t->email_subject,
+                    'email_body' => $t->email_body,
+                    'from_email' => $t->from_email,
+                    'from_name' => $t->from_name,
+                    'branding' => $t->branding,
+                    'cc' => $t->cc,
+                    'bcc' => $t->bcc,
+                    'sms_body' => $t->sms_body,
+                    'is_active' => false,   // can't be used until it has a key
+                    'created_by' => $request->user()->id,
+                    // banner_image / footer_image intentionally not copied — two
+                    // rows sharing one stored file would break when one edits it.
+                ]);
+                $copied++;
+            }
+        });
+
+        $label = $department === '' ? 'Shared' : ucfirst($department);
+        $msg = "Folder duplicated to {$label} — {$copied} draft template".($copied === 1 ? '' : 's')
+            .' created. Open each to set its key before use.';
+
+        return back()->with('success', $msg);
+    }
+
+    /**
+     * Set the department on a set of templates, skipping any whose (key,
+     * department) pair would collide with an existing row (the unique index on
+     * message_templates). Returns [movedCount, array $skippedIds].
+     */
+    private function applyDepartmentToTemplates(\Illuminate\Support\Collection $templates, string $department): array
+    {
+        $moved = 0;
+        $skippedIds = [];
+        foreach ($templates as $template) {
+            if ($template->department === $department) {
+                continue; // already there
+            }
+            $clash = MessageTemplate::where('key', $template->key)
+                ->where('department', $department)
+                ->where('id', '!=', $template->id)
+                ->exists();
+            if ($clash) {
+                $skippedIds[] = $template->id;
+
+                continue;
+            }
+            $template->update(['department' => $department]);
+            $moved++;
+        }
+
+        return [$moved, $skippedIds];
     }
 
     /**
@@ -237,9 +474,59 @@ class MessageTemplateController extends Controller
             'folder_id' => ['nullable', 'integer', 'exists:template_folders,id'],
         ]);
 
-        MessageTemplate::whereIn('id', $data['ids'])->update(['folder_id' => $data['folder_id'] ?? null]);
+        // Moving to the root just ungroups — department is untouched.
+        if (empty($data['folder_id'])) {
+            MessageTemplate::whereIn('id', $data['ids'])->update(['folder_id' => null]);
 
-        return back()->with('success', 'Templates moved.');
+            return back()->with('success', 'Templates moved.');
+        }
+
+        // Moving into a folder: members inherit the folder's department so the
+        // folder stays single-department. Key clashes are left out.
+        $folder = TemplateFolder::findOrFail($data['folder_id']);
+        [, $skippedIds] = $this->applyDepartmentToTemplates(MessageTemplate::whereIn('id', $data['ids'])->get(), $folder->department);
+        $movableIds = array_diff($data['ids'], $skippedIds);
+        if (! empty($movableIds)) {
+            MessageTemplate::whereIn('id', $movableIds)->update(['folder_id' => $folder->id]);
+        }
+
+        $msg = 'Templates moved.';
+        if (! empty($skippedIds)) {
+            $msg .= ' '.count($skippedIds).' left out — the same key already exists in that department.';
+        }
+
+        return back()->with('success', $msg);
+    }
+
+    /**
+     * Bulk-move the selected templates into a department scope ('' = shared).
+     * Backs the "Move to department" action behind the admin department tabs.
+     * Skips any template whose (key, target department) pair already exists on
+     * another row so the key+department uniqueness invariant is preserved.
+     */
+    public function moveDepartment(Request $request)
+    {
+        $this->context($request);
+
+        $data = $request->validate([
+            'ids' => ['required', 'array'],
+            'ids.*' => ['integer', 'exists:message_templates,id'],
+            'department' => ['nullable', Rule::in(array_merge([''], MessageTemplate::DEPARTMENTS))],
+        ]);
+
+        $department = (string) ($data['department'] ?? '');
+        $templates = MessageTemplate::whereIn('id', $data['ids'])->get();
+
+        [$moved, $skippedIds] = $this->applyDepartmentToTemplates($templates, $department);
+        $skipped = count($skippedIds);
+
+        $label = $department === '' ? 'Shared' : ucfirst($department);
+        $msg = "Moved {$moved} template".($moved === 1 ? '' : 's')." to {$label}.";
+        if ($skipped > 0) {
+            $msg .= " {$skipped} skipped — a template with the same key already exists there.";
+        }
+
+        return back()->with($moved === 0 && $skipped > 0 ? 'error' : 'success', $msg);
     }
 
     /**

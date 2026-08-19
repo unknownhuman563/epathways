@@ -98,8 +98,10 @@ export default function DiscoverCarousel({ title, programs = [], onSeeMore, head
 
     return (
         <div className="mb-20">
-            {/* Category header + See More (+ optional right-aligned slot) */}
-            <div className="flex items-center justify-between gap-6 mb-8">
+            {/* Category header + See More (+ optional right-aligned slot). On
+                mobile the right slot (search) stacks full-width under the title
+                instead of squeezing beside it. */}
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 md:gap-6 mb-8">
                 <div className="flex items-center gap-4">
                     <h3 className="text-4xl md:text-5xl font-bold text-[#282728] tracking-tight">{title}</h3>
                     {onSeeMore && (
@@ -111,7 +113,7 @@ export default function DiscoverCarousel({ title, programs = [], onSeeMore, head
                         </button>
                     )}
                 </div>
-                {headerRight && <div className="shrink-0 hidden md:block">{headerRight}</div>}
+                {headerRight && <div className="w-full md:w-auto shrink-0">{headerRight}</div>}
             </div>
 
             {/* Empty state — only reachable for the search-bearing category */}

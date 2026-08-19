@@ -700,7 +700,16 @@ class ImmigrationController extends Controller
                     'inz_application_fee_offshore' => $v->inz_application_fee_offshore !== null ? (float) $v->inz_application_fee_offshore : null,
                 ]]);
 
+            // Cases that already have a generated engagement (draft or sent) are
+            // managed from the Generated Documents table, not created again — so
+            // keep them out of the "new engagement" case picker.
+            $engagedLeadIds = LeadDocument::where('source_variant', 'like', 'engagement:%')
+                ->distinct()
+                ->pluck('lead_id')
+                ->all();
+
             $cases = Lead::immigrationCase()
+                ->whereNotIn('id', $engagedLeadIds)
                 ->orderByDesc('updated_at')
                 ->limit(300)
                 ->get(['id', 'lead_id', 'first_name', 'last_name', 'email', 'phone', 'residence_country', 'inz_visa_type', 'immigration_stage'])
@@ -727,7 +736,7 @@ class ImmigrationController extends Controller
                 ->values();
 
             $generated = LeadDocument::with([
-                'lead:id,first_name,last_name,lead_id,tracking_code,email,phone,engagement_signing_token,engagement_sent_at,engagement_fee_total',
+                'lead:id,first_name,last_name,lead_id,tracking_code,email,phone,engagement_signing_token,engagement_sent_at,engagement_fee_total,engagement_total_amount',
                 'lead.faceImage',
                 'uploader:id,name,email',
             ])
@@ -751,8 +760,11 @@ class ImmigrationController extends Controller
                         $token = $lead->ensureEngagementSigningToken();
                     }
 
-                    // Signed = the Written Agreement in this pack is signed.
-                    $waDoc = $docs->first(fn ($d) => $d->source_variant === 'engagement:written_agreement');
+                    // Signed = the Written Agreement in this pack is signed. Prefer
+                    // a signed copy if one exists so a stray unsigned duplicate
+                    // (e.g. from a re-draft) never hides a completed signature.
+                    $waCandidates = $docs->filter(fn ($d) => $d->source_variant === 'engagement:written_agreement');
+                    $waDoc = $waCandidates->first(fn ($d) => $d->client_signed_at) ?: $waCandidates->first();
                     $signedAt = optional($waDoc)->client_signed_at;
                     // Draft until the pack's signing link has been emailed.
                     $isDraft = $lead ? ! $lead->engagement_sent_at : true;
@@ -772,8 +784,12 @@ class ImmigrationController extends Controller
                         // Draft = generated but not yet emailed. Drafts withhold
                         // the client link and are edited/sent from the manage modal.
                         'is_draft' => $isDraft,
-                        // The (ex-GST) agreement fee the pack was generated at.
+                        // The (ex-GST) professional fee the pack was generated at.
                         'fee_total' => $lead?->engagement_fee_total !== null ? (float) $lead->engagement_fee_total : null,
+                        // The grand total — our fees (incl GST if quoted so) + INZ
+                        // disbursements across the family. Drives the "Total amount"
+                        // column; falls back to the ex-GST fee for older rows.
+                        'total_amount' => $lead?->engagement_total_amount !== null ? (float) $lead->engagement_total_amount : null,
                         // Consolidated summary the table shows instead of every file.
                         'doc_count' => $docs->count(),
                         // Link only once the pack has actually been sent to the client.

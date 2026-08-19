@@ -440,6 +440,11 @@ class DtrController extends Controller
         })->filter()->values()->all();
 
         $isFlexi = $setting->schedule_type === 'flexi';
+        // Schedule label reflects THIS date's schedule (weekend times / day off).
+        $daySched = $setting->scheduleForDate($date);
+        $scheduleLabel = $isFlexi
+            ? 'Flexi — no fixed hours'
+            : ($daySched['working'] ? $fmt($daySched['in']).' – '.$fmt($daySched['out']) : 'Day off');
 
         $payload = [
             'logo_data' => $this->brandLogoData(),
@@ -448,7 +453,7 @@ class DtrController extends Controller
             'employment' => $setting->employment_type === 'part_time' ? 'Part-time' : 'Full-time',
             'team' => $setting->team,
             'timezone' => $setting->timezone,
-            'scheduleLabel' => $isFlexi ? 'Flexi — no fixed hours' : ($fmt($setting->sched_in).' – '.$fmt($setting->sched_out)),
+            'scheduleLabel' => $scheduleLabel,
             'flexi' => $isFlexi,
             'date' => $date,
             'prettyDate' => Carbon::parse($date)->format('l, F j, Y'),
@@ -666,6 +671,10 @@ class DtrController extends Controller
             'timezone' => 'required|string|max:64',
             'sched_in' => 'nullable|string|max:8',
             'sched_out' => 'nullable|string|max:8',
+            'weekly_schedule' => 'nullable|array',
+            'weekly_schedule.*.on' => 'nullable|boolean',
+            'weekly_schedule.*.in' => 'nullable|string|max:8',
+            'weekly_schedule.*.out' => 'nullable|string|max:8',
             'schedule_type' => 'nullable|in:fixed,flexi',
             'break_hours' => 'nullable|numeric|min:0|max:24',
             'reports_to' => 'nullable|string|max:120',
@@ -684,11 +693,14 @@ class DtrController extends Controller
         $data['employment_type'] = $data['employment_type'] ?? 'full_time';
         $data['schedule_type'] = $data['schedule_type'] ?? 'fixed';
 
-        // Flexi has no fixed schedule — clear the clock-in/grace fields so a
-        // stale time never gets used to flag lateness that doesn't apply.
+        // Flexi has no fixed schedule — clear the clock-in fields (and any
+        // per-day schedule) so a stale time never flags lateness that doesn't apply.
         if ($data['schedule_type'] === 'flexi') {
             $data['sched_in'] = null;
             $data['sched_out'] = null;
+            $data['weekly_schedule'] = null;
+        } else {
+            $data['weekly_schedule'] = $this->normalizeWeeklySchedule($data['weekly_schedule'] ?? null);
         }
 
         // Snapshot the before-state so we can audit exactly what changed.
@@ -699,6 +711,33 @@ class DtrController extends Controller
         $this->recordSettingHistory($userId, $existing, $setting);
 
         return back()->with('success', "DTR set up for {$target->name}.");
+    }
+
+    /**
+     * Sanitise the per-day schedule posted from the setup form into a clean
+     * mon..sun map. Returns null when nothing usable was sent (falls back to the
+     * flat single schedule). Off days carry null times; on days keep their time.
+     */
+    private function normalizeWeeklySchedule($ws): ?array
+    {
+        if (empty($ws) || ! is_array($ws)) {
+            return null;
+        }
+
+        $clean = fn ($t) => is_string($t) && preg_match('/^\d{1,2}:\d{2}$/', trim($t)) ? trim($t) : null;
+
+        $out = [];
+        foreach (DtrSetting::WEEK_DAYS as $d) {
+            $day = $ws[$d] ?? null;
+            $on = filter_var($day['on'] ?? false, FILTER_VALIDATE_BOOLEAN);
+            $out[$d] = [
+                'on' => $on,
+                'in' => $on ? $clean($day['in'] ?? null) : null,
+                'out' => $on ? $clean($day['out'] ?? null) : null,
+            ];
+        }
+
+        return $out;
     }
 
     /** Human labels for the audited setup fields, in display order. */
@@ -928,11 +967,18 @@ class DtrController extends Controller
             $variance = round($net - $stdHours, 2);
         }
 
+        // Resolve the schedule for THIS date — weekends can carry different times,
+        // and a day left off the weekly schedule is a non-working day.
+        $daySched = $s ? $s->scheduleForDate($e->work_date) : ['working' => true, 'in' => null, 'out' => null];
+
         if ($s && $s->schedule_type === 'flexi') {
             // Flexi has no fixed clock-in — never Late. Any clock-in is fine.
             $attendance = $e->time_in ? 'Flexi' : null;
-        } elseif ($e->time_in && $s && $s->sched_in) {
-            $attendance = $this->toMinutes($e->time_in) <= ($this->toMinutes($s->sched_in) + $graceMins)
+        } elseif (! $daySched['working']) {
+            // Day off — no schedule to be late against; leave attendance unrated.
+            $attendance = null;
+        } elseif ($e->time_in && $daySched['in']) {
+            $attendance = $this->toMinutes($e->time_in) <= ($this->toMinutes($daySched['in']) + $graceMins)
                 ? 'On Time' : 'Late';
         }
 

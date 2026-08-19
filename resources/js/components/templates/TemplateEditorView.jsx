@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Head, Link, router, useForm } from "@inertiajs/react";
-import { ArrowLeft, Save, Trash2, Send, Mail, Smartphone, ImagePlus, X, AlertTriangle, Loader2 } from "lucide-react";
+import { ArrowLeft, Save, Trash2, Send, Mail, Smartphone, ImagePlus, X, AlertTriangle, Loader2, Copy } from "lucide-react";
 import RichTextEditor from "@/components/templates/RichTextEditor";
 
 const inp = "w-full px-3 py-2 rounded-lg border border-gray-200 text-sm outline-none focus:ring-2 focus:ring-gray-300 focus:border-gray-300";
@@ -54,8 +54,15 @@ export default function TemplateEditorView({
     fixedDepartment = null,
     defaultChannel = null,
     defaultFolderId = null,
+    duplicatedFrom = null,
 }) {
-    const editing = !!template;
+    // A duplicate arrives as a prefilled template with no id + a blank key, so
+    // it must still create (POST), not update. Key on id, not on presence.
+    const editing = !!template?.id;
+    // A saved-but-keyless template is a draft from a folder duplicate: its key is
+    // still editable (set once), even though it's an existing row.
+    const isDraft = editing && !template?.key;
+    const keyLocked = editing && !isDraft;
     const initialChannels = template?.channels ?? (defaultChannel ? [defaultChannel] : ["email"]);
     const form = useForm({
         key: template?.key ?? "",
@@ -203,13 +210,31 @@ export default function TemplateEditorView({
                 <ArrowLeft size={15} /> Back to templates
             </Link>
 
+            {duplicatedFrom && (
+                <div className="flex items-start gap-2 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm text-indigo-800">
+                    <Copy size={15} className="mt-0.5 shrink-0" />
+                    <span>
+                        Duplicating <strong>{duplicatedFrom}</strong>. Give it a new <strong>key</strong> (left blank on purpose) before saving. Uploaded banner/footer images aren&rsquo;t carried over — re-upload them here if you need them.
+                    </span>
+                </div>
+            )}
+
+            {isDraft && (
+                <div className="flex items-start gap-2 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                    <AlertTriangle size={15} className="mt-0.5 shrink-0" />
+                    <span>
+                        This is a <strong>draft copy</strong> from a duplicated folder. Give it a <strong>key</strong> and save — it stays inactive and can&rsquo;t be sent until it has one. Uploaded banner/footer images aren&rsquo;t carried over.
+                    </span>
+                </div>
+            )}
+
             <form onSubmit={submit} className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div className="lg:col-span-2 space-y-5">
                     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-4">
                         <div className="grid grid-cols-2 gap-4">
                             <label className="block">
-                                <span className="block text-xs font-semibold text-gray-600 mb-1">Key {editing && <span className="text-gray-400">(immutable)</span>}</span>
-                                <input value={data.key} onChange={(e) => setData("key", e.target.value)} disabled={editing} placeholder="application_status_update" className={`${inp} ${editing ? "bg-gray-50 text-gray-500" : ""}`} />
+                                <span className="block text-xs font-semibold text-gray-600 mb-1">Key {keyLocked && <span className="text-gray-400">(immutable)</span>}{isDraft && <span className="text-indigo-500">(set a key)</span>}</span>
+                                <input value={data.key} onChange={(e) => setData("key", e.target.value)} disabled={keyLocked} placeholder="application_status_update" className={`${inp} ${keyLocked ? "bg-gray-50 text-gray-500" : ""}`} />
                                 {errors.key && <span className="text-xs text-rose-600">{errors.key}</span>}
                             </label>
                             <label className="block">

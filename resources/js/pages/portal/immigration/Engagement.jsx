@@ -7,6 +7,8 @@ import {
     FileText, Loader2, Mail, Eye, Trash2, ExternalLink, Copy, Link2, ScrollText, Send as SendIcon, CheckCircle2,
 } from "lucide-react";
 import { AvatarPhoto } from "@/components/ui/Avatar";
+import { confirmDialog } from "@/components/ui/ConfirmDialog";
+import GenerationProgress from "@/components/ui/GenerationProgress";
 
 // Initials fallback for the profile avatar when there's no face image.
 const rowInitials = (name = "") =>
@@ -94,8 +96,13 @@ function ClientLink({ url }) {
 function DeleteCaseDocsButton({ caseId, caseName, count }) {
     const [busy, setBusy] = useState(false);
 
-    const remove = () => {
-        if (! confirm(`Delete all ${count} engagement document${count === 1 ? '' : 's'} for ${caseName}? This removes the files permanently.`)) return;
+    const remove = async () => {
+        const ok = await confirmDialog({
+            title: "Delete engagement documents?",
+            message: `Delete all ${count} engagement document${count === 1 ? '' : 's'} for ${caseName}? This removes the files permanently.`,
+            confirmText: "Delete", tone: "danger",
+        });
+        if (! ok) return;
         setBusy(true);
         router.delete(`/admin/leads/${caseId}/engagement/documents`, {
             preserveScroll: true,
@@ -127,6 +134,17 @@ export default function Engagement({ cases = [], documents = [], generated = [],
     const [modalOpen, setModalOpen] = useState(false);
     const [auditFor, setAuditFor] = useState(null);   // { case_name, audit } for the audit-trail modal
     const [manageFor, setManageFor] = useState(null); // the draft row being managed
+    const [preselectedCase, setPreselectedCase] = useState(null);
+
+    // Deep-link from a case profile's "Generate Engagement" button:
+    // /portal/immigration/cases/engagement?case={id} opens the modal preselected.
+    useEffect(() => {
+        if (typeof window === "undefined") return;
+        const caseId = new URLSearchParams(window.location.search).get("case");
+        if (!caseId) return;
+        const c = cases.find((x) => String(x.id) === String(caseId));
+        if (c) { setPreselectedCase(c); setModalOpen(true); }
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
     return (
         <div className="space-y-5 max-w-[1400px] mx-auto pb-12">
@@ -181,7 +199,7 @@ export default function Engagement({ cases = [], documents = [], generated = [],
                                     <th className="px-3 py-2.5">Name &amp; contacts</th>
                                     <th className="px-3 py-2.5">Documents &amp; link</th>
                                     <th className="px-3 py-2.5">Total amount</th>
-                                    <th className="px-3 py-2.5">Signed</th>
+                                    <th className="px-3 py-2.5">Status</th>
                                     <th className="px-3 py-2.5">Created</th>
                                     <th className="px-3 py-2.5 text-right pr-4">Actions</th>
                                 </tr>
@@ -219,7 +237,7 @@ export default function Engagement({ cases = [], documents = [], generated = [],
                                             engagement link (open + copy), instead
                                             of listing every file. */}
                                         <td className="px-3 py-3">
-                                            <div className="space-y-1.5">
+                                            <div className="flex flex-col items-start gap-1.5">
                                                 <span className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-gray-800">
                                                     <FileText size={12} className="text-gray-400" />
                                                     {c.doc_count} document{c.doc_count === 1 ? "" : "s"}
@@ -236,9 +254,18 @@ export default function Engagement({ cases = [], documents = [], generated = [],
                                                 )}
                                             </div>
                                         </td>
-                                        {/* Total amount — the ex-GST agreement fee */}
+                                        {/* Total amount — the grand total (our fees
+                                            incl GST + INZ). Older rows without a
+                                            stored total fall back to the ex-GST fee. */}
                                         <td className="px-3 py-3 whitespace-nowrap">
-                                            {c.fee_total != null ? (
+                                            {c.total_amount != null ? (
+                                                <>
+                                                    <div className="text-[13px] font-bold text-gray-900 tabular-nums">
+                                                        ${Number(c.total_amount).toLocaleString("en-NZ", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                    </div>
+                                                    <div className="text-[10px] text-gray-400">incl. fees &amp; INZ</div>
+                                                </>
+                                            ) : c.fee_total != null ? (
                                                 <>
                                                     <div className="text-[13px] font-bold text-gray-900 tabular-nums">
                                                         ${Number(c.fee_total).toLocaleString("en-NZ", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -267,8 +294,8 @@ export default function Engagement({ cases = [], documents = [], generated = [],
                                                     Draft
                                                 </span>
                                             ) : (
-                                                <span className="inline-flex items-center text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-gray-50 text-gray-500 border border-gray-200">
-                                                    Not signed
+                                                <span className="inline-flex items-center text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+                                                    Sent
                                                 </span>
                                             )}
                                         </td>
@@ -315,7 +342,8 @@ export default function Engagement({ cases = [], documents = [], generated = [],
                     signers={signers}
                     defaultSignerId={default_signer_id}
                     meId={me_id}
-                    onClose={() => setModalOpen(false)}
+                    initialCase={preselectedCase}
+                    onClose={() => { setModalOpen(false); setPreselectedCase(null); }}
                 />
             )}
 
@@ -334,6 +362,8 @@ export default function Engagement({ cases = [], documents = [], generated = [],
 // right. "Save changes" regenerates the pack (still a draft); "Send to email"
 // emails the client the signing link and clears the draft state.
 function DraftManageModal({ row, signers = [], documents = [], onClose }) {
+    // Prefill the fee with the amount this draft was generated at (editable).
+    const initialFee = row.fee_total != null ? String(row.fee_total) : "";
     const currentTypes = (row.documents || []).map((d) => d.type_key).filter(Boolean);
     const [selectedTypes, setSelectedTypes] = useState(
         currentTypes.length ? currentTypes : documents.map((d) => d.key)
@@ -341,11 +371,18 @@ function DraftManageModal({ row, signers = [], documents = [], onClose }) {
     const [signerId, setSignerId] = useState(row.signer_id ?? signers[0]?.id ?? null);
     const [feeLocation, setFeeLocation] = useState("onshore");
     const [includeGst, setIncludeGst] = useState(false);
-    const [feeOverride, setFeeOverride] = useState("");
+    const [feeOverride, setFeeOverride] = useState(initialFee);
     const [busy, setBusy] = useState(null); // 'save' | 'send'
-
-    const previewType = selectedTypes.includes("written_agreement") ? "written_agreement" : (selectedTypes[0] || "written_agreement");
-    const previewUrl = `/admin/leads/${row.case_id}/generate/engage_${previewType}/preview?fee_location=${feeLocation}&include_gst=${includeGst ? 1 : 0}${signerId ? `&signer=${signerId}` : ""}${feeOverride !== "" ? `&professional_fee=${encodeURIComponent(feeOverride)}` : ""}`;
+    // Which document is shown in the preview (tab-selectable).
+    const [previewType, setPreviewType] = useState(
+        (currentTypes.length ? currentTypes : documents.map((d) => d.key)).includes("written_agreement")
+            ? "written_agreement"
+            : (currentTypes[0] || documents[0]?.key || "written_agreement")
+    );
+    // Fall back to a still-selected doc if the previewed one gets unchecked.
+    const activePreview = selectedTypes.includes(previewType) ? previewType : (selectedTypes[0] || previewType);
+    const labelFor = (k) => (documents.find((d) => d.key === k)?.label) || k;
+    const previewUrl = `/admin/leads/${row.case_id}/generate/engage_${activePreview}/preview?fee_location=${feeLocation}&include_gst=${includeGst ? 1 : 0}${signerId ? `&signer=${signerId}` : ""}${feeOverride !== "" ? `&professional_fee=${encodeURIComponent(feeOverride)}` : ""}`;
 
     const toggleType = (k) => setSelectedTypes((s) => (s.includes(k) ? s.filter((x) => x !== k) : [...s, k]));
 
@@ -387,9 +424,18 @@ function DraftManageModal({ row, signers = [], documents = [], onClose }) {
                 </div>
 
                 <div className="flex-1 min-h-0 flex flex-col lg:flex-row overflow-hidden">
-                    {/* Preview */}
-                    <div className="flex-1 min-w-0 min-h-[280px] bg-gray-100 border-b lg:border-b-0 lg:border-r border-gray-100">
-                        <iframe key={previewUrl} src={previewUrl} title="Engagement preview" className="w-full h-full border-0" />
+                    {/* Preview + a tab per generated document */}
+                    <div className="flex-1 min-w-0 min-h-[280px] bg-gray-100 border-b lg:border-b-0 lg:border-r border-gray-100 flex flex-col">
+                        <div className="flex items-center gap-1.5 px-3 py-2 bg-white border-b border-gray-100 overflow-x-auto flex-shrink-0">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 flex-shrink-0">View:</span>
+                            {selectedTypes.map((k) => (
+                                <button key={k} type="button" onClick={() => setPreviewType(k)}
+                                    className={`px-2.5 py-1 rounded-md text-[11px] font-semibold whitespace-nowrap transition-colors ${activePreview === k ? "bg-gray-900 text-white" : "text-gray-500 hover:bg-gray-100"}`}>
+                                    {labelFor(k)}
+                                </button>
+                            ))}
+                        </div>
+                        <iframe key={previewUrl} src={previewUrl} title="Engagement preview" className="flex-1 w-full border-0" />
                     </div>
 
                     {/* Settings */}
@@ -456,6 +502,7 @@ function DraftManageModal({ row, signers = [], documents = [], onClose }) {
                     </div>
                 </div>
             </div>
+            <GenerationProgress active={!!busy} title={busy === "send" ? "Sending to the client…" : "Saving your changes…"} />
         </div>,
         document.body,
     );
@@ -552,12 +599,13 @@ function Activity({ icon, tag, body, at }) {
     );
 }
 
-function NewEngagementModal({ cases, documents, signers = [], defaultSignerId = null, meId, onClose }) {
+function NewEngagementModal({ cases, documents, signers = [], defaultSignerId = null, meId, onClose, initialCase = null }) {
     const [caseSearch, setCaseSearch] = useState("");
-    const [selectedCase, setSelectedCase] = useState(null);
+    const [selectedCase, setSelectedCase] = useState(initialCase);
     const [selectedTypes, setSelectedTypes] = useState(documents.map((d) => d.key));
     const [previewType, setPreviewType] = useState(documents[0]?.key ?? null);
-    const [submitting, setSubmitting] = useState(false);
+    const [submitAction, setSubmitAction] = useState(null); // 'draft' | 'send' | null
+    const submitting = submitAction !== null;
     const [previewLoading, setPreviewLoading] = useState(false);
     const [notify, setNotify] = useState(true);
     // Which price the client is engaged at — "normal" (payment plan) or
@@ -578,6 +626,11 @@ function NewEngagementModal({ cases, documents, signers = [], defaultSignerId = 
         if (meId && signers.some((s) => s.id === meId)) return meId;
         return signers[0]?.id ?? null;
     });
+    // Adviser to assist (clause 2.1, row 2). Defaults to the practice's
+    // designated adviser when someone else is signing; blank otherwise.
+    const [assistSignerId, setAssistSignerId] = useState(() =>
+        (defaultSignerId && signers.some((s) => s.id === defaultSignerId) && defaultSignerId !== signerId) ? defaultSignerId : null
+    );
 
     const selectedSigner = signers.find((s) => s.id === signerId) || null;
 
@@ -630,8 +683,27 @@ function NewEngagementModal({ cases, documents, signers = [], defaultSignerId = 
         if (!hasDiscounted && feeTier === "discounted") setFeeTier("normal");
     }, [hasDiscounted, feeTier]);
 
-    // The ex-GST fee actually used — the manual override if set, else the visa's.
-    const effectiveFee = feeOverride !== "" ? Number(feeOverride) : quotedFee;
+    // Family-aware fee totals from the server (professional sum + INZ sum across
+    // all applicants), fetched live so the receipt matches the generated pack
+    // for cases with dependants. Falls back to the principal's visa while loading.
+    const [familyTotals, setFamilyTotals] = useState(null);
+    useEffect(() => {
+        if (!selectedCase) { setFamilyTotals(null); return; }
+        let cancelled = false;
+        const url = `/admin/leads/${selectedCase.id}/engagement/fee-totals?fee_tier=${feeTier}&fee_location=${feeLocation}&include_gst=${includeGst ? 1 : 0}`;
+        fetch(url, { headers: { Accept: "application/json" } })
+            .then((r) => (r.ok ? r.json() : null))
+            .then((d) => { if (!cancelled) setFamilyTotals(d); })
+            .catch(() => { if (!cancelled) setFamilyTotals(null); });
+        return () => { cancelled = true; };
+    }, [selectedCase, feeTier, feeLocation, includeGst]);
+
+    // The ex-GST professional fee: the manual override if set, else the family
+    // sum (or the principal's visa fee before the totals arrive).
+    const familyProfExcl = familyTotals?.professional_excl ?? quotedFee;
+    const effectiveFee = feeOverride !== "" ? Number(feeOverride) : familyProfExcl;
+    // INZ disbursement total across all applicants (a government charge, no GST).
+    const inzFee = familyTotals?.inz_total ?? (selectedCase ? selectedCase[feeFields.inz] : null);
 
     // The fee a location would quote at the current tier + GST setting — shown
     // in the location dropdown so onshore vs offshore prices are both visible
@@ -654,25 +726,31 @@ function NewEngagementModal({ cases, documents, signers = [], defaultSignerId = 
     const missingSignature = writtenSelected && selectedSigner && !selectedSigner.has_signature;
 
     const previewUrl = selectedCase && previewType
-        ? `/admin/leads/${selectedCase.id}/generate/engage_${previewType}/preview?fee_tier=${feeTier}&fee_location=${feeLocation}&include_gst=${includeGst ? 1 : 0}${signerId ? `&signer=${signerId}` : ""}${feeOverride !== "" ? `&professional_fee=${encodeURIComponent(feeOverride)}` : ""}`
+        ? `/admin/leads/${selectedCase.id}/generate/engage_${previewType}/preview?fee_tier=${feeTier}&fee_location=${feeLocation}&include_gst=${includeGst ? 1 : 0}${signerId ? `&signer=${signerId}` : ""}${assistSignerId ? `&assist_signer=${assistSignerId}` : ""}${feeOverride !== "" ? `&professional_fee=${encodeURIComponent(feeOverride)}` : ""}`
         : null;
 
     // sendEmail=false → "Save as draft": generates the pack but does NOT email
     // the client. sendEmail=true → also emails the scoped signing link.
-    const generate = (sendEmail) => {
+    const generate = async (sendEmail) => {
         if (!selectedCase || selectedTypes.length === 0) return;
         const who = selectedCase.name || "the client";
-        const msg = sendEmail
-            ? `Generate ${selectedTypes.length} document${selectedTypes.length === 1 ? "" : "s"} and EMAIL the signing link to ${who}?`
-            : `Generate ${selectedTypes.length} document${selectedTypes.length === 1 ? "" : "s"} as a draft (the client will NOT be emailed)?`;
-        if (!window.confirm(`${msg}\n\nAre you sure you want to proceed?`)) return;
-        setSubmitting(true);
+        const n = selectedTypes.length;
+        const ok = await confirmDialog({
+            title: sendEmail ? "Generate & email engagement?" : "Save engagement as draft?",
+            message: sendEmail
+                ? `Generate ${n} document${n === 1 ? "" : "s"} and email the signing link to ${who}.`
+                : `Generate ${n} document${n === 1 ? "" : "s"} as a draft. The client will NOT be emailed.`,
+            confirmText: sendEmail ? "Generate & email" : "Save as draft",
+        });
+        if (!ok) return;
+        setSubmitAction(sendEmail ? "send" : "draft");
         router.post(
             `/admin/leads/${selectedCase.id}/engagement/generate`,
             {
                 types: selectedTypes,
                 notify: !!sendEmail && !!selectedCase.email,
                 signer_id: signerId,
+                assist_signer_id: assistSignerId,
                 fee_tier: feeTier,
                 fee_location: feeLocation,
                 include_gst: includeGst,
@@ -682,7 +760,7 @@ function NewEngagementModal({ cases, documents, signers = [], defaultSignerId = 
                 preserveScroll: true,
                 onSuccess: () => { onClose(); },
                 onError: () => { toast.error("Could not generate the documents."); },
-                onFinish: () => setSubmitting(false),
+                onFinish: () => setSubmitAction(null),
             }
         );
     };
@@ -705,7 +783,7 @@ function NewEngagementModal({ cases, documents, signers = [], defaultSignerId = 
                     {/* Left: controls. Case + settings are fixed at the top;
                         only the document list scrolls, so picking documents
                         never squeezes the settings and vice versa. */}
-                    <div className="w-[360px] border-r border-gray-100 flex flex-col min-h-0 flex-shrink-0">
+                    <div className="w-[440px] border-r border-gray-100 flex flex-col min-h-0 flex-shrink-0 overflow-y-auto">
                         {/* Case picker */}
                         <div className="px-4 pt-3 pb-3 border-b border-gray-100">
                             <FieldLabel>Case</FieldLabel>
@@ -752,21 +830,40 @@ function NewEngagementModal({ cases, documents, signers = [], defaultSignerId = 
                             by side. Warnings only render when they apply, so
                             the block stays short in the normal case. */}
                         <div className="px-4 pt-3 pb-3 border-b border-gray-100 space-y-2.5">
-                            <div>
-                                <FieldLabel>Signing adviser</FieldLabel>
-                                <select
-                                    value={signerId ?? ""}
-                                    onChange={(e) => setSignerId(e.target.value ? Number(e.target.value) : null)}
-                                    className={`${ctrlCls} mt-1.5`}
-                                >
-                                    {signers.length === 0 && <option value="">No licensed advisers</option>}
-                                    {signers.map((s) => (
-                                        <option key={s.id} value={s.id}>
-                                            {s.name}{s.licence ? ` · ${s.licence}` : ""}{s.licence_current === false ? " — licence expired" : ""}{s.has_signature ? "" : " (no signature)"}
-                                        </option>
-                                    ))}
-                                </select>
+                            <div className="grid grid-cols-2 gap-2 items-start">
+                                <div>
+                                    <FieldLabel>Signing adviser</FieldLabel>
+                                    <select
+                                        value={signerId ?? ""}
+                                        onChange={(e) => setSignerId(e.target.value ? Number(e.target.value) : null)}
+                                        className={`${ctrlCls} mt-1.5`}
+                                    >
+                                        {signers.length === 0 && <option value="">No licensed advisers</option>}
+                                        {signers.map((s) => (
+                                            <option key={s.id} value={s.id}>
+                                                {s.name}{s.licence ? ` · ${s.licence}` : ""}{s.licence_current === false ? " — licence expired" : ""}{s.has_signature ? "" : " (no signature)"}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                <div>
+                                    <FieldLabel>Adviser to assist <span className="text-gray-400 font-normal">(optional)</span></FieldLabel>
+                                    <select
+                                        value={assistSignerId ?? ""}
+                                        onChange={(e) => setAssistSignerId(e.target.value ? Number(e.target.value) : null)}
+                                        className={`${ctrlCls} mt-1.5`}
+                                    >
+                                        <option value="">— None —</option>
+                                        {signers.filter((s) => s.id !== signerId).map((s) => (
+                                            <option key={s.id} value={s.id}>
+                                                {s.name}{s.licence ? ` · ${s.licence}` : ""}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
                             </div>
+                            <p className="text-[10.5px] text-gray-400">The signing adviser is the Main adviser; the other is listed as Adviser to assist (clause 2.1).</p>
 
                             {selectedSigner && selectedSigner.licence_current === false && (
                                 <Note tone="amber">
@@ -819,31 +916,55 @@ function NewEngagementModal({ cases, documents, signers = [], defaultSignerId = 
                                 </div>
                             </div>
 
-                            {/* The resulting fee — editable. The input is the
-                                ex-GST professional fee sent as an override. */}
-                            {writtenSelected && (
-                                <div className="rounded-lg px-3 py-2 text-white" style={{ backgroundColor: BRAND_TEAL }}>
-                                    <div className="flex items-center justify-between gap-2">
-                                        <span className="text-[11px] text-white/80">Agreement fee <span className="text-white/50">(ex GST)</span></span>
-                                        <div className="flex items-center gap-1">
-                                            <span className="text-sm font-bold">$</span>
-                                            <input
-                                                type="number" min="0" step="0.01"
-                                                value={effectiveFee ?? ""}
-                                                onChange={(e) => setFeeOverride(e.target.value)}
-                                                placeholder="0.00"
-                                                className="w-24 bg-white/15 rounded px-2 py-0.5 text-sm font-bold text-white text-right tabular-nums placeholder-white/40 focus:outline-none focus:bg-white/25"
-                                            />
+                            {/* Receipt-style fee summary — our professional fee
+                                (editable, summed across the family), GST, the INZ
+                                disbursements, and the grand total. Matches the
+                                generated agreement's fee tables and the stored
+                                "Total amount". */}
+                            {writtenSelected && (() => {
+                                const prof = effectiveFee != null && effectiveFee !== "" ? Number(effectiveFee) : 0;
+                                const inz = inzFee != null ? Number(inzFee) : 0;
+                                const gstAmt = prof * GST_RATE;
+                                const total = (includeGst ? prof + gstAmt : prof) + inz;
+                                return (
+                                    <div className="rounded-lg overflow-hidden text-white" style={{ backgroundColor: BRAND_TEAL }}>
+                                        <div className="px-3 py-1.5 bg-black/10 text-[10px] font-bold uppercase tracking-wider text-white/80">Fee summary</div>
+                                        <div className="px-3 py-2 space-y-1.5">
+                                            {/* Our professional fee — editable ex-GST override. */}
+                                            <div className="flex items-center justify-between gap-2">
+                                                <span className="text-[11.5px] text-white/85">Our fees <span className="text-white/50">(ex GST)</span></span>
+                                                <div className="flex items-center gap-1">
+                                                    <span className="text-[12px] font-bold">$</span>
+                                                    <input
+                                                        type="number" min="0" step="0.01"
+                                                        value={effectiveFee ?? ""}
+                                                        onChange={(e) => setFeeOverride(e.target.value)}
+                                                        placeholder="0.00"
+                                                        className="w-20 bg-white/15 rounded px-2 py-0.5 text-[12.5px] font-bold text-white text-right tabular-nums placeholder-white/40 focus:outline-none focus:bg-white/25"
+                                                    />
+                                                </div>
+                                            </div>
+                                            {includeGst && (
+                                                <div className="flex items-center justify-between gap-2 text-white/75">
+                                                    <span className="text-[11.5px]">GST ({GST_PCT}%)</span>
+                                                    <span className="text-[12.5px] font-semibold tabular-nums">${fmtFee(gstAmt)}</span>
+                                                </div>
+                                            )}
+                                            <div className="flex items-center justify-between gap-2">
+                                                <span className="text-[11.5px] text-white/85">Disbursements <span className="text-white/50">(INZ)</span></span>
+                                                <span className="text-[12.5px] font-semibold tabular-nums">{inzFee != null ? `$${fmtFee(inz)}` : "—"}</span>
+                                            </div>
+                                            <div className="flex items-center justify-between gap-2 border-t border-white/25 pt-1.5 mt-0.5">
+                                                <span className="text-[11px] font-bold uppercase tracking-wide">Total amount</span>
+                                                <span className="text-[15px] font-bold tabular-nums">${fmtFee(total)}</span>
+                                            </div>
+                                            {feeOverride !== "" && (
+                                                <button type="button" onClick={() => setFeeOverride("")} className="text-[10px] text-white/70 hover:text-white underline">Reset to visa fee</button>
+                                            )}
                                         </div>
                                     </div>
-                                    {includeGst && effectiveFee != null && effectiveFee !== "" && (
-                                        <p className="text-[10.5px] text-white/70 text-right mt-0.5">incl. GST ${fmtFee(Number(effectiveFee) * (1 + GST_RATE))}</p>
-                                    )}
-                                    {feeOverride !== "" && (
-                                        <button type="button" onClick={() => setFeeOverride("")} className="text-[10px] text-white/70 hover:text-white underline mt-0.5">Reset to visa fee</button>
-                                    )}
-                                </div>
-                            )}
+                                );
+                            })()}
 
                             {signers.length === 0 && (
                                 <Note>
@@ -862,64 +983,42 @@ function NewEngagementModal({ cases, documents, signers = [], defaultSignerId = 
                             )}
                         </div>
 
-                        {/* Document checklist — the only scrolling region. */}
-                        <div className="px-4 pt-3 pb-4 flex-1 overflow-y-auto min-h-0">
-                            <div className="flex items-center justify-between">
-                                <FieldLabel>Documents</FieldLabel>
-                                <button
-                                    onClick={() => setSelectedTypes(
-                                        selectedTypes.length === documents.length ? [] : documents.map((d) => d.key)
-                                    )}
-                                    className="text-[10.5px] font-semibold text-gray-500 hover:text-gray-900"
-                                >
-                                    {selectedTypes.length === documents.length ? "Clear all" : "Select all"}
-                                </button>
-                            </div>
-                            <div className="mt-1.5 space-y-1">
-                                {documents.map((d) => {
-                                    const checked = selectedTypes.includes(d.key);
-                                    const isPreview = previewType === d.key;
-                                    return (
-                                        <div
-                                            key={d.key}
-                                            className={`rounded-lg border px-2.5 py-2 transition-colors ${isPreview ? "border-gray-400 bg-gray-50" : "border-gray-100 bg-white hover:border-gray-200"}`}
-                                        >
-                                            <div className="flex items-start gap-2">
-                                                <button
-                                                    onClick={() => toggleType(d.key)}
-                                                    className={`mt-0.5 w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 ${checked ? "bg-gray-900 border-gray-900" : "bg-white border-gray-300"}`}
-                                                >
-                                                    {checked && <Check size={12} className="text-white" strokeWidth={3} />}
-                                                </button>
-                                                <button onClick={() => setPreviewType(d.key)} className="min-w-0 flex-1 text-left">
-                                                    <p className="text-xs font-semibold text-gray-900 flex items-center gap-1.5">
-                                                        {d.label}
-                                                        {d.dynamic && <span className="text-[9px] font-bold uppercase tracking-wide text-gray-700 bg-gray-200 rounded px-1">Auto</span>}
-                                                    </p>
-                                                    <p className="text-[10.5px] text-gray-400 mt-0.5 leading-snug">{d.description}</p>
-                                                </button>
-                                            </div>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        </div>
                     </div>
 
                     {/* Right: live preview */}
                     <div className="flex-1 flex flex-col min-h-0 bg-gray-50">
-                        <div className="px-4 py-2.5 border-b border-gray-100 flex items-center gap-2 overflow-x-auto flex-shrink-0 bg-white">
-                            <span className="text-[11px] font-semibold text-gray-400 flex-shrink-0">Preview:</span>
-                            {selectedTypes.length === 0 && <span className="text-[11px] text-gray-400">Select a document</span>}
-                            {documents.filter((d) => selectedTypes.includes(d.key)).map((d) => (
-                                <button
-                                    key={d.key}
-                                    onClick={() => setPreviewType(d.key)}
-                                    className={`text-[11px] font-semibold px-2.5 py-1 rounded-full whitespace-nowrap transition-colors ${previewType === d.key ? "bg-gray-900 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
-                                >
-                                    {d.label}
-                                </button>
-                            ))}
+                        {/* Document tabs double as the include checkboxes: tick to
+                            add to the pack, click the name to preview it. */}
+                        <div className="px-4 py-2.5 border-b border-gray-100 flex items-center gap-1.5 overflow-x-auto flex-shrink-0 bg-white">
+                            <button
+                                type="button"
+                                onClick={() => setSelectedTypes(selectedTypes.length === documents.length ? [] : documents.map((d) => d.key))}
+                                className="text-[10.5px] font-semibold text-gray-400 hover:text-gray-900 flex-shrink-0 mr-0.5"
+                            >
+                                {selectedTypes.length === documents.length ? "Clear all" : "Select all"}
+                            </button>
+                            {documents.map((d) => {
+                                const checked = selectedTypes.includes(d.key);
+                                const isPreview = previewType === d.key;
+                                return (
+                                    <div
+                                        key={d.key}
+                                        className={`flex items-center gap-1.5 pl-1.5 pr-2.5 py-1 rounded-full whitespace-nowrap border flex-shrink-0 transition-colors ${isPreview ? "bg-gray-900 border-gray-900 text-white" : checked ? "bg-gray-100 border-gray-200 text-gray-700" : "bg-white border-gray-200 text-gray-400"}`}
+                                    >
+                                        <button
+                                            type="button"
+                                            onClick={() => toggleType(d.key)}
+                                            className={`w-3.5 h-3.5 rounded border flex items-center justify-center flex-shrink-0 ${checked ? (isPreview ? "bg-white border-white" : "bg-gray-900 border-gray-900") : "bg-white border-gray-300"}`}
+                                        >
+                                            {checked && <Check size={10} className={isPreview ? "text-gray-900" : "text-white"} strokeWidth={3} />}
+                                        </button>
+                                        <button type="button" onClick={() => setPreviewType(d.key)} className="text-[11px] font-semibold flex items-center gap-1">
+                                            {d.label}
+                                            {d.dynamic && <span className={`text-[8px] font-bold uppercase tracking-wide rounded px-1 ${isPreview ? "bg-white/20 text-white" : "bg-gray-200 text-gray-600"}`}>Auto</span>}
+                                        </button>
+                                    </div>
+                                );
+                            })}
                         </div>
                         <div className="flex-1 relative min-h-0">
                             {!selectedCase ? (
@@ -976,7 +1075,7 @@ function NewEngagementModal({ cases, documents, signers = [], defaultSignerId = 
                                     disabled={disabled}
                                     className="px-4 py-2 border border-gray-300 text-gray-700 text-sm font-semibold rounded-xl hover:bg-gray-50 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
-                                    {submitting ? <Loader2 size={14} className="animate-spin" /> : <FileText size={14} />}
+                                    {submitAction === "draft" ? <Loader2 size={14} className="animate-spin" /> : <FileText size={14} />}
                                     Save as draft
                                 </button>
                                 <button
@@ -985,7 +1084,7 @@ function NewEngagementModal({ cases, documents, signers = [], defaultSignerId = 
                                     title={selectedCase && !selectedCase.email ? "No email on file for this client" : ""}
                                     className="px-4 py-2 bg-gray-900 text-white text-sm font-semibold rounded-xl hover:bg-black transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
-                                    {submitting ? <Loader2 size={14} className="animate-spin" /> : <FileSignature size={14} />}
+                                    {submitAction === "send" ? <Loader2 size={14} className="animate-spin" /> : <FileSignature size={14} />}
                                     Generate &amp; email
                                 </button>
                             </div>
@@ -993,6 +1092,7 @@ function NewEngagementModal({ cases, documents, signers = [], defaultSignerId = 
                     })()}
                 </div>
             </div>
+            <GenerationProgress active={submitting} title={submitAction === "send" ? "Generating & emailing…" : "Saving your draft…"} />
         </div>
     );
 }

@@ -78,39 +78,46 @@ export default function AgentDashboard({ stats = {}, recent = [], referral = nul
 
             {/* Personal referral link — share this URL and every lead who
                 registers through it is auto-attributed to this agent, so
-                sales sees the source immediately. */}
+                sales sees the source immediately. Solid dark card for
+                strong contrast against the pale dashboard background;
+                Tailwind v4's `bg-linear-*` gradient utility is used
+                explicitly (the old v3 `bg-gradient-*` name silently
+                drops in v4). */}
             {referral?.url && (
-                <div className="rounded-2xl bg-gradient-to-br from-gray-900 via-gray-900 to-gray-800 text-white shadow-lg overflow-hidden">
+                <div className="rounded-2xl bg-gray-900 text-white shadow-lg overflow-hidden border border-gray-800">
                     <div className="flex flex-col lg:flex-row lg:items-center gap-4 p-5">
-                        <div className="flex items-center gap-3 flex-shrink-0">
-                            <div className="w-11 h-11 rounded-xl bg-white/10 flex items-center justify-center">
-                                <LinkIcon size={18} />
+                        <div className="flex items-center gap-3 flex-shrink-0 min-w-0 lg:w-72">
+                            <div className="w-11 h-11 rounded-xl bg-white/10 flex items-center justify-center flex-shrink-0">
+                                <LinkIcon size={18} className="text-white" />
                             </div>
-                            <div>
-                                <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-gray-300">Your referral link</div>
-                                <div className="text-[13px] font-semibold mt-0.5">
-                                    Share it — new sign-ups are credited to you automatically.
+                            <div className="min-w-0">
+                                <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-emerald-300">Your referral link</div>
+                                <div className="text-[13px] font-semibold text-white mt-0.5 leading-snug">
+                                    Share it — new sign-ups are credited to you.
                                 </div>
                             </div>
                         </div>
                         <div className="flex-1 flex items-center gap-2 min-w-0">
-                            <div className="flex-1 min-w-0 bg-white/10 border border-white/10 rounded-lg px-3 py-2.5 font-mono text-[12px] truncate" title={referral.url}>
+                            <div className="flex-1 min-w-0 bg-black/40 border border-white/10 rounded-lg px-3 py-2.5 font-mono text-[12px] text-emerald-100 truncate" title={referral.url}>
                                 {referral.url}
                             </div>
                             <button
                                 type="button"
                                 onClick={copyReferral}
                                 className={`inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-lg text-[12px] font-bold transition-colors flex-shrink-0 ${
-                                    copied ? 'bg-emerald-500 text-white' : 'bg-white text-gray-900 hover:bg-gray-100'
+                                    copied
+                                        ? 'bg-emerald-500 text-white hover:bg-emerald-600'
+                                        : 'bg-white text-gray-900 hover:bg-gray-100'
                                 }`}
                             >
-                                {copied ? <><Check size={13} strokeWidth={3} /> Copied</> : <><Copy size={13} /> Copy</>}
+                                {copied ? <><Check size={13} strokeWidth={3} /> Copied</> : <><Copy size={13} /> Copy link</>}
                             </button>
                         </div>
                     </div>
                     {referral.code && (
-                        <div className="px-5 pb-3 -mt-1 text-[11px] text-gray-400 flex items-center gap-1.5">
-                            Code: <span className="font-mono font-semibold text-gray-200">{referral.code}</span>
+                        <div className="px-5 pb-3.5 -mt-1 text-[11px] text-gray-400 flex items-center gap-1.5 border-t border-white/5 pt-3">
+                            <span className="uppercase tracking-wider text-[10px] font-bold">Code</span>
+                            <span className="font-mono font-semibold text-white bg-white/10 px-2 py-0.5 rounded">{referral.code}</span>
                         </div>
                     )}
                 </div>

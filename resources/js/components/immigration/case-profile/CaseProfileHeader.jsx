@@ -1,5 +1,7 @@
+import { useState } from "react";
 import { Link, router } from "@inertiajs/react";
 import { toast } from "sonner";
+import CaseEngagementModal from "@/components/immigration/case-profile/CaseEngagementModal";
 import CaseHealthBadge from "@/components/ai/CaseHealthBadge";
 import {
     ArrowLeft, Globe, FileSignature, MessageSquarePlus, FilePlus2,
@@ -13,7 +15,8 @@ const fmtDate = (iso) =>
 const initials = (name = "") =>
     name.trim().split(/\s+/).slice(0, 2).map((w) => w[0] || "").join("").toUpperCase() || "C";
 
-export default function CaseProfileHeader({ lead = {}, intake = null, attention = null, tiedTo = null }) {
+export default function CaseProfileHeader({ lead = {}, intake = null, attention = null, tiedTo = null, engagement = {} }) {
+    const [engageOpen, setEngageOpen] = useState(false);
     const fullName = `${lead.first_name ?? ""} ${lead.last_name ?? ""}`.trim() || lead.lead_id || "Unnamed case";
     const visa = lead.inz_visa_type || intake?.data?.visa_type_label || "Visa type not set";
     const stage = lead.immigration_stage || lead.stage || "Stage not set";
@@ -115,7 +118,20 @@ export default function CaseProfileHeader({ lead = {}, intake = null, attention 
                     </div>
 
                     <div className="mt-5 flex flex-wrap items-center gap-2">
-                        <QuickAction icon={FileSignature} label="Generate Agreement" disabledHint="Available in Phase 3" />
+                        {lead.id && (
+                            <button
+                                type="button"
+                                onClick={() => setEngageOpen(true)}
+                                className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-[12px] font-semibold border transition-colors ${
+                                    engagement.sent
+                                        ? "bg-emerald-600 text-white border-emerald-600 hover:bg-emerald-700"
+                                        : "bg-teal-700 text-white border-teal-700 hover:bg-teal-800"
+                                }`}
+                            >
+                                <FileSignature size={14} />
+                                {engagement.sent ? "Engagement emailed — manage" : "Generate Engagement"}
+                            </button>
+                        )}
                         <QuickAction icon={FilePlus2}      label="Request Document"   disabledHint="Available in Phase 2" />
                         <QuickAction icon={MessageSquarePlus} label="Compose Message" disabledHint="Wired by Build 11.A" />
                     </div>
@@ -123,6 +139,15 @@ export default function CaseProfileHeader({ lead = {}, intake = null, attention 
                     <SinceLastOpened attention={attention} />
                 </div>
             </section>
+
+            {engageOpen && (
+                <CaseEngagementModal
+                    leadId={lead.id}
+                    leadName={fullName}
+                    engagement={engagement}
+                    onClose={() => setEngageOpen(false)}
+                />
+            )}
         </div>
     );
 }

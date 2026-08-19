@@ -823,11 +823,20 @@ class LeadController extends Controller
                 ->first(['id', 'name']);
         }
 
+        // Active visa types feed the "Visa applying for" dropdown. The
+        // form also exposes an "Other" option that reveals a free-text
+        // field, so callers can capture visas not (yet) in the catalog.
+        $visaTypes = \App\Models\VisaType::where('active', true)
+            ->orderBy('name')
+            ->pluck('name')
+            ->values();
+
         return inertia('register/QuickRegisterPage', [
             'referral' => $agent ? [
                 'code' => $ref,
                 'agent_name' => $agent->name,
             ] : null,
+            'visa_types' => $visaTypes,
         ]);
     }
 
@@ -922,6 +931,11 @@ class LeadController extends Controller
             // field from the /register?ref=CODE URL. Unknown codes are
             // silently ignored so a stale link never blocks a submission.
             'ref' => 'nullable|string|max:20',
+            // Visa the applicant is interested in. Either a name from the
+            // active VisaType catalog OR "Other" — in which case the
+            // free-text `visa_type_other` overrides it.
+            'visa_type' => 'nullable|string|max:120',
+            'visa_type_other' => 'nullable|string|max:120',
         ]);
 
         try {
@@ -938,6 +952,15 @@ class LeadController extends Controller
                     ->where('referral_code', $validated['ref'])
                     ->value('id');
             }
+
+            // Resolve the applied-for visa. "Other" swaps the dropdown
+            // value for the free-text one so downstream reads a single
+            // string on leads.inz_visa_type.
+            $visa = trim((string) ($validated['visa_type'] ?? ''));
+            if (strcasecmp($visa, 'other') === 0) {
+                $visa = trim((string) ($validated['visa_type_other'] ?? ''));
+            }
+            $visa = $visa !== '' ? $visa : null;
 
             $passportPath = $request->hasFile('passport_pdf')
                 ? $request->file('passport_pdf')->store('passports', 'local')
@@ -972,6 +995,11 @@ class LeadController extends Controller
                 // just because they submitted through a different agent's
                 // link the second time.
                 'agent_id' => $existing->agent_id ?: $agentId,
+                // Visa the applicant chose (from the catalog dropdown or
+                // the "Other" free-text). Only overwrite when a value was
+                // actually submitted, so a returning lead doesn't lose
+                // their previously-recorded visa on a blank re-submit.
+                'inz_visa_type' => $visa ?: $existing->inz_visa_type,
                 // Country of origin (registration) maps to country of birth.
                 'country_of_birth' => $data['country_of_origin'] ?? ($data['country_of_birth'] ?? null),
                 'place_of_birth' => $data['place_of_birth'] ?? null,

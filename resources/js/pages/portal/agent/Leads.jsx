@@ -1,9 +1,10 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { Head, useForm, usePage } from "@inertiajs/react";
 import { createPortal } from "react-dom";
 import {
     Plus, Search, X, Users as UsersIcon, Mail, Phone, MapPin,
-    GraduationCap, Pencil, AlertCircle, Info, Upload, FileText,
+    GraduationCap, Pencil, AlertCircle, Info, Upload, FileText, Stamp,
+    ChevronUp, ChevronDown, ChevronsUpDown, Filter, Check,
 } from "lucide-react";
 import Avatar from "@/components/ui/Avatar";
 
@@ -47,9 +48,136 @@ const QUALIFICATION_OPTIONS = [
 function StatusPill({ value }) {
     if (!value) return <span className="text-gray-300">—</span>;
     return (
-        <span className={`inline-block px-2.5 py-1 rounded-full text-[11px] font-bold border ${STATUS_TONE[value] || "bg-gray-50 text-gray-600 border-gray-200"}`}>
+        <span className={`inline-block px-2 py-0.5 rounded-full text-[10.5px] font-bold border whitespace-nowrap ${STATUS_TONE[value] || "bg-gray-50 text-gray-600 border-gray-200"}`}>
             {value}
         </span>
+    );
+}
+
+// Plain (non-sortable) table header — just applies the shared cell
+// style so headers align visually with SortableTh.
+function Th({ children, align = "left" }) {
+    return (
+        <th className={`px-4 py-3.5 text-[11px] font-bold text-gray-500 uppercase tracking-wider ${align === "right" ? "text-right" : "text-left"}`}>
+            {children}
+        </th>
+    );
+}
+
+// Sortable header — click to cycle asc → desc on the same key, or switch
+// to that key (asc) when previously sorting a different column. Chevron
+// glyph reflects the current state: neutral double-arrow when inactive,
+// direction-arrow when active.
+function SortableTh({ label, sortKey, sort, onSort }) {
+    const active = sort.key === sortKey;
+    const Icon = ! active ? ChevronsUpDown : (sort.dir === "asc" ? ChevronUp : ChevronDown);
+    return (
+        <th className="px-4 py-3.5 text-[11px] font-bold text-gray-500 uppercase tracking-wider">
+            <button
+                type="button"
+                onClick={() => onSort(sortKey)}
+                className={`inline-flex items-center gap-1.5 uppercase tracking-wider transition-colors ${
+                    active ? "text-gray-900" : "text-gray-500 hover:text-gray-800"
+                }`}
+                aria-sort={active ? (sort.dir === "asc" ? "ascending" : "descending") : "none"}
+            >
+                {label}
+                <Icon size={12} className={active ? "text-teal-600" : "text-gray-400"} strokeWidth={2.4} />
+            </button>
+        </th>
+    );
+}
+
+// Toolbar filter chip — sits in the search row. Trigger reads
+// "Label · N" when filters are active, plain "Label" when not. Popup
+// is a scrollable checklist; each pick narrows the table via the
+// caller's onChange (a Set of selected values).
+function ToolbarFilter({ label, options = [], selected, onChange }) {
+    const [open, setOpen] = useState(false);
+    const wrapRef = useRef(null);
+
+    useEffect(() => {
+        if (! open) return;
+        const onClick = (e) => { if (wrapRef.current && ! wrapRef.current.contains(e.target)) setOpen(false); };
+        const onKey = (e) => { if (e.key === "Escape") setOpen(false); };
+        document.addEventListener("mousedown", onClick);
+        document.addEventListener("keydown", onKey);
+        return () => {
+            document.removeEventListener("mousedown", onClick);
+            document.removeEventListener("keydown", onKey);
+        };
+    }, [open]);
+
+    const active = selected.size > 0;
+    const toggle = (v) => {
+        const next = new Set(selected);
+        next.has(v) ? next.delete(v) : next.add(v);
+        onChange(next);
+    };
+
+    return (
+        <div ref={wrapRef} className="relative">
+            <button
+                type="button"
+                onClick={() => setOpen((v) => ! v)}
+                className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-[12px] font-semibold transition-colors border ${
+                    active
+                        ? "bg-teal-50 border-teal-200 text-teal-800"
+                        : "bg-white border-gray-200 text-gray-600 hover:text-gray-900 hover:border-gray-300"
+                }`}
+                aria-expanded={open}
+            >
+                <Filter size={12} strokeWidth={2.4} className={active ? "text-teal-600" : "text-gray-400"} />
+                {label}
+                {active && (
+                    <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-teal-600 text-white text-[10px] font-bold tabular-nums">
+                        {selected.size}
+                    </span>
+                )}
+                <ChevronDown size={12} className={`transition-transform duration-150 ${open ? "rotate-180" : ""}`} strokeWidth={2.4} />
+            </button>
+
+            {open && (
+                <div className="absolute z-30 top-full right-0 mt-1 w-60 bg-white rounded-xl shadow-xl ring-1 ring-black/5 overflow-hidden">
+                    <div className="px-3 py-2 border-b border-gray-100 flex items-center justify-between">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500">Filter by {label.toLowerCase()}</span>
+                        {active && (
+                            <button
+                                type="button"
+                                onClick={() => onChange(new Set())}
+                                className="text-[10px] font-bold text-teal-600 hover:text-teal-800 uppercase"
+                            >
+                                Clear
+                            </button>
+                        )}
+                    </div>
+                    <div className="max-h-64 overflow-y-auto py-1">
+                        {options.length === 0 ? (
+                            <p className="px-3 py-4 text-center text-[11px] text-gray-400 italic">No values yet.</p>
+                        ) : options.map((opt) => {
+                            const checked = selected.has(opt);
+                            return (
+                                <button
+                                    key={opt}
+                                    type="button"
+                                    onClick={() => toggle(opt)}
+                                    className={`w-full flex items-center gap-2.5 px-3 py-1.5 text-left text-[12px] transition-colors ${
+                                        checked ? "bg-teal-50 text-gray-900" : "hover:bg-gray-50 text-gray-700"
+                                    }`}
+                                >
+                                    <span className={`w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 ${
+                                        checked ? "bg-teal-600 border-teal-600" : "bg-white border-gray-300"
+                                    }`}>
+                                        {checked && <Check size={11} className="text-white" strokeWidth={3} />}
+                                    </span>
+                                    <span className="truncate flex-1">{opt}</span>
+                                </button>
+                            );
+                        })}
+                    </div>
+                </div>
+            )}
+        </div>
     );
 }
 
@@ -57,15 +185,63 @@ export default function AgentLeads({ leads = [], programs = [] }) {
     const [search, setSearch] = useState("");
     const [addOpen, setAddOpen] = useState(false);
     const [editLead, setEditLead] = useState(null);
+    // Sort state: { key: 'name'|'visa'|'status'|'added', dir: 'asc'|'desc' }
+    // — default is newest first, matching the previous back-end order.
+    const [sort, setSort] = useState({ key: "added", dir: "desc" });
+    // Column value filters — each Set holds the picked values; empty Set
+    // means "show all". Populated by the header dropdowns.
+    const [visaFilter, setVisaFilter] = useState(() => new Set());
+    const [statusFilter, setStatusFilter] = useState(() => new Set());
+
+    // Unique-values feeding the header filter dropdowns — computed from
+    // the CURRENT lead set so agents only see values that actually exist.
+    const visaOptions = useMemo(
+        () => Array.from(new Set(leads.map((l) => l.visa).filter(Boolean))).sort(),
+        [leads],
+    );
+    const statusOptions = useMemo(
+        () => Array.from(new Set(leads.map((l) => l.status).filter(Boolean))).sort(),
+        [leads],
+    );
 
     const filtered = useMemo(() => {
         const q = search.trim().toLowerCase();
-        if (!q) return leads;
-        return leads.filter((l) =>
-            [l.name, l.email, l.phone, l.location, l.course]
-                .filter(Boolean).some((v) => String(v).toLowerCase().includes(q))
-        );
-    }, [leads, search]);
+        return leads.filter((l) => {
+            if (q && ! [l.name, l.email, l.phone, l.location, l.course, l.visa, l.status]
+                .filter(Boolean).some((v) => String(v).toLowerCase().includes(q))) return false;
+            if (visaFilter.size > 0 && ! visaFilter.has(l.visa)) return false;
+            if (statusFilter.size > 0 && ! statusFilter.has(l.status)) return false;
+            return true;
+        });
+    }, [leads, search, visaFilter, statusFilter]);
+
+    const sorted = useMemo(() => {
+        const rows = filtered.slice();
+        const cmp = (a, b) => {
+            const norm = (v) => (v === null || v === undefined ? "" : String(v).toLowerCase());
+            let av, bv;
+            switch (sort.key) {
+                case "added":  av = new Date(a.created_at).getTime() || 0; bv = new Date(b.created_at).getTime() || 0; break;
+                case "visa":   av = norm(a.visa);   bv = norm(b.visa);   break;
+                case "status": av = norm(a.status); bv = norm(b.status); break;
+                case "name":
+                default:       av = norm(a.name);   bv = norm(b.name);   break;
+            }
+            if (av < bv) return sort.dir === "asc" ? -1 : 1;
+            if (av > bv) return sort.dir === "asc" ? 1 : -1;
+            return 0;
+        };
+        return rows.sort(cmp);
+    }, [filtered, sort]);
+
+    // Clicking a header toggles asc → desc → asc on the same key, or
+    // switches to that key (asc) when it was previously sorting a
+    // different one.
+    const toggleSort = (key) => {
+        setSort((prev) => prev.key === key
+            ? { key, dir: prev.dir === "asc" ? "desc" : "asc" }
+            : { key, dir: "asc" });
+    };
 
     return (
         <div className="space-y-6 max-w-[1500px] mx-auto pb-12">
@@ -89,8 +265,12 @@ export default function AgentLeads({ leads = [], programs = [] }) {
                 <span>You can add leads and edit their contact info. The sales team manages each lead's pipeline stage from here on.</span>
             </div>
 
-            <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
-                <div className="w-full sm:w-80 relative">
+            {/* Search + column filters row. Filters live here (not in the
+                column headers) so they're always visible + reachable with
+                one click, and active selections + a Clear-all shortcut
+                stay on screen while the table scrolls. */}
+            <div className="bg-white p-3 rounded-2xl shadow-sm border border-gray-100 flex flex-col lg:flex-row gap-2 lg:items-center">
+                <div className="flex-1 relative">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                     <input
                         type="text"
@@ -100,67 +280,111 @@ export default function AgentLeads({ leads = [], programs = [] }) {
                         className="block w-full pl-10 pr-3 py-2.5 border border-gray-200 rounded-xl bg-gray-50 placeholder-gray-400 focus:outline-none focus:bg-white focus:ring-2 focus:ring-teal-500 focus:border-teal-500 text-sm transition-all"
                     />
                 </div>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                    <ToolbarFilter label="Visa"   options={visaOptions}   selected={visaFilter}   onChange={setVisaFilter} />
+                    <ToolbarFilter label="Status" options={statusOptions} selected={statusFilter} onChange={setStatusFilter} />
+                    {(visaFilter.size > 0 || statusFilter.size > 0 || search) && (
+                        <button
+                            type="button"
+                            onClick={() => { setVisaFilter(new Set()); setStatusFilter(new Set()); setSearch(""); }}
+                            className="inline-flex items-center gap-1 px-3 py-2 text-[12px] font-semibold text-gray-500 hover:text-gray-900 rounded-lg hover:bg-gray-100 transition-colors"
+                        >
+                            <X size={13} /> Clear
+                        </button>
+                    )}
+                </div>
             </div>
 
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-                <div className="overflow-x-auto min-h-[300px]">
-                    <table className="w-full text-left border-collapse whitespace-nowrap">
+                <div className="min-h-[300px]">
+                    {/* Wider viewport: 6 semantic columns fit without a
+                        horizontal scroll. Contact info (email + phone)
+                        stacks under the name in the Lead cell, and
+                        Education + Program share one Interest column so
+                        the row keeps a reasonable width even on 1280px. */}
+                    <table className="w-full text-left border-collapse table-fixed">
+                        <colgroup>
+                            <col className="w-[28%]" />
+                            <col className="w-[15%]" />
+                            <col className="w-[16%]" />
+                            <col className="w-[13%]" />
+                            <col className="w-[11%]" />
+                            <col className="w-[9%]" />
+                            <col className="w-[8%]" />
+                        </colgroup>
                         <thead>
                             <tr className="bg-gray-50/50 border-b border-gray-100">
-                                <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Lead</th>
-                                <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Contact</th>
-                                <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Location</th>
-                                <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Education</th>
-                                <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Program</th>
-                                <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
-                                <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Added</th>
-                                <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider text-right pr-8">Edit</th>
+                                <SortableTh label="Lead"     sortKey="name"   sort={sort} onSort={toggleSort} />
+                                <Th>Location</Th>
+                                <Th>Interest</Th>
+                                <SortableTh label="Visa"     sortKey="visa"   sort={sort} onSort={toggleSort} />
+                                <SortableTh label="Status"   sortKey="status" sort={sort} onSort={toggleSort} />
+                                <SortableTh label="Added"    sortKey="added"  sort={sort} onSort={toggleSort} />
+                                <th className="px-4 py-3.5 text-[11px] font-bold text-gray-500 uppercase tracking-wider text-right pr-5">Edit</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-50">
-                            {filtered.length === 0 ? (
+                            {sorted.length === 0 ? (
                                 <tr>
-                                    <td colSpan={8} className="px-6 py-16 text-center text-gray-400">
+                                    <td colSpan={7} className="px-6 py-16 text-center text-gray-400">
                                         <UsersIcon className="w-10 h-10 mx-auto mb-3 text-gray-200" />
                                         <p className="font-semibold">No leads yet</p>
                                         <p className="text-sm mt-1">Add your first recruited lead to get started.</p>
                                     </td>
                                 </tr>
-                            ) : filtered.map((l) => (
-                                <tr key={l.id} className="hover:bg-teal-50/30 transition-colors">
-                                    <td className="px-6 py-4">
-                                        <div className="flex items-center gap-3">
+                            ) : sorted.map((l) => (
+                                <tr key={l.id} className="hover:bg-teal-50/30 transition-colors align-top">
+                                    <td className="px-4 py-3">
+                                        <div className="flex items-start gap-3">
                                             <Avatar name={l.name} colorKey={l.id} size={36} />
-                                            <div>
-                                                <div className="font-bold text-gray-900 text-sm">{l.name}</div>
-                                                <div className="text-[11px] text-gray-400">{l.lead_id}</div>
+                                            <div className="min-w-0 flex-1">
+                                                <div className="font-bold text-gray-900 text-sm truncate">{l.name}</div>
+                                                {l.email && (
+                                                    <div className="flex items-center gap-1.5 text-[11px] text-gray-500 mt-0.5 truncate">
+                                                        <Mail size={11} className="text-gray-400 flex-shrink-0" />
+                                                        <span className="truncate">{l.email}</span>
+                                                    </div>
+                                                )}
+                                                {l.phone && (
+                                                    <div className="flex items-center gap-1.5 text-[11px] text-gray-500 mt-0.5 truncate">
+                                                        <Phone size={11} className="text-gray-400 flex-shrink-0" />
+                                                        <span className="truncate">{l.phone}</span>
+                                                    </div>
+                                                )}
                                             </div>
                                         </div>
                                     </td>
-                                    <td className="px-6 py-4 text-sm text-gray-700">
-                                        <div className="space-y-1">
-                                            {l.email && <div className="flex items-center gap-1.5"><Mail size={13} className="text-gray-400" />{l.email}</div>}
-                                            {l.phone && <div className="flex items-center gap-1.5"><Phone size={13} className="text-gray-400" />{l.phone}</div>}
-                                            {!l.email && !l.phone && <span className="text-gray-300">—</span>}
-                                        </div>
+                                    <td className="px-4 py-3 text-sm text-gray-700">
+                                        {l.location
+                                            ? <span className="inline-flex items-start gap-1.5 leading-snug"><MapPin size={12} className="text-gray-400 flex-shrink-0 mt-0.5" /><span className="text-[12px]">{l.location}</span></span>
+                                            : <span className="text-gray-300">—</span>}
                                     </td>
-                                    <td className="px-6 py-4 text-sm text-gray-700">
-                                        {l.location ? <span className="inline-flex items-center gap-1.5"><MapPin size={13} className="text-gray-400" />{l.location}</span> : <span className="text-gray-300">—</span>}
+                                    <td className="px-4 py-3 text-[12px] text-gray-700 leading-snug">
+                                        {l.course || l.highest_qualification ? (
+                                            <div className="space-y-0.5">
+                                                {l.course && (
+                                                    <div className="flex items-start gap-1.5"><GraduationCap size={12} className="text-gray-400 flex-shrink-0 mt-0.5" /><span className="truncate">{l.course}</span></div>
+                                                )}
+                                                {l.highest_qualification && (
+                                                    <div className="text-[11px] text-gray-500 pl-[18px] truncate">{l.highest_qualification}</div>
+                                                )}
+                                            </div>
+                                        ) : <span className="text-gray-300">—</span>}
                                     </td>
-                                    <td className="px-6 py-4 text-sm text-gray-700">
-                                        {l.highest_qualification ? <span className="inline-flex items-center gap-1.5"><GraduationCap size={13} className="text-gray-400" />{l.highest_qualification}</span> : <span className="text-gray-300">—</span>}
+                                    <td className="px-4 py-3 text-sm text-gray-700">
+                                        {l.visa
+                                            ? <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-teal-50 border border-teal-100 text-teal-700 text-[10.5px] font-semibold"><Stamp size={10} /><span className="truncate">{l.visa}</span></span>
+                                            : <span className="text-gray-300">—</span>}
                                     </td>
-                                    <td className="px-6 py-4 text-sm text-gray-700">
-                                        {l.course ? <span className="inline-flex items-center gap-1.5"><GraduationCap size={13} className="text-gray-400" />{l.course}</span> : <span className="text-gray-300">—</span>}
-                                    </td>
-                                    <td className="px-6 py-4"><StatusPill value={l.status} /></td>
-                                    <td className="px-6 py-4 text-sm text-gray-600">{fmtDate(l.created_at)}</td>
-                                    <td className="px-6 py-4 text-right pr-6">
+                                    <td className="px-4 py-3"><StatusPill value={l.status} /></td>
+                                    <td className="px-4 py-3 text-[12px] text-gray-600">{fmtDate(l.created_at)}</td>
+                                    <td className="px-4 py-3 text-right pr-5">
                                         <button
                                             onClick={() => setEditLead(l)}
-                                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors shadow-sm"
+                                            title="Edit info"
+                                            className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-white border border-gray-200 text-gray-500 hover:text-gray-900 hover:bg-gray-50 transition-colors"
                                         >
-                                            <Pencil size={13} className="text-gray-400" /> Edit info
+                                            <Pencil size={13} />
                                         </button>
                                     </td>
                                 </tr>

@@ -23,6 +23,69 @@ const to12h = (hhmm) => {
     return `${hh}:${String(m).padStart(2, "0")} ${ap}`;
 };
 
+// Days of the week, Monday first, for the per-day schedule circles.
+const WEEK_DAYS = [
+    { key: "mon", label: "M", title: "Monday" },
+    { key: "tue", label: "T", title: "Tuesday" },
+    { key: "wed", label: "W", title: "Wednesday" },
+    { key: "thu", label: "T", title: "Thursday" },
+    { key: "fri", label: "F", title: "Friday" },
+    { key: "sat", label: "S", title: "Saturday" },
+    { key: "sun", label: "S", title: "Sunday" },
+];
+
+// Build the two editable schedule groups from a saved setting. With no
+// weekly_schedule, seed the current single schedule as Weekdays (Mon–Fri) +
+// Weekends (Sat–Sun) at the same time — so existing setups open unchanged.
+function groupsFromSetting(setting) {
+    const inD = setting?.sched_in || "09:00";
+    const outD = setting?.sched_out || "18:00";
+    const ws = setting?.weekly_schedule;
+    if (!ws) {
+        return [
+            { days: new Set(["mon", "tue", "wed", "thu", "fri"]), in: inD, out: outD },
+            { days: new Set(["sat", "sun"]), in: inD, out: outD },
+        ];
+    }
+    // Group the "on" days by their (in,out) pair — our UI only ever makes two.
+    const pairs = [];
+    for (const { key } of WEEK_DAYS) {
+        const d = ws[key];
+        if (!d || !d.on) continue;
+        const pk = `${d.in}|${d.out}`;
+        let g = pairs.find((p) => p.pk === pk);
+        if (!g) { g = { pk, in: d.in || inD, out: d.out || outD, days: new Set() }; pairs.push(g); }
+        g.days.add(key);
+    }
+    const at = (i) => (pairs[i] ? { days: pairs[i].days, in: pairs[i].in, out: pairs[i].out } : { days: new Set(), in: inD, out: outD });
+    return [at(0), at(1)];
+}
+
+// Flatten the two groups into the mon..sun map the server stores. A day in no
+// group is a day off (on:false).
+function groupsToWeekly(groups) {
+    const map = {};
+    for (const { key } of WEEK_DAYS) map[key] = { on: false, in: null, out: null };
+    groups.forEach((g) => g.days.forEach((d) => { map[d] = { on: true, in: g.in, out: g.out }; }));
+    return map;
+}
+
+// True when a saved weekly_schedule differs from a plain all-week single
+// schedule — i.e. there's a day off or a second distinct time set. Drives the
+// "per-day" hint in the staff table.
+function weeklyIsCustom(setting) {
+    const ws = setting?.weekly_schedule;
+    if (!ws) return false;
+    const pairs = new Set();
+    let anyOff = false;
+    for (const { key } of WEEK_DAYS) {
+        const d = ws[key];
+        if (!d || !d.on) { anyOff = true; continue; }
+        pairs.add(`${d.in}|${d.out}`);
+    }
+    return anyOff || pairs.size > 1;
+}
+
 // Module-level so the inputs keep a stable identity across renders (defining
 // this inside the form component remounts inputs on every keystroke).
 function Field({ label, hint, children }) {
@@ -62,6 +125,19 @@ function SetupModal({ person, onClose }) {
     const [otherTeam, setOtherTeam] = useState(!!setting?.team && !KNOWN_TEAMS.includes(setting.team));
     const set = (k) => (e) => setF((p) => ({ ...p, [k]: e.target.value }));
 
+    // Two editable schedule groups (Weekdays / Weekends). A day belongs to at
+    // most one group; a day in neither is a day off.
+    const [groups, setGroups] = useState(() => groupsFromSetting(setting));
+    const toggleDay = (gi, dayKey) => setGroups((prev) => {
+        const next = prev.map((g) => ({ ...g, days: new Set(g.days) }));
+        const already = next[gi].days.has(dayKey);
+        next.forEach((g) => g.days.delete(dayKey)); // a day lives in one group only
+        if (!already) next[gi].days.add(dayKey);      // click again = remove (day off)
+        return next;
+    });
+    const setGroupTime = (gi, field, value) => setGroups((prev) => prev.map((g, i) => (i === gi ? { ...g, [field]: value } : g)));
+    const offDays = WEEK_DAYS.filter((d) => !groups.some((g) => g.days.has(d.key)));
+
     const onTeamChange = (e) => {
         const v = e.target.value;
         if (v === "__other") { setOtherTeam(true); setF((p) => ({ ...p, team: "" })); return; }
@@ -71,7 +147,13 @@ function SetupModal({ person, onClose }) {
 
     const save = () => {
         setSaving(true);
-        router.post("/dtr/setup", { ...f, user_id: person.id }, {
+        // Fixed schedules carry the per-day map; flexi ignores it. Keep the flat
+        // sched_in/out in sync with the primary (first non-empty) group so legacy
+        // displays still show the main schedule.
+        const weekly = isFlexi ? null : groupsToWeekly(groups);
+        const primary = groups.find((g) => g.days.size > 0);
+        const flat = (!isFlexi && primary) ? { sched_in: primary.in, sched_out: primary.out } : {};
+        router.post("/dtr/setup", { ...f, ...flat, weekly_schedule: weekly, user_id: person.id }, {
             preserveScroll: true,
             onFinish: () => setSaving(false),
             onSuccess: () => onClose(),
@@ -129,10 +211,45 @@ function SetupModal({ person, onClose }) {
                             <span className="font-bold">Flexi time.</span> No fixed clock-in — {person.name.split(" ")[0]} can time in and out whenever, and won't be flagged late. They work toward the <span className="font-bold">Std hrs / day</span> target below, but it isn't strictly enforced.
                         </div>
                     ) : (
-                        <>
-                            <Field label="Sched. in" hint="When their duty starts"><input type="time" className={input} value={f.sched_in} onChange={set("sched_in")} /></Field>
-                            <Field label="Sched. out" hint="When they're done for the day"><input type="time" className={input} value={f.sched_out} onChange={set("sched_out")} /></Field>
-                        </>
+                        <div className="md:col-span-2 lg:col-span-3 rounded-xl border border-gray-200 p-4">
+                            <div className="flex items-baseline justify-between mb-1">
+                                <span className="text-[11px] font-bold uppercase tracking-wider text-gray-600">Weekly schedule</span>
+                                <span className="text-[11px] text-gray-400">Tap days to assign them · a day in neither group is a day off</span>
+                            </div>
+                            <div className="space-y-3 mt-3">
+                                {groups.map((g, gi) => (
+                                    <div key={gi} className="rounded-lg bg-gray-50 border border-gray-100 p-3">
+                                        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+                                            <span className="text-xs font-bold text-gray-600 w-20 shrink-0">{gi === 0 ? "Weekdays" : "Weekends"}</span>
+                                            <div className="flex items-center gap-1.5">
+                                                {WEEK_DAYS.map((d) => {
+                                                    const on = g.days.has(d.key);
+                                                    return (
+                                                        <button
+                                                            key={d.key}
+                                                            type="button"
+                                                            title={d.title}
+                                                            onClick={() => toggleDay(gi, d.key)}
+                                                            className={`w-8 h-8 rounded-full text-xs font-bold border transition-colors ${on ? "bg-[#436235] text-white border-[#436235]" : "bg-white text-gray-400 border-gray-200 hover:border-[#436235] hover:text-[#436235]"}`}
+                                                        >
+                                                            {d.label}
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
+                                            <div className="flex items-center gap-1.5 ml-auto">
+                                                <input type="time" value={g.in} onChange={(e) => setGroupTime(gi, "in", e.target.value)} className="px-2 py-1.5 rounded-lg border border-gray-200 text-sm outline-none focus:ring-2 focus:ring-[#436235]/30" />
+                                                <span className="text-gray-400 text-xs">to</span>
+                                                <input type="time" value={g.out} onChange={(e) => setGroupTime(gi, "out", e.target.value)} className="px-2 py-1.5 rounded-lg border border-gray-200 text-sm outline-none focus:ring-2 focus:ring-[#436235]/30" />
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                            {offDays.length > 0 && (
+                                <p className="text-[11px] text-gray-400 mt-2">Day off: <span className="font-semibold text-gray-500">{offDays.map((d) => d.title).join(", ")}</span></p>
+                            )}
+                        </div>
                     )}
 
                     <Field label="Break (hrs)"><input type="number" step="0.25" min="0" className={input} value={f.break_hours} onChange={set("break_hours")} /></Field>
@@ -343,7 +460,7 @@ export default function DtrManage({ staff = [] }) {
                                         <td className="px-3 py-3 text-gray-500 whitespace-nowrap">
                                             {!set ? "—" : set.schedule_type === "flexi"
                                                 ? <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold bg-indigo-100 text-indigo-700">Flexi</span>
-                                                : `${to12h(set.sched_in)} – ${to12h(set.sched_out)}`}
+                                                : <span className="inline-flex items-center gap-1.5">{to12h(set.sched_in)} – {to12h(set.sched_out)}{weeklyIsCustom(set) && <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-100 text-amber-700" title="Weekends/some days use a different schedule">PER-DAY</span>}</span>}
                                         </td>
                                         <td className="px-3 py-3 text-right tabular-nums text-gray-500">{set ? (set.schedule_type === "flexi" ? `${Number(set.std_hours).toFixed(1)}h` : `${Number(set.std_hours).toFixed(1)}h / ${set.grace_mins}m`) : "—"}</td>
                                         <td className="px-3 py-3">

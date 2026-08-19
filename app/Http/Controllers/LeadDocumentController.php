@@ -493,6 +493,7 @@ class LeadDocumentController extends Controller
             'types.*' => ['string', Rule::in(array_keys(EngagementDocumentGenerator::DOCS))],
             'notify' => 'sometimes|boolean',
             'signer_id' => 'nullable|integer|exists:users,id',
+            'assist_signer_id' => 'nullable|integer|exists:users,id',
             'fee_tier' => ['nullable', Rule::in(\App\Models\VisaType::FEE_TIERS)],
             'fee_location' => ['nullable', Rule::in(\App\Models\VisaType::FEE_LOCATIONS)],
             'include_gst' => 'sometimes|boolean',
@@ -503,6 +504,9 @@ class LeadDocumentController extends Controller
         $overrides = [];
         if (! empty($data['signer_id'])) {
             $overrides['signer_id'] = $data['signer_id'];
+        }
+        if (! empty($data['assist_signer_id'])) {
+            $overrides['assist_signer_id'] = $data['assist_signer_id'];
         }
         if (! empty($data['fee_tier'])) {
             $overrides['fee_tier'] = $data['fee_tier'];
@@ -518,11 +522,29 @@ class LeadDocumentController extends Controller
         }
 
         try {
-            // Replace-per-type: remove the previous UNSIGNED copies of each type
-            // first so regenerating a draft doesn't stack duplicates. Signed
+            // Never touch a document the client has already signed. Regenerating
+            // a signed type would create a conflicting UNSIGNED copy alongside the
+            // signed one and make a completed pack look unsigned again — so skip
+            // those types entirely and leave the signed document exactly as it is.
+            $alreadySigned = LeadDocument::where('lead_id', $lead->id)
+                ->where('source_variant', 'like', 'engagement:%')
+                ->whereNotNull('client_signed_at')
+                ->pluck('source_variant')
+                ->map(fn ($v) => str_replace('engagement:', '', $v))
+                ->all();
+
+            $typesToGenerate = array_values(array_diff($data['types'], $alreadySigned));
+            $skippedSigned = array_values(array_intersect($data['types'], $alreadySigned));
+
+            if (empty($typesToGenerate)) {
+                return back()->with('success', 'Those documents are already signed by the client, so nothing was changed.');
+            }
+
+            // Replace-per-type: remove the previous UNSIGNED copies of the types
+            // we're regenerating so a draft doesn't stack duplicates. Signed
             // documents are never touched (their signature must be preserved).
             LeadDocument::where('lead_id', $lead->id)
-                ->whereIn('source_variant', array_map(fn ($t) => "engagement:{$t}", $data['types']))
+                ->whereIn('source_variant', array_map(fn ($t) => "engagement:{$t}", $typesToGenerate))
                 ->whereNull('client_signed_at')
                 ->get()
                 ->each(function (LeadDocument $old) {
@@ -535,33 +557,48 @@ class LeadDocumentController extends Controller
             // Keep the created document id per type so the notification can
             // deep-link each icon straight to its generated PDF.
             $generatedDocIds = [];
-            foreach ($data['types'] as $t) {
+            foreach ($typesToGenerate as $t) {
                 $doc = $generator->generate($lead, $t, $overrides);
                 $generatedDocIds[$t] = $doc->id;
             }
 
-            // Record the (ex-GST) professional fee this pack was generated at, so
-            // the Generated Documents table can show a total per engagement.
-            $feeVisa = \App\Models\VisaType::where('name', $lead->inz_visa_type)->first();
-            $feeTotal = $overrides['professional_fee']
-                ?? optional($feeVisa)?->professionalFeeFor($overrides['fee_tier'] ?? 'normal', $overrides['fee_location'] ?? 'onshore');
-            $lead->forceFill(['engagement_fee_total' => $feeTotal])->save();
+            // Record the fees this pack was generated at, so the Generated
+            // Documents table can show the ex-GST professional fee AND the grand
+            // total (our fees incl GST + INZ disbursements across the family) —
+            // but NEVER move them once the Written Agreement is signed. The signed
+            // agreement locks the amounts the client actually agreed to; a later
+            // regeneration of the supporting docs must not overwrite them.
+            if (! in_array('written_agreement', $alreadySigned, true)) {
+                $totals = $generator->feeTotals($lead, $overrides);
+                $lead->forceFill([
+                    'engagement_fee_total' => $totals['professional_excl'],
+                    'engagement_total_amount' => $totals['grand_total'],
+                ])->save();
+            }
 
-            $n = count($data['types']);
+            $n = count($typesToGenerate);
             $message = "{$n} engagement document(s) generated for {$lead->first_name} {$lead->last_name}.";
+            if (! empty($skippedSigned)) {
+                $message .= ' '.count($skippedSigned).' already-signed document(s) were left unchanged.';
+            }
 
             // Optionally email the client that their documents are now available
             // on the scoped signing page. Sending marks the pack as no longer a
             // draft (records engagement_sent_at, which reveals the client link).
+            // Saving as a draft must clear any previous "sent" flag so the status
+            // reads Draft again — unless the pack already carries a signed
+            // document, in which case its state is left intact.
             if (! empty($data['notify'])) {
                 if (empty($lead->email)) {
                     $message .= ' Email not sent — no email on file.';
                 } else {
                     $token = $lead->ensureEngagementSigningToken();
-                    Mail::to($lead->email)->send(new \App\Mail\EngagementDocumentsReady($lead, $data['types'], $generatedDocIds, $token));
+                    Mail::to($lead->email)->send(new \App\Mail\EngagementDocumentsReady($lead, $typesToGenerate, $generatedDocIds, $token));
                     $lead->forceFill(['engagement_sent_at' => now()])->save();
                     $message .= " Client notified at {$lead->email}.";
                 }
+            } elseif (empty($alreadySigned)) {
+                $lead->forceFill(['engagement_sent_at' => null])->save();
             }
 
             return back()->with('success', $message);
@@ -574,6 +611,27 @@ class LeadDocumentController extends Controller
 
             return back()->withErrors(['error' => 'Could not generate the documents: '.$e->getMessage()]);
         }
+    }
+
+    /**
+     * Live fee totals for the engagement modal's receipt — the family-aware
+     * professional-fee sum, INZ disbursement total and grand total for a given
+     * tier/location/GST setting. Read-only JSON; the modal recomputes the
+     * editable professional-fee override against these.
+     */
+    public function engagementFeeTotals(Request $request, EngagementDocumentGenerator $generator, $leadId)
+    {
+        $lead = Lead::findOrFail($leadId);
+
+        $overrides = [
+            'fee_tier' => $request->query('fee_tier'),
+            'fee_location' => $request->query('fee_location'),
+            'include_gst' => filter_var($request->query('include_gst'), FILTER_VALIDATE_BOOLEAN),
+        ];
+        // Deliberately NOT passing professional_fee — the modal applies its own
+        // (editable) override on top of the raw family sums returned here.
+
+        return response()->json($generator->feeTotals($lead, $overrides));
     }
 
     /**
@@ -817,11 +875,15 @@ class LeadDocumentController extends Controller
         $engageType = $this->engagementTypeFor($type);
         if ($engageType !== null) {
             $signer = $request->query('signer');
+            $assistSigner = $request->query('assist_signer');
             $tier = $request->query('fee_tier');
             $location = $request->query('fee_location');
             $opts = [];
             if ($signer) {
                 $opts['signer_id'] = (int) $signer;
+            }
+            if ($assistSigner) {
+                $opts['assist_signer_id'] = (int) $assistSigner;
             }
             if (in_array($tier, \App\Models\VisaType::FEE_TIERS, true)) {
                 $opts['fee_tier'] = $tier;
@@ -1409,10 +1471,11 @@ class LeadDocumentController extends Controller
         }
 
         // A bulk download assembles the case file for lodgement, so it ships
-        // APPROVED documents only by default — nothing unreviewed, pending or
-        // rejected belongs in that bundle. `?status=Submitted` (etc.) narrows
-        // to another single state for the File history's filtered download.
-        $status = $request->query('status', LeadDocument::STATUS_APPROVED);
+        // APPROVED documents only by default. `?status=all` (or ?all=1) bundles
+        // EVERY document on the case; `?status=Submitted` (etc.) narrows to
+        // another single state for the File history's filtered download.
+        $statusParam = $request->query('status', LeadDocument::STATUS_APPROVED);
+        $wantAll = $statusParam === 'all' || $request->boolean('all');
 
         $allowed = [
             LeadDocument::STATUS_SUBMITTED,
@@ -1422,18 +1485,18 @@ class LeadDocumentController extends Controller
             LeadDocument::STATUS_STAFF_SHARED,
         ];
 
-        if (! in_array($status, $allowed, true)) {
-            $status = LeadDocument::STATUS_APPROVED;
-        }
+        $status = in_array($statusParam, $allowed, true) ? $statusParam : LeadDocument::STATUS_APPROVED;
 
         $docs = $lead->documents()
-            ->where('status', $status)
+            ->when(! $wantAll, fn ($q) => $q->where('status', $status))
             ->orderBy('created_at')
             ->get();
 
         if ($docs->isEmpty()) {
             return back()->withErrors([
-                'error' => "This case has no {$status} documents to download.",
+                'error' => $wantAll
+                    ? 'This case has no documents to download.'
+                    : "This case has no {$status} documents to download.",
             ]);
         }
 

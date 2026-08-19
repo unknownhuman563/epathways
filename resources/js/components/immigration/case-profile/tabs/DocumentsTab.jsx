@@ -66,9 +66,10 @@ export default function DocumentsTab({
     // "File history" modal — every file on the case with its status, kept
     // separate from the checklist table below.
     const [filesOpen, setFilesOpen] = useState(false);
-    // Collapsible document sections — a Set of collapsed category names.
-    const [collapsedCats, setCollapsedCats] = useState(() => new Set());
-    const toggleCat = (cat) => setCollapsedCats((prev) => {
+    // Collapsible document sections — collapsed by DEFAULT. expandedCats holds
+    // the categories the user has opened (empty = everything collapsed).
+    const [expandedCats, setExpandedCats] = useState(() => new Set());
+    const toggleCat = (cat) => setExpandedCats((prev) => {
         const next = new Set(prev);
         next.has(cat) ? next.delete(cat) : next.add(cat);
         return next;
@@ -232,13 +233,7 @@ export default function DocumentsTab({
                         <Paperclip size={12} /> File history ({documents.length})
                     </button>
                     {documents.length > 0 && (
-                        <a
-                            href={`/admin/leads/${lead.id}/documents/download-all`}
-                            title="Download the approved documents as a single ZIP — the lodgement bundle"
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold uppercase tracking-wider bg-gray-900 text-white hover:bg-black transition-colors"
-                        >
-                            <Download size={12} /> Download approved (ZIP)
-                        </a>
+                        <DownloadAllMenu leadId={lead.id} />
                     )}
                     <p className="text-[10.5px] text-gray-400">
                         Source: <span className="font-semibold">{checklist.source || "none"}</span>
@@ -271,7 +266,7 @@ export default function DocumentsTab({
                             {groupedRows.map(([category, groupRows]) => {
                                 const approved = groupRows.filter((r) => r.document?.status === "Approved").length;
                                 const checklistRows = groupRows.filter((r) => r.kind === "checklist");
-                                const collapsed = collapsedCats.has(category);
+                                const collapsed = ! expandedCats.has(category);
                                 return (
                                     <Fragment key={category}>
                                         <tr className="bg-gray-200 border-y border-gray-300">
@@ -646,6 +641,52 @@ function Row({ row, leadId, docThreads = [], threadsByDoc = new Map(), caseStaff
             />
         )}
         </Fragment>
+    );
+}
+
+// Bulk-download dropdown — "Download approved (ZIP)" (the lodgement bundle) or
+// "Download all (ZIP)" (every document on the case).
+function DownloadAllMenu({ leadId }) {
+    const [open, setOpen] = useState(false);
+    const ref = useRef(null);
+
+    useEffect(() => {
+        if (! open) return;
+        const onDoc = (e) => { if (! ref.current?.contains(e.target)) setOpen(false); };
+        document.addEventListener("mousedown", onDoc);
+        return () => document.removeEventListener("mousedown", onDoc);
+    }, [open]);
+
+    return (
+        <div ref={ref} className="relative">
+            <button
+                type="button"
+                onClick={() => setOpen((o) => !o)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold uppercase tracking-wider bg-gray-900 text-white hover:bg-black transition-colors"
+            >
+                <Download size={12} /> Download (ZIP) <ChevronDown size={12} />
+            </button>
+            {open && (
+                <div className="absolute right-0 mt-1 w-56 bg-white rounded-lg shadow-xl border border-gray-100 py-1 z-20">
+                    <a
+                        href={`/admin/leads/${leadId}/documents/download-all`}
+                        onClick={() => setOpen(false)}
+                        className="flex items-center gap-2 px-3 py-2 text-[12px] text-gray-700 hover:bg-gray-50"
+                    >
+                        <Download size={13} className="text-gray-400" />
+                        <span><span className="font-semibold">Approved only</span><span className="block text-[10px] text-gray-400">The lodgement bundle</span></span>
+                    </a>
+                    <a
+                        href={`/admin/leads/${leadId}/documents/download-all?all=1`}
+                        onClick={() => setOpen(false)}
+                        className="flex items-center gap-2 px-3 py-2 text-[12px] text-gray-700 hover:bg-gray-50"
+                    >
+                        <Download size={13} className="text-gray-400" />
+                        <span><span className="font-semibold">All documents</span><span className="block text-[10px] text-gray-400">Every file on the case</span></span>
+                    </a>
+                </div>
+            )}
+        </div>
     );
 }
 

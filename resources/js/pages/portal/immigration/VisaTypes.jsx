@@ -89,8 +89,8 @@ export default function VisaTypes({ visaTypes = [], permissions = {} }) {
                                         <th className="px-3 py-2.5 text-right">Consultation</th>
                                         {/* The two quoted totals — what staff are
                                             actually asked for on the phone. */}
-                                        <th className="px-3 py-2.5 text-right">Pay now</th>
-                                        <th className="px-3 py-2.5 text-right">Payment plan</th>
+                                        <th className="px-3 py-2.5 text-right">Discount</th>
+                                        <th className="px-3 py-2.5 text-right">Normal</th>
                                         <th className="px-3 py-2.5 text-center">Checklist</th>
                                         <th className="px-3 py-2.5 text-center">Status</th>
                                         <th className="px-6 py-2.5 text-right">&nbsp;</th>
@@ -236,6 +236,7 @@ function CreateModal({ onClose }) {
         professional_fees_discounted: '',
         professional_fees_offshore: '',
         professional_fees_discounted_offshore: '',
+        offshore_rrp_incl_gst: true,
         inz_application_fee: '',
         inz_application_fee_offshore: '',
         consultation_duration_minutes: 60,
@@ -449,6 +450,8 @@ function CreateModal({ onClose }) {
                                         setData={setData}
                                         errors={errors}
                                         location={loc.key}
+                                        rrpInclGst={loc.key === 'offshore' ? data.offshore_rrp_incl_gst !== false : true}
+                                        onToggleRrp={loc.key === 'offshore' ? (v) => setData('offshore_rrp_incl_gst', v) : null}
                                     />
                                 </Card>
                             ))}
@@ -564,6 +567,7 @@ function EditModal({ visaType, onClose, canViewHistory }) {
         professional_fees_discounted: visaType.professional_fees_discounted ?? '',
         professional_fees_offshore: visaType.professional_fees_offshore ?? '',
         professional_fees_discounted_offshore: visaType.professional_fees_discounted_offshore ?? '',
+        offshore_rrp_incl_gst: visaType.offshore_rrp_incl_gst ?? true,
         inz_application_fee: visaType.inz_application_fee ?? '',
         inz_application_fee_offshore: visaType.inz_application_fee_offshore ?? '',
         consultation_duration_minutes: visaType.consultation_duration_minutes,
@@ -765,6 +769,8 @@ function EditModal({ visaType, onClose, canViewHistory }) {
                                         setData={setData}
                                         errors={errors}
                                         location={loc.key}
+                                        rrpInclGst={loc.key === 'offshore' ? data.offshore_rrp_incl_gst !== false : true}
+                                        onToggleRrp={loc.key === 'offshore' ? (v) => setData('offshore_rrp_incl_gst', v) : null}
                                     />
                                 </Card>
                             ))}
@@ -988,11 +994,11 @@ function computeTiers(data, location = 'onshore') {
     const build = (key, title, note, field) => {
         const raw = data[field];
         const excl = raw === '' || raw === null || raw === undefined ? null : Number(raw);
-        const incl = excl === null || isNaN(excl) ? null : excl * (1 + GST_RATE);
+        const inclVal = excl === null || isNaN(excl) ? null : excl * (1 + GST_RATE);
         // The INZ fee is a government charge passed straight through, so no
         // GST is added to it — it joins the total after the uplift.
-        const total = incl === null && inz === null ? null : (incl || 0) + (inz || 0);
-        return { key, title, note, field, incl, total, tone: TIER_TONES[key] };
+        const total = inclVal === null && inz === null ? null : (inclVal || 0) + (inz || 0);
+        return { key, title, note, field, excl: excl === null || isNaN(excl) ? null : excl, incl: inclVal, total, tone: TIER_TONES[key] };
     };
 
     return {
@@ -1090,9 +1096,18 @@ function VisaProfileHeader({ data }) {
  * editable — the RRP and totals come from computeTiers(), so they can't be
  * entered wrong or drift out of step with the header summary.
  */
-function FeeScheduleTable({ data, setData, errors, location = 'onshore' }) {
+function FeeScheduleTable({ data, setData, errors, location = 'onshore', rrpInclGst = true, onToggleRrp = null }) {
     const { inz, tiers } = computeTiers(data, location);
     const fields = FEE_FIELDS[location] || FEE_FIELDS.onshore;
+    // Whether the RRP column shows the GST-inclusive figure (excl x 1.15) or
+    // the raw GST-exclusive fee. The Total (fees + INZ) follows the same basis
+    // so the row stays internally consistent.
+    const rrpValue = (t) => (rrpInclGst ? t.incl : t.excl);
+    const rrpLabel = rrpInclGst ? 'RRP incl GST' : 'RRP excl GST';
+    const rowTotal = (t) => {
+        const rrp = rrpValue(t);
+        return rrp === null && inz === null ? null : (rrp || 0) + (inz || 0);
+    };
 
     const priceInput = (field, error) => (
         <div className="relative">
@@ -1144,7 +1159,18 @@ function FeeScheduleTable({ data, setData, errors, location = 'onshore' }) {
                                     </th>
                                     <th className={`px-3 py-2 w-[12.5%] ${t.tone.head}`}>
                                         Prof fees
-                                        <span className={`block font-semibold normal-case tracking-normal ${t.tone.headSub}`}>RRP incl GST</span>
+                                        {onToggleRrp ? (
+                                            <select
+                                                value={rrpInclGst ? 'incl' : 'excl'}
+                                                onChange={(e) => onToggleRrp(e.target.value === 'incl')}
+                                                className={`block mx-auto mt-0.5 border-0 bg-transparent text-[10px] font-semibold normal-case tracking-normal cursor-pointer focus:outline-none focus:ring-0 ${t.tone.headSub}`}
+                                            >
+                                                <option value="incl" className="text-gray-900">RRP incl GST</option>
+                                                <option value="excl" className="text-gray-900">RRP excl GST</option>
+                                            </select>
+                                        ) : (
+                                            <span className={`block font-semibold normal-case tracking-normal ${t.tone.headSub}`}>{rrpLabel}</span>
+                                        )}
                                     </th>
                                     <th className={`px-3 py-2 w-[12.5%] ${t.tone.head}`}>
                                         Total
@@ -1177,10 +1203,10 @@ function FeeScheduleTable({ data, setData, errors, location = 'onshore' }) {
                                     {/* Derived, not editable — flat gray so it
                                         reads as a result, not an empty input. */}
                                     <td className="px-2 py-3 bg-gray-50/60">
-                                        <p className="text-xs font-bold tabular-nums text-center text-gray-600">{money(t.incl)}</p>
+                                        <p className="text-xs font-bold tabular-nums text-center text-gray-600">{money(rrpValue(t))}</p>
                                     </td>
                                     <td className="px-2 py-3 bg-gray-50/60">
-                                        <p className="text-sm font-bold tabular-nums text-center text-gray-900">{money(t.total)}</p>
+                                        <p className="text-sm font-bold tabular-nums text-center text-gray-900">{money(rowTotal(t))}</p>
                                     </td>
                                 </React.Fragment>
                             ))}
