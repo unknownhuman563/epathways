@@ -3,7 +3,7 @@ import { Head, Link, router } from "@inertiajs/react";
 import {
     MessageSquare, Plus, Mail, Smartphone, Folder, FolderPlus,
     ChevronRight, Pencil, Trash2, FolderInput, X, CornerUpLeft, Image as ImageIcon,
-    Building2, Copy,
+    Building2, Copy, AlertTriangle,
 } from "lucide-react";
 
 const fmtDate = (iso) => (iso ? new Date(iso).toLocaleDateString("en-US", { day: "2-digit", month: "short", year: "numeric" }) : "—");
@@ -30,6 +30,7 @@ export default function TemplateListView({ templates = [], folders = [], departm
     const [moveOpen, setMoveOpen] = useState(false);
     const [deptMoveOpen, setDeptMoveOpen] = useState(false);
     const [folderDeptOpen, setFolderDeptOpen] = useState(false);
+    const [folderDupOpen, setFolderDupOpen] = useState(false);
     // In-app dialog instead of window.prompt/confirm.
     // { type: 'create'|'rename'|'delete', name, folder?, preselectIds? }
     const [dialog, setDialog] = useState(null);
@@ -101,6 +102,13 @@ export default function TemplateListView({ templates = [], folders = [], departm
     const moveFolderToDept = (folder, department) => {
         post(`${basePath}/folders/${folder.id}/department`, { department });
         setFolderDeptOpen(false);
+    };
+
+    // Clone the folder + all its templates into another department (originals
+    // untouched). Confirms first via the dialog.
+    const duplicateFolderToDept = (folder, department) => {
+        setFolderDupOpen(false);
+        post(`${basePath}/folders/${folder.id}/duplicate`, { department });
     };
 
     // Dialog confirm — runs the action for the open dialog.
@@ -210,7 +218,7 @@ export default function TemplateListView({ templates = [], folders = [], departm
                                 {currentFolder.department ? titleCase(currentFolder.department) : "Shared"}
                             </span>
                             <div className="relative">
-                                <button type="button" onClick={() => setFolderDeptOpen((o) => !o)} title="Move folder to department" className="flex items-center gap-1 text-gray-400 hover:text-gray-700 text-xs font-semibold">
+                                <button type="button" onClick={() => { setFolderDeptOpen((o) => !o); setFolderDupOpen(false); }} title="Move this folder to another department" className="flex items-center gap-1 text-gray-400 hover:text-gray-700 text-xs font-semibold">
                                     <Building2 size={13} /> Move
                                 </button>
                                 {folderDeptOpen && (
@@ -218,6 +226,21 @@ export default function TemplateListView({ templates = [], folders = [], departm
                                         {departmentOptions.map((o) => (
                                             <button key={o.value || "shared"} type="button" onClick={() => moveFolderToDept(currentFolder, o.value)} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex items-center gap-2">
                                                 <Building2 size={14} className={o.value ? "text-indigo-500" : "text-gray-400"} /> {o.value === "" ? "Shared (all departments)" : o.label}
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                            <div className="relative">
+                                <button type="button" onClick={() => { setFolderDupOpen((o) => !o); setFolderDeptOpen(false); }} title="Duplicate this folder and all its templates into another department" className="flex items-center gap-1 text-gray-400 hover:text-indigo-600 text-xs font-semibold">
+                                    <Copy size={13} /> Duplicate to…
+                                </button>
+                                {folderDupOpen && (
+                                    <div className="absolute left-0 mt-1 w-64 max-h-64 overflow-y-auto bg-white text-gray-800 rounded-xl shadow-lg border border-gray-100 py-1 z-20">
+                                        <div className="px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-gray-400">Copy folder + templates to</div>
+                                        {departmentOptions.map((o) => (
+                                            <button key={o.value || "shared"} type="button" onClick={() => duplicateFolderToDept(currentFolder, o.value)} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex items-center gap-2">
+                                                <Copy size={14} className={o.value ? "text-indigo-500" : "text-gray-400"} /> {o.value === "" ? "Shared (all departments)" : o.label}
                                             </button>
                                         ))}
                                     </div>
@@ -391,7 +414,11 @@ export default function TemplateListView({ templates = [], folders = [], departm
                                             />
                                         </td>
                                         <td className="px-6 py-3 font-semibold text-gray-900 text-sm cursor-pointer" onClick={() => router.visit(`${basePath}/${t.id}`)}>{t.name}</td>
-                                        <td className="px-6 py-3 cursor-pointer" onClick={() => router.visit(`${basePath}/${t.id}`)}><code className="text-xs bg-gray-100 rounded px-1.5 py-0.5 text-gray-600">{t.key}</code></td>
+                                        <td className="px-6 py-3 cursor-pointer" onClick={() => router.visit(`${basePath}/${t.id}`)}>
+                                            {t.key
+                                                ? <code className="text-xs bg-gray-100 rounded px-1.5 py-0.5 text-gray-600">{t.key}</code>
+                                                : <span className="inline-flex items-center gap-1 text-xs font-semibold text-amber-600"><AlertTriangle size={12} /> Set a key</span>}
+                                        </td>
                                         <td className="px-6 py-3">
                                             <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${t.department ? "bg-indigo-50 text-indigo-700" : "bg-gray-100 text-gray-500"}`}>
                                                 {t.department ? titleCase(t.department) : "Shared"}

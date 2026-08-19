@@ -8,6 +8,7 @@ use App\Models\TemplateFolder;
 use App\Models\User;
 use App\Services\CommunicationService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
@@ -199,21 +200,35 @@ class MessageTemplateController extends Controller
         $template = MessageTemplate::findOrFail($id);
         $this->authorizeTemplate($ctx['department'], $template);
 
-        // Key stays immutable (code references it). Department is editable in the
-        // admin cross-department context only — portal staff keep their own.
-        $data = $request->validate([...$this->bodyRules(), ...$this->imageRules()]);
-
-        // Department is editable from every portal now. Guard key+department
-        // uniqueness when moving a template between scopes.
+        // A keyless draft (from a folder duplicate) is being finalised — its key
+        // is set now. An already-keyed template keeps its key immutable (code
+        // references it). Department is editable from every portal.
+        $isDraft = empty($template->key);
         $department = $this->resolveStoreDepartment($request, $ctx['department']);
-        $clash = MessageTemplate::where('key', $template->key)
-            ->where('department', $department)
-            ->where('id', '!=', $template->id)
-            ->exists();
-        if ($clash) {
-            return back()->withErrors([
-                'department' => "A '{$template->key}' template already exists in that scope.",
-            ]);
+
+        $rules = [...$this->bodyRules(), ...$this->imageRules()];
+        if ($isDraft) {
+            $rules['key'] = [
+                'required', 'string', 'max:80', 'regex:/^[a-z0-9_]+$/',
+                Rule::unique('message_templates', 'key')
+                    ->where(fn ($q) => $q->where('department', $department))
+                    ->ignore($template->id),
+            ];
+        }
+        $data = $request->validate($rules, ['key.regex' => 'Key must be lowercase letters, numbers and underscores only.']);
+
+        if (! $isDraft) {
+            // Guard key+department uniqueness when moving an existing template.
+            $clash = MessageTemplate::where('key', $template->key)
+                ->where('department', $department)
+                ->where('id', '!=', $template->id)
+                ->exists();
+            if ($clash) {
+                return back()->withErrors([
+                    'department' => "A '{$template->key}' template already exists in that scope.",
+                ]);
+            }
+            unset($data['key']); // never change an existing key
         }
         $data['department'] = $department;
 
@@ -336,6 +351,70 @@ class MessageTemplateController extends Controller
         if (! empty($skippedIds)) {
             $msg .= ' '.count($skippedIds).' template(s) with a clashing key were moved out to the root instead.';
         }
+
+        return back()->with('success', $msg);
+    }
+
+    /**
+     * Clone a folder AND every template inside it into another department in one
+     * step — so a whole set can be reused for another team without rebuilding the
+     * folder and duplicating each template by hand. The originals are untouched:
+     * a brand-new folder and brand-new template rows are created.
+     *
+     * Each cloned template is a KEYLESS DRAFT — its key is left blank (NULL) and
+     * it's created inactive, so you assign a fresh, department-specific key
+     * before it can be used (exactly like the single-template duplicate leaves
+     * the key blank). This also sidesteps any key clash with existing templates.
+     * Uploaded banner/footer images aren't copied (per-template files — the
+     * branding preset carries the look).
+     */
+    public function duplicateFolder(Request $request, $id)
+    {
+        $this->context($request);
+        $source = TemplateFolder::with('templates')->findOrFail($id);
+
+        $data = $request->validate([
+            'department' => ['nullable', Rule::in(array_merge([''], MessageTemplate::DEPARTMENTS))],
+        ]);
+        $department = (string) ($data['department'] ?? '');
+        $sameDept = $source->department === $department;
+
+        $copied = 0;
+        DB::transaction(function () use ($source, $department, $sameDept, $request, &$copied) {
+            $newFolder = TemplateFolder::create([
+                'name' => $sameDept ? $source->name.' (copy)' : $source->name,
+                'department' => $department,
+                'created_by' => $request->user()->id,
+            ]);
+
+            foreach ($source->templates as $t) {
+                MessageTemplate::create([
+                    'key' => null,          // keyless draft — user sets the key
+                    'department' => $department,
+                    'folder_id' => $newFolder->id,
+                    'name' => $t->name,
+                    'description' => $t->description,
+                    'channels' => $t->channels,
+                    'email_subject' => $t->email_subject,
+                    'email_body' => $t->email_body,
+                    'from_email' => $t->from_email,
+                    'from_name' => $t->from_name,
+                    'branding' => $t->branding,
+                    'cc' => $t->cc,
+                    'bcc' => $t->bcc,
+                    'sms_body' => $t->sms_body,
+                    'is_active' => false,   // can't be used until it has a key
+                    'created_by' => $request->user()->id,
+                    // banner_image / footer_image intentionally not copied — two
+                    // rows sharing one stored file would break when one edits it.
+                ]);
+                $copied++;
+            }
+        });
+
+        $label = $department === '' ? 'Shared' : ucfirst($department);
+        $msg = "Folder duplicated to {$label} — {$copied} draft template".($copied === 1 ? '' : 's')
+            .' created. Open each to set its key before use.';
 
         return back()->with('success', $msg);
     }
