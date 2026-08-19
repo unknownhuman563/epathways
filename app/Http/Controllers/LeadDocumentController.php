@@ -559,11 +559,16 @@ class LeadDocumentController extends Controller
             }
 
             // Record the (ex-GST) professional fee this pack was generated at, so
-            // the Generated Documents table can show a total per engagement.
-            $feeVisa = \App\Models\VisaType::where('name', $lead->inz_visa_type)->first();
-            $feeTotal = $overrides['professional_fee']
-                ?? optional($feeVisa)?->professionalFeeFor($overrides['fee_tier'] ?? 'normal', $overrides['fee_location'] ?? 'onshore');
-            $lead->forceFill(['engagement_fee_total' => $feeTotal])->save();
+            // the Generated Documents table can show a total per engagement — but
+            // NEVER move it once the Written Agreement is signed. The signed
+            // agreement locks the amount the client actually agreed to; a later
+            // regeneration of the supporting docs must not overwrite it.
+            if (! in_array('written_agreement', $alreadySigned, true)) {
+                $feeVisa = \App\Models\VisaType::where('name', $lead->inz_visa_type)->first();
+                $feeTotal = $overrides['professional_fee']
+                    ?? optional($feeVisa)?->professionalFeeFor($overrides['fee_tier'] ?? 'normal', $overrides['fee_location'] ?? 'onshore');
+                $lead->forceFill(['engagement_fee_total' => $feeTotal])->save();
+            }
 
             $n = count($typesToGenerate);
             $message = "{$n} engagement document(s) generated for {$lead->first_name} {$lead->last_name}.";
