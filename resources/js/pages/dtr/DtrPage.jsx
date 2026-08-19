@@ -678,13 +678,31 @@ const to12h = (hhmm) => {
     return `${hh}:${String(m).padStart(2, "0")} ${ap}`;
 };
 
+// Day-of-week keys as returned by Date.getDay() (0 = Sunday).
+const DOW_KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+
+// Resolve the schedule that applies on `date` (YYYY-MM-DD), honouring the
+// per-day weekly_schedule when present. Mirrors DtrSetting::scheduleForDate on
+// the server. No weekly_schedule → the flat sched_in/out apply every day.
+const scheduleForDate = (s, date) => {
+    const legacy = { working: true, in: s?.sched_in ?? null, out: s?.sched_out ?? null };
+    const ws = s?.weekly_schedule;
+    if (!ws || !date) return legacy;
+    const d = new Date(`${date}T00:00:00`);
+    if (isNaN(d)) return legacy;
+    const day = ws[DOW_KEYS[d.getDay()]];
+    if (!day || !day.on) return { working: false, in: null, out: null };
+    return { working: true, in: day.in || s?.sched_in || null, out: day.out || s?.sched_out || null };
+};
+
 // Client-side mirror of the server's Net/Variance/Attendance formula for a live
 // preview before saving. The saved rows carry the authoritative values.
-const compute = (timeIn, timeOut, s) => {
+const compute = (timeIn, timeOut, s, date = null) => {
     const std = Number(s?.std_hours ?? 8);
     const brk = Number(s?.break_hours ?? 1);
     const brkAfter = Number(s?.break_after ?? 6);
     const grace = Number(s?.grace_mins ?? 10);
+    const daySched = scheduleForDate(s, date);
     let net = null, variance = null, attendance = null;
     const inM = toMinutes(timeIn), outM0 = toMinutes(timeOut);
     if (inM != null && outM0 != null) {
@@ -695,8 +713,10 @@ const compute = (timeIn, timeOut, s) => {
     }
     if (s?.schedule_type === "flexi") {
         attendance = inM != null ? "Flexi" : null;
-    } else if (inM != null && s?.sched_in) {
-        attendance = inM <= toMinutes(s.sched_in) + grace ? "On Time" : "Late";
+    } else if (!daySched.working) {
+        attendance = null; // day off — nothing to be late against
+    } else if (inM != null && daySched.in) {
+        attendance = inM <= toMinutes(daySched.in) + grace ? "On Time" : "Late";
     }
     return { net, variance, attendance };
 };
@@ -794,7 +814,8 @@ function DayEditor({ setting, entry, date, isToday = false, carried = [], openSh
     const [saveState, setSaveState] = useState("idle"); // idle | saving | saved | error
     const firstAutoSave = useRef(true);
 
-    const live = compute(timeIn, timeOut, setting);
+    const live = compute(timeIn, timeOut, setting, date);
+    const daySched = scheduleForDate(setting, date);
     const todoItems = tasks.filter((t) => t.status === "todo");
     const doneItems = tasks.filter((t) => t.status === "done");
     const carryItems = tasks.filter((t) => t.status === "carry");
@@ -948,7 +969,11 @@ function DayEditor({ setting, entry, date, isToday = false, carried = [], openSh
                     </div>
                     <div className="p-4">
                         <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1.5">Schedule</p>
-                        <p className="text-sm font-semibold text-gray-700">{to12h(setting.sched_in)} – {to12h(setting.sched_out)}</p>
+                        {isFlexi
+                            ? <p className="text-sm font-semibold text-gray-700">Flexi</p>
+                            : daySched.working
+                                ? <p className="text-sm font-semibold text-gray-700">{to12h(daySched.in)} – {to12h(daySched.out)}</p>
+                                : <p className="text-sm font-semibold text-gray-400">Day off</p>}
                     </div>
                 </div>
             </div>
