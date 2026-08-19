@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Head, Link, router, useForm } from "@inertiajs/react";
-import { ArrowLeft, Save, Trash2, Send, Mail, Smartphone, ImagePlus, X, AlertTriangle, Loader2 } from "lucide-react";
+import { ArrowLeft, Save, Trash2, Send, Mail, Smartphone, ImagePlus, X, AlertTriangle, Loader2, Copy } from "lucide-react";
 import RichTextEditor from "@/components/templates/RichTextEditor";
 
 const inp = "w-full px-3 py-2 rounded-lg border border-gray-200 text-sm outline-none focus:ring-2 focus:ring-gray-300 focus:border-gray-300";
@@ -54,8 +54,11 @@ export default function TemplateEditorView({
     fixedDepartment = null,
     defaultChannel = null,
     defaultFolderId = null,
+    duplicatedFrom = null,
 }) {
-    const editing = !!template;
+    // A duplicate arrives as a prefilled template with no id + a blank key, so
+    // it must still create (POST), not update. Key on id, not on presence.
+    const editing = !!template?.id;
     const initialChannels = template?.channels ?? (defaultChannel ? [defaultChannel] : ["email"]);
     const form = useForm({
         key: template?.key ?? "",
@@ -202,6 +205,15 @@ export default function TemplateEditorView({
             <Link href={basePath} className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800">
                 <ArrowLeft size={15} /> Back to templates
             </Link>
+
+            {duplicatedFrom && (
+                <div className="flex items-start gap-2 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm text-indigo-800">
+                    <Copy size={15} className="mt-0.5 shrink-0" />
+                    <span>
+                        Duplicating <strong>{duplicatedFrom}</strong>. Give it a new <strong>key</strong> (left blank on purpose) before saving. Uploaded banner/footer images aren&rsquo;t carried over — re-upload them here if you need them.
+                    </span>
+                </div>
+            )}
 
             <form onSubmit={submit} className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div className="lg:col-span-2 space-y-5">

@@ -3,6 +3,7 @@ import { Head, Link, router } from "@inertiajs/react";
 import {
     MessageSquare, Plus, Mail, Smartphone, Folder, FolderPlus,
     ChevronRight, Pencil, Trash2, FolderInput, X, CornerUpLeft, Image as ImageIcon,
+    Building2, Copy,
 } from "lucide-react";
 
 const fmtDate = (iso) => (iso ? new Date(iso).toLocaleDateString("en-US", { day: "2-digit", month: "short", year: "numeric" }) : "—");
@@ -15,12 +16,20 @@ const titleCase = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : "");
  * it. Grouping is driven client-side off each template's folder_id — the
  * server just persists folder_id via the folders/move endpoints.
  */
-export default function TemplateListView({ templates = [], folders = [], basePath = "/admin/message-templates", scopeLabel = "" }) {
+export default function TemplateListView({ templates = [], folders = [], departmentOptions = [], basePath = "/admin/message-templates", scopeLabel = "" }) {
     const isAdmin = basePath.startsWith("/admin");
+    // Department tabs + move-to-department show wherever department options are
+    // available — which is now every portal, not just admin (the template
+    // library is shared, so the same organiser belongs on every screen).
+    const showDepartments = departmentOptions.length > 0;
     const [activeTab, setActiveTab] = useState("all");
+    // Department segmentation (admin only). "__all" = every department.
+    const [deptTab, setDeptTab] = useState("__all");
     const [currentFolderId, setCurrentFolderId] = useState(null); // null = root
     const [selected, setSelected] = useState(() => new Set());
     const [moveOpen, setMoveOpen] = useState(false);
+    const [deptMoveOpen, setDeptMoveOpen] = useState(false);
+    const [folderDeptOpen, setFolderDeptOpen] = useState(false);
     // In-app dialog instead of window.prompt/confirm.
     // { type: 'create'|'rename'|'delete', name, folder?, preselectIds? }
     const [dialog, setDialog] = useState(null);
@@ -28,15 +37,35 @@ export default function TemplateListView({ templates = [], folders = [], basePat
     const currentFolder = folders.find((f) => f.id === currentFolderId) || null;
 
     const byChannel = (t) => (activeTab === "email" ? t.channels.includes("email") : activeTab === "sms" ? t.channels.includes("sms") : true);
+    // Department filter — "__all" matches everything; "" matches the shared set.
+    // Only applies at the root: inside a folder, folder membership is what
+    // decides (a folder is single-department already).
+    const byDept = (t) => (!showDepartments || deptTab === "__all" || currentFolderId !== null ? true : (t.department || "") === deptTab);
 
     // Templates shown in the current view: inside a folder → that folder's
     // members; at root → only ungrouped templates (folders hold the rest).
     const visibleTemplates = useMemo(
-        () => templates.filter(byChannel).filter((t) => (currentFolderId === null ? !t.folder_id : t.folder_id === currentFolderId)),
-        [templates, activeTab, currentFolderId],
+        () => templates.filter(byChannel).filter(byDept).filter((t) => (currentFolderId === null ? !t.folder_id : t.folder_id === currentFolderId)),
+        [templates, activeTab, deptTab, showDepartments, currentFolderId],
     );
 
     const folderCount = (id) => templates.filter((t) => t.folder_id === id).length;
+
+    // Folders shown under the active department tab ("__all" shows them all).
+    const visibleFolders = useMemo(
+        () => folders.filter((f) => !showDepartments || deptTab === "__all" || (f.department || "") === deptTab),
+        [folders, deptTab, showDepartments],
+    );
+
+    // Department tabs (admin only): "All", then Shared + each portal, each with
+    // a live count over the channel-filtered set.
+    const deptTabs = useMemo(() => {
+        const base = templates.filter(byChannel);
+        const countFor = (val) => (val === "__all" ? base.length : base.filter((t) => (t.department || "") === val).length);
+        const tabs = [{ value: "__all", label: "All" }];
+        for (const o of departmentOptions) tabs.push({ value: o.value, label: o.value === "" ? "Shared" : o.label });
+        return tabs.map((t) => ({ ...t, count: countFor(t.value) }));
+    }, [templates, departmentOptions, activeTab]);
 
     const toggleSelect = (id) => setSelected((prev) => {
         const next = new Set(prev);
@@ -45,14 +74,34 @@ export default function TemplateListView({ templates = [], folders = [], basePat
     });
     const clearSelection = () => setSelected(new Set());
 
+    // Header "select all" — acts on whatever's currently visible (respects the
+    // active department + channel tab and folder view).
+    const allVisibleSelected = visibleTemplates.length > 0 && visibleTemplates.every((t) => selected.has(t.id));
+    const someVisibleSelected = visibleTemplates.some((t) => selected.has(t.id));
+    const toggleSelectAll = () => setSelected((prev) => {
+        const next = new Set(prev);
+        if (allVisibleSelected) visibleTemplates.forEach((t) => next.delete(t.id));
+        else visibleTemplates.forEach((t) => next.add(t.id));
+        return next;
+    });
+
     const enterFolder = (id) => { setCurrentFolderId(id); clearSelection(); };
 
     const post = (url, body, extra = {}) => router.post(url, body, { preserveScroll: true, preserveState: false, ...extra });
 
-    // Dialog openers.
-    const createFolder = (preselectIds = null) => setDialog({ type: "create", name: "", preselectIds: preselectIds ? [...preselectIds] : [] });
+    // The department the current tab represents ('' = Shared). New folders and
+    // templates created from within a tab are filed under it.
+    const tabDept = deptTab === "__all" ? "" : deptTab;
+
+    // Dialog openers. New folders inherit the active department tab.
+    const createFolder = (preselectIds = null) => setDialog({ type: "create", name: "", preselectIds: preselectIds ? [...preselectIds] : [], department: tabDept });
     const renameFolder = (folder) => setDialog({ type: "rename", name: folder.name, folder });
     const deleteFolder = (folder) => setDialog({ type: "delete", folder });
+
+    const moveFolderToDept = (folder, department) => {
+        post(`${basePath}/folders/${folder.id}/department`, { department });
+        setFolderDeptOpen(false);
+    };
 
     // Dialog confirm — runs the action for the open dialog.
     const submitDialog = () => {
@@ -61,7 +110,7 @@ export default function TemplateListView({ templates = [], folders = [], basePat
 
         if (dialog.type === "create") {
             if (!name) return;
-            post(`${basePath}/folders`, { name, template_ids: dialog.preselectIds || [] });
+            post(`${basePath}/folders`, { name, template_ids: dialog.preselectIds || [], department: dialog.department ?? "" });
             clearSelection();
         } else if (dialog.type === "rename") {
             if (!name || name === dialog.folder.name) { setDialog(null); return; }
@@ -71,6 +120,9 @@ export default function TemplateListView({ templates = [], folders = [], basePat
                 preserveScroll: true,
                 onSuccess: () => setCurrentFolderId((c) => (c === dialog.folder.id ? null : c)),
             });
+        } else if (dialog.type === "deleteTemplates") {
+            post(`${basePath}/delete`, { ids: dialog.ids });
+            clearSelection();
         }
         setDialog(null);
     };
@@ -84,9 +136,29 @@ export default function TemplateListView({ templates = [], folders = [], basePat
 
     const removeFromFolder = (id) => post(`${basePath}/move`, { ids: [id], folder_id: null });
 
-    const createHref = currentFolderId
-        ? `${basePath}/create?folder_id=${currentFolderId}${activeTab !== "all" ? `&channel=${activeTab}` : ""}`
-        : (activeTab === "all" ? `${basePath}/create` : `${basePath}/create?channel=${activeTab}`);
+    const setDepartment = (department) => {
+        if (selected.size === 0) return;
+        post(`${basePath}/move-department`, { ids: [...selected], department });
+        clearSelection();
+        setDeptMoveOpen(false);
+    };
+
+    // Bulk delete only appears once templates are selected, and confirms first.
+    const confirmDeleteSelected = () => {
+        if (selected.size === 0) return;
+        setDialog({ type: "deleteTemplates", ids: [...selected], count: selected.size });
+    };
+
+    // New template lands in the current folder's department, else the active tab.
+    const createDept = currentFolder ? (currentFolder.department || "") : (showDepartments && deptTab !== "__all" ? tabDept : null);
+    const createHref = (() => {
+        const params = new URLSearchParams();
+        if (currentFolderId) params.set("folder_id", currentFolderId);
+        if (activeTab !== "all") params.set("channel", activeTab);
+        if (createDept !== null) params.set("department", createDept);
+        const qs = params.toString();
+        return `${basePath}/create${qs ? `?${qs}` : ""}`;
+    })();
 
     // Email Branding lives alongside templates in the same scope (admin or portal).
     const brandingHref = basePath.replace("message-templates", "email-branding").replace("email-templates", "email-branding");
@@ -131,6 +203,52 @@ export default function TemplateListView({ templates = [], folders = [], basePat
                     <span className="font-semibold text-gray-900 flex items-center gap-1.5"><Folder size={14} className="text-amber-500" /> {currentFolder.name}</span>
                     <button type="button" onClick={() => renameFolder(currentFolder)} title="Rename" className="ml-2 text-gray-400 hover:text-gray-700"><Pencil size={14} /></button>
                     <button type="button" onClick={() => deleteFolder(currentFolder)} title="Delete folder" className="text-gray-400 hover:text-rose-600"><Trash2 size={14} /></button>
+                    {showDepartments && (
+                        <>
+                            <span className="mx-1 h-4 w-px bg-gray-200" />
+                            <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${currentFolder.department ? "bg-indigo-50 text-indigo-700" : "bg-gray-100 text-gray-500"}`}>
+                                {currentFolder.department ? titleCase(currentFolder.department) : "Shared"}
+                            </span>
+                            <div className="relative">
+                                <button type="button" onClick={() => setFolderDeptOpen((o) => !o)} title="Move folder to department" className="flex items-center gap-1 text-gray-400 hover:text-gray-700 text-xs font-semibold">
+                                    <Building2 size={13} /> Move
+                                </button>
+                                {folderDeptOpen && (
+                                    <div className="absolute left-0 mt-1 w-56 max-h-64 overflow-y-auto bg-white text-gray-800 rounded-xl shadow-lg border border-gray-100 py-1 z-20">
+                                        {departmentOptions.map((o) => (
+                                            <button key={o.value || "shared"} type="button" onClick={() => moveFolderToDept(currentFolder, o.value)} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex items-center gap-2">
+                                                <Building2 size={14} className={o.value ? "text-indigo-500" : "text-gray-400"} /> {o.value === "" ? "Shared (all departments)" : o.label}
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        </>
+                    )}
+                </div>
+            )}
+
+            {/* Department segmentation — admin only. Keeps the cross-department
+                library from piling into one screen. */}
+            {showDepartments && (
+                <div className="flex items-center gap-1.5 flex-wrap">
+                    {deptTabs.map((tab) => (
+                        <button
+                            key={tab.value}
+                            type="button"
+                            onClick={() => { setDeptTab(tab.value); clearSelection(); }}
+                            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors ${
+                                deptTab === tab.value
+                                    ? "bg-gray-900 text-white border-gray-900"
+                                    : "bg-white text-gray-600 border-gray-200 hover:border-gray-300 hover:text-gray-900"
+                            }`}
+                        >
+                            {tab.label}
+                            <span className={`inline-flex items-center justify-center min-w-[1.25rem] px-1 rounded-full text-[10px] ${deptTab === tab.value ? "bg-white/20 text-white" : "bg-gray-100 text-gray-500"}`}>
+                                {tab.count}
+                            </span>
+                        </button>
+                    ))}
                 </div>
             )}
 
@@ -173,26 +291,45 @@ export default function TemplateListView({ templates = [], folders = [], basePat
                                             <CornerUpLeft size={14} className="text-gray-400" /> Root (ungrouped)
                                         </button>
                                     )}
-                                    {folders.filter((f) => f.id !== currentFolderId).map((f) => (
+                                    {visibleFolders.filter((f) => f.id !== currentFolderId).map((f) => (
                                         <button key={f.id} type="button" onClick={() => moveTo(f.id)} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex items-center gap-2">
                                             <Folder size={14} className="text-amber-500" /> {f.name}
                                         </button>
                                     ))}
-                                    {folders.filter((f) => f.id !== currentFolderId).length === 0 && currentFolderId === null && (
-                                        <div className="px-3 py-2 text-xs text-gray-400">No other folders.</div>
+                                    {visibleFolders.filter((f) => f.id !== currentFolderId).length === 0 && currentFolderId === null && (
+                                        <div className="px-3 py-2 text-xs text-gray-400">No folders in this tab.</div>
                                     )}
                                 </div>
                             )}
                         </div>
+                        {showDepartments && (
+                            <div className="relative">
+                                <button type="button" onClick={() => { setDeptMoveOpen((o) => !o); setMoveOpen(false); }} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20">
+                                    <Building2 size={14} /> Move to department…
+                                </button>
+                                {deptMoveOpen && (
+                                    <div className="absolute right-0 mt-1 w-56 max-h-64 overflow-y-auto bg-white text-gray-800 rounded-xl shadow-lg border border-gray-100 py-1 z-20">
+                                        {departmentOptions.map((o) => (
+                                            <button key={o.value || "shared"} type="button" onClick={() => setDepartment(o.value)} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex items-center gap-2">
+                                                <Building2 size={14} className={o.value ? "text-indigo-500" : "text-gray-400"} /> {o.value === "" ? "Shared (all departments)" : o.label}
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                        <button type="button" onClick={confirmDeleteSelected} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-500/90 hover:bg-rose-500 text-white">
+                            <Trash2 size={14} /> Delete
+                        </button>
                         <button type="button" onClick={clearSelection} className="p-1.5 rounded-lg hover:bg-white/20"><X size={14} /></button>
                     </div>
                 </div>
             )}
 
-            {/* Folder grid — root only */}
-            {currentFolderId === null && folders.length > 0 && (
+            {/* Folder grid — root only, scoped to the active department tab. */}
+            {currentFolderId === null && visibleFolders.length > 0 && (
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-                    {folders.map((f) => (
+                    {visibleFolders.map((f) => (
                         <button
                             key={f.id}
                             type="button"
@@ -216,7 +353,17 @@ export default function TemplateListView({ templates = [], folders = [], basePat
                     <table className="w-full text-left">
                         <thead>
                             <tr className="bg-gray-50/50 border-y border-gray-100 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                                <th className="px-4 py-3 w-10"></th>
+                                <th className="px-4 py-3 w-10">
+                                    <input
+                                        type="checkbox"
+                                        ref={(el) => { if (el) el.indeterminate = !allVisibleSelected && someVisibleSelected; }}
+                                        checked={allVisibleSelected}
+                                        onChange={toggleSelectAll}
+                                        disabled={visibleTemplates.length === 0}
+                                        title="Select all"
+                                        className="rounded border-gray-300 disabled:opacity-40"
+                                    />
+                                </th>
                                 <th className="px-6 py-3">Template</th>
                                 <th className="px-6 py-3">Key</th>
                                 <th className="px-6 py-3">Department</th>
@@ -263,9 +410,12 @@ export default function TemplateListView({ templates = [], folders = [], basePat
                                         </td>
                                         <td className="px-6 py-3 text-sm text-gray-500">{fmtDate(t.updated_at)}</td>
                                         <td className="px-6 py-3 text-right">
-                                            {currentFolder && (
-                                                <button type="button" onClick={() => removeFromFolder(t.id)} title="Remove from folder" className="text-gray-300 hover:text-rose-600"><CornerUpLeft size={15} /></button>
-                                            )}
+                                            <div className="flex items-center justify-end gap-2">
+                                                <button type="button" onClick={() => router.visit(`${basePath}/${t.id}/duplicate`)} title="Duplicate (creates a copy with a blank key)" className="text-gray-300 hover:text-indigo-600"><Copy size={15} /></button>
+                                                {currentFolder && (
+                                                    <button type="button" onClick={() => removeFromFolder(t.id)} title="Remove from folder" className="text-gray-300 hover:text-rose-600"><CornerUpLeft size={15} /></button>
+                                                )}
+                                            </div>
                                         </td>
                                     </tr>
                                 ))
@@ -280,7 +430,21 @@ export default function TemplateListView({ templates = [], folders = [], basePat
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setDialog(null)}>
                     <div className="absolute inset-0 bg-gray-900/40 backdrop-blur-sm" />
                     <div className="relative bg-white rounded-2xl shadow-xl border border-gray-100 w-full max-w-sm p-6" onClick={(e) => e.stopPropagation()}>
-                        {dialog.type === "delete" ? (
+                        {dialog.type === "deleteTemplates" ? (
+                            <>
+                                <div className="flex items-center gap-3 mb-3">
+                                    <span className="w-10 h-10 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center flex-shrink-0"><Trash2 size={18} /></span>
+                                    <h3 className="text-base font-bold text-gray-900">Delete {dialog.count} template{dialog.count === 1 ? "" : "s"}</h3>
+                                </div>
+                                <p className="text-sm text-gray-500 mb-6">
+                                    Permanently delete the selected template{dialog.count === 1 ? "" : "s"}? This can&rsquo;t be undone from here.
+                                </p>
+                                <div className="flex justify-end gap-2">
+                                    <button type="button" onClick={() => setDialog(null)} className="px-4 py-2 text-sm font-semibold text-gray-600 rounded-xl hover:bg-gray-100">Cancel</button>
+                                    <button type="button" onClick={submitDialog} className="px-4 py-2 text-sm font-semibold text-white bg-rose-600 rounded-xl hover:bg-rose-700">Delete {dialog.count} template{dialog.count === 1 ? "" : "s"}</button>
+                                </div>
+                            </>
+                        ) : dialog.type === "delete" ? (
                             <>
                                 <div className="flex items-center gap-3 mb-3">
                                     <span className="w-10 h-10 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center flex-shrink-0"><Trash2 size={18} /></span>
@@ -304,6 +468,9 @@ export default function TemplateListView({ templates = [], folders = [], basePat
                                         {dialog.type === "create" ? "New folder" : "Rename folder"}
                                     </h3>
                                 </div>
+                                {dialog.type === "create" && showDepartments && (
+                                    <p className="text-xs text-gray-500 mb-2">Filed under <span className="font-semibold">{dialog.department ? titleCase(dialog.department) : "Shared"}</span>.</p>
+                                )}
                                 {dialog.type === "create" && dialog.preselectIds?.length > 0 && (
                                     <p className="text-xs text-gray-400 mb-2">{dialog.preselectIds.length} selected template{dialog.preselectIds.length === 1 ? "" : "s"} will be moved into it.</p>
                                 )}
