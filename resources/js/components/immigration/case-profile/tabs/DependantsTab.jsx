@@ -430,7 +430,7 @@ function DependantModal({ dependant, base, caseOptions = [], visaTypes = [], cur
                         <span className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Where do this family member&apos;s documents come from?</span>
                         {caseOptions.length > 0 && (
                             <div className="grid grid-cols-2 gap-2 mb-2">
-                                <button type="button" onClick={() => { setDocMode("case"); set("visa_type_id", ""); }}
+                                <button type="button" onClick={() => setDocMode("case")}
                                     className={`text-left px-3 py-2 rounded-lg border transition-colors ${docMode === "case" ? "border-[#009688] bg-[#009688]/5" : "border-gray-200 hover:bg-gray-50"}`}>
                                     <span className={`block text-[12px] font-bold ${docMode === "case" ? "text-[#009688]" : "text-gray-700"}`}>They have their own case</span>
                                     <span className="block text-[10.5px] text-gray-400 mt-0.5">Show their case checklist &amp; documents here</span>
@@ -451,15 +451,20 @@ function DependantModal({ dependant, base, caseOptions = [], visaTypes = [], cur
                                 <p className="text-[10.5px] text-gray-400 mt-1">Pulls this member&apos;s checklist and <span className="font-semibold">every document uploaded on their own case</span> into this Family view (read-only here).</p>
                             </>
                         ) : (
-                            <>
-                                <select value={form.visa_type_id} onChange={(e) => { set("visa_type_id", e.target.value); set("linked_lead_id", ""); }} className={INPUT}>
-                                    <option value="">— Select a visa —</option>
-                                    {visaTypes.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
-                                </select>
-                                <p className="text-[10.5px] text-gray-400 mt-1">Builds the checklist from the visa; the applicant uploads each document from their portal.</p>
-                            </>
+                            <p className="text-[10.5px] text-gray-400 mt-1">The applicant uploads each document from their portal — pick their visa below to build the checklist.</p>
                         )}
                     </div>
+
+                    {/* Visa type — always available so staff can set the applicant's
+                        visa for BOTH the checklist and the fee agreement, even when
+                        the dependant has their own case. */}
+                    <Field label="Visa type">
+                        <select value={form.visa_type_id} onChange={(e) => set("visa_type_id", e.target.value)} className={INPUT}>
+                            <option value="">— Select a visa —</option>
+                            {visaTypes.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
+                        </select>
+                        <p className="text-[10.5px] text-gray-400 mt-1">Drives this member&apos;s checklist and their line on the engagement agreement.</p>
+                    </Field>
                     {/* Identity fields — only for the manual (no own case) path.
                         When tied to a case, name/DOB/passport come from that case,
                         so there's nothing to type here. */}

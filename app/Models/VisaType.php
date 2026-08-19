@@ -14,6 +14,7 @@ class VisaType extends Model
         'code', 'name', 'short_description', 'category', 'visa_type',
         'consultation_price_nzd', 'professional_fees', 'professional_fees_discounted',
         'professional_fees_offshore', 'professional_fees_discounted_offshore',
+        'offshore_rrp_incl_gst',
         'inz_application_fee', 'inz_application_fee_offshore',
         'consultation_duration_minutes',
         'estimated_minutes', 'icon',
@@ -30,6 +31,8 @@ class VisaType extends Model
         'professional_fees_discounted_offshore' => 'decimal:2',
         'inz_application_fee' => 'decimal:2',
         'inz_application_fee_offshore' => 'decimal:2',
+        // Display-only: show the offshore RRP column incl (default) or excl GST.
+        'offshore_rrp_incl_gst' => 'boolean',
         'consultation_duration_minutes' => 'integer',
         'estimated_minutes' => 'integer',
         'active' => 'boolean',
