@@ -493,6 +493,7 @@ class LeadDocumentController extends Controller
             'types.*' => ['string', Rule::in(array_keys(EngagementDocumentGenerator::DOCS))],
             'notify' => 'sometimes|boolean',
             'signer_id' => 'nullable|integer|exists:users,id',
+            'assist_signer_id' => 'nullable|integer|exists:users,id',
             'fee_tier' => ['nullable', Rule::in(\App\Models\VisaType::FEE_TIERS)],
             'fee_location' => ['nullable', Rule::in(\App\Models\VisaType::FEE_LOCATIONS)],
             'include_gst' => 'sometimes|boolean',
@@ -503,6 +504,9 @@ class LeadDocumentController extends Controller
         $overrides = [];
         if (! empty($data['signer_id'])) {
             $overrides['signer_id'] = $data['signer_id'];
+        }
+        if (! empty($data['assist_signer_id'])) {
+            $overrides['assist_signer_id'] = $data['assist_signer_id'];
         }
         if (! empty($data['fee_tier'])) {
             $overrides['fee_tier'] = $data['fee_tier'];
@@ -558,16 +562,18 @@ class LeadDocumentController extends Controller
                 $generatedDocIds[$t] = $doc->id;
             }
 
-            // Record the (ex-GST) professional fee this pack was generated at, so
-            // the Generated Documents table can show a total per engagement — but
-            // NEVER move it once the Written Agreement is signed. The signed
-            // agreement locks the amount the client actually agreed to; a later
-            // regeneration of the supporting docs must not overwrite it.
+            // Record the fees this pack was generated at, so the Generated
+            // Documents table can show the ex-GST professional fee AND the grand
+            // total (our fees incl GST + INZ disbursements across the family) —
+            // but NEVER move them once the Written Agreement is signed. The signed
+            // agreement locks the amounts the client actually agreed to; a later
+            // regeneration of the supporting docs must not overwrite them.
             if (! in_array('written_agreement', $alreadySigned, true)) {
-                $feeVisa = \App\Models\VisaType::where('name', $lead->inz_visa_type)->first();
-                $feeTotal = $overrides['professional_fee']
-                    ?? optional($feeVisa)?->professionalFeeFor($overrides['fee_tier'] ?? 'normal', $overrides['fee_location'] ?? 'onshore');
-                $lead->forceFill(['engagement_fee_total' => $feeTotal])->save();
+                $totals = $generator->feeTotals($lead, $overrides);
+                $lead->forceFill([
+                    'engagement_fee_total' => $totals['professional_excl'],
+                    'engagement_total_amount' => $totals['grand_total'],
+                ])->save();
             }
 
             $n = count($typesToGenerate);
@@ -605,6 +611,27 @@ class LeadDocumentController extends Controller
 
             return back()->withErrors(['error' => 'Could not generate the documents: '.$e->getMessage()]);
         }
+    }
+
+    /**
+     * Live fee totals for the engagement modal's receipt — the family-aware
+     * professional-fee sum, INZ disbursement total and grand total for a given
+     * tier/location/GST setting. Read-only JSON; the modal recomputes the
+     * editable professional-fee override against these.
+     */
+    public function engagementFeeTotals(Request $request, EngagementDocumentGenerator $generator, $leadId)
+    {
+        $lead = Lead::findOrFail($leadId);
+
+        $overrides = [
+            'fee_tier' => $request->query('fee_tier'),
+            'fee_location' => $request->query('fee_location'),
+            'include_gst' => filter_var($request->query('include_gst'), FILTER_VALIDATE_BOOLEAN),
+        ];
+        // Deliberately NOT passing professional_fee — the modal applies its own
+        // (editable) override on top of the raw family sums returned here.
+
+        return response()->json($generator->feeTotals($lead, $overrides));
     }
 
     /**
@@ -905,11 +932,15 @@ class LeadDocumentController extends Controller
         $engageType = $this->engagementTypeFor($type);
         if ($engageType !== null) {
             $signer = $request->query('signer');
+            $assistSigner = $request->query('assist_signer');
             $tier = $request->query('fee_tier');
             $location = $request->query('fee_location');
             $opts = [];
             if ($signer) {
                 $opts['signer_id'] = (int) $signer;
+            }
+            if ($assistSigner) {
+                $opts['assist_signer_id'] = (int) $assistSigner;
             }
             if (in_array($tier, \App\Models\VisaType::FEE_TIERS, true)) {
                 $opts['fee_tier'] = $tier;

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { createPortal } from "react-dom";
 import { router } from "@inertiajs/react";
 import { toast } from "sonner";
-import { X, FileText, FileSignature, Loader2, Send } from "lucide-react";
+import { X, FileText, FileSignature, Loader2, Send, Check } from "lucide-react";
 import { confirmDialog } from "@/components/ui/ConfirmDialog";
 import GenerationProgress from "@/components/ui/GenerationProgress";
 
@@ -70,14 +70,38 @@ export default function CaseEngagementModal({ leadId, leadName, engagement = {},
                 <div className="flex-1 min-h-0 flex flex-col lg:flex-row overflow-hidden">
                     {/* Preview + a tab per generated document */}
                     <div className="flex-1 min-w-0 min-h-[280px] bg-gray-100 border-b lg:border-b-0 lg:border-r border-gray-100 flex flex-col">
+                        {/* Document tabs double as include checkboxes: tick to keep
+                            in the pack, click the name to preview. */}
                         <div className="flex items-center gap-1.5 px-3 py-2 bg-white border-b border-gray-100 overflow-x-auto flex-shrink-0">
-                            <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 flex-shrink-0">View:</span>
-                            {selectedTypes.map((k) => (
-                                <button key={k} type="button" onClick={() => setPreviewType(k)}
-                                    className={`px-2.5 py-1 rounded-md text-[11px] font-semibold whitespace-nowrap transition-colors ${activePreview === k ? "bg-gray-900 text-white" : "text-gray-500 hover:bg-gray-100"}`}>
-                                    {labelFor(k)}
-                                </button>
-                            ))}
+                            <button
+                                type="button"
+                                onClick={() => setSelectedTypes(selectedTypes.length === documents.length ? [] : documents.map((d) => d.key))}
+                                className="text-[10px] font-bold uppercase tracking-wider text-gray-400 hover:text-gray-900 flex-shrink-0 mr-0.5"
+                            >
+                                {selectedTypes.length === documents.length ? "Clear all" : "Select all"}
+                            </button>
+                            {documents.map((d) => {
+                                const checked = selectedTypes.includes(d.key);
+                                const isPreview = activePreview === d.key;
+                                return (
+                                    <div
+                                        key={d.key}
+                                        className={`flex items-center gap-1.5 pl-1.5 pr-2.5 py-1 rounded-full whitespace-nowrap border flex-shrink-0 transition-colors ${isPreview ? "bg-gray-900 border-gray-900 text-white" : checked ? "bg-gray-100 border-gray-200 text-gray-700" : "bg-white border-gray-200 text-gray-400"}`}
+                                    >
+                                        <button
+                                            type="button"
+                                            onClick={() => toggleType(d.key)}
+                                            className={`w-3.5 h-3.5 rounded border flex items-center justify-center flex-shrink-0 ${checked ? (isPreview ? "bg-white border-white" : "bg-gray-900 border-gray-900") : "bg-white border-gray-300"}`}
+                                        >
+                                            {checked && <Check size={10} className={isPreview ? "text-gray-900" : "text-white"} strokeWidth={3} />}
+                                        </button>
+                                        <button type="button" onClick={() => setPreviewType(d.key)} className="text-[11px] font-semibold flex items-center gap-1">
+                                            {d.label}
+                                            {d.dynamic && <span className={`text-[8px] font-bold uppercase tracking-wide rounded px-1 ${isPreview ? "bg-white/20 text-white" : "bg-gray-200 text-gray-600"}`}>Auto</span>}
+                                        </button>
+                                    </div>
+                                );
+                            })}
                         </div>
                         <iframe key={previewUrl} src={previewUrl} title="Engagement preview" className="flex-1 w-full border-0" />
                     </div>
@@ -95,17 +119,6 @@ export default function CaseEngagementModal({ leadId, leadName, engagement = {},
                             </select>
                         </div>
 
-                        <div>
-                            <label className="block text-[11px] font-semibold text-gray-600 mb-1">Documents</label>
-                            <div className="space-y-1">
-                                {documents.map((d) => (
-                                    <label key={d.key} className="flex items-center gap-2 text-[12.5px] text-gray-700 cursor-pointer">
-                                        <input type="checkbox" checked={selectedTypes.includes(d.key)} onChange={() => toggleType(d.key)} className="rounded border-gray-300" />
-                                        {d.label}
-                                    </label>
-                                ))}
-                            </div>
-                        </div>
 
                         <div className="grid grid-cols-2 gap-2">
                             <div>

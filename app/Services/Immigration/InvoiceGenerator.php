@@ -172,7 +172,41 @@ class InvoiceGenerator
             $items = $this->defaultItems($visaLabel, $serviceFee, $includeDisbursement ? $inzFee : 0);
         }
 
-        $total = array_sum(array_column($items, 'amount'));
+        // Family invoice: when the case has costed dependants and staff haven't
+        // supplied custom line items, render one section per applicant — the
+        // principal first, then partner, then children — each with its own
+        // consulting fee and INZ disbursement. A lone applicant keeps the single
+        // table above.
+        $groups = null;
+        if (empty($o['items'])) {
+            $tier = ($o['fee_tier'] ?? 'normal') === 'discounted' ? 'discounted' : 'normal';
+            $location = ($o['fee_location'] ?? 'onshore') === 'offshore' ? 'offshore' : 'onshore';
+            $incGst = ! empty($o['include_gst']);
+            $applicants = app(EngagementDocumentGenerator::class)->familyApplicants($lead);
+
+            if (count($applicants) > 1) {
+                $groups = [];
+                foreach ($applicants as $a) {
+                    $vm = $a['visa_model'];
+                    $sf = $vm?->professionalFeeFor($tier, $location);
+                    if ($incGst && $sf !== null) {
+                        $sf = round($sf * (1 + VisaType::GST_RATE), 2);
+                    }
+                    $inz = $includeDisbursement ? $vm?->inzFeeFor($location) : null;
+                    $gItems = $this->defaultItems($a['visa'] ?: 'Visa', (float) ($sf ?? 0), (float) ($inz ?? 0));
+                    $groups[] = [
+                        'name' => $a['name'],
+                        'visa' => $a['visa'] ?: 'Visa',
+                        'items' => $gItems,
+                        'subtotal' => array_sum(array_column($gItems, 'amount')),
+                    ];
+                }
+            }
+        }
+
+        $total = $groups
+            ? array_sum(array_column($groups, 'subtotal'))
+            : array_sum(array_column($items, 'amount'));
 
         return [
             'logo_data' => $this->logoData(),
@@ -189,6 +223,9 @@ class InvoiceGenerator
                 'pay_url' => $o['pay_url'] ?? null,
             ],
             'items' => $items,
+            // One section per applicant for a family invoice; null for a single
+            // applicant (the blade then renders the flat items table).
+            'groups' => $groups,
             'total' => $total,
         ];
     }
@@ -233,6 +270,7 @@ class InvoiceGenerator
             'source' => LeadDocument::SOURCE_GENERATED,
             'source_variant' => 'invoice',
             'invoice_number' => $number,
+            'invoice_total' => $payload['total'] ?? null,
             'uploaded_by' => Auth::id(),
         ]);
     }

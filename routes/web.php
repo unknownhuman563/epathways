@@ -843,6 +843,9 @@ Route::middleware(['auth'])->group(function () {
         // + IAA standards) for a case in one call — the Engagement workspace.
         Route::post('/admin/leads/{id}/engagement/generate', [LeadDocumentController::class, 'generateEngagement'])
             ->name('admin.leads.engagement.generate');
+        // Live fee totals for the engagement modal receipt (family-aware).
+        Route::get('/admin/leads/{id}/engagement/fee-totals', [LeadDocumentController::class, 'engagementFeeTotals'])
+            ->name('admin.leads.engagement.fee-totals');
         // Email the client the engagement signing link (from the manage-draft modal).
         Route::post('/admin/leads/{id}/engagement/send', [LeadDocumentController::class, 'sendEngagement'])
             ->name('admin.leads.engagement.send');

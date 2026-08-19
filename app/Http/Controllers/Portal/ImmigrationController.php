@@ -700,7 +700,16 @@ class ImmigrationController extends Controller
                     'inz_application_fee_offshore' => $v->inz_application_fee_offshore !== null ? (float) $v->inz_application_fee_offshore : null,
                 ]]);
 
+            // Cases that already have a generated engagement (draft or sent) are
+            // managed from the Generated Documents table, not created again — so
+            // keep them out of the "new engagement" case picker.
+            $engagedLeadIds = LeadDocument::where('source_variant', 'like', 'engagement:%')
+                ->distinct()
+                ->pluck('lead_id')
+                ->all();
+
             $cases = Lead::immigrationCase()
+                ->whereNotIn('id', $engagedLeadIds)
                 ->orderByDesc('updated_at')
                 ->limit(300)
                 ->get(['id', 'lead_id', 'first_name', 'last_name', 'email', 'phone', 'residence_country', 'inz_visa_type', 'immigration_stage'])
@@ -727,7 +736,7 @@ class ImmigrationController extends Controller
                 ->values();
 
             $generated = LeadDocument::with([
-                'lead:id,first_name,last_name,lead_id,tracking_code,email,phone,engagement_signing_token,engagement_sent_at,engagement_fee_total',
+                'lead:id,first_name,last_name,lead_id,tracking_code,email,phone,engagement_signing_token,engagement_sent_at,engagement_fee_total,engagement_total_amount',
                 'lead.faceImage',
                 'uploader:id,name,email',
             ])
@@ -775,8 +784,12 @@ class ImmigrationController extends Controller
                         // Draft = generated but not yet emailed. Drafts withhold
                         // the client link and are edited/sent from the manage modal.
                         'is_draft' => $isDraft,
-                        // The (ex-GST) agreement fee the pack was generated at.
+                        // The (ex-GST) professional fee the pack was generated at.
                         'fee_total' => $lead?->engagement_fee_total !== null ? (float) $lead->engagement_fee_total : null,
+                        // The grand total — our fees (incl GST if quoted so) + INZ
+                        // disbursements across the family. Drives the "Total amount"
+                        // column; falls back to the ex-GST fee for older rows.
+                        'total_amount' => $lead?->engagement_total_amount !== null ? (float) $lead->engagement_total_amount : null,
                         // Consolidated summary the table shows instead of every file.
                         'doc_count' => $docs->count(),
                         // Link only once the pack has actually been sent to the client.
@@ -914,6 +927,7 @@ class ImmigrationController extends Controller
 
             $cases = Lead::immigrationCase()
                 ->with('faceImage')
+                ->withCount('dependents')
                 ->orderByDesc('updated_at')
                 ->limit(300)
                 ->get(['id', 'lead_id', 'first_name', 'last_name', 'email', 'phone', 'residence_country', 'inz_visa_type', 'immigration_stage'])
@@ -921,6 +935,9 @@ class ImmigrationController extends Controller
                     $fees = $visaFees[$l->inz_visa_type] ?? null;
 
                     return [
+                        // Case has dependants → default the invoice to a section
+                        // per family member.
+                        'has_family' => $l->dependents_count > 0,
                         'id' => $l->id,
                         'lead_id' => $l->lead_id,
                         'name' => trim("{$l->first_name} {$l->last_name}") ?: 'Unknown',
@@ -965,9 +982,15 @@ class ImmigrationController extends Controller
                         'phone' => $lead?->phone,
                         'latest_created_at' => optional($first->created_at)?->toIso8601String(),
                         'latest_by' => $first->uploader?->name,
+                        // Total invoiced for this case (sum of its invoice totals);
+                        // null when none were stored (pre-column invoices).
+                        'total_amount' => $docs->whereNotNull('invoice_total')->isNotEmpty()
+                            ? (float) $docs->sum(fn ($d) => (float) ($d->invoice_total ?? 0))
+                            : null,
                         'invoices' => $docs->map(fn ($d) => [
                             'id' => $d->id,
                             'number' => $d->invoice_number,
+                            'total' => $d->invoice_total !== null ? (float) $d->invoice_total : null,
                             'size' => $d->size,
                             'created_at' => optional($d->created_at)?->toIso8601String(),
                             'download_url' => route('admin.documents.download', $d->id),

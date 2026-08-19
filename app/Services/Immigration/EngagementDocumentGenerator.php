@@ -192,33 +192,249 @@ class EngagementDocumentGenerator
         // to onshore.
         $location = ($overrides['fee_location'] ?? 'onshore') === 'offshore' ? 'offshore' : 'onshore';
 
-        $professionalFee = $overrides['professional_fee'] ?? $visa?->professionalFeeFor($tier, $location);
+        $mainName = trim("{$lead->first_name} {$lead->middle_name} {$lead->last_name}") ?: trim("{$lead->first_name} {$lead->last_name}");
 
-        // Fees are stored exclusive of GST. Staff choose per document whether
-        // the agreement quotes the ex-GST fee or the GST-inclusive RRP.
-        if (! empty($overrides['include_gst']) && $professionalFee !== null) {
-            $professionalFee = round((float) $professionalFee * (1 + VisaType::GST_RATE), 2);
+        // The family group on this case (principal + costed dependants), ordered
+        // partner → children → other.
+        $applicants = $this->buildApplicants($lead);
+
+        // Professional fee = each applicant's visa fee at the chosen
+        // tier/location, summed. An explicit override replaces the sum (staff
+        // set the whole agreement fee by hand). Fees are stored ex-GST; the
+        // agreement shows the ex-GST subtotal + GST and a GST-inclusive total.
+        $sumProfExcl = null;
+        foreach ($applicants as $a) {
+            $f = $a['visa_model']?->professionalFeeFor($tier, $location);
+            if ($f !== null) {
+                $sumProfExcl = ($sumProfExcl ?? 0) + (float) $f;
+            }
+        }
+        $profExcl = $overrides['professional_fee'] ?? $sumProfExcl;
+        $profExcl = $profExcl === null || $profExcl === '' ? null : (float) $profExcl;
+        $profIncl = $profExcl === null ? null : round($profExcl * (1 + VisaType::GST_RATE), 2);
+
+        // GST toggle: "Including GST" shows the ex-GST fee "+GST" and a
+        // GST-inclusive total; "Excluding GST" shows a plain ex-GST fee and
+        // total with no uplift.
+        $gstInclusive = ! empty($overrides['include_gst']);
+        $profTotal = $gstInclusive ? $profIncl : $profExcl;
+
+        // Per-applicant professional fee breakdown for the fee table — one line
+        // per visa. Only when the fee is the summed family fee (no manual
+        // override) and there is more than one applicant; otherwise the single
+        // headline row is enough.
+        $overrideSet = isset($overrides['professional_fee']) && $overrides['professional_fee'] !== null && $overrides['professional_fee'] !== '';
+        $professionalLines = [];
+        if (! $overrideSet && count($applicants) > 1) {
+            foreach ($applicants as $a) {
+                $professionalLines[] = [
+                    'label' => ($a['visa'] ?: '[Visa]').' — '.$a['name'],
+                    'amount' => $this->money($a['visa_model']?->professionalFeeFor($tier, $location)),
+                ];
+            }
         }
 
-        // The INZ fee is a government charge with no GST on it, so it is
-        // never uplifted. It differs by location, so read the offshore /
-        // onshore fee to match the chosen schedule.
-        $inzFee = $overrides['inz_application_fee'] ?? $visa?->inzFeeFor($location);
+        // INZ disbursements grouped by visa type: one line per distinct visa
+        // with its per-application fee, flagged "(each)" when more than one
+        // applicant shares that visa. INZ fees carry no GST and differ by
+        // location, so read the schedule matching the chosen location.
+        $inzGroups = [];
+        foreach ($applicants as $a) {
+            $key = $a['visa'] ?: '[Visa type]';
+            if (! isset($inzGroups[$key])) {
+                $inzGroups[$key] = ['visa' => $key, 'fee' => $a['visa_model']?->inzFeeFor($location), 'count' => 0];
+            }
+            $inzGroups[$key]['count']++;
+        }
+        $inzLines = array_values(array_map(fn ($g) => [
+            'label' => 'INZ '.$g['visa'].' Application Fee',
+            'amount' => $this->money($g['fee']),
+            'each' => $g['count'] > 1,
+        ], $inzGroups));
+
+        // Clause 4.1 applicant lines — "Visa Type — Full Name".
+        $applicantLines = array_map(fn ($a) => [
+            'name' => $a['name'],
+            'visa' => $a['visa'] ?: '[Visa Category]',
+        ], $applicants);
+
+        // Responsible advisers (clause 2.1): the signing adviser is the Main
+        // adviser; the chosen assisting adviser is the Adviser to assist.
+        $mainAdv = $this->adviserRow($overrides['signer_id'] ?? null, 'Main adviser');
+        $assistAdv = $this->adviserRow($overrides['assist_signer_id'] ?? null, 'Adviser to assist');
+        $advisers = array_values(array_filter([$mainAdv, $assistAdv]));
+
+        // Supervision (clause 3): a provisional adviser works under the
+        // full-licence adviser (the Supervisor). Only applies when the named
+        // pair is exactly one full + one provisional.
+        $supervisor = null;
+        $provisionalAdv = null;
+        foreach ($advisers as $a) {
+            if ($a['is_full'] && ! $supervisor) {
+                $supervisor = $a;
+            }
+            if ($a['is_provisional'] && ! $provisionalAdv) {
+                $provisionalAdv = $a;
+            }
+        }
+        $supervision = ($supervisor && $provisionalAdv)
+            ? ['supervisor' => $supervisor, 'provisional' => $provisionalAdv]
+            : null;
 
         return [
             'client' => [
-                'name' => trim("{$lead->first_name} {$lead->middle_name} {$lead->last_name}") ?: trim("{$lead->first_name} {$lead->last_name}"),
+                'name' => $mainName,
                 'address' => $overrides['client_address'] ?? $this->clientAddress($lead),
                 'phone' => $lead->phone,
                 'email' => $lead->email,
                 // Applicant e-signature (data URI) once the client has signed.
                 'signature' => $overrides['client_signature'] ?? null,
             ],
+            // Every applicant on the case (principal + dependants) for the
+            // service and disbursement tables.
+            'applicants' => $applicantLines,
+            'inz_lines' => $inzLines,
+            'is_family' => count($applicantLines) > 1,
             'visa_category' => $overrides['visa_category'] ?? $lead->inz_visa_type,
-            'professional_fee' => $this->money($professionalFee),
-            'inz_fee' => $this->money($inzFee),
+            // Ex-GST subtotal + the total to print (GST-inclusive only when the
+            // "Including GST" toggle is on), plus the flag so the fee row can
+            // append "+GST" (see clauses 5.2 / 7.1).
+            'professional_fee' => $this->money($profExcl),
+            'professional_fee_total' => $this->money($profTotal),
+            'professional_lines' => $professionalLines,
+            'gst_inclusive' => $gstInclusive,
+            'inz_fee' => $this->money($applicants[0]['visa_model']?->inzFeeFor($location)),
             'adviser' => $this->adviser($overrides['signer_id'] ?? null),
+            // Responsible-advisers table (clause 2.1) + supervision (clause 3),
+            // built from the chosen signing adviser (Main) and assisting adviser.
+            'advisers' => $advisers,
+            'supervision' => $supervision,
             'generated_date' => now()->format('d/m/Y'),
+        ];
+    }
+
+    /**
+     * The family group on a case: the principal applicant plus every dependant
+     * that has a resolvable visa (their own linked case's visa, or a staff-set
+     * visa on the dependant record), ordered partner → children → other. Each
+     * entry carries its visa name + VisaType model for fee lookups. Shared by
+     * the written-agreement data and the fee-totals calculation so they never
+     * disagree.
+     */
+    private function buildApplicants(Lead $lead): array
+    {
+        $visa = $lead->inz_visa_type ? VisaType::where('name', $lead->inz_visa_type)->first() : null;
+        $mainName = trim("{$lead->first_name} {$lead->middle_name} {$lead->last_name}") ?: trim("{$lead->first_name} {$lead->last_name}");
+
+        $applicants = [[
+            'name' => $mainName ?: '[Applicant name]',
+            'visa' => $lead->inz_visa_type,
+            'visa_model' => $visa,
+        ]];
+
+        $deps = [];
+        foreach ($lead->dependents()->with(['visaType', 'linkedLead'])->get() as $dep) {
+            if ($dep->linkedLead && $dep->linkedLead->inz_visa_type) {
+                $visaName = $dep->linkedLead->inz_visa_type;
+                $visaModel = VisaType::where('name', $visaName)->first();
+                $name = trim("{$dep->linkedLead->first_name} {$dep->linkedLead->last_name}") ?: $dep->fullName();
+            } elseif ($dep->visaType) {
+                $visaName = $dep->visaType->name;
+                $visaModel = $dep->visaType;
+                $name = $dep->fullName();
+            } else {
+                continue;
+            }
+
+            $deps[] = [
+                'name' => $name,
+                'visa' => $visaName,
+                'visa_model' => $visaModel,
+                'rel' => $dep->relationship,
+            ];
+        }
+
+        $relOrder = ['partner' => 1, 'child' => 2, 'parent' => 3, 'sibling' => 4, 'other' => 5];
+        usort($deps, fn ($a, $b) => ($relOrder[$a['rel']] ?? 9) <=> ($relOrder[$b['rel']] ?? 9));
+
+        return array_merge($applicants, $deps);
+    }
+
+    /**
+     * The case's family group (principal + costed dependants), ordered
+     * partner → children → other. Each entry: name, visa name, VisaType model.
+     * Public so the invoice generator can render a section per applicant.
+     */
+    public function familyApplicants(Lead $lead): array
+    {
+        return $this->buildApplicants($lead);
+    }
+
+    /**
+     * The money totals for an engagement — our professional fees (summed across
+     * the family, or the manual override), GST, the INZ disbursements, and the
+     * grand total. Raw numbers (nulls where unset) so callers can store or
+     * display them. Mirrors the written-agreement fee tables exactly.
+     *
+     * @return array{professional_excl: float|null, gst: float, professional_total: float|null, inz_total: float, grand_total: float|null}
+     */
+    public function feeTotals(Lead $lead, array $overrides = []): array
+    {
+        $tier = ($overrides['fee_tier'] ?? 'normal') === 'discounted' ? 'discounted' : 'normal';
+        $location = ($overrides['fee_location'] ?? 'onshore') === 'offshore' ? 'offshore' : 'onshore';
+        $gstInclusive = ! empty($overrides['include_gst']);
+
+        $applicants = $this->buildApplicants($lead);
+
+        $sumProfExcl = null;
+        $inzTotal = 0.0;
+        foreach ($applicants as $a) {
+            $f = $a['visa_model']?->professionalFeeFor($tier, $location);
+            if ($f !== null) {
+                $sumProfExcl = ($sumProfExcl ?? 0) + (float) $f;
+            }
+            $inz = $a['visa_model']?->inzFeeFor($location);
+            if ($inz !== null) {
+                $inzTotal += (float) $inz;
+            }
+        }
+
+        $overrideSet = isset($overrides['professional_fee']) && $overrides['professional_fee'] !== null && $overrides['professional_fee'] !== '';
+        $profExcl = $overrideSet ? (float) $overrides['professional_fee'] : $sumProfExcl;
+
+        $gst = $profExcl === null ? 0.0 : round($profExcl * VisaType::GST_RATE, 2);
+        $profTotal = $profExcl === null ? null : ($gstInclusive ? round($profExcl + $gst, 2) : $profExcl);
+        $grand = ($profTotal ?? 0) + $inzTotal;
+
+        return [
+            'professional_excl' => $profExcl,
+            'gst' => $gstInclusive ? $gst : 0.0,
+            'professional_total' => $profTotal,
+            'inz_total' => $inzTotal,
+            'grand_total' => ($profExcl === null && $inzTotal <= 0) ? null : round($grand, 2),
+        ];
+    }
+
+    /**
+     * One row of the responsible-advisers table (clause 2.1) for a chosen user,
+     * with licence type + number read live from their record. Null when no user.
+     */
+    private function adviserRow($userId, string $role): ?array
+    {
+        $u = $userId ? \App\Models\User::find($userId) : null;
+        if (! $u) {
+            return null;
+        }
+
+        $type = $u->iaa_licence_number ? ($u->iaa_licence_type ?: null) : null;
+
+        return [
+            'role' => $role,
+            'name' => $u->name,
+            'licence_type' => $type ? ucfirst(strtolower($type)) : '—',
+            'licence_number' => $u->iaa_licence_number ?: '—',
+            'is_full' => strtolower((string) $type) === 'full',
+            'is_provisional' => strtolower((string) $type) === 'provisional',
         ];
     }
 
@@ -337,16 +553,16 @@ class EngagementDocumentGenerator
             : '';
     }
 
-    /** Base64 data URI of the official D Immigration Consultancy logo for the
-     *  engagement documents (cover + PDF header). */
+    /** Base64 data URI of the ePathways Migration logo for the engagement
+     *  documents (cover + PDF header). */
     private function logoData(): string
     {
         if (self::$logoCache !== null) {
             return self::$logoCache;
         }
-        $path = base_path('resources/assets/dimmigration_logo.png');
+        $path = base_path('resources/assets/Immigration/migration_logo.png');
         if (! is_file($path)) {
-            $path = base_path('resources/assets/Immigration/migration_logo.png');
+            $path = base_path('resources/assets/philipine_ep_logo.png');
         }
 
         return self::$logoCache = 'data:image/png;base64,'.base64_encode(file_get_contents($path));
