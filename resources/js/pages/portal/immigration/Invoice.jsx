@@ -106,6 +106,7 @@ export default function Invoice({ cases = [], generated = [], suggestions = [], 
                                     <th className="px-3 py-3">Name</th>
                                     <th className="px-3 py-3">Contacts</th>
                                     <th className="px-3 py-3">Invoices</th>
+                                    <th className="px-3 py-3">Total amount</th>
                                     <th className="px-3 py-3">Created</th>
                                     <th className="px-3 py-3 text-right pr-4">Actions</th>
                                 </tr>
@@ -149,6 +150,16 @@ export default function Invoice({ cases = [], generated = [], suggestions = [], 
                                                     </div>
                                                 ))}
                                             </div>
+                                        </td>
+                                        {/* Total amount — sum of this case's invoice totals. */}
+                                        <td className="px-3 py-3 whitespace-nowrap">
+                                            {c.total_amount != null ? (
+                                                <span className="text-[13px] font-bold text-gray-900 tabular-nums">
+                                                    ${Number(c.total_amount).toLocaleString("en-NZ", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                </span>
+                                            ) : (
+                                                <span className="text-[11px] text-gray-300">—</span>
+                                            )}
                                         </td>
                                         <td className="px-3 py-3 whitespace-nowrap">
                                             <div className="text-[12px] text-gray-700 font-medium">{fmtDate(c.latest_created_at)}</div>
@@ -331,6 +342,13 @@ function NewInvoiceModal({ cases, nextNumber, preselectId = null, onClose }) {
     // Fully editable line items — starts from the visa's fees, staff can
     // edit any row or add their own.
     const [items, setItems] = useState([]);
+    // Family invoice: a section per applicant (principal + dependants), built
+    // server-side. On by default when the case has dependants. Turning it off
+    // reveals the manual line-item editor.
+    const [familyMode, setFamilyMode] = useState(false);
+    useEffect(() => {
+        setFamilyMode(!!selectedCase?.has_family);
+    }, [selectedCase]);
 
     const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
 
@@ -413,10 +431,11 @@ function NewInvoiceModal({ cases, nextNumber, preselectId = null, onClose }) {
             fee_tier: feeTier,
             fee_location: feeLocation,
             include_gst: includeGst ? 1 : 0,
-            items: JSON.stringify(items),
         });
+        // Family mode omits items so the server itemises per applicant.
+        if (!familyMode) p.set("items", JSON.stringify(items));
         return `/admin/leads/${selectedCase.id}/invoice/preview?${p.toString()}`;
-    }, [selectedCase, form, items, feeTier, feeLocation, includeGst]);
+    }, [selectedCase, form, items, feeTier, feeLocation, includeGst, familyMode]);
 
     // Debounce preview reloads while typing amounts.
     const [debouncedUrl, setDebouncedUrl] = useState(null);
@@ -430,7 +449,7 @@ function NewInvoiceModal({ cases, nextNumber, preselectId = null, onClose }) {
     const generate = () => {
         if (! selectedCase) return;
         setSubmitting(true);
-        router.post(`/admin/leads/${selectedCase.id}/invoice/generate`, { ...form, fee_tier: feeTier, fee_location: feeLocation, include_gst: includeGst, items }, {
+        router.post(`/admin/leads/${selectedCase.id}/invoice/generate`, { ...form, fee_tier: feeTier, fee_location: feeLocation, include_gst: includeGst, ...(familyMode ? {} : { items }) }, {
             preserveScroll: true,
             onSuccess: () => onClose(),
             onError: () => toast.error("Could not generate the invoice."),
@@ -552,15 +571,32 @@ function NewInvoiceModal({ cases, nextNumber, preselectId = null, onClose }) {
                         <div className="p-4 space-y-3">
                             <div className="flex items-center justify-between">
                                 <label className="text-[11px] font-bold uppercase tracking-[0.1em] text-gray-400">Line items</label>
-                                <button
-                                    type="button"
-                                    onClick={addItem}
-                                    className="text-[11px] font-semibold text-gray-800 hover:text-black inline-flex items-center gap-1"
-                                >
-                                    <Plus size={12} /> Add item
-                                </button>
+                                {!familyMode && (
+                                    <button
+                                        type="button"
+                                        onClick={addItem}
+                                        className="text-[11px] font-semibold text-gray-800 hover:text-black inline-flex items-center gap-1"
+                                    >
+                                        <Plus size={12} /> Add item
+                                    </button>
+                                )}
                             </div>
 
+                            {selectedCase?.has_family && (
+                                <label className="flex items-start gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 cursor-pointer">
+                                    <input type="checkbox" checked={familyMode} onChange={(e) => setFamilyMode(e.target.checked)} className="mt-0.5 rounded border-gray-300" />
+                                    <span className="text-[11.5px] text-gray-700 leading-snug">
+                                        <span className="font-semibold">Itemise per family member</span> — a section per applicant (principal, partner, then children), each with its consulting fee &amp; disbursement.
+                                    </span>
+                                </label>
+                            )}
+
+                            {familyMode ? (
+                                <p className="text-[11.5px] text-gray-500 leading-snug rounded-lg border border-dashed border-gray-200 px-3 py-3">
+                                    Each applicant with a visa gets its own consulting fee and INZ disbursement section, totalled at the bottom — see the preview. Turn off <span className="font-semibold">Itemise per family member</span> to edit line items by hand.
+                                </p>
+                            ) : (
+                            <>
                             {items.length === 0 && (
                                 <p className="text-[11px] text-gray-400">No items yet — click <span className="font-semibold">Add item</span>.</p>
                             )}
@@ -624,6 +660,8 @@ function NewInvoiceModal({ cases, nextNumber, preselectId = null, onClose }) {
                                         This visa has no fees on the <span className="font-semibold">Visas</span> page — enter the amounts manually.
                                     </p>
                                 </div>
+                            )}
+                            </>
                             )}
                         </div>
                     </div>

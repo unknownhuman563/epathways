@@ -927,6 +927,7 @@ class ImmigrationController extends Controller
 
             $cases = Lead::immigrationCase()
                 ->with('faceImage')
+                ->withCount('dependents')
                 ->orderByDesc('updated_at')
                 ->limit(300)
                 ->get(['id', 'lead_id', 'first_name', 'last_name', 'email', 'phone', 'residence_country', 'inz_visa_type', 'immigration_stage'])
@@ -934,6 +935,9 @@ class ImmigrationController extends Controller
                     $fees = $visaFees[$l->inz_visa_type] ?? null;
 
                     return [
+                        // Case has dependants → default the invoice to a section
+                        // per family member.
+                        'has_family' => $l->dependents_count > 0,
                         'id' => $l->id,
                         'lead_id' => $l->lead_id,
                         'name' => trim("{$l->first_name} {$l->last_name}") ?: 'Unknown',
@@ -978,9 +982,15 @@ class ImmigrationController extends Controller
                         'phone' => $lead?->phone,
                         'latest_created_at' => optional($first->created_at)?->toIso8601String(),
                         'latest_by' => $first->uploader?->name,
+                        // Total invoiced for this case (sum of its invoice totals);
+                        // null when none were stored (pre-column invoices).
+                        'total_amount' => $docs->whereNotNull('invoice_total')->isNotEmpty()
+                            ? (float) $docs->sum(fn ($d) => (float) ($d->invoice_total ?? 0))
+                            : null,
                         'invoices' => $docs->map(fn ($d) => [
                             'id' => $d->id,
                             'number' => $d->invoice_number,
+                            'total' => $d->invoice_total !== null ? (float) $d->invoice_total : null,
                             'size' => $d->size,
                             'created_at' => optional($d->created_at)?->toIso8601String(),
                             'download_url' => route('admin.documents.download', $d->id),

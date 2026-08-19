@@ -36,6 +36,7 @@ class LeadDocument extends Model
         'engagement_signer_id', 'client_signature_path',
         'client_signed_at', 'client_signer_name', 'client_signer_ip',
         'invoice_number',
+        'invoice_total',
         'gdrive_file_id', 'gdrive_synced_at',
     ];
 

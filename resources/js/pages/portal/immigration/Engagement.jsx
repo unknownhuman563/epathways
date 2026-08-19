@@ -189,6 +189,7 @@ export default function Engagement({ cases = [], documents = [], generated = [],
                                 <col className="w-[230px]" />
                                 <col />
                                 <col className="w-[120px]" />
+                                <col className="w-[120px]" />
                                 <col className="w-[130px]" />
                                 <col className="w-[150px]" />
                                 <col className="w-[90px]" />
@@ -198,6 +199,7 @@ export default function Engagement({ cases = [], documents = [], generated = [],
                                     <th className="px-4 py-2.5">Profile</th>
                                     <th className="px-3 py-2.5">Name &amp; contacts</th>
                                     <th className="px-3 py-2.5">Documents &amp; link</th>
+                                    <th className="px-3 py-2.5">Consulting fee</th>
                                     <th className="px-3 py-2.5">Total amount</th>
                                     <th className="px-3 py-2.5">Status</th>
                                     <th className="px-3 py-2.5">Created</th>
@@ -254,9 +256,22 @@ export default function Engagement({ cases = [], documents = [], generated = [],
                                                 )}
                                             </div>
                                         </td>
+                                        {/* Consulting fee — our professional fee (ex GST). */}
+                                        <td className="px-3 py-3 whitespace-nowrap">
+                                            {c.fee_total != null ? (
+                                                <>
+                                                    <div className="text-[13px] font-bold text-gray-900 tabular-nums">
+                                                        ${Number(c.fee_total).toLocaleString("en-NZ", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                    </div>
+                                                    <div className="text-[10px] text-gray-400">ex GST</div>
+                                                </>
+                                            ) : (
+                                                <span className="text-[11px] text-gray-300">—</span>
+                                            )}
+                                        </td>
                                         {/* Total amount — the grand total (our fees
-                                            incl GST + INZ). Older rows without a
-                                            stored total fall back to the ex-GST fee. */}
+                                            incl GST + INZ). Blank on older rows that
+                                            predate the stored total (regenerate to fill). */}
                                         <td className="px-3 py-3 whitespace-nowrap">
                                             {c.total_amount != null ? (
                                                 <>
@@ -264,13 +279,6 @@ export default function Engagement({ cases = [], documents = [], generated = [],
                                                         ${Number(c.total_amount).toLocaleString("en-NZ", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                                     </div>
                                                     <div className="text-[10px] text-gray-400">incl. fees &amp; INZ</div>
-                                                </>
-                                            ) : c.fee_total != null ? (
-                                                <>
-                                                    <div className="text-[13px] font-bold text-gray-900 tabular-nums">
-                                                        ${Number(c.fee_total).toLocaleString("en-NZ", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                                    </div>
-                                                    <div className="text-[10px] text-gray-400">ex GST</div>
                                                 </>
                                             ) : (
                                                 <span className="text-[11px] text-gray-300">—</span>
@@ -369,10 +377,26 @@ function DraftManageModal({ row, signers = [], documents = [], onClose }) {
         currentTypes.length ? currentTypes : documents.map((d) => d.key)
     );
     const [signerId, setSignerId] = useState(row.signer_id ?? signers[0]?.id ?? null);
+    const [assistSignerId, setAssistSignerId] = useState(row.assist_signer_id ?? null);
     const [feeLocation, setFeeLocation] = useState("onshore");
+    const [feeTier, setFeeTier] = useState("normal");
     const [includeGst, setIncludeGst] = useState(false);
     const [feeOverride, setFeeOverride] = useState(initialFee);
     const [busy, setBusy] = useState(null); // 'save' | 'send'
+    // Family-aware fee totals for the receipt (professional sum + INZ sum).
+    const [familyTotals, setFamilyTotals] = useState(null);
+    useEffect(() => {
+        let cancelled = false;
+        const url = `/admin/leads/${row.case_id}/engagement/fee-totals?fee_tier=${feeTier}&fee_location=${feeLocation}&include_gst=${includeGst ? 1 : 0}`;
+        fetch(url, { headers: { Accept: "application/json" } })
+            .then((r) => (r.ok ? r.json() : null))
+            .then((d) => { if (!cancelled) setFamilyTotals(d); })
+            .catch(() => { if (!cancelled) setFamilyTotals(null); });
+        return () => { cancelled = true; };
+    }, [row.case_id, feeTier, feeLocation, includeGst]);
+    const familyProfExcl = familyTotals?.professional_excl ?? null;
+    const effectiveFee = feeOverride !== "" ? Number(feeOverride) : familyProfExcl;
+    const inzTotal = familyTotals?.inz_total ?? null;
     // Which document is shown in the preview (tab-selectable).
     const [previewType, setPreviewType] = useState(
         (currentTypes.length ? currentTypes : documents.map((d) => d.key)).includes("written_agreement")
@@ -382,7 +406,7 @@ function DraftManageModal({ row, signers = [], documents = [], onClose }) {
     // Fall back to a still-selected doc if the previewed one gets unchecked.
     const activePreview = selectedTypes.includes(previewType) ? previewType : (selectedTypes[0] || previewType);
     const labelFor = (k) => (documents.find((d) => d.key === k)?.label) || k;
-    const previewUrl = `/admin/leads/${row.case_id}/generate/engage_${activePreview}/preview?fee_location=${feeLocation}&include_gst=${includeGst ? 1 : 0}${signerId ? `&signer=${signerId}` : ""}${feeOverride !== "" ? `&professional_fee=${encodeURIComponent(feeOverride)}` : ""}`;
+    const previewUrl = `/admin/leads/${row.case_id}/generate/engage_${activePreview}/preview?fee_tier=${feeTier}&fee_location=${feeLocation}&include_gst=${includeGst ? 1 : 0}${signerId ? `&signer=${signerId}` : ""}${assistSignerId ? `&assist_signer=${assistSignerId}` : ""}${feeOverride !== "" ? `&professional_fee=${encodeURIComponent(feeOverride)}` : ""}`;
 
     const toggleType = (k) => setSelectedTypes((s) => (s.includes(k) ? s.filter((x) => x !== k) : [...s, k]));
 
@@ -390,8 +414,8 @@ function DraftManageModal({ row, signers = [], documents = [], onClose }) {
         if (busy || selectedTypes.length === 0) return;
         setBusy("save");
         router.post(`/admin/leads/${row.case_id}/engagement/generate`, {
-            types: selectedTypes, notify: false, signer_id: signerId,
-            fee_tier: "normal", fee_location: feeLocation, include_gst: includeGst,
+            types: selectedTypes, notify: false, signer_id: signerId, assist_signer_id: assistSignerId,
+            fee_tier: feeTier, fee_location: feeLocation, include_gst: includeGst,
             professional_fee: feeOverride !== "" ? Number(feeOverride) : null,
         }, {
             preserveScroll: true,
@@ -426,14 +450,38 @@ function DraftManageModal({ row, signers = [], documents = [], onClose }) {
                 <div className="flex-1 min-h-0 flex flex-col lg:flex-row overflow-hidden">
                     {/* Preview + a tab per generated document */}
                     <div className="flex-1 min-w-0 min-h-[280px] bg-gray-100 border-b lg:border-b-0 lg:border-r border-gray-100 flex flex-col">
+                        {/* Document tabs double as include checkboxes: tick to keep
+                            in the pack, click the name to preview. */}
                         <div className="flex items-center gap-1.5 px-3 py-2 bg-white border-b border-gray-100 overflow-x-auto flex-shrink-0">
-                            <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 flex-shrink-0">View:</span>
-                            {selectedTypes.map((k) => (
-                                <button key={k} type="button" onClick={() => setPreviewType(k)}
-                                    className={`px-2.5 py-1 rounded-md text-[11px] font-semibold whitespace-nowrap transition-colors ${activePreview === k ? "bg-gray-900 text-white" : "text-gray-500 hover:bg-gray-100"}`}>
-                                    {labelFor(k)}
-                                </button>
-                            ))}
+                            <button
+                                type="button"
+                                onClick={() => setSelectedTypes(selectedTypes.length === documents.length ? [] : documents.map((d) => d.key))}
+                                className="text-[10px] font-bold uppercase tracking-wider text-gray-400 hover:text-gray-900 flex-shrink-0 mr-0.5"
+                            >
+                                {selectedTypes.length === documents.length ? "Clear all" : "Select all"}
+                            </button>
+                            {documents.map((d) => {
+                                const checked = selectedTypes.includes(d.key);
+                                const isPreview = activePreview === d.key;
+                                return (
+                                    <div
+                                        key={d.key}
+                                        className={`flex items-center gap-1.5 pl-1.5 pr-2.5 py-1 rounded-full whitespace-nowrap border flex-shrink-0 transition-colors ${isPreview ? "bg-gray-900 border-gray-900 text-white" : checked ? "bg-gray-100 border-gray-200 text-gray-700" : "bg-white border-gray-200 text-gray-400"}`}
+                                    >
+                                        <button
+                                            type="button"
+                                            onClick={() => toggleType(d.key)}
+                                            className={`w-3.5 h-3.5 rounded border flex items-center justify-center flex-shrink-0 ${checked ? (isPreview ? "bg-white border-white" : "bg-gray-900 border-gray-900") : "bg-white border-gray-300"}`}
+                                        >
+                                            {checked && <Check size={10} className={isPreview ? "text-gray-900" : "text-white"} strokeWidth={3} />}
+                                        </button>
+                                        <button type="button" onClick={() => setPreviewType(d.key)} className="text-[11px] font-semibold flex items-center gap-1">
+                                            {d.label}
+                                            {d.dynamic && <span className={`text-[8px] font-bold uppercase tracking-wide rounded px-1 ${isPreview ? "bg-white/20 text-white" : "bg-gray-200 text-gray-600"}`}>Auto</span>}
+                                        </button>
+                                    </div>
+                                );
+                            })}
                         </div>
                         <iframe key={previewUrl} src={previewUrl} title="Engagement preview" className="flex-1 w-full border-0" />
                     </div>
@@ -442,50 +490,93 @@ function DraftManageModal({ row, signers = [], documents = [], onClose }) {
                     <div className="lg:w-[360px] flex-shrink-0 overflow-y-auto p-5 space-y-4">
                         <p className="text-[11px] font-bold uppercase tracking-wider text-gray-500">Settings</p>
 
-                        <div>
-                            <label className="block text-[11px] font-semibold text-gray-600 mb-1">Signing adviser</label>
-                            <select value={signerId ?? ""} onChange={(e) => setSignerId(Number(e.target.value) || null)}
-                                className="w-full text-[13px] px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-gray-900">
-                                {signers.map((s) => <option key={s.id} value={s.id}>{s.name}{s.licence_current === false ? " (licence expired)" : ""}</option>)}
-                            </select>
+                        <div className="grid grid-cols-2 gap-2 items-start">
+                            <div>
+                                <label className="block text-[11px] font-semibold text-gray-600 mb-1">Signing adviser</label>
+                                <select value={signerId ?? ""} onChange={(e) => setSignerId(Number(e.target.value) || null)}
+                                    className="w-full text-[13px] px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-gray-900">
+                                    {signers.map((s) => <option key={s.id} value={s.id}>{s.name}{s.licence_current === false ? " (licence expired)" : ""}</option>)}
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-[11px] font-semibold text-gray-600 mb-1">Adviser to assist <span className="text-gray-400 font-normal">(optional)</span></label>
+                                <select value={assistSignerId ?? ""} onChange={(e) => setAssistSignerId(e.target.value ? Number(e.target.value) : null)}
+                                    className="w-full text-[13px] px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-gray-900">
+                                    <option value="">— None —</option>
+                                    {signers.filter((s) => s.id !== signerId).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                                </select>
+                            </div>
                         </div>
+                        <p className="text-[10.5px] text-gray-400 -mt-2">The signing adviser is the Main adviser; the other is listed as Adviser to assist (clause 2.1).</p>
 
                         <div>
-                            <label className="block text-[11px] font-semibold text-gray-600 mb-1">Documents</label>
-                            <div className="space-y-1">
-                                {documents.map((d) => (
-                                    <label key={d.key} className="flex items-center gap-2 text-[12.5px] text-gray-700 cursor-pointer">
-                                        <input type="checkbox" checked={selectedTypes.includes(d.key)} onChange={() => toggleType(d.key)} className="rounded border-gray-300" />
-                                        {d.label}
-                                    </label>
-                                ))}
-                            </div>
+                            <label className="block text-[11px] font-semibold text-gray-600 mb-1">Applicant location</label>
+                            <select value={feeLocation} onChange={(e) => setFeeLocation(e.target.value)}
+                                className="w-full text-[13px] px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-gray-900">
+                                <option value="onshore">Onshore</option>
+                                <option value="offshore">Offshore</option>
+                            </select>
                         </div>
 
                         <div className="grid grid-cols-2 gap-2">
                             <div>
-                                <label className="block text-[11px] font-semibold text-gray-600 mb-1">Location</label>
-                                <select value={feeLocation} onChange={(e) => setFeeLocation(e.target.value)}
+                                <label className="block text-[11px] font-semibold text-gray-600 mb-1">Payment basis</label>
+                                <select value={feeTier} onChange={(e) => setFeeTier(e.target.value)}
                                     className="w-full text-[13px] px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-gray-900">
-                                    <option value="onshore">Onshore</option>
-                                    <option value="offshore">Offshore</option>
+                                    <option value="normal">Normal (payment plan)</option>
+                                    <option value="discounted">Discounted (pay now)</option>
                                 </select>
                             </div>
                             <div>
                                 <label className="block text-[11px] font-semibold text-gray-600 mb-1">GST</label>
                                 <select value={includeGst ? "incl" : "excl"} onChange={(e) => setIncludeGst(e.target.value === "incl")}
                                     className="w-full text-[13px] px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-gray-900">
-                                    <option value="excl">Exclusive</option>
-                                    <option value="incl">Inclusive</option>
+                                    <option value="excl">Excluding GST</option>
+                                    <option value="incl">Including GST ({GST_PCT}%)</option>
                                 </select>
                             </div>
                         </div>
 
-                        <div>
-                            <label className="block text-[11px] font-semibold text-gray-600 mb-1">Agreement fee (ex GST) — leave blank for the visa fee</label>
-                            <input type="number" min="0" step="0.01" value={feeOverride} onChange={(e) => setFeeOverride(e.target.value)} placeholder="Visa default"
-                                className="w-full text-[13px] px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-gray-900" />
-                        </div>
+                        {/* Receipt-style fee summary — our professional fee (editable,
+                            summed across the family), GST, INZ disbursements, total. */}
+                        {(() => {
+                            const prof = effectiveFee != null && effectiveFee !== "" ? Number(effectiveFee) : 0;
+                            const inz = inzTotal != null ? Number(inzTotal) : 0;
+                            const gstAmt = prof * GST_RATE;
+                            const total = (includeGst ? prof + gstAmt : prof) + inz;
+                            return (
+                                <div className="rounded-lg overflow-hidden text-white" style={{ backgroundColor: BRAND_TEAL }}>
+                                    <div className="px-3 py-1.5 bg-black/10 text-[10px] font-bold uppercase tracking-wider text-white/80">Fee summary</div>
+                                    <div className="px-3 py-2 space-y-1.5">
+                                        <div className="flex items-center justify-between gap-2">
+                                            <span className="text-[11.5px] text-white/85">Our fees <span className="text-white/50">(ex GST)</span></span>
+                                            <div className="flex items-center gap-1">
+                                                <span className="text-[12px] font-bold">$</span>
+                                                <input type="number" min="0" step="0.01" value={effectiveFee ?? ""} onChange={(e) => setFeeOverride(e.target.value)} placeholder="0.00"
+                                                    className="w-20 bg-white/15 rounded px-2 py-0.5 text-[12.5px] font-bold text-white text-right tabular-nums placeholder-white/40 focus:outline-none focus:bg-white/25" />
+                                            </div>
+                                        </div>
+                                        {includeGst && (
+                                            <div className="flex items-center justify-between gap-2 text-white/75">
+                                                <span className="text-[11.5px]">GST ({GST_PCT}%)</span>
+                                                <span className="text-[12.5px] font-semibold tabular-nums">${fmtFee(gstAmt)}</span>
+                                            </div>
+                                        )}
+                                        <div className="flex items-center justify-between gap-2">
+                                            <span className="text-[11.5px] text-white/85">Disbursements <span className="text-white/50">(INZ)</span></span>
+                                            <span className="text-[12.5px] font-semibold tabular-nums">{inzTotal != null ? `$${fmtFee(inz)}` : "—"}</span>
+                                        </div>
+                                        <div className="flex items-center justify-between gap-2 border-t border-white/25 pt-1.5 mt-0.5">
+                                            <span className="text-[11px] font-bold uppercase tracking-wide">Total amount</span>
+                                            <span className="text-[15px] font-bold tabular-nums">${fmtFee(total)}</span>
+                                        </div>
+                                        {feeOverride !== "" && (
+                                            <button type="button" onClick={() => setFeeOverride("")} className="text-[10px] text-white/70 hover:text-white underline">Reset to visa fee</button>
+                                        )}
+                                    </div>
+                                </div>
+                            );
+                        })()}
 
                         <div className="pt-2 space-y-2 border-t border-gray-100">
                             <button type="button" onClick={saveChanges} disabled={!!busy || selectedTypes.length === 0}
