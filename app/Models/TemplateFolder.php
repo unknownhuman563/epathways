@@ -7,13 +7,14 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
- * A folder that groups message templates. Shared/global like the template
- * library — not department-scoped. Deleting a folder leaves its templates
- * intact (their folder_id is nulled via the FK's nullOnDelete).
+ * A folder that groups message templates. Department-scoped: a folder lives
+ * under one department tab ('' = the Shared / all-departments tab). Deleting a
+ * folder leaves its templates intact (their folder_id is nulled via the FK's
+ * nullOnDelete).
  */
 class TemplateFolder extends Model
 {
-    protected $fillable = ['name', 'created_by'];
+    protected $fillable = ['name', 'department', 'created_by'];
 
     public function templates(): HasMany
     {

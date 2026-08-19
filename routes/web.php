@@ -553,11 +553,16 @@ Route::middleware(['auth'])->group(function () {
         // Message templates — staff-editable email/SMS templates.
         Route::get('/admin/message-templates', [\App\Http\Controllers\MessageTemplateController::class, 'index'])->name('admin.message-templates');
         Route::get('/admin/message-templates/create', [\App\Http\Controllers\MessageTemplateController::class, 'create'])->name('admin.message-templates.create');
+        Route::get('/admin/message-templates/{id}/duplicate', [\App\Http\Controllers\MessageTemplateController::class, 'duplicate'])->name('admin.message-templates.duplicate');
         // Folder grouping (shared/global) — registered before the {id} show route.
         Route::post('/admin/message-templates/folders', [\App\Http\Controllers\MessageTemplateController::class, 'storeFolder'])->name('admin.message-templates.folders.store');
         Route::put('/admin/message-templates/folders/{id}', [\App\Http\Controllers\MessageTemplateController::class, 'updateFolder'])->name('admin.message-templates.folders.update');
         Route::delete('/admin/message-templates/folders/{id}', [\App\Http\Controllers\MessageTemplateController::class, 'destroyFolder'])->name('admin.message-templates.folders.destroy');
+        Route::post('/admin/message-templates/folders/{id}/department', [\App\Http\Controllers\MessageTemplateController::class, 'moveFolderDepartment'])->name('admin.message-templates.folders.department');
+        Route::post('/admin/message-templates/folders/{id}/duplicate', [\App\Http\Controllers\MessageTemplateController::class, 'duplicateFolder'])->name('admin.message-templates.folders.duplicate');
         Route::post('/admin/message-templates/move', [\App\Http\Controllers\MessageTemplateController::class, 'moveTemplates'])->name('admin.message-templates.move');
+        Route::post('/admin/message-templates/move-department', [\App\Http\Controllers\MessageTemplateController::class, 'moveDepartment'])->name('admin.message-templates.move-department');
+        Route::post('/admin/message-templates/delete', [\App\Http\Controllers\MessageTemplateController::class, 'destroyMany'])->name('admin.message-templates.delete-many');
         Route::post('/admin/message-templates', [\App\Http\Controllers\MessageTemplateController::class, 'store'])->name('admin.message-templates.store');
         Route::get('/admin/message-templates/{id}', [\App\Http\Controllers\MessageTemplateController::class, 'show'])->name('admin.message-templates.show');
         Route::put('/admin/message-templates/{id}', [\App\Http\Controllers\MessageTemplateController::class, 'update'])->name('admin.message-templates.update');
@@ -908,11 +913,16 @@ Route::middleware(['auth'])->group(function () {
                 $c = \App\Http\Controllers\MessageTemplateController::class;
                 Route::get('/email-templates', [$c, 'index'])->name('email-templates');
                 Route::get('/email-templates/create', [$c, 'create'])->name('email-templates.create');
+                Route::get('/email-templates/{id}/duplicate', [$c, 'duplicate'])->name('email-templates.duplicate');
                 // Folder grouping (shared/global) — before the {id} show route.
                 Route::post('/email-templates/folders', [$c, 'storeFolder'])->name('email-templates.folders.store');
                 Route::put('/email-templates/folders/{id}', [$c, 'updateFolder'])->name('email-templates.folders.update');
                 Route::delete('/email-templates/folders/{id}', [$c, 'destroyFolder'])->name('email-templates.folders.destroy');
+                Route::post('/email-templates/folders/{id}/department', [$c, 'moveFolderDepartment'])->name('email-templates.folders.department');
+                Route::post('/email-templates/folders/{id}/duplicate', [$c, 'duplicateFolder'])->name('email-templates.folders.duplicate');
                 Route::post('/email-templates/move', [$c, 'moveTemplates'])->name('email-templates.move');
+                Route::post('/email-templates/move-department', [$c, 'moveDepartment'])->name('email-templates.move-department');
+                Route::post('/email-templates/delete', [$c, 'destroyMany'])->name('email-templates.delete-many');
                 Route::post('/email-templates', [$c, 'store'])->name('email-templates.store');
                 Route::get('/email-templates/{id}', [$c, 'show'])->name('email-templates.show');
                 Route::put('/email-templates/{id}', [$c, 'update'])->name('email-templates.update');
