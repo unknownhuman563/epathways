@@ -661,6 +661,29 @@ class Lead extends Model
                 ]);
             }
         });
+
+        // Immigration CASE stage-triggered client emails (config/stage_emails.php
+        // immigration_map — e.g. "Invoice Paid" => invoice_paid). Fires once per
+        // immigration_stage transition, catching every write path (the process
+        // chain, the manual "Move to stage" dropdown, etc.) since all save here.
+        static::updated(function (Lead $lead) {
+            if (! $lead->wasChanged('immigration_stage') || empty($lead->email)) {
+                return;
+            }
+
+            $key = config('stage_emails.immigration_map')[$lead->immigration_stage] ?? null;
+            if (! $key) {
+                return;
+            }
+
+            try {
+                \App\Jobs\SendLeadFollowupEmail::sendKey($key, $lead);
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning('Immigration stage email failed', [
+                    'lead_id' => $lead->id, 'stage' => $lead->immigration_stage, 'error' => $e->getMessage(),
+                ]);
+            }
+        });
     }
 
     /**

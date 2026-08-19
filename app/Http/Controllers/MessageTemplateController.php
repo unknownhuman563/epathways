@@ -31,6 +31,7 @@ class MessageTemplateController extends Controller
         ['name' => 'email', 'description' => "Lead's email"],
         ['name' => 'phone', 'description' => "Lead's phone"],
         ['name' => 'tracker_url', 'description' => 'Link to the lead /track/{code} page'],
+        ['name' => 'engagement_url', 'description' => 'Scoped engagement signing link (only filled when sent from the engagement generator)'],
         ['name' => 'assigned_staff_name', 'description' => 'Assigned staff member, or "the ePathways team"'],
         ['name' => 'status', 'description' => 'Application status (passed when staff send an update)'],
         ['name' => 'status_detail', 'description' => 'Optional note describing the status change'],
@@ -152,6 +153,7 @@ class MessageTemplateController extends Controller
             'from_email' => $source->from_email,
             'from_name' => $source->from_name,
             'branding' => $source->branding,
+            'to_extra' => $source->to_extra,
             'cc' => $source->cc,
             'bcc' => $source->bcc,
             'sms_body' => $source->sms_body,
@@ -400,6 +402,7 @@ class MessageTemplateController extends Controller
                     'from_email' => $t->from_email,
                     'from_name' => $t->from_name,
                     'branding' => $t->branding,
+                    'to_extra' => $t->to_extra,
                     'cc' => $t->cc,
                     'bcc' => $t->bcc,
                     'sms_body' => $t->sms_body,
@@ -690,6 +693,7 @@ class MessageTemplateController extends Controller
             // Per-portal banner/CTA preset (config/email_branding.php).
             'branding' => ['nullable', Rule::in(array_keys(config('email_branding', ['default' => []])))],
             // Comma-separated addresses copied on every send.
+            'to_extra' => ['nullable', 'string', 'max:1000'],
             'cc' => ['nullable', 'string', 'max:1000'],
             'bcc' => ['nullable', 'string', 'max:1000'],
             // Rich HTML from the editor is more verbose than the old Markdown.

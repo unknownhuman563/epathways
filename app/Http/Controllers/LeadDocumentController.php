@@ -587,7 +587,7 @@ class LeadDocumentController extends Controller
                     $message .= ' Email not sent — no email on file.';
                 } else {
                     $token = $lead->ensureEngagementSigningToken();
-                    Mail::to($lead->email)->send(new \App\Mail\EngagementDocumentsReady($lead, $typesToGenerate, $generatedDocIds, $token));
+                    $this->notifyEngagement($lead, $token, $typesToGenerate, $generatedDocIds);
                     $lead->forceFill(['engagement_sent_at' => now()])->save();
                     $message .= " Client notified at {$lead->email}.";
                 }
@@ -631,10 +631,37 @@ class LeadDocumentController extends Controller
         }
 
         $token = $lead->ensureEngagementSigningToken();
-        Mail::to($lead->email)->send(new \App\Mail\EngagementDocumentsReady($lead, array_keys($typeMap), $typeMap, $token));
+        $this->notifyEngagement($lead, $token, array_keys($typeMap), $typeMap);
         $lead->forceFill(['engagement_sent_at' => now()])->save();
 
         return back()->with('success', "Engagement sent to {$lead->email}.");
+    }
+
+    /**
+     * Email the client that their engagement documents are ready. Prefers the
+     * editable `migration_agreement` template (its "Open my documents" button is
+     * filled with the scoped {{engagement_url}} signing link), and falls back to
+     * the hardcoded EngagementDocumentsReady mail only if that template is gone.
+     *
+     * @param  array<int,string>  $types  Generated engagement doc keys (fallback only)
+     * @param  array<string,int>  $docIds  doc key => LeadDocument id (fallback only)
+     */
+    private function notifyEngagement(Lead $lead, string $token, array $types, array $docIds): void
+    {
+        $template = \App\Models\MessageTemplate::active()
+            ->where('key', 'migration_agreement')
+            ->orderByRaw("CASE WHEN department = '' THEN 0 ELSE 1 END")
+            ->first();
+
+        if ($template) {
+            $link = rtrim((string) config('app.url'), '/').'/engagement/'.$token;
+            app(\App\Services\CommunicationService::class)->sendTemplate($template, $lead, ['engagement_url' => $link]);
+
+            return;
+        }
+
+        // Template removed — keep the client notified via the original email.
+        Mail::to($lead->email)->send(new \App\Mail\EngagementDocumentsReady($lead, $types, $docIds, $token));
     }
 
     /**
@@ -713,11 +740,41 @@ class LeadDocumentController extends Controller
         try {
             $doc = $generator->generate($lead, $this->invoiceOverridesFrom($request));
 
+            $this->emailInvoice($lead, $doc);
+
             return back()->with('success', "Invoice {$doc->invoice_number} generated for {$lead->first_name} {$lead->last_name}.");
         } catch (\Throwable $e) {
             Log::error('Invoice generation failed', ['lead_id' => $leadId, 'error' => $e->getMessage()]);
 
             return back()->withErrors(['error' => 'Could not generate the invoice: '.$e->getMessage()]);
+        }
+    }
+
+    /**
+     * Email the client their invoice on generation (key: send_invoice), with the
+     * invoice PDF attached. Best-effort — a mail failure must never fail the
+     * generate, and it no-ops if the template is missing or there's no email.
+     */
+    private function emailInvoice(Lead $lead, LeadDocument $doc): void
+    {
+        try {
+            if (empty($lead->email)) {
+                return;
+            }
+
+            $template = \App\Models\MessageTemplate::active()
+                ->where('key', 'send_invoice')
+                ->orderByRaw("CASE WHEN department = '' THEN 0 ELSE 1 END")
+                ->first();
+            if (! $template) {
+                return;
+            }
+
+            app(\App\Services\CommunicationService::class)->sendTemplate($template, $lead, [], [
+                ['path' => $doc->file_path, 'name' => 'Invoice '.$doc->invoice_number.'.pdf'],
+            ]);
+        } catch (\Throwable $e) {
+            Log::warning('send_invoice email failed', ['lead_id' => $lead->id, 'error' => $e->getMessage()]);
         }
     }
 

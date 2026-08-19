@@ -82,6 +82,7 @@ export default function TemplateEditorView({
         // template → Sales branding), falling back to the portal you're in for a
         // brand-new template. Shared/global → default ePathways artwork.
         branding: template?.branding ?? ((template?.department ?? fixedDepartment ?? "") || "default"),
+        to_extra: template?.to_extra ?? "",
         cc: template?.cc ?? "",
         bcc: template?.bcc ?? "",
         banner_image: null,
@@ -294,6 +295,12 @@ export default function TemplateEditorView({
                                 <p className="col-span-2 text-[11px] text-gray-400 -mt-2">Blank = default sender. The address must be verified in your mail provider (Brevo).</p>
                             </div>
                             <div className="grid grid-cols-2 gap-4">
+                                <label className="block col-span-2">
+                                    <span className="block text-xs font-semibold text-gray-600 mb-1">To — also send to <span className="text-gray-400 font-normal">(optional)</span></span>
+                                    <input value={data.to_extra} onChange={(e) => setData("to_extra", e.target.value)} placeholder="team@epathways.co.nz, another@…" className={inp} />
+                                    {errors.to_extra && <span className="text-xs text-rose-600">{errors.to_extra}</span>}
+                                    <span className="block text-[11px] text-gray-400 mt-1">The client is always the main recipient. These extra addresses are added to the To line on every send (e.g. so your internal team gets the same email).</span>
+                                </label>
                                 <label className="block">
                                     <span className="block text-xs font-semibold text-gray-600 mb-1">Cc <span className="text-gray-400 font-normal">(optional)</span></span>
                                     <input value={data.cc} onChange={(e) => setData("cc", e.target.value)} placeholder="team@epathways.co.nz, other@…" className={inp} />

@@ -85,6 +85,7 @@ class CommunicationService
                 $template->cc,
                 $template->bcc,
                 $template->branding,
+                $template->to_extra,
             );
         }
 
@@ -247,7 +248,7 @@ class CommunicationService
         return $res['ok'];
     }
 
-    private function sendEmail(Lead $lead, string $subject, string $body, ?string $key, array $attachments = [], ?int $campaignId = null, ?string $bannerImage = null, ?string $footerImage = null, ?string $fromEmail = null, ?string $fromName = null, ?string $cc = null, ?string $bcc = null, ?string $branding = null): MessageLog
+    private function sendEmail(Lead $lead, string $subject, string $body, ?string $key, array $attachments = [], ?int $campaignId = null, ?string $bannerImage = null, ?string $footerImage = null, ?string $fromEmail = null, ?string $fromName = null, ?string $cc = null, ?string $bcc = null, ?string $branding = null, ?string $toExtra = null): MessageLog
     {
         if (empty($lead->email)) {
             return $this->log([
@@ -267,8 +268,16 @@ class CommunicationService
             'subject' => $subject, 'body' => $body, 'status' => MessageLog::STATUS_QUEUED,
         ]);
 
+        // The lead is always the primary recipient; a template's optional "To
+        // (also send to)" list adds extra addresses (e.g. the internal team) to
+        // the To line, deduped against the lead's own address.
+        $recipients = collect([$lead->email])
+            ->merge($this->parseAddresses($toExtra))
+            ->map(fn ($e) => strtolower(trim((string) $e)))
+            ->filter()->unique()->values()->all();
+
         try {
-            Mail::to($lead->email)->queue(
+            Mail::to($recipients)->queue(
                 new TemplatedMessage($subject, $body, $attachments, $bannerImage, $footerImage, $log->id, $fromEmail, $fromName, $cc, $bcc, $branding)
             );
         } catch (\Throwable $e) {
@@ -281,6 +290,19 @@ class CommunicationService
         }
 
         return $log;
+    }
+
+    /** Split a comma/semicolon-separated address string into valid emails. */
+    private function parseAddresses(?string $raw): array
+    {
+        if (! $raw) {
+            return [];
+        }
+
+        return collect(preg_split('/[,;]+/', $raw))
+            ->map(fn ($e) => trim($e))
+            ->filter(fn ($e) => filter_var($e, FILTER_VALIDATE_EMAIL))
+            ->values()->all();
     }
 
     private function sendSms(Lead $lead, string $body, ?string $key): MessageLog

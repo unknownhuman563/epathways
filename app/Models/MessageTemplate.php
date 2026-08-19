@@ -31,6 +31,7 @@ class MessageTemplate extends Model
         'banner_image',
         'footer_image',
         'branding',
+        'to_extra',
         'cc',
         'bcc',
         'sms_body',
