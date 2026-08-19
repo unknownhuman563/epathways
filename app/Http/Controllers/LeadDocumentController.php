@@ -518,11 +518,29 @@ class LeadDocumentController extends Controller
         }
 
         try {
-            // Replace-per-type: remove the previous UNSIGNED copies of each type
-            // first so regenerating a draft doesn't stack duplicates. Signed
+            // Never touch a document the client has already signed. Regenerating
+            // a signed type would create a conflicting UNSIGNED copy alongside the
+            // signed one and make a completed pack look unsigned again — so skip
+            // those types entirely and leave the signed document exactly as it is.
+            $alreadySigned = LeadDocument::where('lead_id', $lead->id)
+                ->where('source_variant', 'like', 'engagement:%')
+                ->whereNotNull('client_signed_at')
+                ->pluck('source_variant')
+                ->map(fn ($v) => str_replace('engagement:', '', $v))
+                ->all();
+
+            $typesToGenerate = array_values(array_diff($data['types'], $alreadySigned));
+            $skippedSigned = array_values(array_intersect($data['types'], $alreadySigned));
+
+            if (empty($typesToGenerate)) {
+                return back()->with('success', 'Those documents are already signed by the client, so nothing was changed.');
+            }
+
+            // Replace-per-type: remove the previous UNSIGNED copies of the types
+            // we're regenerating so a draft doesn't stack duplicates. Signed
             // documents are never touched (their signature must be preserved).
             LeadDocument::where('lead_id', $lead->id)
-                ->whereIn('source_variant', array_map(fn ($t) => "engagement:{$t}", $data['types']))
+                ->whereIn('source_variant', array_map(fn ($t) => "engagement:{$t}", $typesToGenerate))
                 ->whereNull('client_signed_at')
                 ->get()
                 ->each(function (LeadDocument $old) {
@@ -535,7 +553,7 @@ class LeadDocumentController extends Controller
             // Keep the created document id per type so the notification can
             // deep-link each icon straight to its generated PDF.
             $generatedDocIds = [];
-            foreach ($data['types'] as $t) {
+            foreach ($typesToGenerate as $t) {
                 $doc = $generator->generate($lead, $t, $overrides);
                 $generatedDocIds[$t] = $doc->id;
             }
@@ -547,21 +565,29 @@ class LeadDocumentController extends Controller
                 ?? optional($feeVisa)?->professionalFeeFor($overrides['fee_tier'] ?? 'normal', $overrides['fee_location'] ?? 'onshore');
             $lead->forceFill(['engagement_fee_total' => $feeTotal])->save();
 
-            $n = count($data['types']);
+            $n = count($typesToGenerate);
             $message = "{$n} engagement document(s) generated for {$lead->first_name} {$lead->last_name}.";
+            if (! empty($skippedSigned)) {
+                $message .= ' '.count($skippedSigned).' already-signed document(s) were left unchanged.';
+            }
 
             // Optionally email the client that their documents are now available
             // on the scoped signing page. Sending marks the pack as no longer a
             // draft (records engagement_sent_at, which reveals the client link).
+            // Saving as a draft must clear any previous "sent" flag so the status
+            // reads Draft again — unless the pack already carries a signed
+            // document, in which case its state is left intact.
             if (! empty($data['notify'])) {
                 if (empty($lead->email)) {
                     $message .= ' Email not sent — no email on file.';
                 } else {
                     $token = $lead->ensureEngagementSigningToken();
-                    Mail::to($lead->email)->send(new \App\Mail\EngagementDocumentsReady($lead, $data['types'], $generatedDocIds, $token));
+                    Mail::to($lead->email)->send(new \App\Mail\EngagementDocumentsReady($lead, $typesToGenerate, $generatedDocIds, $token));
                     $lead->forceFill(['engagement_sent_at' => now()])->save();
                     $message .= " Client notified at {$lead->email}.";
                 }
+            } elseif (empty($alreadySigned)) {
+                $lead->forceFill(['engagement_sent_at' => null])->save();
             }
 
             return back()->with('success', $message);
