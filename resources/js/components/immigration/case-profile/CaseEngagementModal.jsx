@@ -4,6 +4,7 @@ import { router } from "@inertiajs/react";
 import { toast } from "sonner";
 import { X, FileText, FileSignature, Loader2, Send } from "lucide-react";
 import { confirmDialog } from "@/components/ui/ConfirmDialog";
+import GenerationProgress from "@/components/ui/GenerationProgress";
 
 // Generate an engagement pack from the case profile — preview on the left,
 // editable settings on the right. Posts to the same endpoint the Engagement
@@ -18,9 +19,11 @@ export default function CaseEngagementModal({ leadId, leadName, engagement = {},
     const [includeGst, setIncludeGst] = useState(false);
     const [feeOverride, setFeeOverride] = useState("");
     const [busy, setBusy] = useState(null); // 'draft' | 'send'
+    const [previewType, setPreviewType] = useState(documents.some((d) => d.key === "written_agreement") ? "written_agreement" : (documents[0]?.key || "written_agreement"));
 
-    const previewType = selectedTypes.includes("written_agreement") ? "written_agreement" : (selectedTypes[0] || "written_agreement");
-    const previewUrl = `/admin/leads/${leadId}/generate/engage_${previewType}/preview?fee_location=${feeLocation}&include_gst=${includeGst ? 1 : 0}${signerId ? `&signer=${signerId}` : ""}${feeOverride !== "" ? `&professional_fee=${encodeURIComponent(feeOverride)}` : ""}`;
+    const activePreview = selectedTypes.includes(previewType) ? previewType : (selectedTypes[0] || previewType);
+    const labelFor = (k) => (documents.find((d) => d.key === k)?.label) || k;
+    const previewUrl = `/admin/leads/${leadId}/generate/engage_${activePreview}/preview?fee_location=${feeLocation}&include_gst=${includeGst ? 1 : 0}${signerId ? `&signer=${signerId}` : ""}${feeOverride !== "" ? `&professional_fee=${encodeURIComponent(feeOverride)}` : ""}`;
 
     const toggleType = (k) => setSelectedTypes((s) => (s.includes(k) ? s.filter((x) => x !== k) : [...s, k]));
 
@@ -65,9 +68,18 @@ export default function CaseEngagementModal({ leadId, leadName, engagement = {},
                 </div>
 
                 <div className="flex-1 min-h-0 flex flex-col lg:flex-row overflow-hidden">
-                    {/* Preview */}
-                    <div className="flex-1 min-w-0 min-h-[280px] bg-gray-100 border-b lg:border-b-0 lg:border-r border-gray-100">
-                        <iframe key={previewUrl} src={previewUrl} title="Engagement preview" className="w-full h-full border-0" />
+                    {/* Preview + a tab per generated document */}
+                    <div className="flex-1 min-w-0 min-h-[280px] bg-gray-100 border-b lg:border-b-0 lg:border-r border-gray-100 flex flex-col">
+                        <div className="flex items-center gap-1.5 px-3 py-2 bg-white border-b border-gray-100 overflow-x-auto flex-shrink-0">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 flex-shrink-0">View:</span>
+                            {selectedTypes.map((k) => (
+                                <button key={k} type="button" onClick={() => setPreviewType(k)}
+                                    className={`px-2.5 py-1 rounded-md text-[11px] font-semibold whitespace-nowrap transition-colors ${activePreview === k ? "bg-gray-900 text-white" : "text-gray-500 hover:bg-gray-100"}`}>
+                                    {labelFor(k)}
+                                </button>
+                            ))}
+                        </div>
+                        <iframe key={previewUrl} src={previewUrl} title="Engagement preview" className="flex-1 w-full border-0" />
                     </div>
 
                     {/* Settings */}
@@ -135,6 +147,7 @@ export default function CaseEngagementModal({ leadId, leadName, engagement = {},
                     </div>
                 </div>
             </div>
+            <GenerationProgress active={!!busy} title={busy === "send" ? "Generating & emailing…" : "Saving your draft…"} />
         </div>,
         document.body,
     );
