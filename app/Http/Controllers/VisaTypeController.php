@@ -95,6 +95,8 @@ class VisaTypeController extends Controller
             'professional_fees_discounted' => 'nullable|numeric|min:0|max:1000000',
             'professional_fees_offshore' => 'nullable|numeric|min:0|max:1000000',
             'professional_fees_discounted_offshore' => 'nullable|numeric|min:0|max:1000000',
+            // Display-only: offshore RRP column shown incl (default) or excl GST.
+            'offshore_rrp_incl_gst' => 'sometimes|boolean',
             'inz_application_fee' => 'nullable|numeric|min:0|max:1000000',
             'inz_application_fee_offshore' => 'nullable|numeric|min:0|max:1000000',
             'consultation_duration_minutes' => 'required|integer|min:15|max:180',
@@ -158,6 +160,7 @@ class VisaTypeController extends Controller
             'name', 'code', 'short_description', 'visa_type',
             'consultation_price_nzd', 'professional_fees', 'professional_fees_discounted',
             'professional_fees_offshore', 'professional_fees_discounted_offshore',
+            'offshore_rrp_incl_gst',
             'inz_application_fee', 'inz_application_fee_offshore',
             'consultation_duration_minutes',
             'estimated_minutes', 'icon', 'inz_form_refs', 'active',
@@ -211,6 +214,7 @@ class VisaTypeController extends Controller
                 'professional_fees_discounted' => $payload['professional_fees_discounted'] ?? null,
                 'professional_fees_offshore' => $payload['professional_fees_offshore'] ?? null,
                 'professional_fees_discounted_offshore' => $payload['professional_fees_discounted_offshore'] ?? null,
+                'offshore_rrp_incl_gst' => $payload['offshore_rrp_incl_gst'] ?? true,
                 'inz_application_fee' => $payload['inz_application_fee'] ?? null,
                 'inz_application_fee_offshore' => $payload['inz_application_fee_offshore'] ?? null,
                 'consultation_duration_minutes' => $payload['consultation_duration_minutes'],
@@ -336,6 +340,7 @@ class VisaTypeController extends Controller
             'professional_fees_discounted' => $v->professional_fees_discounted === null ? null : (float) $v->professional_fees_discounted,
             'professional_fees_offshore' => $v->professional_fees_offshore === null ? null : (float) $v->professional_fees_offshore,
             'professional_fees_discounted_offshore' => $v->professional_fees_discounted_offshore === null ? null : (float) $v->professional_fees_discounted_offshore,
+            'offshore_rrp_incl_gst' => (bool) $v->offshore_rrp_incl_gst,
             'inz_application_fee' => $v->inz_application_fee === null ? null : (float) $v->inz_application_fee,
             'inz_application_fee_offshore' => $v->inz_application_fee_offshore === null ? null : (float) $v->inz_application_fee_offshore,
             // Both tiers per location, with GST-inclusive RRP + total computed

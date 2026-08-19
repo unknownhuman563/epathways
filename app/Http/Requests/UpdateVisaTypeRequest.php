@@ -51,6 +51,7 @@ class UpdateVisaTypeRequest extends FormRequest
             'professional_fees_discounted' => 'nullable|numeric|min:0|max:1000000',
             'professional_fees_offshore' => 'nullable|numeric|min:0|max:1000000',
             'professional_fees_discounted_offshore' => 'nullable|numeric|min:0|max:1000000',
+            'offshore_rrp_incl_gst' => 'sometimes|boolean',
             'inz_application_fee' => 'nullable|numeric|min:0|max:1000000',
             'inz_application_fee_offshore' => 'nullable|numeric|min:0|max:1000000',
             'consultation_duration_minutes' => 'required|integer|min:15|max:180',

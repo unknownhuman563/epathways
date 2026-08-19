@@ -27,21 +27,42 @@
     <div class="clause"><span class="n">2.1</span> The following licensed immigration advisers are responsible for providing You with the immigration advice services set out in this Agreement:</div>
     <table class="data head">
         <tr><th>Role</th><th>Name</th><th>Type of Licence</th><th>Licence Number</th></tr>
-        <tr><td>Main adviser</td><td>Yuxiang (Hendry) DAI</td><td>Full</td><td>201500074</td></tr>
-        <tr><td>Adviser to assist</td><td>Dev BHAGEERUTTY</td><td>Provisional</td><td>202401351</td></tr>
+        @if(!empty($advisers ?? []))
+            @foreach($advisers as $a)
+                <tr><td>{{ $a['role'] }}</td><td>{{ $a['name'] }}</td><td>{{ $a['licence_type'] }}</td><td>{{ $a['licence_number'] }}</td></tr>
+            @endforeach
+        @else
+            <tr><td>Main adviser</td><td>[Full Name of Immigration Adviser]</td><td>&mdash;</td><td>&mdash;</td></tr>
+        @endif
     </table>
     <div class="clause"><span class="n">2.2</span> You authorise all licensed immigration advisers named in clause 2.1 to act for You in relation to the Immigration Matter identified in this Agreement.</div>
 
     <h2 class="section">3. SUPERVISION</h2>
-    <div class="clause"><span class="n">3.1</span> Yuxiang (Hendry) Dai, Licence Number 201500074, is the Supervisor.</div>
-    <div class="clause"><span class="n">3.2</span> Dev Bhageerutty is the holder of a provisional immigration adviser licence, which allows him to provide immigration advice in relation to all immigration matters while working under the direct supervision of the Supervisor, who holds a full immigration adviser licence.</div>
-    <div class="clause"><span class="n">3.3</span> Dev Bhageerutty must seek advice from the Supervisor whenever necessary.</div>
-    <div class="clause"><span class="n">3.4</span> Any personal information You provide will be shared with the Supervisor, as part of the supervision arrangement between Dev Bhageerutty and the Supervisor.</div>
-    <div class="clause"><span class="n">3.5</span> The Supervisor is required to keep Your personal information confidential under clause 12(d) of the Licensed Immigration Advisers Code of Conduct 2014.</div>
+    @if(!empty($supervision ?? null))
+        <div class="clause"><span class="n">3.1</span> {{ $supervision['supervisor']['name'] }}, Licence Number {{ $supervision['supervisor']['licence_number'] }}, is the Supervisor.</div>
+        <div class="clause"><span class="n">3.2</span> {{ $supervision['provisional']['name'] }} is the holder of a provisional immigration adviser licence, which allows them to provide immigration advice in relation to all immigration matters while working under the direct supervision of the Supervisor, who holds a full immigration adviser licence.</div>
+        <div class="clause"><span class="n">3.3</span> {{ $supervision['provisional']['name'] }} must seek advice from the Supervisor whenever necessary.</div>
+        <div class="clause"><span class="n">3.4</span> Any personal information You provide will be shared with the Supervisor, as part of the supervision arrangement between {{ $supervision['provisional']['name'] }} and the Supervisor.</div>
+        <div class="clause"><span class="n">3.5</span> The Supervisor is required to keep Your personal information confidential under clause 12(d) of the Licensed Immigration Advisers Code of Conduct 2014.</div>
+    @else
+        <div class="clause"><span class="n">3.1</span> All licensed immigration advisers named in clause 2.1 hold full immigration adviser licences. No supervision arrangement applies to this Agreement.</div>
+    @endif
 
     <h2 class="section">4. OUR SERVICE</h2>
     <div class="clause"><span class="n">4.1</span> We will provide You the service in relation to Your application to Immigration New Zealand, as described below:</div>
-    <ul><li>Client's application to Immigration New Zealand for <span class="{{ $visa_category ? '' : 'fill' }}">{{ $visa_category ?: '[Visa Category / Application Type]' }}</span>.</li></ul>
+    <ul>
+        @if(!empty($applicants ?? []))
+            @php
+                $applicantParts = [];
+                foreach ($applicants as $ap) {
+                    $applicantParts[] = '<strong>'.e($ap['visa']).'</strong> &ndash; '.e($ap['name']);
+                }
+            @endphp
+            <li>Client's application to Immigration New Zealand for<br>[{!! implode(';<br>', $applicantParts) !!}].</li>
+        @else
+            <li>Client's application to Immigration New Zealand for <span class="{{ $visa_category ? '' : 'fill' }}">{{ $visa_category ?: '[Visa Category / Application Type]' }}</span>.</li>
+        @endif
+    </ul>
     <div class="clause"><span class="n">4.2</span> We anticipate that Your Immigration Matter will involve the following services, split into the stages of work below:</div>
     <table class="data head">
         <tr><th style="width:14%">Stage</th><th>Services to be undertaken</th></tr>
@@ -69,8 +90,11 @@
     <div class="clause"><span class="n">5.2</span> You will pay the following fee for Our service described above:</div>
     <table class="data head">
         <tr><th>Description</th><th class="amount">Costs (NZ$)</th></tr>
-        <tr><td>Consulting and service fee for Our service above</td><td class="amount {{ $professional_fee ? '' : 'fill' }}">{{ $professional_fee ?: '[Amount]' }}</td></tr>
-        <tr><td><strong>TOTAL</strong></td><td class="amount {{ $professional_fee ? '' : 'fill' }}"><strong>{{ $professional_fee ?: '[Total Fee]' }}</strong></td></tr>
+        <tr><td>Consulting and service fee for Our service above</td><td class="amount {{ $professional_fee ? '' : 'fill' }}">{{ $professional_fee ? ($professional_fee.(($gst_inclusive ?? false) ? '+GST' : '')) : '[Amount]' }}</td></tr>
+        @foreach(($professional_lines ?? []) as $pl)
+            <tr><td style="padding-left:22px; color:#4b5563;">{{ $pl['label'] }}</td><td class="amount">{{ $pl['amount'] ?: '—' }}</td></tr>
+        @endforeach
+        <tr><td><strong>TOTAL</strong></td><td class="amount {{ ($professional_fee_total ?? null) ? '' : 'fill' }}"><strong>{{ ($professional_fee_total ?? null) ?: '[Total Fee]' }}</strong></td></tr>
     </table>
     <div class="clause"><span class="n">5.3</span> Our fee noted above is a set fee that covers all work of a standard nature involved in delivering the service described in this Agreement.</div>
     <div class="clause"><span class="n">5.4</span> If any extra work is required involving additional fees, We will advise You of the additional fees, the reasons why, and obtain Your written approval. Any extra charges would be at Our standard rate of $345.00 per hour.</div>
@@ -80,7 +104,13 @@
     <div class="clause"><span class="n">6.2</span> We will obtain the following amounts from You as funds in advance, pay the associated disbursements using Our Current (practice) account, and then, following payment, transfer the relevant amounts from Our client fund account to Our Current (practice) account. You will pay the following disbursement(s) in relation to Our service described above:</div>
     <table class="data head">
         <tr><th>Visa Type</th><th class="amount">Cost (NZ$)</th></tr>
-        <tr><td class="{{ $visa_category ? '' : 'fill' }}">{{ $visa_category ? ($visa_category.' — INZ Application Fee') : '[INZ Application Fee Description]' }}</td><td class="amount {{ $inz_fee ? '' : 'fill' }}">{{ $inz_fee ?: '[Amount]' }}</td></tr>
+        @if(!empty($inz_lines ?? []))
+            @foreach($inz_lines as $line)
+                <tr><td>{{ $line['label'] }}</td><td class="amount {{ $line['amount'] ? '' : 'fill' }}">{{ $line['amount'] ? ($line['amount'].($line['each'] ? '  (each)' : '')) : '[Amount]' }}</td></tr>
+            @endforeach
+        @else
+            <tr><td class="{{ $visa_category ? '' : 'fill' }}">{{ $visa_category ? ($visa_category.' — INZ Application Fee') : '[INZ Application Fee Description]' }}</td><td class="amount {{ $inz_fee ? '' : 'fill' }}">{{ $inz_fee ?: '[Amount]' }}</td></tr>
+        @endif
     </table>
     <p>You are responsible for paying the above fee(s) to INZ directly by bank cheque or credit card, upon lodgement or while on request.</p>
     <div class="clause"><span class="n">6.3</span> Please note that the above disbursement amount is correct as at the date of making this service agreement but may be subject to change at the time of payment.</div>
@@ -89,7 +119,7 @@
     <h2 class="section">7. PAYMENT TERMS AND CONDITIONS</h2>
     <div class="clause"><span class="n">7.1</span> You will pay Our fees identified above on the following terms: Consulting and service fee – payable upon signing this service agreement (pay in advance). This fee includes all stages outlined in clause 4.2 above.</div>
     <table class="data head">
-        <tr><th>In Total</th><th class="amount {{ $professional_fee ? '' : 'fill' }}">{{ $professional_fee ?: '[Total Fee]' }}</th></tr>
+        <tr><th>In Total</th><th class="amount {{ ($professional_fee_total ?? null) ? '' : 'fill' }}">{{ ($professional_fee_total ?? null) ?: '[Total Fee]' }}</th></tr>
     </table>
     <p class="muted">* Once payment is made, please keep your invoice as your receipt.</p>
     <div class="clause"><span class="n">7.2</span> We will issue invoices to You when fees and/or disbursements become payable in accordance with the above terms.</div>
@@ -165,12 +195,12 @@
     <p style="margin-top:18px;">I have read and understood the terms and conditions set out above.</p>
     <table class="sign-tbl avoid-break">
         <tr>
-            <td>
+            <td style="vertical-align:bottom;">
                 <div class="sign-line" style="border-bottom:0;"></div>
-                <div style="border-bottom:1px solid #374151; text-align:center;">{{ $client['name'] ?: '[Full Name of Applicant]' }}</div>
+                <div style="border-bottom:1px solid #374151; text-align:center;">{{ !empty($applicants ?? []) ? implode('; ', array_column($applicants, 'name')) : ($client['name'] ?: '[Full Name of Applicant]') }}</div>
                 <div class="sign-cap" style="text-align:center;">(Full Name of Applicant)</div>
             </td>
-            <td>
+            <td style="vertical-align:bottom;">
                 <div class="sign-line" style="border-bottom:0;"></div>
                 <div style="border-bottom:1px solid #374151; text-align:center;">{{ $adviser['name'] }}</div>
                 <div class="sign-cap" style="text-align:center;">(Full Name of Immigration Adviser){{ $adviser['licence'] ? ' · Licence '.$adviser['licence'] : '' }}</div>
