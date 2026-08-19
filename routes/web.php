@@ -563,6 +563,7 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/admin/message-templates/move', [\App\Http\Controllers\MessageTemplateController::class, 'moveTemplates'])->name('admin.message-templates.move');
         Route::post('/admin/message-templates/move-department', [\App\Http\Controllers\MessageTemplateController::class, 'moveDepartment'])->name('admin.message-templates.move-department');
         Route::post('/admin/message-templates/delete', [\App\Http\Controllers\MessageTemplateController::class, 'destroyMany'])->name('admin.message-templates.delete-many');
+        Route::post('/admin/message-templates/upload-image', [\App\Http\Controllers\MessageTemplateController::class, 'uploadEmailImage'])->name('admin.message-templates.upload-image');
         Route::post('/admin/message-templates', [\App\Http\Controllers\MessageTemplateController::class, 'store'])->name('admin.message-templates.store');
         Route::get('/admin/message-templates/{id}', [\App\Http\Controllers\MessageTemplateController::class, 'show'])->name('admin.message-templates.show');
         Route::put('/admin/message-templates/{id}', [\App\Http\Controllers\MessageTemplateController::class, 'update'])->name('admin.message-templates.update');
@@ -926,6 +927,7 @@ Route::middleware(['auth'])->group(function () {
                 Route::post('/email-templates/move', [$c, 'moveTemplates'])->name('email-templates.move');
                 Route::post('/email-templates/move-department', [$c, 'moveDepartment'])->name('email-templates.move-department');
                 Route::post('/email-templates/delete', [$c, 'destroyMany'])->name('email-templates.delete-many');
+                Route::post('/email-templates/upload-image', [$c, 'uploadEmailImage'])->name('email-templates.upload-image');
                 Route::post('/email-templates', [$c, 'store'])->name('email-templates.store');
                 Route::get('/email-templates/{id}', [$c, 'show'])->name('email-templates.show');
                 Route::put('/email-templates/{id}', [$c, 'update'])->name('email-templates.update');

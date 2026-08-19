@@ -26,6 +26,7 @@ class MessageTemplate extends Model
         'channels',
         'email_subject',
         'email_body',
+        'design_json',
         'from_email',
         'from_name',
         'banner_image',
@@ -44,6 +45,7 @@ class MessageTemplate extends Model
         'channels' => 'array',
         'variables_documented' => 'array',
         'is_active' => 'boolean',
+        'design_json' => 'array',
     ];
 
     public function creator(): BelongsTo

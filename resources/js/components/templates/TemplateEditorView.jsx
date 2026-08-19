@@ -1,7 +1,11 @@
 import { useState, useEffect } from "react";
 import { Head, Link, router, useForm } from "@inertiajs/react";
-import { ArrowLeft, Save, Trash2, Send, Mail, Smartphone, ImagePlus, X, AlertTriangle, Loader2, Copy } from "lucide-react";
+import { ArrowLeft, Save, Trash2, Send, Mail, Smartphone, ImagePlus, X, AlertTriangle, Loader2, Copy, Eye, Wand2 } from "lucide-react";
 import RichTextEditor from "@/components/templates/RichTextEditor";
+// Statically imported (not lazy) so Vite pre-bundles react-email-editor at
+// startup — an on-demand import of it fails the dev server's dep optimizer.
+// The package is tiny (the editor itself loads at runtime), so no bundle cost.
+import EmailBuilder from "@/components/templates/EmailBuilder";
 
 const inp = "w-full px-3 py-2 rounded-lg border border-gray-200 text-sm outline-none focus:ring-2 focus:ring-gray-300 focus:border-gray-300";
 
@@ -77,6 +81,7 @@ export default function TemplateEditorView({
         from_email: template?.from_email ?? "",
         from_name: template?.from_name ?? "",
         email_body: template?.email_body ?? "",
+        design_json: template?.design_json ?? null,
         sms_body: template?.sms_body ?? "",
         // Branding preset defaults to the template's own Department (a Sales
         // template → Sales branding), falling back to the portal you're in for a
@@ -94,6 +99,8 @@ export default function TemplateEditorView({
     const { data, setData, errors, processing } = form;
 
     const [testEmail, setTestEmail] = useState("");
+    const [previewOpen, setPreviewOpen] = useState(false);
+    const [builderOpen, setBuilderOpen] = useState(false);
     // Object-URL previews for freshly-picked (not-yet-saved) images.
     const [previews, setPreviews] = useState({ banner_image: null, footer_image: null });
 
@@ -126,6 +133,31 @@ export default function TemplateEditorView({
     // custom image overrides it, so picking Education shows Education's art.
     const brandingOpt = brandingOptions.find((o) => o.value === data.branding) || {};
     const presetPreview = (field) => (field === "banner_image" ? brandingOpt.banner_url : brandingOpt.footer_url);
+
+    // Build an approximate rendered email for the Preview modal: the selected
+    // branding's banner on top, the body (with sample variables filled) in the
+    // middle, and the footer below — mirroring the branded shell used on send.
+    const buildPreviewHtml = () => {
+        const sample = {
+            first_name: "Angi", last_name: "Libanan", full_name: "Angi Libanan",
+            email: "client@example.com", phone: "+64 21 000 0000",
+            tracker_url: "#", engagement_url: "#", client_portal_url: "#",
+            assigned_staff_name: "the ePathways team", status: "In progress", status_detail: "a quick update",
+            event_name: "Sample Event", event_date: "1 Jan 2026", event_time: "10:00 AM", event_location: "Auckland",
+            document_name: "Sample Document.pdf", reason: "sample reason",
+        };
+        const fill = (t) => String(t || "").replace(/\{\{\s*(\w+)\s*\}\}/g, (_, k) => (k in sample ? sample[k] : ""));
+        // A visual-builder email is already a complete document — preview it as-is,
+        // exactly as it sends (no branded shell).
+        if (data.design_json) {
+            return fill(data.email_body);
+        }
+        const shownBanner = previews.banner_image || (!data.remove_banner && (template?.banner_image_url || brandingOpt.banner_url));
+        const shownFooter = previews.footer_image || (!data.remove_footer && (template?.footer_image_url || brandingOpt.footer_url));
+        const banner = shownBanner ? `<img src="${shownBanner}" style="display:block;width:100%;max-width:600px;height:auto;border:0;">` : "";
+        const footer = shownFooter ? `<img src="${shownFooter}" style="display:block;width:100%;max-width:600px;height:auto;border:0;">` : "";
+        return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{margin:0;background:#eef0f4;font-family:'Segoe UI',Arial,Helvetica,sans-serif;color:#333;} .wrap{max-width:600px;margin:0 auto;background:#fff;} .pad{padding:28px 36px;font-size:14px;line-height:1.6;} img{max-width:100%;} table{max-width:100%;}</style></head><body><div class="wrap">${banner}<div class="pad">${fill(data.email_body)}</div>${footer}</div></body></html>`;
+    };
     // Admin (cross-department) context supplies departmentOptions — show the
     // selector on both create and edit so scope (shared / a department) is
     // changeable. Portal staff never get options, so it stays hidden for them.
@@ -314,9 +346,27 @@ export default function TemplateEditorView({
                                 <p className="col-span-2 text-[11px] text-gray-400 -mt-2">Comma-separated. These addresses are copied on every send of this template.</p>
                             </div>
                             <label className="block">
-                                <span className="block text-xs font-semibold text-gray-600 mb-1">Body</span>
-                                <RichTextEditor value={data.email_body} onChange={(html) => setData("email_body", html)} />
-                                <span className="block text-[11px] text-gray-400 mt-1">Format with the toolbar. Insert variables like <code>{"{{first_name}}"}</code> as plain text.</span>
+                                <div className="flex items-center justify-between mb-1">
+                                    <span className="block text-xs font-semibold text-gray-600">Body</span>
+                                    <div className="flex items-center gap-3">
+                                        <button type="button" onClick={() => setBuilderOpen(true)} className="text-[11px] font-bold text-white bg-[#436235] hover:bg-[#375029] inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg"><Wand2 size={12} /> Customize email body</button>
+                                        <button type="button" onClick={() => setPreviewOpen(true)} className="text-[11px] font-semibold text-[#436235] hover:text-[#375029] inline-flex items-center gap-1"><Eye size={12} /> Preview</button>
+                                    </div>
+                                </div>
+                                {data.design_json ? (
+                                    <div className="rounded-lg border border-gray-200 overflow-hidden bg-gray-100">
+                                        <div className="flex items-center gap-2 px-3 py-2 border-b border-gray-200 bg-white text-[11px] text-gray-600">
+                                            <Wand2 size={13} className="text-[#436235]" />
+                                            <span>Built with the visual editor — click <strong>Customize email body</strong> above to edit it.</span>
+                                        </div>
+                                        <iframe title="Email body" srcDoc={data.email_body} sandbox="" className="w-full bg-gray-100" style={{ height: 480 }} />
+                                    </div>
+                                ) : (
+                                    <>
+                                        <RichTextEditor value={data.email_body} onChange={(html) => setData("email_body", html)} />
+                                        <span className="block text-[11px] text-gray-400 mt-1">Format with the toolbar, or use <strong>Customize email body</strong> for a drag-and-drop design.</span>
+                                    </>
+                                )}
                             </label>
 
                             {/* Optional branding — banner header + footer CTA image.
@@ -422,6 +472,31 @@ export default function TemplateEditorView({
                     )}
                 </div>
             </form>
+
+            {builderOpen && (
+                <EmailBuilder
+                    initialDesign={data.design_json}
+                    initialHtml={data.email_body}
+                    uploadUrl={`${basePath}/upload-image`}
+                    onSave={(html, design) => { setData("email_body", html); setData("design_json", design); setBuilderOpen(false); }}
+                    onClose={() => setBuilderOpen(false)}
+                />
+            )}
+
+            {previewOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setPreviewOpen(false)}>
+                    <div className="absolute inset-0 bg-gray-900/50 backdrop-blur-sm" />
+                    <div className="relative bg-white rounded-2xl shadow-xl border border-gray-100 w-full max-w-2xl h-[82vh] flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100">
+                            <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2"><Eye size={16} /> Email preview</h3>
+                            <button type="button" onClick={() => setPreviewOpen(false)} className="p-1.5 rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-700"><X size={18} /></button>
+                        </div>
+                        {data.email_subject && <div className="px-5 py-2 border-b border-gray-100 text-sm"><span className="text-gray-400">Subject:</span> <span className="font-semibold text-gray-800">{data.email_subject.replace(/\{\{\s*first_name\s*\}\}/g, "Angi")}</span></div>}
+                        <iframe title="Email preview" srcDoc={buildPreviewHtml()} className="flex-1 w-full bg-[#eef0f4]" sandbox="" />
+                        <p className="px-5 py-2 text-[11px] text-gray-400 border-t border-gray-100">Approximate preview with sample values. The banner &amp; footer come from the selected branding; the live email may vary slightly.</p>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

@@ -46,6 +46,9 @@ class TemplatedMessage extends Mailable implements ShouldQueue
         public ?string $ccList = null,
         public ?string $bccList = null,
         public ?string $branding = null,
+        // A visual-builder email is already a complete document — render it as-is
+        // (no branded shell) so its own layout/banner isn't double-wrapped.
+        public bool $rawHtml = false,
     ) {}
 
     public function envelope(): Envelope
@@ -93,7 +96,7 @@ class TemplatedMessage extends Mailable implements ShouldQueue
     public function content(): Content
     {
         return new Content(
-            view: 'emails.branded',
+            view: $this->rawHtml ? 'emails.raw' : 'emails.branded',
             with: [
                 'subjectLine' => $this->subjectLine,
                 'bodyHtml' => $this->bodyHtml(),
