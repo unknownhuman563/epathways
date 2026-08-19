@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { AvatarPhoto } from "@/components/ui/Avatar";
 import { confirmDialog } from "@/components/ui/ConfirmDialog";
+import GenerationProgress from "@/components/ui/GenerationProgress";
 
 // Initials fallback for the profile avatar when there's no face image.
 const rowInitials = (name = "") =>
@@ -236,7 +237,7 @@ export default function Engagement({ cases = [], documents = [], generated = [],
                                             engagement link (open + copy), instead
                                             of listing every file. */}
                                         <td className="px-3 py-3">
-                                            <div className="space-y-1.5">
+                                            <div className="flex flex-col items-start gap-1.5">
                                                 <span className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-gray-800">
                                                     <FileText size={12} className="text-gray-400" />
                                                     {c.doc_count} document{c.doc_count === 1 ? "" : "s"}
@@ -352,6 +353,8 @@ export default function Engagement({ cases = [], documents = [], generated = [],
 // right. "Save changes" regenerates the pack (still a draft); "Send to email"
 // emails the client the signing link and clears the draft state.
 function DraftManageModal({ row, signers = [], documents = [], onClose }) {
+    // Prefill the fee with the amount this draft was generated at (editable).
+    const initialFee = row.fee_total != null ? String(row.fee_total) : "";
     const currentTypes = (row.documents || []).map((d) => d.type_key).filter(Boolean);
     const [selectedTypes, setSelectedTypes] = useState(
         currentTypes.length ? currentTypes : documents.map((d) => d.key)
@@ -359,11 +362,18 @@ function DraftManageModal({ row, signers = [], documents = [], onClose }) {
     const [signerId, setSignerId] = useState(row.signer_id ?? signers[0]?.id ?? null);
     const [feeLocation, setFeeLocation] = useState("onshore");
     const [includeGst, setIncludeGst] = useState(false);
-    const [feeOverride, setFeeOverride] = useState("");
+    const [feeOverride, setFeeOverride] = useState(initialFee);
     const [busy, setBusy] = useState(null); // 'save' | 'send'
-
-    const previewType = selectedTypes.includes("written_agreement") ? "written_agreement" : (selectedTypes[0] || "written_agreement");
-    const previewUrl = `/admin/leads/${row.case_id}/generate/engage_${previewType}/preview?fee_location=${feeLocation}&include_gst=${includeGst ? 1 : 0}${signerId ? `&signer=${signerId}` : ""}${feeOverride !== "" ? `&professional_fee=${encodeURIComponent(feeOverride)}` : ""}`;
+    // Which document is shown in the preview (tab-selectable).
+    const [previewType, setPreviewType] = useState(
+        (currentTypes.length ? currentTypes : documents.map((d) => d.key)).includes("written_agreement")
+            ? "written_agreement"
+            : (currentTypes[0] || documents[0]?.key || "written_agreement")
+    );
+    // Fall back to a still-selected doc if the previewed one gets unchecked.
+    const activePreview = selectedTypes.includes(previewType) ? previewType : (selectedTypes[0] || previewType);
+    const labelFor = (k) => (documents.find((d) => d.key === k)?.label) || k;
+    const previewUrl = `/admin/leads/${row.case_id}/generate/engage_${activePreview}/preview?fee_location=${feeLocation}&include_gst=${includeGst ? 1 : 0}${signerId ? `&signer=${signerId}` : ""}${feeOverride !== "" ? `&professional_fee=${encodeURIComponent(feeOverride)}` : ""}`;
 
     const toggleType = (k) => setSelectedTypes((s) => (s.includes(k) ? s.filter((x) => x !== k) : [...s, k]));
 
@@ -405,9 +415,18 @@ function DraftManageModal({ row, signers = [], documents = [], onClose }) {
                 </div>
 
                 <div className="flex-1 min-h-0 flex flex-col lg:flex-row overflow-hidden">
-                    {/* Preview */}
-                    <div className="flex-1 min-w-0 min-h-[280px] bg-gray-100 border-b lg:border-b-0 lg:border-r border-gray-100">
-                        <iframe key={previewUrl} src={previewUrl} title="Engagement preview" className="w-full h-full border-0" />
+                    {/* Preview + a tab per generated document */}
+                    <div className="flex-1 min-w-0 min-h-[280px] bg-gray-100 border-b lg:border-b-0 lg:border-r border-gray-100 flex flex-col">
+                        <div className="flex items-center gap-1.5 px-3 py-2 bg-white border-b border-gray-100 overflow-x-auto flex-shrink-0">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 flex-shrink-0">View:</span>
+                            {selectedTypes.map((k) => (
+                                <button key={k} type="button" onClick={() => setPreviewType(k)}
+                                    className={`px-2.5 py-1 rounded-md text-[11px] font-semibold whitespace-nowrap transition-colors ${activePreview === k ? "bg-gray-900 text-white" : "text-gray-500 hover:bg-gray-100"}`}>
+                                    {labelFor(k)}
+                                </button>
+                            ))}
+                        </div>
+                        <iframe key={previewUrl} src={previewUrl} title="Engagement preview" className="flex-1 w-full border-0" />
                     </div>
 
                     {/* Settings */}
@@ -474,6 +493,7 @@ function DraftManageModal({ row, signers = [], documents = [], onClose }) {
                     </div>
                 </div>
             </div>
+            <GenerationProgress active={!!busy} title={busy === "send" ? "Sending to the client…" : "Saving your changes…"} />
         </div>,
         document.body,
     );
@@ -575,7 +595,8 @@ function NewEngagementModal({ cases, documents, signers = [], defaultSignerId = 
     const [selectedCase, setSelectedCase] = useState(initialCase);
     const [selectedTypes, setSelectedTypes] = useState(documents.map((d) => d.key));
     const [previewType, setPreviewType] = useState(documents[0]?.key ?? null);
-    const [submitting, setSubmitting] = useState(false);
+    const [submitAction, setSubmitAction] = useState(null); // 'draft' | 'send' | null
+    const submitting = submitAction !== null;
     const [previewLoading, setPreviewLoading] = useState(false);
     const [notify, setNotify] = useState(true);
     // Which price the client is engaged at — "normal" (payment plan) or
@@ -689,7 +710,7 @@ function NewEngagementModal({ cases, documents, signers = [], defaultSignerId = 
             confirmText: sendEmail ? "Generate & email" : "Save as draft",
         });
         if (!ok) return;
-        setSubmitting(true);
+        setSubmitAction(sendEmail ? "send" : "draft");
         router.post(
             `/admin/leads/${selectedCase.id}/engagement/generate`,
             {
@@ -705,7 +726,7 @@ function NewEngagementModal({ cases, documents, signers = [], defaultSignerId = 
                 preserveScroll: true,
                 onSuccess: () => { onClose(); },
                 onError: () => { toast.error("Could not generate the documents."); },
-                onFinish: () => setSubmitting(false),
+                onFinish: () => setSubmitAction(null),
             }
         );
     };
@@ -728,7 +749,7 @@ function NewEngagementModal({ cases, documents, signers = [], defaultSignerId = 
                     {/* Left: controls. Case + settings are fixed at the top;
                         only the document list scrolls, so picking documents
                         never squeezes the settings and vice versa. */}
-                    <div className="w-[360px] border-r border-gray-100 flex flex-col min-h-0 flex-shrink-0">
+                    <div className="w-[360px] border-r border-gray-100 flex flex-col min-h-0 flex-shrink-0 overflow-y-auto">
                         {/* Case picker */}
                         <div className="px-4 pt-3 pb-3 border-b border-gray-100">
                             <FieldLabel>Case</FieldLabel>
@@ -886,7 +907,7 @@ function NewEngagementModal({ cases, documents, signers = [], defaultSignerId = 
                         </div>
 
                         {/* Document checklist — the only scrolling region. */}
-                        <div className="px-4 pt-3 pb-4 flex-1 overflow-y-auto min-h-0">
+                        <div className="px-4 pt-3 pb-4">
                             <div className="flex items-center justify-between">
                                 <FieldLabel>Documents</FieldLabel>
                                 <button
@@ -999,7 +1020,7 @@ function NewEngagementModal({ cases, documents, signers = [], defaultSignerId = 
                                     disabled={disabled}
                                     className="px-4 py-2 border border-gray-300 text-gray-700 text-sm font-semibold rounded-xl hover:bg-gray-50 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
-                                    {submitting ? <Loader2 size={14} className="animate-spin" /> : <FileText size={14} />}
+                                    {submitAction === "draft" ? <Loader2 size={14} className="animate-spin" /> : <FileText size={14} />}
                                     Save as draft
                                 </button>
                                 <button
@@ -1008,7 +1029,7 @@ function NewEngagementModal({ cases, documents, signers = [], defaultSignerId = 
                                     title={selectedCase && !selectedCase.email ? "No email on file for this client" : ""}
                                     className="px-4 py-2 bg-gray-900 text-white text-sm font-semibold rounded-xl hover:bg-black transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
-                                    {submitting ? <Loader2 size={14} className="animate-spin" /> : <FileSignature size={14} />}
+                                    {submitAction === "send" ? <Loader2 size={14} className="animate-spin" /> : <FileSignature size={14} />}
                                     Generate &amp; email
                                 </button>
                             </div>
@@ -1016,6 +1037,7 @@ function NewEngagementModal({ cases, documents, signers = [], defaultSignerId = 
                     })()}
                 </div>
             </div>
+            <GenerationProgress active={submitting} title={submitAction === "send" ? "Generating & emailing…" : "Saving your draft…"} />
         </div>
     );
 }

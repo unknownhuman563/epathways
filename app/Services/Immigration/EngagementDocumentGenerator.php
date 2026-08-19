@@ -156,10 +156,15 @@ class EngagementDocumentGenerator
         // the const array since it needs a runtime value).
         $coverSubtitle = $type === 'complaints_procedure' ? date('Y') : $meta['cover_subtitle'];
 
+        $signerId = $overrides['signer_id'] ?? null;
+
         $payload = [
             'logo_data' => $this->logoData(),
             'cover_bg_data' => $this->coverBgData(),
-            'contact' => self::CONTACT,
+            // Contact + adviser reflect the generating adviser on every document
+            // (footer, parties, complaints), not just the signed Written Agreement.
+            'contact' => $this->contactFor($signerId),
+            'adviser' => $this->adviser($signerId),
             'doc_header' => $meta['header'],
             'cover_eyebrow' => $meta['eyebrow'],
             'cover_title' => $meta['cover_title'],
@@ -251,16 +256,36 @@ class EngagementDocumentGenerator
         // neutral placeholder rather than naming a real adviser who never
         // agreed to sign this document.
         if (! $user) {
-            return ['name' => '[Full Name of Immigration Adviser]', 'licence' => null, 'signature' => null];
+            return ['name' => '[Full Name of Immigration Adviser]', 'licence' => null, 'email' => null, 'phone' => null, 'signature' => null];
         }
 
         return [
             'name' => $user->name,
             'licence' => $user->iaa_licence_number,
+            // The generating adviser's own contact — printed on the documents so
+            // the client corresponds with the adviser who issued them.
+            'email' => $user->email,
+            'phone' => $user->phone,
             // Trimmed, like every other generator: signature-pad exports are
             // mostly blank canvas, so the raw image sizes the canvas rather
             // than the ink and the visible signature comes out tiny.
             'signature' => $user->signatureDataUriTrimmed(),
+        ];
+    }
+
+    /**
+     * The document contact block (footer + parties) — the generating adviser's
+     * own email/phone, falling back to the company defaults. Website stays the
+     * company's.
+     */
+    private function contactFor($signerId): array
+    {
+        $user = $signerId ? \App\Models\User::find($signerId) : null;
+
+        return [
+            'email' => ($user && $user->email) ? $user->email : self::CONTACT['email'],
+            'phone' => ($user && $user->phone) ? $user->phone : self::CONTACT['phone'],
+            'website' => self::CONTACT['website'],
         ];
     }
 
@@ -295,23 +320,35 @@ class EngagementDocumentGenerator
      * time is not an option. Returns '' if the asset is missing, which just
      * leaves the flat teal cover.
      */
+    /** Encoded once per request — a pack generates 4 docs, so avoid re-reading. */
+    private static ?string $coverBgCache = null;
+
+    private static ?string $logoCache = null;
+
     private function coverBgData(): string
     {
+        if (self::$coverBgCache !== null) {
+            return self::$coverBgCache;
+        }
         $path = base_path('resources/assets/Immigration/cover-skyline.png');
 
-        return is_file($path)
+        return self::$coverBgCache = is_file($path)
             ? 'data:image/png;base64,'.base64_encode(file_get_contents($path))
             : '';
     }
 
-    /** Base64 data URI of the ePathways Migration logo for cover + PDF. */
+    /** Base64 data URI of the official D Immigration Consultancy logo for the
+     *  engagement documents (cover + PDF header). */
     private function logoData(): string
     {
-        $path = base_path('resources/assets/Immigration/migration_logo.png');
+        if (self::$logoCache !== null) {
+            return self::$logoCache;
+        }
+        $path = base_path('resources/assets/dimmigration_logo.png');
         if (! is_file($path)) {
-            $path = base_path('resources/assets/philipine_ep_logo.png');
+            $path = base_path('resources/assets/Immigration/migration_logo.png');
         }
 
-        return 'data:image/png;base64,'.base64_encode(file_get_contents($path));
+        return self::$logoCache = 'data:image/png;base64,'.base64_encode(file_get_contents($path));
     }
 }
