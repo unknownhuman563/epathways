@@ -648,7 +648,7 @@ export default function LeadDetails({ lead: backendLead, proposal = null, activi
 
             {/* ── Communications tab — message history sent to this lead ── */}
             {activeTab === 'communications' && (
-                <CommunicationsPanel leadId={backendLead.id} />
+                <CommunicationsPanel leadId={backendLead.id} leadEmail={backendLead.email} />
             )}
 
             {/* Compose message slide-over (email / SMS / both) */}
