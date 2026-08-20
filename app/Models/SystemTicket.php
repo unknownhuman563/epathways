@@ -18,22 +18,27 @@ class SystemTicket extends Model
     use LogsActivity, SoftDeletes;
 
     public const CATEGORIES = ['change', 'feature', 'bug', 'other'];
+
     public const PRIORITIES = ['low', 'normal', 'high', 'urgent'];
-    public const STATUSES   = ['open', 'in_review', 'planned', 'in_progress', 'done', 'declined'];
+
+    public const STATUSES = ['open', 'in_review', 'planned', 'in_progress', 'done', 'declined'];
 
     protected $fillable = [
         'ticket_ref', 'title', 'description', 'category', 'priority', 'status',
         'submitted_by', 'department', 'admin_response', 'resolved_by', 'resolved_at',
+        'images',
     ];
 
     protected $casts = [
         'resolved_at' => 'datetime',
+        // Array of private-disk paths for the submitter's screenshots.
+        'images' => 'array',
     ];
 
     protected static function booted(): void
     {
         static::creating(function (SystemTicket $ticket) {
-            $ticket->ticket_ref = $ticket->ticket_ref ?: 'TKT-' . strtoupper(Str::random(6));
+            $ticket->ticket_ref = $ticket->ticket_ref ?: 'TKT-'.strtoupper(Str::random(6));
         });
     }
 
@@ -60,17 +65,17 @@ class SystemTicket extends Model
     {
         return [
             'open_count' => static::open()->count(),
-            'recent'     => static::open()
+            'recent' => static::open()
                 ->latest()
                 ->limit(3)
                 ->get()
                 ->map(fn (self $t) => [
-                    'id'         => $t->id,
+                    'id' => $t->id,
                     'ticket_ref' => $t->ticket_ref,
-                    'title'      => $t->title,
+                    'title' => $t->title,
                     'department' => $t->department,
-                    'priority'   => $t->priority,
-                    'status'     => $t->status,
+                    'priority' => $t->priority,
+                    'status' => $t->status,
                     'created_at' => optional($t->created_at)?->toIso8601String(),
                 ])
                 ->all(),

@@ -418,6 +418,10 @@ Route::middleware(['auth'])->group(function () {
     // System request tickets — any staff member can raise one (leads are
     // blocked inside the controller).
     Route::post('/tickets', [\App\Http\Controllers\SystemTicketController::class, 'store'])->name('tickets.store');
+    // Screenshot stream — auth-gated to admins + the ticket's own submitter
+    // inside the controller (the files live on the private disk).
+    Route::get('/system-tickets/{id}/images/{index}', [\App\Http\Controllers\SystemTicketController::class, 'image'])
+        ->whereNumber(['id', 'index'])->name('system-tickets.image');
 
     // Active message templates (JSON) — feeds the bulk-email + compose pickers.
     // Any authenticated staff member; no lead-specific data is exposed.
