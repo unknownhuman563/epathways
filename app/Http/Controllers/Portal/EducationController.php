@@ -278,6 +278,7 @@ class EducationController extends Controller
                 'studentConverter:id,name',
                 'immigrationConverter:id,name',
                 'stageUpdater:id,name', 'lastActivityUser:id,name',
+                'agent:id,name',
             ])
                 ->where(function ($q) {
                     $q->where('is_student', true)
@@ -326,6 +327,12 @@ class EducationController extends Controller
                         'email' => $l->email,
                         'phone' => $l->phone,
                         'referral' => $l->referral,
+                        // Recruiting agent (role='agent') credited with this
+                        // student — drives the "Referring agent" dropdown in
+                        // the add/edit modal (replaces the old free-text
+                        // "Referral" field).
+                        'agent_id' => $l->agent_id,
+                        'agent_name' => optional($l->agent)->name,
                         // `education_stage` is the Education-team lifecycle
                         // shown as a dropdown in the Status column; falls
                         // back to the lead's generic status only as a hint.
@@ -384,6 +391,11 @@ class EducationController extends Controller
                 ->get(['id', 'name', 'country', 'city']);
             $programOptions = \App\Models\Program::orderBy('title')
                 ->get(['id', 'title', 'level']);
+            // Recruiting agents for the "Referring agent" dropdown in the
+            // add/edit student modal.
+            $agentOptions = \App\Models\User::where('role', 'agent')
+                ->orderBy('name')
+                ->get(['id', 'name']);
 
             [$component, $portal] = $this->studentsComponent();
 
@@ -392,6 +404,7 @@ class EducationController extends Controller
                 'students' => $students,
                 'schoolOptions' => $schoolOptions,
                 'programOptions' => $programOptions,
+                'agentOptions' => $agentOptions,
             ]);
         } catch (\Throwable $e) {
             Log::error('Education students list failed', ['error' => $e->getMessage()]);
@@ -545,6 +558,7 @@ class EducationController extends Controller
                 'email' => $data['email'] ?? null,
                 'phone' => $data['phone'] ?? null,
                 'referral' => $data['referral'] ?? null,
+                'agent_id' => $data['agent_id'] ?? null,
                 'residence_country' => $data['location'] ?? null,
                 // First canonical stage if the staff member didn't pick
                 // one — the row shows up under "Endorsed to School" with
@@ -633,6 +647,7 @@ class EducationController extends Controller
                 'email' => $data['email'] ?? null,
                 'phone' => $data['phone'] ?? null,
                 'referral' => $data['referral'] ?? null,
+                'agent_id' => $data['agent_id'] ?? null,
                 'residence_country' => $data['location'] ?? null,
                 'education_stage' => $data['education_stage'] ?? null,
                 'english_stage' => $data['english_stage'] ?? null,
@@ -735,6 +750,8 @@ class EducationController extends Controller
             'email' => 'required|email|max:191',
             'phone' => 'required|string|max:60',
             'referral' => 'nullable|string|max:191',
+            // Referring recruiting agent — must be a user with role 'agent'.
+            'agent_id' => ['nullable', 'integer', \Illuminate\Validation\Rule::exists('users', 'id')->where('role', 'agent')],
             'location' => 'nullable|string|max:120',
             'education_stage' => ['nullable', \Illuminate\Validation\Rule::in(Lead::EDUCATION_STAGES)],
             'english_stage' => ['nullable', \Illuminate\Validation\Rule::in(Lead::ENGLISH_STAGES)],
