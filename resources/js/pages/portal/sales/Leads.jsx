@@ -30,7 +30,7 @@ const STAGE_STYLES = {
     "New Leads":                      "bg-rose-100 text-rose-800 border-rose-200",
     "Contact Attempted":              "bg-orange-100 text-orange-800 border-orange-200",
     "Contacted for Booking":          "bg-yellow-100 text-yellow-800 border-yellow-200",
-    "Booking Confirmation with Bryll":"bg-cyan-100 text-cyan-800 border-cyan-200",
+    "Booking Confirmation":"bg-cyan-100 text-cyan-800 border-cyan-200",
     "Missed the Meeting":             "bg-pink-100 text-pink-800 border-pink-200",
     "Qualified but Not Ready":        "bg-slate-100 text-slate-700 border-slate-200",
     "Qualified but No Funds":         "bg-slate-100 text-slate-700 border-slate-200",
@@ -1875,7 +1875,7 @@ function RowMenu({ lead, open, onToggle, onClose, onEdit, onRequestPortal, onVie
 // journey stepper. Each pipeline status maps to one milestone group.
 const JOURNEY_MILESTONES = [
     { key: "New",        label: "New",        statuses: ["New Leads", "Contact Attempted", "Contacted for Booking"] },
-    { key: "Screened",   label: "Screened",   statuses: ["Booking Confirmation with Bryll", "Qualified but Not Ready", "Qualified but No Funds", "Qualified", "Missed the Meeting"] },
+    { key: "Screened",   label: "Screened",   statuses: ["Booking Confirmation", "Qualified but Not Ready", "Qualified but No Funds", "Qualified", "Missed the Meeting"] },
     { key: "Consult",    label: "Consult",    statuses: ["Booked Consultation", "Did Not Book Consultation", "No Show", "Consultation Done"] },
     { key: "Proposal",   label: "Proposal",   statuses: ["Proposal Sent"] },
     { key: "Engagement", label: "Engagement", statuses: ["Consultancy Agreement"] },

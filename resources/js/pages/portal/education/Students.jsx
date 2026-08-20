@@ -182,7 +182,7 @@ const STAGE_STYLES = {
     "New Leads":                      "bg-rose-100 text-rose-800 border-rose-200",
     "Contact Attempted":              "bg-orange-100 text-orange-800 border-orange-200",
     "Contacted for Booking":          "bg-yellow-100 text-yellow-800 border-yellow-200",
-    "Booking Confirmation with Bryll":"bg-cyan-100 text-cyan-800 border-cyan-200",
+    "Booking Confirmation":"bg-cyan-100 text-cyan-800 border-cyan-200",
     "Missed the Meeting":             "bg-pink-100 text-pink-800 border-pink-200",
     "Qualified but Not Ready":        "bg-slate-100 text-slate-700 border-slate-200",
     "Qualified but No Funds":         "bg-slate-100 text-slate-700 border-slate-200",

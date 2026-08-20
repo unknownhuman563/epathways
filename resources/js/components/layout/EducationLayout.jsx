@@ -5,7 +5,7 @@ import {
     ListChecks, LineChart, User, Bell, Tag, Star, CheckSquare, ClipboardCheck,
     Building2, Ticket, Mail,
     PenLine, Megaphone, Smartphone, MessageSquare, FileText, Award,
-    Clock,
+    Clock, BookOpen,
 } from "lucide-react";
 
 export default function EducationLayout({ children }) {
@@ -28,6 +28,7 @@ export default function EducationLayout({ children }) {
         },
         { name: "Task Board", href: "/portal/education/tasks", icon: <CheckSquare size={20} />, badge: badges.tasks_open, badgeTone: badges.tasks_overdue > 0 ? "danger" : "default" },
         { name: "Assessments", href: "/portal/education/assessments", icon: <ClipboardCheck size={20} /> },
+        { name: "Bookings", href: "/admin/booking", icon: <BookOpen size={20} /> },
         { name: "Students",  href: "/portal/education/students",  icon: <Users size={20} /> },
         { name: "Documents", href: "/portal/education/documents", icon: <FolderOpen size={20} />, badge: badges.docs_pending_review, badgeTone: "warning" },
         { name: "User Reviews", href: "/admin/user-reviews", icon: <Star size={20} /> },

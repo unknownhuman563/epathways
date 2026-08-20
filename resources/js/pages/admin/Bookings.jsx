@@ -46,9 +46,15 @@ export default function Bookings({ bookings: backendBookings, stages = [] }) {
     const [editingData, setEditingData] = useState({ id: null, date: '', time: '', status: '' });
     const [viewingBooking, setViewingBooking] = useState(null);
 
+    // Tabs to split consultation bookings by service line.
+    const [tab, setTab] = useState("all");
+    const matchesTab = (b, t) => (t === "all" ? true : (b.service || "").toLowerCase().includes(t));
+    const filteredBookings = bookings.filter((b) => matchesTab(b, tab));
+    const tabCount = (t) => bookings.filter((b) => matchesTab(b, t)).length;
+
     const toggleSelectAll = (e) => {
         if (e.target.checked) {
-            setSelectedBookings(bookings.map(b => b.id));
+            setSelectedBookings(filteredBookings.map(b => b.id));
         } else {
             setSelectedBookings([]);
         }
@@ -89,7 +95,7 @@ export default function Bookings({ bookings: backendBookings, stages = [] }) {
             .then((data) => {
                 const lead = data.lead || {};
                 setBookings((bs) => bs.map((b) => b.id === booking.id
-                    ? { ...b, lead_internal_id: lead.id, lead_id: lead.lead_id, stage: lead.status || 'Booking Confirmation with Bryll' }
+                    ? { ...b, lead_internal_id: lead.id, lead_id: lead.lead_id, stage: lead.status || 'Booking Confirmation' }
                     : b));
             })
             .catch(() => { /* leave the button so staff can retry */ })
@@ -212,6 +218,24 @@ export default function Bookings({ bookings: backendBookings, stages = [] }) {
                 </div>
             </div>
 
+            {/* Service tabs — All / Education / Immigration */}
+            <div className="flex items-center gap-1 border-b border-gray-100">
+                {[
+                    { key: "all", label: "All Bookings" },
+                    { key: "education", label: "Education" },
+                    { key: "immigration", label: "Immigration" },
+                ].map((t) => (
+                    <button
+                        key={t.key}
+                        type="button"
+                        onClick={() => setTab(t.key)}
+                        className={`px-4 py-2.5 text-sm font-semibold border-b-2 -mb-px transition-colors ${tab === t.key ? "border-gray-900 text-gray-900" : "border-transparent text-gray-400 hover:text-gray-700"}`}
+                    >
+                        {t.label} <span className="ml-1 text-xs text-gray-400">{tabCount(t.key)}</span>
+                    </button>
+                ))}
+            </div>
+
             {/* Table */}
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
                 <div className="overflow-x-auto min-h-[400px]">
@@ -223,7 +247,7 @@ export default function Bookings({ bookings: backendBookings, stages = [] }) {
                                         type="checkbox" 
                                         className="w-4 h-4 text-[#436235] bg-gray-100 border-gray-300 rounded focus:ring-[#436235] cursor-pointer" 
                                         onChange={toggleSelectAll}
-                                        checked={selectedBookings.length === bookings.length && bookings.length > 0}
+                                        checked={filteredBookings.length > 0 && filteredBookings.every(b => selectedBookings.includes(b.id))}
                                     />
                                 </th>
                                 <th className="px-6 py-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">Client</th>
@@ -238,7 +262,7 @@ export default function Bookings({ bookings: backendBookings, stages = [] }) {
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-50">
-                            {bookings.map((booking) => (
+                            {filteredBookings.map((booking) => (
                                 <tr 
                                     key={booking.id} 
                                     className={`hover:bg-[#436235]/5 transition-colors ${selectedBookings.includes(booking.id) ? 'bg-[#436235]/5' : ''}`}

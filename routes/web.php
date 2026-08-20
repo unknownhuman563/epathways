@@ -519,11 +519,6 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/admin/programs/{id}', [ProgramController::class, 'update']);
         Route::delete('/admin/programs/{id}', [ProgramController::class, 'destroy']);
 
-        Route::get('/admin/booking', [BookingController::class, 'index'])->name('admin.bookings');
-        Route::post('/admin/bookings/{id}', [BookingController::class, 'update']);
-        Route::delete('/admin/bookings/{id}', [BookingController::class, 'destroy'])->name('admin.bookings.destroy');
-        // Convert a booking's client into a pipeline lead (education flow).
-        Route::post('/admin/bookings/{id}/convert', [BookingController::class, 'convertToLead'])->name('admin.bookings.convert');
 
         Route::get('/admin/settings', [SettingController::class, 'index'])->name('admin.settings');
         Route::post('/admin/settings', [SettingController::class, 'update']);
@@ -685,6 +680,16 @@ Route::middleware(['auth'])->group(function () {
             ->name('admin.portal-invitation.generate-credentials');
         Route::post('/admin/leads/{id}/portal-invitation/reset-password', [LeadPortalInvitationController::class, 'resetPassword'])
             ->name('admin.portal-invitation.reset-password');
+    });
+
+    // Consultation bookings — admin + education (education triages/converts
+    // booking requests; the page has All / Education / Immigration tabs).
+    Route::middleware('portal:admin,education')->group(function () {
+        Route::get('/admin/booking', [BookingController::class, 'index'])->name('admin.bookings');
+        Route::post('/admin/bookings/{id}', [BookingController::class, 'update']);
+        Route::delete('/admin/bookings/{id}', [BookingController::class, 'destroy'])->name('admin.bookings.destroy');
+        // Convert a booking's client into a pipeline lead (education flow).
+        Route::post('/admin/bookings/{id}/convert', [BookingController::class, 'convertToLead'])->name('admin.bookings.convert');
     });
 
     // Program Promotions — admin / sales / education can manage time-bound
