@@ -1558,16 +1558,32 @@ function DocumentsHubTab({
         };
     };
 
-    // Universal items (e.g. SV Information Form) pinned to the very top.
+    // When the server hands us an explicit section order (the general/education
+    // checklist), the whole requirements list obeys it — including the SV
+    // Information Form, which joins the "Information Form" section instead of
+    // being pinned on top, so the very first section is the one staff intend
+    // (e.g. Personal Documents). Immigration checklists send no order, so the
+    // VIF stays pinned and sections keep their natural order (unchanged).
+    const sectionOrder = Array.isArray(visa?.section_order) && visa.section_order.length ? visa.section_order : null;
+    const UNIVERSAL_SECTION = 'Information Form';
+
+    // Universal items (e.g. SV Information Form) pinned to the very top — only
+    // when there's no explicit order (immigration).
     const svRows = useMemo(
-        () => checklist.filter((it) => it.universal).map(buildRow),
-        [checklist, docsByKey] // eslint-disable-line react-hooks/exhaustive-deps
+        () => sectionOrder ? [] : checklist.filter((it) => it.universal).map(buildRow),
+        [checklist, docsByKey, sectionOrder] // eslint-disable-line react-hooks/exhaustive-deps
     );
 
-    // The rest of the checklist, grouped by section further down.
+    // The rest of the checklist, grouped by section further down. With an
+    // explicit order, universal items fold into their natural section.
     const requirementRows = useMemo(
-        () => checklist.filter((it) => ! it.universal).map(buildRow),
-        [checklist, docsByKey] // eslint-disable-line react-hooks/exhaustive-deps
+        () => checklist
+            .filter((it) => sectionOrder ? true : ! it.universal)
+            .map((it) => {
+                const row = buildRow(it);
+                return sectionOrder && it.universal ? { ...row, section: UNIVERSAL_SECTION } : row;
+            }),
+        [checklist, docsByKey, sectionOrder] // eslint-disable-line react-hooks/exhaustive-deps
     );
 
     const requirementsBySection = useMemo(() => {
@@ -1576,8 +1592,13 @@ function DocumentsHubTab({
             if (! m.has(row.section)) m.set(row.section, []);
             m.get(row.section).push(row);
         }
-        return Array.from(m.entries()).map(([section, items]) => ({ section, items }));
-    }, [requirementRows]);
+        const entries = Array.from(m.entries()).map(([section, items]) => ({ section, items }));
+        if (sectionOrder) {
+            const rank = (s) => { const i = sectionOrder.indexOf(s); return i === -1 ? 999 : i; };
+            entries.sort((a, b) => rank(a.section) - rank(b.section));
+        }
+        return entries;
+    }, [requirementRows, sectionOrder]);
 
     // Count still needed (missing or rejected) — drives the section subtitle.
     const outstandingCount = useMemo(
@@ -1645,8 +1666,10 @@ function DocumentsHubTab({
             )}
 
             {/* SECTION 1 — agreements (consultancy paperwork comes first,
-                ahead of any document collection) */}
-            {showAdviserDocs && agreements.length > 0 && (
+                ahead of any document collection). Hidden on the general
+                education tracker (sectionOrder present) so only the four
+                requirement sections show. */}
+            {! sectionOrder && showAdviserDocs && agreements.length > 0 && (
                 <DocsSection
                     title="Agreements to sign"
                     eyebrow="Consultancy"
@@ -1681,7 +1704,7 @@ function DocumentsHubTab({
                 status) instead of disappearing. Items are only removed when a
                 staff member unchecks them (hidden_track_documents, filtered
                 server-side). */}
-            <DocsSection hideHeader last={counts.other === 0}>
+            <DocsSection hideHeader last={counts.other === 0 || !! sectionOrder}>
                 {counts.requirementsTotal === 0 ? (
                     <DocsEmptyRequirements />
                 ) : (
@@ -1704,8 +1727,9 @@ function DocumentsHubTab({
             </DocsSection>
 
             {/* SECTION 3 (last) — uploaded files that don't map to any
-                checklist item. */}
-            {counts.other > 0 && (
+                checklist item. Hidden on the general education tracker so
+                only the four requirement sections show. */}
+            {! sectionOrder && counts.other > 0 && (
                 <DocsSection
                     title="Other documents"
                     eyebrow="Uploads"

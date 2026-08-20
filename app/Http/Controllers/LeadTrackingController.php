@@ -1339,9 +1339,26 @@ class LeadTrackingController extends Controller
      * exact same shape as resolveVisa() so the tracker template can render
      * it interchangeably.
      */
+    /**
+     * The only requirement sections a general/education client sees on their
+     * tracker, in the order they should work through them. Every other config
+     * section (Immigration Forms, Employment/Financial, Partner, etc.) is for
+     * internal/immigration use and is hidden from this tracker.
+     */
+    private const TRACKER_SECTIONS = [
+        'Personal Documents',
+        'Information Form',
+        'Offer and Academic Documents',
+        'Agreements',
+    ];
+
     private function resolveGeneralChecklist(Lead $lead): array
     {
-        $sections = config('lead_document_checklist.sections', []);
+        // Only the client-facing sections, and only those (drops the internal
+        // immigration/financial sections that made the list balloon to 50+).
+        $sections = collect(config('lead_document_checklist.sections', []))
+            ->filter(fn ($s) => in_array($s['section'] ?? null, self::TRACKER_SECTIONS, true))
+            ->all();
 
         $docsByKey = $lead->documents()
             ->whereNotNull('checklist_key')
@@ -1396,6 +1413,10 @@ class LeadTrackingController extends Controller
             'code' => null,
             'short_description' => null,
             'checklist' => array_merge($this->universalTopItems($lead, $docsByKey), $decorated),
+            // The order the client should work through the requirement sections
+            // on their tracker. Tracker-only — the staff Documents tab is
+            // unaffected. Same list that scopes which sections show above.
+            'section_order' => self::TRACKER_SECTIONS,
             'totals' => [
                 'required' => $requiredCount,
                 'submitted' => $submittedCount,
