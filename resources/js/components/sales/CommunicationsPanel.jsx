@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Mail, MessageSquare, Loader2, ChevronDown, AlertTriangle, Send, Paperclip, X, Reply, Inbox } from "lucide-react";
+import { Mail, MessageSquare, Loader2, ChevronDown, AlertTriangle, Send, Paperclip, X, Reply, Inbox, RefreshCw } from "lucide-react";
 import RichTextEditor from "@/components/templates/RichTextEditor";
 
 const STATUS = {
@@ -35,6 +35,8 @@ export default function CommunicationsPanel({ leadId, leadEmail = "" }) {
     const [sending, setSending] = useState(false);
     const [error, setError] = useState(null);
     const [sent, setSent] = useState(false);
+    const [checking, setChecking] = useState(false);
+    const [checkNote, setCheckNote] = useState(null);
     const fileRef = useRef(null);
 
     const indexUrl = `/admin/leads/${leadId}/communications`;
@@ -56,6 +58,26 @@ export default function CommunicationsPanel({ leadId, leadEmail = "" }) {
     }, [indexUrl]);
 
     useEffect(() => { load(); }, [load]);
+
+    // Trigger the IMAP mailbox fetch, then refresh the feed so a just-arrived
+    // reply shows up here without visiting the Email → Replies inbox.
+    const checkReplies = async () => {
+        setChecking(true); setCheckNote(null);
+        try {
+            await fetch(`${indexUrl}/sync`, {
+                method: "POST",
+                headers: { Accept: "application/json", "X-Requested-With": "XMLHttpRequest", "X-XSRF-TOKEN": xsrf() },
+                credentials: "same-origin",
+            });
+            // The fetch is queued; give the worker a moment, then reload.
+            await new Promise((r) => setTimeout(r, 2500));
+            await load();
+            setCheckNote("Checked the mailbox. Any new replies now show above — click again in a moment if one is still landing.");
+            setTimeout(() => setCheckNote(null), 6000);
+        } finally {
+            setChecking(false);
+        }
+    };
 
     const addFiles = (list) => setFiles((prev) => [...prev, ...Array.from(list || [])].slice(0, 5));
     const removeFile = (i) => setFiles((prev) => prev.filter((_, idx) => idx !== i));
@@ -157,6 +179,20 @@ export default function CommunicationsPanel({ leadId, leadEmail = "" }) {
             )}
 
             {/* ── Conversation feed ────────────────────────────────────── */}
+            <div className="flex items-center justify-between px-1">
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Conversation</p>
+                <button
+                    onClick={checkReplies}
+                    disabled={checking}
+                    title="Pull the mailbox for new replies from this lead"
+                    className="inline-flex items-center gap-1.5 text-xs font-medium text-gray-500 hover:text-gray-800 disabled:opacity-50"
+                >
+                    <RefreshCw size={13} className={checking ? "animate-spin" : ""} />
+                    {checking ? "Checking…" : "Check for replies"}
+                </button>
+            </div>
+            {checkNote && <p className="text-[11px] text-gray-400 px-1 -mt-2">{checkNote}</p>}
+
             {loading && logs.length === 0 ? (
                 <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-10 flex items-center justify-center text-gray-400 text-sm gap-2">
                     <Loader2 size={16} className="animate-spin" /> Loading conversation…

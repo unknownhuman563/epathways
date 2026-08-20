@@ -119,4 +119,19 @@ class LeadCommunicationsController extends Controller
 
         return response()->json(['ok' => true, 'log_id' => $log->id]);
     }
+
+    /**
+     * POST /admin/leads/{lead}/communications/sync — pull the mailbox on demand
+     * so a lead's just-sent reply shows up without leaving the tab (the same
+     * IMAP fetch the Email → Replies inbox "Sync now" button runs). Queued, so
+     * the slow fetch never blocks the request; the feed picks it up on refresh.
+     */
+    public function sync(Request $request, Lead $lead)
+    {
+        abort_unless(LeadAccess::canView($request->user(), $lead), 403, 'You do not have access to this lead.');
+
+        \App\Jobs\SyncEmailRepliesJob::dispatch();
+
+        return response()->json(['ok' => true]);
+    }
 }

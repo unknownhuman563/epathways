@@ -774,6 +774,8 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/admin/leads/{lead}/communications', [\App\Http\Controllers\Sales\LeadCommunicationsController::class, 'index'])->name('admin.leads.communications');
         // Reply to the lead from the conversation tab (blocked if they have no email).
         Route::post('/admin/leads/{lead}/communications', [\App\Http\Controllers\Sales\LeadCommunicationsController::class, 'reply'])->name('admin.leads.communications.reply');
+        // Pull the mailbox on demand so a fresh reply appears without leaving the tab.
+        Route::post('/admin/leads/{lead}/communications/sync', [\App\Http\Controllers\Sales\LeadCommunicationsController::class, 'sync'])->name('admin.leads.communications.sync');
 
         // Cross-lead document queue — review lead-submitted docs in bulk.
         Route::get('/admin/document-queue', [\App\Http\Controllers\DocumentQueueController::class, 'index'])->name('admin.document-queue');
