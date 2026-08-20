@@ -6,7 +6,7 @@ import {
     Briefcase, Languages, Building2, KeyRound, Sparkles, Tag,
     Radio, PenLine, CalendarDays, Inbox, Megaphone, BarChart3,
     CheckSquare, Clock, Crown, LifeBuoy, Mail, MessageSquare, Smartphone,
-    Wallet, UserCheck, Wrench, Award, User, BadgeCheck,
+    Wallet, UserCheck, Wrench, Award, User, BadgeCheck, Send,
 } from "lucide-react";
 
 // Super-admin-only entry — only injected when the current user holds
@@ -69,6 +69,7 @@ const ADMIN_NAV = [
         icon: <Mail size={20} />,
         children: [
             { name: "Templates", href: "/admin/message-templates", icon: <PenLine size={16} /> },
+            { name: "Compose", href: "/admin/email/compose", icon: <Send size={16} /> },
             { name: "Bulk Mail", href: "/admin/email/bulk", icon: <Megaphone size={16} /> },
             { name: "SMS", href: "/admin/email/sms", icon: <Smartphone size={16} /> },
             { name: "Replies", href: "/admin/email/replies", icon: <MessageSquare size={16} /> },

@@ -43,6 +43,7 @@ export default function EducationLayout({ children }) {
             icon: <Mail size={20} />,
             children: [
                 { name: "Templates", href: "/portal/education/email-templates", icon: <PenLine size={16} /> },
+                { name: "Compose", href: "/portal/education/compose", icon: <Mail size={16} /> },
                 { name: "Bulk Mail", href: "/portal/education/bulk-email",      icon: <Megaphone size={16} /> },
                 { name: "SMS",       href: "/portal/education/sms",             icon: <Smartphone size={16} /> },
                 { name: "Replies",   href: "/portal/education/email/replies",   icon: <MessageSquare size={16} /> },

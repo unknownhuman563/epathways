@@ -251,6 +251,39 @@ class CommunicationService
         return $res['ok'];
     }
 
+    /**
+     * Send a manually composed email (Compose module) to an arbitrary address,
+     * or to a lead when $leadId is given. Subject/body are already substituted by
+     * the caller. Logs with source='compose' and recipient_type 'lead'/'raw'.
+     * $rawHtml=true sends a self-contained builder email (no branded shell).
+     */
+    public function sendComposedEmail(string $address, ?string $subject, string $body, array $attachments = [], bool $rawHtml = false, ?int $leadId = null): MessageLog
+    {
+        $address = strtolower(trim($address));
+
+        $log = $this->log([
+            'source' => 'compose',
+            'channel' => MessageLog::CHANNEL_EMAIL,
+            'recipient_type' => $leadId ? 'lead' : 'raw',
+            'recipient_id' => $leadId,
+            'recipient_address' => $address,
+            'subject' => $subject,
+            'body' => $body,
+            'status' => MessageLog::STATUS_QUEUED,
+        ]);
+
+        try {
+            Mail::to($address)->queue(
+                new TemplatedMessage($subject ?? '', $body, $attachments, null, null, $log->id, null, null, null, null, null, $rawHtml)
+            );
+        } catch (\Throwable $e) {
+            Log::error('Composed email failed', ['address' => $address, 'error' => $e->getMessage()]);
+            $log->update(['status' => MessageLog::STATUS_FAILED, 'error_message' => $e->getMessage(), 'failed_at' => now()]);
+        }
+
+        return $log;
+    }
+
     private function sendEmail(Lead $lead, string $subject, string $body, ?string $key, array $attachments = [], ?int $campaignId = null, ?string $bannerImage = null, ?string $footerImage = null, ?string $fromEmail = null, ?string $fromName = null, ?string $cc = null, ?string $bcc = null, ?string $branding = null, ?string $toExtra = null, bool $raw = false): MessageLog
     {
         if (empty($lead->email)) {

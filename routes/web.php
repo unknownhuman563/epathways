@@ -588,6 +588,12 @@ Route::middleware(['auth'])->group(function () {
 
         Route::get('/admin/email/replies', [\App\Http\Controllers\EmailReplyController::class, 'index'])->name('admin.email.replies');
         Route::post('/admin/email/replies/sync', [\App\Http\Controllers\EmailReplyController::class, 'syncNow'])->name('admin.email.replies.sync');
+
+        // Compose — write a one-off email to picked leads and/or typed addresses.
+        Route::get('/admin/email/compose', [\App\Http\Controllers\ComposeController::class, 'index'])->name('admin.email.compose');
+        Route::post('/admin/email/compose/send', [\App\Http\Controllers\ComposeController::class, 'send'])->name('admin.email.compose.send');
+        Route::post('/admin/email/compose/upload-image', [\App\Http\Controllers\ComposeController::class, 'uploadImage'])->name('admin.email.compose.upload-image');
+        Route::get('/admin/email/compose/leads', [\App\Http\Controllers\ComposeController::class, 'searchLeads'])->name('admin.email.compose.leads');
         Route::post('/admin/email/replies/{leadId}/read', [\App\Http\Controllers\EmailReplyController::class, 'markThreadRead'])->name('admin.email.replies.read');
         Route::post('/admin/email/replies/{leadId}/reply', [\App\Http\Controllers\EmailReplyController::class, 'reply'])->name('admin.email.replies.reply');
 
@@ -914,6 +920,13 @@ Route::middleware(['auth'])->group(function () {
             ->prefix("portal/{$deptRole}")
             ->name("portal.{$deptRole}.")
             ->group(function () {
+                // Compose — one-off email to picked leads and/or typed addresses.
+                $compose = \App\Http\Controllers\ComposeController::class;
+                Route::get('/compose', [$compose, 'index'])->name('compose');
+                Route::post('/compose/send', [$compose, 'send'])->name('compose.send');
+                Route::post('/compose/upload-image', [$compose, 'uploadImage'])->name('compose.upload-image');
+                Route::get('/compose/leads', [$compose, 'searchLeads'])->name('compose.leads');
+
                 $c = \App\Http\Controllers\MessageTemplateController::class;
                 Route::get('/email-templates', [$c, 'index'])->name('email-templates');
                 Route::get('/email-templates/create', [$c, 'create'])->name('email-templates.create');

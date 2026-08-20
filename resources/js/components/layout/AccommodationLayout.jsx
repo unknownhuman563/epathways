@@ -17,6 +17,7 @@ const ACCOMMODATION_NAV = [
     { name: "Task Tracker", href: "/portal/accommodation/tasks", icon: <ClipboardList size={20} /> },
     { name: "Gas Delivery Tracker", href: "/portal/accommodation/gas-delivery", icon: <Flame size={20} /> },
     { name: "Email Templates", href: "/portal/accommodation/email-templates", icon: <MessageSquare size={20} /> },
+    { name: "Compose", href: "/portal/accommodation/compose", icon: <MessageSquare size={20} /> },
 
     { name: "Setup", section: true },
     { name: "Properties", href: "/portal/accommodation/properties", icon: <Home size={20} /> },

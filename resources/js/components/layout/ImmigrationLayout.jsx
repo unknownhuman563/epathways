@@ -55,6 +55,7 @@ export default function ImmigrationLayout({ children }) {
             icon: <Mail size={20} />,
             children: [
                 { name: "Templates", href: "/portal/immigration/email-templates", icon: <PenLine size={16} /> },
+                { name: "Compose", href: "/portal/immigration/compose", icon: <Mail size={16} /> },
                 { name: "Bulk Mail", href: "/portal/immigration/bulk-email",      icon: <Megaphone size={16} /> },
                 { name: "SMS",       href: "/portal/immigration/sms",             icon: <Smartphone size={16} /> },
                 { name: "Replies",   href: "/portal/immigration/email/replies",   icon: <MessageSquare size={16} /> },
