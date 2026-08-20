@@ -28,7 +28,10 @@ export default function CommunicationsPanel({ leadId, leadEmail = "" }) {
     const [canEmail, setCanEmail] = useState(!!leadEmail);
     const [email, setEmail] = useState(leadEmail);
 
-    // Composer state.
+    // Composer state. It stays closed until the user picks a message to reply
+    // to (or starts a fresh email), then opens pre-filled.
+    const [composerOpen, setComposerOpen] = useState(false);
+    const [replyContext, setReplyContext] = useState(null); // { subject } of the message being answered
     const [subject, setSubject] = useState("");
     const [body, setBody] = useState("");
     const [files, setFiles] = useState([]);
@@ -40,6 +43,28 @@ export default function CommunicationsPanel({ leadId, leadEmail = "" }) {
     const fileRef = useRef(null);
 
     const indexUrl = `/admin/leads/${leadId}/communications`;
+    const composerRef = useRef(null);
+
+    const scrollToComposer = () => setTimeout(() => composerRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }), 50);
+
+    // Open the composer to answer a specific message — pre-fills "Re: <subject>".
+    const openReply = (m) => {
+        const base = (m.subject || "").replace(/^\s*re:\s*/i, "").trim();
+        setSubject(base ? `Re: ${base}` : "");
+        setReplyContext({ subject: m.subject, from: m.direction === "in" ? (m.from || "the lead") : "your team" });
+        setBody(""); setError(null); setSent(false);
+        setComposerOpen(true);
+        scrollToComposer();
+    };
+
+    // Start a fresh email not tied to any message.
+    const openBlank = () => {
+        setSubject(""); setReplyContext(null); setBody(""); setError(null); setSent(false);
+        setComposerOpen(true);
+        scrollToComposer();
+    };
+
+    const closeComposer = () => { setComposerOpen(false); setReplyContext(null); setSubject(""); setBody(""); setFiles([]); setError(null); };
 
     const load = useCallback(async () => {
         setLoading(true);
@@ -100,6 +125,7 @@ export default function CommunicationsPanel({ leadId, leadEmail = "" }) {
             });
             if (res.ok) {
                 setSubject(""); setBody(""); setFiles([]); setSent(true);
+                setComposerOpen(false); setReplyContext(null);
                 await load();
                 setTimeout(() => setSent(false), 3000);
             } else {
@@ -115,18 +141,43 @@ export default function CommunicationsPanel({ leadId, leadEmail = "" }) {
 
     return (
         <div className="space-y-4">
-            {/* ── Composer ─────────────────────────────────────────────── */}
-            {canEmail ? (
-                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 sm:p-5">
-                    <div className="flex items-center gap-2 mb-3">
-                        <span className="w-8 h-8 rounded-lg bg-gray-900 text-white flex items-center justify-center shrink-0">
-                            <Reply size={15} />
-                        </span>
-                        <div className="min-w-0">
-                            <p className="text-sm font-semibold text-gray-900">Reply to this lead</p>
-                            <p className="text-[11px] text-gray-400 truncate">To {email}</p>
-                        </div>
+            {/* ── No-email guard (always shown when the lead has no address) ── */}
+            {!canEmail && (
+                <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-start gap-3">
+                    <AlertTriangle size={16} className="text-amber-600 shrink-0 mt-0.5" />
+                    <div>
+                        <p className="text-sm font-semibold text-amber-800">No email address on file</p>
+                        <p className="text-xs text-amber-700 mt-0.5">Add an email in the <strong>Personal Info</strong> tab to email this lead. You can still view any past messages below.</p>
                     </div>
+                </div>
+            )}
+            {sent && <p className="text-xs text-emerald-600 px-1">Reply sent to {email}.</p>}
+
+            {/* ── Composer — opens when a message's Reply button (or New email) is used ── */}
+            {canEmail && composerOpen && (
+                <div ref={composerRef} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 sm:p-5">
+                    <div className="flex items-start justify-between gap-2 mb-3">
+                        <div className="flex items-center gap-2 min-w-0">
+                            <span className="w-8 h-8 rounded-lg bg-gray-900 text-white flex items-center justify-center shrink-0">
+                                <Reply size={15} />
+                            </span>
+                            <div className="min-w-0">
+                                <p className="text-sm font-semibold text-gray-900">
+                                    {replyContext ? "Reply" : "New email"}
+                                </p>
+                                <p className="text-[11px] text-gray-400 truncate">To {email}</p>
+                            </div>
+                        </div>
+                        <button type="button" onClick={closeComposer} className="text-gray-400 hover:text-gray-700 p-1" title="Close">
+                            <X size={16} />
+                        </button>
+                    </div>
+
+                    {replyContext && (
+                        <div className="mb-2 text-[11px] text-gray-500 bg-gray-50 border border-gray-100 rounded-lg px-3 py-1.5 truncate">
+                            Replying to <span className="font-medium text-gray-700">{replyContext.subject || "(no subject)"}</span>
+                        </div>
+                    )}
 
                     <input
                         value={subject}
@@ -149,7 +200,6 @@ export default function CommunicationsPanel({ leadId, leadEmail = "" }) {
                     )}
 
                     {error && <p className="mt-2 text-xs text-rose-600 flex items-center gap-1.5"><AlertTriangle size={12} /> {error}</p>}
-                    {sent && <p className="mt-2 text-xs text-emerald-600">Reply sent to {email}.</p>}
 
                     <div className="flex items-center justify-between mt-3">
                         <label className="inline-flex items-center gap-1.5 text-xs font-medium text-gray-500 hover:text-gray-700 cursor-pointer">
@@ -168,28 +218,30 @@ export default function CommunicationsPanel({ leadId, leadEmail = "" }) {
                         </button>
                     </div>
                 </div>
-            ) : (
-                <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-start gap-3">
-                    <AlertTriangle size={16} className="text-amber-600 shrink-0 mt-0.5" />
-                    <div>
-                        <p className="text-sm font-semibold text-amber-800">No email address on file</p>
-                        <p className="text-xs text-amber-700 mt-0.5">Add an email in the <strong>Personal Info</strong> tab to email this lead. You can still view any past messages below.</p>
-                    </div>
-                </div>
             )}
 
             {/* ── Conversation feed ────────────────────────────────────── */}
             <div className="flex items-center justify-between px-1">
                 <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Conversation</p>
-                <button
-                    onClick={checkReplies}
-                    disabled={checking}
-                    title="Pull the mailbox for new replies from this lead"
-                    className="inline-flex items-center gap-1.5 text-xs font-medium text-gray-500 hover:text-gray-800 disabled:opacity-50"
-                >
-                    <RefreshCw size={13} className={checking ? "animate-spin" : ""} />
-                    {checking ? "Checking…" : "Check for replies"}
-                </button>
+                <div className="flex items-center gap-3">
+                    {canEmail && !composerOpen && (
+                        <button
+                            onClick={openBlank}
+                            className="inline-flex items-center gap-1.5 text-xs font-semibold text-gray-700 hover:text-black"
+                        >
+                            <Mail size={13} /> New email
+                        </button>
+                    )}
+                    <button
+                        onClick={checkReplies}
+                        disabled={checking}
+                        title="Pull the mailbox for new replies from this lead"
+                        className="inline-flex items-center gap-1.5 text-xs font-medium text-gray-500 hover:text-gray-800 disabled:opacity-50"
+                    >
+                        <RefreshCw size={13} className={checking ? "animate-spin" : ""} />
+                        {checking ? "Checking…" : "Check for replies"}
+                    </button>
+                </div>
             </div>
             {checkNote && <p className="text-[11px] text-gray-400 px-1 -mt-2">{checkNote}</p>}
 
@@ -243,6 +295,14 @@ export default function CommunicationsPanel({ leadId, leadEmail = "" }) {
                                                 <p className="mt-2 text-xs text-rose-600 flex items-center gap-1.5">
                                                     <AlertTriangle size={12} /> {m.error}
                                                 </p>
+                                            )}
+                                            {canEmail && isEmail && (
+                                                <button
+                                                    onClick={(e) => { e.stopPropagation(); openReply(m); }}
+                                                    className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-900 text-white text-xs font-semibold hover:bg-black"
+                                                >
+                                                    <Reply size={13} /> Reply to this email
+                                                </button>
                                             )}
                                         </div>
                                     )}
