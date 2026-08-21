@@ -167,10 +167,13 @@ export default function Engagement({ cases = [], documents = [], generated = [],
 
     // Deep-link from a case profile's "Generate Engagement" button:
     // /portal/immigration/cases/engagement?case={id} opens the modal preselected.
+    // If that case already has a draft, open it in manage mode instead.
     useEffect(() => {
         if (typeof window === "undefined") return;
         const caseId = new URLSearchParams(window.location.search).get("case");
         if (!caseId) return;
+        const existing = generated.find((g) => String(g.case_id) === String(caseId));
+        if (existing) { setManageFor(existing); return; }
         const c = cases.find((x) => String(x.id) === String(caseId));
         if (c) { setPreselectedCase(c); setModalOpen(true); }
     }, []); // eslint-disable-line react-hooks/exhaustive-deps

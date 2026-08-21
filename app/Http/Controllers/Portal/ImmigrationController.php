@@ -800,8 +800,10 @@ class ImmigrationController extends Controller
                         // disbursements across the family. Drives the "Total amount"
                         // column; falls back to the ex-GST fee for older rows.
                         'total_amount' => $lead?->engagement_total_amount !== null ? (float) $lead->engagement_total_amount : null,
-                        // Consolidated summary the table shows instead of every file.
-                        'doc_count' => $docs->count(),
+                        // Consolidated summary the table shows instead of every
+                        // file — include the bundled invoice so it matches the
+                        // client link's document count.
+                        'doc_count' => $docs->count() + ($invoicedIds->contains($first->lead_id) ? 1 : 0),
                         // Link only once the pack has actually been sent to the client.
                         'signing_url' => (! $isDraft && $token) ? '/engagement/'.$token : null,
                         'signer_id' => optional($waDoc)->engagement_signer_id,
