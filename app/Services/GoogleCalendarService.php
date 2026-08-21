@@ -104,22 +104,62 @@ class GoogleCalendarService
         $event->setConferenceData($conference);
 
         try {
+            $calendarId = (string) config('services.google_calendar.calendar_id', 'primary');
             $created = $this->calendar()->events->insert(
-                (string) config('services.google_calendar.calendar_id', 'primary'),
+                $calendarId,
                 $event,
                 ['conferenceDataVersion' => 1, 'sendUpdates' => 'all'],
             );
 
+            // The Meet conference is created ASYNCHRONOUSLY: the insert response
+            // usually comes back with conferenceData.status = 'pending' and NO
+            // link yet. Re-GET the event once to pick up the resolved link, and
+            // read it from conferenceData.entryPoints (not just the legacy
+            // hangoutLink), so the Meet URL isn't lost to a too-early read.
+            $meet = $this->extractMeetLink($created);
+            $status = optional(optional(optional($created->getConferenceData())->getCreateRequest())->getStatus())->getStatusCode();
+            if (blank($meet)) {
+                try {
+                    $refetched = $this->calendar()->events->get($calendarId, $created->getId(), ['conferenceDataVersion' => 1]);
+                    $meet = $this->extractMeetLink($refetched);
+                    $status = optional(optional(optional($refetched->getConferenceData())->getCreateRequest())->getStatus())->getStatusCode() ?: $status;
+                } catch (\Throwable $e) {
+                    Log::warning('Booking Meet re-fetch failed', ['booking_id' => $booking->id, 'error' => $e->getMessage()]);
+                }
+            }
+
             $booking->google_event_id = $created->getId();
-            $booking->meet_link = $created->getHangoutLink();
+            $booking->meet_link = $meet;
             $booking->save();
 
             Log::info('Booking calendar event created', [
-                'booking_id' => $booking->id, 'event_id' => $created->getId(), 'meet' => (bool) $created->getHangoutLink(),
+                'booking_id' => $booking->id, 'event_id' => $created->getId(),
+                'meet' => (bool) $meet, 'conference_status' => $status,
             ]);
         } catch (\Throwable $e) {
             Log::error('Booking calendar event failed', ['booking_id' => $booking->id, 'error' => $e->getMessage()]);
         }
+    }
+
+    /**
+     * Pull the Google Meet URL from an event, preferring the newer
+     * conferenceData.entryPoints (video) and falling back to the legacy
+     * hangoutLink. Returns null when the conference isn't ready yet.
+     */
+    private function extractMeetLink(Event $event): ?string
+    {
+        $link = $event->getHangoutLink();
+        if (filled($link)) {
+            return $link;
+        }
+        $conf = $event->getConferenceData();
+        foreach ((array) (optional($conf)->getEntryPoints() ?? []) as $ep) {
+            if ($ep->getEntryPointType() === 'video' && filled($ep->getUri())) {
+                return $ep->getUri();
+            }
+        }
+
+        return null;
     }
 
     /**
