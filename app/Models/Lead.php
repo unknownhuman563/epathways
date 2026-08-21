@@ -827,7 +827,10 @@ class Lead extends Model
      */
     public function proposals()
     {
-        return $this->hasMany(LeadProposal::class)->latest();
+        // Newest first. Order by id (not created_at) so versions saved in the
+        // same second — e.g. a restore that backfills then snapshots — still
+        // order deterministically by insertion.
+        return $this->hasMany(LeadProposal::class)->orderByDesc('id');
     }
 
     /**

@@ -1246,24 +1246,34 @@ class LeadDocumentController extends Controller
                 ]);
             }
 
+            // A genuinely new/different proposal (not a no-op re-save of the
+            // same set) supersedes the current one.
+            $latest = $lead->proposals()->first();
+            $latestIds = $latest ? array_values(array_map('intval', $latest->program_ids ?? [])) : null;
+            $isNewVersion = ! empty($ids) && $latestIds !== $ids;
+
+            if ($isNewVersion) {
+                // Freeze the current selection onto the version being
+                // superseded, so history keeps "what they'd chosen", then
+                // start the new proposal with NOTHING selected by default.
+                if ($latest && $lead->preferred_program_id) {
+                    $latest->update(['selected_program_id' => (int) $lead->preferred_program_id]);
+                }
+                $lead->preferred_program_id = null;
+                $lead->preferred_program_chosen_at = null;
+            }
+
             $lead->proposed_program_ids = $ids ?: null;
             $lead->save();
 
-            // Snapshot every non-empty save as a new proposal version so the
-            // previous proposal (and the programs it suggested) is never lost.
-            // Skip when it's identical to the latest version (a no-op re-save)
-            // so history doesn't fill with duplicates. Clearing (empty list)
-            // only resets the active shortlist — it never adds a history row.
-            if (! empty($ids)) {
-                $latest = $lead->proposals()->first();
-                $latestIds = $latest ? array_values(array_map('intval', $latest->program_ids ?? [])) : null;
-                if ($latestIds !== $ids) {
-                    \App\Models\LeadProposal::create([
-                        'lead_id' => $lead->id,
-                        'program_ids' => $ids,
-                        'created_by' => optional($request->user())->id,
-                    ]);
-                }
+            // Snapshot the new version. Clearing (empty list) only resets the
+            // active shortlist — it never adds a history row.
+            if ($isNewVersion) {
+                \App\Models\LeadProposal::create([
+                    'lead_id' => $lead->id,
+                    'program_ids' => $ids,
+                    'created_by' => optional($request->user())->id,
+                ]);
             }
 
             $count = count($ids);

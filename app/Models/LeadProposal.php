@@ -13,7 +13,7 @@ use Illuminate\Database\Eloquent\Model;
 class LeadProposal extends Model
 {
     protected $fillable = [
-        'lead_id', 'program_ids', 'created_by',
+        'lead_id', 'program_ids', 'selected_program_id', 'created_by',
     ];
 
     protected $casts = [
@@ -28,5 +28,10 @@ class LeadProposal extends Model
     public function creator()
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function selectedProgram()
+    {
+        return $this->belongsTo(Program::class, 'selected_program_id');
     }
 }

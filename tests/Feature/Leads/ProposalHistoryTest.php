@@ -84,6 +84,35 @@ class ProposalHistoryTest extends TestCase
         $this->assertSame([$b->id], $lead->fresh()->proposed_program_ids);
     }
 
+    public function test_new_proposal_clears_selection_and_freezes_it_on_the_old_version(): void
+    {
+        $this->actingAs(User::factory()->create(['role' => 'admin']));
+
+        $a = $this->program('Bachelor of Accounting');
+        $b = $this->program('Bachelor of Nursing');
+        $c = $this->program('Bachelor of IT');
+
+        $lead = Lead::create(['first_name' => 'Prop', 'last_name' => 'Lead', 'status' => 'Consultation Done']);
+
+        // First proposal, and the client picks program A.
+        $this->post("/admin/leads/{$lead->id}/proposal", ['program_ids' => [$a->id, $b->id]])->assertRedirect();
+        $lead->forceFill(['preferred_program_id' => $a->id, 'preferred_program_chosen_at' => now()])->save();
+
+        // Staff create a NEW proposal.
+        $this->post("/admin/leads/{$lead->id}/proposal", ['program_ids' => [$c->id]])->assertRedirect();
+
+        $lead->refresh();
+        // The new active proposal has NOTHING selected by default …
+        $this->assertNull($lead->preferred_program_id);
+
+        // … and the superseded version keeps the program that had been chosen.
+        $superseded = LeadProposal::where('lead_id', $lead->id)
+            ->where('program_ids', json_encode([$a->id, $b->id]))
+            ->first();
+        $this->assertNotNull($superseded);
+        $this->assertSame($a->id, $superseded->selected_program_id);
+    }
+
     public function test_clearing_does_not_add_a_history_row(): void
     {
         $this->actingAs(User::factory()->create(['role' => 'admin']));

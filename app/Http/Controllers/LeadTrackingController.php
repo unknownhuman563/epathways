@@ -139,40 +139,59 @@ class LeadTrackingController extends Controller
      */
     private function publicProposal(Lead $lead): ?array
     {
-        $ids = is_array($lead->proposed_program_ids) ? array_values($lead->proposed_program_ids) : [];
+        $ids = is_array($lead->proposed_program_ids) ? array_values(array_map('intval', $lead->proposed_program_ids)) : [];
         if (empty($ids)) {
             return null;
         }
 
-        $programs = \App\Models\Program::whereIn('id', $ids)
+        // Previous proposal versions (all but the newest, which is the active
+        // one shown above). Shown read-only on the tracker as earlier options.
+        $previousVersions = $lead->proposals->slice(1)->values();
+
+        // Fetch every program referenced across the active + previous versions
+        // in one query.
+        $allIds = collect($ids);
+        foreach ($previousVersions as $v) {
+            $allIds = $allIds->merge(is_array($v->program_ids) ? $v->program_ids : []);
+        }
+        $allIds = $allIds->map(fn ($x) => (int) $x)->unique()->values();
+
+        $programs = \App\Models\Program::whereIn('id', $allIds)
             ->get(['id', 'title', 'slug', 'level', 'category', 'industry', 'location', 'price_text', 'duration_months', 'intake_months', 'image'])
             ->keyBy('id');
 
-        // Preserve staff-picked ordering exactly (their order = their
-        // recommendation). Drop any IDs whose Program row has vanished.
-        $ordered = collect($ids)
-            ->map(fn ($id) => $programs->get($id))
+        $mapOne = fn ($p) => [
+            'id' => $p->id,
+            'title' => $p->title,
+            'slug' => $p->slug,
+            'level' => $p->level,
+            'category' => $p->category,
+            'industry' => $p->industry,
+            'location' => $p->location,
+            'price_text' => $p->price_text,
+            'duration_months' => $p->duration_months,
+            'intake_months' => $p->intake_months,
+            'image_url' => $p->image ? \Illuminate\Support\Facades\Storage::disk('public')->url($p->image) : null,
+            'public_url' => '/program-details/'.($p->slug ?: $p->id),
+        ];
+        // Preserve staff-picked ordering exactly. Drop ids whose Program vanished.
+        $mapIds = fn ($idList) => collect($idList)
+            ->map(fn ($id) => $programs->get((int) $id))
             ->filter()
-            ->map(fn ($p) => [
-                'id' => $p->id,
-                'title' => $p->title,
-                'slug' => $p->slug,
-                'level' => $p->level,
-                'category' => $p->category,
-                'industry' => $p->industry,
-                'location' => $p->location,
-                'price_text' => $p->price_text,
-                'duration_months' => $p->duration_months,
-                'intake_months' => $p->intake_months,
-                'image_url' => $p->image ? \Illuminate\Support\Facades\Storage::disk('public')->url($p->image) : null,
-                'public_url' => '/program-details/'.($p->slug ?: $p->id),
-            ])
+            ->map($mapOne)
             ->values();
 
         return [
-            'programs' => $ordered,
+            'programs' => $mapIds($ids),
             'preferred_program_id' => $lead->preferred_program_id,
             'chosen_at' => optional($lead->preferred_program_chosen_at)->toIso8601String(),
+            // Earlier proposals, newest first — read-only history for the client.
+            'previous' => $previousVersions->map(fn ($v) => [
+                'id' => $v->id,
+                'programs' => $mapIds($v->program_ids ?? []),
+                'selected_program_id' => $v->selected_program_id,
+                'created_at' => optional($v->created_at)->toIso8601String(),
+            ])->values(),
         ];
     }
 

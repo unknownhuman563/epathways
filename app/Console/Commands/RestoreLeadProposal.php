@@ -26,9 +26,9 @@ use Illuminate\Support\Facades\DB;
  */
 class RestoreLeadProposal extends Command
 {
-    protected $signature = 'proposals:restore {lead : Lead lead_id (e.g. REG-XXXX) or email} {titles* : Program titles in the order they should appear} {--dry-run : Resolve and report without writing}';
+    protected $signature = 'proposals:restore {lead : Lead lead_id (e.g. REG-XXXX) or email} {titles* : Program titles in the order they should appear} {--selected= : Title of the program to mark as chosen on this proposal} {--reset : Delete existing proposal history for this lead first (clean rebuild)} {--dry-run : Resolve and report without writing}';
 
-    protected $description = "Restore a lead's proposal shortlist from program titles (recovers a proposal overwritten before version history).";
+    protected $description = "Restore a lead's proposal shortlist from program titles (recovers a proposal overwritten before version history). Run once per version, oldest first, to rebuild a full history.";
 
     public function handle(): int
     {
@@ -76,11 +76,35 @@ class RestoreLeadProposal extends Command
         }
 
         $ids = array_values(array_unique($ids));
+
+        // Optional selected program — must be one of the restored set.
+        $selectedId = null;
+        if ($sel = $this->option('selected')) {
+            $match = Program::whereRaw('LOWER(title) = ?', [mb_strtolower(trim($sel))])->first();
+            if (! $match) {
+                $this->error("--selected: no program titled '{$sel}'.");
+
+                return self::FAILURE;
+            }
+            if (! in_array($match->id, $ids, true)) {
+                $this->error("--selected: '{$match->title}' is not in the restored set.");
+
+                return self::FAILURE;
+            }
+            $selectedId = $match->id;
+        }
+
         $current = is_array($lead->proposed_program_ids) ? array_map('intval', $lead->proposed_program_ids) : [];
         $this->newLine();
         $this->info("Lead {$lead->lead_id} ({$lead->email})");
         $this->line('  current active : '.(empty($current) ? '(none)' : implode(', ', $current)));
         $this->line('  restore to     : '.implode(', ', $ids));
+        if ($selectedId) {
+            $this->line("  selected       : {$selectedId}");
+        }
+        if ($this->option('reset')) {
+            $this->line('  reset          : existing history will be DELETED first');
+        }
 
         if ($dry) {
             $this->newLine();
@@ -89,9 +113,21 @@ class RestoreLeadProposal extends Command
             return self::SUCCESS;
         }
 
-        DB::transaction(function () use ($lead, $ids) {
-            // Preserve the current active proposal in history if it isn't
-            // captured yet, so restoring doesn't discard it.
+        DB::transaction(function () use ($lead, $ids, $selectedId) {
+            // Clean rebuild: wipe history + the active shortlist/selection so a
+            // fresh, correctly-ordered sequence can be laid down.
+            if ($this->option('reset')) {
+                $lead->proposals()->delete();
+                $lead->forceFill([
+                    'proposed_program_ids' => null,
+                    'preferred_program_id' => null,
+                    'preferred_program_chosen_at' => null,
+                ])->save();
+                $lead->refresh();
+            }
+
+            // Legacy safety (non-reset): snapshot a pre-existing active proposal
+            // into history if it isn't captured yet, so it isn't discarded.
             if (! empty($lead->proposed_program_ids) && ! $lead->proposals()->exists()) {
                 LeadProposal::create([
                     'lead_id' => $lead->id,
@@ -100,18 +136,37 @@ class RestoreLeadProposal extends Command
                 ]);
             }
 
+            // Supersede: a new/different active freezes the current selection
+            // onto the version being replaced, then starts unselected — same
+            // rule as saveProposal.
+            $latest = $lead->proposals()->first();
+            $latestIds = $latest ? array_values(array_map('intval', $latest->program_ids ?? [])) : null;
+            $isNew = $latestIds !== $ids;
+            if ($isNew) {
+                if ($latest && $lead->preferred_program_id) {
+                    $latest->update(['selected_program_id' => (int) $lead->preferred_program_id]);
+                }
+                $lead->preferred_program_id = null;
+                $lead->preferred_program_chosen_at = null;
+            }
+
             $lead->proposed_program_ids = $ids;
             $lead->save();
 
-            // Version the restored set unless it already matches the latest.
-            $latest = $lead->proposals()->first();
-            $latestIds = $latest ? array_values(array_map('intval', $latest->program_ids ?? [])) : null;
-            if ($latestIds !== $ids) {
+            if ($isNew) {
                 LeadProposal::create([
                     'lead_id' => $lead->id,
                     'program_ids' => $ids,
                     'created_by' => null,
                 ]);
+            }
+
+            // Mark the chosen program on this (now-active) proposal, if given.
+            if ($selectedId) {
+                $lead->forceFill([
+                    'preferred_program_id' => $selectedId,
+                    'preferred_program_chosen_at' => now(),
+                ])->save();
             }
         });
 

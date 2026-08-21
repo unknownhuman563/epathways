@@ -674,8 +674,8 @@ class SalesController extends Controller
                     // MySQL, so filter empty arrays in PHP instead.
                     $q->whereRaw("proposed_program_ids != '[]'");
                 })
-                // Full proposal version history, newest first (the relation is
-                // already ->latest()), with who saved each one.
+                // Full proposal version history, newest first, with who saved
+                // each one.
                 ->with(['faceImage', 'proposals.creator:id,name'])
                 ->orderByDesc('updated_at')
                 ->get();
@@ -683,16 +683,18 @@ class SalesController extends Controller
             $proposals = $proposalLeads
                 ->filter(fn (Lead $l) => is_array($l->proposed_program_ids) && count($l->proposed_program_ids) > 0)
                 ->map(function (Lead $l) use ($mapPrograms) {
-                    // Active shortlist = the lead's current proposed_program_ids.
+                    // Active shortlist = the lead's current proposed_program_ids;
+                    // its selection is the live preferred_program_id.
                     $picks = $mapPrograms($l->proposed_program_ids);
 
-                    // Past versions — every saved proposal, newest first. The
-                    // very latest snapshot is the active one (already shown as
-                    // `programs`), so we surface the earlier ones as history.
-                    $allVersions = $l->proposals->map(fn ($p) => [
+                    // Previous versions = every saved proposal EXCEPT the newest
+                    // (which is the active one shown above). Each keeps the
+                    // program it had selected at the time.
+                    $previous = $l->proposals->slice(1)->map(fn ($p) => [
                         'id' => $p->id,
                         'programs' => $mapPrograms($p->program_ids),
                         'programs_count' => count($p->program_ids ?? []),
+                        'selected_program_id' => $p->selected_program_id,
                         'created_by' => optional($p->creator)->name,
                         'created_at' => optional($p->created_at)->toIso8601String(),
                     ])->values();
@@ -708,14 +710,11 @@ class SalesController extends Controller
                         'status' => $l->status,
                         'programs' => $picks,
                         'programs_count' => $picks->count(),
-                        // Full version history (newest first). The first entry
-                        // corresponds to the active shortlist; the rest are
-                        // previous proposals kept for reference.
-                        'history' => $allVersions,
-                        'history_count' => $allVersions->count(),
-                        // Which shortlisted program the lead settled on (set
-                        // from the tracker's "Choose this one" or by staff in
-                        // the Notify modal). Drives the highlight in the list.
+                        // Previous proposals kept for reference (newest first).
+                        'previous' => $previous,
+                        'previous_count' => $previous->count(),
+                        // The active proposal's chosen program (null when a new
+                        // proposal was just created — nothing selected yet).
                         'preferred_program_id' => $l->preferred_program_id,
                         'preferred_program_chosen_at' => optional($l->preferred_program_chosen_at)->toIso8601String(),
                         'updated_at' => optional($l->updated_at)->toIso8601String(),
