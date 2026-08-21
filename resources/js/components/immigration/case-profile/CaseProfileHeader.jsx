@@ -5,7 +5,7 @@ import CaseEngagementModal from "@/components/immigration/case-profile/CaseEngag
 import CaseHealthBadge from "@/components/ai/CaseHealthBadge";
 import {
     ArrowLeft, Globe, FileSignature, MessageSquarePlus, FilePlus2,
-    BadgeCheck, Briefcase, Archive, Eye, Link2,
+    BadgeCheck, Briefcase, Archive, Eye, Link2, Pencil,
 } from "lucide-react";
 import { AvatarPhoto } from "@/components/ui/Avatar";
 
@@ -15,10 +15,25 @@ const fmtDate = (iso) =>
 const initials = (name = "") =>
     name.trim().split(/\s+/).slice(0, 2).map((w) => w[0] || "").join("").toUpperCase() || "C";
 
-export default function CaseProfileHeader({ lead = {}, intake = null, attention = null, tiedTo = null, engagement = {} }) {
+export default function CaseProfileHeader({ lead = {}, intake = null, attention = null, tiedTo = null, engagement = {}, visaTypes = [] }) {
     const [engageOpen, setEngageOpen] = useState(false);
+    const [visaEditing, setVisaEditing] = useState(false);
+    const [savingVisa, setSavingVisa] = useState(false);
     const fullName = `${lead.first_name ?? ""} ${lead.last_name ?? ""}`.trim() || lead.lead_id || "Unnamed case";
     const visa = lead.inz_visa_type || intake?.data?.visa_type_label || "Visa type not set";
+    const currentVisaId = visaTypes.find((v) => v.name === lead.inz_visa_type)?.id ?? "";
+
+    // Inline edit of the case's visa type — posts to the same endpoint the Cases
+    // table uses; the checklist follows the newly-set visa.
+    const changeVisa = (id) => {
+        setSavingVisa(true);
+        router.post(`/portal/immigration/cases/${lead.id}/visa`, { visa_type_id: id || null }, {
+            preserveScroll: true,
+            onSuccess: () => { toast.success("Visa type updated"); setVisaEditing(false); },
+            onError: (e) => toast.error(Object.values(e)[0] || "Could not update the visa type"),
+            onFinish: () => setSavingVisa(false),
+        });
+    };
     const stage = lead.immigration_stage || lead.stage || "Stage not set";
     const conversionOrigin = lead.is_assessment_converted ? "Assessment-converted" : "Sales-converted";
     const openedIso = lead.created_at || lead.immigration_converted_at || null;
@@ -74,7 +89,30 @@ export default function CaseProfileHeader({ lead = {}, intake = null, attention 
                                     {fullName}
                                 </h1>
                                 <p className="text-[13px] text-gray-500 mt-0.5">
-                                    <span className="inline-flex items-center gap-1.5"><Globe size={13} className="text-gray-400" /> {visa}</span>
+                                    {visaEditing ? (
+                                        <span className="inline-flex items-center gap-1.5">
+                                            <Globe size={13} className="text-gray-400" />
+                                            <select
+                                                autoFocus
+                                                defaultValue={currentVisaId}
+                                                disabled={savingVisa}
+                                                onChange={(e) => changeVisa(e.target.value)}
+                                                onBlur={() => setVisaEditing(false)}
+                                                className="text-[13px] border border-gray-300 rounded-md px-1.5 py-0.5 focus:outline-none focus:border-gray-500 disabled:opacity-50"
+                                            >
+                                                <option value="">Visa type not set</option>
+                                                {visaTypes.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
+                                            </select>
+                                        </span>
+                                    ) : (
+                                        <span className="inline-flex items-center gap-1.5 group">
+                                            <Globe size={13} className="text-gray-400" /> {visa}
+                                            <button type="button" onClick={() => setVisaEditing(true)} title="Edit visa type"
+                                                className="text-gray-300 hover:text-gray-700 transition-colors">
+                                                <Pencil size={11} />
+                                            </button>
+                                        </span>
+                                    )}
                                     {lead.lead_id && <span className="text-gray-300"> · </span>}
                                     {lead.lead_id && <span className="font-mono text-gray-400">{lead.lead_id}</span>}
                                     {openedDate && <><span className="text-gray-300"> · </span>opened {openedDate}</>}

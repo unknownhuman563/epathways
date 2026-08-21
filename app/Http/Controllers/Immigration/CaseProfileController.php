@@ -515,6 +515,54 @@ class CaseProfileController extends Controller
         return back()->with('success', $data['in_agreement'] ? 'Added to the agreement.' : 'Excluded from the agreement.');
     }
 
+    /**
+     * Open a dependant as their own immigration case. Every family member is a
+     * case in its own right — if this one isn't tied to a case yet, create one
+     * from their details and link it, then send the user to that case profile.
+     */
+    public function openDependentCase(Lead $lead, \App\Models\CaseDependent $dependent)
+    {
+        $this->guardCase($lead);
+        abort_unless($dependent->lead_id === $lead->id, 404);
+
+        // Already tied to a case — just go there.
+        if ($dependent->linked_lead_id) {
+            return redirect("/portal/immigration/cases/{$dependent->linked_lead_id}/profile");
+        }
+
+        $case = Lead::create([
+            'lead_id' => 'IC-'.strtoupper(uniqid()),
+            'first_name' => $dependent->first_name ?: 'Family',
+            'middle_name' => $dependent->middle_name,
+            'last_name' => $dependent->family_name,
+            'gender' => $dependent->gender,
+            'dob' => $dependent->dob,
+            // Family members share the main applicant's email — correspondence
+            // for the whole group goes to the principal.
+            'email' => $lead->email,
+            'phone' => $lead->phone,
+            'citizenship' => $dependent->nationality,
+            'passport_number' => $dependent->passport_number,
+            'passport_expiry' => $dependent->passport_expiry,
+            'inz_visa_type' => $dependent->visaType?->name,
+            'is_immigration_case' => true,
+            'immigration_stage' => Lead::IMMIGRATION_STAGES[0],
+            'immigration_converted_at' => now(),
+            'immigration_converted_by' => auth()->id(),
+            'stage_updated_at' => now(),
+            'stage_updated_by' => auth()->id(),
+            'source' => 'family.immigration',
+            'status' => 'New',
+            'stage' => 'Visa Process',
+        ]);
+
+        // Tie the dependant to its new case so the link is permanent.
+        $dependent->update(['linked_lead_id' => $case->id]);
+
+        return redirect("/portal/immigration/cases/{$case->id}/profile")
+            ->with('success', "Case opened for {$dependent->fullName()}.");
+    }
+
     public function deleteDependent(Lead $lead, \App\Models\CaseDependent $dependent)
     {
         $this->guardCase($lead);

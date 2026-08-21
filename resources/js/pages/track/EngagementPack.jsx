@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, Fragment } from "react";
 import { Head, router } from "@inertiajs/react";
 import SignatureCanvas from "react-signature-canvas";
 import {
     FileSignature, Eraser, ShieldCheck, AlertCircle, Loader2, FileText,
-    Eye, Download, CheckCircle2, X, Upload, Type, PenLine,
+    Eye, Download, CheckCircle2, X, Upload, Type, PenLine, Check,
 } from "lucide-react";
 import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
@@ -14,107 +14,175 @@ import Footer from "@/components/layout/Footer";
 
 const ACCENT = "#0f766e";
 
-export default function EngagementPack({ token, client = {}, documents = [] }) {
+export default function EngagementPack({ token, client = {}, documents = [], proofs = [], proof_upload_url = null, adviser = null, invoice_paid = false }) {
     const [signing, setSigning] = useState(null); // the signable doc being signed
     const [viewing, setViewing] = useState(null); // the doc open in the preview modal
-    const [agreed, setAgreed] = useState({});     // doc id -> "I agree" ticked
 
     const agreement = documents.find((d) => d.signable) || null;
-    const others = documents.filter((d) => !d.signable);
+    const invoice = documents.find((d) => d.is_invoice) || null;
+    const standards = documents.filter((d) => !d.signable && !d.is_invoice);
 
-    // The other documents are acknowledged (optionally) from inside their view modal.
-    const setDocAgreed = (id, v) => setAgreed((a) => ({ ...a, [id]: v }));
+    const agreementSigned = !! agreement?.signed;
+    const invoicePaid = !! invoice_paid;
+    // Which of the three onboarding steps the client is on.
+    const step = ! agreementSigned ? 1 : ! invoicePaid ? 2 : 3;
+    const todo = (agreement && ! agreementSigned ? 1 : 0) + (invoice && ! invoicePaid ? 1 : 0);
+
+    const steps = [
+        {
+            n: 1, label: "Agreement signed",
+            sub: agreementSigned ? (agreement?.signed_at ? `Signed ${fmtDate(agreement.signed_at)}` : "Done") : "waiting on you",
+            done: agreementSigned,
+        },
+        {
+            n: 2, label: "Invoice paid",
+            sub: invoicePaid ? "Received" : (invoice?.invoice_total != null ? `${money(invoice.invoice_total)} due ${fmtDate(invoice.due_date)}` : "awaiting"),
+            done: invoicePaid,
+        },
+        {
+            n: 3, label: "Documents requested",
+            sub: step >= 3 ? "Ready" : "unlocks after step 2",
+            done: false,
+        },
+    ];
 
     return (
         <>
             <Navbar />
-            <Head title="Your engagement documents — ePathways Migration" />
+            <Head title="Getting started — ePathways Migration" />
             <main className="min-h-screen bg-gray-50 py-10 px-4">
-                <div className="max-w-3xl mx-auto space-y-6">
-                    <header className="space-y-1">
-                        <p className="text-[11px] font-bold uppercase tracking-[0.22em] inline-flex items-center gap-1.5" style={{ color: ACCENT }}>
-                            <FileSignature size={12} /> Engagement documents
-                        </p>
-                        <h1 className="text-2xl font-bold text-gray-900">Your engagement pack</h1>
-                        <p className="text-sm text-gray-600">
-                            {client.first_name ? `Hi ${client.first_name}, ` : ""}please review the documents below and sign your engagement agreement.
+                <div className="max-w-2xl mx-auto space-y-5">
+                    <header>
+                        <p className="text-[11px] font-bold uppercase tracking-[0.2em]" style={{ color: ACCENT }}>Step {step} of 3 · Getting started</p>
+                        <h1 className="text-[28px] leading-tight font-bold text-gray-900 mt-1">
+                            {todo <= 1 ? "One thing to do before" : "Two things to do before"}<br />we can start your application
+                        </h1>
+                        <p className="text-[14px] text-gray-500 mt-2 leading-relaxed">
+                            {client.first_name ? `Hi ${client.first_name} — ` : ""}sign your engagement agreement and settle the invoice. Everything else on this page is yours to keep and read at your own pace.
                         </p>
                     </header>
+
+                    {/* Three-step tracker */}
+                    <div className="bg-white border border-gray-200 rounded-xl px-4 py-3.5 flex items-center gap-2">
+                        {steps.map((s, i) => (
+                            <Fragment key={s.n}>
+                                <div className="flex items-center gap-2.5 min-w-0">
+                                    <span
+                                        className={`w-6 h-6 rounded-full border flex items-center justify-center text-[11px] font-bold flex-shrink-0 ${s.done ? "text-white border-transparent" : s.n === step ? "border-current" : "text-gray-300 border-gray-200"}`}
+                                        style={s.done ? { backgroundColor: ACCENT } : s.n === step ? { color: ACCENT } : {}}
+                                    >
+                                        {s.done ? <Check size={13} /> : s.n}
+                                    </span>
+                                    <div className="min-w-0">
+                                        <p className={`text-[12.5px] font-bold truncate ${s.n === step || s.done ? "text-gray-900" : "text-gray-400"}`}>{s.label}</p>
+                                        <p className="text-[11px] text-gray-400 truncate">{s.sub}</p>
+                                    </div>
+                                </div>
+                                {i < steps.length - 1 && <span className="flex-1 h-px bg-gray-100 min-w-[12px]" />}
+                            </Fragment>
+                        ))}
+                    </div>
+
+                    {/* Written Agreement — the primary action (dark card) */}
+                    {agreement && ! agreementSigned && (
+                        <section className="rounded-2xl bg-gray-900 text-white p-6 shadow-sm">
+                            <div className="flex items-start justify-between gap-4">
+                                <div className="min-w-0">
+                                    <p className="text-[11px] font-bold uppercase tracking-[0.18em]" style={{ color: "#5eead4" }}>Action required</p>
+                                    <h2 className="text-xl font-bold mt-1.5">Sign your written agreement</h2>
+                                    <p className="text-[13.5px] text-gray-300 mt-2 leading-relaxed max-w-md">
+                                        This is the contract between you and your licensed adviser — it sets out the services, the fee, and your right to complain. Read it, then sign electronically. Takes about four minutes.
+                                    </p>
+                                </div>
+                                {agreement.sign_by && (
+                                    <div className="text-right flex-shrink-0">
+                                        <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Sign by</p>
+                                        <p className="text-[15px] font-bold">{fmtDate(agreement.sign_by)}</p>
+                                        <p className="text-[12px]" style={{ color: "#fbbf24" }}>{daysLeftLabel(agreement.sign_by)}</p>
+                                    </div>
+                                )}
+                            </div>
+                            <div className="mt-5 flex items-center justify-between gap-3 flex-wrap">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                    <button type="button" onClick={() => setSigning(agreement)}
+                                        className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-lg text-white text-[13px] font-bold hover:opacity-90" style={{ backgroundColor: ACCENT }}>
+                                        <FileSignature size={14} /> Review &amp; sign
+                                    </button>
+                                    <button type="button" onClick={() => setViewing(agreement)}
+                                        className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-lg border border-white/20 text-white text-[13px] font-semibold hover:bg-white/10">
+                                        Read first
+                                    </button>
+                                    <a href={agreement.download_url}
+                                        className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-lg border border-white/20 text-white text-[13px] font-semibold hover:bg-white/10">
+                                        Download PDF
+                                    </a>
+                                </div>
+                                {agreement.size ? <span className="text-[12px] text-gray-400">{formatBytes(agreement.size)}</span> : null}
+                            </div>
+                        </section>
+                    )}
+                    {agreement && agreementSigned && (
+                        <section className="rounded-2xl bg-white border border-emerald-200 p-5 flex items-center gap-3">
+                            <span className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center flex-shrink-0"><CheckCircle2 size={20} /></span>
+                            <div className="min-w-0 flex-1">
+                                <p className="text-[14px] font-bold text-gray-900">Agreement signed</p>
+                                <p className="text-[12.5px] text-gray-500">
+                                    Signed{agreement.signer_name ? ` by ${agreement.signer_name}` : ""}{agreement.signed_at ? ` · ${fmtDate(agreement.signed_at)}` : ""}. Thank you.
+                                </p>
+                            </div>
+                            <a href={agreement.download_url} className="text-[13px] font-semibold" style={{ color: ACCENT }}>Download</a>
+                        </section>
+                    )}
+
+                    {/* Invoice + proof of payment */}
+                    {invoice && (
+                        <InvoiceCard invoice={invoice} paid={invoicePaid} proofs={proofs} uploadUrl={proof_upload_url} onView={() => setViewing(invoice)} />
+                    )}
+
+                    {/* Yours to keep — standard IAA documents */}
+                    {standards.length > 0 && (
+                        <section>
+                            <div className="flex items-end justify-between border-b border-gray-200 pb-2 gap-3">
+                                <div className="min-w-0">
+                                    <p className="text-[11px] font-bold uppercase tracking-wider text-gray-400">Yours to keep</p>
+                                    <p className="text-[12.5px] text-gray-500 mt-0.5">No action needed — these explain how we work and what you can expect.</p>
+                                </div>
+                                <DownloadAll docs={standards} />
+                            </div>
+                            <ul>
+                                {standards.map((d) => (
+                                    <li key={d.id} className="py-3.5 border-b border-gray-100 flex items-start gap-3">
+                                        <div className="min-w-0 flex-1">
+                                            <p className="text-[14px] font-bold text-gray-900">{d.title}</p>
+                                            {d.desc && <p className="text-[12.5px] text-gray-500 mt-0.5">{d.desc}</p>}
+                                        </div>
+                                        {d.size ? <span className="text-[11px] text-gray-300 font-mono mt-0.5 whitespace-nowrap">{formatBytes(d.size)}</span> : null}
+                                        <button type="button" onClick={() => setViewing(d)} className="text-[13px] font-semibold flex-shrink-0" style={{ color: ACCENT }}>Read</button>
+                                        <a href={d.download_url} className="text-[13px] font-semibold text-gray-400 hover:text-gray-700 flex-shrink-0">Save</a>
+                                    </li>
+                                ))}
+                            </ul>
+                        </section>
+                    )}
+
+                    {/* Adviser */}
+                    {adviser && (
+                        <section className="bg-white border border-gray-200 rounded-2xl px-5 py-4 flex items-center gap-3 flex-wrap">
+                            <span className="w-11 h-11 rounded-full flex items-center justify-center text-white text-[13px] font-bold flex-shrink-0" style={{ backgroundColor: ACCENT }}>
+                                {(adviser.name || "A").split(/\s+/).slice(0, 2).map((s) => s[0] || "").join("").toUpperCase()}
+                            </span>
+                            <div className="min-w-0 flex-1">
+                                <p className="text-[14px] font-bold text-gray-900">{adviser.name} <span className="font-normal text-gray-500">· your licensed adviser</span></p>
+                                <p className="text-[12px] text-gray-500">{adviser.licence ? `Licence ${adviser.licence} · ` : ""}replies within one business day</p>
+                            </div>
+                        </section>
+                    )}
 
                     {documents.length === 0 && (
                         <div className="bg-white border border-gray-200 rounded-xl p-8 text-center">
                             <FileText size={26} className="mx-auto text-gray-300" />
                             <p className="mt-3 text-sm text-gray-600">No engagement documents are available on this link.</p>
                         </div>
-                    )}
-
-                    {/* The agreement to sign */}
-                    {agreement && (
-                        <section className="bg-white border-2 rounded-2xl overflow-hidden shadow-sm" style={{ borderColor: `${ACCENT}33` }}>
-                            <div className="px-5 py-4 flex items-start gap-3" style={{ backgroundColor: `${ACCENT}0d` }}>
-                                <span className="w-10 h-10 rounded-xl flex items-center justify-center text-white flex-shrink-0" style={{ backgroundColor: ACCENT }}>
-                                    <FileSignature size={19} />
-                                </span>
-                                <div className="min-w-0 flex-1">
-                                    <h2 className="text-[15px] font-bold text-gray-900">{agreement.title}</h2>
-                                    <p className="text-[12px] text-gray-500">Requires your signature</p>
-                                </div>
-                                {agreement.signed && (
-                                    <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 flex-shrink-0">
-                                        <CheckCircle2 size={12} /> Signed
-                                    </span>
-                                )}
-                            </div>
-                            <div className="px-5 py-4 flex items-center gap-2 flex-wrap">
-                                <button type="button" onClick={() => setViewing(agreement)}
-                                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-gray-200 text-gray-700 text-[13px] font-semibold hover:bg-gray-50">
-                                    <Eye size={14} /> View
-                                </button>
-                                <a href={agreement.download_url}
-                                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-gray-200 text-gray-700 text-[13px] font-semibold hover:bg-gray-50">
-                                    <Download size={14} /> Download
-                                </a>
-                                {agreement.signed ? (
-                                    <span className="text-[12px] text-gray-500 ml-1">
-                                        Signed{agreement.signer_name ? ` by ${agreement.signer_name}` : ""}{agreement.signed_at ? ` · ${new Date(agreement.signed_at).toLocaleDateString("en-NZ", { day: "numeric", month: "short", year: "numeric" })}` : ""}
-                                    </span>
-                                ) : (
-                                    <button type="button" onClick={() => setSigning(agreement)}
-                                        className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-white text-[13px] font-bold hover:opacity-90 ml-auto" style={{ backgroundColor: ACCENT }}>
-                                        <FileSignature size={14} /> Review &amp; sign
-                                    </button>
-                                )}
-                            </div>
-                        </section>
-                    )}
-
-                    {/* The rest of the pack — view / download only */}
-                    {others.length > 0 && (
-                        <section className="bg-white border border-gray-200 rounded-2xl overflow-hidden">
-                            <div className="px-5 py-3 border-b border-gray-100 text-[11px] font-bold uppercase tracking-wider text-gray-500">
-                                Your documents
-                            </div>
-                            <ul className="divide-y divide-gray-50">
-                                {others.map((d) => (
-                                    <li key={d.id} className="px-5 py-3.5 flex items-center gap-3">
-                                        <span className="w-9 h-9 rounded-lg bg-gray-100 text-gray-500 flex items-center justify-center flex-shrink-0"><FileText size={16} /></span>
-                                        <span className="min-w-0 flex-1">
-                                            <span className="block text-[13px] font-semibold text-gray-800 truncate">{d.title}</span>
-                                            {d.size ? <span className="block text-[11px] text-gray-400">{formatBytes(d.size)}</span> : null}
-                                        </span>
-                                        {(d.signed || agreed[d.id]) && (
-                                            <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 whitespace-nowrap">
-                                                <CheckCircle2 size={13} /> Agreed
-                                            </span>
-                                        )}
-                                        <button type="button" onClick={() => setViewing(d)} title="View & agree"
-                                            className="inline-flex items-center justify-center p-2 rounded-md border border-gray-200 text-gray-600 hover:bg-gray-50"><Eye size={14} /></button>
-                                        <a href={d.download_url} title="Download"
-                                            className="inline-flex items-center justify-center p-2 rounded-md border border-gray-200 text-gray-600 hover:bg-gray-50"><Download size={14} /></a>
-                                    </li>
-                                ))}
-                            </ul>
-                        </section>
                     )}
                 </div>
             </main>
@@ -124,17 +192,120 @@ export default function EngagementPack({ token, client = {}, documents = [] }) {
                 <SignModal doc={signing} clientName={client.name} onClose={() => setSigning(null)} />
             )}
             {viewing && (
-                <DocViewModal
-                    doc={viewing}
-                    agreeable={!viewing.signable && !viewing.signed}
-                    agreed={!!agreed[viewing.id]}
-                    onAgree={(v) => setDocAgreed(viewing.id, v)}
-                    onClose={() => setViewing(null)}
-                />
+                <DocViewModal doc={viewing} onClose={() => setViewing(null)} />
             )}
         </>
     );
 }
+
+// The invoice card — amount, due date, proof-of-payment upload, and links.
+function InvoiceCard({ invoice, paid, proofs = [], uploadUrl, onView }) {
+    return (
+        <section className="bg-white border border-gray-200 rounded-2xl p-5">
+            <div className="flex items-start justify-between gap-4">
+                <div className="min-w-0">
+                    <p className="text-[11px] font-bold uppercase tracking-wider" style={{ color: paid ? "#059669" : "#b45309" }}>{paid ? "Paid" : "Awaiting payment"}</p>
+                    <h2 className="text-lg font-bold text-gray-900 mt-1">{invoice.title}</h2>
+                    <p className="text-[12.5px] text-gray-500 mt-0.5">
+                        {invoice.due_date ? `Due ${fmtDate(invoice.due_date)} · ` : ""}service fee and INZ lodgement charge
+                    </p>
+                </div>
+                {invoice.invoice_total != null && (
+                    <div className="text-right flex-shrink-0">
+                        <p className="text-[22px] font-bold text-gray-900 tabular-nums">{money(invoice.invoice_total)}</p>
+                        <p className="text-[11px] text-gray-400">NZD, GST included</p>
+                    </div>
+                )}
+            </div>
+
+            {! paid && uploadUrl && (
+                <div className="mt-4 rounded-xl border border-dashed border-gray-200 p-4 flex items-center justify-between gap-3 flex-wrap">
+                    <div className="min-w-0">
+                        <p className="text-[13px] font-bold text-gray-800">Paid your invoice?</p>
+                        <p className="text-[12px] text-gray-500">Upload your receipt or bank-transfer confirmation and we'll verify it. PDF or image, up to 10 MB.</p>
+                    </div>
+                    <ProofUpload uploadUrl={uploadUrl} />
+                </div>
+            )}
+            {paid && (
+                <div className="mt-4 rounded-xl bg-emerald-50 border border-emerald-100 px-4 py-3 text-[13px] text-emerald-800 inline-flex items-center gap-2">
+                    <CheckCircle2 size={15} /> Payment received — thank you.
+                </div>
+            )}
+
+            {proofs.length > 0 && (
+                <ul className="mt-3 space-y-1.5">
+                    {proofs.map((p) => (
+                        <li key={p.id} className="flex items-center gap-2 text-[12px]">
+                            <FileText size={13} className="text-gray-300 flex-shrink-0" />
+                            <span className="text-gray-600 truncate flex-1">{p.original_name}</span>
+                            <span className="text-gray-400 whitespace-nowrap">{proofStatus(p.status)}</span>
+                            <a href={p.view_url} target="_blank" rel="noopener noreferrer" className="font-semibold flex-shrink-0" style={{ color: ACCENT }}>View</a>
+                        </li>
+                    ))}
+                </ul>
+            )}
+
+            <div className="mt-4 flex items-center justify-between gap-3 border-t border-gray-100 pt-3 flex-wrap">
+                <div className="flex items-center gap-4">
+                    <button type="button" onClick={onView} className="text-[13px] font-semibold" style={{ color: ACCENT }}>View invoice</button>
+                    <a href={invoice.download_url} className="text-[13px] font-semibold" style={{ color: ACCENT }}>Download</a>
+                </div>
+                <span className="text-[11px] text-gray-400">We verify uploads within one business day</span>
+            </div>
+        </section>
+    );
+}
+
+// Upload button for proof of payment (used inside the invoice card).
+function ProofUpload({ uploadUrl }) {
+    const fileRef = useRef(null);
+    const [uploading, setUploading] = useState(false);
+    const onChange = (e) => {
+        const files = Array.from(e.target.files || []);
+        if (! files.length) return;
+        setUploading(true);
+        router.post(uploadUrl, { files }, {
+            forceFormData: true, preserveScroll: true,
+            onFinish: () => { setUploading(false); if (fileRef.current) fileRef.current.value = ""; },
+        });
+    };
+    return (
+        <>
+            <button type="button" onClick={() => fileRef.current?.click()} disabled={uploading}
+                className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-lg text-white text-[13px] font-bold hover:opacity-90 disabled:opacity-50 flex-shrink-0" style={{ backgroundColor: ACCENT }}>
+                {uploading ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
+                {uploading ? "Uploading…" : "Upload proof of payment"}
+            </button>
+            <input ref={fileRef} type="file" multiple accept="application/pdf,image/*" className="hidden" onChange={onChange} />
+        </>
+    );
+}
+
+// Download every "yours to keep" document, one after another.
+function DownloadAll({ docs = [] }) {
+    const onClick = () => docs.forEach((d) => {
+        const a = document.createElement("a");
+        a.href = d.download_url; a.download = "";
+        document.body.appendChild(a); a.click(); a.remove();
+    });
+    return <button type="button" onClick={onClick} className="text-[13px] font-semibold flex-shrink-0" style={{ color: ACCENT }}>Download all</button>;
+}
+
+const fmtDate = (iso) =>
+    iso ? new Date(iso).toLocaleDateString("en-NZ", { day: "numeric", month: "short", year: "numeric" }) : "";
+const money = (n) =>
+    `$${Number(n || 0).toLocaleString("en-NZ", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const proofStatus = (s) =>
+    s === "Approved" ? "Confirmed" : s === "Rejected" ? "Needs attention" : "Under review";
+const daysLeftLabel = (iso) => {
+    if (! iso) return "";
+    const days = Math.ceil((new Date(iso) - Date.now()) / 86400000);
+    if (days < 0) return "overdue";
+    if (days === 0) return "due today";
+    return `${days} day${days === 1 ? "" : "s"} left`;
+};
+
 
 // In-page document preview — opens the PDF in a modal instead of a new tab. When
 // `agreeable`, an acknowledgement checkbox sits below the document.
