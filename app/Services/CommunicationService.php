@@ -85,6 +85,10 @@ class CommunicationService
                 $template->cc,
                 $template->bcc,
                 $template->branding,
+                $template->to_extra,
+                // A visual-builder template is a complete, self-contained email —
+                // send it as-is, without the branded shell wrapping it.
+                filled($template->design_json),
             );
         }
 
@@ -247,7 +251,40 @@ class CommunicationService
         return $res['ok'];
     }
 
-    private function sendEmail(Lead $lead, string $subject, string $body, ?string $key, array $attachments = [], ?int $campaignId = null, ?string $bannerImage = null, ?string $footerImage = null, ?string $fromEmail = null, ?string $fromName = null, ?string $cc = null, ?string $bcc = null, ?string $branding = null): MessageLog
+    /**
+     * Send a manually composed email (Compose module) to an arbitrary address,
+     * or to a lead when $leadId is given. Subject/body are already substituted by
+     * the caller. Logs with source='compose' and recipient_type 'lead'/'raw'.
+     * $rawHtml=true sends a self-contained builder email (no branded shell).
+     */
+    public function sendComposedEmail(string $address, ?string $subject, string $body, array $attachments = [], bool $rawHtml = false, ?int $leadId = null): MessageLog
+    {
+        $address = strtolower(trim($address));
+
+        $log = $this->log([
+            'source' => 'compose',
+            'channel' => MessageLog::CHANNEL_EMAIL,
+            'recipient_type' => $leadId ? 'lead' : 'raw',
+            'recipient_id' => $leadId,
+            'recipient_address' => $address,
+            'subject' => $subject,
+            'body' => $body,
+            'status' => MessageLog::STATUS_QUEUED,
+        ]);
+
+        try {
+            Mail::to($address)->queue(
+                new TemplatedMessage($subject ?? '', $body, $attachments, null, null, $log->id, null, null, null, null, null, $rawHtml)
+            );
+        } catch (\Throwable $e) {
+            Log::error('Composed email failed', ['address' => $address, 'error' => $e->getMessage()]);
+            $log->update(['status' => MessageLog::STATUS_FAILED, 'error_message' => $e->getMessage(), 'failed_at' => now()]);
+        }
+
+        return $log;
+    }
+
+    private function sendEmail(Lead $lead, string $subject, string $body, ?string $key, array $attachments = [], ?int $campaignId = null, ?string $bannerImage = null, ?string $footerImage = null, ?string $fromEmail = null, ?string $fromName = null, ?string $cc = null, ?string $bcc = null, ?string $branding = null, ?string $toExtra = null, bool $raw = false): MessageLog
     {
         if (empty($lead->email)) {
             return $this->log([
@@ -267,9 +304,17 @@ class CommunicationService
             'subject' => $subject, 'body' => $body, 'status' => MessageLog::STATUS_QUEUED,
         ]);
 
+        // The lead is always the primary recipient; a template's optional "To
+        // (also send to)" list adds extra addresses (e.g. the internal team) to
+        // the To line, deduped against the lead's own address.
+        $recipients = collect([$lead->email])
+            ->merge($this->parseAddresses($toExtra))
+            ->map(fn ($e) => strtolower(trim((string) $e)))
+            ->filter()->unique()->values()->all();
+
         try {
-            Mail::to($lead->email)->queue(
-                new TemplatedMessage($subject, $body, $attachments, $bannerImage, $footerImage, $log->id, $fromEmail, $fromName, $cc, $bcc, $branding)
+            Mail::to($recipients)->queue(
+                new TemplatedMessage($subject, $body, $attachments, $bannerImage, $footerImage, $log->id, $fromEmail, $fromName, $cc, $bcc, $branding, $raw)
             );
         } catch (\Throwable $e) {
             Log::error('CommunicationService email failed', ['lead_id' => $lead->id, 'error' => $e->getMessage()]);
@@ -281,6 +326,19 @@ class CommunicationService
         }
 
         return $log;
+    }
+
+    /** Split a comma/semicolon-separated address string into valid emails. */
+    private function parseAddresses(?string $raw): array
+    {
+        if (! $raw) {
+            return [];
+        }
+
+        return collect(preg_split('/[,;]+/', $raw))
+            ->map(fn ($e) => trim($e))
+            ->filter(fn ($e) => filter_var($e, FILTER_VALIDATE_EMAIL))
+            ->values()->all();
     }
 
     private function sendSms(Lead $lead, string $body, ?string $key): MessageLog

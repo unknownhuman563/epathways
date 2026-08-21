@@ -1365,7 +1365,7 @@ class LeadController extends Controller
         // the item's frontend key so the gallery card can render each list.
         $checklistFiles = \App\Models\LeadDocument::where('lead_id', $lead->id)
             ->whereNotNull('checklist_key')
-            ->with('uploader:id,name')
+            ->with('uploader:id,name', 'reviewer:id,name')
             ->orderBy('created_at')
             ->get()
             ->groupBy('checklist_key')
@@ -1378,6 +1378,8 @@ class LeadController extends Controller
                 'source' => $f->source,
                 'source_variant' => $f->source_variant,
                 'uploaded_by' => optional($f->uploader)->name,
+                'reviewed_by' => optional($f->reviewer)->name,
+                'reviewed_at' => $f->reviewed_at,
                 'created_at' => $f->created_at,
             ])->values());
 

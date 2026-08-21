@@ -182,7 +182,7 @@ const STAGE_STYLES = {
     "New Leads":                      "bg-rose-100 text-rose-800 border-rose-200",
     "Contact Attempted":              "bg-orange-100 text-orange-800 border-orange-200",
     "Contacted for Booking":          "bg-yellow-100 text-yellow-800 border-yellow-200",
-    "Booking Confirmation with Bryll":"bg-cyan-100 text-cyan-800 border-cyan-200",
+    "Booking Confirmation":"bg-cyan-100 text-cyan-800 border-cyan-200",
     "Missed the Meeting":             "bg-pink-100 text-pink-800 border-pink-200",
     "Qualified but Not Ready":        "bg-slate-100 text-slate-700 border-slate-200",
     "Qualified but No Funds":         "bg-slate-100 text-slate-700 border-slate-200",
@@ -394,7 +394,7 @@ const fmtDate = (iso) => {
     } catch { return ""; }
 };
 
-export default function EducationStudents({ students = [], schoolOptions = [], programOptions = [] }) {
+export default function EducationStudents({ students = [], schoolOptions = [], programOptions = [], agentOptions = [] }) {
     // Add / edit student modal — null = closed, {} = new, object = edit.
     const [editingStudent, setEditingStudent] = useState(null);
     const [studentModalOpen, setStudentModalOpen] = useState(false);
@@ -978,6 +978,7 @@ export default function EducationStudents({ students = [], schoolOptions = [], p
                 onClose={closeStudentModal}
                 schoolOptions={schoolOptions}
                 programOptions={programOptions}
+                agentOptions={agentOptions}
             />
 
             {filesStudent && (
@@ -1020,7 +1021,7 @@ function StudentDashboardPanel({ student: s }) {
                         stage. Lives in the expander so the row column
                         stays compact. */}
                     <ReadOnlyField icon={UserPlus}  label="Endorsed by"    value={s.endorsed_by} />
-                    <ReadOnlyField icon={Users}     label="Referral"       value={s.referral} />
+                    <ReadOnlyField icon={Users}     label="Referring agent" value={s.agent_name || s.referral} />
                     <ReadOnlyField icon={UserPlus}  label="Assigned person" value={s.immigration_assignee || s.english_assignee} />
                 </div>
             </section>

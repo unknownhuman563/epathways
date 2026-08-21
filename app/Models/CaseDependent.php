@@ -16,7 +16,7 @@ class CaseDependent extends Model
     public const RELATIONSHIPS = ['child', 'partner', 'parent', 'sibling', 'other'];
 
     protected $fillable = [
-        'lead_id', 'linked_lead_id', 'visa_type_id', 'relationship', 'family_name', 'first_name', 'middle_name',
+        'lead_id', 'linked_lead_id', 'visa_type_id', 'relationship', 'in_agreement', 'fee_override', 'family_name', 'first_name', 'middle_name',
         'dob', 'gender', 'nationality', 'passport_number', 'passport_expiry',
         'source', 'notes', 'added_by',
     ];
@@ -24,6 +24,8 @@ class CaseDependent extends Model
     protected $casts = [
         'dob' => 'date',
         'passport_expiry' => 'date',
+        'in_agreement' => 'boolean',
+        'fee_override' => 'decimal:2',
     ];
 
     public function lead(): BelongsTo

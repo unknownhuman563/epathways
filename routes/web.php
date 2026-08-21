@@ -418,6 +418,10 @@ Route::middleware(['auth'])->group(function () {
     // System request tickets — any staff member can raise one (leads are
     // blocked inside the controller).
     Route::post('/tickets', [\App\Http\Controllers\SystemTicketController::class, 'store'])->name('tickets.store');
+    // Screenshot stream — auth-gated to admins + the ticket's own submitter
+    // inside the controller (the files live on the private disk).
+    Route::get('/system-tickets/{id}/images/{index}', [\App\Http\Controllers\SystemTicketController::class, 'image'])
+        ->whereNumber(['id', 'index'])->name('system-tickets.image');
 
     // Active message templates (JSON) — feeds the bulk-email + compose pickers.
     // Any authenticated staff member; no lead-specific data is exposed.
@@ -519,11 +523,6 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/admin/programs/{id}', [ProgramController::class, 'update']);
         Route::delete('/admin/programs/{id}', [ProgramController::class, 'destroy']);
 
-        Route::get('/admin/booking', [BookingController::class, 'index'])->name('admin.bookings');
-        Route::post('/admin/bookings/{id}', [BookingController::class, 'update']);
-        Route::delete('/admin/bookings/{id}', [BookingController::class, 'destroy'])->name('admin.bookings.destroy');
-        // Convert a booking's client into a pipeline lead (education flow).
-        Route::post('/admin/bookings/{id}/convert', [BookingController::class, 'convertToLead'])->name('admin.bookings.convert');
 
         Route::get('/admin/settings', [SettingController::class, 'index'])->name('admin.settings');
         Route::post('/admin/settings', [SettingController::class, 'update']);
@@ -563,6 +562,7 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/admin/message-templates/move', [\App\Http\Controllers\MessageTemplateController::class, 'moveTemplates'])->name('admin.message-templates.move');
         Route::post('/admin/message-templates/move-department', [\App\Http\Controllers\MessageTemplateController::class, 'moveDepartment'])->name('admin.message-templates.move-department');
         Route::post('/admin/message-templates/delete', [\App\Http\Controllers\MessageTemplateController::class, 'destroyMany'])->name('admin.message-templates.delete-many');
+        Route::post('/admin/message-templates/upload-image', [\App\Http\Controllers\MessageTemplateController::class, 'uploadEmailImage'])->name('admin.message-templates.upload-image');
         Route::post('/admin/message-templates', [\App\Http\Controllers\MessageTemplateController::class, 'store'])->name('admin.message-templates.store');
         Route::get('/admin/message-templates/{id}', [\App\Http\Controllers\MessageTemplateController::class, 'show'])->name('admin.message-templates.show');
         Route::put('/admin/message-templates/{id}', [\App\Http\Controllers\MessageTemplateController::class, 'update'])->name('admin.message-templates.update');
@@ -587,6 +587,12 @@ Route::middleware(['auth'])->group(function () {
 
         Route::get('/admin/email/replies', [\App\Http\Controllers\EmailReplyController::class, 'index'])->name('admin.email.replies');
         Route::post('/admin/email/replies/sync', [\App\Http\Controllers\EmailReplyController::class, 'syncNow'])->name('admin.email.replies.sync');
+
+        // Compose — write a one-off email to picked leads and/or typed addresses.
+        Route::get('/admin/email/compose', [\App\Http\Controllers\ComposeController::class, 'index'])->name('admin.email.compose');
+        Route::post('/admin/email/compose/send', [\App\Http\Controllers\ComposeController::class, 'send'])->name('admin.email.compose.send');
+        Route::post('/admin/email/compose/upload-image', [\App\Http\Controllers\ComposeController::class, 'uploadImage'])->name('admin.email.compose.upload-image');
+        Route::get('/admin/email/compose/leads', [\App\Http\Controllers\ComposeController::class, 'searchLeads'])->name('admin.email.compose.leads');
         Route::post('/admin/email/replies/{leadId}/read', [\App\Http\Controllers\EmailReplyController::class, 'markThreadRead'])->name('admin.email.replies.read');
         Route::post('/admin/email/replies/{leadId}/reply', [\App\Http\Controllers\EmailReplyController::class, 'reply'])->name('admin.email.replies.reply');
 
@@ -680,6 +686,16 @@ Route::middleware(['auth'])->group(function () {
             ->name('admin.portal-invitation.reset-password');
     });
 
+    // Consultation bookings — admin + education (education triages/converts
+    // booking requests; the page has All / Education / Immigration tabs).
+    Route::middleware('portal:admin,education')->group(function () {
+        Route::get('/admin/booking', [BookingController::class, 'index'])->name('admin.bookings');
+        Route::post('/admin/bookings/{id}', [BookingController::class, 'update']);
+        Route::delete('/admin/bookings/{id}', [BookingController::class, 'destroy'])->name('admin.bookings.destroy');
+        // Convert a booking's client into a pipeline lead (education flow).
+        Route::post('/admin/bookings/{id}/convert', [BookingController::class, 'convertToLead'])->name('admin.bookings.convert');
+    });
+
     // Program Promotions — admin / sales / education can manage time-bound
     // discount campaigns shown on the public Home + Education Journey +
     // Programs pages. Banner image uploads land in storage/app/public/promos.
@@ -756,6 +772,10 @@ Route::middleware(['auth'])->group(function () {
         // across departments.
         Route::post('/admin/leads/{lead}/compose', [\App\Http\Controllers\Sales\ComposeMessageController::class, 'send'])->name('admin.leads.compose');
         Route::get('/admin/leads/{lead}/communications', [\App\Http\Controllers\Sales\LeadCommunicationsController::class, 'index'])->name('admin.leads.communications');
+        // Reply to the lead from the conversation tab (blocked if they have no email).
+        Route::post('/admin/leads/{lead}/communications', [\App\Http\Controllers\Sales\LeadCommunicationsController::class, 'reply'])->name('admin.leads.communications.reply');
+        // Pull the mailbox on demand so a fresh reply appears without leaving the tab.
+        Route::post('/admin/leads/{lead}/communications/sync', [\App\Http\Controllers\Sales\LeadCommunicationsController::class, 'sync'])->name('admin.leads.communications.sync');
 
         // Cross-lead document queue — review lead-submitted docs in bulk.
         Route::get('/admin/document-queue', [\App\Http\Controllers\DocumentQueueController::class, 'index'])->name('admin.document-queue');
@@ -846,6 +866,15 @@ Route::middleware(['auth'])->group(function () {
         // Live fee totals for the engagement modal receipt (family-aware).
         Route::get('/admin/leads/{id}/engagement/fee-totals', [LeadDocumentController::class, 'engagementFeeTotals'])
             ->name('admin.leads.engagement.fee-totals');
+        // The case's family, with their "in agreement" flag, for the modal's
+        // include checkboxes; and the toggle that flips it.
+        Route::get('/admin/leads/{id}/engagement/family', [LeadDocumentController::class, 'engagementFamily'])
+            ->name('admin.leads.engagement.family');
+        Route::patch('/admin/leads/{id}/engagement/family/{dependent}', [LeadDocumentController::class, 'setEngagementFamilyInclusion'])
+            ->name('admin.leads.engagement.family.toggle');
+        // Set one applicant's (principal or dependant) professional fee override.
+        Route::patch('/admin/leads/{id}/engagement/applicant-fee', [LeadDocumentController::class, 'setEngagementApplicantFee'])
+            ->name('admin.leads.engagement.applicant-fee');
         // Email the client the engagement signing link (from the manage-draft modal).
         Route::post('/admin/leads/{id}/engagement/send', [LeadDocumentController::class, 'sendEngagement'])
             ->name('admin.leads.engagement.send');
@@ -913,6 +942,13 @@ Route::middleware(['auth'])->group(function () {
             ->prefix("portal/{$deptRole}")
             ->name("portal.{$deptRole}.")
             ->group(function () {
+                // Compose — one-off email to picked leads and/or typed addresses.
+                $compose = \App\Http\Controllers\ComposeController::class;
+                Route::get('/compose', [$compose, 'index'])->name('compose');
+                Route::post('/compose/send', [$compose, 'send'])->name('compose.send');
+                Route::post('/compose/upload-image', [$compose, 'uploadImage'])->name('compose.upload-image');
+                Route::get('/compose/leads', [$compose, 'searchLeads'])->name('compose.leads');
+
                 $c = \App\Http\Controllers\MessageTemplateController::class;
                 Route::get('/email-templates', [$c, 'index'])->name('email-templates');
                 Route::get('/email-templates/create', [$c, 'create'])->name('email-templates.create');
@@ -926,6 +962,7 @@ Route::middleware(['auth'])->group(function () {
                 Route::post('/email-templates/move', [$c, 'moveTemplates'])->name('email-templates.move');
                 Route::post('/email-templates/move-department', [$c, 'moveDepartment'])->name('email-templates.move-department');
                 Route::post('/email-templates/delete', [$c, 'destroyMany'])->name('email-templates.delete-many');
+                Route::post('/email-templates/upload-image', [$c, 'uploadEmailImage'])->name('email-templates.upload-image');
                 Route::post('/email-templates', [$c, 'store'])->name('email-templates.store');
                 Route::get('/email-templates/{id}', [$c, 'show'])->name('email-templates.show');
                 Route::put('/email-templates/{id}', [$c, 'update'])->name('email-templates.update');
@@ -1220,6 +1257,10 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/inz-forms', [\App\Http\Controllers\Portal\ImmigrationAdviserController::class, 'inzForms'])->name('inz-forms');
             Route::get('/verification', [\App\Http\Controllers\Portal\ImmigrationAdviserController::class, 'verification'])->name('verification');
             Route::post('/verification/{document}', [\App\Http\Controllers\Portal\ImmigrationAdviserController::class, 'verifyDocument'])->name('verification.verify');
+            // Full-page document review for a case.
+            Route::get('/verification/review/{lead}', [\App\Http\Controllers\Portal\ImmigrationAdviserController::class, 'review'])->name('verification.review');
+            // AI "document vs client record" scan for the review page.
+            Route::post('/verification/{document}/ai-scan', [\App\Http\Controllers\Portal\ImmigrationAdviserController::class, 'aiScanDocument'])->name('verification.ai-scan');
             Route::get('/reports', [\App\Http\Controllers\Portal\ImmigrationAdviserController::class, 'reports'])->name('reports');
             Route::get('/sign-off', [\App\Http\Controllers\Portal\ImmigrationAdviserController::class, 'signOff'])->name('sign-off');
             Route::get('/notifications', [\App\Http\Controllers\NotificationController::class, 'index'])->name('notifications');
@@ -1352,6 +1393,9 @@ Route::middleware(['auth'])->group(function () {
             // On-demand AI note (OpenRouter) on what's missing from the assessment.
             Route::get('/cases/{lead}/assessment-ai-note', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'assessmentAiNote'])
                 ->name('cases.assessment-ai-note');
+            // AI "document vs case record" identity scan for the Personal tab.
+            Route::post('/cases/{lead}/identity-scan', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'identityScan'])
+                ->name('cases.identity-scan');
 
             // Build 12 phase 3 — case-assist findings. Dismiss carries a
             // required reason; re-evaluate queues a refresh (never on page load).
@@ -1422,6 +1466,7 @@ Route::middleware(['auth'])->group(function () {
             Route::post('/cases/{lead}/dependents', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'addDependent'])->name('cases.dependents.store');
             Route::get('/cases/{lead}/dependent-source', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'dependentSourceIdentity'])->name('cases.dependent-source');
             Route::put('/cases/{lead}/dependents/{dependent}', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'updateDependent'])->name('cases.dependents.update');
+            Route::patch('/cases/{lead}/dependents/{dependent}/in-agreement', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'setDependentInAgreement'])->name('cases.dependents.in-agreement');
             Route::delete('/cases/{lead}/dependents/{dependent}', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'deleteDependent'])->name('cases.dependents.destroy');
             Route::post('/cases/{lead}/dependents/{dependent}/documents', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'uploadDependentDocument'])->name('cases.dependents.documents.store');
             Route::post('/cases/{lead}/dependents/{dependent}/documents/{document}/status', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'setDependentDocumentStatus'])->name('cases.dependents.documents.status');
@@ -1586,6 +1631,7 @@ Route::middleware(['auth'])->group(function () {
         // and the Accounts Receivable / Accounts Payable ledger.
         Route::middleware('portal:finance')->prefix('finance')->name('portal.finance.')->group(function () {
             Route::get('/dashboard', [\App\Http\Controllers\Portal\FinanceController::class, 'dashboard'])->name('dashboard');
+            Route::get('/invoice', [\App\Http\Controllers\Portal\FinanceController::class, 'invoice'])->name('invoice');
             Route::get('/tasks', [\App\Http\Controllers\Portal\FinanceController::class, 'tasks'])->name('tasks');
 
             // Accounts Receivable

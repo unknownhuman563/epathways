@@ -21,6 +21,34 @@ const fmtFee = (n) =>
 const GST_RATE = 0.15;
 const GST_PCT = Math.round(GST_RATE * 100);
 
+// A per-applicant fee input for the engagement modal. Holds a local draft and
+// commits on blur / Enter; blank clears the override (back to the visa fee).
+function ApplicantFeeInput({ value, placeholder, disabled = false, onCommit }) {
+    const [local, setLocal] = useState(value != null ? String(value) : "");
+    useEffect(() => { setLocal(value != null ? String(value) : ""); }, [value]);
+    const commit = () => {
+        const orig = value != null ? String(value) : "";
+        if (local === orig) return;
+        onCommit(local);
+    };
+    return (
+        <div className="flex items-center gap-1 flex-shrink-0">
+            <span className="text-[11px] text-gray-400">$</span>
+            <input
+                type="number" min="0" step="0.01"
+                value={local}
+                disabled={disabled}
+                onChange={(e) => setLocal(e.target.value)}
+                onBlur={commit}
+                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); e.currentTarget.blur(); } }}
+                placeholder={placeholder != null ? Number(placeholder).toFixed(2) : "0.00"}
+                title="Blank uses the visa fee"
+                className="w-20 text-[12px] text-right tabular-nums border border-gray-200 rounded px-2 py-0.5 bg-white focus:outline-none focus:border-gray-400 disabled:opacity-40 disabled:bg-gray-100"
+            />
+        </div>
+    );
+}
+
 // One control style for every input/select in the settings panel, so the
 // column reads as a single stack rather than a pile of one-off styles.
 const ctrlCls = "w-full px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs text-gray-800 focus:outline-none focus:bg-white focus:border-gray-400";
@@ -130,11 +158,12 @@ function DeleteCaseDocsButton({ caseId, caseName, count }) {
  * IAA standard docs), preview each live, then generate. The Written
  * Agreement's fees are pulled from the case's visa on the Visas page.
  */
-export default function Engagement({ cases = [], documents = [], generated = [], signers = [], default_signer_id = null, me_id = null }) {
+export default function Engagement({ cases = [], documents = [], generated = [], signers = [], default_signer_id = null, me_id = null, activityLog = [] }) {
     const [modalOpen, setModalOpen] = useState(false);
     const [auditFor, setAuditFor] = useState(null);   // { case_name, audit } for the audit-trail modal
     const [manageFor, setManageFor] = useState(null); // the draft row being managed
     const [preselectedCase, setPreselectedCase] = useState(null);
+    const [view, setView] = useState("documents");    // "documents" | "log"
 
     // Deep-link from a case profile's "Generate Engagement" button:
     // /portal/immigration/cases/engagement?case={id} opens the modal preselected.
@@ -169,7 +198,27 @@ export default function Engagement({ cases = [], documents = [], generated = [],
                 </button>
             </div>
 
+            {/* Tabs — the generated pack table, or the fee-change activity log. */}
+            <div className="flex items-center gap-1 border-b border-gray-200">
+                {[
+                    { key: "documents", label: "Generated documents" },
+                    { key: "log", label: `Activity log${activityLog.length ? ` (${activityLog.length})` : ""}` },
+                ].map((t) => (
+                    <button
+                        key={t.key}
+                        type="button"
+                        onClick={() => setView(t.key)}
+                        className={`px-4 py-2.5 text-sm font-semibold border-b-2 -mb-px transition-colors ${
+                            view === t.key ? "border-gray-900 text-gray-900" : "border-transparent text-gray-500 hover:text-gray-900"
+                        }`}
+                    >
+                        {t.label}
+                    </button>
+                ))}
+            </div>
+
             {/* Recently generated — same column layout as Proposals & Agreements */}
+            {view === "documents" && (
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
                 <div className="px-5 py-3 border-b border-gray-100">
                     <h2 className="text-[12px] font-bold uppercase tracking-[0.12em] text-gray-500">Generated documents</h2>
@@ -342,6 +391,33 @@ export default function Engagement({ cases = [], documents = [], generated = [],
                     </div>
                 )}
             </div>
+            )}
+
+            {view === "log" && (
+                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                    <div className="px-5 py-3 border-b border-gray-100">
+                        <h2 className="text-[12px] font-bold uppercase tracking-[0.12em] text-gray-500">Fee change log</h2>
+                    </div>
+                    {activityLog.length === 0 ? (
+                        <div className="px-5 py-10 text-center text-sm text-gray-400">No fee changes logged yet.</div>
+                    ) : (
+                        <ul className="divide-y divide-gray-50">
+                            {activityLog.map((a) => (
+                                <li key={a.id} className="px-5 py-3 flex items-start justify-between gap-4">
+                                    <div className="min-w-0">
+                                        <p className="text-[13px] text-gray-800">{a.description}</p>
+                                        <p className="text-[11px] text-gray-400 mt-0.5">
+                                            {a.actor_name}
+                                            <span className="ml-1.5 inline-flex items-center rounded bg-gray-100 px-1.5 py-0.5 font-mono text-[10px] text-gray-500">{a.action}</span>
+                                        </p>
+                                    </div>
+                                    <span className="text-[11px] text-gray-400 whitespace-nowrap flex-shrink-0">{fmtDate(a.created_at)}</span>
+                                </li>
+                            ))}
+                        </ul>
+                    )}
+                </div>
+            )}
 
             {modalOpen && (
                 <NewEngagementModal
@@ -777,6 +853,51 @@ function NewEngagementModal({ cases, documents, signers = [], defaultSignerId = 
     // Family-aware fee totals from the server (professional sum + INZ sum across
     // all applicants), fetched live so the receipt matches the generated pack
     // for cases with dependants. Falls back to the principal's visa while loading.
+    // The case's family + their in-agreement flags, for the include checkboxes.
+    // Bumping familyRefresh re-fetches the family AND the fee totals, and forces
+    // the preview iframe to re-render, so toggling a member updates everything.
+    const [family, setFamily] = useState([]);
+    const [principal, setPrincipal] = useState(null);
+    const [familyRefresh, setFamilyRefresh] = useState(0);
+    useEffect(() => {
+        if (!selectedCase) { setFamily([]); setPrincipal(null); return; }
+        let cancelled = false;
+        const url = `/admin/leads/${selectedCase.id}/engagement/family?fee_tier=${feeTier}&fee_location=${feeLocation}`;
+        fetch(url, { headers: { Accept: "application/json" } })
+            .then((r) => (r.ok ? r.json() : null))
+            .then((d) => { if (!cancelled) { setFamily(d?.family || []); setPrincipal(d?.principal || null); } })
+            .catch(() => { if (!cancelled) { setFamily([]); setPrincipal(null); } });
+        return () => { cancelled = true; };
+    }, [selectedCase, feeTier, feeLocation, familyRefresh]);
+
+    const xsrfToken = () => decodeURIComponent((document.cookie.match(/XSRF-TOKEN=([^;]+)/) || [])[1] || "");
+
+    const toggleFamilyMember = (dep, val) => {
+        if (!selectedCase) return;
+        setFamily((prev) => prev.map((m) => (m.id === dep.id ? { ...m, in_agreement: val } : m)));
+        fetch(`/admin/leads/${selectedCase.id}/engagement/family/${dep.id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json", Accept: "application/json", "X-XSRF-TOKEN": xsrfToken() },
+            body: JSON.stringify({ in_agreement: val }),
+        })
+            .then((r) => { if (!r.ok) throw new Error(); })
+            .then(() => setFamilyRefresh((v) => v + 1))
+            .catch(() => { toast.error("Could not update"); setFamilyRefresh((v) => v + 1); });
+    };
+
+    // Persist one applicant's fee override (principal or dependant). value "" clears it.
+    const setApplicantFee = (type, dependentId, value) => {
+        if (!selectedCase) return;
+        fetch(`/admin/leads/${selectedCase.id}/engagement/applicant-fee`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json", Accept: "application/json", "X-XSRF-TOKEN": xsrfToken() },
+            body: JSON.stringify({ type, dependent_id: dependentId ?? null, fee: value === "" ? null : Number(value) }),
+        })
+            .then((r) => { if (!r.ok) throw new Error(); })
+            .then(() => { toast.success("Amount updated"); setFamilyRefresh((v) => v + 1); })
+            .catch(() => { toast.error("Could not update the amount"); setFamilyRefresh((v) => v + 1); });
+    };
+
     const [familyTotals, setFamilyTotals] = useState(null);
     useEffect(() => {
         if (!selectedCase) { setFamilyTotals(null); return; }
@@ -787,7 +908,7 @@ function NewEngagementModal({ cases, documents, signers = [], defaultSignerId = 
             .then((d) => { if (!cancelled) setFamilyTotals(d); })
             .catch(() => { if (!cancelled) setFamilyTotals(null); });
         return () => { cancelled = true; };
-    }, [selectedCase, feeTier, feeLocation, includeGst]);
+    }, [selectedCase, feeTier, feeLocation, includeGst, familyRefresh]);
 
     // The ex-GST professional fee: the manual override if set, else the family
     // sum (or the principal's visa fee before the totals arrive).
@@ -817,13 +938,14 @@ function NewEngagementModal({ cases, documents, signers = [], defaultSignerId = 
     const missingSignature = writtenSelected && selectedSigner && !selectedSigner.has_signature;
 
     const previewUrl = selectedCase && previewType
-        ? `/admin/leads/${selectedCase.id}/generate/engage_${previewType}/preview?fee_tier=${feeTier}&fee_location=${feeLocation}&include_gst=${includeGst ? 1 : 0}${signerId ? `&signer=${signerId}` : ""}${assistSignerId ? `&assist_signer=${assistSignerId}` : ""}${feeOverride !== "" ? `&professional_fee=${encodeURIComponent(feeOverride)}` : ""}`
+        ? `/admin/leads/${selectedCase.id}/generate/engage_${previewType}/preview?fee_tier=${feeTier}&fee_location=${feeLocation}&include_gst=${includeGst ? 1 : 0}${signerId ? `&signer=${signerId}` : ""}${assistSignerId ? `&assist_signer=${assistSignerId}` : ""}${feeOverride !== "" ? `&professional_fee=${encodeURIComponent(feeOverride)}` : ""}&_r=${familyRefresh}`
         : null;
 
     // sendEmail=false → "Save as draft": generates the pack but does NOT email
     // the client. sendEmail=true → also emails the scoped signing link.
     const generate = async (sendEmail) => {
         if (!selectedCase || selectedTypes.length === 0) return;
+        if (!assistSignerId) { toast.error("Choose an adviser to assist before generating."); return; }
         const who = selectedCase.name || "the client";
         const n = selectedTypes.length;
         const ok = await confirmDialog({
@@ -939,7 +1061,7 @@ function NewEngagementModal({ cases, documents, signers = [], defaultSignerId = 
                                 </div>
 
                                 <div>
-                                    <FieldLabel>Adviser to assist <span className="text-gray-400 font-normal">(optional)</span></FieldLabel>
+                                    <FieldLabel>Adviser to assist <span className="text-red-500 font-normal">*</span></FieldLabel>
                                     <select
                                         value={assistSignerId ?? ""}
                                         onChange={(e) => setAssistSignerId(e.target.value ? Number(e.target.value) : null)}
@@ -1007,6 +1129,52 @@ function NewEngagementModal({ cases, documents, signers = [], defaultSignerId = 
                                 </div>
                             </div>
 
+                            {/* Family — who is billed on this agreement. Only
+                                shown when the case has costed dependants; untick a
+                                member to leave them off the agreement + invoice. */}
+                            {selectedCase && (
+                                <div className="rounded-lg border border-gray-200 bg-gray-50/60 p-2.5">
+                                    <div className="flex items-center justify-between mb-1.5">
+                                        <p className="text-[10px] font-bold uppercase tracking-wider text-gray-500">In this agreement</p>
+                                        <p className="text-[10px] text-gray-400">Amount (ex GST)</p>
+                                    </div>
+                                    {/* Principal — always included; amount editable. */}
+                                    <div className="flex items-center gap-2 py-1">
+                                        <input type="checkbox" checked disabled className="rounded border-gray-300 w-3.5 h-3.5 flex-shrink-0" />
+                                        <div className="min-w-0 flex-1">
+                                            <span className="text-[12px] font-semibold text-gray-700">{principal?.name || selectedCase.name}</span>
+                                            <span className="text-[12px] text-gray-400"> · main applicant</span>
+                                        </div>
+                                        <ApplicantFeeInput
+                                            value={principal?.fee_override}
+                                            placeholder={principal?.default_fee}
+                                            onCommit={(v) => setApplicantFee("principal", null, v)}
+                                        />
+                                    </div>
+                                    {family.map((m) => (
+                                        <div key={m.id} className="flex items-center gap-2 py-1">
+                                            <input
+                                                type="checkbox"
+                                                checked={m.in_agreement !== false}
+                                                onChange={(e) => toggleFamilyMember(m, e.target.checked)}
+                                                className="rounded border-gray-300 text-[#009688] focus:ring-0 w-3.5 h-3.5 flex-shrink-0"
+                                            />
+                                            <div className="min-w-0 flex-1">
+                                                <span className="text-[12px] font-semibold text-gray-800">{m.name}</span>
+                                                <span className="text-[12px] text-gray-400 capitalize"> · {m.relationship}{m.visa ? ` · ${m.visa}` : ""}</span>
+                                            </div>
+                                            <ApplicantFeeInput
+                                                value={m.fee_override}
+                                                placeholder={m.default_fee}
+                                                disabled={m.in_agreement === false}
+                                                onCommit={(v) => setApplicantFee("dependent", m.id, v)}
+                                            />
+                                        </div>
+                                    ))}
+                                    <p className="text-[10px] text-gray-400 mt-1.5">Edit an amount to set that applicant's fee. Leave blank to use the visa fee.</p>
+                                </div>
+                            )}
+
                             {/* Receipt-style fee summary — our professional fee
                                 (editable, summed across the family), GST, the INZ
                                 disbursements, and the grand total. Matches the
@@ -1021,19 +1189,11 @@ function NewEngagementModal({ cases, documents, signers = [], defaultSignerId = 
                                     <div className="rounded-lg overflow-hidden text-white" style={{ backgroundColor: BRAND_TEAL }}>
                                         <div className="px-3 py-1.5 bg-black/10 text-[10px] font-bold uppercase tracking-wider text-white/80">Fee summary</div>
                                         <div className="px-3 py-2 space-y-1.5">
-                                            {/* Our professional fee — editable ex-GST override. */}
+                                            {/* Our professional fee — the sum of each applicant's
+                                                amount (edit per applicant above). */}
                                             <div className="flex items-center justify-between gap-2">
                                                 <span className="text-[11.5px] text-white/85">Our fees <span className="text-white/50">(ex GST)</span></span>
-                                                <div className="flex items-center gap-1">
-                                                    <span className="text-[12px] font-bold">$</span>
-                                                    <input
-                                                        type="number" min="0" step="0.01"
-                                                        value={effectiveFee ?? ""}
-                                                        onChange={(e) => setFeeOverride(e.target.value)}
-                                                        placeholder="0.00"
-                                                        className="w-20 bg-white/15 rounded px-2 py-0.5 text-[12.5px] font-bold text-white text-right tabular-nums placeholder-white/40 focus:outline-none focus:bg-white/25"
-                                                    />
-                                                </div>
+                                                <span className="text-[12.5px] font-bold tabular-nums">${fmtFee(prof)}</span>
                                             </div>
                                             {includeGst && (
                                                 <div className="flex items-center justify-between gap-2 text-white/75">
@@ -1049,9 +1209,6 @@ function NewEngagementModal({ cases, documents, signers = [], defaultSignerId = 
                                                 <span className="text-[11px] font-bold uppercase tracking-wide">Total amount</span>
                                                 <span className="text-[15px] font-bold tabular-nums">${fmtFee(total)}</span>
                                             </div>
-                                            {feeOverride !== "" && (
-                                                <button type="button" onClick={() => setFeeOverride("")} className="text-[10px] text-white/70 hover:text-white underline">Reset to visa fee</button>
-                                            )}
                                         </div>
                                     </div>
                                 );
@@ -1157,6 +1314,7 @@ function NewEngagementModal({ cases, documents, signers = [], defaultSignerId = 
                     </div>
                     {(() => {
                         const disabled = !selectedCase || selectedTypes.length === 0 || submitting
+                            || !assistSignerId
                             || (selectedSigner && selectedSigner.licence_current === false);
                         return (
                             <div className="flex items-center gap-2 flex-shrink-0">

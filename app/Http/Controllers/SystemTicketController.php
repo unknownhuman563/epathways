@@ -8,6 +8,7 @@ use App\Notifications\TicketSubmitted;
 use App\Notifications\TicketUpdated;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Notification;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 
 class SystemTicketController extends Controller
@@ -22,19 +23,34 @@ class SystemTicketController extends Controller
         abort_if($user->isLead(), 403, 'Only staff can submit tickets.');
 
         $data = $request->validate([
-            'title'       => ['required', 'string', 'max:160'],
+            'title' => ['required', 'string', 'max:160'],
             'description' => ['required', 'string', 'max:5000'],
-            'category'    => ['required', Rule::in(SystemTicket::CATEGORIES)],
-            'priority'    => ['nullable', Rule::in(SystemTicket::PRIORITIES)],
+            'category' => ['required', Rule::in(SystemTicket::CATEGORIES)],
+            'priority' => ['nullable', Rule::in(SystemTicket::PRIORITIES)],
+            // Up to 5 screenshots so the admin can see the exact screen.
+            'images' => ['nullable', 'array', 'max:5'],
+            'images.*' => ['image', 'mimes:jpeg,jpg,png,webp,gif', 'max:5120'],
         ]);
 
         $ticket = SystemTicket::create([
-            ...$data,
-            'priority'     => $data['priority'] ?? 'normal',
-            'status'       => 'open',
+            'title' => $data['title'],
+            'description' => $data['description'],
+            'category' => $data['category'],
+            'priority' => $data['priority'] ?? 'normal',
+            'status' => 'open',
             'submitted_by' => $user->id,
-            'department'   => $user->role,
+            'department' => $user->role,
         ]);
+
+        // Store screenshots on the private disk (they can contain client data);
+        // they're served back through the auth-gated image() stream below.
+        if ($request->hasFile('images')) {
+            $paths = [];
+            foreach ($request->file('images') as $img) {
+                $paths[] = $img->store("system-tickets/{$ticket->id}", 'local');
+            }
+            $ticket->update(['images' => $paths]);
+        }
 
         $recipients = User::whereIn('role', [User::ROLE_ADMIN, User::ROLE_SUPER_ADMIN])->get();
         if ($recipients->isNotEmpty()) {
@@ -70,11 +86,11 @@ class SystemTicketController extends Controller
 
         return inertia($this->myTicketsPage($user), [
             'tickets' => $tickets,
-            'counts'  => [
-                'open'  => (clone $mine)->open()->count(),
+            'counts' => [
+                'open' => (clone $mine)->open()->count(),
                 'total' => (clone $mine)->count(),
             ],
-            'meta'    => [
+            'meta' => [
                 'categories' => SystemTicket::CATEGORIES,
                 'priorities' => SystemTicket::PRIORITIES,
             ],
@@ -85,12 +101,12 @@ class SystemTicketController extends Controller
     private function myTicketsPage($user): string
     {
         return match ($user->role) {
-            'sales'         => 'portal/sales/Tickets',
-            'education'     => 'portal/education/Tickets',
-            'english'       => 'portal/english/Tickets',
+            'sales' => 'portal/sales/Tickets',
+            'education' => 'portal/education/Tickets',
+            'english' => 'portal/english/Tickets',
             'accommodation' => 'portal/accommodation/Tickets',
             'immigration', 'immigration_manager', 'immigration_adviser' => 'portal/immigration/Tickets',
-            default         => 'portal/sales/Tickets',
+            default => 'portal/sales/Tickets',
         };
     }
 
@@ -98,7 +114,7 @@ class SystemTicketController extends Controller
     public function adminIndex(Request $request)
     {
         $status = $request->query('status');
-        $dept   = $request->query('department');
+        $dept = $request->query('department');
         $search = trim((string) $request->query('search', ''));
 
         $base = SystemTicket::query()
@@ -120,12 +136,12 @@ class SystemTicketController extends Controller
         return inertia('admin/SystemTickets', [
             'tickets' => $tickets,
             'filters' => ['status' => $status, 'department' => $dept, 'search' => $search],
-            'meta'    => [
+            'meta' => [
                 'categories' => SystemTicket::CATEGORIES,
                 'priorities' => SystemTicket::PRIORITIES,
-                'statuses'   => SystemTicket::STATUSES,
+                'statuses' => SystemTicket::STATUSES,
             ],
-            'counts'  => ['open' => SystemTicket::open()->count()],
+            'counts' => ['open' => SystemTicket::open()->count()],
         ]);
     }
 
@@ -134,16 +150,16 @@ class SystemTicketController extends Controller
         $ticket = SystemTicket::findOrFail($id);
 
         $data = $request->validate([
-            'status'         => ['required', Rule::in(SystemTicket::STATUSES)],
+            'status' => ['required', Rule::in(SystemTicket::STATUSES)],
             'admin_response' => ['nullable', 'string', 'max:5000'],
         ]);
 
         $resolved = in_array($data['status'], ['done', 'declined'], true);
         $ticket->update([
-            'status'         => $data['status'],
+            'status' => $data['status'],
             'admin_response' => $data['admin_response'] ?? $ticket->admin_response,
-            'resolved_by'    => $resolved ? $request->user()->id : null,
-            'resolved_at'    => $resolved ? now() : null,
+            'resolved_by' => $resolved ? $request->user()->id : null,
+            'resolved_at' => $resolved ? now() : null,
         ]);
 
         // Tell the department who raised it.
@@ -154,22 +170,49 @@ class SystemTicketController extends Controller
         return back()->with('success', "Ticket {$ticket->ticket_ref} updated.");
     }
 
+    /**
+     * Stream one of a ticket's screenshots from the private disk. Gated to the
+     * admins/super-admins (the triagers) and the staff member who raised it —
+     * EnsurePortalAccess is role-level only, so ownership is re-checked here.
+     */
+    public function image(Request $request, int $id, int $index)
+    {
+        $user = $request->user();
+        abort_if($user->isLead(), 403);
+
+        $ticket = SystemTicket::findOrFail($id);
+        abort_unless(
+            $user->isAtLeast('admin') || $ticket->submitted_by === $user->id,
+            403,
+        );
+
+        $images = $ticket->images ?? [];
+        abort_unless(isset($images[$index]) && Storage::disk('local')->exists($images[$index]), 404);
+
+        return response()->file(Storage::disk('local')->path($images[$index]));
+    }
+
     private function serialize(SystemTicket $t): array
     {
         return [
-            'id'             => $t->id,
-            'ticket_ref'     => $t->ticket_ref,
-            'title'          => $t->title,
-            'description'    => $t->description,
-            'category'       => $t->category,
-            'priority'       => $t->priority,
-            'status'         => $t->status,
-            'department'     => $t->department,
-            'submitter'      => optional($t->submitter)->name,
+            'id' => $t->id,
+            'ticket_ref' => $t->ticket_ref,
+            'title' => $t->title,
+            'description' => $t->description,
+            'category' => $t->category,
+            'priority' => $t->priority,
+            'status' => $t->status,
+            'department' => $t->department,
+            'submitter' => optional($t->submitter)->name,
             'admin_response' => $t->admin_response,
-            'resolver'       => optional($t->resolver)->name,
-            'created_at'     => optional($t->created_at)?->toIso8601String(),
-            'resolved_at'    => optional($t->resolved_at)?->toIso8601String(),
+            'resolver' => optional($t->resolver)->name,
+            // Auth-gated stream URLs for each screenshot (never the raw path).
+            'images' => collect($t->images ?? [])
+                ->keys()
+                ->map(fn ($i) => url("/system-tickets/{$t->id}/images/{$i}"))
+                ->all(),
+            'created_at' => optional($t->created_at)?->toIso8601String(),
+            'resolved_at' => optional($t->resolved_at)?->toIso8601String(),
         ];
     }
 }

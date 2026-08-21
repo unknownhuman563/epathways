@@ -19,12 +19,42 @@ export function resolveThread(leadId, threadId) {
     });
 }
 
-/** One thread: body, who asked, who's on the hook, and an explicit resolve. */
-export function ThreadItem({ thread, leadId, anchorLabel = null }) {
+// Prettify a staff role for the byline (e.g. immigration_manager → "Case
+// manager"). Falls back to a title-cased version of the raw role.
+const ROLE_LABEL = {
+    super_admin: "Super admin",
+    admin: "Admin",
+    immigration_manager: "Case manager",
+    immigration_adviser: "Licensed adviser",
+    sales: "Sales",
+    education: "Education",
+    english: "English",
+    accommodation: "Accommodation",
+    finance: "Finance",
+    agent: "Agent",
+    lead: "Client",
+};
+const roleLabel = (r) =>
+    r ? (ROLE_LABEL[r] || String(r).replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())) : null;
+
+// The composer's textarea id for a given anchor, so a thread's "Reply" can focus
+// the composer that posts to the same place.
+const composerIdFor = (anchor) =>
+    anchor && anchor.anchor_type === "document" && anchor.anchor_id
+        ? `thread-composer-document-${anchor.anchor_id}`
+        : null;
+
+/** One thread: body, who wrote it, its audience, and an explicit resolve.
+ * When `childrenOf`/`anchor` are supplied it renders nested replies and an
+ * inline reply box (used for document comments). */
+export function ThreadItem({ thread, leadId, anchorLabel = null, childrenOf = null, anchor = null, caseStaff = [] }) {
     const open = ! thread.resolved_at;
     const [editing, setEditing] = useState(false);
     const [draft, setDraft] = useState(thread.body || "");
     const [saving, setSaving] = useState(false);
+    const [replyOpen, setReplyOpen] = useState(false);
+    const replies = childrenOf ? childrenOf(thread.id) : [];
+    const canReplyInline = !! anchor;
 
     const saveEdit = () => {
         if (! draft.trim()) return toast.error("Comment can't be empty");
@@ -37,76 +67,157 @@ export function ThreadItem({ thread, leadId, anchorLabel = null }) {
         });
     };
 
+    const focusReply = () => {
+        const el = document.getElementById(composerIdFor(thread));
+        if (el) { el.focus(); el.scrollIntoView({ block: "nearest", behavior: "smooth" }); }
+    };
+
+    // A comment authored by the client reads FROM CLIENT (amber); a staff
+    // comment shared with the client reads TO CLIENT (teal); everything else is
+    // INTERNAL (gray).
+    const fromClient = thread.author_role === "lead";
+
     return (
-        <div className={`rounded-lg border px-3 py-2.5 ${open ? "border-amber-200 bg-amber-50/50" : "border-gray-100 bg-white"}`}>
-            <div className="flex items-start gap-2">
-                <HelpCircle size={13} className={`mt-0.5 flex-shrink-0 ${open ? "text-amber-500" : "text-gray-300"}`} />
-                <div className="min-w-0 flex-1">
-                    {editing ? (
-                        <div className="space-y-2">
-                            <textarea
-                                value={draft}
-                                onChange={(e) => setDraft(e.target.value)}
-                                rows={3}
-                                maxLength={2000}
-                                autoFocus
-                                className="w-full text-[13px] px-2.5 py-1.5 bg-white border border-gray-300 rounded-lg focus:outline-none focus:border-gray-500 resize-none"
-                            />
-                            <div className="flex items-center gap-1.5">
-                                <button type="button" onClick={saveEdit} disabled={saving}
-                                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-gray-900 text-white text-[10.5px] font-semibold hover:bg-black disabled:opacity-50">
-                                    <CheckCircle2 size={11} /> Save
-                                </button>
-                                <button type="button" onClick={() => { setEditing(false); setDraft(thread.body || ""); }}
-                                    className="text-[10.5px] font-semibold text-gray-400 hover:text-gray-700">Cancel</button>
-                            </div>
-                        </div>
-                    ) : (
-                        <p className="text-[13px] text-gray-900 whitespace-pre-wrap leading-snug">{thread.body}</p>
+        <div className="py-4 border-b border-gray-100 last:border-b-0">
+            <div className="flex items-start justify-between gap-3">
+                <div className="flex items-center gap-2 flex-wrap min-w-0">
+                    <span className="text-[13px] font-bold text-gray-900">{thread.author || "Unknown"}</span>
+                    {roleLabel(thread.author_role) && (
+                        <span className="text-[12px] text-gray-400">{roleLabel(thread.author_role)}</span>
                     )}
-                    <div className="mt-1 flex items-center gap-1.5 flex-wrap text-[10.5px] text-gray-400">
-                        <span>{thread.author || "Unknown"}</span>
-                        <span>· {fmt(thread.created_at)}</span>
-                        {anchorLabel && <span className="text-gray-400">· {anchorLabel}</span>}
-                        {thread.requires_answer && (
-                            <span className="font-bold uppercase text-amber-600">· needs an answer</span>
-                        )}
-                        {thread.addressed_to && (
-                            <span className="inline-flex items-center gap-0.5 text-gray-500">
-                                <CornerDownRight size={9} /> {thread.addressed_to.name}
-                            </span>
-                        )}
-                    </div>
-                    {! open && (
-                        <p className="mt-1 text-[10.5px] text-emerald-600 inline-flex items-center gap-1">
-                            <CheckCircle2 size={11} /> Answered{thread.resolved_by ? ` by ${thread.resolved_by}` : ""} · {fmt(thread.resolved_at)}
-                        </p>
-                    )}
+                    <span className="text-[12px] text-gray-400">{fmt(thread.created_at)}</span>
                 </div>
-                {! editing && (
-                    <div className="flex-shrink-0 flex items-center gap-1">
-                        {thread.can_edit && (
-                            <button
-                                type="button"
-                                onClick={() => { setDraft(thread.body || ""); setEditing(true); }}
-                                title="Edit"
-                                className="inline-flex items-center justify-center p-1 rounded-md border border-gray-200 text-gray-500 hover:border-gray-400 hover:text-gray-800"
-                            >
-                                <Pencil size={11} />
-                            </button>
-                        )}
-                        {open && (
-                            <button
-                                type="button"
-                                onClick={() => resolveThread(leadId, thread.id)}
-                                title="Mark this thread answered"
-                                className="inline-flex items-center gap-1 px-2 py-1 rounded-md border border-gray-200 text-[10.5px] font-semibold text-gray-600 hover:border-emerald-500 hover:text-emerald-600"
-                            >
-                                <CheckCircle2 size={11} /> Answer
-                            </button>
-                        )}
-                    </div>
+                {fromClient ? (
+                    <span className="text-[10.5px] font-bold uppercase tracking-wider text-amber-600 flex-shrink-0">From client</span>
+                ) : thread.client_visible ? (
+                    <span className="text-[10.5px] font-bold uppercase tracking-wider text-teal-600 flex-shrink-0">To client</span>
+                ) : anchorLabel ? (
+                    <span className="text-[10.5px] font-semibold text-gray-400 flex-shrink-0">{anchorLabel}</span>
+                ) : (
+                    <span className="text-[10.5px] font-bold uppercase tracking-wider text-gray-300 flex-shrink-0">Internal</span>
                 )}
+            </div>
+
+            {editing ? (
+                <div className="mt-2 space-y-2">
+                    <textarea
+                        value={draft}
+                        onChange={(e) => setDraft(e.target.value)}
+                        rows={3}
+                        maxLength={2000}
+                        autoFocus
+                        className="w-full text-[13px] px-2.5 py-1.5 bg-white border border-gray-300 rounded-lg focus:outline-none focus:border-gray-500 resize-none"
+                    />
+                    <div className="flex items-center gap-1.5">
+                        <button type="button" onClick={saveEdit} disabled={saving}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-gray-900 text-white text-[10.5px] font-semibold hover:bg-black disabled:opacity-50">
+                            <CheckCircle2 size={11} /> Save
+                        </button>
+                        <button type="button" onClick={() => { setEditing(false); setDraft(thread.body || ""); }}
+                            className="text-[10.5px] font-semibold text-gray-400 hover:text-gray-700">Cancel</button>
+                    </div>
+                </div>
+            ) : (
+                <p className={`mt-1.5 text-[13px] leading-relaxed whitespace-pre-wrap ${fromClient ? "text-amber-700" : "text-slate-700"}`}>{thread.body}</p>
+            )}
+
+            {! editing && (
+                <div className="mt-3 flex items-center justify-between gap-2">
+                    <span className="text-[11px] text-gray-400">
+                        {open
+                            ? (thread.requires_answer ? (
+                                <>
+                                    {thread.client_visible
+                                        ? "Awaiting client answer"
+                                        : `Awaiting answer${thread.addressed_to ? ` from ${thread.addressed_to.name}` : ""}`}
+                                    {" · "}
+                                    <button type="button" onClick={() => resolveThread(leadId, thread.id)} className="text-gray-400 hover:text-emerald-600 underline underline-offset-2">
+                                        mark answered
+                                    </button>
+                                </>
+                            ) : (thread.addressed_to ? `For ${thread.addressed_to.name}` : ""))
+                            : `Answered${thread.resolved_by ? ` by ${thread.resolved_by}` : ""} · ${fmt(thread.resolved_at)}`}
+                    </span>
+                    <div className="flex items-center gap-4 text-[12px] font-semibold text-gray-400">
+                        {thread.can_edit && (
+                            <button type="button" onClick={() => { setDraft(thread.body || ""); setEditing(true); }} className="hover:text-gray-900">Edit</button>
+                        )}
+                        <button
+                            type="button"
+                            onClick={() => (canReplyInline ? setReplyOpen((v) => ! v) : focusReply())}
+                            className={replyOpen ? "text-gray-900" : "hover:text-gray-900"}
+                        >
+                            Reply
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            {replyOpen && canReplyInline && (
+                <ReplyComposer
+                    leadId={leadId}
+                    anchor={anchor}
+                    parentId={thread.id}
+                    clientVisible={thread.client_visible}
+                    onDone={() => setReplyOpen(false)}
+                />
+            )}
+
+            {replies.length > 0 && (
+                <div className="mt-2 pl-5 border-l border-gray-200 space-y-0">
+                    {replies.map((c) => (
+                        <ThreadItem
+                            key={c.id}
+                            thread={c}
+                            leadId={leadId}
+                            anchor={anchor}
+                            caseStaff={caseStaff}
+                            childrenOf={childrenOf}
+                        />
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+}
+
+/** A compact inline reply box, posting a child comment on the same anchor. */
+function ReplyComposer({ leadId, anchor, parentId, clientVisible, onDone }) {
+    const [body, setBody] = useState("");
+    const [posting, setPosting] = useState(false);
+
+    const submit = () => {
+        if (! body.trim()) return toast.error("Write a reply first");
+        setPosting(true);
+        router.post(`/portal/immigration/cases/${leadId}/threads`, {
+            ...anchor,
+            parent_id: parentId,
+            body,
+            client_visible: !! clientVisible,
+        }, {
+            preserveScroll: true,
+            onSuccess: () => { toast.success("Reply added"); setBody(""); onDone?.(); },
+            onError: (e) => toast.error(Object.values(e)[0] || "Could not reply"),
+            onFinish: () => setPosting(false),
+        });
+    };
+
+    return (
+        <div className="mt-2 space-y-2">
+            <textarea
+                autoFocus
+                value={body}
+                onChange={(e) => setBody(e.target.value)}
+                rows={2}
+                maxLength={2000}
+                placeholder="Write a reply…"
+                className="w-full text-[13px] px-2.5 py-1.5 bg-white border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400 resize-none"
+            />
+            <div className="flex items-center gap-3">
+                <button type="button" onClick={submit} disabled={posting}
+                    className="text-[13px] font-bold text-teal-700 hover:text-teal-900 disabled:opacity-50">Post reply</button>
+                <button type="button" onClick={onDone}
+                    className="text-[12px] font-semibold text-gray-400 hover:text-gray-700">Cancel</button>
             </div>
         </div>
     );
@@ -123,12 +234,16 @@ export function ThreadComposer({ leadId, caseStaff = [], fixedAnchor = null, sta
     const [body, setBody] = useState("");
     const [addressedTo, setAddressedTo] = useState("");
     const [requires, setRequires] = useState(false);
+    // Audience: false = internal only (default), true = shared with the client.
+    const [clientVisible, setClientVisible] = useState(false);
     const [anchorType, setAnchorType] = useState("case");
     const [anchorKey, setAnchorKey] = useState("");
     const [posting, setPosting] = useState(false);
 
+    const composerId = composerIdFor(fixedAnchor);
+
     const submit = () => {
-        if (! body.trim()) return toast.error(plain ? "Write a comment first" : "Write the question first");
+        if (! body.trim()) return toast.error(plain ? "Write a note first" : "Write the question first");
         const anchor = fixedAnchor || { anchor_type: anchorType, anchor_key: anchorType === "case" ? null : anchorKey };
         if (! fixedAnchor && anchorType !== "case" && ! anchorKey.trim()) {
             return toast.error(anchorType === "gate" ? "Name the gate (e.g. 06)" : "Name the stage");
@@ -139,11 +254,12 @@ export function ThreadComposer({ leadId, caseStaff = [], fixedAnchor = null, sta
             body,
             addressed_to_id: addressedTo || null,
             requires_answer: requires,
+            client_visible: clientVisible,
         }, {
             preserveScroll: true,
             onSuccess: () => {
-                toast.success(plain ? "Comment added" : "Thread posted");
-                setBody(""); setRequires(false); setAddressedTo(""); setAnchorKey("");
+                toast.success(clientVisible ? "Shared with the client" : (plain ? "Note added" : "Thread posted"));
+                setBody(""); setRequires(false); setAddressedTo(""); setAnchorKey(""); setClientVisible(false);
                 if (compact) setOpen(false);
             },
             onError: (e) => toast.error(Object.values(e)[0] || "Could not post"),
@@ -158,13 +274,36 @@ export function ThreadComposer({ leadId, caseStaff = [], fixedAnchor = null, sta
                 onClick={() => setOpen(true)}
                 className="inline-flex items-center gap-1 text-[10.5px] font-semibold text-gray-400 hover:text-gray-900"
             >
-                <MessageSquare size={11} /> {plain ? "Add a comment" : "Ask a question"}
+                <MessageSquare size={11} /> {plain ? "Add a note" : "Ask a question"}
             </button>
         );
     }
 
+    // Two audience "tabs" — Internal only (default) then Client sees this.
+    const audienceTabs = (
+        <div className="flex items-center gap-3 text-[12px] font-semibold">
+            <button
+                type="button"
+                onClick={() => setClientVisible(false)}
+                className={! clientVisible ? "text-gray-900 border-b-2 border-teal-600 pb-0.5" : "text-gray-400 hover:text-gray-700"}
+            >
+                Internal only
+            </button>
+            <button
+                type="button"
+                onClick={() => setClientVisible(true)}
+                className={clientVisible ? "text-gray-900 border-b-2 border-teal-600 pb-0.5" : "text-gray-400 hover:text-gray-700"}
+            >
+                Client sees this
+            </button>
+            <span className="text-[11px] font-normal text-gray-400">
+                {clientVisible ? "Appears in the client portal and the reminder email" : "Staff only. Never shown to the client."}
+            </span>
+        </div>
+    );
+
     return (
-        <div className={compact ? "rounded-lg border border-gray-200 bg-gray-50/60 p-2.5 space-y-2" : "rounded-xl border border-gray-200 bg-white p-3 space-y-2"}>
+        <div className={plain ? "pt-2 space-y-2" : (compact ? "rounded-xl border border-gray-200 bg-white p-3 space-y-2" : "rounded-xl border border-gray-200 bg-white p-3 space-y-2")}>
             {! fixedAnchor && (
                 <div className="flex items-center gap-2">
                     <select
@@ -206,18 +345,20 @@ export function ThreadComposer({ leadId, caseStaff = [], fixedAnchor = null, sta
                 </div>
             )}
             <textarea
+                id={composerId || undefined}
                 value={body}
                 onChange={(e) => setBody(e.target.value)}
                 rows={compact ? 2 : 3}
                 maxLength={2000}
                 placeholder={placeholder}
-                className="w-full text-[13px] px-2.5 py-1.5 bg-white border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400 resize-none"
+                className={plain
+                    ? "w-full text-[13px] px-0 py-1.5 bg-transparent border-0 border-b border-gray-200 focus:outline-none focus:border-gray-400 resize-none placeholder-gray-400"
+                    : "w-full text-[13px] px-2.5 py-1.5 bg-white border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400 resize-none"}
             />
-            <div className="flex items-center justify-between gap-2 flex-wrap">
-                {/* Plain mode = a straight comment: no addressee / "needs an
-                    answer" controls (used for document comments). */}
-                {plain ? <span /> : (
-                    <div className="flex items-center gap-2">
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+                {audienceTabs}
+                <div className="flex items-center gap-3">
+                    {! plain && (
                         <select
                             value={addressedTo}
                             onChange={(e) => setAddressedTo(e.target.value)}
@@ -226,20 +367,18 @@ export function ThreadComposer({ leadId, caseStaff = [], fixedAnchor = null, sta
                             <option value="">To (anyone)</option>
                             {caseStaff.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
                         </select>
-                        <label className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-gray-600 cursor-pointer">
-                            <input type="checkbox" checked={requires} onChange={(e) => setRequires(e.target.checked)}
-                                className="rounded border-gray-300 text-amber-600 focus:ring-0 w-3.5 h-3.5" />
-                            Needs an answer
-                        </label>
-                    </div>
-                )}
-                <div className="flex items-center gap-1.5">
+                    )}
+                    <label className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-gray-500 cursor-pointer">
+                        <input type="checkbox" checked={requires} onChange={(e) => setRequires(e.target.checked)}
+                            className="rounded border-gray-300 text-amber-600 focus:ring-0 w-3.5 h-3.5" />
+                        Needs an answer
+                    </label>
                     {compact && (
-                        <button type="button" onClick={() => setOpen(false)} className="text-[11px] font-semibold text-gray-400 hover:text-gray-700">Cancel</button>
+                        <button type="button" onClick={() => setOpen(false)} className="text-[12px] font-semibold text-gray-400 hover:text-gray-700">Cancel</button>
                     )}
                     <button type="button" onClick={submit} disabled={posting}
-                        className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-gray-900 text-white text-[11px] font-semibold hover:bg-black disabled:opacity-50">
-                        <Send size={11} /> Post
+                        className="text-[13px] font-bold text-teal-700 hover:text-teal-900 disabled:opacity-50">
+                        Post
                     </button>
                 </div>
             </div>

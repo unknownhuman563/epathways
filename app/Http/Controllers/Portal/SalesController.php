@@ -25,7 +25,7 @@ class SalesController extends Controller
         'New Leads',
         'Contact Attempted',
         'Contacted for Booking',
-        'Booking Confirmation with Bryll',
+        'Booking Confirmation',
         'Missed the Meeting',
         'Qualified but Not Ready',
         'Qualified but No Funds',
@@ -1120,7 +1120,7 @@ class SalesController extends Controller
     /** Group a stage into one of 4 visual buckets for the pipeline chart. */
     private function stageBucket(string $stage): string
     {
-        if (in_array($stage, ['New Leads', 'Contact Attempted', 'Contacted for Booking', 'Booking Confirmation with Bryll', 'Missed the Meeting'], true)) {
+        if (in_array($stage, ['New Leads', 'Contact Attempted', 'Contacted for Booking', 'Booking Confirmation', 'Missed the Meeting'], true)) {
             return 'Early';
         }
         if (in_array($stage, ['Qualified but Not Ready', 'Qualified but No Funds', 'Qualified', 'Booked Consultation', 'Did Not Book Consultation', 'No Show', 'Consultation Done'], true)) {

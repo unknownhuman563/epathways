@@ -58,6 +58,15 @@ export default function MyTickets({ tickets = { data: [], links: [] }, counts = 
                                             <span className={`text-[11px] font-semibold ${PRIORITY_CLS[t.priority] ?? ""}`}>{titleCase(t.priority)}</span>
                                         </div>
                                         <p className="text-sm text-gray-600 mt-1 whitespace-pre-line">{t.description}</p>
+                                        {t.images?.length > 0 && (
+                                            <div className="flex flex-wrap gap-2 mt-2">
+                                                {t.images.map((src, i) => (
+                                                    <a key={i} href={src} target="_blank" rel="noopener noreferrer" className="block w-16 h-16 rounded-lg overflow-hidden border border-gray-200 hover:opacity-80">
+                                                        <img src={src} alt={`Screenshot ${i + 1}`} className="w-full h-full object-cover" />
+                                                    </a>
+                                                ))}
+                                            </div>
+                                        )}
                                     </div>
                                     <span className={`shrink-0 text-[11px] font-semibold px-2.5 py-1 rounded-full border ${meta.cls}`}>{meta.label}</span>
                                 </div>

@@ -7,7 +7,9 @@ use App\Models\User;
 use App\Notifications\TicketSubmitted;
 use App\Notifications\TicketUpdated;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Notification;
+use Illuminate\Support\Facades\Storage;
 use Inertia\Testing\AssertableInertia as Assert;
 use Tests\TestCase;
 
@@ -142,5 +144,70 @@ class SystemTicketTest extends TestCase
         $ticket->refresh();
         $this->assertSame($admin->id, $ticket->resolved_by);
         $this->assertNotNull($ticket->resolved_at);
+    }
+
+    public function test_ticket_can_be_submitted_with_screenshots(): void
+    {
+        Notification::fake();
+        Storage::fake('local');
+        $sales = User::factory()->create(['role' => 'sales']);
+
+        $this->actingAs($sales)->post('/tickets', $this->payload([
+            'images' => [UploadedFile::fake()->image('a.png'), UploadedFile::fake()->image('b.jpg')],
+        ]))->assertRedirect();
+
+        $ticket = SystemTicket::first();
+        $this->assertCount(2, $ticket->images);
+        foreach ($ticket->images as $path) {
+            Storage::disk('local')->assertExists($path);
+        }
+    }
+
+    public function test_more_than_five_images_is_rejected(): void
+    {
+        Storage::fake('local');
+        $sales = User::factory()->create(['role' => 'sales']);
+
+        $this->actingAs($sales)->post('/tickets', $this->payload([
+            'images' => array_map(fn ($i) => UploadedFile::fake()->image("s{$i}.png"), range(1, 6)),
+        ]))->assertSessionHasErrors('images');
+
+        $this->assertSame(0, SystemTicket::count());
+    }
+
+    public function test_non_image_upload_is_rejected(): void
+    {
+        Storage::fake('local');
+        $sales = User::factory()->create(['role' => 'sales']);
+
+        $this->actingAs($sales)->post('/tickets', $this->payload([
+            'images' => [UploadedFile::fake()->create('notes.pdf', 40, 'application/pdf')],
+        ]))->assertSessionHasErrors('images.0');
+    }
+
+    public function test_submitter_and_admin_can_stream_a_screenshot_but_other_staff_cannot(): void
+    {
+        Notification::fake();
+        Storage::fake('local');
+        $sales = User::factory()->create(['role' => 'sales']);
+
+        $this->actingAs($sales)->post('/tickets', $this->payload([
+            'images' => [UploadedFile::fake()->image('a.png')],
+        ]));
+        $ticket = SystemTicket::first();
+
+        // Owner can view.
+        $this->actingAs($sales)->get("/system-tickets/{$ticket->id}/images/0")->assertOk();
+        // Admin (triager) can view.
+        $this->actingAs(User::factory()->create(['role' => 'admin']))
+            ->get("/system-tickets/{$ticket->id}/images/0")->assertOk();
+        // An unrelated staff member cannot.
+        $this->actingAs(User::factory()->create(['role' => 'education']))
+            ->get("/system-tickets/{$ticket->id}/images/0")->assertForbidden();
+        // A lead cannot.
+        $this->actingAs(User::factory()->create(['role' => 'lead']))
+            ->get("/system-tickets/{$ticket->id}/images/0")->assertForbidden();
+        // Out-of-range index 404s.
+        $this->actingAs($sales)->get("/system-tickets/{$ticket->id}/images/9")->assertNotFound();
     }
 }

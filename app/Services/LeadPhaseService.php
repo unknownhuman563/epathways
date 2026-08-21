@@ -78,7 +78,7 @@ class LeadPhaseService
         'New Leads',
         'Contact Attempted',
         'Contacted for Booking',
-        'Booking Confirmation with Bryll',
+        'Booking Confirmation',
         'Missed the Meeting',
         'Qualified but Not Ready',
         'Qualified but No Funds',

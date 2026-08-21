@@ -141,6 +141,10 @@ class EngagementSigningController extends Controller
         $doc = $this->packQuery($lead)->where('id', $docId)->firstOrFail();
         abort_unless($doc->source_variant === 'engagement:written_agreement', 403);
 
+        // Capture BEFORE we stamp client_signed_at so the confirmation email
+        // fires only on the first signing, not on a re-sign.
+        $firstSigning = empty($doc->client_signed_at);
+
         $request->validate([
             'signature_data' => 'nullable|string',
             'signature_image' => 'nullable|image|mimes:png,jpg,jpeg|max:2048',
@@ -173,6 +177,13 @@ class EngagementSigningController extends Controller
         ])->save();
 
         $lead->recordStaffActivity('Client signed the Written Agreement');
+
+        // Confirm receipt to the client with their document checklist (key:
+        // agreement_signed). First signing only; best-effort so a mail failure
+        // never blocks the signature from being saved.
+        if ($firstSigning) {
+            \App\Jobs\SendLeadFollowupEmail::sendKey('agreement_signed', $lead);
+        }
 
         return back()->with('success', 'Thank you — your agreement has been signed.');
     }

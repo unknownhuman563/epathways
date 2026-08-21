@@ -145,6 +145,18 @@ class InvoiceGenerator
         $visaLabel = $o['visa_label'] ?? $defaults['visa_label'];
 
         $serviceFee = (float) ($o['service_fee'] ?? $defaults['service_fee'] ?? 0);
+        // Engagement path (no explicit service_fee): honour the principal's
+        // per-applicant fee override on a single-applicant invoice.
+        if (! array_key_exists('service_fee', $o)) {
+            $eng = app(EngagementDocumentGenerator::class);
+            $apps = $eng->familyApplicants($lead);
+            if (count($apps) === 1) {
+                $pf = $eng->applicantFee($apps[0], $o['fee_tier'] ?? 'normal', $o['fee_location'] ?? 'onshore');
+                if ($pf !== null) {
+                    $serviceFee = ! empty($o['include_gst']) ? round($pf * (1 + VisaType::GST_RATE), 2) : $pf;
+                }
+            }
+        }
         $inzFee = (float) ($o['inz_fee'] ?? $defaults['inz_fee'] ?? 0);
         $includeDisbursement = array_key_exists('include_disbursement', $o)
             ? (bool) $o['include_disbursement']
@@ -186,9 +198,12 @@ class InvoiceGenerator
 
             if (count($applicants) > 1) {
                 $groups = [];
+                $eng = app(EngagementDocumentGenerator::class);
                 foreach ($applicants as $a) {
                     $vm = $a['visa_model'];
-                    $sf = $vm?->professionalFeeFor($tier, $location);
+                    // Per-applicant fee override (else the visa's fee) — matches
+                    // the written agreement's per-applicant lines.
+                    $sf = $eng->applicantFee($a, $tier, $location);
                     if ($incGst && $sf !== null) {
                         $sf = round($sf * (1 + VisaType::GST_RATE), 2);
                     }
