@@ -78,7 +78,7 @@ class GoogleCalendarService
 
         // Anchor the event to the timezone the client booked in, so the invite
         // is self-describing (same absolute instant, meaningful wall time).
-        $tz = $booking->client_timezone ?: 'UTC';
+        $tz = $this->canonicalTimezone($booking->client_timezone);
         $start = Carbon::parse($booking->appointment_at)->setTimezone($tz);
         $duration = (int) config('services.google_calendar.default_duration', 30);
         $end = (clone $start)->addMinutes($duration > 0 ? $duration : 30);
@@ -142,6 +142,69 @@ class GoogleCalendarService
     }
 
     /**
+     * Normalise a client-supplied IANA timezone to a name Google Calendar
+     * accepts. Browsers/devices can report DEPRECATED aliases (e.g.
+     * "Asia/Calcutta", "Europe/Kiev") which PHP tolerates but the Calendar API
+     * rejects ("Unknown or bad timezone") — failing the whole event insert.
+     * ICU's canonical id maps them (Asia/Calcutta -> Asia/Kolkata). Empty or
+     * still-invalid values fall back to the booking default.
+     */
+    private function canonicalTimezone(?string $tz): string
+    {
+        $tz = trim((string) $tz);
+        $fallback = (string) config('services.booking.timezone', 'Pacific/Auckland');
+
+        if ($tz === '') {
+            return $fallback;
+        }
+
+        // Explicit map of deprecated IANA aliases PHP accepts but Google
+        // Calendar rejects. This is the reliable path (works without the intl
+        // extension, which prod may not have). Asia/Calcutta -> Asia/Kolkata is
+        // the common one (India). Extend as new ones surface in the logs.
+        static $aliases = [
+            'Asia/Calcutta' => 'Asia/Kolkata',
+            'Asia/Rangoon' => 'Asia/Yangon',
+            'Asia/Saigon' => 'Asia/Ho_Chi_Minh',
+            'Asia/Katmandu' => 'Asia/Kathmandu',
+            'Asia/Dacca' => 'Asia/Dhaka',
+            'Asia/Thimbu' => 'Asia/Thimphu',
+            'Asia/Ashkhabad' => 'Asia/Ashgabat',
+            'Asia/Ujung_Pandang' => 'Asia/Makassar',
+            'Asia/Macao' => 'Asia/Macau',
+            'Asia/Chongqing' => 'Asia/Shanghai',
+            'Asia/Harbin' => 'Asia/Shanghai',
+            'Asia/Kashgar' => 'Asia/Urumqi',
+            'Asia/Istanbul' => 'Europe/Istanbul',
+            'Europe/Kiev' => 'Europe/Kyiv',
+            'Europe/Uzhgorod' => 'Europe/Kyiv',
+            'Europe/Zaporozhye' => 'Europe/Kyiv',
+            'Europe/Nicosia' => 'Asia/Nicosia',
+            'America/Godthab' => 'America/Nuuk',
+            'America/Buenos_Aires' => 'America/Argentina/Buenos_Aires',
+            'Pacific/Enderbury' => 'Pacific/Kanton',
+            'Australia/Currie' => 'Australia/Hobart',
+        ];
+        if (isset($aliases[$tz])) {
+            $tz = $aliases[$tz];
+        } elseif (class_exists(\IntlTimeZone::class)) {
+            // Generic canonicalisation for anything not in the map.
+            $canonical = \IntlTimeZone::getCanonicalID($tz);
+            if (is_string($canonical) && $canonical !== '' && $canonical !== 'Etc/Unknown') {
+                $tz = $canonical;
+            }
+        }
+
+        try {
+            new \DateTimeZone($tz);
+
+            return $tz;
+        } catch (\Throwable $e) {
+            return $fallback;
+        }
+    }
+
+    /**
      * Pull the Google Meet URL from an event, preferring the newer
      * conferenceData.entryPoints (video) and falling back to the legacy
      * hangoutLink. Returns null when the conference isn't ready yet.
@@ -173,7 +236,7 @@ class GoogleCalendarService
             return;
         }
 
-        $tz = $booking->client_timezone ?: 'UTC';
+        $tz = $this->canonicalTimezone($booking->client_timezone);
         $start = Carbon::parse($booking->appointment_at)->setTimezone($tz);
         $duration = (int) config('services.google_calendar.default_duration', 30);
         $end = (clone $start)->addMinutes($duration > 0 ? $duration : 30);
