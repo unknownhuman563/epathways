@@ -62,7 +62,7 @@ export default function Invoice({ cases = [], generated = [], suggestions = [], 
 
     return (
         <div className="space-y-5 max-w-[1400px] mx-auto pb-12">
-            <Head title="Invoice — Immigration" />
+            <Head title="Invoice — Finance" />
 
             <div className="flex items-center justify-between gap-4">
                 <div className="flex items-center gap-3">
@@ -189,6 +189,24 @@ export default function Invoice({ cases = [], generated = [], suggestions = [], 
                                                     </div>
                                                 ))}
                                                 <div className="pt-2 mt-0.5 border-t border-gray-100 w-full flex items-center justify-end gap-1">
+                                                    {c.tracking_code ? (
+                                                        <a
+                                                            href={`/track/${c.tracking_code}`}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            title="Open the client's application tracker"
+                                                            className={iconBtnCls}
+                                                        >
+                                                            <ExternalLink size={13} />
+                                                        </a>
+                                                    ) : (
+                                                        <span
+                                                            title="No tracking code on this case yet"
+                                                            className="w-7 h-7 rounded-lg border border-gray-100 flex items-center justify-center text-gray-300"
+                                                        >
+                                                            <ExternalLink size={13} />
+                                                        </span>
+                                                    )}
                                                     <DeleteInvoicesButton caseId={c.case_id} caseName={c.case_name} count={c.invoices.length} />
                                                 </div>
                                             </div>

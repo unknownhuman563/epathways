@@ -423,6 +423,7 @@ class CaseProfileController extends Controller
             ->map(fn (\App\Models\CaseDependent $d) => array_merge([
                 'id' => $d->id,
                 'relationship' => $d->relationship,
+                'in_agreement' => (bool) $d->in_agreement,
                 'visa_type_id' => $d->visa_type_id,
                 'visa_name' => $d->visaType?->name,
                 'family_name' => $d->family_name,
@@ -501,6 +502,17 @@ class CaseProfileController extends Controller
         $dependent->update($request->validate($this->dependentRules()));
 
         return back()->with('success', 'Dependant updated.');
+    }
+
+    /** Toggle whether a dependant is included on the written agreement / invoice. */
+    public function setDependentInAgreement(Request $request, Lead $lead, \App\Models\CaseDependent $dependent)
+    {
+        $this->guardCase($lead);
+        abort_unless($dependent->lead_id === $lead->id, 404);
+        $data = $request->validate(['in_agreement' => ['required', 'boolean']]);
+        $dependent->update(['in_agreement' => $data['in_agreement']]);
+
+        return back()->with('success', $data['in_agreement'] ? 'Added to the agreement.' : 'Excluded from the agreement.');
     }
 
     public function deleteDependent(Lead $lead, \App\Models\CaseDependent $dependent)
@@ -748,19 +760,22 @@ class CaseProfileController extends Controller
 
         return \App\Models\CaseThread::query()
             ->where('lead_id', $lead->id)
-            ->with(['author:id,name', 'addressedTo:id,name', 'resolver:id,name'])
+            ->with(['author:id,name,role', 'addressedTo:id,name', 'resolver:id,name'])
             ->orderByRaw('resolved_at IS NULL DESC')
             ->orderByDesc('id')
             ->get()
             ->map(fn (\App\Models\CaseThread $t) => [
                 'id' => $t->id,
+                'parent_id' => $t->parent_id,
                 'anchor_type' => $t->anchor_type,
                 'anchor_id' => $t->anchor_id,
                 'anchor_key' => $t->anchor_key,
                 'anchor_attempt' => $t->anchor_attempt,
                 'body' => $t->body,
                 'requires_answer' => $t->requires_answer,
+                'client_visible' => (bool) $t->client_visible,
                 'author' => $t->author?->name,
+                'author_role' => $t->author?->role,
                 'addressed_to' => $t->addressedTo ? ['id' => $t->addressedTo->id, 'name' => $t->addressedTo->name] : null,
                 'resolved_at' => optional($t->resolved_at)->toIso8601String(),
                 'resolved_by' => $t->resolver?->name,
@@ -1054,6 +1069,7 @@ class CaseProfileController extends Controller
         $user = $this->guardCase($lead);
 
         $data = $request->validate([
+            'parent_id' => ['nullable', 'integer'],
             'anchor_type' => ['required', \Illuminate\Validation\Rule::in(\App\Models\CaseThread::ANCHOR_TYPES)],
             // document → an id on this case; step/gate/stage → a key.
             'anchor_id' => ['nullable', 'integer', 'required_if:anchor_type,document'],
@@ -1062,7 +1078,19 @@ class CaseProfileController extends Controller
             'body' => ['required', 'string', 'max:2000'],
             'addressed_to_id' => ['nullable', 'integer', 'exists:users,id'],
             'requires_answer' => ['boolean'],
+            'client_visible' => ['boolean'],
         ]);
+
+        // A reply inherits its parent's anchor (and must belong to this case).
+        $parent = null;
+        if (! empty($data['parent_id'])) {
+            $parent = \App\Models\CaseThread::where('id', $data['parent_id'])->where('lead_id', $lead->id)->first();
+            abort_unless($parent, 422, 'That comment is not on this case.');
+            $data['anchor_type'] = $parent->anchor_type;
+            $data['anchor_id'] = $parent->anchor_id;
+            $data['anchor_key'] = $parent->anchor_key;
+            $data['anchor_attempt'] = $parent->anchor_attempt;
+        }
 
         // A document anchor must reference a document that belongs to this case —
         // row-level, not just "some document id" (§13).
@@ -1076,6 +1104,7 @@ class CaseProfileController extends Controller
 
         $thread = \App\Models\CaseThread::create([
             'lead_id' => $lead->id,
+            'parent_id' => $parent?->id,
             'anchor_type' => $data['anchor_type'],
             'anchor_id' => $data['anchor_type'] === \App\Models\CaseThread::ANCHOR_DOCUMENT ? $data['anchor_id'] : null,
             'anchor_key' => in_array($data['anchor_type'], ['step', 'gate', 'stage'], true) ? ($data['anchor_key'] ?? null) : null,
@@ -1084,6 +1113,7 @@ class CaseProfileController extends Controller
             'addressed_to_id' => $data['addressed_to_id'] ?? null,
             'body' => $data['body'],
             'requires_answer' => (bool) ($data['requires_answer'] ?? false),
+            'client_visible' => (bool) ($data['client_visible'] ?? false),
         ]);
 
         // Answer-requiring + addressed → it lands in that person's queue, and we
@@ -1248,6 +1278,43 @@ class CaseProfileController extends Controller
         abort_unless($lead->is_immigration_case, 404);
 
         return $user;
+    }
+
+    /**
+     * POST /portal/immigration/cases/{lead}/identity-scan — AI reads the
+     * applicant's passport (or best identity document) and compares the
+     * extracted fields to the case file. Powers the Personal tab's "Confirmed
+     * by document" panel and its field badges. Indicative only.
+     */
+    public function identityScan(Request $request, \App\Services\Immigration\VerificationScanService $scanner, Lead $lead)
+    {
+        $this->guardCase($lead);
+
+        // Prefer a passport document; fall back to any identity-looking file.
+        $doc = LeadDocument::where('lead_id', $lead->id)
+            ->whereNotNull('file_path')
+            ->where(function ($q) {
+                $q->where('checklist_key', 'like', '%passport%')
+                    ->orWhere('original_name', 'like', '%passport%');
+            })
+            ->orderByDesc('created_at')
+            ->first();
+
+        if (! $doc) {
+            return response()->json(['ok' => false, 'error' => 'No passport document on file to scan.']);
+        }
+
+        $result = $scanner->scan($doc);
+        $result['document'] = $doc->original_name;
+
+        \Illuminate\Support\Facades\Log::info('Case identity AI scan', [
+            'user' => $request->user()?->id,
+            'lead' => $lead->id,
+            'document' => $doc->id,
+            'ok' => $result['ok'] ?? false,
+        ]);
+
+        return response()->json($result);
     }
 
     /** POST /portal/immigration/cases/{lead}/personal — edit the applicant's

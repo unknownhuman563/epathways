@@ -829,6 +829,21 @@ class ImmigrationController extends Controller
                 })
                 ->values();
 
+            // Engagement activity trail — fee adjustments and per-applicant fee
+            // edits across all cases, for the Activity Log tab.
+            $activityLog = \App\Models\ActivityLog::query()
+                ->where('action', 'like', 'engagement.%')
+                ->latest()
+                ->limit(100)
+                ->get()
+                ->map(fn ($log) => [
+                    'id' => $log->id,
+                    'action' => $log->action,
+                    'description' => $log->description,
+                    'actor_name' => $log->actor_name ?: 'System',
+                    'created_at' => optional($log->created_at)?->toIso8601String(),
+                ])->values();
+
             return inertia($page, [
                 'cases' => $cases,
                 'documents' => \App\Services\Immigration\EngagementDocumentGenerator::catalogue(),
@@ -836,6 +851,7 @@ class ImmigrationController extends Controller
                 'signers' => $this->signingAdvisers(),
                 'default_signer_id' => $this->defaultSignerId(),
                 'me_id' => auth()->id(),
+                'activityLog' => $activityLog,
             ]);
         } catch (\Throwable $e) {
             Log::error('Immigration engagement page failed', ['error' => $e->getMessage()]);
