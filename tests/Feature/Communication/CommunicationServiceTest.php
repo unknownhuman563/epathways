@@ -175,6 +175,18 @@ class CommunicationServiceTest extends TestCase
         $this->assertStringNotContainsString('}}', $res['email']->body);
     }
 
+    public function test_program_options_html_is_not_escaped(): void
+    {
+        // Server-built HTML block must render as markup, not escaped text.
+        $this->template(['channels' => ['email'], 'email_body' => 'Programs: {{program_options}}']);
+        $res = $this->service()->sendTemplated('tmpl', $this->lead(), [
+            'program_options' => '<p><strong>Option 1:</strong> BSc Nursing</p>',
+        ]);
+
+        $this->assertStringContainsString('<p><strong>Option 1:</strong> BSc Nursing</p>', $res['email']->body);
+        $this->assertStringNotContainsString('&lt;p&gt;', $res['email']->body);
+    }
+
     public function test_invalid_phone_logs_failed_sms(): void
     {
         $this->fakeSmsOk();

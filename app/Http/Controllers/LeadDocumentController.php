@@ -1425,10 +1425,14 @@ class LeadDocumentController extends Controller
     }
 
     /**
-     * Build the {{program_1}}..{{program_3}} context for the Study Proposal
-     * template from the lead's proposed_program_ids. Each is a plain-text
-     * "Title — Level · Fee" line; missing slots are empty strings so the
-     * template's fixed three Option lines still render cleanly.
+     * Build the Study Proposal template context from the lead's
+     * proposed_program_ids.
+     *
+     *  - {{program_options}} : the whole "Recommended Programs" block as HTML —
+     *    ONLY the selected programs, one "Option N:" line each (1..5). This is
+     *    the flexible token: 1 program → 1 line, 3 → 3 lines, no blank slots.
+     *  - {{program_1}}..{{program_5}} : the same values as individual plain-text
+     *    lines, kept for older templates. Unselected slots are empty strings.
      */
     private function proposalProgramVars(Lead $lead): array
     {
@@ -1438,11 +1442,15 @@ class LeadDocumentController extends Controller
             ->get(['id', 'title', 'level', 'price_text'])
             ->keyBy('id');
 
-        $vars = ['program_1' => '', 'program_2' => '', 'program_3' => ''];
+        $vars = [
+            'program_1' => '', 'program_2' => '', 'program_3' => '',
+            'program_4' => '', 'program_5' => '',
+        ];
+        $optionsHtml = '';
 
         $slot = 1;
         foreach ($ids as $pid) {
-            if ($slot > 3) {
+            if ($slot > 5) {
                 break;
             }
             $p = $lines->get($pid);
@@ -1455,9 +1463,14 @@ class LeadDocumentController extends Controller
                 $p->level ? "Level {$p->level}" : null,
                 $p->price_text ?: null,
             ]);
-            $vars['program_'.$slot] = implode(' · ', $parts);
+            $text = implode(' · ', $parts);
+            $vars['program_'.$slot] = $text;
+            // Escape the dynamic text; the surrounding markup is ours.
+            $optionsHtml .= '<p style="margin:4px 0;"><strong>Option '.$slot.':</strong> '.e($text).'</p>';
             $slot++;
         }
+
+        $vars['program_options'] = $optionsHtml;
 
         return $vars;
     }

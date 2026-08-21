@@ -113,6 +113,38 @@ class ProposalHistoryTest extends TestCase
         $this->assertSame($a->id, $superseded->selected_program_id);
     }
 
+    public function test_proposal_email_shows_only_selected_program_options(): void
+    {
+        \Illuminate\Support\Facades\Mail::fake();
+        $this->actingAs(User::factory()->create(['role' => 'admin']));
+
+        // A study-proposal template using the flexible {{program_options}} block.
+        \App\Models\MessageTemplate::create([
+            'key' => 'program_proposal', 'name' => 'Study Proposal', 'channels' => ['email'],
+            'email_subject' => 'Proposal', 'email_body' => 'Options: {{program_options}}',
+        ]);
+
+        $a = $this->program('Bachelor of Accounting');
+        $b = $this->program('Bachelor of Nursing');
+        $lead = Lead::create([
+            'first_name' => 'Opt', 'last_name' => 'Lead', 'email' => 'opt@example.com',
+            'status' => 'Consultation Done', 'tracking_code' => 'OPTX-OPTX-OPTX',
+            'proposed_program_ids' => [$a->id, $b->id],
+        ]);
+
+        $this->post("/admin/leads/{$lead->id}/notify-document-ready", ['kind' => 'proposal'])
+            ->assertRedirect();
+
+        $log = \App\Models\MessageLog::where('template_key', 'program_proposal')->latest()->first();
+        $this->assertNotNull($log);
+        // Exactly two options — the two selected — and no empty Option 3.
+        $this->assertStringContainsString('Option 1:', $log->body);
+        $this->assertStringContainsString('Bachelor of Accounting', $log->body);
+        $this->assertStringContainsString('Option 2:', $log->body);
+        $this->assertStringContainsString('Bachelor of Nursing', $log->body);
+        $this->assertStringNotContainsString('Option 3:', $log->body);
+    }
+
     public function test_clearing_does_not_add_a_history_row(): void
     {
         $this->actingAs(User::factory()->create(['role' => 'admin']));

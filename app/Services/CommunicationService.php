@@ -17,6 +17,14 @@ use Illuminate\Support\Facades\Mail;
  */
 class CommunicationService
 {
+    /**
+     * Template variables whose values are trusted, server-built HTML and must
+     * NOT be HTML-escaped on substitution (their dynamic parts are escaped
+     * where the value is assembled). E.g. the Study Proposal's rendered
+     * "Recommended Programs" block.
+     */
+    private const RAW_HTML_KEYS = ['program_options'];
+
     public function __construct(private SmsProvider $sms) {}
 
     /**
@@ -446,7 +454,12 @@ class CommunicationService
             }
             $value = (string) $context[$key];
 
-            return $escape ? e($value) : $value;
+            // A few keys carry trusted, server-built HTML (their dynamic parts
+            // are already escaped where built) — never double-escape those, or
+            // their markup would render as visible text.
+            $isRawHtml = in_array($key, self::RAW_HTML_KEYS, true);
+
+            return ($escape && ! $isRawHtml) ? e($value) : $value;
         }, $template) ?? $template;
 
         // Safety net: drop any residual {{ … }} the substitution couldn't
