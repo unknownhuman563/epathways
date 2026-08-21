@@ -21,4 +21,13 @@ return [
         'Consultation Done' => 'consultation_done',
         'Not Qualified' => 'not_qualified',
     ],
+
+    // Immigration CASE stage (a Lead::IMMIGRATION_STAGES value, stored in
+    // leads.immigration_stage) => the MessageTemplate key to send when a case
+    // MOVES INTO that stage. Fires from the Lead model's `updated` hook, so it
+    // catches every stage-change path (manual "Move to stage", the process
+    // chain, etc.). Same rules as `map`: a missing template key is a no-op.
+    'immigration_map' => [
+        'Invoice Paid' => 'invoice_paid',
+    ],
 ];

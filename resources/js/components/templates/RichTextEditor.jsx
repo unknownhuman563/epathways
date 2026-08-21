@@ -8,15 +8,17 @@ import { Link } from "@tiptap/extension-link";
 import {
     Bold, Italic, Underline as UnderlineIcon, Heading1, Heading2, List, ListOrdered,
     AlignLeft, AlignCenter, AlignRight, Link as LinkIcon, Highlighter, Baseline, RemoveFormatting,
-    MousePointerClick,
+    MousePointerClick, Wand2,
 } from "lucide-react";
+
+// A body with tables/images is a rich layout the plain editor can't render — it
+// gets a live preview here and is edited with the "Customize email body" builder.
+const hasRichHtml = (html) => /<(table|img)\b/i.test(String(html || ""));
 
 /**
  * The stock Link mark only round-trips href/rel/target, so saving a template
  * silently strips the inline `style` off CTA anchors — a green button turns
  * back into a plain blue link. Carrying `style` through keeps buttons intact.
- * Safe: the server still strips on*= handlers and javascript: URLs
- * (MessageTemplateController::sanitizeBody).
  */
 const StyledLink = Link.extend({
     addAttributes() {
@@ -31,18 +33,10 @@ const StyledLink = Link.extend({
     },
 });
 
-// House CTA pill — matches the buttons in DefaultMessageTemplatesSeeder so
-// staff-authored buttons look identical to the seeded ones.
+// House CTA pill — matches the buttons in DefaultMessageTemplatesSeeder.
 const BUTTON_STYLE =
     "display:inline-block;padding:12px 26px;background:#2e7d32;color:#ffffff;text-decoration:none;border-radius:6px;font-weight:700;";
 
-/**
- * TipTap rich-text editor for the email body. Emits HTML (bold, headings,
- * colors, alignment, lists, links) that the branded email shell renders
- * directly. Bold/size/color all use inline styles so they survive email
- * clients. Legacy Markdown templates are converted to HTML server-side before
- * they reach this editor.
- */
 const FONT_SIZES = [
     { label: "Small", value: "13px" },
     { label: "Normal", value: "" },
@@ -70,15 +64,18 @@ function Btn({ active, disabled, onClick, title, children }) {
 
 const Divider = () => <span className="w-px h-5 bg-gray-200 mx-1" />;
 
+/**
+ * Simple-text email editor (TipTap), shown at email width. Rich layouts (tables/
+ * images built in the "Customize email body" builder) render as a live preview
+ * instead — the plain editor can't hold them, and would flatten them.
+ */
 export default function RichTextEditor({ value = "", onChange }) {
-    // Tracks the last value we know the editor holds, so we can tell an
-    // external change (e.g. loading a template) apart from the user typing.
     const lastValue = useRef(value);
 
     const editor = useEditor({
         extensions: [
             StarterKit.configure({
-                link: false,   // replaced by StyledLink, which keeps inline styles
+                link: false,
                 heading: { levels: [1, 2, 3] },
             }),
             StyledLink.configure({ openOnClick: false, HTMLAttributes: { rel: "noopener", target: "_blank" } }),
@@ -92,7 +89,7 @@ export default function RichTextEditor({ value = "", onChange }) {
         immediatelyRender: false,
         editorProps: {
             attributes: {
-                class: "tiptap-body min-h-[220px] px-4 py-3 outline-none text-sm text-gray-800",
+                class: "tiptap-body min-h-[380px] w-full max-w-[600px] mx-auto bg-white rounded shadow-sm px-8 py-6 outline-none text-sm text-gray-800",
             },
         },
         onUpdate: ({ editor }) => {
@@ -102,8 +99,6 @@ export default function RichTextEditor({ value = "", onChange }) {
         },
     });
 
-    // Sync the editor when `value` is changed from outside (template load,
-    // form reset) — but not when the change came from the user's own typing.
     useEffect(() => {
         if (!editor) return;
         if (value === lastValue.current) return;
@@ -129,13 +124,10 @@ export default function RichTextEditor({ value = "", onChange }) {
         const url = window.prompt("Link URL", prev);
         if (url === null) return;
         if (url === "") editor.chain().focus().extendMarkRange("link").unsetLink().run();
-        // Keep any existing inline style so re-pointing a button's URL doesn't
-        // flatten it back into a plain link.
         else editor.chain().focus().extendMarkRange("link")
             .setLink({ href: url, style: editor.getAttributes("link").style || null }).run();
     };
 
-    // Wrap the selection in a link carrying the house CTA pill styling.
     const setButton = () => {
         const prev = editor.getAttributes("link").href || "";
         const url = window.prompt("Button link URL", prev);
@@ -167,7 +159,6 @@ export default function RichTextEditor({ value = "", onChange }) {
 
                 <Divider />
 
-                {/* Text color */}
                 <label title="Text color" className="h-8 w-8 inline-flex items-center justify-center rounded-md text-gray-600 hover:bg-gray-100 cursor-pointer relative">
                     <Baseline size={15} />
                     <input
@@ -177,7 +168,6 @@ export default function RichTextEditor({ value = "", onChange }) {
                         className="absolute inset-0 opacity-0 cursor-pointer"
                     />
                 </label>
-                {/* Highlight color */}
                 <label title="Highlight" className="h-8 w-8 inline-flex items-center justify-center rounded-md text-gray-600 hover:bg-gray-100 cursor-pointer relative">
                     <Highlighter size={15} />
                     <input
@@ -206,7 +196,17 @@ export default function RichTextEditor({ value = "", onChange }) {
                 <Btn title="Clear formatting" onClick={() => editor.chain().focus().unsetAllMarks().clearNodes().run()}><RemoveFormatting size={15} /></Btn>
             </div>
 
-            <EditorContent editor={editor} />
+            {hasRichHtml(value) && (
+                <div className="flex items-center gap-2 px-3 py-2 border-b border-amber-100 bg-amber-50 text-[11px] text-amber-800">
+                    <Wand2 size={13} className="text-[#436235] shrink-0" />
+                    <span>This template has a rich layout. You can edit the text here, but it may simplify tables/images — use <strong>Customize email body</strong> to keep the full design.</span>
+                </div>
+            )}
+
+            {/* Email-width canvas on a light ground, so it reads like a real email. */}
+            <div className="bg-gray-100 p-4">
+                <EditorContent editor={editor} />
+            </div>
         </div>
     );
 }

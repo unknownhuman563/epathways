@@ -25,7 +25,7 @@ const STAGE_STYLES = {
     "New Leads":                      "bg-rose-100 text-rose-800 border-rose-200",
     "Contact Attempted":              "bg-orange-100 text-orange-800 border-orange-200",
     "Contacted for Booking":          "bg-yellow-100 text-yellow-800 border-yellow-200",
-    "Booking Confirmation with Bryll":"bg-cyan-100 text-cyan-800 border-cyan-200",
+    "Booking Confirmation":"bg-cyan-100 text-cyan-800 border-cyan-200",
     "Missed the Meeting":             "bg-pink-100 text-pink-800 border-pink-200",
     "Qualified but Not Ready":        "bg-slate-100 text-slate-700 border-slate-200",
     "Qualified but No Funds":         "bg-slate-100 text-slate-700 border-slate-200",
@@ -648,7 +648,7 @@ export default function LeadDetails({ lead: backendLead, proposal = null, activi
 
             {/* ── Communications tab — message history sent to this lead ── */}
             {activeTab === 'communications' && (
-                <CommunicationsPanel leadId={backendLead.id} />
+                <CommunicationsPanel leadId={backendLead.id} leadEmail={backendLead.email} />
             )}
 
             {/* Compose message slide-over (email / SMS / both) */}
@@ -3292,15 +3292,25 @@ function TagsPanel({ leadId, tags, allTags }) {
 // header row carries the per-section verify / request-revisions controls that
 // gate the lead-portal flow.
 function ChecklistTable({ state = {}, checklistFiles = {}, lead, onSave, verifications = {}, onVerifySection, hiddenKeys = new Set(), onToggleTrack }) {
+    // Collapsible sections — collapsed by DEFAULT, mirroring the immigration
+    // Case Profile Documents tab. `expanded` holds the sections the user opened.
+    const [expanded, setExpanded] = useState(() => new Set());
+    const toggle = (key) => setExpanded((prev) => {
+        const next = new Set(prev);
+        next.has(key) ? next.delete(key) : next.add(key);
+        return next;
+    });
+
     return (
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
             <table className="w-full text-left">
                 <thead>
                     <tr className="bg-gray-50/60 border-b border-gray-100 text-[10px] font-bold uppercase tracking-widest text-gray-500">
                         <th className="pl-4 pr-2 py-3 w-10 text-center" title="Show on the public /track page"></th>
-                        <th className="px-6 py-3">File</th>
+                        <th className="px-6 py-3">Document</th>
                         <th className="px-6 py-3">Attachment</th>
                         <th className="px-6 py-3 w-40">Status</th>
+                        <th className="px-6 py-3 w-44">Reviewed by</th>
                         <th className="px-6 py-3 w-64">Notes</th>
                     </tr>
                 </thead>
@@ -3328,12 +3338,17 @@ function ChecklistTable({ state = {}, checklistFiles = {}, lead, onSave, verific
                         const shownCount = itemKeys.filter((k) => ! hiddenKeys.has(k)).length;
                         const allShown = shownCount === itemKeys.length;
                         const someShown = shownCount > 0 && shownCount < itemKeys.length;
+                        // "X/Y" completion count — how many items in this section
+                        // have at least one uploaded file (mirrors the immigration
+                        // tab's approved/total chip).
+                        const withFilesCount = itemKeys.filter((k) => (checklistFiles[k]?.length || 0) > 0).length;
+                        const isOpen = expanded.has(section.key);
                         return (
                             <React.Fragment key={section.key}>
                                 {/* Section header — matches the immigration Case
-                                    Documents tab (bg-gray-200 / border-gray-300).
-                                    The "All in tracker" toggle sits on the same
-                                    left rail as per-row checkboxes below. */}
+                                    Documents tab (bg-gray-200 / border-gray-300):
+                                    tracker checkbox, a chevron to collapse/expand,
+                                    the section name and an X/Y count. */}
                                 <tr className="bg-gray-200 border-y border-gray-300">
                                     <td className="pl-4 pr-2 py-2 w-10 text-center">
                                         <input
@@ -3345,9 +3360,18 @@ function ChecklistTable({ state = {}, checklistFiles = {}, lead, onSave, verific
                                             className="w-4 h-4 rounded border-gray-400 text-gray-900 focus:ring-1 focus:ring-gray-500 cursor-pointer"
                                         />
                                     </td>
-                                    <td colSpan={4} className="px-6 py-2">
+                                    <td colSpan={5} className="px-6 py-2">
                                         <div className="flex items-center justify-between gap-3 flex-wrap">
-                                            <span className="text-[11px] font-bold uppercase tracking-wider text-gray-700">{section.section}</span>
+                                            <button
+                                                type="button"
+                                                onClick={() => toggle(section.key)}
+                                                className="flex items-center gap-1.5 group"
+                                                title={isOpen ? 'Collapse section' : 'Expand section'}
+                                            >
+                                                <ChevronDown size={13} className={`text-gray-500 group-hover:text-gray-900 transition-transform ${isOpen ? '' : '-rotate-90'}`} />
+                                                <span className="text-[11px] font-bold uppercase tracking-wider text-gray-700 group-hover:text-gray-900">{section.section}</span>
+                                                <span className="text-[10.5px] font-semibold text-gray-500">{withFilesCount}/{itemKeys.length}</span>
+                                            </button>
                                             <select
                                                 value={ver || ''}
                                                 onChange={(e) => setSectionStatus(e.target.value)}
@@ -3361,7 +3385,7 @@ function ChecklistTable({ state = {}, checklistFiles = {}, lead, onSave, verific
                                         </div>
                                     </td>
                                 </tr>
-                                {section.items.map((it) => (
+                                {isOpen && section.items.map((it) => (
                                     <ChecklistRow
                                         key={it.id}
                                         item={it}
@@ -3546,6 +3570,26 @@ function ChecklistRow({ item, lead, entry, files = [], onSave, hidden = false, o
                         <option key={s.key} value={s.key}>{s.label}</option>
                     ))}
                 </select>
+            </td>
+
+            {/* Reviewed by — whoever last reviewed an uploaded file for this
+                item (from the doc queue), and when. Dash until reviewed. */}
+            <td className="px-6 py-3">
+                {(() => {
+                    const reviewed = files
+                        .filter((f) => f.reviewed_by)
+                        .sort((a, b) => new Date(b.reviewed_at || 0) - new Date(a.reviewed_at || 0))[0];
+                    return reviewed ? (
+                        <div className="min-w-0">
+                            <p className="text-[12px] font-semibold text-gray-800 truncate" title={reviewed.reviewed_by}>{reviewed.reviewed_by}</p>
+                            {reviewed.reviewed_at && (
+                                <p className="text-[10px] text-gray-400 tabular-nums">{new Date(reviewed.reviewed_at).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
+                            )}
+                        </div>
+                    ) : (
+                        <span className="text-[11px] text-gray-300">—</span>
+                    );
+                })()}
             </td>
 
             {/* Notes — inline, saved on blur */}

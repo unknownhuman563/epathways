@@ -21,6 +21,7 @@ class MessageLog extends Model
 
     protected $fillable = [
         'template_key',
+        'source',
         'campaign_id',
         'channel',
         'recipient_type',

@@ -7,6 +7,7 @@ const ENGLISH_NAV = [
     { name: "Learners", href: "/portal/english/learners", icon: <Users size={20} /> },
     { name: "Assessments", href: "/portal/english/assessments", icon: <ClipboardCheck size={20} /> },
     { name: "Email Templates", href: "/portal/english/email-templates", icon: <Mail size={20} /> },
+    { name: "Compose", href: "/portal/english/compose", icon: <Mail size={20} /> },
 
     { name: "Account", section: true },
     { name: "Daily Time Record", href: "/portal/english/dtr", icon: <Clock size={20} /> },

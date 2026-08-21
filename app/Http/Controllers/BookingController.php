@@ -187,7 +187,7 @@ class BookingController extends Controller
      * Convert a booking's client into a pipeline lead. Bookings are standalone
      * by default — staff click "Convert" on the Bookings list to promote the
      * client into Leads (education flow). Find-or-create by email (dedupe),
-     * then land them on the "Booking Confirmation with Bryll" stage. Idempotent:
+     * then land them on the "Booking Confirmation" stage. Idempotent:
      * a booking already linked to a lead just returns it.
      */
     public function convertToLead(Request $request, $id)
@@ -219,7 +219,7 @@ class BookingController extends Controller
             // lead that's already further along back to this stage.
             $preBookingStages = ['New Leads', 'Contact Attempted', 'Contacted for Booking'];
             if ($lead->wasRecentlyCreated || $lead->status === null || in_array($lead->status, $preBookingStages, true)) {
-                $lead->status = 'Booking Confirmation with Bryll';
+                $lead->status = 'Booking Confirmation';
             }
 
             // Carry the intake scalars onto the lead when the booking has them.
@@ -314,7 +314,7 @@ class BookingController extends Controller
             // pre-booking stages — never regress a lead that's further along.
             $preBookingStages = ['New Leads', 'Contact Attempted', 'Contacted for Booking'];
             if ($lead->wasRecentlyCreated || $lead->status === null || in_array($lead->status, $preBookingStages, true)) {
-                $lead->status = 'Booking Confirmation with Bryll';
+                $lead->status = 'Booking Confirmation';
                 $lead->save();
             }
 

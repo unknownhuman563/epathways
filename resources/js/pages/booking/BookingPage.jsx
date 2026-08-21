@@ -35,7 +35,6 @@ import devImg from "@assets/team/Dev.png";
 import daiImg from "@assets/team/dai.png";
 import emilyImg from "@assets/team/emily.png";
 import emmaImg from "@assets/team/emma.png";
-import bryllImg from "@assets/team/bryll.jpg";
 
 const categories = [
     {
@@ -114,11 +113,11 @@ const consultants = {
     education: [
         {
             id: 2,
-            name: 'Fhilip Bryll Añabeza',
+            name: 'Emma Ceballo',
             role: 'Education Consultant',
-            image: bryllImg,
-            bio: "Bryll supports international students with admissions, course selection, and pathway planning into New Zealand institutions.",
-            tags: ['EDUCATION SPEC', 'EN'],
+            image: emmaImg,
+            bio: "Emma is a dedicated education consultant helping international students seamlessly transition into the New Zealand education system, with a focus on holistic student success and pathway planning.",
+            tags: ['EDUCATION SPEC', '5 YRS EXP', 'EN'],
             status: 'available',
             availability: 'Mon – Fri, 9am – 5pm NZST',
             sessionLength: '45 – 60 min, Video',
@@ -141,22 +140,6 @@ const consultants = {
                 wed: { start: '10:00', end: '18:15' }, thu: { start: '10:00', end: '18:15' },
                 fri: { start: '10:00', end: '18:15' },
             },
-        },
-        {
-            id: 6,
-            readOnly: true,
-            name: 'Emma Ceballo',
-            role: <>Head <br /> <span className="italic text-[8px] text-gray-500 font-medium mt-1 inline-block">Education Department</span></>,
-            image: emmaImg,
-            bio: "Emma is a dedicated education consultant helping international students seamlessly transition into the New Zealand education system, with a focus on holistic student success and pathway planning.",
-            tags: ['EDUCATION SPEC', '5 YRS EXP', 'EN'],
-            status: 'available',
-            availability: 'Mon – Fri, 9am – 5pm NZST',
-            sessionLength: '45 – 60 min, Video',
-            sessionFormat: 'Video Call or Phone',
-            institutions: 'Nationwide Support',
-            specialisesIn: ['Pathway Planning', 'Course Matching', 'Student Support', 'Admissions'],
-            bookingUrl: 'https://calendar.google.com/calendar/appointments/schedules/AcZssZ2UC60-y5UinpTZqTSV_AMOwsLtuXpqYm3xGUI3WsjVjQQ9TcZPSv_ieaSi1CSlKDlL9OXabohZ?gv=true'
         },
         {
             id: 1,
@@ -1113,19 +1096,19 @@ export default function BookingPage({ visaTypes = [], availability = {}, booking
                                                                 </div>
 
                                                     <div className="space-y-6 text-gray-600">
-                                                        {selection.consultant?.name === 'Fhilip Bryll Añabeza' ? (
+                                                        {selection.consultant?.name === 'Emma Ceballo' ? (
                                                             <>
                                                                 <div className="flex items-center gap-4">
                                                                     <Phone className="w-5 h-5 text-black" />
-                                                                    <span>+63 991 854 8675 (PH)</span>
+                                                                    <span>+64 21 227 8000 (NZ)</span>
                                                                 </div>
                                                                 <div className="flex items-center gap-4">
                                                                     <MessageSquare className="w-5 h-5 text-black" />
-                                                                    <span>+63 939 586 3654 (WhatsApp)</span>
+                                                                    <span>+64 21 227 8000 (NZ)</span>
                                                                 </div>
                                                                 <div className="flex items-center gap-4">
                                                                     <Mail className="w-5 h-5 text-black" />
-                                                                    <span>hello@epathways.ph</span>
+                                                                    <span>emma@epathways.co.nz</span>
                                                                 </div>
                                                             </>
                                                         ) : (

@@ -31,6 +31,7 @@ class MessageTemplateController extends Controller
         ['name' => 'email', 'description' => "Lead's email"],
         ['name' => 'phone', 'description' => "Lead's phone"],
         ['name' => 'tracker_url', 'description' => 'Link to the lead /track/{code} page'],
+        ['name' => 'engagement_url', 'description' => 'Scoped engagement signing link (only filled when sent from the engagement generator)'],
         ['name' => 'assigned_staff_name', 'description' => 'Assigned staff member, or "the ePathways team"'],
         ['name' => 'status', 'description' => 'Application status (passed when staff send an update)'],
         ['name' => 'status_detail', 'description' => 'Optional note describing the status change'],
@@ -149,9 +150,11 @@ class MessageTemplateController extends Controller
             'channels' => $source->channels ?? [],
             'email_subject' => $source->email_subject,
             'email_body' => $emailBody,
+            'design_json' => $source->design_json,
             'from_email' => $source->from_email,
             'from_name' => $source->from_name,
             'branding' => $source->branding,
+            'to_extra' => $source->to_extra,
             'cc' => $source->cc,
             'bcc' => $source->bcc,
             'sms_body' => $source->sms_body,
@@ -397,9 +400,11 @@ class MessageTemplateController extends Controller
                     'channels' => $t->channels,
                     'email_subject' => $t->email_subject,
                     'email_body' => $t->email_body,
+                    'design_json' => $t->design_json,
                     'from_email' => $t->from_email,
                     'from_name' => $t->from_name,
                     'branding' => $t->branding,
+                    'to_extra' => $t->to_extra,
                     'cc' => $t->cc,
                     'bcc' => $t->bcc,
                     'sms_body' => $t->sms_body,
@@ -690,8 +695,12 @@ class MessageTemplateController extends Controller
             // Per-portal banner/CTA preset (config/email_branding.php).
             'branding' => ['nullable', Rule::in(array_keys(config('email_branding', ['default' => []])))],
             // Comma-separated addresses copied on every send.
+            'to_extra' => ['nullable', 'string', 'max:1000'],
             'cc' => ['nullable', 'string', 'max:1000'],
             'bcc' => ['nullable', 'string', 'max:1000'],
+            // Unlayer design document for builder-made templates (nullable = a
+            // plain-text template edited without the visual builder).
+            'design_json' => ['nullable', 'array'],
             // Rich HTML from the editor is more verbose than the old Markdown.
             'email_body' => ['nullable', 'string', 'max:65000'],
             'sms_body' => ['nullable', 'string', 'max:1600'],
@@ -710,12 +719,40 @@ class MessageTemplateController extends Controller
             return $html;
         }
 
-        $html = preg_replace('#<(script|style|iframe|object|embed)\b[^>]*>.*?</\1>#is', '', $html);
-        $html = preg_replace('#<(script|style|iframe|object|embed)\b[^>]*/?>#i', '', $html);
+        // <style> is intentionally allowed (the visual email builder emits a
+        // scoped style block); it cannot execute JS in modern mail clients. We
+        // still strip active content and neutralise the few CSS attack vectors.
+        $html = preg_replace('#<(script|iframe|object|embed)\b[^>]*>.*?</\1>#is', '', $html);
+        $html = preg_replace('#<(script|iframe|object|embed)\b[^>]*/?>#i', '', $html);
         $html = preg_replace('#\son\w+\s*=\s*("[^"]*"|\'[^\']*\'|[^\s>]+)#i', '', $html);
         $html = preg_replace('#(href|src)\s*=\s*(["\'])\s*javascript:[^"\']*\2#i', '$1="#"', $html);
+        $html = preg_replace('#expression\s*\(#i', 'expr_(', $html);          // legacy IE CSS exec
+        $html = preg_replace('#@import\b#i', '/* import */', $html);          // no remote CSS pulls
 
         return $html;
+    }
+
+    /**
+     * Image upload target for the visual email builder (GrapesJS asset manager).
+     * Stores on the PUBLIC disk and returns the GrapesJS-expected shape so the
+     * uploaded image drops straight onto the canvas with a hosted URL.
+     */
+    public function uploadEmailImage(Request $request)
+    {
+        $this->context($request); // access gated by the route's portal:* middleware
+
+        $request->validate([
+            'files' => ['required', 'array', 'max:10'],
+            'files.*' => ['image', 'mimes:jpg,jpeg,png,gif,webp', 'max:5120'],
+        ]);
+
+        $data = [];
+        foreach ($request->file('files', []) as $file) {
+            $path = $file->store('email-assets', 'public');
+            $data[] = ['src' => Storage::disk('public')->url($path)];
+        }
+
+        return response()->json(['data' => $data]);
     }
 
     /** Optional email-shell branding images (banner header + footer CTA). */

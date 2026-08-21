@@ -45,6 +45,7 @@ export default function SalesLayout({ children }) {
         { name: "Promotions",      href: "/admin/promos",                 icon: <Tag size={20} /> },
         { name: "Bulk Email",      href: "/portal/sales/bulk-email",      icon: <Send size={20} /> },
         { name: "Email Templates", href: "/portal/sales/email-templates", icon: <FileText size={20} /> },
+        { name: "Compose", href: "/portal/sales/compose", icon: <Send size={20} /> },
         { name: "Campaigns",       href: "/portal/sales/campaigns",       icon: <BarChart3 size={20} /> },
 
         { name: "Account", section: true },

@@ -55,7 +55,7 @@ const DRAFT_KEY = "education.newStudent.draft";
 
 const blankForm = () => ({
     first_name: "", middle_name: "", last_name: "", suffix: "",
-    gender: "", email: "", phone: "", referral: "", location: "",
+    gender: "", email: "", phone: "", referral: "", agent_id: "", location: "",
     // Department picks WHICH stage column we save to ("education_stage",
     // "english_stage", "immigration_stage"); `stage` is the actual value
     // for that department's list. Default department is education.
@@ -72,6 +72,7 @@ export default function AddEditStudentModal({
     onClose,
     schoolOptions  = [],
     programOptions = [],
+    agentOptions   = [],
 }) {
     const editing = !! student;
     const [form,    setForm]    = useState(blankForm);
@@ -122,6 +123,7 @@ export default function AddEditStudentModal({
             email:           student.email                              ?? "",
             phone:           student.phone                              ?? "",
             referral:        student.referral                           ?? "",
+            agent_id:        student.agent_id != null ? String(student.agent_id) : "",
             location:        student.location                           ?? "",
             department:      seedDept,
             stage:           seedStage,
@@ -290,8 +292,13 @@ export default function AddEditStudentModal({
                             <Field label="Contact number" required>
                                 <input type="tel" required value={form.phone} onChange={set("phone")} className={ICls} placeholder="+63 …" />
                             </Field>
-                            <Field label="Referral" hint="Who referred them · optional">
-                                <input type="text" value={form.referral} onChange={set("referral")} className={ICls} maxLength={191} placeholder="e.g. Agent, friend, FB ad" />
+                            <Field label="Referring agent" hint="Recruiting agent who referred them · optional">
+                                <select value={form.agent_id} onChange={set("agent_id")} className={ICls}>
+                                    <option value="">— No agent —</option>
+                                    {agentOptions.map((a) => (
+                                        <option key={a.id} value={String(a.id)}>{a.name}</option>
+                                    ))}
+                                </select>
                             </Field>
                             <Field label="Location" hint="Country only · optional">
                                 <input type="text" value={form.location} onChange={set("location")} className={ICls} maxLength={120} placeholder="e.g. Philippines" />

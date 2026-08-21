@@ -418,6 +418,10 @@ Route::middleware(['auth'])->group(function () {
     // System request tickets — any staff member can raise one (leads are
     // blocked inside the controller).
     Route::post('/tickets', [\App\Http\Controllers\SystemTicketController::class, 'store'])->name('tickets.store');
+    // Screenshot stream — auth-gated to admins + the ticket's own submitter
+    // inside the controller (the files live on the private disk).
+    Route::get('/system-tickets/{id}/images/{index}', [\App\Http\Controllers\SystemTicketController::class, 'image'])
+        ->whereNumber(['id', 'index'])->name('system-tickets.image');
 
     // Active message templates (JSON) — feeds the bulk-email + compose pickers.
     // Any authenticated staff member; no lead-specific data is exposed.
@@ -519,11 +523,6 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/admin/programs/{id}', [ProgramController::class, 'update']);
         Route::delete('/admin/programs/{id}', [ProgramController::class, 'destroy']);
 
-        Route::get('/admin/booking', [BookingController::class, 'index'])->name('admin.bookings');
-        Route::post('/admin/bookings/{id}', [BookingController::class, 'update']);
-        Route::delete('/admin/bookings/{id}', [BookingController::class, 'destroy'])->name('admin.bookings.destroy');
-        // Convert a booking's client into a pipeline lead (education flow).
-        Route::post('/admin/bookings/{id}/convert', [BookingController::class, 'convertToLead'])->name('admin.bookings.convert');
 
         Route::get('/admin/settings', [SettingController::class, 'index'])->name('admin.settings');
         Route::post('/admin/settings', [SettingController::class, 'update']);
@@ -563,6 +562,7 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/admin/message-templates/move', [\App\Http\Controllers\MessageTemplateController::class, 'moveTemplates'])->name('admin.message-templates.move');
         Route::post('/admin/message-templates/move-department', [\App\Http\Controllers\MessageTemplateController::class, 'moveDepartment'])->name('admin.message-templates.move-department');
         Route::post('/admin/message-templates/delete', [\App\Http\Controllers\MessageTemplateController::class, 'destroyMany'])->name('admin.message-templates.delete-many');
+        Route::post('/admin/message-templates/upload-image', [\App\Http\Controllers\MessageTemplateController::class, 'uploadEmailImage'])->name('admin.message-templates.upload-image');
         Route::post('/admin/message-templates', [\App\Http\Controllers\MessageTemplateController::class, 'store'])->name('admin.message-templates.store');
         Route::get('/admin/message-templates/{id}', [\App\Http\Controllers\MessageTemplateController::class, 'show'])->name('admin.message-templates.show');
         Route::put('/admin/message-templates/{id}', [\App\Http\Controllers\MessageTemplateController::class, 'update'])->name('admin.message-templates.update');
@@ -587,6 +587,12 @@ Route::middleware(['auth'])->group(function () {
 
         Route::get('/admin/email/replies', [\App\Http\Controllers\EmailReplyController::class, 'index'])->name('admin.email.replies');
         Route::post('/admin/email/replies/sync', [\App\Http\Controllers\EmailReplyController::class, 'syncNow'])->name('admin.email.replies.sync');
+
+        // Compose — write a one-off email to picked leads and/or typed addresses.
+        Route::get('/admin/email/compose', [\App\Http\Controllers\ComposeController::class, 'index'])->name('admin.email.compose');
+        Route::post('/admin/email/compose/send', [\App\Http\Controllers\ComposeController::class, 'send'])->name('admin.email.compose.send');
+        Route::post('/admin/email/compose/upload-image', [\App\Http\Controllers\ComposeController::class, 'uploadImage'])->name('admin.email.compose.upload-image');
+        Route::get('/admin/email/compose/leads', [\App\Http\Controllers\ComposeController::class, 'searchLeads'])->name('admin.email.compose.leads');
         Route::post('/admin/email/replies/{leadId}/read', [\App\Http\Controllers\EmailReplyController::class, 'markThreadRead'])->name('admin.email.replies.read');
         Route::post('/admin/email/replies/{leadId}/reply', [\App\Http\Controllers\EmailReplyController::class, 'reply'])->name('admin.email.replies.reply');
 
@@ -680,6 +686,16 @@ Route::middleware(['auth'])->group(function () {
             ->name('admin.portal-invitation.reset-password');
     });
 
+    // Consultation bookings — admin + education (education triages/converts
+    // booking requests; the page has All / Education / Immigration tabs).
+    Route::middleware('portal:admin,education')->group(function () {
+        Route::get('/admin/booking', [BookingController::class, 'index'])->name('admin.bookings');
+        Route::post('/admin/bookings/{id}', [BookingController::class, 'update']);
+        Route::delete('/admin/bookings/{id}', [BookingController::class, 'destroy'])->name('admin.bookings.destroy');
+        // Convert a booking's client into a pipeline lead (education flow).
+        Route::post('/admin/bookings/{id}/convert', [BookingController::class, 'convertToLead'])->name('admin.bookings.convert');
+    });
+
     // Program Promotions — admin / sales / education can manage time-bound
     // discount campaigns shown on the public Home + Education Journey +
     // Programs pages. Banner image uploads land in storage/app/public/promos.
@@ -756,6 +772,10 @@ Route::middleware(['auth'])->group(function () {
         // across departments.
         Route::post('/admin/leads/{lead}/compose', [\App\Http\Controllers\Sales\ComposeMessageController::class, 'send'])->name('admin.leads.compose');
         Route::get('/admin/leads/{lead}/communications', [\App\Http\Controllers\Sales\LeadCommunicationsController::class, 'index'])->name('admin.leads.communications');
+        // Reply to the lead from the conversation tab (blocked if they have no email).
+        Route::post('/admin/leads/{lead}/communications', [\App\Http\Controllers\Sales\LeadCommunicationsController::class, 'reply'])->name('admin.leads.communications.reply');
+        // Pull the mailbox on demand so a fresh reply appears without leaving the tab.
+        Route::post('/admin/leads/{lead}/communications/sync', [\App\Http\Controllers\Sales\LeadCommunicationsController::class, 'sync'])->name('admin.leads.communications.sync');
 
         // Cross-lead document queue — review lead-submitted docs in bulk.
         Route::get('/admin/document-queue', [\App\Http\Controllers\DocumentQueueController::class, 'index'])->name('admin.document-queue');
@@ -922,6 +942,13 @@ Route::middleware(['auth'])->group(function () {
             ->prefix("portal/{$deptRole}")
             ->name("portal.{$deptRole}.")
             ->group(function () {
+                // Compose — one-off email to picked leads and/or typed addresses.
+                $compose = \App\Http\Controllers\ComposeController::class;
+                Route::get('/compose', [$compose, 'index'])->name('compose');
+                Route::post('/compose/send', [$compose, 'send'])->name('compose.send');
+                Route::post('/compose/upload-image', [$compose, 'uploadImage'])->name('compose.upload-image');
+                Route::get('/compose/leads', [$compose, 'searchLeads'])->name('compose.leads');
+
                 $c = \App\Http\Controllers\MessageTemplateController::class;
                 Route::get('/email-templates', [$c, 'index'])->name('email-templates');
                 Route::get('/email-templates/create', [$c, 'create'])->name('email-templates.create');
@@ -935,6 +962,7 @@ Route::middleware(['auth'])->group(function () {
                 Route::post('/email-templates/move', [$c, 'moveTemplates'])->name('email-templates.move');
                 Route::post('/email-templates/move-department', [$c, 'moveDepartment'])->name('email-templates.move-department');
                 Route::post('/email-templates/delete', [$c, 'destroyMany'])->name('email-templates.delete-many');
+                Route::post('/email-templates/upload-image', [$c, 'uploadEmailImage'])->name('email-templates.upload-image');
                 Route::post('/email-templates', [$c, 'store'])->name('email-templates.store');
                 Route::get('/email-templates/{id}', [$c, 'show'])->name('email-templates.show');
                 Route::put('/email-templates/{id}', [$c, 'update'])->name('email-templates.update');
