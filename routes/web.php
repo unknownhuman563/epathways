@@ -852,6 +852,12 @@ Route::middleware(['auth'])->group(function () {
     Route::middleware('portal:admin,sales,education,english,immigration,immigration_manager,immigration_adviser,accommodation,finance')->group(function () {
         Route::post('/admin/leads/{id}/documents/checklist/{key}/upload', [LeadDocumentController::class, 'staffChecklistUpload'])
             ->name('admin.leads.documents.checklist.upload');
+        // Per-lead ad-hoc document rows on the Documents tab — scoped to this
+        // one lead (leads.custom_documents), uploaded against by a custom.* key.
+        Route::post('/admin/leads/{id}/documents/custom', [LeadDocumentController::class, 'addCustomDocument'])
+            ->name('admin.leads.documents.custom.add');
+        Route::delete('/admin/leads/{id}/documents/custom/{key}', [LeadDocumentController::class, 'removeCustomDocument'])
+            ->name('admin.leads.documents.custom.remove');
         // Templated agreement generator — Blade -> PDF -> attached as a
         // LeadDocument with source='generated'. Only agree.consultancy
         // (single|partner variant) is wired up right now.

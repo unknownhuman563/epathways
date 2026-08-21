@@ -1421,6 +1421,40 @@ class LeadTrackingController extends Controller
             }
         }
 
+        // Per-lead ad-hoc documents (leads.custom_documents) — this lead only.
+        // Rendered as their own "Additional Documents" section so the client
+        // can upload them from the tracker like any other requirement.
+        $custom = is_array($lead->custom_documents) ? $lead->custom_documents : [];
+        $customSections = [];
+        foreach ($custom as $c) {
+            $key = $c['key'] ?? null;
+            if (! $key || in_array($key, $hidden, true)) {
+                continue;
+            }
+            $docs = $docsByKey->get($key) ?? collect();
+            $status = 'missing';
+            if ($docs->contains(fn ($d) => $d->status === LeadDocument::STATUS_APPROVED)) {
+                $status = 'approved';
+            } elseif ($docs->contains(fn ($d) => in_array($d->status, [LeadDocument::STATUS_SUBMITTED, LeadDocument::STATUS_UNDER_REVIEW]))) {
+                $status = 'submitted';
+            } elseif ($docs->contains(fn ($d) => $d->status === LeadDocument::STATUS_REJECTED)) {
+                $status = 'rejected';
+            }
+            $sec = trim((string) ($c['section'] ?? '')) ?: 'Additional Documents';
+            $customSections[$sec] = true;
+            $decorated[] = [
+                'key' => $key,
+                'label' => $sec.' · '.($c['name'] ?? $key),
+                'hint' => null,
+                'required' => true,
+                'status' => $status,
+                'count' => $docs->count(),
+            ];
+        }
+        // Any custom folder that isn't one of the standard four gets appended
+        // to the section order so it renders after them, in order.
+        $extraSections = array_values(array_diff(array_keys($customSections), self::TRACKER_SECTIONS));
+
         $requiredCount = collect($decorated)->where('required', true)->count();
         $submittedCount = collect($decorated)
             ->where('required', true)
@@ -1450,8 +1484,11 @@ class LeadTrackingController extends Controller
             'checklist' => $decorated,
             // The order the client should work through the requirement sections
             // on their tracker. Tracker-only — the staff Documents tab is
-            // unaffected. Same list that scopes which sections show above.
-            'section_order' => self::TRACKER_SECTIONS,
+            // unaffected. Same list that scopes which sections show above; the
+            // per-lead "Additional Documents" section is appended when present.
+            'section_order' => empty($extraSections)
+                ? self::TRACKER_SECTIONS
+                : array_merge(self::TRACKER_SECTIONS, $extraSections),
             'totals' => [
                 'required' => $requiredCount,
                 'submitted' => $submittedCount,

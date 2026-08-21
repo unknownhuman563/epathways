@@ -323,6 +323,61 @@ class LeadDocumentController extends Controller
      * checklist item — used by the agreements panel, or when staff helps
      * the lead by uploading on their behalf.
      */
+    /**
+     * Add a per-lead ad-hoc document row to this lead's Documents tab. Scoped
+     * to the one lead (stored in leads.custom_documents) — no other lead sees
+     * it. Uploads attach to it via its generated `custom.*` checklist_key,
+     * reusing the normal upload/status/tracker flow.
+     */
+    public function addCustomDocument(Request $request, $leadId)
+    {
+        $lead = Lead::findOrFail($leadId);
+
+        $data = $request->validate([
+            'name' => 'required|string|max:120',
+            // Which checklist folder/section the document drops into. Free-form
+            // (the frontend offers the standard folders) — defaults to the
+            // per-lead "Additional Documents" bucket when omitted.
+            'section' => 'nullable|string|max:120',
+        ]);
+
+        $items = is_array($lead->custom_documents) ? $lead->custom_documents : [];
+        $items[] = [
+            'key' => 'custom.'.\Illuminate\Support\Str::random(12),
+            'name' => trim($data['name']),
+            'section' => trim((string) ($data['section'] ?? '')) ?: 'Additional Documents',
+            'created_at' => now()->toIso8601String(),
+            'created_by' => Auth::id(),
+        ];
+        $lead->custom_documents = $items;
+        $lead->save();
+
+        return back()->with('success', 'Document added to this lead.');
+    }
+
+    /**
+     * Remove a per-lead custom document row. Any files already uploaded against
+     * it are kept — their checklist_key is nulled so they surface as orphans
+     * rather than vanishing with the item definition.
+     */
+    public function removeCustomDocument(Request $request, $leadId, $key)
+    {
+        $lead = Lead::findOrFail($leadId);
+
+        $items = is_array($lead->custom_documents) ? $lead->custom_documents : [];
+        $lead->custom_documents = array_values(array_filter(
+            $items,
+            fn ($i) => ($i['key'] ?? null) !== $key
+        )) ?: null;
+        $lead->save();
+
+        LeadDocument::where('lead_id', $lead->id)
+            ->where('checklist_key', $key)
+            ->update(['checklist_key' => null]);
+
+        return back()->with('success', 'Document removed.');
+    }
+
     public function staffChecklistUpload(Request $request, $leadId, $key)
     {
         $lead = Lead::findOrFail($leadId);

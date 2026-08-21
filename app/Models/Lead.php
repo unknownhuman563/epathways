@@ -222,6 +222,9 @@ class Lead extends Model
         'calendar_date', 'client_info_link', 'call_update_form_link',
         'document_checklist',
         'hidden_track_documents',
+        // Per-lead ad-hoc document rows [{key, name}] added on the Documents
+        // tab — scoped to this one lead, uploaded against by a custom.* key.
+        'custom_documents',
         // Up to 3 program IDs staff have proposed for this lead — drives
         // the "Proposal" tab on the Proposal & Agreements page and the
         // program shortlist rendered on the tracker.
@@ -349,6 +352,7 @@ class Lead extends Model
         'calendar_date' => 'date',
         'document_checklist' => 'array',
         'hidden_track_documents' => 'array',
+        'custom_documents' => 'array',
         'proposed_program_ids' => 'array',
         'preferred_program_chosen_at' => 'datetime',
         'section_verifications' => 'array',
