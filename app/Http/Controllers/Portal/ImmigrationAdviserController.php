@@ -113,6 +113,12 @@ class ImmigrationAdviserController extends Controller
         return app(ImmigrationController::class)->inzForms('portal/immigration-adviser/InzForms');
     }
 
+    /** Visas catalogue — the same VisaType manager under adviser chrome. */
+    public function visas(\App\Http\Controllers\VisaTypeController $visaTypes)
+    {
+        return $visaTypes->index('portal/immigration-adviser/VisaTypes');
+    }
+
     /**
      * Verification queue — documents a manager has marked "Checked" (referred to
      * the adviser). The LIA makes the final Approve/Reject call, which is what the

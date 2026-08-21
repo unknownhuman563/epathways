@@ -100,6 +100,15 @@ const RENDER_TABS = [ALL_TAB, ...CASE_TABS];
 
 // Which tab a stage belongs to. Cases with no stage yet fall into
 // Applications — that's where the journey starts.
+// Fields a case is searchable by — name/contacts, visa + INZ reference, stage,
+// and identity (passport number/expiry).
+const caseMatchesQuery = (c, q) =>
+    [
+        c.name, c.lead_id, c.email, c.phone, c.country,
+        c.inz_visa_type, c.inz_reference, c.inz_status, c.immigration_stage,
+        c.passport_number, c.passport_expiry,
+    ].some((v) => (v || '').toString().toLowerCase().includes(q));
+
 const tabKeyForStage = (stage) => {
     if (! stage) return 'applications';
     const hit = CASE_TABS.find((t) => t.stages.includes(stage));
@@ -158,11 +167,21 @@ export default function ImmigrationCases({ cases = [], distribution = [], priori
                 if (s !== stageFilter) return false;
             }
             if (!q) return true;
-            return [
-                c.name, c.lead_id, c.email, c.phone, c.country, c.inz_visa_type, c.inz_reference,
-            ].some((v) => (v || '').toString().toLowerCase().includes(q));
+            return caseMatchesQuery(c, q);
         });
     }, [cases, search, stageFilter, tab, custodyFilter, me_id]);
+
+    // Searching auto-navigates to the tab that holds the match, so staff don't
+    // have to click through each tab. Only jumps when the current tab shows no
+    // match (respects a tab you're already on if it contains a result).
+    useEffect(() => {
+        const q = search.trim().toLowerCase();
+        if (!q) return;
+        const inCurrentTab = (c) => tab === 'all' || tabKeyForStage(c.immigration_stage) === tab;
+        if (cases.some((c) => caseMatchesQuery(c, q) && inCurrentTab(c))) return;
+        const first = cases.find((c) => caseMatchesQuery(c, q));
+        if (first) setTab(tabKeyForStage(first.immigration_stage));
+    }, [search, cases]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const sorted = useMemo(() => {
         const arr = [...filtered];

@@ -33,6 +33,18 @@ export default function DependantsTab({ lead, dependents = [], caseOptions = [],
         router.delete(`${base}/${d.id}`, { preserveScroll: true, onSuccess: () => toast.success("Dependant removed") });
     };
 
+    // Open a family member's own case. If they aren't tied to one yet, the
+    // server creates it (every family member is a case) and redirects there.
+    const openCase = (d) => {
+        if (d.linked_lead_id) {
+            router.visit(`/portal/immigration/cases/${d.linked_lead_id}/profile`);
+            return;
+        }
+        router.post(`${base}/${d.id}/open-case`, {}, {
+            onError: () => toast.error("Could not open the case"),
+        });
+    };
+
     // Include/exclude a dependant from the written agreement + invoice. The
     // engagement fees, preview and invoice all read this flag.
     const toggleAgreement = (d, val) => {
@@ -81,7 +93,7 @@ export default function DependantsTab({ lead, dependents = [], caseOptions = [],
                         </thead>
                         <tbody className="divide-y divide-gray-50">
                             {dependents.map((d) => (
-                                <DependantRow key={d.id} d={d} onEdit={() => setEditing(d)} onRemove={() => remove(d)} onDocs={() => setDocsFor(d)} onToggleAgreement={(val) => toggleAgreement(d, val)} />
+                                <DependantRow key={d.id} d={d} onEdit={() => setEditing(d)} onRemove={() => remove(d)} onDocs={() => setDocsFor(d)} onToggleAgreement={(val) => toggleAgreement(d, val)} onOpenCase={() => openCase(d)} />
                             ))}
                         </tbody>
                     </table>
@@ -107,7 +119,7 @@ function ProgressBar({ done, total }) {
     );
 }
 
-function DependantRow({ d, onEdit, onRemove, onDocs, onToggleAgreement }) {
+function DependantRow({ d, onEdit, onRemove, onDocs, onToggleAgreement, onOpenCase }) {
     const p = d.progress || { required_done: 0, required_total: 0 };
     // The child's uploaded Face image, if any — shown as their profile photo.
     const photo = (d.checklist || []).find((i) => i.key?.endsWith("face_image") && i.document)?.document;
@@ -124,7 +136,14 @@ function DependantRow({ d, onEdit, onRemove, onDocs, onToggleAgreement }) {
                         </div>
                     )}
                     <div className="min-w-0">
-                        <div className="text-sm font-bold text-gray-900 truncate">{d.full_name}</div>
+                        <button
+                            type="button"
+                            onClick={onOpenCase}
+                            className="text-sm font-bold text-[#009688] hover:text-[#00695f] hover:underline truncate inline-block max-w-full text-left"
+                            title={d.linked_lead_id ? "Open this family member's case" : "Open this family member as a case"}
+                        >
+                            {d.full_name}
+                        </button>
                         <div className="text-[12px] text-gray-500 truncate">
                             {[d.dob && `DOB ${d.dob}`, d.nationality, d.passport_number && `Passport ${d.passport_number}`].filter(Boolean).join(" · ") || "No details yet"}
                         </div>

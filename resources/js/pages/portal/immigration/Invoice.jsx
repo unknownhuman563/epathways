@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import {
     ReceiptText, Search, Plus, X, Download, Eye, Trash2,
     FileText, Loader2, AlertTriangle, ExternalLink,
-    FileSignature, ArrowRight,
+    FileSignature, ArrowRight, CheckCircle2,
 } from "lucide-react";
 
 // Shared shape for the icon-only row actions — no text labels, the
@@ -45,8 +45,10 @@ const money = (n) => (n === null || n === undefined || n === "" ? "—" : `$${Nu
  * left (case, number, dates, fee lines) and a live preview of the tax
  * invoice on the right. Amounts default from the case's visa fees.
  */
-export default function Invoice({ cases = [], generated = [], suggestions = [], nextNumber = null }) {
+export default function Invoice({ cases = [], generated = [], suggestions = [], proofs = [], nextNumber = null }) {
     const [modalOpen, setModalOpen] = useState(false);
+    const [view, setView] = useState("invoices"); // "invoices" | "proofs"
+    const pendingProofs = proofs.filter((p) => p.status !== "Approved").length;
     // When set, the New-invoice modal opens with this case pre-selected —
     // used by the "generate invoice" suggestion cards.
     const [preselectId, setPreselectId] = useState(null);
@@ -83,11 +85,33 @@ export default function Invoice({ cases = [], generated = [], suggestions = [], 
                 </button>
             </div>
 
-            {suggestions.length > 0 && (
+            {/* Tabs — generated invoices, or client proof-of-payment uploads. */}
+            <div className="flex items-center gap-1 border-b border-gray-200">
+                {[
+                    { key: "invoices", label: "Generated invoices" },
+                    { key: "proofs", label: `Proof of payment${pendingProofs ? ` (${pendingProofs})` : ""}` },
+                ].map((t) => (
+                    <button
+                        key={t.key}
+                        type="button"
+                        onClick={() => setView(t.key)}
+                        className={`px-4 py-2.5 text-sm font-semibold border-b-2 -mb-px transition-colors ${
+                            view === t.key ? "border-gray-900 text-gray-900" : "border-transparent text-gray-500 hover:text-gray-900"
+                        }`}
+                    >
+                        {t.label}
+                    </button>
+                ))}
+            </div>
+
+            {view === "proofs" && <ProofReviewTable proofs={proofs} />}
+
+            {view === "invoices" && suggestions.length > 0 && (
                 <SuggestionStrip suggestions={suggestions} onGenerate={openNew} />
             )}
 
             {/* Generated invoices — one row per case */}
+            {view === "invoices" && (
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
                 <div className="px-5 py-3 border-b border-gray-100">
                     <h2 className="text-[12px] font-bold uppercase tracking-[0.12em] text-gray-500">Generated invoices</h2>
@@ -200,10 +224,151 @@ export default function Invoice({ cases = [], generated = [], suggestions = [], 
                     </div>
                 )}
             </div>
+            )}
 
             {modalOpen && (
                 <NewInvoiceModal cases={cases} nextNumber={nextNumber} preselectId={preselectId} onClose={closeModal} />
             )}
+        </div>
+    );
+}
+
+// Client proof-of-payment uploads, with verify (approve) / reject actions.
+function ProofReviewTable({ proofs = [] }) {
+    const [busyId, setBusyId] = useState(null);
+    const [previewing, setPreviewing] = useState(null);
+
+    const setStatus = (p, status, onDone) => {
+        setBusyId(p.id);
+        router.post(p.status_url, { status }, {
+            preserveScroll: true,
+            preserveState: true,
+            only: ["proofs"],
+            onSuccess: () => { toast.success(status === "Approved" ? "Payment confirmed" : "Marked as needs attention"); onDone?.(); },
+            onError: (e) => toast.error(Object.values(e)[0] || "Could not update"),
+            onFinish: () => setBusyId(null),
+        });
+    };
+
+    const badge = (s) => s === "Approved"
+        ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+        : s === "Rejected"
+            ? "bg-rose-50 text-rose-700 border-rose-200"
+            : "bg-amber-50 text-amber-700 border-amber-200";
+    const badgeLabel = (s) => s === "Approved" ? "Confirmed" : s === "Rejected" ? "Needs attention" : "Under review";
+
+    return (
+        <>
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+            <div className="px-5 py-3 border-b border-gray-100">
+                <h2 className="text-[12px] font-bold uppercase tracking-[0.12em] text-gray-500">Proof of payment</h2>
+            </div>
+            {proofs.length === 0 ? (
+                <div className="px-5 py-12 text-center text-sm text-gray-400">No proof-of-payment uploads yet.</div>
+            ) : (
+                <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs min-w-[820px]">
+                        <thead>
+                            <tr className="bg-slate-800 text-[10px] font-bold text-white uppercase tracking-wider">
+                                <th className="px-4 py-3">Case</th>
+                                <th className="px-4 py-3">File</th>
+                                <th className="px-4 py-3">Uploaded</th>
+                                <th className="px-4 py-3">Status</th>
+                                <th className="px-4 py-3 text-right pr-4">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-50">
+                            {proofs.map((p) => (
+                                <tr key={p.id} className="hover:bg-gray-50/60">
+                                    <td className="px-4 py-3">
+                                        <a href={`/portal/immigration/cases/${p.case_id}/profile`} className="font-bold text-gray-900 hover:text-[#009688]">{p.case_name}</a>
+                                        {p.case_ref && <div className="text-[11px] text-gray-400 font-mono">{p.case_ref}</div>}
+                                    </td>
+                                    <td className="px-4 py-3">
+                                        <div className="flex items-center gap-1.5">
+                                            <FileText size={13} className="text-gray-300" />
+                                            <span className="text-gray-700 truncate max-w-[200px]" title={p.original_name}>{p.original_name}</span>
+                                            <span className="text-gray-400">{fmtSize(p.size)}</span>
+                                        </div>
+                                    </td>
+                                    <td className="px-4 py-3 whitespace-nowrap text-gray-500">{fmtDate(p.uploaded_at)}</td>
+                                    <td className="px-4 py-3">
+                                        <span className={`inline-flex items-center text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full border ${badge(p.status)}`}>{badgeLabel(p.status)}</span>
+                                    </td>
+                                    <td className="px-4 py-3 pr-4">
+                                        <div className="flex items-center justify-end gap-1.5">
+                                            <button type="button" onClick={() => setPreviewing(p)} title="View & verify" className={iconBtnCls}><Eye size={13} /></button>
+                                            <a href={p.download_url} title="Download" className={iconBtnCls}><Download size={13} /></a>
+                                        </div>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            )}
+        </div>
+        {previewing && (
+            <ProofPreviewModal
+                proof={previewing}
+                busy={busyId === previewing.id}
+                onConfirm={() => setStatus(previewing, "Approved", () => setPreviewing(null))}
+                onReject={() => setStatus(previewing, "Rejected", () => setPreviewing(null))}
+                onClose={() => setPreviewing(null)}
+            />
+        )}
+        </>
+    );
+}
+
+// Preview a proof-of-payment file in a modal, with Confirm / Reject inline.
+function ProofPreviewModal({ proof, busy, onConfirm, onReject, onClose }) {
+    useEffect(() => {
+        const onKey = (e) => { if (e.key === "Escape") onClose(); };
+        const prev = document.body.style.overflow;
+        document.body.style.overflow = "hidden";
+        window.addEventListener("keydown", onKey);
+        return () => { document.body.style.overflow = prev; window.removeEventListener("keydown", onKey); };
+    }, [onClose]);
+
+    const isPdf = /\.pdf$/i.test(proof.original_name || "");
+    const done = proof.status === "Approved" || proof.status === "Rejected";
+
+    return (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-3" onClick={onClose}>
+            <div className="w-[95vw] max-w-[1000px] h-[90vh] max-h-[calc(100vh-1.5rem)] bg-white rounded-2xl shadow-xl flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
+                <div className="px-5 py-3.5 border-b border-gray-100 flex items-center justify-between gap-3 flex-shrink-0">
+                    <div className="min-w-0">
+                        <h2 className="text-sm font-bold text-gray-900 truncate">{proof.case_name} — proof of payment</h2>
+                        <p className="text-[11px] text-gray-400 truncate">{proof.original_name} · {fmtSize(proof.size)} · {fmtDate(proof.uploaded_at)}</p>
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                        <a href={proof.download_url} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 text-gray-700 text-[12px] font-semibold hover:bg-gray-50"><Download size={13} /> Download</a>
+                        <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-700"><X size={18} /></button>
+                    </div>
+                </div>
+                <div className="flex-1 min-h-0 bg-gray-100 flex items-center justify-center overflow-auto">
+                    {isPdf
+                        ? <iframe src={proof.view_url} title={proof.original_name} className="w-full h-full border-0" />
+                        : <img src={proof.view_url} alt={proof.original_name} className="max-w-full max-h-full object-contain" />}
+                </div>
+                <div className="px-5 py-3.5 border-t border-gray-100 flex items-center justify-between gap-3 flex-shrink-0 flex-wrap">
+                    <p className="text-[12px] text-gray-500">Does this receipt match the invoice amount?</p>
+                    <div className="flex items-center gap-2">
+                        {proof.status !== "Rejected" && (
+                            <button type="button" onClick={onReject} disabled={busy}
+                                className="inline-flex items-center px-4 py-2 rounded-lg border border-gray-200 text-gray-600 text-[13px] font-semibold hover:border-rose-400 hover:text-rose-600 disabled:opacity-50">Reject</button>
+                        )}
+                        {proof.status !== "Approved" && (
+                            <button type="button" onClick={onConfirm} disabled={busy}
+                                className="inline-flex items-center gap-1.5 px-5 py-2 rounded-lg bg-emerald-600 text-white text-[13px] font-bold hover:bg-emerald-700 disabled:opacity-50">
+                                {busy ? <Loader2 size={13} className="animate-spin" /> : <CheckCircle2 size={14} />} Confirm payment
+                            </button>
+                        )}
+                        {done && proof.status === "Approved" && <span className="text-[13px] font-semibold text-emerald-600">Confirmed</span>}
+                    </div>
+                </div>
+            </div>
         </div>
     );
 }

@@ -55,6 +55,16 @@ export default function CaseProfile() {
     }, []);
     const [activeTab, setActiveTab] = useState(initialTab);
 
+    // Navigating between two case profiles reuses this same page component
+    // (Inertia doesn't remount it), so reset the tab whenever the case changes
+    // — a fresh case opens on Overview unless the URL asks for a specific tab.
+    useEffect(() => {
+        const t = typeof window !== "undefined"
+            ? new URLSearchParams(window.location.search).get("tab")
+            : null;
+        setActiveTab(t && VALID_TABS.has(t) ? t : "overview");
+    }, [lead.id]);
+
     useEffect(() => {
         if (typeof window === "undefined") return;
         const url = new URL(window.location.href);
@@ -77,7 +87,7 @@ export default function CaseProfile() {
         <div className="max-w-[1300px] mx-auto pb-12 space-y-5">
             <Head title={`${fullName} — Case profile`} />
 
-            <CaseProfileHeader lead={lead} intake={intake} attention={attention} tiedTo={tiedTo} engagement={engagement} />
+            <CaseProfileHeader lead={lead} intake={intake} attention={attention} tiedTo={tiedTo} engagement={engagement} visaTypes={visaTypes} />
 
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-x-auto">
                 <nav className="flex items-stretch min-w-max">
