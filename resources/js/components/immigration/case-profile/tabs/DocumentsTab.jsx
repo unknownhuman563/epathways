@@ -375,8 +375,8 @@ export default function DocumentsTab({
                                             : null;
                                 return (
                                     <Fragment key={category}>
-                                        <tr className="border-t border-gray-100">
-                                            <td colSpan={4} className="px-4 pt-5 pb-2">
+                                        <tr className="bg-gray-800 border-y border-gray-700">
+                                            <td colSpan={4} className="px-4 py-2.5">
                                                 <div className="flex items-center justify-between gap-2">
                                                     <div className="flex items-center gap-2">
                                                         {checklistRows.length > 0 && (
@@ -390,9 +390,9 @@ export default function DocumentsTab({
                                                             title={collapsed ? "Expand section" : "Collapse section"}
                                                         >
                                                             {collapsed
-                                                                ? <ChevronRight size={12} className="text-gray-300 group-hover:text-gray-900" />
-                                                                : <ChevronDown size={12} className="text-gray-300 group-hover:text-gray-900" />}
-                                                            <span className="text-[11px] font-bold uppercase tracking-wider text-gray-500 group-hover:text-gray-900">
+                                                                ? <ChevronRight size={12} className="text-gray-400 group-hover:text-white" />
+                                                                : <ChevronDown size={12} className="text-gray-400 group-hover:text-white" />}
+                                                            <span className="text-[11px] font-bold uppercase tracking-wider text-gray-100 group-hover:text-white">
                                                                 {category}
                                                             </span>
                                                             <span className="text-[11px] font-semibold text-gray-400">
@@ -401,7 +401,7 @@ export default function DocumentsTab({
                                                         </button>
                                                     </div>
                                                     {rightNote && (
-                                                        <span className="text-[11px] text-gray-400">{rightNote}</span>
+                                                        <span className="text-[11px] text-gray-300">{rightNote}</span>
                                                     )}
                                                 </div>
                                             </td>
@@ -618,18 +618,9 @@ function Row({ row, leadId, docThreads = [], threadsByDoc = new Map(), caseStaff
                                 >
                                     View
                                 </button>
-                                <FileMenu doc={d} leadId={leadId} />
+                                <FileMenu doc={d} leadId={leadId} checklistKey={row.kind === "checklist" ? row.key : null} />
                             </div>
                         ))}
-                        {row.kind === "checklist" && (
-                            <div>
-                                <UploadSlot
-                                    leadId={leadId}
-                                    checklistKey={row.key}
-                                    label="Upload another"
-                                />
-                            </div>
-                        )}
                     </div>
                 ) : (
                     <div className="flex items-center gap-1.5 flex-wrap">
@@ -849,12 +840,14 @@ function DownloadAllMenu({ leadId }) {
 // Per-file actions menu (⋮) — Download + Delete, tucked away to keep the
 // attachment cell tidy. Portal-rendered so the dropdown escapes the scrollable
 // table. Delete asks for a second click to confirm (destructive, irreversible).
-function FileMenu({ doc, leadId }) {
+function FileMenu({ doc, leadId, checklistKey = null }) {
     const [open, setOpen] = useState(false);
     const [confirming, setConfirming] = useState(false);
     const [busy, setBusy] = useState(false);
+    const [uploading, setUploading] = useState(false);
     const [coords, setCoords] = useState({ top: 0, left: 0 });
     const btnRef = useRef(null);
+    const fileRef = useRef(null);
     const MENU_W = 168;
 
     useEffect(() => {
@@ -883,6 +876,30 @@ function FileMenu({ doc, leadId }) {
         });
     };
 
+    // Replace = upload a new file against the same checklist slot.
+    const onReplace = (e) => {
+        const files = Array.from(e.target.files || []);
+        if (files.length === 0) return;
+        setUploading(true);
+        router.post(
+            `/admin/leads/${leadId}/documents/checklist/${encodeURIComponent(checklistKey)}/upload`,
+            { files },
+            {
+                forceFormData: true,
+                preserveScroll: true,
+                preserveState: true,
+                only: ["documents"],
+                onSuccess: () => toast.success("File uploaded"),
+                onError: (errs) => toast.error(Object.values(errs)[0] || "Upload failed"),
+                onFinish: () => {
+                    setUploading(false);
+                    if (fileRef.current) fileRef.current.value = "";
+                    close();
+                },
+            },
+        );
+    };
+
     return (
         <>
             <button
@@ -894,6 +911,16 @@ function FileMenu({ doc, leadId }) {
             >
                 <MoreVertical size={12} />
             </button>
+            {checklistKey && (
+                <input
+                    ref={fileRef}
+                    type="file"
+                    multiple
+                    onChange={onReplace}
+                    className="hidden"
+                    accept="application/pdf,image/*,.doc,.docx,.xls,.xlsx"
+                />
+            )}
             {open && createPortal(
                 <>
                     <div className="fixed inset-0 z-[59]" onClick={close} />
@@ -908,6 +935,17 @@ function FileMenu({ doc, leadId }) {
                         >
                             <Download size={13} className="text-gray-400" /> Download
                         </a>
+                        {checklistKey && (
+                            <button
+                                type="button"
+                                onClick={() => fileRef.current?.click()}
+                                disabled={uploading}
+                                className="w-full text-left flex items-center gap-2 px-3 py-1.5 text-[12px] text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                            >
+                                {uploading ? <Loader2 size={13} className="animate-spin text-gray-400" /> : <Upload size={13} className="text-gray-400" />}
+                                {uploading ? "Uploading…" : "Replace"}
+                            </button>
+                        )}
                         {! confirming ? (
                             <button
                                 type="button"
