@@ -29,7 +29,7 @@ class VisaTypeController extends Controller
      * Portal listing — every Immigration tier + admins can view; only Manager+
      * (per VisaTypePolicy@update) sees the Edit affordance in the UI.
      */
-    public function index()
+    public function index(string $page = 'portal/immigration/VisaTypes')
     {
         $this->authorize('viewAny', VisaType::class);
 
@@ -46,7 +46,7 @@ class VisaTypeController extends Controller
         // the server-side guards can never drift apart. Anyone who can do
         // X via the policy sees X in the toolbar; anyone who can't, sees a
         // clean rendering with the action hidden.
-        return Inertia::render('portal/immigration/VisaTypes', [
+        return Inertia::render($page, [
             'visaTypes' => $rows,
             'permissions' => [
                 'canCreate' => $user?->can('create', VisaType::class) ?? false,

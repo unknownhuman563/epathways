@@ -357,6 +357,7 @@ Route::middleware(['throttle:tracker'])->group(function () {
     Route::get('/engagement/{token}/documents/{doc}/download', [\App\Http\Controllers\EngagementSigningController::class, 'download'])->name('engagement.sign.download');
     Route::get('/engagement/{token}/documents/{doc}/preview', [\App\Http\Controllers\EngagementSigningController::class, 'preview'])->name('engagement.sign.preview');
     Route::post('/engagement/{token}/documents/{doc}/sign', [\App\Http\Controllers\EngagementSigningController::class, 'sign'])->name('engagement.sign');
+    Route::post('/engagement/{token}/proof-of-payment', [\App\Http\Controllers\EngagementSigningController::class, 'uploadProof'])->name('engagement.proof');
 });
 
 // Public Registration & Assessment Routes
@@ -1255,6 +1256,7 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/engagement', [\App\Http\Controllers\Portal\ImmigrationAdviserController::class, 'engagement'])->name('engagement');
             Route::get('/invoice', [\App\Http\Controllers\Portal\ImmigrationAdviserController::class, 'invoice'])->name('invoice');
             Route::get('/inz-forms', [\App\Http\Controllers\Portal\ImmigrationAdviserController::class, 'inzForms'])->name('inz-forms');
+            Route::get('/visas', [\App\Http\Controllers\Portal\ImmigrationAdviserController::class, 'visas'])->name('visas');
             Route::get('/verification', [\App\Http\Controllers\Portal\ImmigrationAdviserController::class, 'verification'])->name('verification');
             Route::post('/verification/{document}', [\App\Http\Controllers\Portal\ImmigrationAdviserController::class, 'verifyDocument'])->name('verification.verify');
             // Full-page document review for a case.
@@ -1467,6 +1469,7 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/cases/{lead}/dependent-source', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'dependentSourceIdentity'])->name('cases.dependent-source');
             Route::put('/cases/{lead}/dependents/{dependent}', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'updateDependent'])->name('cases.dependents.update');
             Route::patch('/cases/{lead}/dependents/{dependent}/in-agreement', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'setDependentInAgreement'])->name('cases.dependents.in-agreement');
+            Route::post('/cases/{lead}/dependents/{dependent}/open-case', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'openDependentCase'])->name('cases.dependents.open-case');
             Route::delete('/cases/{lead}/dependents/{dependent}', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'deleteDependent'])->name('cases.dependents.destroy');
             Route::post('/cases/{lead}/dependents/{dependent}/documents', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'uploadDependentDocument'])->name('cases.dependents.documents.store');
             Route::post('/cases/{lead}/dependents/{dependent}/documents/{document}/status', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'setDependentDocumentStatus'])->name('cases.dependents.documents.status');

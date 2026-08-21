@@ -414,6 +414,9 @@ class ImmigrationController extends Controller
                         'inz_visa_type' => $l->inz_visa_type,
                         'inz_reference' => $l->inz_reference,
                         'inz_lodged_at' => $l->inz_lodged_at,
+                        // Searchable identity fields (passport number/expiry).
+                        'passport_number' => $l->passport_number,
+                        'passport_expiry' => optional($l->passport_expiry)->toDateString(),
                         // Immigration-team sub-stage. Drives both the inline
                         // status picker on each row and the distribution graph
                         // up top. Pre-existing leads still on `inz_status`
@@ -1050,16 +1053,40 @@ class ImmigrationController extends Controller
                 })
                 ->values();
 
+            // Proof-of-payment uploads clients submitted from the engagement
+            // page — staff verify (approve/reject) them here.
+            $proofs = LeadDocument::with(['lead:id,first_name,last_name,lead_id', 'lead.faceImage'])
+                ->where('source_variant', 'proof_of_payment')
+                ->orderByDesc('created_at')
+                ->limit(300)
+                ->get()
+                ->map(fn (LeadDocument $d) => [
+                    'id' => $d->id,
+                    'case_id' => $d->lead_id,
+                    'case_name' => $d->lead ? (trim("{$d->lead->first_name} {$d->lead->last_name}") ?: '—') : '—',
+                    'case_ref' => $d->lead?->lead_id,
+                    'avatar_url' => $d->lead?->faceImageUrl(),
+                    'original_name' => $d->original_name,
+                    'size' => $d->size,
+                    'status' => $d->status,
+                    'uploaded_at' => optional($d->created_at)?->toIso8601String(),
+                    'view_url' => route('admin.documents.download', $d->id).'?inline=1',
+                    'download_url' => route('admin.documents.download', $d->id),
+                    'status_url' => "/admin/leads/{$d->lead_id}/documents/{$d->id}/status",
+                ])
+                ->values();
+
             return inertia($page, [
                 'cases' => $cases,
                 'generated' => $generated,
                 'suggestions' => $suggestions,
+                'proofs' => $proofs,
                 'nextNumber' => app(\App\Services\Immigration\InvoiceGenerator::class)->nextInvoiceNumber(),
             ]);
         } catch (\Throwable $e) {
             Log::error('Immigration invoice page failed', ['error' => $e->getMessage()]);
 
-            return inertia($page, ['cases' => [], 'generated' => [], 'suggestions' => [], 'nextNumber' => null]);
+            return inertia($page, ['cases' => [], 'generated' => [], 'suggestions' => [], 'proofs' => [], 'nextNumber' => null]);
         }
     }
 

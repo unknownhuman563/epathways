@@ -20,6 +20,13 @@ use Illuminate\Support\Str;
  */
 class EngagementSigningController extends Controller
 {
+    /** Plain-language, client-facing blurbs for the standard pack documents. */
+    private const DOC_BLURBS = [
+        'complaints_procedure' => 'How to raise a concern with us, and with the Immigration Advisers Authority.',
+        'code_of_conduct' => 'The professional rules every licensed adviser in New Zealand must follow.',
+        'professional_standards' => 'The service levels and timeframes you can expect from us.',
+    ];
+
     /** Resolve the lead by its engagement token (the bearer credential). */
     private function resolveByToken(string $token): ?Lead
     {
@@ -31,10 +38,17 @@ class EngagementSigningController extends Controller
         return Lead::where('engagement_signing_token', $token)->first();
     }
 
-    /** Only the engagement-pack documents for this lead. */
+    /**
+     * Documents the engagement token may stream: the engagement pack, the
+     * bundled tax invoice, and the client's own proof-of-payment uploads.
+     */
     private function packQuery(Lead $lead)
     {
-        return $lead->documents()->where('source_variant', 'like', 'engagement:%');
+        return $lead->documents()->where(function ($q) {
+            $q->where('source_variant', 'like', 'engagement:%')
+                ->orWhere('source_variant', 'invoice')
+                ->orWhere('source_variant', 'proof_of_payment');
+        });
     }
 
     /** The standalone page: the engagement pack + the agreement to sign. */
@@ -45,19 +59,34 @@ class EngagementSigningController extends Controller
 
         $labels = EngagementDocumentGenerator::DOCS;
 
-        $documents = $this->packQuery($lead)
+        // The pack + the bundled invoice (proof-of-payment uploads are listed
+        // separately below).
+        $documents = $lead->documents()
+            ->where(function ($q) {
+                $q->where('source_variant', 'like', 'engagement:%')
+                    ->orWhere('source_variant', 'invoice');
+            })
             ->orderByDesc('created_at')
             ->get()
             ->map(function (LeadDocument $d) use ($token, $labels) {
+                $isInvoice = $d->source_variant === 'invoice';
                 $type = str_replace('engagement:', '', (string) $d->source_variant);
                 $isWrittenAgreement = $type === 'written_agreement';
-                $title = isset($labels[$type]) ? $labels[$type]['label'] : $d->original_name;
+                $title = $isInvoice ? 'Invoice'.($d->invoice_number ? " {$d->invoice_number}" : '')
+                    : (isset($labels[$type]) ? $labels[$type]['label'] : $d->original_name);
 
                 return [
                     'id' => $d->id,
                     'title' => $title,
                     'original_name' => $d->original_name,
                     'size' => $d->size,
+                    'is_invoice' => $isInvoice,
+                    // Plain-language blurb for the "yours to keep" list.
+                    'desc' => self::DOC_BLURBS[$type] ?? null,
+                    // Invoice figures (real; nulls stay null).
+                    'invoice_number' => $isInvoice ? $d->invoice_number : null,
+                    'invoice_total' => $isInvoice && $d->invoice_total !== null ? (float) $d->invoice_total : null,
+                    'due_date' => $isInvoice ? optional(optional($d->created_at)->addDays(7))->toIso8601String() : null,
                     'view_url' => "/engagement/{$token}/documents/{$d->id}/download?inline=1",
                     'download_url' => "/engagement/{$token}/documents/{$d->id}/download",
                     // Live HTML preview (only for the signable agreement) — the
@@ -67,9 +96,37 @@ class EngagementSigningController extends Controller
                     'signed' => (bool) $d->client_signed_at,
                     'signed_at' => optional($d->client_signed_at)->toIso8601String(),
                     'signer_name' => $d->client_signer_name,
+                    // When the agreement was made available, the client has a
+                    // week to sign — a soft deadline shown as "N days left".
+                    'sign_by' => $isWrittenAgreement ? optional(optional($d->created_at)->addDays(7))->toIso8601String() : null,
                     'sign_url' => $isWrittenAgreement ? "/engagement/{$token}/documents/{$d->id}/sign" : null,
                 ];
             })
+            ->values();
+
+        // The licensed adviser who signs — from the written agreement's signer.
+        $waDoc = $documents->firstWhere('signable', true);
+        $signerId = $lead->documents()->where('source_variant', 'engagement:written_agreement')->value('engagement_signer_id');
+        $signer = $signerId ? \App\Models\User::find($signerId) : null;
+        $adviser = $signer ? [
+            'name' => $signer->name,
+            'licence' => $signer->iaa_licence_number,
+        ] : null;
+
+        // The client's own proof-of-payment uploads.
+        $proofs = $lead->documents()
+            ->where('source_variant', 'proof_of_payment')
+            ->orderByDesc('created_at')
+            ->get()
+            ->map(fn (LeadDocument $d) => [
+                'id' => $d->id,
+                'original_name' => $d->original_name,
+                'size' => $d->size,
+                'status' => $d->status,
+                'uploaded_at' => optional($d->created_at)->toIso8601String(),
+                'view_url' => "/engagement/{$token}/documents/{$d->id}/download?inline=1",
+                'download_url' => "/engagement/{$token}/documents/{$d->id}/download",
+            ])
             ->values();
 
         return inertia('track/EngagementPack', [
@@ -79,6 +136,11 @@ class EngagementSigningController extends Controller
                 'first_name' => $lead->first_name,
             ],
             'documents' => $documents,
+            'proofs' => $proofs,
+            'proof_upload_url' => "/engagement/{$token}/proof-of-payment",
+            'adviser' => $adviser,
+            // Invoice counts as settled once a proof of payment is approved.
+            'invoice_paid' => $proofs->contains(fn ($p) => $p['status'] === 'Approved'),
         ]);
     }
 
@@ -99,6 +161,36 @@ class EngagementSigningController extends Controller
         }
 
         return Storage::disk('local')->download($doc->file_path, $doc->original_name);
+    }
+
+    /** Client uploads proof of payment (receipt / bank transfer screenshot). */
+    public function uploadProof(Request $request, string $token)
+    {
+        $lead = $this->resolveByToken($token);
+        abort_unless($lead, 404);
+
+        $request->validate([
+            'files' => ['required', 'array', 'min:1', 'max:5'],
+            'files.*' => ['file', 'mimes:pdf,jpg,jpeg,png,webp,gif', 'max:10240'],
+        ]);
+
+        foreach ($request->file('files', []) as $file) {
+            $path = $file->store("lead-documents/{$lead->id}", 'local');
+            LeadDocument::create([
+                'lead_id' => $lead->id,
+                'checklist_key' => 'proof_of_payment',
+                'original_name' => $file->getClientOriginalName(),
+                'file_path' => $path,
+                'mime' => $file->getClientMimeType(),
+                'size' => $file->getSize(),
+                'status' => LeadDocument::STATUS_SUBMITTED,
+                'source' => LeadDocument::SOURCE_UPLOAD,
+                'source_variant' => 'proof_of_payment',
+                'uploaded_by' => null,
+            ]);
+        }
+
+        return back()->with('success', 'Proof of payment uploaded — thank you. We will confirm receipt shortly.');
     }
 
     /**
