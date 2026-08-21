@@ -421,7 +421,14 @@ class CommunicationService
      */
     private function substitute(string $template, array $context, bool $escape): string
     {
-        return preg_replace_callback('/\{\{\s*([a-z0-9_.]+)\s*\}\}/i', function ($m) use ($context, $escape) {
+        // Rich-text editors sometimes inject markup INSIDE a token, e.g.
+        // {{<strong>first</strong>.name}}. Strip HTML tags found between the
+        // braces first so the token becomes recognisable — otherwise the
+        // malformed placeholder slips past substitution and breaks the mail
+        // provider's own {{ }} template parser (Brevo: "Error … near '<'").
+        $template = preg_replace_callback('/\{\{(.*?)\}\}/s', fn ($m) => '{{'.strip_tags($m[1]).'}}', $template) ?? $template;
+
+        $rendered = preg_replace_callback('/\{\{\s*([a-z0-9_.]+)\s*\}\}/i', function ($m) use ($context, $escape) {
             $key = strtolower($m[1]);
             if (! array_key_exists($key, $context)) {
                 // Fall back from a dotted variable to its underscore form, so
@@ -441,6 +448,11 @@ class CommunicationService
 
             return $escape ? e($value) : $value;
         }, $template) ?? $template;
+
+        // Safety net: drop any residual {{ … }} the substitution couldn't
+        // resolve (e.g. a token with stray characters), so nothing the mail
+        // provider would try — and fail — to parse ever leaves the app.
+        return preg_replace('/\{\{.*?\}\}/s', '', $rendered) ?? $rendered;
     }
 
     /** Normalize a freeform phone to E.164 (default region NZ/PH fallback), or null. */
