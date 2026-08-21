@@ -86,6 +86,19 @@ class FinanceController extends Controller
     }
 
     /**
+     * Invoice workspace — same tax-invoice generator the immigration portal
+     * uses, surfaced for finance. Reuses ImmigrationController::invoice() so the
+     * case list, generated invoices, suggestions and next number stay in sync;
+     * generation posts to the shared /admin/leads/{id}/invoice/* endpoints,
+     * which the finance role can already reach.
+     */
+    public function invoice()
+    {
+        return app(\App\Http\Controllers\Portal\ImmigrationController::class)
+            ->invoice('portal/finance/Invoice');
+    }
+
+    /**
      * Task Board — direct copy of the canonical pattern from
      * AccommodationController::tasks(). Scoped to `department='finance'`
      * tasks plus the user's personal queue.

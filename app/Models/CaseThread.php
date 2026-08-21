@@ -37,13 +37,14 @@ class CaseThread extends Model
     ];
 
     protected $fillable = [
-        'lead_id', 'anchor_type', 'anchor_id', 'anchor_key', 'anchor_attempt',
-        'author_id', 'addressed_to_id', 'body', 'requires_answer',
+        'lead_id', 'parent_id', 'anchor_type', 'anchor_id', 'anchor_key', 'anchor_attempt',
+        'author_id', 'addressed_to_id', 'body', 'requires_answer', 'client_visible',
         'resolved_at', 'resolved_by',
     ];
 
     protected $casts = [
         'requires_answer' => 'boolean',
+        'client_visible' => 'boolean',
         'anchor_attempt' => 'integer',
         'resolved_at' => 'datetime',
     ];

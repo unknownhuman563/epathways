@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, Fragment } from "react";
 import { Head, router } from "@inertiajs/react";
 import { toast } from "sonner";
 import {
     BadgeCheck, ShieldCheck, ShieldAlert, Eye, Download, FileText,
-    CheckCircle2, XCircle, Globe, Clock, X, Loader2, SearchCheck, ChevronRight,
+    CheckCircle2, XCircle, Globe, Clock, X, Loader2, SearchCheck, ChevronRight, ChevronLeft, MoreHorizontal,
 } from "lucide-react";
 
 // Adviser verification queue. Documents a manager marked "Checked" (referred to
@@ -11,8 +11,8 @@ import {
 // a tab-list of that client's Checked documents — the adviser works through them
 // one at a time (document on the left, remarks + final verdict on the right).
 
-export default function Verification({ documents = [], licence = {} }) {
-    const [active, setActive] = useState(null); // the client group being reviewed
+export default function Verification({ documents = [], decided = [], licence = {} }) {
+    const openReview = (g) => router.visit(`/portal/immigration-adviser/verification/review/${g.case.id}`);
 
     // Group the checked documents by client/case.
     const groups = useMemo(() => {
@@ -27,30 +27,41 @@ export default function Verification({ documents = [], licence = {} }) {
 
     const fmt = (iso) => (iso ? new Date(iso).toLocaleDateString("en-NZ", { day: "numeric", month: "short", year: "numeric" }) : "—");
 
+    const [tab, setTab] = useState("verify");
+
+    // Enrich each client group with its longest wait, manager-flagged count and
+    // the referring manager, then order oldest-wait-first.
+    const enriched = useMemo(() => groups
+        .map((g) => {
+            const earliest = g.docs.map((d) => d.checked_at).filter(Boolean).sort()[0] || null;
+            return {
+                ...g,
+                earliest,
+                flagged: g.docs.filter((d) => d.note).length,
+                referrer: g.docs.map((d) => d.referred_by).find(Boolean) || null,
+            };
+        })
+        .sort((a, b) => (a.earliest || "").localeCompare(b.earliest || "")), [groups]);
+
+    const flaggedGroups = enriched.filter((g) => g.flagged > 0);
+    const nextUp = enriched[0] || null;
+    const shown = tab === "flagged" ? flaggedGroups : enriched;
+    const buckets = [
+        { key: "old", label: "Waiting more than 2 days", tone: "text-red-500 bg-red-50/50", rows: shown.filter((g) => waitDays(g.earliest) > 2) },
+        { key: "week", label: "This week", tone: "text-gray-400 bg-gray-50/70", rows: shown.filter((g) => waitDays(g.earliest) <= 2) },
+    ];
+
     return (
-        <div className="max-w-5xl mx-auto pb-14 space-y-6">
+        <div className="max-w-[1400px] mx-auto pb-14 space-y-6">
             <Head title="Verification" />
 
             {/* Header */}
             <div className="flex items-start justify-between gap-4 flex-wrap">
                 <div>
-                    <p className="text-[10px] font-bold uppercase tracking-[0.28em] text-[#009688] mb-1.5">Licensed review</p>
-                    <h1 className="text-2xl font-semibold text-gray-900 tracking-tight">Verification</h1>
-                    <p className="text-sm text-gray-500 mt-1">Documents your managers checked and referred to you. Your decision is what the client sees.</p>
+                    <h1 className="text-2xl font-semibold text-gray-900 tracking-tight">Verification queue</h1>
+                    <p className="text-sm text-gray-500 mt-1 max-w-xl">Documents your managers checked and referred to you. Your decision is what the client sees.</p>
                 </div>
                 <LicenceChip licence={licence} />
-            </div>
-
-            {/* Count strip */}
-            <div className="grid grid-cols-2 gap-3 sm:max-w-md">
-                <div className="rounded-2xl border border-gray-100 bg-white shadow-sm px-4 py-3.5 flex items-center gap-3">
-                    <span className="w-9 h-9 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center"><Clock size={17} /></span>
-                    <div><p className="text-lg font-bold text-gray-900 leading-none tabular-nums">{documents.length}</p><p className="text-[11px] text-gray-500 mt-0.5">document{documents.length === 1 ? "" : "s"} to verify</p></div>
-                </div>
-                <div className="rounded-2xl border border-gray-100 bg-white shadow-sm px-4 py-3.5 flex items-center gap-3">
-                    <span className="w-9 h-9 rounded-xl bg-[#009688]/10 text-[#00796b] flex items-center justify-center"><BadgeCheck size={17} /></span>
-                    <div><p className="text-lg font-bold text-gray-900 leading-none tabular-nums">{groups.length}</p><p className="text-[11px] text-gray-500 mt-0.5">client{groups.length === 1 ? "" : "s"} waiting</p></div>
-                </div>
             </div>
 
             {groups.length === 0 ? (
@@ -60,57 +71,94 @@ export default function Verification({ documents = [], licence = {} }) {
                     <p className="text-xs text-gray-500 mt-1">When a manager marks a document as checked, it appears here.</p>
                 </div>
             ) : (
-                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-left">
-                            <thead>
-                                <tr className="bg-gray-50/60 border-b border-gray-200 text-[10px] font-bold text-gray-500 uppercase tracking-wider">
-                                    <th className="px-4 py-3">Client</th>
-                                    <th className="px-4 py-3">Visa</th>
-                                    <th className="px-4 py-3">To verify</th>
-                                    <th className="px-4 py-3">Referred</th>
-                                    <th className="px-4 py-3 text-right">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-100">
-                                {groups.map((g) => {
-                                    const earliest = g.docs.map((d) => d.checked_at).filter(Boolean).sort()[0];
-                                    return (
-                                        <tr key={g.case.id} className="hover:bg-gray-50/50 align-middle">
-                                            <td className="px-4 py-3">
-                                                <div className="flex items-center gap-3 min-w-0">
-                                                    <span className="w-9 h-9 rounded-full inline-flex items-center justify-center text-white text-[11px] font-bold flex-shrink-0 bg-[#009688]">{initials(g.case.name)}</span>
-                                                    <div className="min-w-0">
-                                                        <p className="text-[13px] font-semibold text-gray-900 truncate">{g.case.name}</p>
-                                                        <p className="text-[11px] text-gray-400 font-mono truncate">{g.case.lead_id}</p>
-                                                    </div>
-                                                </div>
-                                            </td>
-                                            <td className="px-4 py-3">
-                                                <span className="text-[12px] text-gray-700 inline-flex items-center gap-1.5"><Globe size={12} className="text-gray-400" /> {g.case.visa || "No visa type"}</span>
-                                            </td>
-                                            <td className="px-4 py-3">
-                                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold border bg-amber-50 text-amber-700 border-amber-200">{g.docs.length} document{g.docs.length > 1 ? "s" : ""}</span>
-                                            </td>
-                                            <td className="px-4 py-3">
-                                                <span className="text-[12px] text-gray-500 tabular-nums">{fmt(earliest)}</span>
-                                            </td>
-                                            <td className="px-4 py-3 text-right">
-                                                <button type="button" onClick={() => setActive(g)}
-                                                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-gray-900 text-white text-[12px] font-semibold hover:bg-gray-800">
-                                                    <SearchCheck size={14} /> Review
-                                                </button>
-                                            </td>
-                                        </tr>
-                                    );
-                                })}
-                            </tbody>
-                        </table>
+                <>
+                    {/* Next up — the client who has waited longest. */}
+                    {nextUp && (
+                        <div className="rounded-2xl bg-gray-900 text-white px-5 py-4 flex items-center gap-4 flex-wrap">
+                            <span className="w-11 h-11 rounded-full bg-white/10 flex items-center justify-center text-[13px] font-bold flex-shrink-0">{initials(nextUp.case.name)}</span>
+                            <div className="min-w-0 flex-1">
+                                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#4fd1c5]">Next up · oldest wait</p>
+                                <p className="text-[15px] font-bold mt-0.5 truncate">
+                                    {nextUp.case.name} — {nextUp.docs.length} document{nextUp.docs.length === 1 ? "" : "s"}{nextUp.flagged > 0 ? `, ${nextUp.flagged} flagged by manager` : ""}
+                                </p>
+                                <p className="text-[12px] text-white/60 mt-0.5 truncate">
+                                    Waiting {relWait(nextUp.earliest)} · {nextUp.case.visa || "No visa type"}{nextUp.referrer ? ` · referred by ${nextUp.referrer}` : ""}
+                                </p>
+                            </div>
+                            <button type="button" onClick={() => openReview(nextUp)}
+                                className="px-4 py-2.5 rounded-xl bg-[#009688] text-white text-[13px] font-bold hover:bg-[#00796b] flex-shrink-0">
+                                Start review
+                            </button>
+                        </div>
+                    )}
+
+                    {/* Filter tabs */}
+                    <div className="flex items-center gap-2 flex-wrap">
+                        <TabBtn active={tab === "verify"} onClick={() => setTab("verify")} label="To verify" count={enriched.length} />
+                        <TabBtn active={tab === "flagged"} onClick={() => setTab("flagged")} label="Flagged by manager" count={flaggedGroups.length} />
+                        <span className="ml-auto text-[12px] text-gray-400">Sorted by longest wait</span>
+                    </div>
+
+                    {/* Queue table, bucketed by how long they've waited. */}
+                    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left">
+                                <thead>
+                                    <tr className="bg-gray-50/60 border-b border-gray-200 text-[10px] font-bold text-gray-500 uppercase tracking-wider">
+                                        <th className="px-5 py-3">Client</th>
+                                        <th className="px-4 py-3">Visa</th>
+                                        <th className="px-4 py-3">To verify</th>
+                                        <th className="px-4 py-3">Waiting</th>
+                                        <th className="px-4 py-3 text-right pr-5">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {shown.length === 0 && (
+                                        <tr><td colSpan={5} className="px-5 py-10 text-center text-[13px] text-gray-400">Nothing in this view.</td></tr>
+                                    )}
+                                    {buckets.map((bucket) => bucket.rows.length > 0 && (
+                                        <Fragment key={bucket.key}>
+                                            <tr>
+                                                <td colSpan={5} className={`px-5 py-2 text-[10px] font-bold uppercase tracking-wider ${bucket.tone}`}>{bucket.label}</td>
+                                            </tr>
+                                            {bucket.rows.map((g) => <QueueRow key={g.case.id} g={g} onReview={() => openReview(g)} />)}
+                                        </Fragment>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                        <div className="px-5 py-3 border-t border-gray-100 flex items-center justify-between text-[12px] text-gray-500 flex-wrap gap-2">
+                            <span>{groups.length} client{groups.length === 1 ? "" : "s"} waiting · {documents.length} document{documents.length === 1 ? "" : "s"}</span>
+                            <span className="text-gray-400">Your decision is recorded against your licence</span>
+                        </div>
+                    </div>
+                </>
+            )}
+
+            {/* Recent verdicts — the adviser's decision history. */}
+            {decided.length > 0 && (
+                <div>
+                    <div className="flex items-center justify-between mb-2">
+                        <h2 className="text-[13px] font-bold text-gray-700 uppercase tracking-wider">Your recent verdicts</h2>
+                        <span className="text-[12px] text-gray-400">{decided.length} recorded</span>
+                    </div>
+                    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm divide-y divide-gray-50">
+                        {decided.map((d) => (
+                            <div key={d.id} className="px-5 py-3 flex items-center gap-3">
+                                <span className="w-8 h-8 rounded-full inline-flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0 bg-gray-400">{initials(d.case.name)}</span>
+                                <div className="min-w-0 flex-1">
+                                    <p className="text-[13px] font-semibold text-gray-900 truncate">{d.case.name} <span className="text-gray-400 font-normal">· {docLabel(d)}</span></p>
+                                    {d.note && <p className="text-[11px] text-gray-400 truncate">{d.note}</p>}
+                                </div>
+                                {d.status === "Approved"
+                                    ? <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 flex-shrink-0">Accepted</span>
+                                    : <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-red-50 text-red-600 flex-shrink-0">Requires attention</span>}
+                                <span className="text-[11px] text-gray-400 tabular-nums w-24 text-right flex-shrink-0">{d.reviewed_at ? relWait(d.reviewed_at) + " ago" : ""}</span>
+                            </div>
+                        ))}
                     </div>
                 </div>
             )}
-
-            {active && <ReviewModal group={active} onClose={() => setActive(null)} />}
         </div>
     );
 }
@@ -127,162 +175,72 @@ function LicenceChip({ licence }) {
 
 const initials = (n = "") => n.trim().split(/\s+/).slice(0, 2).map((w) => w[0] || "").join("").toUpperCase() || "—";
 
-// Per-client review modal — document on the left, a tab-list of the client's
-// Checked documents + remarks + verdict on the right. Reviewing one advances to
-// the next without closing.
-function ReviewModal({ group, onClose }) {
-    const [docs, setDocs] = useState(group.docs);       // remaining checked docs
-    const [idx, setIdx] = useState(0);                  // active doc
-    const [note, setNote] = useState("");
-    const [busy, setBusy] = useState(null);
+// How long a document has waited, as a coarse relative label.
+const waitDays = (iso) => (iso ? (Date.now() - new Date(iso).getTime()) / 86400000 : 0);
+const relWait = (iso) => {
+    if (!iso) return "—";
+    const h = Math.floor((Date.now() - new Date(iso).getTime()) / 3600000);
+    if (h < 1) return "just now";
+    if (h < 24) return `${h} hour${h === 1 ? "" : "s"}`;
+    const d = Math.floor(h / 24);
+    return `${d} day${d === 1 ? "" : "s"}`;
+};
 
-    useEffect(() => {
-        const prev = document.body.style.overflow;
-        document.body.style.overflow = "hidden";
-        return () => { document.body.style.overflow = prev; };
-    }, []);
+// A friendly document label — the checklist key, else the filename sans extension.
+const docLabel = (d) => (d.checklist_key
+    ? d.checklist_key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
+    : (d.original_name || "Document").replace(/\.[^.]+$/, ""));
 
-    const d = docs[idx] || null;
-    const isPdf = (d?.mime || "").includes("pdf");
-    const isImage = (d?.mime || "").startsWith("image/");
-
-    const decide = (action) => {
-        if (!d) return;
-        if (action === "reject" && !note.trim()) {
-            toast.error("Add a reason before flagging — the client will see it.");
-            return;
-        }
-        setBusy(action);
-        router.post(`/portal/immigration-adviser/verification/${d.id}`, { action, note }, {
-            preserveScroll: true,
-            preserveState: true,
-            onSuccess: () => {
-                toast.success(action === "approve" ? "Accepted / Satisfactory" : "Marked as required attention");
-                const rest = docs.filter((_, i) => i !== idx);
-                setNote("");
-                if (rest.length === 0) { onClose(); return; }
-                setDocs(rest);
-                setIdx(Math.min(idx, rest.length - 1));
-            },
-            onError: (err) => toast.error(Object.values(err)[0] || "Could not save"),
-            onFinish: () => setBusy(null),
-        });
-    };
-
+function TabBtn({ active, onClick, label, count }) {
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40" onClick={onClose}>
-            <div className="w-[94vw] max-w-[1200px] h-[90vh] rounded-2xl bg-white shadow-xl flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
-                {/* Header */}
-                <div className="px-5 py-3.5 border-b border-gray-100 flex items-start justify-between gap-4">
-                    <div className="min-w-0">
-                        <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[#009688] mb-0.5">Document review</p>
-                        <h2 className="text-sm font-bold text-gray-900 truncate">{group.case.name}</h2>
-                        <p className="text-[12px] text-gray-500 truncate">{group.case.visa || "No visa type"} · {docs.length} to verify</p>
-                    </div>
-                    <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-700 flex-shrink-0"><X size={18} /></button>
-                </div>
-
-                {/* Body */}
-                <div className="flex-1 min-h-0 flex flex-col lg:flex-row overflow-hidden">
-                    {/* LEFT — the selected document */}
-                    <div className="lg:flex-1 min-h-0 bg-gray-100 border-b lg:border-b-0 lg:border-r border-gray-100 flex flex-col">
-                        {!d ? (
-                            <div className="flex-1 flex items-center justify-center text-sm text-gray-400">No document selected</div>
-                        ) : d.has_file === false ? (
-                            <div className="flex-1 flex flex-col items-center justify-center text-center p-8">
-                                <FileText size={40} className="text-gray-300" />
-                                <p className="mt-3 text-sm font-semibold text-gray-700">File unavailable</p>
-                                <p className="mt-1 text-[12px] text-gray-500 max-w-xs">This record has no file on the server. Ask the client to re-upload it before verifying.</p>
-                            </div>
-                        ) : (isPdf || isImage) ? (
-                            isImage ? (
-                                <div className="flex-1 overflow-auto p-4 flex items-start justify-center"><img src={d.view_url} alt={d.original_name} className="max-w-full h-auto rounded-lg shadow-sm" /></div>
-                            ) : (
-                                <iframe src={d.view_url} title={d.original_name} className="flex-1 w-full border-0" />
-                            )
-                        ) : (
-                            <div className="flex-1 flex flex-col items-center justify-center text-center p-8">
-                                <FileText size={40} className="text-gray-300" />
-                                <p className="mt-3 text-sm text-gray-600">No inline preview for this file type.</p>
-                                <a href={d.download_url} className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 text-gray-700 text-[12px] font-semibold hover:bg-white"><Download size={13} /> Download to view</a>
-                            </div>
-                        )}
-                        {d && d.has_file !== false && (
-                            <div className="flex items-center gap-1.5 px-4 py-2 border-t border-gray-200 bg-white">
-                                <a href={d.view_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-gray-200 text-gray-600 text-[11px] font-semibold hover:bg-gray-50"><Eye size={12} /> Open in tab</a>
-                                <a href={d.download_url} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-gray-200 text-gray-600 text-[11px] font-semibold hover:bg-gray-50"><Download size={12} /> Download</a>
-                            </div>
-                        )}
-                    </div>
-
-                    {/* RIGHT — the client's checked docs tab-list + remarks + verdict */}
-                    <div className="lg:w-[380px] flex-shrink-0 overflow-y-auto overscroll-contain p-4 bg-gray-50 space-y-4">
-                        {/* Tab list of this client's Checked documents */}
-                        <div>
-                            <p className="text-[11px] font-bold uppercase tracking-wider text-gray-500 mb-2">Documents to verify</p>
-                            <div className="space-y-1.5">
-                                {docs.map((doc, i) => (
-                                    <button key={doc.id} type="button" onClick={() => { setIdx(i); setNote(""); }}
-                                        className={`w-full text-left rounded-lg border px-3 py-2 flex items-center gap-2 transition-colors ${i === idx ? "border-[#009688] bg-[#009688]/5" : "border-gray-200 bg-white hover:bg-gray-50"}`}>
-                                        <FileText size={13} className={i === idx ? "text-[#009688] flex-shrink-0" : "text-gray-400 flex-shrink-0"} />
-                                        <span className="min-w-0 flex-1">
-                                            <span className="flex items-center gap-1.5">
-                                                <span className={`block text-[12px] truncate ${i === idx ? "font-semibold text-gray-900" : "text-gray-700"}`}>{doc.original_name}</span>
-                                                {doc.is_vif && <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-indigo-50 text-indigo-600 border border-indigo-200 flex-shrink-0">VIF</span>}
-                                            </span>
-                                            {doc.checklist_key && <span className="block text-[10px] text-gray-400 font-mono truncate">{doc.checklist_key}</span>}
-                                        </span>
-                                        {i === idx && <ChevronRight size={13} className="text-[#009688] flex-shrink-0" />}
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-
-                        {d && (
-                            <>
-                                {/* Context */}
-                                <div className="rounded-xl border border-gray-200 bg-white p-3 space-y-2">
-                                    {d.note && <MetaRow label="Manager note" value={d.note} />}
-                                    {d.checked_at && <MetaRow label="Checked" value={new Date(d.checked_at).toLocaleString("en-NZ")} />}
-                                </div>
-
-                                {/* Remarks */}
-                                <div className="rounded-xl border border-gray-200 bg-white p-3">
-                                    <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-500 mb-2">Remarks</label>
-                                    <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={4}
-                                        placeholder="Your remarks on this document. Required when flagging — the client sees the reason."
-                                        className="w-full rounded-lg border border-gray-200 px-3 py-2 text-[13px] outline-none focus:border-[#009688] focus:ring-1 focus:ring-[#009688] resize-y" />
-                                </div>
-
-                                {/* Verdict */}
-                                <div className="rounded-xl border border-gray-200 bg-white p-3">
-                                    <p className="text-[11px] font-bold uppercase tracking-wider text-gray-500 mb-1">Final verdict</p>
-                                    <p className="text-[11px] text-gray-400 mb-3 leading-snug">This is the status the client sees on their document.</p>
-                                    <div className="flex flex-col gap-2">
-                                        <button type="button" disabled={!!busy} onClick={() => decide("approve")}
-                                            className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-lg bg-emerald-600 text-white text-[13px] font-bold hover:bg-emerald-700 disabled:opacity-50">
-                                            {busy === "approve" ? <Loader2 size={15} className="animate-spin" /> : <CheckCircle2 size={15} />} Accept / Satisfactory
-                                        </button>
-                                        <button type="button" disabled={!!busy} onClick={() => decide("reject")}
-                                            className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-lg border border-red-300 text-red-600 text-[13px] font-bold hover:bg-red-50 disabled:opacity-50">
-                                            {busy === "reject" ? <Loader2 size={15} className="animate-spin" /> : <XCircle size={15} />} Required attention
-                                        </button>
-                                    </div>
-                                </div>
-                            </>
-                        )}
-                    </div>
-                </div>
-            </div>
-        </div>
+        <button type="button" onClick={onClick}
+            className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-[12.5px] font-semibold transition-colors ${active ? "bg-gray-900 text-white" : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-50"}`}>
+            {label}
+            <span className={`inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-[11px] font-bold ${active ? "bg-white/20 text-white" : "bg-gray-100 text-gray-500"}`}>{count}</span>
+        </button>
     );
 }
 
-function MetaRow({ label, value }) {
+// One client's row in the queue — chips for each document to verify (amber when
+// the manager flagged it), how long they've waited, and the Review action.
+function QueueRow({ g, onReview }) {
+    const late = waitDays(g.earliest) > 2;
     return (
-        <div>
-            <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">{label}</p>
-            <p className="text-[12.5px] text-gray-800 break-words">{value}</p>
-        </div>
+        <tr className="border-t border-gray-50 hover:bg-gray-50/40 align-middle">
+            <td className="px-5 py-3.5">
+                <div className="flex items-center gap-3 min-w-0">
+                    <span className="w-9 h-9 rounded-full inline-flex items-center justify-center text-white text-[11px] font-bold flex-shrink-0 bg-[#009688]">{initials(g.case.name)}</span>
+                    <div className="min-w-0">
+                        <p className="text-[13px] font-semibold text-gray-900 truncate">{g.case.name}</p>
+                        <p className="text-[11px] text-gray-400 font-mono truncate">{g.case.lead_id}</p>
+                    </div>
+                </div>
+            </td>
+            <td className="px-4 py-3.5 text-[12.5px] text-gray-700">{g.case.visa || "No visa type"}</td>
+            <td className="px-4 py-3.5">
+                <div className="flex flex-wrap gap-1.5 max-w-[300px]">
+                    {g.docs.map((d) => (
+                        <span key={d.id} title={d.note || ""}
+                            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold ${d.note ? "bg-amber-50 text-amber-700" : "bg-gray-100 text-gray-600"}`}>
+                            <span className={`w-1.5 h-1.5 rounded-full ${d.note ? "bg-amber-500" : "bg-gray-400"}`} />
+                            {docLabel(d)}
+                        </span>
+                    ))}
+                </div>
+            </td>
+            <td className="px-4 py-3.5">
+                <p className={`text-[12.5px] font-semibold tabular-nums ${late ? "text-red-600" : "text-gray-700"}`}>{relWait(g.earliest)}</p>
+                {g.referrer && <p className="text-[11px] text-gray-400">by {g.referrer}</p>}
+            </td>
+            <td className="px-4 py-3.5 pr-5 text-right whitespace-nowrap">
+                <div className="inline-flex items-center gap-1.5">
+                    <button type="button" onClick={onReview}
+                        className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-gray-900 text-white text-[12px] font-semibold hover:bg-gray-800">
+                        <SearchCheck size={14} /> Review
+                    </button>
+                    <span className="w-8 h-8 rounded-lg border border-gray-200 inline-flex items-center justify-center text-gray-300"><MoreHorizontal size={15} /></span>
+                </div>
+            </td>
+        </tr>
     );
 }
