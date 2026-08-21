@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { Link, router } from "@inertiajs/react";
 import { toast } from "sonner";
-import CaseEngagementModal from "@/components/immigration/case-profile/CaseEngagementModal";
 import CaseHealthBadge from "@/components/ai/CaseHealthBadge";
 import {
     ArrowLeft, Globe, FileSignature, MessageSquarePlus, FilePlus2,
@@ -16,7 +15,6 @@ const initials = (name = "") =>
     name.trim().split(/\s+/).slice(0, 2).map((w) => w[0] || "").join("").toUpperCase() || "C";
 
 export default function CaseProfileHeader({ lead = {}, intake = null, attention = null, tiedTo = null, engagement = {}, visaTypes = [] }) {
-    const [engageOpen, setEngageOpen] = useState(false);
     const [visaEditing, setVisaEditing] = useState(false);
     const [savingVisa, setSavingVisa] = useState(false);
     const fullName = `${lead.first_name ?? ""} ${lead.last_name ?? ""}`.trim() || lead.lead_id || "Unnamed case";
@@ -152,7 +150,7 @@ export default function CaseProfileHeader({ lead = {}, intake = null, attention 
                             {lead.id && (
                                 <button
                                     type="button"
-                                    onClick={() => setEngageOpen(true)}
+                                    onClick={() => router.visit(`/portal/immigration/cases/engagement?case=${lead.id}`)}
                                     className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-[12px] font-semibold border transition-colors ${
                                         engagement.sent
                                             ? "bg-emerald-600 text-white border-emerald-600 hover:bg-emerald-700"
@@ -176,14 +174,6 @@ export default function CaseProfileHeader({ lead = {}, intake = null, attention 
                 </div>
             </section>
 
-            {engageOpen && (
-                <CaseEngagementModal
-                    leadId={lead.id}
-                    leadName={fullName}
-                    engagement={engagement}
-                    onClose={() => setEngageOpen(false)}
-                />
-            )}
         </div>
     );
 }
