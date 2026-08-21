@@ -653,31 +653,49 @@ class SalesController extends Controller
                 ->get(['id', 'title', 'level', 'category', 'price_text', 'location', 'industry']);
             $programMap = $programCatalog->keyBy('id');
 
+            // Reusable: turn a list of program ids into badge payloads,
+            // preserving order and dropping any that no longer exist.
+            $mapPrograms = fn ($ids) => collect(is_array($ids) ? $ids : [])
+                ->map(fn ($pid) => $programMap->get((int) $pid))
+                ->filter()
+                ->map(fn ($p) => [
+                    'id' => $p->id,
+                    'title' => $p->title,
+                    'level' => $p->level,
+                    'category' => $p->category,
+                    'price_text' => $p->price_text,
+                    'location' => $p->location,
+                ])
+                ->values();
+
             $proposalLeads = Lead::whereNotNull('proposed_program_ids')
                 ->where(function ($q) {
                     // JSON_LENGTH not portable across SQLite (tests) and
                     // MySQL, so filter empty arrays in PHP instead.
                     $q->whereRaw("proposed_program_ids != '[]'");
                 })
-                ->with('faceImage')
+                // Full proposal version history, newest first (the relation is
+                // already ->latest()), with who saved each one.
+                ->with(['faceImage', 'proposals.creator:id,name'])
                 ->orderByDesc('updated_at')
                 ->get();
 
             $proposals = $proposalLeads
                 ->filter(fn (Lead $l) => is_array($l->proposed_program_ids) && count($l->proposed_program_ids) > 0)
-                ->map(function (Lead $l) use ($programMap) {
-                    $picks = collect($l->proposed_program_ids)
-                        ->map(fn ($pid) => $programMap->get($pid))
-                        ->filter()
-                        ->map(fn ($p) => [
-                            'id' => $p->id,
-                            'title' => $p->title,
-                            'level' => $p->level,
-                            'category' => $p->category,
-                            'price_text' => $p->price_text,
-                            'location' => $p->location,
-                        ])
-                        ->values();
+                ->map(function (Lead $l) use ($mapPrograms) {
+                    // Active shortlist = the lead's current proposed_program_ids.
+                    $picks = $mapPrograms($l->proposed_program_ids);
+
+                    // Past versions — every saved proposal, newest first. The
+                    // very latest snapshot is the active one (already shown as
+                    // `programs`), so we surface the earlier ones as history.
+                    $allVersions = $l->proposals->map(fn ($p) => [
+                        'id' => $p->id,
+                        'programs' => $mapPrograms($p->program_ids),
+                        'programs_count' => count($p->program_ids ?? []),
+                        'created_by' => optional($p->creator)->name,
+                        'created_at' => optional($p->created_at)->toIso8601String(),
+                    ])->values();
 
                     return [
                         'id' => $l->id,
@@ -690,6 +708,11 @@ class SalesController extends Controller
                         'status' => $l->status,
                         'programs' => $picks,
                         'programs_count' => $picks->count(),
+                        // Full version history (newest first). The first entry
+                        // corresponds to the active shortlist; the rest are
+                        // previous proposals kept for reference.
+                        'history' => $allVersions,
+                        'history_count' => $allVersions->count(),
                         // Which shortlisted program the lead settled on (set
                         // from the tracker's "Choose this one" or by staff in
                         // the Notify modal). Drives the highlight in the list.

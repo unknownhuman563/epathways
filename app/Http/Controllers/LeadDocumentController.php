@@ -1231,8 +1231,40 @@ class LeadDocumentController extends Controller
             // Uniquify + reindex so the JSON stays clean regardless of
             // client-side ordering / duplicates.
             $ids = array_values(array_unique(array_map('intval', $validated['program_ids'] ?? [])));
+
+            // Legacy safety: a lead whose active proposal predates versioning
+            // has no history row yet. Snapshot that existing shortlist BEFORE
+            // overwriting so it isn't lost the first time it's touched.
+            $existing = is_array($lead->proposed_program_ids)
+                ? array_values(array_map('intval', $lead->proposed_program_ids))
+                : [];
+            if (! empty($existing) && ! $lead->proposals()->exists()) {
+                \App\Models\LeadProposal::create([
+                    'lead_id' => $lead->id,
+                    'program_ids' => $existing,
+                    'created_by' => null,
+                ]);
+            }
+
             $lead->proposed_program_ids = $ids ?: null;
             $lead->save();
+
+            // Snapshot every non-empty save as a new proposal version so the
+            // previous proposal (and the programs it suggested) is never lost.
+            // Skip when it's identical to the latest version (a no-op re-save)
+            // so history doesn't fill with duplicates. Clearing (empty list)
+            // only resets the active shortlist — it never adds a history row.
+            if (! empty($ids)) {
+                $latest = $lead->proposals()->first();
+                $latestIds = $latest ? array_values(array_map('intval', $latest->program_ids ?? [])) : null;
+                if ($latestIds !== $ids) {
+                    \App\Models\LeadProposal::create([
+                        'lead_id' => $lead->id,
+                        'program_ids' => $ids,
+                        'created_by' => optional($request->user())->id,
+                    ]);
+                }
+            }
 
             $count = count($ids);
             $msg = $count === 0

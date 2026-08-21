@@ -381,6 +381,39 @@ function ProposalsTable({ rows, portalBase, fmtDate, onNotify }) {
                                         );
                                     })}
                                 </div>
+
+                                {/* ── PREVIOUS PROPOSALS (version history) ──
+                                    Every earlier proposal is kept. history[0]
+                                    is the active one shown above, so the
+                                    disclosure lists history.slice(1). */}
+                                {Array.isArray(r.history) && r.history.length > 1 && (
+                                    <details className="mt-2 group/hist">
+                                        <summary className="cursor-pointer list-none inline-flex items-center gap-1 text-[10px] font-semibold text-gray-400 hover:text-gray-600 select-none">
+                                            <ChevronRight size={10} className="transition-transform group-open/hist:rotate-90" />
+                                            {r.history.length - 1} previous proposal{r.history.length - 1 === 1 ? '' : 's'}
+                                        </summary>
+                                        <div className="mt-2 space-y-2.5 border-l-2 border-gray-100 pl-3">
+                                            {r.history.slice(1).map((v) => (
+                                                <div key={v.id} className="space-y-1">
+                                                    <div className="text-[9px] font-bold uppercase tracking-wider text-gray-400">
+                                                        {fmtDate(v.created_at)}{v.created_by ? ` · ${v.created_by}` : ''}
+                                                    </div>
+                                                    {v.programs.map((p) => (
+                                                        <div key={p.id} className="flex items-center gap-2">
+                                                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-gray-100 text-gray-500 border border-gray-200">
+                                                                Level {p.level}
+                                                            </span>
+                                                            <span className="text-[11px] text-gray-600 truncate max-w-[260px]" title={p.title}>{p.title}</span>
+                                                            {p.location && (
+                                                                <span className="text-[10px] text-gray-400 whitespace-nowrap">· {p.location}</span>
+                                                            )}
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </details>
+                                )}
                             </td>
                             {/* ── CREATED ─────────────────────────────── */}
                             <td className="px-3 py-3 whitespace-nowrap text-gray-600">

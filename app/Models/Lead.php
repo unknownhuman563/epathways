@@ -821,6 +821,16 @@ class Lead extends Model
     }
 
     /**
+     * Version history of program proposals. The newest row is the active
+     * shortlist (mirrors proposed_program_ids); older rows are kept so a new
+     * proposal never discards the previous one.
+     */
+    public function proposals()
+    {
+        return $this->hasMany(LeadProposal::class)->latest();
+    }
+
+    /**
      * The applicant's latest uploaded Face image — used as the profile
      * picture (avatar) across the staff leads / cases / students tables and
      * the client tracker. Eager-load with `->with('faceImage')` to avoid an
