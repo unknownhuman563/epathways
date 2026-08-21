@@ -617,6 +617,11 @@ class LeadDocumentController extends Controller
                 $lead->forceFill([
                     'engagement_fee_total' => $totals['professional_excl'],
                     'engagement_total_amount' => $totals['grand_total'],
+                    // Remember the settings so re-opening the draft reproduces them.
+                    'engagement_fee_location' => $data['fee_location'] ?? 'onshore',
+                    'engagement_fee_tier' => $data['fee_tier'] ?? 'normal',
+                    'engagement_include_gst' => (bool) ($data['include_gst'] ?? false),
+                    'engagement_assist_signer_id' => $data['assist_signer_id'] ?? null,
                 ])->save();
             }
 

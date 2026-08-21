@@ -5,7 +5,7 @@ import CaseEngagementModal from "@/components/immigration/case-profile/CaseEngag
 import CaseHealthBadge from "@/components/ai/CaseHealthBadge";
 import {
     ArrowLeft, Globe, FileSignature, MessageSquarePlus, FilePlus2,
-    BadgeCheck, Briefcase, Archive, Eye, Link2, Pencil,
+    BadgeCheck, Briefcase, Archive, Eye, Link2, ChevronDown,
 } from "lucide-react";
 import { AvatarPhoto } from "@/components/ui/Avatar";
 
@@ -105,13 +105,11 @@ export default function CaseProfileHeader({ lead = {}, intake = null, attention 
                                             </select>
                                         </span>
                                     ) : (
-                                        <span className="inline-flex items-center gap-1.5 group">
+                                        <button type="button" onClick={() => setVisaEditing(true)} title="Change visa type"
+                                            className="inline-flex items-center gap-1.5 rounded-md px-1.5 py-0.5 -mx-1.5 hover:bg-gray-100 transition-colors">
                                             <Globe size={13} className="text-gray-400" /> {visa}
-                                            <button type="button" onClick={() => setVisaEditing(true)} title="Edit visa type"
-                                                className="text-gray-300 hover:text-gray-700 transition-colors">
-                                                <Pencil size={11} />
-                                            </button>
-                                        </span>
+                                            <ChevronDown size={13} className="text-gray-400" />
+                                        </button>
                                     )}
                                     {lead.lead_id && <span className="text-gray-300"> · </span>}
                                     {lead.lead_id && <span className="font-mono text-gray-400">{lead.lead_id}</span>}

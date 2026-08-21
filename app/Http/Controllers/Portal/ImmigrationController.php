@@ -738,8 +738,12 @@ class ImmigrationController extends Controller
                 })
                 ->values();
 
+            // Which cases already have a generated invoice — so the draft modal
+            // reopens with the Invoice document ticked when one exists.
+            $invoicedIds = LeadDocument::where('source_variant', 'invoice')->distinct()->pluck('lead_id');
+
             $generated = LeadDocument::with([
-                'lead:id,first_name,last_name,lead_id,tracking_code,email,phone,engagement_signing_token,engagement_sent_at,engagement_fee_total,engagement_total_amount',
+                'lead:id,first_name,last_name,lead_id,tracking_code,email,phone,engagement_signing_token,engagement_sent_at,engagement_fee_total,engagement_total_amount,engagement_fee_location,engagement_fee_tier,engagement_include_gst,engagement_assist_signer_id',
                 'lead.faceImage',
                 'uploader:id,name,email',
             ])
@@ -751,7 +755,7 @@ class ImmigrationController extends Controller
                 // nested so the table renders a single line per applicant
                 // instead of one line per file.
                 ->groupBy('lead_id')
-                ->map(function ($docs) {
+                ->map(function ($docs) use ($invoicedIds) {
                     $first = $docs->first(); // newest first (ordered desc)
                     $lead = $first->lead;
 
@@ -787,6 +791,9 @@ class ImmigrationController extends Controller
                         // Draft = generated but not yet emailed. Drafts withhold
                         // the client link and are edited/sent from the manage modal.
                         'is_draft' => $isDraft,
+                        // Whether this case already has a generated invoice, so the
+                        // draft modal reopens with the Invoice document ticked.
+                        'has_invoice' => $invoicedIds->contains($first->lead_id),
                         // The (ex-GST) professional fee the pack was generated at.
                         'fee_total' => $lead?->engagement_fee_total !== null ? (float) $lead->engagement_fee_total : null,
                         // The grand total — our fees (incl GST if quoted so) + INZ
@@ -798,6 +805,12 @@ class ImmigrationController extends Controller
                         // Link only once the pack has actually been sent to the client.
                         'signing_url' => (! $isDraft && $token) ? '/engagement/'.$token : null,
                         'signer_id' => optional($waDoc)->engagement_signer_id,
+                        // Settings the pack was generated at — so the draft modal
+                        // reopens with the same location / tier / GST / assisting adviser.
+                        'assist_signer_id' => $lead?->engagement_assist_signer_id,
+                        'fee_location' => $lead?->engagement_fee_location,
+                        'fee_tier' => $lead?->engagement_fee_tier,
+                        'include_gst' => (bool) $lead?->engagement_include_gst,
                         'sent_at' => optional($lead?->engagement_sent_at)?->toIso8601String(),
                         'signed' => (bool) $signedAt,
                         'signed_at' => optional($signedAt)?->toIso8601String(),
