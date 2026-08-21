@@ -66,7 +66,7 @@ const categories = [
         icon: Globe,
         label: 'IMMIGRATION',
         image: visaImg,
-        comingSoon: false
+        comingSoon: true
     },
     {
         id: 'accommodation',

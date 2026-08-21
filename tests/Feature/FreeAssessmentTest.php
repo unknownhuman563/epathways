@@ -3,8 +3,6 @@
 namespace Tests\Feature;
 
 use App\Models\Lead;
-use App\Models\LeadEducationExp;
-use App\Models\LeadStudyPlan;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Bus;
@@ -491,6 +489,33 @@ class FreeAssessmentTest extends TestCase
         $lead = Lead::latest()->first();
         $this->assertNotNull($lead->passport_path);
         Storage::disk('public')->assertExists($lead->passport_path);
+    }
+
+    public function test_enrolment_uploads_create_checklist_documents(): void
+    {
+        Storage::fake('local');
+
+        $payload = $this->fullPayload();
+        $payload['cv_files'] = [UploadedFile::fake()->create('cv.pdf', 200, 'application/pdf')];
+        $payload['passport_files'] = [UploadedFile::fake()->create('passport.pdf', 200, 'application/pdf')];
+        $payload['diploma_files'] = [UploadedFile::fake()->image('diploma.jpg')];
+        $payload['transcript_files'] = [UploadedFile::fake()->create('tor.pdf', 200, 'application/pdf')];
+
+        $this->post('/free-assessment', $payload)->assertRedirect();
+
+        $lead = \App\Models\Lead::latest()->first();
+        $this->assertNotNull($lead);
+
+        // Each upload becomes a checklist-keyed LeadDocument so it surfaces in
+        // the staff Documents tab (not just the education_notes JSON bucket).
+        $keys = \App\Models\LeadDocument::where('lead_id', $lead->id)
+            ->pluck('checklist_key')
+            ->all();
+
+        $this->assertContains('acad.cv', $keys);
+        $this->assertContains('pers.passport', $keys);
+        $this->assertContains('acad.degree_diploma', $keys);
+        $this->assertContains('acad.transcript', $keys);
     }
 
     public function test_invalid_email_rejected(): void

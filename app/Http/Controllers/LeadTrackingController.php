@@ -118,10 +118,14 @@ class LeadTrackingController extends Controller
                 ? $this->buildImmigrationJourney($lead)
                 : $this->buildTimeline($lead),
             // Immigration cases get the visa-type-specific checklist.
-            // General leads / students fall back to the shared documents
-            // checklist so their tracker actually shows "What we still need"
-            // instead of an empty state.
-            'visa' => $this->resolveVisa($lead) ?? $this->resolveGeneralChecklist($lead),
+            // General leads / students ALWAYS get the general Document Checklist
+            // (the 16 required docs), regardless of any inz_visa_type they may
+            // carry — the registration form's "Visa applying for" is just an
+            // interest field for staff and must not connect the tracker to an
+            // immigration visa's checklist. Only a real immigration case
+            // (is_immigration_case) resolves to the visa-specific list.
+            'visa' => ($lead->is_immigration_case ? $this->resolveVisa($lead) : null)
+                ?? $this->resolveGeneralChecklist($lead),
             // Staff-suggested program shortlist (from the Proposals tab on
             // the internal Proposal & Agreements page).
             'proposal' => $this->publicProposal($lead),
@@ -1409,10 +1413,22 @@ class LeadTrackingController extends Controller
             ->count();
 
         return [
-            'name' => 'Document Checklist',
+            // Label the tracker with the visa the applicant selected (if any),
+            // e.g. "Tourist Visa" — shown in the header pill, subtitle and
+            // "Type of Visa" card. The requirements below stay the general
+            // Document Checklist either way; this is a display label only, not
+            // a link to the immigration visa's own checklist. Falls back to
+            // "Document Checklist" when they never picked one.
+            'name' => $lead->inz_visa_type ?: 'Document Checklist',
             'code' => null,
             'short_description' => null,
-            'checklist' => array_merge($this->universalTopItems($lead, $docsByKey), $decorated),
+            // Exactly the config checklist — no universal SV-form injection here.
+            // The general tracker must show the SAME items as the staff lead-
+            // profile Documents tab (which is config-only). The universal item
+            // duplicated the config's "SVF — Student Visa Form" (info.svf) with
+            // a second "Visa Information Form" (svf) row, so the two surfaces
+            // diverged. Immigration cases keep their universal items (resolveVisa).
+            'checklist' => $decorated,
             // The order the client should work through the requirement sections
             // on their tracker. Tracker-only — the staff Documents tab is
             // unaffected. Same list that scopes which sections show above.

@@ -786,6 +786,8 @@ Route::middleware(['auth'])->group(function () {
         // Inline pipeline-stage change from the leads table / kanban. Declared
         // AFTER /admin/leads/import so the literal segment isn't caught as {id}.
         Route::post('/admin/leads/{id}', [LeadController::class, 'updateLeadStatus'])->name('admin.leads.status');
+        // Inline "Visa applying for" change from the leads table dropdown.
+        Route::post('/admin/leads/{id}/visa', [LeadController::class, 'updateLeadVisa'])->name('admin.leads.visa');
         Route::post('/admin/leads/{id}/documents/checklist', [LeadController::class, 'updateDocumentChecklist'])->name('admin.leads.documents.checklist');
         Route::post('/admin/leads/{id}/documents/section-verification', [LeadController::class, 'updateSectionVerification'])->name('admin.leads.documents.section-verification');
 
@@ -1060,6 +1062,7 @@ Route::middleware(['auth'])->group(function () {
             Route::post('/leads/{id}/notes', [\App\Http\Controllers\LeadNoteController::class, 'store'])->name('leads.notes.store');
             Route::post('/leads/{id}/agent', [SalesController::class, 'updateLeadAgent'])->name('leads.agent');
             Route::post('/leads/{id}', [SalesController::class, 'updateLead'])->name('leads.update');
+            Route::post('/leads/{id}/visa', [LeadController::class, 'updateLeadVisa'])->name('leads.visa');
             Route::get('/bookings', [SalesController::class, 'bookings'])->name('bookings');
             Route::post('/bookings/{id}', [SalesController::class, 'updateBooking'])->name('bookings.update');
 
@@ -1163,6 +1166,7 @@ Route::middleware(['auth'])->group(function () {
             Route::post('/leads/bulk-delete', [SalesController::class, 'bulkDelete'])->name('leads.bulk-delete');
             Route::post('/leads/{id}/notes', [\App\Http\Controllers\LeadNoteController::class, 'store'])->name('leads.notes.store');
             Route::post('/leads/{id}', [EducationController::class, 'updateLead'])->name('leads.update');
+            Route::post('/leads/{id}/visa', [LeadController::class, 'updateLeadVisa'])->name('leads.visa');
             Route::post('/leads/{id}/portal-invitation/request', [LeadPortalInvitationController::class, 'request'])
                 ->name('leads.portal-invitation.request');
             // Read-only registration snapshot — mirrors the sales route so the
@@ -1284,6 +1288,7 @@ Route::middleware(['auth'])->group(function () {
             Route::post('/leads/bulk-agent', [SalesController::class, 'bulkAssignAgent'])->name('leads.bulk-agent');
             Route::post('/leads/bulk-delete', [SalesController::class, 'bulkDelete'])->name('leads.bulk-delete');
             Route::post('/leads/{id}', [ImmigrationController::class, 'updateLead'])->name('leads.update');
+            Route::post('/leads/{id}/visa', [LeadController::class, 'updateLeadVisa'])->name('leads.visa');
             Route::post('/leads/{id}/portal-invitation/request', [LeadPortalInvitationController::class, 'request'])
                 ->name('leads.portal-invitation.request');
             // Read-only registration snapshot — mirrors the sales route so the

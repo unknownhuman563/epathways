@@ -502,6 +502,20 @@ export default function LeadDetails({ lead: backendLead, proposal = null, activi
                             )}
                         </div>
 
+                        {/* Visa applying for — the applicant's selected visa
+                            (interest/intent). Shown in the header beside the
+                            stage so staff see it at a glance; editable on the
+                            Personal Info tab (Current NZ Visa section). */}
+                        {backendLead.inz_visa_type && (
+                            <span
+                                className="inline-flex items-center gap-1 text-xs text-indigo-700 font-bold bg-indigo-50 border border-indigo-200 px-2 py-1 rounded-md"
+                                title="Visa applying for"
+                            >
+                                <Globe size={12} className="opacity-70" />
+                                {backendLead.inz_visa_type}
+                            </span>
+                        )}
+
                         <span className="text-xs text-blue-700 font-bold bg-blue-50 border border-blue-100 px-2 py-1 rounded-md uppercase tracking-wider">{lead.branch}</span>
                         <span className="text-xs text-gray-600 font-medium bg-gray-100 px-2 py-1 rounded-md">ID: {lead.id}</span>
 
@@ -943,6 +957,7 @@ export default function LeadDetails({ lead: backendLead, proposal = null, activi
                 >
                     {({ editing, form, setF, errors }) => (
                         <FieldGrid>
+                            <Field editing={editing} label="Visa Applying For" field="inz_visa_type" form={form} setF={setF} errors={errors} placeholder="e.g. Student Visa, Tourist Visa" hint="From the registration form's “Visa applying for”." fullWidth />
                             <Field editing={editing} label="Current Visa Type" field="current_nz_visa_type" form={form} setF={setF} errors={errors} placeholder="e.g. AEWV, Student Visa, Visitor" />
                             <Field editing={editing} label="Visa Number" field="current_nz_visa_number" form={form} setF={setF} errors={errors} hint="Encrypted at rest." />
                             <Field editing={editing} label="Issued Date" field="current_nz_visa_issued_date" form={form} setF={setF} errors={errors} type="date" />
@@ -1138,6 +1153,11 @@ export default function LeadDetails({ lead: backendLead, proposal = null, activi
                     )}
                 </Section>
 
+                {/* Registration & imported answers — JSON-bucketed fields
+                    (partner/spouse, children, pathway, registration extras)
+                    that have no dedicated column. Self-hides when empty. */}
+                <ImportedProfileSections lead={backendLead} />
+
             </div>
             </div>
         </div>
@@ -1183,38 +1203,53 @@ function ImportedProfileSections({ lead }) {
         { k: 'will_bring_children',        label: 'Will you bring your children' },
         { k: 'will_bring_children_other', label: 'Children — other answer' },
     ];
+    // Registration-only extras that have no dedicated Lead column — captured
+    // in education_notes by the registration form. Surfaced here so nothing
+    // the applicant submitted is lost.
+    const registrationFields = [
+        { k: 'pathway_interest', label: 'Pathway interested in' },
+        { k: 'age',              label: 'Age (as registered)' },
+        { k: 'experience',       label: 'Experience' },
+        { k: 'advisor_question', label: 'Question for our advisor' },
+    ];
 
     const has = (bag, fields) => fields.some((f) => bag[f.k]);
 
+    const anything = has(family, intentFields) || has(edu, eduFields) || has(work, workFields)
+        || has(family, partnerFields) || has(family, childrenFields) || has(edu, registrationFields);
+
+    // Nothing to show (e.g. a manually-created lead with no JSON buckets) —
+    // render nothing rather than an empty card.
+    if (! anything) return null;
+
     return (
-        <div className="space-y-6">
-            <SubSection title="Pathway & intent" show={has(family, intentFields)}>
-                <ProfileGrid bag={family} fields={intentFields} />
-            </SubSection>
+        <SectionCard title="Registration &amp; Other Details" icon={FileText}>
+            <div className="space-y-6">
+                <SubSection title="Pathway & intent" show={has(family, intentFields)}>
+                    <ProfileGrid bag={family} fields={intentFields} />
+                </SubSection>
 
-            <SubSection title="Education" show={has(edu, eduFields)}>
-                <ProfileGrid bag={edu} fields={eduFields} />
-            </SubSection>
+                <SubSection title="Registration answers" show={has(edu, registrationFields)}>
+                    <ProfileGrid bag={edu} fields={registrationFields} />
+                </SubSection>
 
-            <SubSection title="Work" show={has(work, workFields)}>
-                <ProfileGrid bag={work} fields={workFields} />
-            </SubSection>
+                <SubSection title="Education" show={has(edu, eduFields)}>
+                    <ProfileGrid bag={edu} fields={eduFields} />
+                </SubSection>
 
-            <SubSection title="Partner / spouse" show={has(family, partnerFields)}>
-                <ProfileGrid bag={family} fields={partnerFields} />
-            </SubSection>
+                <SubSection title="Work" show={has(work, workFields)}>
+                    <ProfileGrid bag={work} fields={workFields} />
+                </SubSection>
 
-            <SubSection title="Children" show={has(family, childrenFields)}>
-                <ProfileGrid bag={family} fields={childrenFields} />
-            </SubSection>
+                <SubSection title="Partner / spouse" show={has(family, partnerFields)}>
+                    <ProfileGrid bag={family} fields={partnerFields} />
+                </SubSection>
 
-            {/* Empty state — JSON is set but none of the named keys matched
-                (e.g. legacy data or a partially-mapped CSV). Show the raw
-                JSON keys so the data isn't invisible. */}
-            {!(has(family, intentFields) || has(edu, eduFields) || has(work, workFields) || has(family, partnerFields) || has(family, childrenFields)) && (
-                <p className="text-sm text-gray-400 italic">No profile fields captured yet.</p>
-            )}
-        </div>
+                <SubSection title="Children" show={has(family, childrenFields)}>
+                    <ProfileGrid bag={family} fields={childrenFields} />
+                </SubSection>
+            </div>
+        </SectionCard>
     );
 }
 
@@ -1526,6 +1561,7 @@ function snapshotForSection(lead, key) {
         case 3: // Current NZ visa
             return {
                 first_name: lead.first_name || '',
+                inz_visa_type: lead.inz_visa_type || '',
                 current_nz_visa_type: lead.current_nz_visa_type || '',
                 current_nz_visa_number: lead.current_nz_visa_number || '',
                 current_nz_visa_issued_date: d(lead.current_nz_visa_issued_date),
@@ -3291,7 +3327,7 @@ function TagsPanel({ leadId, tags, allTags }) {
 // system agreements, set status / notes — no drill-in page. Each section
 // header row carries the per-section verify / request-revisions controls that
 // gate the lead-portal flow.
-function ChecklistTable({ state = {}, checklistFiles = {}, lead, onSave, verifications = {}, onVerifySection, hiddenKeys = new Set(), onToggleTrack }) {
+function ChecklistTable({ sections = CHECKLIST, state = {}, checklistFiles = {}, lead, onSave, verifications = {}, onVerifySection, hiddenKeys = new Set(), onToggleTrack }) {
     // Collapsible sections — collapsed by DEFAULT, mirroring the immigration
     // Case Profile Documents tab. `expanded` holds the sections the user opened.
     const [expanded, setExpanded] = useState(() => new Set());
@@ -3315,7 +3351,7 @@ function ChecklistTable({ state = {}, checklistFiles = {}, lead, onSave, verific
                     </tr>
                 </thead>
                 <tbody>
-                    {CHECKLIST.map((section) => {
+                    {sections.map((section) => {
                         const ver = verifications[section.key]?.status || null;
                         const verMeta = ver ? SECTION_STATUSES[ver] : null;
                         // Section verification — Verify / Request-revisions are
@@ -3662,9 +3698,22 @@ function DocumentsPanel({ lead, checklistFiles = {}, orphans = [], currentUser =
         }, { preserveScroll: true, preserveState: true });
     };
 
+    // General / education leads (the "Document Checklist" type) only work
+    // through four requirement sections, in a fixed order — mirroring the
+    // public tracker. Immigration cases keep the full checklist (they manage
+    // every section). Ordering: Personal → Information Form → Offer & Academic
+    // → Agreements.
+    const sections = React.useMemo(() => {
+        if (lead?.is_immigration_case) return CHECKLIST;
+        const ORDER = ['personal', 'information_form', 'academic', 'agreements'];
+        return ORDER
+            .map((k) => CHECKLIST.find((s) => s.key === k))
+            .filter(Boolean);
+    }, [lead?.is_immigration_case]);
+
     // High-level progress strip — count items where the lead has actually
     // uploaded a file, plus the manually-set status counts.
-    const allItems = CHECKLIST.flatMap((s) => s.items);
+    const allItems = sections.flatMap((s) => s.items);
     const total = allItems.length;
     const counts = allItems.reduce((acc, it) => {
         const s = state[it.id]?.status;
@@ -3732,6 +3781,7 @@ function DocumentsPanel({ lead, checklistFiles = {}, orphans = [], currentUser =
             {/* Single self-contained checklist table — upload, generate,
                 status, notes and per-section verification all happen inline. */}
             <ChecklistTable
+                sections={sections}
                 state={state}
                 checklistFiles={checklistFiles}
                 lead={lead}

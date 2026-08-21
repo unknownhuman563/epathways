@@ -150,6 +150,7 @@ class SalesController extends Controller
                 // Recruiting agents roster for the Leads "Agents" tab — each
                 // with a count of leads they've added (incl. converted ones).
                 'agents' => $this->agentsSummary(),
+                'visaOptions' => $this->visaOptions(),
             ]);
         } catch (\Throwable $e) {
             Log::error('Sales leads list failed', ['error' => $e->getMessage()]);

@@ -198,6 +198,7 @@ class ImmigrationController extends Controller
                 'allTagNames' => \App\Models\LeadTag::orderBy('name')->pluck('name'),
                 'events' => $this->eventsSummary(),
                 'tabCounts' => $this->leadTabCounts(),
+                'visaOptions' => $this->visaOptions(),
             ]);
         } catch (\Throwable $e) {
             Log::error('Immigration leads list failed', ['error' => $e->getMessage()]);
@@ -298,8 +299,6 @@ class ImmigrationController extends Controller
      * Extracted so other portals (e.g. the adviser portal) can render the exact
      * same List of Cases UI. An optional $scope closure narrows the case query
      * (and its total) — e.g. to a single owner for "My Cases".
-     *
-     * @param  \Closure|null  $scope
      */
     public function casesPayload(?\Closure $scope = null): array
     {
@@ -2701,7 +2700,7 @@ class ImmigrationController extends Controller
             'institution_name' => 'Institution Name',
             'country_of_study' => 'Country of Study',
             'other_notes' => 'Other Notes for Adviser',
-            'current_country' => "Country When Application is Submitted",
+            'current_country' => 'Country When Application is Submitted',
             'partnership_status' => 'Partnership Status',
             'other_names' => 'Other Names Used',
             'country_of_birth' => 'Country of Birth',
