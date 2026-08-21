@@ -16,7 +16,13 @@ const COLORS = {
  * first open and is cached server-side for 24h; the refresh control forces a
  * re-analysis. Renders nothing when AI is off or the user lacks access.
  */
-export default function CaseHealthBadge({ caseId }) {
+const HEALTH_ACCENT = {
+    hot: "text-red-300", warm: "text-orange-300", cold: "text-sky-300",
+    critical: "text-red-300", unknown: "text-gray-300",
+};
+const fmtGen = (iso) => (iso ? new Date(iso).toLocaleString("en-NZ", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : null);
+
+export default function CaseHealthBadge({ caseId, variant = "badge" }) {
     const [analysis, setAnalysis] = useState(null);
     const [loading, setLoading] = useState(true);
     const [disabled, setDisabled] = useState(false);
@@ -44,6 +50,35 @@ export default function CaseHealthBadge({ caseId }) {
     }, [caseId]);
 
     if (disabled) return null;
+
+    // Dark "CASE SUMMARY · AI" card for the case-profile header.
+    if (variant === "card") {
+        const gen = analysis && fmtGen(analysis.generated_at || analysis.updated_at || analysis.analyzed_at);
+        return (
+            <div className="rounded-2xl bg-gray-900 text-white p-4">
+                <div className="flex items-center justify-between">
+                    <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#4fd1c5] inline-flex items-center gap-1.5"><Sparkles size={12} /> Case summary · AI</p>
+                    <button onClick={refresh} disabled={refreshing || loading} className="text-[12px] font-semibold text-white/70 hover:text-white inline-flex items-center gap-1 disabled:opacity-50">
+                        <RefreshCw size={12} className={refreshing ? "animate-spin" : ""} /> Refresh
+                    </button>
+                </div>
+                {loading ? (
+                    <p className="mt-2.5 text-[13px] text-white/60 inline-flex items-center gap-2"><Loader2 size={14} className="animate-spin" /> Analysing case…</p>
+                ) : !analysis ? (
+                    <p className="mt-2.5 text-[13px] text-white/50">No AI summary available for this case.</p>
+                ) : (
+                    <>
+                        <p className="mt-2 text-[13.5px] leading-relaxed text-white/90">
+                            <span className={`font-bold capitalize ${HEALTH_ACCENT[analysis.health] || HEALTH_ACCENT.unknown}`}>Case {analysis.health}. </span>
+                            {analysis.summary}
+                        </p>
+                        {gen && <p className="mt-2.5 text-[11px] text-white/40">Generated {gen}</p>}
+                    </>
+                )}
+            </div>
+        );
+    }
+
     if (loading) {
         return (
             <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 text-sm text-gray-400">

@@ -28,9 +28,9 @@ import { ThreadItem, ThreadComposer } from "@/components/immigration/case-profil
 const STATUS_OPTIONS = [
     { value: "Submitted",   label: "Submitted" },
     { value: "UnderReview", label: "Under review" },
-    { value: "Checked",     label: "Checked (refer to adviser)" },
-    { value: "Approved",    label: "Accepted / Satisfactory" },
-    { value: "Rejected",    label: "Required attention" },
+    { value: "Checked",     label: "With adviser" },
+    { value: "Approved",    label: "Approved" },
+    { value: "Rejected",    label: "Needs attention" },
 ];
 
 const STATUS_TONE = {
@@ -40,6 +40,27 @@ const STATUS_TONE = {
     Approved:    "bg-emerald-50 text-emerald-700 border-emerald-200",
     Rejected:    "bg-red-50 text-red-700 border-red-200",
     StaffShared: "bg-gray-50 text-gray-700 border-gray-200",
+};
+
+// Leading dot on the Verdict column — a compact at-a-glance signal.
+const VERDICT_DOT = {
+    Submitted:   "bg-amber-500",
+    UnderReview: "bg-blue-500",
+    Checked:     "bg-purple-500",
+    Approved:    "bg-teal-600",
+    Rejected:    "bg-red-500",
+    StaffShared: "bg-gray-400",
+};
+
+// The status text color, matched to the dot — a clean colored label instead of
+// a boxed pill.
+const VERDICT_TEXT = {
+    Submitted:   "text-amber-600",
+    UnderReview: "text-blue-600",
+    Checked:     "text-purple-600",
+    Approved:    "text-teal-600",
+    Rejected:    "text-red-600",
+    StaffShared: "text-gray-600",
 };
 
 export default function DocumentsTab({
@@ -77,6 +98,9 @@ export default function DocumentsTab({
     // "Request a document" modal — a free-text ad-hoc request not tied to a
     // checklist slot.
     const [requestOpen, setRequestOpen] = useState(false);
+    // Status filter for the checklist (All / Needs client action / Submitted /
+    // With adviser / Approved).
+    const [filter, setFilter] = useState("all");
 
     // Build a checklist-keyed map of uploaded documents (latest wins per key).
     // Orphans (no matching checklist entry) get collected separately.
@@ -175,6 +199,34 @@ export default function DocumentsTab({
         groupedRows[groupIndex.get(category)][1].push(row);
     }
 
+    // Which filter bucket a row falls into. Drives the filter-tab counts and
+    // the segmented progress bar. A required slot with nothing uploaded (or a
+    // rejected upload) still needs the client to act.
+    const bucketOf = (row) => {
+        const s = row.document?.status;
+        if (s === "Approved") return "approved";
+        if (s === "Checked") return "adviser";
+        if (s === "Submitted" || s === "UnderReview" || s === "StaffShared") return "submitted";
+        if (s === "Rejected") return "needs";
+        if (! row.document) return "needs";
+        return "submitted";
+    };
+    const counts = { needs: 0, submitted: 0, adviser: 0, approved: 0 };
+    for (const r of allRows) counts[bucketOf(r)] += 1;
+    const FILTERS = [
+        { key: "all",       label: "All",                count: allRows.length },
+        { key: "needs",     label: "Needs client action", count: counts.needs },
+        { key: "submitted", label: "Submitted",          count: counts.submitted },
+        { key: "adviser",   label: "With adviser",       count: counts.adviser },
+        { key: "approved",  label: "Approved",           count: counts.approved },
+    ];
+    // Apply the active filter to the grouped rows, dropping now-empty sections.
+    const shownGrouped = filter === "all"
+        ? groupedRows
+        : groupedRows
+            .map(([cat, rs]) => [cat, rs.filter((r) => bucketOf(r) === filter)])
+            .filter(([, rs]) => rs.length > 0);
+
     if (allRows.length === 0) {
         return (
             <div className="space-y-4">
@@ -208,90 +260,149 @@ export default function DocumentsTab({
     return (
         <div className="space-y-4">
             {vif && ! hasVifRow && <VifCard vif={vif} />}
-            <div className="flex items-end justify-between gap-3 flex-wrap">
+            <div className="flex items-start justify-between gap-3 flex-wrap">
                 <div className="min-w-0">
-                    <h2 className="text-base font-bold text-gray-900">Documents</h2>
-                    <p className="text-xs text-gray-500 mt-0.5">
+                    <h2 className="text-lg font-bold text-gray-900">Document checklist</h2>
+                    <p className="text-[13px] text-gray-500 mt-0.5">
                         {checklist.visa || "All uploads"}
                         {reqTotal > 0 && (
-                            <> · <span className="font-semibold text-gray-700">{reqApproved} of {reqTotal}</span> required documents approved</>
+                            <> · <span className="font-semibold text-gray-800">{reqApproved} of {reqTotal}</span> required documents approved</>
                         )}
                         {reqTotal === 0 && totals.total > 0 && (
                             <> · {totals.approved} of {totals.total} approved</>
                         )}
+                        {counts.adviser > 0 && (
+                            <> · {counts.adviser} waiting on the adviser</>
+                        )}
                     </p>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
                     {/* Separate from the checklist below: what has actually
                         come in, with each file's status. */}
                     <button
                         type="button"
                         onClick={() => setFilesOpen(true)}
                         title="Every file on this case with its review status"
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold uppercase tracking-wider border border-gray-200 text-gray-600 hover:border-gray-900 hover:text-gray-900 transition-colors"
+                        className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-[13px] font-semibold border border-gray-200 text-gray-700 hover:border-gray-900 hover:text-gray-900 transition-colors"
                     >
-                        <Paperclip size={12} /> File history ({documents.length})
+                        File history ({documents.length})
                     </button>
                     {documents.length > 0 && (
                         <DownloadAllMenu leadId={lead.id} />
                     )}
-                    <p className="text-[10.5px] text-gray-400">
-                        Source: <span className="font-semibold">{checklist.source || "none"}</span>
-                    </p>
+                    <button
+                        type="button"
+                        onClick={() => setRequestOpen(true)}
+                        className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-[13px] font-semibold bg-teal-600 text-white hover:bg-teal-700 transition-colors"
+                    >
+                        Request documents
+                    </button>
                 </div>
             </div>
 
-            {reqTotal > 0 && (
-                <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                    <div
-                        className="h-full bg-gray-900 transition-[width] duration-500"
-                        style={{ width: `${Math.min(100, pct)}%` }}
-                    />
+            {(reqTotal > 0 || allRows.length > 0) && (
+                <div className="flex h-2 rounded-full overflow-hidden bg-gray-100">
+                    {counts.approved > 0 && (
+                        <div className="bg-teal-600 transition-[width] duration-500" style={{ width: `${(counts.approved / allRows.length) * 100}%` }} />
+                    )}
+                    {counts.adviser > 0 && (
+                        <div className="bg-teal-400 transition-[width] duration-500" style={{ width: `${(counts.adviser / allRows.length) * 100}%` }} />
+                    )}
+                    {counts.submitted > 0 && (
+                        <div className="bg-amber-500 transition-[width] duration-500" style={{ width: `${(counts.submitted / allRows.length) * 100}%` }} />
+                    )}
                 </div>
             )}
 
-            <div className="border border-gray-100 rounded-xl overflow-hidden bg-white">
-                <div className="overflow-x-auto">
+            {/* Status filter tabs — All / Needs client action / Submitted /
+                With adviser / Approved. */}
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+                <div className="flex items-center gap-2 flex-wrap">
+                    {FILTERS.map((f) => {
+                        const active = filter === f.key;
+                        return (
+                            <button
+                                key={f.key}
+                                type="button"
+                                onClick={() => setFilter(f.key)}
+                                className={`inline-flex items-center gap-1.5 pl-3.5 pr-2.5 py-1.5 rounded-full text-[13px] font-semibold border transition-colors ${
+                                    active
+                                        ? "bg-gray-900 text-white border-gray-900"
+                                        : "bg-white text-gray-600 border-gray-200 hover:border-gray-400"
+                                }`}
+                            >
+                                {f.label}
+                                <span className={`inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full text-[11px] font-bold ${
+                                    active ? "bg-white/20 text-white" : "bg-gray-100 text-gray-600"
+                                }`}>
+                                    {f.count}
+                                </span>
+                            </button>
+                        );
+                    })}
+                </div>
+                <p className="text-[12px] text-gray-400">
+                    Source: <span className="font-semibold">{checklist.source || "none"}</span>
+                </p>
+            </div>
+
+            <div className="overflow-x-auto">
                     <table className="w-full text-sm">
                         <thead>
-                            <tr className="bg-gray-50 border-b border-gray-100 text-[10.5px] font-bold uppercase tracking-wider text-gray-500">
-                                <th className="text-left px-4 py-2.5 w-[30%]">Document</th>
-                                <th className="text-left px-4 py-2.5 w-[22%]">Attachment</th>
-                                <th className="text-left px-4 py-2.5 w-[14%]">Status</th>
-                                <th className="text-left px-4 py-2.5 w-[18%]">Reviewed by</th>
-                                <th className="text-left px-4 py-2.5 w-[16%]">Notes</th>
+                            <tr className="bg-gray-50 rounded-lg text-[10.5px] font-bold uppercase tracking-wider text-gray-400">
+                                <th className="text-left px-4 py-3 w-[34%] rounded-l-lg">Document</th>
+                                <th className="text-left px-4 py-3 w-[26%]">Attachment</th>
+                                <th className="text-left px-4 py-3 w-[22%]">Verdict</th>
+                                <th className="text-left px-4 py-3 w-[18%] rounded-r-lg">Notes</th>
                             </tr>
                         </thead>
                         <tbody>
-                            {groupedRows.map(([category, groupRows]) => {
+                            {shownGrouped.map(([category, groupRows]) => {
                                 const approved = groupRows.filter((r) => r.document?.status === "Approved").length;
                                 const checklistRows = groupRows.filter((r) => r.kind === "checklist");
-                                const collapsed = ! expandedCats.has(category);
+                                const adviserWait = groupRows.filter((r) => bucketOf(r) === "adviser").length;
+                                const needAction = groupRows.filter((r) => bucketOf(r) === "needs").length;
+                                // While a filter is active, always show matching
+                                // rows regardless of the section's collapse state.
+                                const collapsed = filter === "all" ? ! expandedCats.has(category) : false;
+                                const allApproved = approved === groupRows.length && groupRows.length > 0;
+                                const rightNote = allApproved
+                                    ? "completed"
+                                    : adviserWait > 0
+                                        ? `${adviserWait} with the adviser`
+                                        : needAction > 0
+                                            ? `${needAction} need client action`
+                                            : null;
                                 return (
                                     <Fragment key={category}>
-                                        <tr className="bg-gray-200 border-y border-gray-300">
-                                            <td colSpan={5} className="px-4 py-2">
-                                                <div className="flex items-center gap-2">
-                                                    {checklistRows.length > 0 && (
-                                                        <SectionSelectAll leadId={lead.id} rows={checklistRows} />
+                                        <tr className="bg-gray-800 border-y border-gray-700">
+                                            <td colSpan={4} className="px-4 py-2.5">
+                                                <div className="flex items-center justify-between gap-2">
+                                                    <div className="flex items-center gap-2">
+                                                        {checklistRows.length > 0 && (
+                                                            <SectionSelectAll leadId={lead.id} rows={checklistRows} />
+                                                        )}
+                                                        {/* Click the header to collapse/expand the section. */}
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => toggleCat(category)}
+                                                            className="flex items-center gap-1.5 group"
+                                                            title={collapsed ? "Expand section" : "Collapse section"}
+                                                        >
+                                                            {collapsed
+                                                                ? <ChevronRight size={12} className="text-gray-400 group-hover:text-white" />
+                                                                : <ChevronDown size={12} className="text-gray-400 group-hover:text-white" />}
+                                                            <span className="text-[11px] font-bold uppercase tracking-wider text-gray-100 group-hover:text-white">
+                                                                {category}
+                                                            </span>
+                                                            <span className="text-[11px] font-semibold text-gray-400">
+                                                                {approved}/{groupRows.length}
+                                                            </span>
+                                                        </button>
+                                                    </div>
+                                                    {rightNote && (
+                                                        <span className="text-[11px] text-gray-300">{rightNote}</span>
                                                     )}
-                                                    {/* Click the header to collapse/expand the section. */}
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => toggleCat(category)}
-                                                        className="flex items-center gap-1.5 group"
-                                                        title={collapsed ? "Expand section" : "Collapse section"}
-                                                    >
-                                                        {collapsed
-                                                            ? <ChevronRight size={13} className="text-gray-500 group-hover:text-gray-900" />
-                                                            : <ChevronDown size={13} className="text-gray-500 group-hover:text-gray-900" />}
-                                                        <span className="text-[11px] font-bold uppercase tracking-wider text-gray-700 group-hover:text-gray-900">
-                                                            {category}
-                                                        </span>
-                                                        <span className="text-[10.5px] font-semibold text-gray-500">
-                                                            {approved}/{groupRows.length}
-                                                        </span>
-                                                    </button>
                                                 </div>
                                             </td>
                                         </tr>
@@ -309,9 +420,18 @@ export default function DocumentsTab({
                                     </Fragment>
                                 );
                             })}
+                            {shownGrouped.length === 0 && (
+                                <tr>
+                                    <td colSpan={4} className="px-4 py-10 text-center text-[13px] text-gray-400">
+                                        Nothing in this view.
+                                        <button type="button" onClick={() => setFilter("all")} className="ml-1 font-semibold text-gray-600 hover:text-gray-900 underline">
+                                            Show all
+                                        </button>
+                                    </td>
+                                </tr>
+                            )}
                         </tbody>
                     </table>
-                </div>
             </div>
 
             {/* Request a document — an ad-hoc request for something not on the
@@ -368,6 +488,14 @@ function Row({ row, leadId, docThreads = [], threadsByDoc = new Map(), caseStaff
     const [rejectOpen, setRejectOpen] = useState(false);
     // Which attached file is open in the in-window preview popup (with comments).
     const [previewDoc, setPreviewDoc] = useState(null);
+    // Notes/threads expand — the Notes column shows a "N notes" summary and the
+    // full discussion only opens on click, keeping the table clean.
+    const [notesOpen, setNotesOpen] = useState(false);
+
+    const files = row.documents && row.documents.length ? row.documents : (doc ? [doc] : []);
+    const noteThreads = files.flatMap((d) => threadsByDoc.get(d.id) || []);
+    const noteCount = noteThreads.length + (note ? 1 : 0);
+    const notePreview = (noteThreads[noteThreads.length - 1]?.body) || note || "";
 
     const persist = (nextStatus, nextNote, kind) => {
         if (! doc) return;
@@ -471,10 +599,11 @@ function Row({ row, leadId, docThreads = [], threadsByDoc = new Map(), caseStaff
                 )}
                 {doc ? (
                     <div className="flex flex-col gap-1.5">
-                        {(row.documents && row.documents.length ? row.documents : [doc]).map((d) => (
-                            <div key={d.id} className="flex items-center gap-1.5 flex-wrap">
-                                <span className="flex flex-col min-w-0 max-w-[160px]">
-                                    <span className="text-[11px] text-gray-700 truncate" title={d.original_name}>
+                        {files.map((d) => (
+                            <div key={d.id} className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 max-w-[300px]">
+                                <FileText size={16} className="text-gray-300 flex-shrink-0" />
+                                <span className="flex flex-col min-w-0 flex-1">
+                                    <span className="text-[12px] text-gray-800 truncate" title={d.original_name}>
                                         {d.original_name}
                                     </span>
                                     {d.size ? (
@@ -485,22 +614,13 @@ function Row({ row, leadId, docThreads = [], threadsByDoc = new Map(), caseStaff
                                     type="button"
                                     onClick={() => setPreviewDoc(d)}
                                     title="View & comment"
-                                    className="inline-flex items-center justify-center p-1.5 rounded-md border border-gray-200 bg-white text-gray-600 hover:text-gray-900 hover:bg-gray-50"
+                                    className="text-[12px] font-semibold text-teal-700 hover:text-teal-900 flex-shrink-0"
                                 >
-                                    <Eye size={12} />
+                                    View
                                 </button>
-                                <FileMenu doc={d} leadId={leadId} />
+                                <FileMenu doc={d} leadId={leadId} checklistKey={row.kind === "checklist" ? row.key : null} />
                             </div>
                         ))}
-                        {row.kind === "checklist" && (
-                            <div>
-                                <UploadSlot
-                                    leadId={leadId}
-                                    checklistKey={row.key}
-                                    label="Upload another"
-                                />
-                            </div>
-                        )}
                     </div>
                 ) : (
                     <div className="flex items-center gap-1.5 flex-wrap">
@@ -514,68 +634,62 @@ function Row({ row, leadId, docThreads = [], threadsByDoc = new Map(), caseStaff
                 )}
             </td>
 
-            {/* Status dropdown — disabled when nothing's been uploaded yet */}
+            {/* Verdict — review status (dropdown) plus who decided it and when.
+                Merges the former Status + Reviewed-by columns per the mockup. */}
             <td className="px-4 py-3">
                 {doc ? (
-                    <div className="flex items-center gap-1.5">
-                        <select
-                            value={status || ""}
-                            onChange={onStatusChange}
-                            disabled={savingStatus}
-                            className={`text-[11px] font-semibold px-2 py-1 rounded-md border focus:outline-none focus:ring-0 disabled:opacity-50 ${STATUS_TONE[status] || "bg-gray-50 text-gray-700 border-gray-200"}`}
-                        >
-                            {STATUS_OPTIONS.map((o) => (
-                                <option key={o.value} value={o.value} className="bg-white text-gray-900">{o.label}</option>
-                            ))}
-                        </select>
-                        {savingStatus && <span className="text-[10px] text-gray-400">Saving…</span>}
+                    <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                            <span className={`w-2 h-2 rounded-full flex-shrink-0 ${VERDICT_DOT[status] || "bg-gray-300"}`} />
+                            <select
+                                value={status || ""}
+                                onChange={onStatusChange}
+                                disabled={savingStatus}
+                                title="Change verdict"
+                                className={`text-[13px] font-semibold bg-transparent border-0 p-0 pr-1 -ml-0.5 focus:outline-none focus:ring-0 cursor-pointer disabled:opacity-50 ${VERDICT_TEXT[status] || "text-gray-600"}`}
+                            >
+                                {STATUS_OPTIONS.map((o) => (
+                                    <option key={o.value} value={o.value} className="bg-white text-gray-900">{o.label}</option>
+                                ))}
+                            </select>
+                            {savingStatus && <span className="text-[10px] text-gray-400">Saving…</span>}
+                        </div>
+                        {row.document?.reviewed_by ? (
+                            <p className="text-[10.5px] text-gray-400 pl-4 truncate" title={row.document.reviewed_by}>
+                                {row.document.reviewed_by}
+                                {row.document.reviewed_by_role && <> · {String(row.document.reviewed_by_role).replace(/_/g, " ")}</>}
+                                {row.document.reviewed_at && <> · {formatDate(row.document.reviewed_at)}</>}
+                            </p>
+                        ) : (
+                            <p className="text-[10.5px] text-gray-400 pl-4">not yet checked</p>
+                        )}
                     </div>
                 ) : (
-                    <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold border bg-gray-50 text-gray-500 border-gray-200">
+                    <span className="inline-flex items-center gap-2 text-[11px] font-semibold text-gray-500">
+                        <span className="w-2 h-2 rounded-full bg-gray-300" />
                         Not submitted
                     </span>
                 )}
             </td>
 
-            {/* Reviewed by — who made the Accept/Required-attention decision, and when */}
-            <td className="px-4 py-3">
-                {row.document?.reviewed_by ? (
-                    <div className="min-w-0">
-                        <p className="text-[12px] font-semibold text-gray-800 truncate" title={row.document.reviewed_by}>
-                            {row.document.reviewed_by}
-                        </p>
-                        {row.document.reviewed_by_role && (
-                            <p className="text-[10px] text-gray-400 capitalize">{String(row.document.reviewed_by_role).replace(/_/g, " ")}</p>
-                        )}
-                        {row.document.reviewed_at && (
-                            <p className="text-[10px] text-gray-400 tabular-nums">{formatDate(row.document.reviewed_at)}</p>
-                        )}
-                    </div>
-                ) : (
-                    <span className="text-[11px] text-gray-300">—</span>
-                )}
-            </td>
-
-            {/* Notes — inline-editable, saves on blur */}
+            {/* Notes — a compact summary that opens the full discussion in place */}
             <td className="px-4 py-3">
                 {doc ? (
-                    <div className="relative">
-                        <input
-                            type="text"
-                            value={note}
-                            onChange={(e) => setNote(e.target.value)}
-                            onBlur={onNoteBlur}
-                            placeholder="Add a note…"
-                            maxLength={500}
-                            className="w-full text-[12px] px-2 py-1 rounded-md border border-gray-200 bg-white focus:outline-none focus:border-gray-400 disabled:opacity-50"
-                            disabled={savingNote}
-                        />
-                        {savedNote && (
-                            <span className="absolute right-2 top-1/2 -translate-y-1/2 inline-flex items-center text-emerald-600">
-                                <Check size={11} />
-                            </span>
+                    <button
+                        type="button"
+                        onClick={() => setNotesOpen((v) => ! v)}
+                        className="text-left group max-w-[220px]"
+                    >
+                        <span className="inline-flex items-center gap-1 text-[12px] font-semibold text-gray-700 group-hover:text-gray-900">
+                            {noteCount > 0 ? `${noteCount} note${noteCount === 1 ? "" : "s"}` : "Add a note"}
+                            {notesOpen
+                                ? <ChevronDown size={12} className="text-gray-400" />
+                                : <ChevronRight size={12} className="text-gray-400" />}
+                        </span>
+                        {notePreview && ! notesOpen && (
+                            <span className="block text-[11px] text-gray-400 truncate">{notePreview}</span>
                         )}
-                    </div>
+                    </button>
                 ) : (
                     <span className="text-[11px] text-gray-300">—</span>
                 )}
@@ -593,33 +707,66 @@ function Row({ row, leadId, docThreads = [], threadsByDoc = new Map(), caseStaff
             checklist slot can hold several uploads (e.g. two Passport.pdf), and
             each keeps its own thread, labelled by filename when there's more
             than one. */}
-        {doc && (
-            <tr className="border-b border-gray-50 last:border-b-0">
-                <td colSpan={5} className="px-4 pb-3 pt-0">
+        {doc && notesOpen && (
+            <tr className="border-b border-gray-50 last:border-b-0 bg-gray-50/40">
+                <td colSpan={4} className="px-4 pb-4 pt-1">
                     {(() => {
-                        const files = row.documents && row.documents.length ? row.documents : [doc];
                         const multi = files.length > 1;
                         return (
-                            <div className="ml-6 space-y-3">
+                            <div className="ml-6 max-w-3xl space-y-3">
+                                {/* Reviewer note — the private status note (also
+                                    set when a document is marked "Required
+                                    attention"). Saves on blur. */}
+                                <div className="relative max-w-md">
+                                    <label className="block text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">Reviewer note</label>
+                                    <input
+                                        type="text"
+                                        value={note}
+                                        onChange={(e) => setNote(e.target.value)}
+                                        onBlur={onNoteBlur}
+                                        placeholder="Add a note…"
+                                        maxLength={500}
+                                        className="w-full text-[12px] px-2.5 py-1.5 rounded-lg border border-gray-200 bg-white focus:outline-none focus:border-gray-400 disabled:opacity-50"
+                                        disabled={savingNote}
+                                    />
+                                    {savedNote && (
+                                        <span className="absolute right-2 top-[27px] inline-flex items-center text-emerald-600">
+                                            <Check size={11} />
+                                        </span>
+                                    )}
+                                    {note && row.document?.reviewed_by && (
+                                        <p className="mt-1 text-[10.5px] text-gray-400">
+                                            {row.document.reviewed_by}
+                                            {row.document.reviewed_by_role && <> · {String(row.document.reviewed_by_role).replace(/_/g, " ")}</>}
+                                            {row.document.reviewed_at && <> · {formatDate(row.document.reviewed_at)}</>}
+                                        </p>
+                                    )}
+                                </div>
                                 {files.map((d) => {
                                     const dThreads = threadsByDoc.get(d.id) || [];
                                     return (
-                                        <div key={d.id} className="space-y-1.5">
+                                        <div key={d.id} className="border-l border-gray-200 pl-6">
                                             {multi && (
                                                 <p className="text-[10.5px] font-semibold text-gray-500 inline-flex items-center gap-1.5 border-l-2 border-gray-200 pl-2">
                                                     <FileText size={11} className="text-gray-400" /> {d.original_name}
                                                 </p>
                                             )}
-                                            {dThreads.map((t) => (
-                                                <ThreadItem key={t.id} thread={t} leadId={leadId} />
+                                            {dThreads.filter((t) => ! t.parent_id).map((t) => (
+                                                <ThreadItem
+                                                    key={t.id}
+                                                    thread={t}
+                                                    leadId={leadId}
+                                                    caseStaff={caseStaff}
+                                                    anchor={{ anchor_type: "document", anchor_id: d.id }}
+                                                    childrenOf={(id) => dThreads.filter((x) => x.parent_id === id).sort((a, b) => a.id - b.id)}
+                                                />
                                             ))}
                                             <ThreadComposer
                                                 leadId={leadId}
                                                 caseStaff={caseStaff}
                                                 fixedAnchor={{ anchor_type: "document", anchor_id: d.id }}
-                                                compact
                                                 plain
-                                                placeholder={multi ? `Comment on ${d.original_name}…` : `Comment on ${row.label}…`}
+                                                placeholder={multi ? `Write a note about ${d.original_name}…` : "Write a note about this document…"}
                                             />
                                         </div>
                                     );
@@ -693,12 +840,14 @@ function DownloadAllMenu({ leadId }) {
 // Per-file actions menu (⋮) — Download + Delete, tucked away to keep the
 // attachment cell tidy. Portal-rendered so the dropdown escapes the scrollable
 // table. Delete asks for a second click to confirm (destructive, irreversible).
-function FileMenu({ doc, leadId }) {
+function FileMenu({ doc, leadId, checklistKey = null }) {
     const [open, setOpen] = useState(false);
     const [confirming, setConfirming] = useState(false);
     const [busy, setBusy] = useState(false);
+    const [uploading, setUploading] = useState(false);
     const [coords, setCoords] = useState({ top: 0, left: 0 });
     const btnRef = useRef(null);
+    const fileRef = useRef(null);
     const MENU_W = 168;
 
     useEffect(() => {
@@ -727,6 +876,30 @@ function FileMenu({ doc, leadId }) {
         });
     };
 
+    // Replace = upload a new file against the same checklist slot.
+    const onReplace = (e) => {
+        const files = Array.from(e.target.files || []);
+        if (files.length === 0) return;
+        setUploading(true);
+        router.post(
+            `/admin/leads/${leadId}/documents/checklist/${encodeURIComponent(checklistKey)}/upload`,
+            { files },
+            {
+                forceFormData: true,
+                preserveScroll: true,
+                preserveState: true,
+                only: ["documents"],
+                onSuccess: () => toast.success("File uploaded"),
+                onError: (errs) => toast.error(Object.values(errs)[0] || "Upload failed"),
+                onFinish: () => {
+                    setUploading(false);
+                    if (fileRef.current) fileRef.current.value = "";
+                    close();
+                },
+            },
+        );
+    };
+
     return (
         <>
             <button
@@ -738,6 +911,16 @@ function FileMenu({ doc, leadId }) {
             >
                 <MoreVertical size={12} />
             </button>
+            {checklistKey && (
+                <input
+                    ref={fileRef}
+                    type="file"
+                    multiple
+                    onChange={onReplace}
+                    className="hidden"
+                    accept="application/pdf,image/*,.doc,.docx,.xls,.xlsx"
+                />
+            )}
             {open && createPortal(
                 <>
                     <div className="fixed inset-0 z-[59]" onClick={close} />
@@ -752,6 +935,17 @@ function FileMenu({ doc, leadId }) {
                         >
                             <Download size={13} className="text-gray-400" /> Download
                         </a>
+                        {checklistKey && (
+                            <button
+                                type="button"
+                                onClick={() => fileRef.current?.click()}
+                                disabled={uploading}
+                                className="w-full text-left flex items-center gap-2 px-3 py-1.5 text-[12px] text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                            >
+                                {uploading ? <Loader2 size={13} className="animate-spin text-gray-400" /> : <Upload size={13} className="text-gray-400" />}
+                                {uploading ? "Uploading…" : "Replace"}
+                            </button>
+                        )}
                         {! confirming ? (
                             <button
                                 type="button"

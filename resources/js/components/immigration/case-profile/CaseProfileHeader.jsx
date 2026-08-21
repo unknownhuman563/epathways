@@ -1,11 +1,10 @@
 import { useState } from "react";
 import { Link, router } from "@inertiajs/react";
 import { toast } from "sonner";
-import CaseEngagementModal from "@/components/immigration/case-profile/CaseEngagementModal";
 import CaseHealthBadge from "@/components/ai/CaseHealthBadge";
 import {
     ArrowLeft, Globe, FileSignature, MessageSquarePlus, FilePlus2,
-    BadgeCheck, Briefcase, Archive, Eye, Link2,
+    BadgeCheck, Briefcase, Archive, Eye, Link2, ChevronDown,
 } from "lucide-react";
 import { AvatarPhoto } from "@/components/ui/Avatar";
 
@@ -15,12 +14,28 @@ const fmtDate = (iso) =>
 const initials = (name = "") =>
     name.trim().split(/\s+/).slice(0, 2).map((w) => w[0] || "").join("").toUpperCase() || "C";
 
-export default function CaseProfileHeader({ lead = {}, intake = null, attention = null, tiedTo = null, engagement = {} }) {
-    const [engageOpen, setEngageOpen] = useState(false);
+export default function CaseProfileHeader({ lead = {}, intake = null, attention = null, tiedTo = null, engagement = {}, visaTypes = [] }) {
+    const [visaEditing, setVisaEditing] = useState(false);
+    const [savingVisa, setSavingVisa] = useState(false);
     const fullName = `${lead.first_name ?? ""} ${lead.last_name ?? ""}`.trim() || lead.lead_id || "Unnamed case";
     const visa = lead.inz_visa_type || intake?.data?.visa_type_label || "Visa type not set";
+    const currentVisaId = visaTypes.find((v) => v.name === lead.inz_visa_type)?.id ?? "";
+
+    // Inline edit of the case's visa type — posts to the same endpoint the Cases
+    // table uses; the checklist follows the newly-set visa.
+    const changeVisa = (id) => {
+        setSavingVisa(true);
+        router.post(`/portal/immigration/cases/${lead.id}/visa`, { visa_type_id: id || null }, {
+            preserveScroll: true,
+            onSuccess: () => { toast.success("Visa type updated"); setVisaEditing(false); },
+            onError: (e) => toast.error(Object.values(e)[0] || "Could not update the visa type"),
+            onFinish: () => setSavingVisa(false),
+        });
+    };
     const stage = lead.immigration_stage || lead.stage || "Stage not set";
     const conversionOrigin = lead.is_assessment_converted ? "Assessment-converted" : "Sales-converted";
+    const openedIso = lead.created_at || lead.immigration_converted_at || null;
+    const openedDate = openedIso ? fmtDate(openedIso) : null;
 
     // Soft-delete (archive) — the case row stays in the database, notes
     // and tasks survive, and it can be restored from the archive view.
@@ -56,28 +71,47 @@ export default function CaseProfileHeader({ lead = {}, intake = null, attention 
                 </button>
             </div>
 
-            <section className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-                <div className="h-24 bg-gradient-to-br from-gray-900 via-gray-800 to-gray-700" />
-                <div className="px-6 pb-5 -mt-12">
-                    <div className="flex items-end justify-between gap-4 flex-wrap">
-                        <div className="flex items-end gap-4">
-                            {/* Applicant's uploaded Face image when present,
-                                otherwise the initials tile. */}
-                            <div className="w-24 h-24 rounded-2xl overflow-hidden bg-gradient-to-br from-gray-700 to-gray-900 text-white flex items-center justify-center font-black text-3xl ring-4 ring-white shadow-lg">
+            <section className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+                <div className="flex flex-col lg:flex-row gap-6">
+                    {/* LEFT — identity, status, actions */}
+                    <div className="flex-1 min-w-0">
+                        <div className="flex items-start gap-4">
+                            {/* Applicant's uploaded Face image when present, otherwise the initials tile. */}
+                            <div className="w-24 h-24 rounded-2xl overflow-hidden bg-gradient-to-br from-gray-100 to-gray-200 text-gray-500 flex items-center justify-center font-black text-2xl flex-shrink-0 border border-gray-200">
                                 <AvatarPhoto src={lead.avatar_url} title={fullName}>
                                     {initials(fullName)}
                                 </AvatarPhoto>
                             </div>
-                            <div className="pb-2">
-                                <h1 className="text-2xl font-bold text-gray-900 tracking-tight leading-tight">
+                            <div className="min-w-0">
+                                <h1 className="text-2xl font-bold text-gray-900 tracking-tight leading-tight truncate">
                                     {fullName}
                                 </h1>
-                                <p className="text-sm text-gray-500 mt-0.5 inline-flex items-center gap-2">
-                                    <Globe size={13} className="text-gray-400" />
-                                    {visa}
-                                    {lead.lead_id && (
-                                        <span className="ml-2 font-mono text-gray-400">{lead.lead_id}</span>
+                                <p className="text-[13px] text-gray-500 mt-0.5">
+                                    {visaEditing ? (
+                                        <span className="inline-flex items-center gap-1.5">
+                                            <Globe size={13} className="text-gray-400" />
+                                            <select
+                                                autoFocus
+                                                defaultValue={currentVisaId}
+                                                disabled={savingVisa}
+                                                onChange={(e) => changeVisa(e.target.value)}
+                                                onBlur={() => setVisaEditing(false)}
+                                                className="text-[13px] border border-gray-300 rounded-md px-1.5 py-0.5 focus:outline-none focus:border-gray-500 disabled:opacity-50"
+                                            >
+                                                <option value="">Visa type not set</option>
+                                                {visaTypes.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
+                                            </select>
+                                        </span>
+                                    ) : (
+                                        <button type="button" onClick={() => setVisaEditing(true)} title="Change visa type"
+                                            className="inline-flex items-center gap-1.5 rounded-md px-1.5 py-0.5 -mx-1.5 hover:bg-gray-100 transition-colors">
+                                            <Globe size={13} className="text-gray-400" /> {visa}
+                                            <ChevronDown size={13} className="text-gray-400" />
+                                        </button>
                                     )}
+                                    {lead.lead_id && <span className="text-gray-300"> · </span>}
+                                    {lead.lead_id && <span className="font-mono text-gray-400">{lead.lead_id}</span>}
+                                    {openedDate && <><span className="text-gray-300"> · </span>opened {openedDate}</>}
                                 </p>
                                 <div className="mt-2 flex flex-wrap items-center gap-1.5">
                                     <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-gray-100 border border-gray-200 text-[11px] font-semibold text-gray-700">
@@ -88,17 +122,17 @@ export default function CaseProfileHeader({ lead = {}, intake = null, attention 
                                             INZ: {lead.inz_status}
                                         </span>
                                     )}
+                                    {engagement.sent && (
+                                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-teal-50 border border-teal-100 text-[11px] font-semibold text-teal-700">
+                                            <FileSignature size={11} /> Engagement {engagement.signed ? "signed" : "sent"}
+                                        </span>
+                                    )}
                                     <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-gray-50 border border-gray-100 text-[11px] font-medium text-gray-600">
                                         {lead.is_assessment_converted
                                             ? <BadgeCheck size={11} className="text-emerald-500" />
                                             : <Briefcase size={11} className="text-gray-400" />}
                                         {conversionOrigin}
                                     </span>
-                                    {lead.immigration_converted_at && (
-                                        <span className="text-[11px] text-gray-400">
-                                            since {fmtDate(lead.immigration_converted_at)}
-                                        </span>
-                                    )}
                                     {tiedTo && (
                                         <Link
                                             href={`/portal/immigration/cases/${tiedTo.id}/profile`}
@@ -112,42 +146,34 @@ export default function CaseProfileHeader({ lead = {}, intake = null, attention 
                             </div>
                         </div>
 
-                        <div className="pb-2 flex items-center gap-2 flex-wrap">
-                            {lead.id ? <CaseHealthBadge caseId={lead.id} /> : null}
+                        <div className="mt-4 flex flex-wrap items-center gap-2">
+                            {lead.id && (
+                                <button
+                                    type="button"
+                                    onClick={() => router.visit(`/portal/immigration/cases/engagement?case=${lead.id}`)}
+                                    className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-[12px] font-semibold border transition-colors ${
+                                        engagement.sent
+                                            ? "bg-emerald-600 text-white border-emerald-600 hover:bg-emerald-700"
+                                            : "bg-teal-700 text-white border-teal-700 hover:bg-teal-800"
+                                    }`}
+                                >
+                                    <FileSignature size={14} />
+                                    {engagement.sent ? "Engagement emailed — manage" : "Generate Engagement"}
+                                </button>
+                            )}
+                            <QuickAction icon={FilePlus2}      label="Request Document"   disabledHint="Available in Phase 2" />
+                            <QuickAction icon={MessageSquarePlus} label="Compose Message" disabledHint="Wired by Build 11.A" />
                         </div>
                     </div>
 
-                    <div className="mt-5 flex flex-wrap items-center gap-2">
-                        {lead.id && (
-                            <button
-                                type="button"
-                                onClick={() => setEngageOpen(true)}
-                                className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-[12px] font-semibold border transition-colors ${
-                                    engagement.sent
-                                        ? "bg-emerald-600 text-white border-emerald-600 hover:bg-emerald-700"
-                                        : "bg-teal-700 text-white border-teal-700 hover:bg-teal-800"
-                                }`}
-                            >
-                                <FileSignature size={14} />
-                                {engagement.sent ? "Engagement emailed — manage" : "Generate Engagement"}
-                            </button>
-                        )}
-                        <QuickAction icon={FilePlus2}      label="Request Document"   disabledHint="Available in Phase 2" />
-                        <QuickAction icon={MessageSquarePlus} label="Compose Message" disabledHint="Wired by Build 11.A" />
+                    {/* RIGHT — AI case summary + what changed since last open */}
+                    <div className="w-full lg:w-96 flex-shrink-0 space-y-3">
+                        {lead.id && <CaseHealthBadge caseId={lead.id} variant="card" />}
+                        <SinceLastOpened attention={attention} />
                     </div>
-
-                    <SinceLastOpened attention={attention} />
                 </div>
             </section>
 
-            {engageOpen && (
-                <CaseEngagementModal
-                    leadId={lead.id}
-                    leadName={fullName}
-                    engagement={engagement}
-                    onClose={() => setEngageOpen(false)}
-                />
-            )}
         </div>
     );
 }
@@ -163,7 +189,7 @@ function SinceLastOpened({ attention }) {
     const changes = attention.changed_since || [];
 
     return (
-        <div className="mt-4 rounded-xl border border-gray-100 bg-gray-50/70 px-4 py-3">
+        <div className="rounded-xl border border-gray-100 bg-gray-50/70 px-4 py-3">
             <p className="text-[11px] font-semibold text-gray-500 inline-flex items-center gap-1.5">
                 <Eye size={12} className="text-teal-500" />
                 Since you last opened this · {fmtDateTime(attention.last_opened_at)}

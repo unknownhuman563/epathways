@@ -413,6 +413,9 @@ class ImmigrationController extends Controller
                         'inz_visa_type' => $l->inz_visa_type,
                         'inz_reference' => $l->inz_reference,
                         'inz_lodged_at' => $l->inz_lodged_at,
+                        // Searchable identity fields (passport number/expiry).
+                        'passport_number' => $l->passport_number,
+                        'passport_expiry' => optional($l->passport_expiry)->toDateString(),
                         // Immigration-team sub-stage. Drives both the inline
                         // status picker on each row and the distribution graph
                         // up top. Pre-existing leads still on `inz_status`
@@ -734,8 +737,12 @@ class ImmigrationController extends Controller
                 })
                 ->values();
 
+            // Which cases already have a generated invoice — so the draft modal
+            // reopens with the Invoice document ticked when one exists.
+            $invoicedIds = LeadDocument::where('source_variant', 'invoice')->distinct()->pluck('lead_id');
+
             $generated = LeadDocument::with([
-                'lead:id,first_name,last_name,lead_id,tracking_code,email,phone,engagement_signing_token,engagement_sent_at,engagement_fee_total,engagement_total_amount',
+                'lead:id,first_name,last_name,lead_id,tracking_code,email,phone,engagement_signing_token,engagement_sent_at,engagement_fee_total,engagement_total_amount,engagement_fee_location,engagement_fee_tier,engagement_include_gst,engagement_assist_signer_id',
                 'lead.faceImage',
                 'uploader:id,name,email',
             ])
@@ -747,7 +754,7 @@ class ImmigrationController extends Controller
                 // nested so the table renders a single line per applicant
                 // instead of one line per file.
                 ->groupBy('lead_id')
-                ->map(function ($docs) {
+                ->map(function ($docs) use ($invoicedIds) {
                     $first = $docs->first(); // newest first (ordered desc)
                     $lead = $first->lead;
 
@@ -783,17 +790,28 @@ class ImmigrationController extends Controller
                         // Draft = generated but not yet emailed. Drafts withhold
                         // the client link and are edited/sent from the manage modal.
                         'is_draft' => $isDraft,
+                        // Whether this case already has a generated invoice, so the
+                        // draft modal reopens with the Invoice document ticked.
+                        'has_invoice' => $invoicedIds->contains($first->lead_id),
                         // The (ex-GST) professional fee the pack was generated at.
                         'fee_total' => $lead?->engagement_fee_total !== null ? (float) $lead->engagement_fee_total : null,
                         // The grand total — our fees (incl GST if quoted so) + INZ
                         // disbursements across the family. Drives the "Total amount"
                         // column; falls back to the ex-GST fee for older rows.
                         'total_amount' => $lead?->engagement_total_amount !== null ? (float) $lead->engagement_total_amount : null,
-                        // Consolidated summary the table shows instead of every file.
-                        'doc_count' => $docs->count(),
+                        // Consolidated summary the table shows instead of every
+                        // file — include the bundled invoice so it matches the
+                        // client link's document count.
+                        'doc_count' => $docs->count() + ($invoicedIds->contains($first->lead_id) ? 1 : 0),
                         // Link only once the pack has actually been sent to the client.
                         'signing_url' => (! $isDraft && $token) ? '/engagement/'.$token : null,
                         'signer_id' => optional($waDoc)->engagement_signer_id,
+                        // Settings the pack was generated at — so the draft modal
+                        // reopens with the same location / tier / GST / assisting adviser.
+                        'assist_signer_id' => $lead?->engagement_assist_signer_id,
+                        'fee_location' => $lead?->engagement_fee_location,
+                        'fee_tier' => $lead?->engagement_fee_tier,
+                        'include_gst' => (bool) $lead?->engagement_include_gst,
                         'sent_at' => optional($lead?->engagement_sent_at)?->toIso8601String(),
                         'signed' => (bool) $signedAt,
                         'signed_at' => optional($signedAt)?->toIso8601String(),
@@ -828,6 +846,21 @@ class ImmigrationController extends Controller
                 })
                 ->values();
 
+            // Engagement activity trail — fee adjustments and per-applicant fee
+            // edits across all cases, for the Activity Log tab.
+            $activityLog = \App\Models\ActivityLog::query()
+                ->where('action', 'like', 'engagement.%')
+                ->latest()
+                ->limit(100)
+                ->get()
+                ->map(fn ($log) => [
+                    'id' => $log->id,
+                    'action' => $log->action,
+                    'description' => $log->description,
+                    'actor_name' => $log->actor_name ?: 'System',
+                    'created_at' => optional($log->created_at)?->toIso8601String(),
+                ])->values();
+
             return inertia($page, [
                 'cases' => $cases,
                 'documents' => \App\Services\Immigration\EngagementDocumentGenerator::catalogue(),
@@ -835,6 +868,7 @@ class ImmigrationController extends Controller
                 'signers' => $this->signingAdvisers(),
                 'default_signer_id' => $this->defaultSignerId(),
                 'me_id' => auth()->id(),
+                'activityLog' => $activityLog,
             ]);
         } catch (\Throwable $e) {
             Log::error('Immigration engagement page failed', ['error' => $e->getMessage()]);
@@ -1033,16 +1067,40 @@ class ImmigrationController extends Controller
                 })
                 ->values();
 
+            // Proof-of-payment uploads clients submitted from the engagement
+            // page — staff verify (approve/reject) them here.
+            $proofs = LeadDocument::with(['lead:id,first_name,last_name,lead_id', 'lead.faceImage'])
+                ->where('source_variant', 'proof_of_payment')
+                ->orderByDesc('created_at')
+                ->limit(300)
+                ->get()
+                ->map(fn (LeadDocument $d) => [
+                    'id' => $d->id,
+                    'case_id' => $d->lead_id,
+                    'case_name' => $d->lead ? (trim("{$d->lead->first_name} {$d->lead->last_name}") ?: '—') : '—',
+                    'case_ref' => $d->lead?->lead_id,
+                    'avatar_url' => $d->lead?->faceImageUrl(),
+                    'original_name' => $d->original_name,
+                    'size' => $d->size,
+                    'status' => $d->status,
+                    'uploaded_at' => optional($d->created_at)?->toIso8601String(),
+                    'view_url' => route('admin.documents.download', $d->id).'?inline=1',
+                    'download_url' => route('admin.documents.download', $d->id),
+                    'status_url' => "/admin/leads/{$d->lead_id}/documents/{$d->id}/status",
+                ])
+                ->values();
+
             return inertia($page, [
                 'cases' => $cases,
                 'generated' => $generated,
                 'suggestions' => $suggestions,
+                'proofs' => $proofs,
                 'nextNumber' => app(\App\Services\Immigration\InvoiceGenerator::class)->nextInvoiceNumber(),
             ]);
         } catch (\Throwable $e) {
             Log::error('Immigration invoice page failed', ['error' => $e->getMessage()]);
 
-            return inertia($page, ['cases' => [], 'generated' => [], 'suggestions' => [], 'nextNumber' => null]);
+            return inertia($page, ['cases' => [], 'generated' => [], 'suggestions' => [], 'proofs' => [], 'nextNumber' => null]);
         }
     }
 

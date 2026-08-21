@@ -357,6 +357,7 @@ Route::middleware(['throttle:tracker'])->group(function () {
     Route::get('/engagement/{token}/documents/{doc}/download', [\App\Http\Controllers\EngagementSigningController::class, 'download'])->name('engagement.sign.download');
     Route::get('/engagement/{token}/documents/{doc}/preview', [\App\Http\Controllers\EngagementSigningController::class, 'preview'])->name('engagement.sign.preview');
     Route::post('/engagement/{token}/documents/{doc}/sign', [\App\Http\Controllers\EngagementSigningController::class, 'sign'])->name('engagement.sign');
+    Route::post('/engagement/{token}/proof-of-payment', [\App\Http\Controllers\EngagementSigningController::class, 'uploadProof'])->name('engagement.proof');
 });
 
 // Public Registration & Assessment Routes
@@ -868,6 +869,15 @@ Route::middleware(['auth'])->group(function () {
         // Live fee totals for the engagement modal receipt (family-aware).
         Route::get('/admin/leads/{id}/engagement/fee-totals', [LeadDocumentController::class, 'engagementFeeTotals'])
             ->name('admin.leads.engagement.fee-totals');
+        // The case's family, with their "in agreement" flag, for the modal's
+        // include checkboxes; and the toggle that flips it.
+        Route::get('/admin/leads/{id}/engagement/family', [LeadDocumentController::class, 'engagementFamily'])
+            ->name('admin.leads.engagement.family');
+        Route::patch('/admin/leads/{id}/engagement/family/{dependent}', [LeadDocumentController::class, 'setEngagementFamilyInclusion'])
+            ->name('admin.leads.engagement.family.toggle');
+        // Set one applicant's (principal or dependant) professional fee override.
+        Route::patch('/admin/leads/{id}/engagement/applicant-fee', [LeadDocumentController::class, 'setEngagementApplicantFee'])
+            ->name('admin.leads.engagement.applicant-fee');
         // Email the client the engagement signing link (from the manage-draft modal).
         Route::post('/admin/leads/{id}/engagement/send', [LeadDocumentController::class, 'sendEngagement'])
             ->name('admin.leads.engagement.send');
@@ -1250,8 +1260,13 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/engagement', [\App\Http\Controllers\Portal\ImmigrationAdviserController::class, 'engagement'])->name('engagement');
             Route::get('/invoice', [\App\Http\Controllers\Portal\ImmigrationAdviserController::class, 'invoice'])->name('invoice');
             Route::get('/inz-forms', [\App\Http\Controllers\Portal\ImmigrationAdviserController::class, 'inzForms'])->name('inz-forms');
+            Route::get('/visas', [\App\Http\Controllers\Portal\ImmigrationAdviserController::class, 'visas'])->name('visas');
             Route::get('/verification', [\App\Http\Controllers\Portal\ImmigrationAdviserController::class, 'verification'])->name('verification');
             Route::post('/verification/{document}', [\App\Http\Controllers\Portal\ImmigrationAdviserController::class, 'verifyDocument'])->name('verification.verify');
+            // Full-page document review for a case.
+            Route::get('/verification/review/{lead}', [\App\Http\Controllers\Portal\ImmigrationAdviserController::class, 'review'])->name('verification.review');
+            // AI "document vs client record" scan for the review page.
+            Route::post('/verification/{document}/ai-scan', [\App\Http\Controllers\Portal\ImmigrationAdviserController::class, 'aiScanDocument'])->name('verification.ai-scan');
             Route::get('/reports', [\App\Http\Controllers\Portal\ImmigrationAdviserController::class, 'reports'])->name('reports');
             Route::get('/sign-off', [\App\Http\Controllers\Portal\ImmigrationAdviserController::class, 'signOff'])->name('sign-off');
             Route::get('/notifications', [\App\Http\Controllers\NotificationController::class, 'index'])->name('notifications');
@@ -1385,6 +1400,9 @@ Route::middleware(['auth'])->group(function () {
             // On-demand AI note (OpenRouter) on what's missing from the assessment.
             Route::get('/cases/{lead}/assessment-ai-note', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'assessmentAiNote'])
                 ->name('cases.assessment-ai-note');
+            // AI "document vs case record" identity scan for the Personal tab.
+            Route::post('/cases/{lead}/identity-scan', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'identityScan'])
+                ->name('cases.identity-scan');
 
             // Build 12 phase 3 — case-assist findings. Dismiss carries a
             // required reason; re-evaluate queues a refresh (never on page load).
@@ -1455,6 +1473,8 @@ Route::middleware(['auth'])->group(function () {
             Route::post('/cases/{lead}/dependents', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'addDependent'])->name('cases.dependents.store');
             Route::get('/cases/{lead}/dependent-source', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'dependentSourceIdentity'])->name('cases.dependent-source');
             Route::put('/cases/{lead}/dependents/{dependent}', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'updateDependent'])->name('cases.dependents.update');
+            Route::patch('/cases/{lead}/dependents/{dependent}/in-agreement', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'setDependentInAgreement'])->name('cases.dependents.in-agreement');
+            Route::post('/cases/{lead}/dependents/{dependent}/open-case', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'openDependentCase'])->name('cases.dependents.open-case');
             Route::delete('/cases/{lead}/dependents/{dependent}', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'deleteDependent'])->name('cases.dependents.destroy');
             Route::post('/cases/{lead}/dependents/{dependent}/documents', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'uploadDependentDocument'])->name('cases.dependents.documents.store');
             Route::post('/cases/{lead}/dependents/{dependent}/documents/{document}/status', [\App\Http\Controllers\Immigration\CaseProfileController::class, 'setDependentDocumentStatus'])->name('cases.dependents.documents.status');
@@ -1619,6 +1639,7 @@ Route::middleware(['auth'])->group(function () {
         // and the Accounts Receivable / Accounts Payable ledger.
         Route::middleware('portal:finance')->prefix('finance')->name('portal.finance.')->group(function () {
             Route::get('/dashboard', [\App\Http\Controllers\Portal\FinanceController::class, 'dashboard'])->name('dashboard');
+            Route::get('/invoice', [\App\Http\Controllers\Portal\FinanceController::class, 'invoice'])->name('invoice');
             Route::get('/tasks', [\App\Http\Controllers\Portal\FinanceController::class, 'tasks'])->name('tasks');
 
             // Accounts Receivable

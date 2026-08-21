@@ -113,6 +113,12 @@ class ImmigrationAdviserController extends Controller
         return app(ImmigrationController::class)->inzForms('portal/immigration-adviser/InzForms');
     }
 
+    /** Visas catalogue — the same VisaType manager under adviser chrome. */
+    public function visas(\App\Http\Controllers\VisaTypeController $visaTypes)
+    {
+        return $visaTypes->index('portal/immigration-adviser/VisaTypes');
+    }
+
     /**
      * Verification queue — documents a manager has marked "Checked" (referred to
      * the adviser). The LIA makes the final Approve/Reject call, which is what the
@@ -122,7 +128,7 @@ class ImmigrationAdviserController extends Controller
     {
         $docs = LeadDocument::where('status', LeadDocument::STATUS_CHECKED)
             ->whereHas('lead', fn ($q) => $q->immigrationCase())
-            ->with('lead:id,lead_id,first_name,last_name,inz_visa_type')
+            ->with(['lead:id,lead_id,first_name,last_name,inz_visa_type', 'reviewer:id,name'])
             ->orderBy('reviewed_at')
             ->get()
             ->map(fn (LeadDocument $d) => [
@@ -130,6 +136,8 @@ class ImmigrationAdviserController extends Controller
                 'original_name' => $d->original_name,
                 'checklist_key' => $d->checklist_key,
                 'note' => $d->note,
+                // The manager who checked & referred this document to the adviser.
+                'referred_by' => optional($d->reviewer)->name,
                 'mime' => $d->mime,
                 'size' => $d->size,
                 // A system-generated Visa Information Form referred straight to
@@ -150,11 +158,36 @@ class ImmigrationAdviserController extends Controller
                     'lead_id' => $d->lead->lead_id,
                     'name' => trim("{$d->lead->first_name} {$d->lead->last_name}") ?: ($d->lead->lead_id ?: 'Case'),
                     'visa' => $d->lead->inz_visa_type,
+                    'case_url' => route('portal.immigration-adviser.cases.show', $d->lead->id),
+                ],
+            ])->values();
+
+        // The adviser's recent verdicts — a running history of what they've
+        // decided, so the queue is never a dead end when it's empty.
+        $decided = LeadDocument::whereIn('status', [LeadDocument::STATUS_APPROVED, LeadDocument::STATUS_REJECTED])
+            ->where('reviewed_by', $request->user()->id)
+            ->whereHas('lead', fn ($q) => $q->immigrationCase())
+            ->with('lead:id,lead_id,first_name,last_name')
+            ->orderByDesc('reviewed_at')
+            ->limit(40)
+            ->get()
+            ->map(fn (LeadDocument $d) => [
+                'id' => $d->id,
+                'name' => $d->original_name,
+                'checklist_key' => $d->checklist_key,
+                'status' => $d->status,
+                'note' => $d->note,
+                'reviewed_at' => optional($d->reviewed_at)->toIso8601String(),
+                'case' => [
+                    'id' => $d->lead->id,
+                    'lead_id' => $d->lead->lead_id,
+                    'name' => trim("{$d->lead->first_name} {$d->lead->last_name}") ?: ($d->lead->lead_id ?: 'Case'),
                 ],
             ])->values();
 
         return inertia('portal/immigration-adviser/Verification', [
             'documents' => $docs,
+            'decided' => $decided,
             'licence' => $this->licence($request->user()),
         ]);
     }
@@ -189,6 +222,81 @@ class ImmigrationAdviserController extends Controller
         $document->lead?->recordStaffActivity($status.' '.($document->original_name ?: 'file'));
 
         return back()->with('success', $status === LeadDocument::STATUS_APPROVED ? 'Document approved.' : 'Document rejected.');
+    }
+
+    /**
+     * Full-page document review for one case — the referred (Checked) documents,
+     * shown one at a time with the manager's referral context and the AI
+     * "document vs client record" scan. Replaces the in-queue modal.
+     */
+    public function review(Request $request, Lead $lead)
+    {
+        abort_unless($lead->is_immigration_case, 404);
+
+        $docs = LeadDocument::where('lead_id', $lead->id)
+            ->where('status', LeadDocument::STATUS_CHECKED)
+            ->with('reviewer:id,name')
+            ->orderBy('reviewed_at')
+            ->get()
+            ->map(fn (LeadDocument $d) => [
+                'id' => $d->id,
+                'original_name' => $d->original_name,
+                'checklist_key' => $d->checklist_key,
+                'note' => $d->note,
+                'referred_by' => optional($d->reviewer)->name,
+                'mime' => $d->mime,
+                'size' => $d->size,
+                'is_vif' => $d->source_variant === 'vif',
+                'checked_at' => optional($d->reviewed_at)->toIso8601String(),
+                'has_file' => (bool) $d->file_path && (
+                    \Illuminate\Support\Facades\Storage::disk('local')->exists($d->file_path)
+                    || \Illuminate\Support\Facades\Storage::disk('public')->exists($d->file_path)
+                ),
+                'view_url' => "/admin/documents/{$d->id}/download?inline=1",
+                'download_url' => "/admin/documents/{$d->id}/download",
+                'ai_scan_url' => route('portal.immigration-adviser.verification.ai-scan', $d->id),
+            ])->values();
+
+        if ($docs->isEmpty()) {
+            return redirect()->route('portal.immigration-adviser.verification');
+        }
+
+        $ai = app(\App\Services\AIService::class);
+
+        return inertia('portal/immigration-adviser/VerificationReview', [
+            'case' => [
+                'id' => $lead->id,
+                'lead_id' => $lead->lead_id,
+                'name' => trim("{$lead->first_name} {$lead->last_name}") ?: ($lead->lead_id ?: 'Case'),
+                'visa' => $lead->inz_visa_type,
+                'case_url' => route('portal.immigration-adviser.cases.show', $lead->id),
+            ],
+            'documents' => $docs,
+            'licence' => $this->licence($request->user()),
+            'ai_enabled' => $ai->isEnabled() && $ai->configured(),
+        ]);
+    }
+
+    /**
+     * AI "Document vs client record" scan for the review page — reads the
+     * document and compares extracted identity fields to the case file.
+     * Indicative only; the LIA still makes the verdict.
+     */
+    public function aiScanDocument(Request $request, \App\Services\Immigration\VerificationScanService $scanner, LeadDocument $document)
+    {
+        abort_unless($document->lead && $document->lead->is_immigration_case, 404);
+
+        $result = $scanner->scan($document);
+
+        // One audit line per AI retrieval, attributable to the adviser.
+        \Illuminate\Support\Facades\Log::info('Verification AI scan', [
+            'user' => $request->user()?->id,
+            'document' => $document->id,
+            'ok' => $result['ok'] ?? false,
+            'conflicts' => $result['conflicts'] ?? null,
+        ]);
+
+        return response()->json($result);
     }
 
     /** Adviser reports — verification throughput + casework at a glance. */
