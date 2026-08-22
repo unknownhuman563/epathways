@@ -51,7 +51,7 @@ class LeadNoteController extends Controller
         $validated = $request->validate([
             'body'                => 'required|string|max:2000',
             'pinned'              => 'nullable|boolean',
-            'kind'                => ['nullable', \Illuminate\Validation\Rule::in(['general', 'pre_screen', 'goal_setting'])],
+            'kind'                => ['nullable', \Illuminate\Validation\Rule::in(['general', 'pre_screen', 'goal_setting', 'risk', 'client_contact'])],
             'pre_screened_by'     => 'nullable|string|max:80',
             'pre_screen_mode'     => ['nullable', \Illuminate\Validation\Rule::in(['gmeet', 'call'])],
             'pre_screen_date'     => 'nullable|date',

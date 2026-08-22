@@ -594,26 +594,34 @@ class LeadPortalController extends Controller
             return $lead;
         }
         $dep = \App\Models\CaseDependent::where('id', $id)->where('lead_id', $lead->id)->firstOrFail();
-        // The dependant's valid checklist keys come from the visa assigned to
-        // them (by staff). Tied-to-a-case dependants are read-only here.
-        abort_if($dep->linked_lead_id, 403, 'This family member manages their documents on their own case.');
+
+        // The main applicant manages every family member's documents from their
+        // own portal — including members tied to their own case. For a linked
+        // member the file attaches to THAT case (so it shows in the same
+        // read-through view); otherwise it attaches to the dependant sub-record.
+        $child = $dep->linked_lead_id ? \App\Models\Lead::find($dep->linked_lead_id) : null;
+        $validKeys = $child
+            ? collect(app(\App\Services\Immigration\CaseChecklistService::class)->withStatuses($child))->pluck('key')->filter()->all()
+            : $dep->checklistKeys();
+
         $data = $request->validate([
             'file' => 'required|file|max:20480',
-            'checklist_key' => ['nullable', 'string', \Illuminate\Validation\Rule::in($dep->checklistKeys())],
+            'checklist_key' => ['nullable', 'string', \Illuminate\Validation\Rule::in($validKeys)],
         ]);
 
         $file = $request->file('file');
-        $path = $file->store("lead-documents/{$lead->id}/dependents/{$dep->id}", 'local');
+        $targetLeadId = $child?->id ?? $lead->id;
+        $path = $file->store($child ? "lead-documents/{$child->id}" : "lead-documents/{$lead->id}/dependents/{$dep->id}", 'local');
 
         \App\Models\LeadDocument::create([
-            'lead_id' => $lead->id,
-            'dependent_id' => $dep->id,
+            'lead_id' => $targetLeadId,
+            'dependent_id' => $child ? null : $dep->id,
             'checklist_key' => $data['checklist_key'] ?? null,
             'original_name' => $file->getClientOriginalName(),
             'file_path' => $path,
             'mime' => $file->getClientMimeType(),
             'size' => $file->getSize(),
-            'source' => 'dependent',
+            'source' => $child ? 'upload' : 'dependent',
             'status' => 'Submitted',
         ]);
 
@@ -627,7 +635,15 @@ class LeadPortalController extends Controller
             return $lead;
         }
         $dep = \App\Models\CaseDependent::where('id', $id)->where('lead_id', $lead->id)->firstOrFail();
-        $doc = \App\Models\LeadDocument::where('id', $docId)->where('dependent_id', $dep->id)->firstOrFail();
+        // The dependant's own doc, or — when tied to the child's case — a doc on
+        // that case (but never a staff-generated artifact like an agreement/invoice).
+        $doc = \App\Models\LeadDocument::where('id', $docId)
+            ->where(function ($q) use ($dep) {
+                $q->where('dependent_id', $dep->id);
+                if ($dep->linked_lead_id) {
+                    $q->orWhere(fn ($w) => $w->where('lead_id', $dep->linked_lead_id)->whereNotIn('source', ['generated', 'engagement']));
+                }
+            })->firstOrFail();
         if ($doc->file_path && \Illuminate\Support\Facades\Storage::disk('local')->exists($doc->file_path)) {
             \Illuminate\Support\Facades\Storage::disk('local')->delete($doc->file_path);
         }

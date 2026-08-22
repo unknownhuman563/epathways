@@ -111,6 +111,7 @@ class EngagementSigningController extends Controller
         $adviser = $signer ? [
             'name' => $signer->name,
             'licence' => $signer->iaa_licence_number,
+            'avatar' => $signer->avatar_url,
         ] : null;
 
         // The client's own proof-of-payment uploads.
@@ -269,6 +270,14 @@ class EngagementSigningController extends Controller
         ])->save();
 
         $lead->recordStaffActivity('Client signed the Written Agreement');
+
+        // Signing moves the case to "Agreement Signed" — only from a pre-signing
+        // stage, so it never downgrades a case that's already lodged/approved.
+        if ($firstSigning) {
+            if ($lead->advanceImmigrationStage('Agreement Signed', ['For Assessment', 'Endorsed', 'Agreement Sent', 'For Agreement & Invoice', 'Request for Information'], null)) {
+                \App\Jobs\EvaluateCaseFindings::dispatch($lead->id);
+            }
+        }
 
         // Confirm receipt to the client with their document checklist (key:
         // agreement_signed). First signing only; best-effort so a mail failure
