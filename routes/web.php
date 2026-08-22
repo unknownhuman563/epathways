@@ -1144,6 +1144,20 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/profile', [\App\Http\Controllers\Portal\AgentController::class, 'profile'])->name('profile');
         });
 
+        // Sub-agent portal — works ONE recruiting agent's referral leads
+        // (their parent_agent_id) with a sales-style pipeline. Every action is
+        // row-scoped to agent_id = parent_agent_id inside SubAgentController.
+        Route::middleware('portal:sub_agent')->prefix('sub-agent')->name('portal.sub-agent.')->group(function () {
+            Route::get('/dashboard', [\App\Http\Controllers\Portal\SubAgentController::class, 'dashboard'])->name('dashboard');
+            Route::get('/leads', [\App\Http\Controllers\Portal\SubAgentController::class, 'leads'])->name('leads');
+            Route::post('/leads', [\App\Http\Controllers\Portal\SubAgentController::class, 'storeLead'])->name('leads.store');
+            // Static segments declared before /leads/{id} so they win.
+            Route::post('/leads/{id}/notes', [\App\Http\Controllers\Portal\SubAgentController::class, 'storeNote'])->name('leads.notes.store');
+            Route::post('/leads/{id}/priority', [\App\Http\Controllers\Portal\SubAgentController::class, 'updatePriority'])->name('leads.priority');
+            Route::post('/leads/{id}', [\App\Http\Controllers\Portal\SubAgentController::class, 'updateLead'])->name('leads.update');
+            Route::get('/profile', [\App\Http\Controllers\Portal\SubAgentController::class, 'profile'])->name('profile');
+        });
+
         // Other portals — each has its own controller + dedicated dashboard
         // page. Admins satisfy every portal:* check via canAccessPortal(), so
         // they can view any role's dashboard.

@@ -32,6 +32,8 @@ class UserController extends Controller
         $users = User::whereNotIn('role', ['lead', 'revoked_lead'])
             ->orderBy('name')
             ->get(['id', 'name', 'email', 'phone', 'location', 'role', 'avatar_path', 'created_at',
+                // Sub-agent → recruiting agent link; the edit modal pre-fills it.
+                'parent_agent_id',
                 // IAA licence — admin-managed (Build 12 fast-follow); the edit
                 // modal pre-fills from these.
                 'iaa_licence_number', 'iaa_licence_type', 'iaa_licence_expiry', 'iaa_licence_verified_at']);
@@ -58,8 +60,14 @@ class UserController extends Controller
             ->limit(500)
             ->get(array_merge($leadCols, ['immigration_stage', 'inz_visa_type', 'immigration_converted_at']));
 
+        // Recruiting agents a sub-agent can be linked to (parent picker).
+        $agents = User::where('role', 'agent')
+            ->orderBy('name')
+            ->get(['id', 'name', 'email', 'referral_code']);
+
         return inertia('admin/Users', [
             'users' => $users,
+            'agents' => $agents,
             'roles' => $this->roleValues(),
             'leads' => $leads,
             'students' => $students,
@@ -78,6 +86,11 @@ class UserController extends Controller
             'phone' => [$contactRule, 'string', 'max:60'],
             'location' => [$contactRule, 'string', 'max:255'],
             'role' => ['required', Rule::in($this->roleValues())],
+            // A sub-agent must be linked to the recruiting agent they work under.
+            'parent_agent_id' => [
+                $request->input('role') === User::ROLE_SUB_AGENT ? 'required' : 'nullable',
+                Rule::exists('users', 'id')->where('role', 'agent'),
+            ],
             'password' => ['required', \Illuminate\Validation\Rules\Password::defaults()],
             'avatar' => 'nullable|'.UploadValidation::image(),
             // IAA licence — admin-set + audited (Build 12 fast-follow). The
@@ -95,6 +108,12 @@ class UserController extends Controller
         // Only a super admin may create another super admin.
         if ($validated['role'] === User::ROLE_SUPER_ADMIN && optional($request->user())->role !== User::ROLE_SUPER_ADMIN) {
             return back()->withErrors(['role' => 'Only a super admin can assign the Super Admin role.']);
+        }
+
+        // Only a sub-agent carries a parent agent link — clear it for any
+        // other role so a stray value can't leak through.
+        if ($validated['role'] !== User::ROLE_SUB_AGENT) {
+            $validated['parent_agent_id'] = null;
         }
 
         // The 'password' => 'hashed' cast on the model hashes this on save.
@@ -124,6 +143,11 @@ class UserController extends Controller
             'phone' => [$contactRule, 'string', 'max:60'],
             'location' => [$contactRule, 'string', 'max:255'],
             'role' => ['required', Rule::in($this->roleValues())],
+            // A sub-agent must be linked to the recruiting agent they work under.
+            'parent_agent_id' => [
+                $request->input('role') === User::ROLE_SUB_AGENT ? 'required' : 'nullable',
+                Rule::exists('users', 'id')->where('role', 'agent'),
+            ],
             'password' => ['nullable', \Illuminate\Validation\Rules\Password::defaults()],
             'avatar' => 'nullable|'.UploadValidation::image(),
             // IAA licence — admin-set + audited (Build 12 fast-follow). Expiry
@@ -156,6 +180,11 @@ class UserController extends Controller
         $user->phone = $validated['phone'] ?? null;
         $user->location = $validated['location'] ?? null;
         $user->role = $validated['role'];
+        // Sub-agents are linked to one recruiting agent; every other role
+        // clears the link.
+        $user->parent_agent_id = $validated['role'] === User::ROLE_SUB_AGENT
+            ? ($validated['parent_agent_id'] ?? null)
+            : null;
         // Licence fields — nulled out when cleared, so revoking a licence is a
         // real admin action captured in the audit's `changed` list.
         $user->iaa_licence_number = $validated['iaa_licence_number'] ?? null;
