@@ -317,7 +317,16 @@ class GoogleCalendarService
 
     private function description(Booking $booking): string
     {
-        $lines = ['ePathways consultation booking.'];
+        $lines = [];
+
+        // Emma's bookings lead with her personal intro + contact details, then
+        // the booking summary. Other consultants keep the plain summary.
+        if (trim((string) $booking->consultant_name) === 'Emma Ceballo') {
+            $lines[] = self::EMMA_INTRO;
+            $lines[] = '';
+        }
+
+        $lines[] = 'ePathways consultation booking.';
         if ($booking->service_type) {
             $lines[] = 'Service: '.$booking->service_type;
         }
@@ -333,4 +342,7 @@ class GoogleCalendarService
 
         return implode("\n", $lines);
     }
+
+    /** Emma Ceballo's intro + contact block for the calendar event description. */
+    private const EMMA_INTRO = "Hi, I'm Emma Ceballo from ePathways New Zealand. 🇳🇿 Thank you for your interest in ePathways! We're excited to help you achieve your dream of studying, working, and building a new life in New Zealand.\n\nYou can also contact me directly via:\n\n📞 Phone: +64 21 227 8000\n💬 WhatsApp: +64 21 227 8000\n📧 Email: emma@epathways.co.nz\n\nI'm looking forward to helping you explore the right pathway to New Zealand! 🇳🇿✨";
 }
