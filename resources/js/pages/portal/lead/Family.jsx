@@ -146,8 +146,9 @@ function DocumentsModal({ d, onClose }) {
     const fileRefs = useRef({});
     const [busyKey, setBusyKey] = useState(null);
     const checklist = d.checklist || [];
-    // Tied to this member's own case — they upload there; here it's view-only.
-    const linked = !!d.linked;
+    // The main applicant manages every family member's documents from here —
+    // upload / replace / delete — even members tied to their own case.
+    const linked = false;
 
     const upload = (key, e) => {
         const file = e.target.files?.[0];
