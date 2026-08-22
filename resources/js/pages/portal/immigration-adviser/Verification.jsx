@@ -45,6 +45,8 @@ export default function Verification({ documents = [], decided = [], licence = {
 
     const flaggedGroups = enriched.filter((g) => g.flagged > 0);
     const nextUp = enriched[0] || null;
+    const decidedToday = useMemo(() => decided.filter((d) => isToday(d.reviewed_at)), [decided]);
+    const verifiedThisWeek = useMemo(() => decided.filter((d) => waitDays(d.reviewed_at) <= 7).length, [decided]);
     const shown = tab === "flagged" ? flaggedGroups : enriched;
     const buckets = [
         { key: "old", label: "Waiting more than 2 days", tone: "text-red-500 bg-red-50/50", rows: shown.filter((g) => waitDays(g.earliest) > 2) },
@@ -96,47 +98,57 @@ export default function Verification({ documents = [], decided = [], licence = {
                     <div className="flex items-center gap-2 flex-wrap">
                         <TabBtn active={tab === "verify"} onClick={() => setTab("verify")} label="To verify" count={enriched.length} />
                         <TabBtn active={tab === "flagged"} onClick={() => setTab("flagged")} label="Flagged by manager" count={flaggedGroups.length} />
+                        <TabBtn active={tab === "decided"} onClick={() => setTab("decided")} label="Decided today" count={decidedToday.length} />
                         <span className="ml-auto text-[12px] text-gray-400">Sorted by longest wait</span>
                     </div>
 
-                    {/* Queue table, bucketed by how long they've waited. */}
+                    {/* Queue table, bucketed by how long they've waited — or
+                        the "decided today" list when that tab is active. */}
                     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
                         <div className="overflow-x-auto">
                             <table className="w-full text-left">
                                 <thead>
                                     <tr className="bg-gray-50/60 border-b border-gray-200 text-[10px] font-bold text-gray-500 uppercase tracking-wider">
                                         <th className="px-5 py-3">Client</th>
-                                        <th className="px-4 py-3">Visa</th>
-                                        <th className="px-4 py-3">To verify</th>
-                                        <th className="px-4 py-3">Waiting</th>
+                                        <th className="px-4 py-3">{tab === "decided" ? "Decision" : "To verify"}</th>
+                                        <th className="px-4 py-3">{tab === "decided" ? "Decided" : "Waiting"}</th>
                                         <th className="px-4 py-3 text-right pr-5">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {shown.length === 0 && (
-                                        <tr><td colSpan={5} className="px-5 py-10 text-center text-[13px] text-gray-400">Nothing in this view.</td></tr>
+                                    {tab === "decided" ? (
+                                        decidedToday.length === 0
+                                            ? <tr><td colSpan={4} className="px-5 py-10 text-center text-[13px] text-gray-400">Nothing decided yet today.</td></tr>
+                                            : decidedToday.map((d) => <DecidedRow key={d.id} d={d} />)
+                                    ) : (
+                                        <>
+                                            {shown.length === 0 && (
+                                                <tr><td colSpan={4} className="px-5 py-10 text-center text-[13px] text-gray-400">Nothing in this view.</td></tr>
+                                            )}
+                                            {buckets.map((bucket) => bucket.rows.length > 0 && (
+                                                <Fragment key={bucket.key}>
+                                                    <tr>
+                                                        <td colSpan={4} className={`px-5 py-2 text-[10px] font-bold uppercase tracking-wider ${bucket.tone}`}>{bucket.label}</td>
+                                                    </tr>
+                                                    {bucket.rows.map((g) => <QueueRow key={g.case.id} g={g} onReview={() => openReview(g)} />)}
+                                                </Fragment>
+                                            ))}
+                                        </>
                                     )}
-                                    {buckets.map((bucket) => bucket.rows.length > 0 && (
-                                        <Fragment key={bucket.key}>
-                                            <tr>
-                                                <td colSpan={5} className={`px-5 py-2 text-[10px] font-bold uppercase tracking-wider ${bucket.tone}`}>{bucket.label}</td>
-                                            </tr>
-                                            {bucket.rows.map((g) => <QueueRow key={g.case.id} g={g} onReview={() => openReview(g)} />)}
-                                        </Fragment>
-                                    ))}
                                 </tbody>
                             </table>
                         </div>
                         <div className="px-5 py-3 border-t border-gray-100 flex items-center justify-between text-[12px] text-gray-500 flex-wrap gap-2">
                             <span>{groups.length} client{groups.length === 1 ? "" : "s"} waiting · {documents.length} document{documents.length === 1 ? "" : "s"}</span>
-                            <span className="text-gray-400">Your decision is recorded against your licence</span>
+                            <span className="text-gray-400">You verified <span className="font-semibold text-gray-600">{verifiedThisWeek}</span> document{verifiedThisWeek === 1 ? "" : "s"} this week</span>
                         </div>
                     </div>
                 </>
             )}
 
-            {/* Recent verdicts — the adviser's decision history. */}
-            {decided.length > 0 && (
+            {/* Recent verdicts — the adviser's decision history (hidden on the
+                Decided-today tab, which already lists today's decisions). */}
+            {tab !== "decided" && decided.length > 0 && (
                 <div>
                     <div className="flex items-center justify-between mb-2">
                         <h2 className="text-[13px] font-bold text-gray-700 uppercase tracking-wider">Your recent verdicts</h2>
@@ -201,37 +213,61 @@ function TabBtn({ active, onClick, label, count }) {
     );
 }
 
-// One client's row in the queue — chips for each document to verify (amber when
-// the manager flagged it), how long they've waited, and the Review action.
+// Is an ISO timestamp on today's calendar date?
+const isToday = (iso) => {
+    if (!iso) return false;
+    const d = new Date(iso), n = new Date();
+    return d.getFullYear() === n.getFullYear() && d.getMonth() === n.getMonth() && d.getDate() === n.getDate();
+};
+
+// One client's row in the queue — a document count with the manager-flagged
+// tally, a progress bar, and the flagged document names, plus the wait and the
+// Review action.
 function QueueRow({ g, onReview }) {
     const late = waitDays(g.earliest) > 2;
+    const total = g.docs.length;
+    const flaggedDocs = g.docs.filter((d) => d.note);
+    const flagged = flaggedDocs.length;
+    const pct = total > 0 ? Math.round((flagged / total) * 100) : 0;
+    const flaggedLabels = flaggedDocs.slice(0, 3).map((d) => docLabel(d));
+    const extra = flagged - flaggedLabels.length;
     return (
-        <tr className="border-t border-gray-50 hover:bg-gray-50/40 align-middle">
+        <tr className="border-t border-gray-50 hover:bg-gray-50/40 align-top">
+            {/* Client + reference + visa */}
             <td className="px-5 py-3.5">
                 <div className="flex items-center gap-3 min-w-0">
                     <span className="w-9 h-9 rounded-full inline-flex items-center justify-center text-white text-[11px] font-bold flex-shrink-0 bg-[#009688]">{initials(g.case.name)}</span>
                     <div className="min-w-0">
                         <p className="text-[13px] font-semibold text-gray-900 truncate">{g.case.name}</p>
-                        <p className="text-[11px] text-gray-400 font-mono truncate">{g.case.lead_id}</p>
+                        <p className="text-[11px] text-gray-400 truncate">
+                            <span className="font-mono">{g.case.lead_id}</span>{g.case.visa ? ` · ${g.case.visa}` : ""}
+                        </p>
                     </div>
                 </div>
             </td>
-            <td className="px-4 py-3.5 text-[12.5px] text-gray-700">{g.case.visa || "No visa type"}</td>
-            <td className="px-4 py-3.5">
-                <div className="flex flex-wrap gap-1.5 max-w-[300px]">
-                    {g.docs.map((d) => (
-                        <span key={d.id} title={d.note || ""}
-                            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold ${d.note ? "bg-amber-50 text-amber-700" : "bg-gray-100 text-gray-600"}`}>
-                            <span className={`w-1.5 h-1.5 rounded-full ${d.note ? "bg-amber-500" : "bg-gray-400"}`} />
-                            {docLabel(d)}
-                        </span>
-                    ))}
+            {/* To verify — count, flagged tally, progress bar, flagged names */}
+            <td className="px-4 py-3.5 max-w-[380px]">
+                <div className="flex items-center gap-2">
+                    <span className="text-[13px] font-bold text-gray-900">{total} document{total === 1 ? "" : "s"}</span>
+                    {flagged > 0
+                        ? <span className="text-[11px] font-semibold text-amber-600">{flagged} flagged</span>
+                        : <span className="text-[11px] font-medium text-gray-400">none flagged</span>}
                 </div>
+                <div className="mt-1.5 h-1.5 rounded-full bg-gray-100 overflow-hidden max-w-[300px]">
+                    <div className="h-full bg-amber-400 rounded-full" style={{ width: `${flagged > 0 ? Math.max(8, pct) : 0}%` }} />
+                </div>
+                <p className="mt-1.5 text-[11px] text-gray-500 truncate max-w-[340px]">
+                    {flagged > 0
+                        ? <>Flagged: <span className="text-gray-700">{flaggedLabels.join(", ")}</span>{extra > 0 ? ` +${extra} more` : ""}</>
+                        : "Nothing flagged — routine check"}
+                </p>
             </td>
+            {/* Waiting */}
             <td className="px-4 py-3.5">
                 <p className={`text-[12.5px] font-semibold tabular-nums ${late ? "text-red-600" : "text-gray-700"}`}>{relWait(g.earliest)}</p>
                 {g.referrer && <p className="text-[11px] text-gray-400">by {g.referrer}</p>}
             </td>
+            {/* Actions */}
             <td className="px-4 py-3.5 pr-5 text-right whitespace-nowrap">
                 <div className="inline-flex items-center gap-1.5">
                     <button type="button" onClick={onReview}
@@ -241,6 +277,32 @@ function QueueRow({ g, onReview }) {
                     <span className="w-8 h-8 rounded-lg border border-gray-200 inline-flex items-center justify-center text-gray-300"><MoreHorizontal size={15} /></span>
                 </div>
             </td>
+        </tr>
+    );
+}
+
+// A document the adviser decided today — client, verdict, and when.
+function DecidedRow({ d }) {
+    const accepted = d.status === "Approved";
+    return (
+        <tr className="border-t border-gray-50 hover:bg-gray-50/40">
+            <td className="px-5 py-3.5">
+                <div className="flex items-center gap-3 min-w-0">
+                    <span className="w-9 h-9 rounded-full inline-flex items-center justify-center text-white text-[11px] font-bold flex-shrink-0 bg-gray-400">{initials(d.case.name)}</span>
+                    <div className="min-w-0">
+                        <p className="text-[13px] font-semibold text-gray-900 truncate">{d.case.name}</p>
+                        <p className="text-[11px] text-gray-400 truncate">{docLabel(d)}</p>
+                    </div>
+                </div>
+            </td>
+            <td className="px-4 py-3.5">
+                {accepted
+                    ? <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700">Accepted</span>
+                    : <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-red-50 text-red-600">Requires attention</span>}
+                {d.note && <p className="text-[11px] text-gray-400 truncate mt-1 max-w-[340px]">{d.note}</p>}
+            </td>
+            <td className="px-4 py-3.5 text-[12px] text-gray-500 tabular-nums">{d.reviewed_at ? relWait(d.reviewed_at) + " ago" : ""}</td>
+            <td className="px-4 py-3.5 pr-5" />
         </tr>
     );
 }
