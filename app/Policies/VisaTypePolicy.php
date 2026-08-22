@@ -32,11 +32,12 @@ class VisaTypePolicy
     {
         // Department staff can spin up new visa types — they're the ones
         // adding INZ products to the catalogue. Admin tiers retain access
-        // for completeness.
+        // for completeness. Advisers manage the catalogue in their portal too.
         return $user->hasAnyRole([
             User::ROLE_SUPER_ADMIN,
             User::ROLE_ADMIN,
             User::ROLE_IMMIGRATION_MANAGER,
+            User::ROLE_IMMIGRATION_ADVISER,
             'immigration',
         ]);
     }
@@ -56,18 +57,20 @@ class VisaTypePolicy
             User::ROLE_SUPER_ADMIN,
             User::ROLE_ADMIN,
             User::ROLE_IMMIGRATION_MANAGER,
+            User::ROLE_IMMIGRATION_ADVISER,
             'immigration',
         ]);
     }
 
     public function delete(User $user, ?VisaType $visaType = null): bool
     {
-        // Soft-delete is a maintenance action — manager-tier + admins
-        // only. Plain `immigration` advisers stay locked out.
+        // Soft-delete is a maintenance action — admins, manager-tier, and
+        // advisers (who manage the catalogue from their own portal).
         return $user->hasAnyRole([
             User::ROLE_SUPER_ADMIN,
             User::ROLE_ADMIN,
             User::ROLE_IMMIGRATION_MANAGER,
+            User::ROLE_IMMIGRATION_ADVISER,
         ]);
     }
 
