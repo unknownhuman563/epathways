@@ -680,6 +680,15 @@ class LeadDocumentController extends Controller
                 ])->save();
             }
 
+            // Generating the written agreement moves the case forward to
+            // "For Agreement & Invoice" — but only from an early stage, so it
+            // never downgrades an advanced or already-signed case.
+            if (in_array('written_agreement', $typesToGenerate, true)) {
+                if ($lead->advanceImmigrationStage('For Agreement & Invoice', ['For Assessment', 'Endorsed', 'Agreement Sent'], auth()->id())) {
+                    \App\Jobs\EvaluateCaseFindings::dispatch($lead->id);
+                }
+            }
+
             $n = count($typesToGenerate);
             $message = "{$n} engagement document(s) generated for {$lead->first_name} {$lead->last_name}.";
             if (! empty($skippedSigned)) {
