@@ -19,10 +19,11 @@ const ROLE_STYLES = {
     accommodation: 'bg-cyan-100 text-cyan-700 border-cyan-200',
     finance:       'bg-lime-100 text-lime-700 border-lime-200',
     agent:         'bg-teal-100 text-teal-700 border-teal-200',
+    sub_agent:     'bg-purple-100 text-purple-700 border-purple-200',
 };
 
 const roleStyle = (role) => ROLE_STYLES[role] || 'bg-gray-100 text-gray-600 border-gray-200';
-const ROLE_LABELS = { super_admin: 'Super Admin' };
+const ROLE_LABELS = { super_admin: 'Super Admin', sub_agent: 'Sub-agent' };
 const roleLabel = (role) => (role ? ROLE_LABELS[role] || role.charAt(0).toUpperCase() + role.slice(1) : '—');
 
 const formatDate = (iso) => {
@@ -50,6 +51,7 @@ function Input(props) {
 
 const blankUser = () => ({
     name: '', email: '', phone: '', location: '', role: '', password: '', avatar: null,
+    parent_agent_id: '',
     iaa_licence_number: '', iaa_licence_type: '', iaa_licence_expiry: '', iaa_licence_verified_at: '',
 });
 
@@ -58,7 +60,7 @@ const blankUser = () => ({
 const IMMIGRATION_ROLES = ['immigration', 'immigration_manager', 'immigration_adviser'];
 const dateOnly = (v) => (v ? String(v).slice(0, 10) : '');
 
-function UserModal({ open, onClose, editing, roles }) {
+function UserModal({ open, onClose, editing, roles, agents = [] }) {
     const isEdit = !!editing;
     const [preview, setPreview] = useState(null);
     const [showPassword, setShowPassword] = useState(false);
@@ -82,6 +84,7 @@ function UserModal({ open, onClose, editing, roles }) {
             role: editing.role ?? (roles[0] || ''),
             password: '',
             avatar: null,
+            parent_agent_id: editing.parent_agent_id ?? '',
             iaa_licence_number: editing.iaa_licence_number ?? '',
             iaa_licence_type: editing.iaa_licence_type ?? '',
             iaa_licence_expiry: dateOnly(editing.iaa_licence_expiry),
@@ -225,6 +228,28 @@ function UserModal({ open, onClose, editing, roles }) {
                             </p>
                         </div>
 
+                        {data.role === 'sub_agent' && (
+                            <div className="rounded-xl border border-purple-200 bg-purple-50/40 p-3.5 space-y-2">
+                                <Label required>Works under agent</Label>
+                                <select
+                                    value={data.parent_agent_id}
+                                    onChange={e => setField('parent_agent_id', e.target.value)}
+                                    className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-gray-900 transition-all"
+                                >
+                                    <option value="">Select an agent…</option>
+                                    {agents.map(a => (
+                                        <option key={a.id} value={a.id}>{a.name}{a.referral_code ? ` · ${a.referral_code}` : ''}</option>
+                                    ))}
+                                </select>
+                                <p className="text-[11px] text-gray-500">
+                                    The sub-agent works this agent's referral leads only — a sales-style pipeline scoped to that agent's referrals.
+                                </p>
+                                {agents.length === 0 && (
+                                    <p className="text-[11px] text-amber-600">No agents exist yet — create an agent first, then assign a sub-agent under them.</p>
+                                )}
+                            </div>
+                        )}
+
                         {IMMIGRATION_ROLES.includes(data.role) && (
                             <div className="rounded-xl border border-amber-200 bg-amber-50/40 p-3.5 space-y-3">
                                 <div className="flex items-center gap-2">
@@ -339,7 +364,7 @@ function UserModal({ open, onClose, editing, roles }) {
     );
 }
 
-export default function Users({ users = [], roles = [], leads = [], students = [], cases = [] }) {
+export default function Users({ users = [], agents = [], roles = [], leads = [], students = [], cases = [] }) {
     const { props } = usePage();
     const currentUserId = props.auth?.user?.id;
 
@@ -648,7 +673,7 @@ export default function Users({ users = [], roles = [], leads = [], students = [
 
             </>)}
 
-            <UserModal open={showModal} onClose={closeModal} editing={editing} roles={roles} />
+            <UserModal open={showModal} onClose={closeModal} editing={editing} roles={roles} agents={agents} />
 
             {deleteTarget && (
                 <>

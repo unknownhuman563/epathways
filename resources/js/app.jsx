@@ -14,6 +14,7 @@ import ImmigrationAdviserLayout from './components/layout/ImmigrationAdviserLayo
 import AccommodationLayout from './components/layout/AccommodationLayout';
 import FinanceLayout from './components/layout/FinanceLayout';
 import AgentLayout from './components/layout/AgentLayout';
+import SubAgentLayout from './components/layout/SubAgentLayout';
 import LeadLayout from './components/layout/LeadLayout';
 import RoleLayout from './components/layout/RoleLayout';
 import FlashToaster from './components/ui/FlashToaster';
@@ -31,6 +32,7 @@ const PORTAL_LAYOUTS = {
   'portal/immigration/': ImmigrationLayout,
   'portal/accommodation/': AccommodationLayout,
   'portal/finance/': FinanceLayout,
+  'portal/sub-agent/': SubAgentLayout,
   'portal/agent/': AgentLayout,
   'portal/lead/': LeadLayout,
 };
