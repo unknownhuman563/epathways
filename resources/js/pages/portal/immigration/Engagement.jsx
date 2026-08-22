@@ -167,10 +167,13 @@ export default function Engagement({ cases = [], documents = [], generated = [],
 
     // Deep-link from a case profile's "Generate Engagement" button:
     // /portal/immigration/cases/engagement?case={id} opens the modal preselected.
+    // If that case already has a draft, open it in manage mode instead.
     useEffect(() => {
         if (typeof window === "undefined") return;
         const caseId = new URLSearchParams(window.location.search).get("case");
         if (!caseId) return;
+        const existing = generated.find((g) => String(g.case_id) === String(caseId));
+        if (existing) { setManageFor(existing); return; }
         const c = cases.find((x) => String(x.id) === String(caseId));
         if (c) { setPreselectedCase(c); setModalOpen(true); }
     }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -436,7 +439,16 @@ export default function Engagement({ cases = [], documents = [], generated = [],
             )}
 
             {manageFor && (
-                <DraftManageModal row={manageFor} signers={signers} documents={documents} onClose={() => setManageFor(null)} />
+                <NewEngagementModal
+                    cases={cases}
+                    documents={documents}
+                    signers={signers}
+                    defaultSignerId={default_signer_id}
+                    meId={me_id}
+                    initialCase={cases.find((c) => String(c.id) === String(manageFor.case_id)) || { id: manageFor.case_id, name: manageFor.case_name, email: manageFor.email }}
+                    draft={manageFor}
+                    onClose={() => setManageFor(null)}
+                />
             )}
         </div>
     );
@@ -454,9 +466,10 @@ function DraftManageModal({ row, signers = [], documents = [], onClose }) {
     );
     const [signerId, setSignerId] = useState(row.signer_id ?? signers[0]?.id ?? null);
     const [assistSignerId, setAssistSignerId] = useState(row.assist_signer_id ?? null);
-    const [feeLocation, setFeeLocation] = useState("onshore");
-    const [feeTier, setFeeTier] = useState("normal");
-    const [includeGst, setIncludeGst] = useState(false);
+    // Reopen the draft with the settings it was generated at.
+    const [feeLocation, setFeeLocation] = useState(row.fee_location ?? "onshore");
+    const [feeTier, setFeeTier] = useState(row.fee_tier ?? "normal");
+    const [includeGst, setIncludeGst] = useState(!! row.include_gst);
     const [feeOverride, setFeeOverride] = useState(initialFee);
     const [busy, setBusy] = useState(null); // 'save' | 'send'
     // Family-aware fee totals for the receipt (professional sum + INZ sum).
@@ -766,10 +779,20 @@ function Activity({ icon, tag, body, at }) {
     );
 }
 
-function NewEngagementModal({ cases, documents, signers = [], defaultSignerId = null, meId, onClose, initialCase = null }) {
+function NewEngagementModal({ cases, documents, signers = [], defaultSignerId = null, meId, onClose, initialCase = null, draft = null }) {
+    // When managing an existing draft, seed every setting from it so the modal
+    // reopens exactly as the pack was generated. The invoice isn't an
+    // "engagement:" document, so add it back from the draft's has_invoice flag.
+    const draftTypes = draft
+        ? [
+            ...(draft.documents || []).map((d) => d.type_key).filter(Boolean),
+            ...(draft.has_invoice ? ["invoice"] : []),
+        ]
+        : [];
+
     const [caseSearch, setCaseSearch] = useState("");
     const [selectedCase, setSelectedCase] = useState(initialCase);
-    const [selectedTypes, setSelectedTypes] = useState(documents.map((d) => d.key));
+    const [selectedTypes, setSelectedTypes] = useState(draftTypes.length ? draftTypes : documents.map((d) => d.key));
     const [previewType, setPreviewType] = useState(documents[0]?.key ?? null);
     const [submitAction, setSubmitAction] = useState(null); // 'draft' | 'send' | null
     const submitting = submitAction !== null;
@@ -777,27 +800,29 @@ function NewEngagementModal({ cases, documents, signers = [], defaultSignerId = 
     const [notify, setNotify] = useState(true);
     // Which price the client is engaged at — "normal" (payment plan) or
     // "discounted" (pay now). Drives the professional fee on the agreement.
-    const [feeTier, setFeeTier] = useState("normal");
+    const [feeTier, setFeeTier] = useState(draft?.fee_tier ?? "normal");
     // Applicant location — "onshore" (in NZ) or "offshore" (abroad). Picks
     // which of the visa's two fee schedules the agreement quotes.
-    const [feeLocation, setFeeLocation] = useState("onshore");
+    const [feeLocation, setFeeLocation] = useState(draft?.fee_location ?? "onshore");
     // Fees are stored excluding GST; this decides whether the agreement
     // quotes that figure or the GST-inclusive RRP.
-    const [includeGst, setIncludeGst] = useState(false);
+    const [includeGst, setIncludeGst] = useState(!! draft?.include_gst);
     // Manual override for the (ex-GST) professional fee. "" = use the visa's fee.
     const [feeOverride, setFeeOverride] = useState("");
-    // Default the signing adviser to the practice's designated LIA (Hendry) when
-    // present; otherwise the current user if they're eligible; otherwise first.
+    // Default the signing adviser to the draft's, else the practice's designated
+    // LIA (Hendry), else the current user if eligible, else the first.
     const [signerId, setSignerId] = useState(() => {
+        if (draft?.signer_id && signers.some((s) => s.id === draft.signer_id)) return draft.signer_id;
         if (defaultSignerId && signers.some((s) => s.id === defaultSignerId)) return defaultSignerId;
         if (meId && signers.some((s) => s.id === meId)) return meId;
         return signers[0]?.id ?? null;
     });
-    // Adviser to assist (clause 2.1, row 2). Defaults to the practice's
+    // Adviser to assist (clause 2.1, row 2). Draft's value, else the practice's
     // designated adviser when someone else is signing; blank otherwise.
-    const [assistSignerId, setAssistSignerId] = useState(() =>
-        (defaultSignerId && signers.some((s) => s.id === defaultSignerId) && defaultSignerId !== signerId) ? defaultSignerId : null
-    );
+    const [assistSignerId, setAssistSignerId] = useState(() => {
+        if (draft) return draft.assist_signer_id ?? null;
+        return (defaultSignerId && signers.some((s) => s.id === defaultSignerId) && defaultSignerId !== signerId) ? defaultSignerId : null;
+    });
 
     const selectedSigner = signers.find((s) => s.id === signerId) || null;
 
@@ -986,9 +1011,12 @@ function NewEngagementModal({ cases, documents, signers = [], defaultSignerId = 
             >
                 {/* Header */}
                 <div className="px-5 py-3.5 border-b border-gray-100 flex items-center justify-between flex-shrink-0">
-                    <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2">
-                        <FileSignature size={16} className="text-gray-700" /> New engagement documents
-                    </h3>
+                    <div className="min-w-0">
+                        <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2">
+                            <FileSignature size={16} className="text-gray-700" /> {draft ? `Manage draft — ${draft.case_name || selectedCase?.name || "case"}` : "New engagement documents"}
+                        </h3>
+                        {draft && <p className="text-[11px] text-gray-400 mt-0.5">{draft.sent_at ? "Already emailed — regenerating replaces the current draft." : "Not yet sent to the client."}</p>}
+                    </div>
                     <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
                 </div>
 

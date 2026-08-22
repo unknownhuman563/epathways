@@ -55,12 +55,16 @@ export default function AgentLeads({ agent, leads = [], statuses = [], portalBas
 
             {/* Header */}
             <div className="flex flex-col gap-3">
-                <Link
-                    href={`${portalBase}/leads?tab=agents`}
-                    className="inline-flex items-center gap-1.5 text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors w-max"
-                >
-                    <ArrowLeft size={16} /> Back to Leads
-                </Link>
+                {/* Sub-agents land straight on this screen — there's no parent
+                    leads table to go back to, so the drill-in link is hidden. */}
+                {portalBase !== '/portal/sub-agent' && (
+                    <Link
+                        href={`${portalBase}/leads?tab=agents`}
+                        className="inline-flex items-center gap-1.5 text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors w-max"
+                    >
+                        <ArrowLeft size={16} /> Back to Leads
+                    </Link>
+                )}
                 <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
                     <div className="flex items-center gap-3">
                         <div

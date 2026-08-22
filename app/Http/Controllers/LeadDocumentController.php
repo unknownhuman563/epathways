@@ -617,7 +617,21 @@ class LeadDocumentController extends Controller
                 $lead->forceFill([
                     'engagement_fee_total' => $totals['professional_excl'],
                     'engagement_total_amount' => $totals['grand_total'],
+                    // Remember the settings so re-opening the draft reproduces them.
+                    'engagement_fee_location' => $data['fee_location'] ?? 'onshore',
+                    'engagement_fee_tier' => $data['fee_tier'] ?? 'normal',
+                    'engagement_include_gst' => (bool) ($data['include_gst'] ?? false),
+                    'engagement_assist_signer_id' => $data['assist_signer_id'] ?? null,
                 ])->save();
+            }
+
+            // Generating the written agreement moves the case forward to
+            // "For Agreement & Invoice" — but only from an early stage, so it
+            // never downgrades an advanced or already-signed case.
+            if (in_array('written_agreement', $typesToGenerate, true)) {
+                if ($lead->advanceImmigrationStage('For Agreement & Invoice', ['For Assessment', 'Endorsed', 'Agreement Sent'], auth()->id())) {
+                    \App\Jobs\EvaluateCaseFindings::dispatch($lead->id);
+                }
             }
 
             $n = count($typesToGenerate);

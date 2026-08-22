@@ -37,8 +37,12 @@ class User extends Authenticatable
      *  User row is kept (history/linked records) but can no longer log in. */
     public const ROLE_REVOKED_LEAD = 'revoked_lead';
 
+    /** A sub-agent works the referral leads of ONE recruiting agent (their
+     *  `parent_agent_id`), with a sales-style pipeline scoped to that agent. */
+    public const ROLE_SUB_AGENT = 'sub_agent';
+
     /** Department portals a non-admin user can be assigned to. */
-    public const PORTAL_ROLES = ['sales', 'education', 'english', 'immigration', 'accommodation', 'finance', 'agent'];
+    public const PORTAL_ROLES = ['sales', 'education', 'english', 'immigration', 'accommodation', 'finance', 'agent', 'sub_agent'];
 
     /** Roles that resolve to the Immigration portal. */
     public const IMMIGRATION_ROLES = [
@@ -65,6 +69,7 @@ class User extends Authenticatable
         'password',
         'role',
         'referral_code',
+        'parent_agent_id',
         'lead_id',
         'iaa_licence_number',
         'iaa_licence_type',
@@ -401,6 +406,11 @@ class User extends Authenticatable
             return '/portal/immigration/dashboard';
         }
 
+        // Sub-agent portal uses a hyphenated URL prefix; its role is underscored.
+        if ($this->role === self::ROLE_SUB_AGENT) {
+            return '/portal/sub-agent/dashboard';
+        }
+
         return in_array($this->role, self::PORTAL_ROLES, true)
             ? "/portal/{$this->role}/dashboard"
             : '/admin/dashboard';
@@ -416,6 +426,12 @@ class User extends Authenticatable
     public function agentLeads()
     {
         return $this->hasMany(Lead::class, 'agent_id');
+    }
+
+    /** The recruiting agent a sub-agent works under (role='sub_agent' only). */
+    public function parentAgent()
+    {
+        return $this->belongsTo(User::class, 'parent_agent_id');
     }
 
     /**

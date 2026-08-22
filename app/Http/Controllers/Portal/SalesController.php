@@ -262,6 +262,7 @@ class SalesController extends Controller
         [$component, $portalBase] = match (true) {
             request()->is('admin/*') => ['admin/AgentLeads', '/admin'],
             request()->is('portal/education/*') => ['portal/education/AgentLeads', '/portal/education'],
+            request()->is('portal/sub-agent/*') => ['portal/sub-agent/AgentLeads', '/portal/sub-agent'],
             default => ['portal/sales/AgentLeads', '/portal/sales'],
         };
 

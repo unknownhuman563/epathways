@@ -1815,8 +1815,10 @@ class CaseProfileController extends Controller
             ->map(fn (LeadNote $n) => [
                 'id' => $n->id,
                 'body' => $n->body,
+                'kind' => $n->kind ?: 'general',
                 'pinned' => (bool) ($n->pinned ?? false),
                 'author' => $n->author_name ?? null,
+                'author_role' => $n->author_role ?? null,
                 'created_at' => $n->created_at,
             ])
             ->all();
