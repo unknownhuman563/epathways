@@ -1708,7 +1708,9 @@ class CaseProfileController extends Controller
     private function loadDocumentRequests(Lead $lead): array
     {
         return $lead->documentRequests()
-            ->with(['requester:id,name', 'latestDocument:id,request_id,status,original_name'])
+            // latestDocument is a latestOfMany (self-join), so its constrained
+            // columns must be table-qualified or `request_id` is ambiguous.
+            ->with(['requester:id,name', 'latestDocument:lead_documents.id,lead_documents.request_id,lead_documents.status,lead_documents.original_name'])
             ->orderByDesc('created_at')
             ->get()
             ->map(fn (\App\Models\LeadDocumentRequest $r) => [
