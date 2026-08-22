@@ -168,6 +168,32 @@ class Lead extends Model
     }
 
     /**
+     * Move the immigration case forward to `$to`, but only from one of the
+     * `$from` stages (an unset stage always qualifies) — so an automatic
+     * transition never downgrades a case that's already further along or clobbers
+     * a signed/lodged one. Stamps the stage-tracking columns + history and saves.
+     * Returns true when the stage actually moved.
+     */
+    public function advanceImmigrationStage(string $to, array $from, ?int $byUserId = null): bool
+    {
+        $current = $this->immigration_stage;
+        if ($current === $to) {
+            return false;
+        }
+        if ($current !== null && ! in_array($current, $from, true)) {
+            return false;
+        }
+
+        $this->immigration_stage = $to;
+        $this->stage_updated_at = now();
+        $this->stage_updated_by = $byUserId;
+        $this->pushStageHistory('immigration', $to, $this->immigration_assignee);
+        $this->save();
+
+        return true;
+    }
+
+    /**
      * Canonical lead-pipeline stages. Single source of truth — referenced
      * by SalesController validation and the LeadController stage-update
      * endpoint. Order is the canonical pipeline order surfaced in the UI.

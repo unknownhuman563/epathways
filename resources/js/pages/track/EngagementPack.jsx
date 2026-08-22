@@ -168,9 +168,13 @@ export default function EngagementPack({ token, client = {}, documents = [], pro
                     {/* Adviser */}
                     {adviser && (
                         <section className="bg-white border border-gray-200 rounded-2xl px-5 py-4 flex items-center gap-3 flex-wrap">
-                            <span className="w-11 h-11 rounded-full flex items-center justify-center text-white text-[13px] font-bold flex-shrink-0" style={{ backgroundColor: ACCENT }}>
-                                {(adviser.name || "A").split(/\s+/).slice(0, 2).map((s) => s[0] || "").join("").toUpperCase()}
-                            </span>
+                            {adviser.avatar ? (
+                                <img src={adviser.avatar} alt={adviser.name} className="w-11 h-11 rounded-full object-cover flex-shrink-0 border border-gray-100" />
+                            ) : (
+                                <span className="w-11 h-11 rounded-full flex items-center justify-center text-white text-[13px] font-bold flex-shrink-0" style={{ backgroundColor: ACCENT }}>
+                                    {(adviser.name || "A").split(/\s+/).slice(0, 2).map((s) => s[0] || "").join("").toUpperCase()}
+                                </span>
+                            )}
                             <div className="min-w-0 flex-1">
                                 <p className="text-[14px] font-bold text-gray-900">{adviser.name} <span className="font-normal text-gray-500">· your licensed adviser</span></p>
                                 <p className="text-[12px] text-gray-500">{adviser.licence ? `Licence ${adviser.licence} · ` : ""}replies within one business day</p>

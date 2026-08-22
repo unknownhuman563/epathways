@@ -4,6 +4,11 @@
  * activity. Wired to the real case props; a few derived numbers fall back
  * gracefully when the underlying data isn't present.
  */
+import { useState } from "react";
+import { router } from "@inertiajs/react";
+import { toast } from "sonner";
+import { Pin } from "lucide-react";
+
 const fmtDate = (iso) => (iso ? new Date(iso).toLocaleDateString("en-NZ", { day: "numeric", month: "short", year: "numeric" }) : "—");
 const fmtShort = (iso) => (iso ? new Date(iso).toLocaleDateString("en-NZ", { day: "numeric", month: "short" }) : "—");
 const fmtDateTime = (iso) => (iso ? new Date(iso).toLocaleString("en-NZ", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "—");
@@ -119,11 +124,12 @@ export default function OverviewTab(props) {
                     </section>
                 )}
 
-                {/* Documents progress */}
+                {/* Documents + Internal notes, side by side */}
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-5 items-start">
                 <section className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
                     <div className="flex items-center justify-between gap-3 mb-3">
                         <h2 className="text-[15px] font-bold text-gray-900">Documents <span className="text-[12px] font-normal text-gray-400 ml-1">{reqApproved} of {reqTotal} approved · {documents.length} files on file</span></h2>
-                        <button type="button" onClick={() => go("documents")} className="text-[13px] font-semibold text-teal-700 hover:underline">Open documents</button>
+                        <button type="button" onClick={() => go("documents")} className="text-[13px] font-semibold text-teal-700 hover:underline flex-shrink-0">Open documents</button>
                     </div>
                     <ProgressBar segments={[
                         { v: tally.approved, cls: "bg-teal-700" },
@@ -143,6 +149,10 @@ export default function OverviewTab(props) {
                         {depTotal > 0 && <CategoryRow label="Dependant documents" done={depDone} total={depTotal} />}
                     </div>
                 </section>
+
+                {/* Internal notes — the case team's private notebook */}
+                <InternalNotes leadId={lead.id} notes={notes} onSeeAll={() => go("notes")} />
+                </div>
 
                 {/* Family included */}
                 {dependents.length > 0 && (
@@ -201,18 +211,6 @@ export default function OverviewTab(props) {
                     <Stat big={money(outstanding)} label="outstanding on invoice" tone={outstanding > 0 ? "amber" : "teal"} />
                 </div>
 
-                {/* Pinned note */}
-                {pinned && (
-                    <section className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-                        <div className="flex items-center gap-2 mb-1.5">
-                            <h2 className="text-[14px] font-bold text-gray-900">Pinned note</h2>
-                            <span className="text-[9px] font-bold uppercase text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">Staff only</span>
-                        </div>
-                        <p className="text-[12.5px] text-gray-600 leading-relaxed">{pinned.body || pinned.note || pinned.content}</p>
-                        <p className="text-[11px] text-gray-400 mt-1.5">{pinned.author_name || pinned.author || ""}{pinned.created_at ? ` · ${fmtShort(pinned.created_at)}` : ""}</p>
-                    </section>
-                )}
-
                 {/* Recent activity */}
                 {recent.length > 0 && (
                     <section className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
@@ -235,6 +233,100 @@ export default function OverviewTab(props) {
                 )}
                 </div>
             </div>
+        </div>
+    );
+}
+
+const NOTE_KINDS = [
+    { key: "general", label: "Note", tone: "text-teal-700" },
+    { key: "risk", label: "Risk", tone: "text-red-600" },
+    { key: "client_contact", label: "Client contact", tone: "text-blue-600" },
+];
+const kindMeta = (k) =>
+    NOTE_KINDS.find((x) => x.key === k) || (k === "engagement" ? { label: "Note", tone: "text-amber-600" } : { label: "Note", tone: "text-gray-500" });
+
+// The case team's private notebook — categorised notes (Note / Risk / Client
+// contact), pinnable, never shown to the client.
+function InternalNotes({ leadId, notes = [], onSeeAll }) {
+    const [kind, setKind] = useState("general");
+    const [body, setBody] = useState("");
+    const [pinned, setPinned] = useState(false);
+    const [posting, setPosting] = useState(false);
+
+    const submit = () => {
+        if (! body.trim()) return;
+        setPosting(true);
+        router.post(`/admin/leads/${leadId}/notes`, { body, pinned, kind }, {
+            preserveScroll: true,
+            onSuccess: () => { setBody(""); setPinned(false); setKind("general"); toast.success("Note added"); },
+            onError: (e) => toast.error(Object.values(e)[0] || "Could not add note"),
+            onFinish: () => setPosting(false),
+        });
+    };
+
+    const pinnedNotes = notes.filter((n) => n.pinned);
+    const rest = notes.filter((n) => ! n.pinned);
+
+    return (
+        <section className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+            <div className="flex items-center justify-between gap-2 mb-3">
+                <h2 className="text-[14px] font-bold text-gray-900">Internal notes <span className="text-[11px] font-normal text-gray-400">never shown to the client</span></h2>
+                <button type="button" onClick={onSeeAll} className="text-[12px] font-semibold text-teal-700 hover:underline flex-shrink-0">All {notes.length}</button>
+            </div>
+
+            {/* Composer */}
+            <div className="rounded-xl border border-gray-200 p-2.5">
+                <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={2} maxLength={2000}
+                    placeholder="Add a note for the case team…"
+                    className="w-full text-[13px] outline-none resize-none placeholder-gray-400" />
+                <div className="flex items-center justify-between mt-1.5 pt-1.5 border-t border-gray-50 gap-2 flex-wrap">
+                    <div className="flex items-center gap-2.5">
+                        {NOTE_KINDS.map((k) => (
+                            <button key={k.key} type="button" onClick={() => setKind(k.key)}
+                                className={`text-[12px] font-semibold ${kind === k.key ? "text-gray-900 underline underline-offset-4" : "text-gray-400 hover:text-gray-700"}`}>
+                                {k.label}
+                            </button>
+                        ))}
+                    </div>
+                    <div className="flex items-center gap-3">
+                        <button type="button" onClick={() => setPinned((p) => ! p)} title="Pin to top"
+                            className={`inline-flex items-center gap-1 text-[12px] font-semibold ${pinned ? "text-amber-600" : "text-gray-400 hover:text-gray-700"}`}>
+                            <Pin size={12} /> Pin
+                        </button>
+                        <button type="button" onClick={submit} disabled={posting || ! body.trim()}
+                            className="text-[13px] font-bold text-teal-700 hover:text-teal-900 disabled:opacity-40">Post</button>
+                    </div>
+                </div>
+            </div>
+
+            {/* Notes */}
+            {notes.length === 0 ? (
+                <p className="text-[12px] text-gray-400 mt-3">No notes yet.</p>
+            ) : (
+                <div className="mt-4 space-y-4">
+                    {pinnedNotes.length > 0 && (
+                        <div>
+                            <p className="text-[10px] font-bold uppercase tracking-wider text-amber-600 mb-2">Pinned</p>
+                            <div className="space-y-3">{pinnedNotes.map((n) => <NoteItem key={n.id} n={n} />)}</div>
+                        </div>
+                    )}
+                    <div className="space-y-3">{rest.map((n) => <NoteItem key={n.id} n={n} />)}</div>
+                </div>
+            )}
+        </section>
+    );
+}
+
+function NoteItem({ n }) {
+    const meta = kindMeta(n.kind);
+    return (
+        <div className="border-b border-gray-50 pb-3 last:border-b-0 last:pb-0">
+            <div className="flex items-center justify-between gap-2">
+                <span className={`text-[10px] font-bold uppercase tracking-wider ${meta.tone}`}>{meta.label}</span>
+                <span className="text-[11px] text-gray-400">{fmtShort(n.created_at)}</span>
+            </div>
+            <p className="text-[12.5px] text-gray-700 leading-relaxed mt-1 whitespace-pre-wrap">{n.body}</p>
+            <p className="text-[11px] text-gray-400 mt-1">{n.author || "Unknown"}{n.author_role ? ` · ${String(n.author_role).replace(/_/g, " ")}` : ""}</p>
         </div>
     );
 }
