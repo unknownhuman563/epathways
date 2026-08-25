@@ -1332,7 +1332,7 @@ class LeadController extends Controller
         // layout (because app.jsx picks the layout from the page-name prefix).
         $path = request()->path(); // e.g. "portal/sales/leads/23"
         $page = 'admin/LeadDetails';
-        foreach (['sales', 'education', 'english', 'immigration', 'accommodation'] as $role) {
+        foreach (['sales', 'education', 'english', 'immigration', 'immigration-adviser', 'accommodation'] as $role) {
             str_starts_with($path, "portal/{$role}/") ? $page = "portal/{$role}/LeadDetails" : null;
         }
 

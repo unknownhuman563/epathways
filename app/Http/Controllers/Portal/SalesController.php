@@ -263,6 +263,7 @@ class SalesController extends Controller
         [$component, $portalBase] = match (true) {
             request()->is('admin/*') => ['admin/AgentLeads', '/admin'],
             request()->is('portal/education/*') => ['portal/education/AgentLeads', '/portal/education'],
+            request()->is('portal/immigration-adviser/*') => ['portal/immigration-adviser/AgentLeads', '/portal/immigration-adviser'],
             request()->is('portal/sub-agent/*') => ['portal/sub-agent/AgentLeads', '/portal/sub-agent'],
             default => ['portal/sales/AgentLeads', '/portal/sales'],
         };
@@ -318,8 +319,11 @@ class SalesController extends Controller
         // render under admin/ (AdminLayout) and point row actions back at the
         // /admin routes; department portals keep their /portal/{role} base.
         $isAdmin = request()->is('admin/*');
+        $registrantsPage = request()->is('portal/immigration-adviser/*')
+            ? 'portal/immigration-adviser/EventRegistrants'
+            : ($isAdmin ? 'admin/EventRegistrants' : 'portal/sales/EventRegistrants');
 
-        return inertia($isAdmin ? 'admin/EventRegistrants' : 'portal/sales/EventRegistrants', [
+        return inertia($registrantsPage, [
             'event' => [
                 'id' => $event->id,
                 'name' => $event->name,
@@ -382,9 +386,13 @@ class SalesController extends Controller
         })->values()->all();
 
         $isAdmin = request()->is('admin/*');
+        $isAdviser = request()->is('portal/immigration-adviser/*');
+        $regPage = $isAdviser ? 'portal/immigration-adviser/LeadRegistration'
+            : ($isAdmin ? 'admin/LeadRegistration' : 'portal/sales/LeadRegistration');
+        $regBase = $isAdviser ? '/portal/immigration-adviser' : ($isAdmin ? '/admin' : '/portal/sales');
 
-        return inertia($isAdmin ? 'admin/LeadRegistration' : 'portal/sales/LeadRegistration', [
-            'portalBase' => $isAdmin ? '/admin' : '/portal/sales',
+        return inertia($regPage, [
+            'portalBase' => $regBase,
             'lead' => [
                 'id' => $lead->id,
                 'lead_id' => $lead->lead_id,

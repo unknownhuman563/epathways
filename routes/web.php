@@ -829,7 +829,7 @@ Route::middleware(['auth'])->group(function () {
     // updateStatus is per-document so a sales lead's documents can't be
     // touched from this widened gate (no Lead Profile route routes them
     // here).
-    Route::middleware('portal:admin,sales,immigration,immigration_manager,immigration_adviser')->group(function () {
+    Route::middleware('portal:admin,sales,immigration,immigration_manager,immigration_adviser,finance')->group(function () {
         Route::get('/admin/leads/{id}/documents', [LeadDocumentController::class, 'staffIndex'])
             ->name('admin.leads.documents');
         Route::post('/admin/leads/{id}/documents/requests', [LeadDocumentController::class, 'requestStore'])
@@ -1275,6 +1275,28 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/cases', [\App\Http\Controllers\Portal\ImmigrationAdviserController::class, 'cases'])->name('cases');
             Route::get('/my-cases', [\App\Http\Controllers\Portal\ImmigrationAdviserController::class, 'myCases'])->name('my-cases');
             Route::get('/tasks', [\App\Http\Controllers\Portal\ImmigrationAdviserController::class, 'tasks'])->name('tasks');
+
+            // Leads pipeline + Students dashboard — the same shared screens the
+            // immigration portal uses, served under the adviser layout. The
+            // action/nav routes below mirror the immigration ones so the shared
+            // Leads/Students components' links resolve on this prefix (no 404)
+            // and the adviser stays in their own portal chrome.
+            Route::get('/leads', [\App\Http\Controllers\Portal\ImmigrationAdviserController::class, 'leads'])->name('leads');
+            Route::post('/leads/bulk-agent', [SalesController::class, 'bulkAssignAgent'])->name('leads.bulk-agent');
+            Route::post('/leads/bulk-delete', [SalesController::class, 'bulkDelete'])->name('leads.bulk-delete');
+            Route::post('/leads/{id}', [ImmigrationController::class, 'updateLead'])->name('leads.update');
+            Route::post('/leads/{id}/visa', [LeadController::class, 'updateLeadVisa'])->name('leads.visa');
+            Route::post('/leads/{id}/portal-invitation/request', [LeadPortalInvitationController::class, 'request'])->name('leads.portal-invitation.request');
+            Route::get('/leads/{id}/registration', [SalesController::class, 'showLeadRegistration'])->name('leads.registration');
+            Route::get('/leads/{id}', [LeadController::class, 'show'])->name('leads.show');
+            Route::get('/agents/{id}/leads', [SalesController::class, 'agentLeads'])->name('agents.leads');
+            Route::get('/events/{id}/registrants', [SalesController::class, 'eventRegistrantsPage'])->name('events.registrants');
+
+            Route::get('/students', [\App\Http\Controllers\Portal\ImmigrationAdviserController::class, 'students'])->name('students');
+            Route::post('/students/{id}/dashboard-field', [\App\Http\Controllers\Portal\EducationController::class, 'updateStudentField'])->name('students.dashboard-field');
+            Route::post('/students', [\App\Http\Controllers\Portal\EducationController::class, 'storeStudent'])->name('students.store');
+            Route::post('/students/{id}/update', [\App\Http\Controllers\Portal\EducationController::class, 'updateStudent'])->name('students.update');
+            Route::post('/students/{id}/destroy', [\App\Http\Controllers\Portal\EducationController::class, 'destroyStudent'])->name('students.destroy');
             Route::get('/assessments', [\App\Http\Controllers\Portal\ImmigrationAdviserController::class, 'assessments'])->name('assessments');
             Route::get('/cases/{lead}', [\App\Http\Controllers\Portal\ImmigrationAdviserController::class, 'showCase'])->name('cases.show');
             // Document verification queue — manager-checked docs the LIA approves/rejects.

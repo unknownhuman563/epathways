@@ -428,6 +428,7 @@ class EducationController extends Controller
     {
         return match (true) {
             request()->is('portal/sales/*') => ['portal/sales/Students', 'sales'],
+            request()->is('portal/immigration-adviser/*') => ['portal/immigration-adviser/Students', 'immigration-adviser'],
             request()->is('portal/immigration/*') => ['portal/immigration/Students', 'immigration'],
             default => ['portal/education/Students', 'education'],
         };
