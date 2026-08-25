@@ -11,7 +11,7 @@ import {
     User as UserIcon, ArrowRight, Sparkles, FolderOpen, Copy, Info, Undo2, Send,
     Globe, Home, Wand2, Users as UsersIcon, Eye,
     Paperclip, FileImage, Film, Music,
-    Briefcase, Trash2, RefreshCw, MoreVertical,
+    Briefcase, Trash2, RefreshCw, MoreVertical, Plus, X,
 } from 'lucide-react';
 import { CHECKLIST, STATUSES, STATUS_CHIP, STATUS_LABEL, SECTION_STATUSES, IMPORTANT_NOTES, renderFilename, currentSectionIndex } from '@/data/leadDocumentChecklist';
 import SendUpdateModal from '@/components/leads/SendUpdateModal';
@@ -502,6 +502,20 @@ export default function LeadDetails({ lead: backendLead, proposal = null, activi
                             )}
                         </div>
 
+                        {/* Visa applying for — the applicant's selected visa
+                            (interest/intent). Shown in the header beside the
+                            stage so staff see it at a glance; editable on the
+                            Personal Info tab (Current NZ Visa section). */}
+                        {backendLead.inz_visa_type && (
+                            <span
+                                className="inline-flex items-center gap-1 text-xs text-indigo-700 font-bold bg-indigo-50 border border-indigo-200 px-2 py-1 rounded-md"
+                                title="Visa applying for"
+                            >
+                                <Globe size={12} className="opacity-70" />
+                                {backendLead.inz_visa_type}
+                            </span>
+                        )}
+
                         <span className="text-xs text-blue-700 font-bold bg-blue-50 border border-blue-100 px-2 py-1 rounded-md uppercase tracking-wider">{lead.branch}</span>
                         <span className="text-xs text-gray-600 font-medium bg-gray-100 px-2 py-1 rounded-md">ID: {lead.id}</span>
 
@@ -943,6 +957,7 @@ export default function LeadDetails({ lead: backendLead, proposal = null, activi
                 >
                     {({ editing, form, setF, errors }) => (
                         <FieldGrid>
+                            <Field editing={editing} label="Visa Applying For" field="inz_visa_type" form={form} setF={setF} errors={errors} placeholder="e.g. Student Visa, Tourist Visa" hint="From the registration form's “Visa applying for”." fullWidth />
                             <Field editing={editing} label="Current Visa Type" field="current_nz_visa_type" form={form} setF={setF} errors={errors} placeholder="e.g. AEWV, Student Visa, Visitor" />
                             <Field editing={editing} label="Visa Number" field="current_nz_visa_number" form={form} setF={setF} errors={errors} hint="Encrypted at rest." />
                             <Field editing={editing} label="Issued Date" field="current_nz_visa_issued_date" form={form} setF={setF} errors={errors} type="date" />
@@ -1138,6 +1153,11 @@ export default function LeadDetails({ lead: backendLead, proposal = null, activi
                     )}
                 </Section>
 
+                {/* Registration & imported answers — JSON-bucketed fields
+                    (partner/spouse, children, pathway, registration extras)
+                    that have no dedicated column. Self-hides when empty. */}
+                <ImportedProfileSections lead={backendLead} />
+
             </div>
             </div>
         </div>
@@ -1183,38 +1203,53 @@ function ImportedProfileSections({ lead }) {
         { k: 'will_bring_children',        label: 'Will you bring your children' },
         { k: 'will_bring_children_other', label: 'Children — other answer' },
     ];
+    // Registration-only extras that have no dedicated Lead column — captured
+    // in education_notes by the registration form. Surfaced here so nothing
+    // the applicant submitted is lost.
+    const registrationFields = [
+        { k: 'pathway_interest', label: 'Pathway interested in' },
+        { k: 'age',              label: 'Age (as registered)' },
+        { k: 'experience',       label: 'Experience' },
+        { k: 'advisor_question', label: 'Question for our advisor' },
+    ];
 
     const has = (bag, fields) => fields.some((f) => bag[f.k]);
 
+    const anything = has(family, intentFields) || has(edu, eduFields) || has(work, workFields)
+        || has(family, partnerFields) || has(family, childrenFields) || has(edu, registrationFields);
+
+    // Nothing to show (e.g. a manually-created lead with no JSON buckets) —
+    // render nothing rather than an empty card.
+    if (! anything) return null;
+
     return (
-        <div className="space-y-6">
-            <SubSection title="Pathway & intent" show={has(family, intentFields)}>
-                <ProfileGrid bag={family} fields={intentFields} />
-            </SubSection>
+        <SectionCard title="Registration &amp; Other Details" icon={FileText}>
+            <div className="space-y-6">
+                <SubSection title="Pathway & intent" show={has(family, intentFields)}>
+                    <ProfileGrid bag={family} fields={intentFields} />
+                </SubSection>
 
-            <SubSection title="Education" show={has(edu, eduFields)}>
-                <ProfileGrid bag={edu} fields={eduFields} />
-            </SubSection>
+                <SubSection title="Registration answers" show={has(edu, registrationFields)}>
+                    <ProfileGrid bag={edu} fields={registrationFields} />
+                </SubSection>
 
-            <SubSection title="Work" show={has(work, workFields)}>
-                <ProfileGrid bag={work} fields={workFields} />
-            </SubSection>
+                <SubSection title="Education" show={has(edu, eduFields)}>
+                    <ProfileGrid bag={edu} fields={eduFields} />
+                </SubSection>
 
-            <SubSection title="Partner / spouse" show={has(family, partnerFields)}>
-                <ProfileGrid bag={family} fields={partnerFields} />
-            </SubSection>
+                <SubSection title="Work" show={has(work, workFields)}>
+                    <ProfileGrid bag={work} fields={workFields} />
+                </SubSection>
 
-            <SubSection title="Children" show={has(family, childrenFields)}>
-                <ProfileGrid bag={family} fields={childrenFields} />
-            </SubSection>
+                <SubSection title="Partner / spouse" show={has(family, partnerFields)}>
+                    <ProfileGrid bag={family} fields={partnerFields} />
+                </SubSection>
 
-            {/* Empty state — JSON is set but none of the named keys matched
-                (e.g. legacy data or a partially-mapped CSV). Show the raw
-                JSON keys so the data isn't invisible. */}
-            {!(has(family, intentFields) || has(edu, eduFields) || has(work, workFields) || has(family, partnerFields) || has(family, childrenFields)) && (
-                <p className="text-sm text-gray-400 italic">No profile fields captured yet.</p>
-            )}
-        </div>
+                <SubSection title="Children" show={has(family, childrenFields)}>
+                    <ProfileGrid bag={family} fields={childrenFields} />
+                </SubSection>
+            </div>
+        </SectionCard>
     );
 }
 
@@ -1526,6 +1561,7 @@ function snapshotForSection(lead, key) {
         case 3: // Current NZ visa
             return {
                 first_name: lead.first_name || '',
+                inz_visa_type: lead.inz_visa_type || '',
                 current_nz_visa_type: lead.current_nz_visa_type || '',
                 current_nz_visa_number: lead.current_nz_visa_number || '',
                 current_nz_visa_issued_date: d(lead.current_nz_visa_issued_date),
@@ -3291,7 +3327,7 @@ function TagsPanel({ leadId, tags, allTags }) {
 // system agreements, set status / notes — no drill-in page. Each section
 // header row carries the per-section verify / request-revisions controls that
 // gate the lead-portal flow.
-function ChecklistTable({ state = {}, checklistFiles = {}, lead, onSave, verifications = {}, onVerifySection, hiddenKeys = new Set(), onToggleTrack }) {
+function ChecklistTable({ sections = CHECKLIST, state = {}, checklistFiles = {}, lead, onSave, verifications = {}, onVerifySection, hiddenKeys = new Set(), onToggleTrack, onRemoveCustom, onDuplicateCustom }) {
     // Collapsible sections — collapsed by DEFAULT, mirroring the immigration
     // Case Profile Documents tab. `expanded` holds the sections the user opened.
     const [expanded, setExpanded] = useState(() => new Set());
@@ -3315,7 +3351,7 @@ function ChecklistTable({ state = {}, checklistFiles = {}, lead, onSave, verific
                     </tr>
                 </thead>
                 <tbody>
-                    {CHECKLIST.map((section) => {
+                    {sections.map((section) => {
                         const ver = verifications[section.key]?.status || null;
                         const verMeta = ver ? SECTION_STATUSES[ver] : null;
                         // Section verification — Verify / Request-revisions are
@@ -3395,6 +3431,8 @@ function ChecklistTable({ state = {}, checklistFiles = {}, lead, onSave, verific
                                         onSave={onSave}
                                         hidden={hiddenKeys.has(it.id)}
                                         onToggleTrack={onToggleTrack}
+                                        onRemoveCustom={it.custom ? onRemoveCustom : undefined}
+                                        onDuplicateCustom={it.custom ? onDuplicateCustom : undefined}
                                     />
                                 ))}
                             </React.Fragment>
@@ -3409,7 +3447,7 @@ function ChecklistTable({ state = {}, checklistFiles = {}, lead, onSave, verific
 // One checklist row — owns its own upload / generate state so the File,
 // Attachment, Status and Notes columns all work inline without leaving the
 // table.
-function ChecklistRow({ item, lead, entry, files = [], onSave, hidden = false, onToggleTrack }) {
+function ChecklistRow({ item, lead, entry, files = [], onSave, hidden = false, onToggleTrack, onRemoveCustom, onDuplicateCustom }) {
     const [uploading, setUploading] = useState(false);
     const [generating, setGenerating] = useState(false);
     const [variantOpen, setVariantOpen] = useState(false);
@@ -3501,6 +3539,33 @@ function ChecklistRow({ item, lead, entry, files = [], onSave, hidden = false, o
                         <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-widest bg-[#436235]/10 text-[#436235] border border-[#436235]/20">
                             System
                         </span>
+                    )}
+                    {item.custom && (
+                        <>
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-widest bg-blue-50 text-blue-700 border border-blue-200">
+                                Custom
+                            </span>
+                            {onDuplicateCustom && (
+                                <button
+                                    type="button"
+                                    onClick={() => onDuplicateCustom(item)}
+                                    title="Duplicate this document"
+                                    className="inline-flex items-center justify-center w-5 h-5 rounded text-gray-300 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                                >
+                                    <Copy size={12} />
+                                </button>
+                            )}
+                            {onRemoveCustom && (
+                                <button
+                                    type="button"
+                                    onClick={() => onRemoveCustom(item)}
+                                    title="Delete this document from the lead"
+                                    className="inline-flex items-center justify-center w-5 h-5 rounded text-gray-300 hover:text-red-600 hover:bg-red-50 transition-colors"
+                                >
+                                    <Trash2 size={12} />
+                                </button>
+                            )}
+                        </>
                     )}
                 </div>
             </td>
@@ -3662,9 +3727,88 @@ function DocumentsPanel({ lead, checklistFiles = {}, orphans = [], currentUser =
         }, { preserveScroll: true, preserveState: true });
     };
 
+    // General / education leads (the "Document Checklist" type) only work
+    // through four requirement sections, in a fixed order — mirroring the
+    // public tracker. Immigration cases keep the full checklist (they manage
+    // every section). Ordering: Personal → Information Form → Offer & Academic
+    // → Agreements.
+    const sections = React.useMemo(() => {
+        const base = lead?.is_immigration_case
+            ? CHECKLIST
+            : ['personal', 'information_form', 'academic', 'agreements']
+                .map((k) => CHECKLIST.find((s) => s.key === k))
+                .filter(Boolean);
+
+        // Per-lead ad-hoc documents (leads.custom_documents) drop into the
+        // folder staff chose — this lead only. Each is a custom.* item so
+        // uploads/status use the same key-based flow. Items targeting an
+        // existing folder merge into it; the rest form their own section
+        // (e.g. "Additional Documents").
+        const custom = Array.isArray(lead?.custom_documents) ? lead.custom_documents : [];
+        if (custom.length === 0) return base;
+
+        const bySection = {};
+        custom.forEach((c) => {
+            const sec = c.section || 'Additional Documents';
+            (bySection[sec] ||= []).push({ id: c.key, name: c.name, custom: true, section: sec });
+        });
+
+        const used = new Set();
+        const merged = base.map((s) => {
+            const extra = bySection[s.section];
+            if (! extra) return s;
+            used.add(s.section);
+            return { ...s, items: [...s.items, ...extra] };
+        });
+        const leftover = Object.entries(bySection)
+            .filter(([sec]) => ! used.has(sec))
+            .map(([sec, items]) => ({ key: 'lead_custom_' + sec.replace(/\W+/g, '_').toLowerCase(), section: sec, items }));
+
+        return [...merged, ...leftover];
+    }, [lead?.is_immigration_case, lead?.custom_documents]);
+
+    // Folder choices for the "Add document" modal — the standard folders plus
+    // the catch-all "Additional Documents".
+    const folderOptions = React.useMemo(() => {
+        const base = lead?.is_immigration_case
+            ? CHECKLIST.map((s) => s.section)
+            : ['Personal Documents', 'Information Form', 'Offer and Academic Documents', 'Agreements'];
+        return [...base, 'Additional Documents'];
+    }, [lead?.is_immigration_case]);
+
+    // Add / remove a per-lead ad-hoc document.
+    const [addOpen, setAddOpen] = useState(false);
+    const [newDocName, setNewDocName] = useState('');
+    const [newDocSection, setNewDocSection] = useState('');
+    const [addingDoc, setAddingDoc] = useState(false);
+    const openAddDocument = () => { setNewDocName(''); setNewDocSection(''); setAddOpen(true); };
+    const submitAddDocument = (e) => {
+        e?.preventDefault?.();
+        const name = newDocName.trim();
+        if (! name) return;
+        setAddingDoc(true);
+        router.post(`/admin/leads/${lead.id}/documents/custom`, { name, section: newDocSection }, {
+            preserveScroll: true, preserveState: true,
+            onSuccess: () => { setAddOpen(false); setNewDocName(''); },
+            onFinish: () => setAddingDoc(false),
+        });
+    };
+    const removeCustomDocument = (item) => {
+        if (! window.confirm(`Remove "${item.name}" from this lead's documents? Any files already uploaded to it are kept.`)) return;
+        router.delete(`/admin/leads/${lead.id}/documents/custom/${item.id}`, {
+            preserveScroll: true, preserveState: true,
+        });
+    };
+    const duplicateCustomDocument = (item) => {
+        router.post(`/admin/leads/${lead.id}/documents/custom`, {
+            name: item.name,
+            section: item.section || '',
+        }, { preserveScroll: true, preserveState: true });
+    };
+
     // High-level progress strip — count items where the lead has actually
     // uploaded a file, plus the manually-set status counts.
-    const allItems = CHECKLIST.flatMap((s) => s.items);
+    const allItems = sections.flatMap((s) => s.items);
     const total = allItems.length;
     const counts = allItems.reduce((acc, it) => {
         const s = state[it.id]?.status;
@@ -3729,9 +3873,92 @@ function DocumentsPanel({ lead, checklistFiles = {}, orphans = [], currentUser =
                 </div>
             </div>
 
+            {/* Add a per-lead ad-hoc document — a row that only this lead has. */}
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+                <p className="text-[12px] text-gray-500">Need something not on the list? Add a document for this lead only.</p>
+                <button
+                    type="button"
+                    onClick={openAddDocument}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-gray-900 text-white text-[12px] font-semibold hover:bg-black transition-colors"
+                >
+                    <Plus size={14} /> Add document
+                </button>
+            </div>
+
+            {/* Add-document modal — a per-lead ad-hoc requirement. */}
+            {addOpen && (
+                <div
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+                    onMouseDown={(e) => { if (e.target === e.currentTarget) setAddOpen(false); }}
+                >
+                    <form
+                        onSubmit={submitAddDocument}
+                        className="w-full max-w-md bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden"
+                    >
+                        <div className="px-6 py-4 border-b border-gray-100 flex items-center gap-2.5 bg-gray-50/40">
+                            <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-700 flex items-center justify-center">
+                                <FileText size={16} />
+                            </div>
+                            <div>
+                                <h3 className="text-sm font-bold text-gray-900">Add a document</h3>
+                                <p className="text-[11px] text-gray-500 mt-0.5">Added to this lead only — it won't affect any other lead.</p>
+                            </div>
+                            <button type="button" onClick={() => setAddOpen(false)} className="ml-auto w-7 h-7 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 flex items-center justify-center">
+                                <X size={16} />
+                            </button>
+                        </div>
+                        <div className="p-6 space-y-4">
+                            <div>
+                                <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-500 mb-1.5">Folder</label>
+                                <input
+                                    type="text"
+                                    list="lead-doc-folders"
+                                    value={newDocSection}
+                                    onChange={(e) => setNewDocSection(e.target.value)}
+                                    placeholder="e.g. Personal Documents"
+                                    maxLength={120}
+                                    className="w-full px-3.5 py-2.5 rounded-lg border border-gray-200 text-sm text-gray-900 bg-white outline-none focus:border-gray-900 focus:ring-1 focus:ring-gray-900 transition-all"
+                                />
+                                <datalist id="lead-doc-folders">
+                                    {folderOptions.map((f) => (
+                                        <option key={f} value={f} />
+                                    ))}
+                                </datalist>
+                                <p className="text-[10.5px] text-gray-400 mt-1">Type a folder name or pick an existing one. Blank goes to “Additional Documents”.</p>
+                            </div>
+                            <div>
+                                <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-500 mb-1.5">Document name</label>
+                                <input
+                                    type="text"
+                                    autoFocus
+                                    value={newDocName}
+                                    onChange={(e) => setNewDocName(e.target.value)}
+                                    placeholder="e.g. Marriage Certificate"
+                                    maxLength={120}
+                                    className="w-full px-3.5 py-2.5 rounded-lg border border-gray-200 text-sm text-gray-900 outline-none focus:border-gray-900 focus:ring-1 focus:ring-gray-900 transition-all"
+                                />
+                            </div>
+                        </div>
+                        <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-end gap-2 bg-gray-50/40">
+                            <button type="button" onClick={() => setAddOpen(false)} className="px-4 py-2 rounded-lg text-[12px] font-semibold text-gray-600 hover:text-gray-900 hover:bg-gray-100 transition-colors">
+                                Cancel
+                            </button>
+                            <button
+                                type="submit"
+                                disabled={addingDoc || ! newDocName.trim()}
+                                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-gray-900 text-white text-[12px] font-semibold hover:bg-black transition-colors disabled:opacity-50"
+                            >
+                                <Plus size={14} /> {addingDoc ? 'Adding…' : 'Add document'}
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            )}
+
             {/* Single self-contained checklist table — upload, generate,
                 status, notes and per-section verification all happen inline. */}
             <ChecklistTable
+                sections={sections}
                 state={state}
                 checklistFiles={checklistFiles}
                 lead={lead}
@@ -3740,6 +3967,8 @@ function DocumentsPanel({ lead, checklistFiles = {}, orphans = [], currentUser =
                 onVerifySection={saveSectionStatus}
                 hiddenKeys={hiddenKeys}
                 onToggleTrack={toggleTrack}
+                onRemoveCustom={removeCustomDocument}
+                onDuplicateCustom={duplicateCustomDocument}
             />
 
             {/* Legacy uploads — files with no checklist_key. These were

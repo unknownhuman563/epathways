@@ -66,7 +66,7 @@ const categories = [
         icon: Globe,
         label: 'IMMIGRATION',
         image: visaImg,
-        comingSoon: false
+        comingSoon: true
     },
     {
         id: 'accommodation',
@@ -128,17 +128,18 @@ const consultants = {
             // widget. Weekly windows are in the consultant's timezone; the
             // client sees each slot converted to their own.
             timezone: 'Asia/Manila',
-            // 15-min slots, weekdays 10am–6pm — mirrors his Google appointment
-            // schedule (hours aren't API-readable, so keep this in sync if he
-            // changes them there). Busy times are pulled live from his calendar.
+            // 15-min slots, weekdays 11am–6pm — mirrors Emma's Google
+            // appointment schedule (hours aren't API-readable, so keep this in
+            // sync if she changes them there). Busy times are pulled live from
+            // her calendar. Sat/Sun are omitted = unavailable.
             slotMinutes: 15,
             busyUrl: '/booking/busy',
             // end is exclusive of the last start, so 18:15 makes 6:00 PM the
-            // last bookable slot (window 10:00 AM – 6:00 PM inclusive).
+            // last bookable slot (window 11:00 AM – 6:00 PM inclusive).
             availabilityConfig: {
-                mon: { start: '10:00', end: '18:15' }, tue: { start: '10:00', end: '18:15' },
-                wed: { start: '10:00', end: '18:15' }, thu: { start: '10:00', end: '18:15' },
-                fri: { start: '10:00', end: '18:15' },
+                mon: { start: '11:00', end: '18:15' }, tue: { start: '11:00', end: '18:15' },
+                wed: { start: '11:00', end: '18:15' }, thu: { start: '11:00', end: '18:15' },
+                fri: { start: '11:00', end: '18:15' },
             },
         },
         {
@@ -1104,7 +1105,7 @@ export default function BookingPage({ visaTypes = [], availability = {}, booking
                                                                 </div>
                                                                 <div className="flex items-center gap-4">
                                                                     <MessageSquare className="w-5 h-5 text-black" />
-                                                                    <span>+64 21 227 8000 (NZ)</span>
+                                                                    <span>+64 21 227 8000 (WhatsApp)</span>
                                                                 </div>
                                                                 <div className="flex items-center gap-4">
                                                                     <Mail className="w-5 h-5 text-black" />

@@ -115,6 +115,7 @@ class EducationController extends Controller
                 'events' => $this->eventsSummary(),
                 'tabCounts' => $this->leadTabCounts(),
                 'agents' => $this->agentsSummary(),
+                'visaOptions' => $this->visaOptions(),
             ]);
         } catch (\Throwable $e) {
             Log::error('Education leads list failed', ['error' => $e->getMessage()]);

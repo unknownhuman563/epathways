@@ -5,7 +5,6 @@ namespace Tests\Feature\Lead;
 use App\Models\Lead;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
@@ -25,6 +24,7 @@ class PersonalProfileTest extends TestCase
     {
         $user = User::factory()->create(['role' => 'admin']);
         $this->actingAs($user);
+
         return $user;
     }
 
@@ -32,12 +32,29 @@ class PersonalProfileTest extends TestCase
     private function makeLead(array $overrides = []): Lead
     {
         return Lead::create(array_merge([
-            'lead_id'    => 'LP-00001',
+            'lead_id' => 'LP-00001',
             'first_name' => 'Jane',
-            'last_name'  => 'Doe',
-            'email'      => 'jane@example.com',
-            'status'     => 'New Leads',
+            'last_name' => 'Doe',
+            'email' => 'jane@example.com',
+            'status' => 'New Leads',
         ], $overrides));
+    }
+
+    public function test_inline_visa_update_sets_inz_visa_type(): void
+    {
+        $this->actingAsStaff();
+        $lead = $this->makeLead(['inz_visa_type' => null]);
+
+        $this->post("/admin/leads/{$lead->id}/visa", ['inz_visa_type' => 'Tourist Visa'])
+            ->assertRedirect();
+
+        $this->assertSame('Tourist Visa', $lead->fresh()->inz_visa_type);
+
+        // Clearing the dropdown (empty value) nulls it out.
+        $this->post("/admin/leads/{$lead->id}/visa", ['inz_visa_type' => ''])
+            ->assertRedirect();
+
+        $this->assertNull($lead->fresh()->inz_visa_type);
     }
 
     // ─── 1 : migration adds new columns without breaking existing rows ──
@@ -92,23 +109,23 @@ class PersonalProfileTest extends TestCase
         $lead = $this->makeLead();
 
         $payload = [
-            'first_name'        => 'Jane',
+            'first_name' => 'Jane',
             // Section 1
-            'preferred_name'    => 'Janie',
-            'whatsapp'          => '+64210000111',
+            'preferred_name' => 'Janie',
+            'whatsapp' => '+64210000111',
             'residence_address_line_1' => '12 Some Street',
             'residence_address_postcode' => '6011',
             'has_been_in_nz_continuously' => true,
             'nz_continuous_residence_months' => 36,
             // Section 4
-            'preferred_course'  => 'NZ Diploma in IT',
+            'preferred_course' => 'NZ Diploma in IT',
             'preferred_qualification_level' => 'Diploma',
             'english_test_type' => 'PTE',
             'english_test_overall_score' => 58.0,
             // Section 5
-            'funding_source'    => 'Self',
+            'funding_source' => 'Self',
             'estimated_total_cost_nzd' => 25000,
-            'available_funds_nzd'      => 30000,
+            'available_funds_nzd' => 30000,
         ];
 
         $this->post("/admin/leads/{$lead->id}/personal", $payload)
@@ -131,9 +148,9 @@ class PersonalProfileTest extends TestCase
         $lead = $this->makeLead();
 
         $this->post("/admin/leads/{$lead->id}/personal", [
-            'first_name'         => 'Jane',
+            'first_name' => 'Jane',
             'current_salary_nzd' => -100,                              // negative salary
-            'dob'                => now()->addYears(2)->toDateString(), // future DOB
+            'dob' => now()->addYears(2)->toDateString(), // future DOB
         ])
             ->assertSessionHasErrors(['current_salary_nzd', 'dob']);
     }
@@ -146,9 +163,9 @@ class PersonalProfileTest extends TestCase
         $lead = $this->makeLead();
 
         $this->post("/admin/leads/{$lead->id}/personal", [
-            'first_name'       => 'Jane',
-            'has_passport'     => true,
-            'passport_number'  => 'A1234567',
+            'first_name' => 'Jane',
+            'has_passport' => true,
+            'passport_number' => 'A1234567',
         ])->assertSessionHasNoErrors();
 
         // Raw DB column != accessor value — confirms the encrypted cast
@@ -168,7 +185,7 @@ class PersonalProfileTest extends TestCase
         $lead = $this->makeLead();
 
         $this->post("/admin/leads/{$lead->id}/personal", [
-            'first_name'   => 'Jane',
+            'first_name' => 'Jane',
             'has_passport' => true,
             // passport_number intentionally omitted
         ])->assertSessionHasErrors(['passport_number']);
@@ -182,18 +199,18 @@ class PersonalProfileTest extends TestCase
         $lead = $this->makeLead();
 
         $this->post("/admin/leads/{$lead->id}/personal", [
-            'first_name'      => 'Jane',
+            'first_name' => 'Jane',
             'employment_type' => 'Employed',
         ])->assertSessionHasErrors(['current_employer_name']);
 
         $this->post("/admin/leads/{$lead->id}/personal", [
-            'first_name'      => 'Jane',
+            'first_name' => 'Jane',
             'employment_type' => 'Self-employed',
         ])->assertSessionHasErrors(['current_employer_name']);
 
         // 'Unemployed' / 'Student' / 'Retired' do NOT require the field.
         $this->post("/admin/leads/{$lead->id}/personal", [
-            'first_name'      => 'Jane',
+            'first_name' => 'Jane',
             'employment_type' => 'Student',
         ])->assertSessionHasNoErrors();
     }
@@ -206,14 +223,14 @@ class PersonalProfileTest extends TestCase
         $lead = $this->makeLead();
 
         $this->post("/admin/leads/{$lead->id}/personal", [
-            'first_name'              => 'Jane',
-            'has_health_disclosure'   => true,
+            'first_name' => 'Jane',
+            'has_health_disclosure' => true,
             'health_disclosure_notes' => 'too short', // < 10 chars
         ])->assertSessionHasErrors(['health_disclosure_notes']);
 
         $this->post("/admin/leads/{$lead->id}/personal", [
-            'first_name'              => 'Jane',
-            'has_health_disclosure'   => true,
+            'first_name' => 'Jane',
+            'has_health_disclosure' => true,
             'health_disclosure_notes' => 'controlled asthma diagnosed in 2018',
         ])->assertSessionHasNoErrors();
     }
@@ -226,9 +243,9 @@ class PersonalProfileTest extends TestCase
         $lead = $this->makeLead();
 
         $this->post("/admin/leads/{$lead->id}/personal", [
-            'first_name'                  => 'Jane',
-            'has_character_disclosure'    => true,
-            'character_disclosure_notes'  => 'short',
+            'first_name' => 'Jane',
+            'has_character_disclosure' => true,
+            'character_disclosure_notes' => 'short',
         ])->assertSessionHasErrors(['character_disclosure_notes']);
     }
 
@@ -240,7 +257,7 @@ class PersonalProfileTest extends TestCase
         $lead = $this->makeLead();
 
         $this->post("/admin/leads/{$lead->id}/personal", [
-            'first_name'             => 'Jane',
+            'first_name' => 'Jane',
             'has_been_declined_visa' => true,
         ])->assertSessionHasErrors(['declined_visa_details']);
     }
@@ -253,7 +270,7 @@ class PersonalProfileTest extends TestCase
         $lead = $this->makeLead();
 
         $this->post("/admin/leads/{$lead->id}/personal", [
-            'first_name'          => 'Jane',
+            'first_name' => 'Jane',
             'has_criminal_record' => true,
             'criminal_record_details' => 'short',
         ])->assertSessionHasErrors(['criminal_record_details']);
@@ -267,14 +284,14 @@ class PersonalProfileTest extends TestCase
         $lead = $this->makeLead();
 
         $this->post("/admin/leads/{$lead->id}/personal", [
-            'first_name'   => 'Jane',
+            'first_name' => 'Jane',
             'has_children' => true,
             // number_of_children omitted (default 0 == invalid)
         ])->assertSessionHasErrors(['number_of_children']);
 
         $this->post("/admin/leads/{$lead->id}/personal", [
-            'first_name'         => 'Jane',
-            'has_children'       => true,
+            'first_name' => 'Jane',
+            'has_children' => true,
             'number_of_children' => 2,
         ])->assertSessionHasNoErrors();
     }
@@ -286,13 +303,13 @@ class PersonalProfileTest extends TestCase
         $this->actingAsStaff();
         $lead = $this->makeLead([
             'preferred_course' => 'NZ Diploma in IT', // populated by sec 4
-            'funding_source'   => 'Self',             // populated by sec 5
+            'funding_source' => 'Self',             // populated by sec 5
         ]);
 
         // Save only Section 1 — sibling sections must stay untouched.
         $this->post("/admin/leads/{$lead->id}/personal", [
-            'first_name'    => 'Jane',
-            'preferred_name'=> 'JJ',
+            'first_name' => 'Jane',
+            'preferred_name' => 'JJ',
         ])->assertSessionHasNoErrors();
 
         $lead->refresh();
@@ -308,15 +325,15 @@ class PersonalProfileTest extends TestCase
         $this->actingAsStaff();
         $lead = $this->makeLead([
             'preferred_name' => 'JJ',
-            'citizenship'    => 'New Zealand',
+            'citizenship' => 'New Zealand',
         ]);
 
         $this->post("/admin/leads/{$lead->id}/personal", [
-            'first_name'                     => 'Jane',
-            'employment_type'                => 'Employed',
-            'current_employer_name'          => 'Acme Co',
-            'current_position_title'         => 'Engineer',
-            'years_of_relevant_experience'   => 7,
+            'first_name' => 'Jane',
+            'employment_type' => 'Employed',
+            'current_employer_name' => 'Acme Co',
+            'current_position_title' => 'Engineer',
+            'years_of_relevant_experience' => 7,
         ])->assertSessionHasNoErrors();
 
         $lead->refresh();
@@ -364,7 +381,7 @@ class PersonalProfileTest extends TestCase
 
     public function test_17_has_current_nz_visa_accessor(): void
     {
-        $with    = $this->makeLead(['lead_id' => 'LP-W', 'current_nz_visa_type' => 'AEWV']);
+        $with = $this->makeLead(['lead_id' => 'LP-W', 'current_nz_visa_type' => 'AEWV']);
         $without = $this->makeLead(['lead_id' => 'LP-X', 'current_nz_visa_type' => null]);
 
         $this->assertTrue($with->has_current_nz_visa);
@@ -385,7 +402,7 @@ class PersonalProfileTest extends TestCase
         $before = DB::table('activity_logs')->count();
 
         $this->post("/admin/leads/{$lead->id}/personal", [
-            'first_name'     => 'Jane',
+            'first_name' => 'Jane',
             'preferred_name' => 'JJ',
         ])->assertSessionHasNoErrors();
 
@@ -404,7 +421,7 @@ class PersonalProfileTest extends TestCase
         // Confirms the Lead model still loads with all its existing
         // fillable + relations after the wide-column build.
         $lead = $this->makeLead([
-            'is_immigration_case'      => true,
+            'is_immigration_case' => true,
             'immigration_converted_at' => now(),
         ]);
         $this->assertTrue((bool) $lead->is_immigration_case);
@@ -417,8 +434,8 @@ class PersonalProfileTest extends TestCase
     public function test_20_tracking_page_renders_with_wide_profile(): void
     {
         $lead = $this->makeLead([
-            'tracking_code'   => 'EP-TEST1234',
-            'preferred_name'  => 'JJ',
+            'tracking_code' => 'EP-TEST1234',
+            'preferred_name' => 'JJ',
             'highest_qualification' => 'Bachelor',
         ]);
 
@@ -449,43 +466,43 @@ class PersonalProfileTest extends TestCase
         $lead = $this->makeLead();
 
         $rich = [
-            'first_name'                    => 'Jane',
+            'first_name' => 'Jane',
             // Section 1 + 2
-            'preferred_name'                => 'Janie',
-            'dob'                           => '1995-05-05',
-            'whatsapp'                      => '+64210000111',
-            'has_passport'                  => true,
-            'passport_number'               => 'A1234567',
-            'passport_issuing_country'      => 'India',
-            'passport_issue_date'           => '2020-01-01',
-            'passport_expiry'               => '2030-01-01',
+            'preferred_name' => 'Janie',
+            'dob' => '1995-05-05',
+            'whatsapp' => '+64210000111',
+            'has_passport' => true,
+            'passport_number' => 'A1234567',
+            'passport_issuing_country' => 'India',
+            'passport_issue_date' => '2020-01-01',
+            'passport_expiry' => '2030-01-01',
             // Section 3
-            'current_nz_visa_type'          => 'AEWV',
-            'current_nz_visa_number'        => 'VISA-123-456',
+            'current_nz_visa_type' => 'AEWV',
+            'current_nz_visa_number' => 'VISA-123-456',
             // Section 4
-            'preferred_course'              => 'NZ Diploma in IT',
-            'english_test_type'             => 'PTE',
-            'english_test_overall_score'    => 58.5,
+            'preferred_course' => 'NZ Diploma in IT',
+            'english_test_type' => 'PTE',
+            'english_test_overall_score' => 58.5,
             // Section 5
-            'funding_source'                => 'Mixed',
-            'estimated_total_cost_nzd'      => 25000.00,
-            'annual_income_nzd'             => 75000,
-            'annual_income_currency'        => 'NZD',
+            'funding_source' => 'Mixed',
+            'estimated_total_cost_nzd' => 25000.00,
+            'annual_income_nzd' => 75000,
+            'annual_income_currency' => 'NZD',
             // Section 6
-            'employment_type'               => 'Employed',
-            'current_employer_name'         => 'Acme Co',
+            'employment_type' => 'Employed',
+            'current_employer_name' => 'Acme Co',
             'current_employment_start_date' => '2022-02-01',
-            'has_anzsco_listed_role'        => true,
-            'anzsco_code'                   => '261313',
+            'has_anzsco_listed_role' => true,
+            'anzsco_code' => '261313',
             // Section 7
-            'highest_qualification'         => 'Bachelor',
+            'highest_qualification' => 'Bachelor',
             'highest_qualification_year_completed' => 2017,
             // Section 8
-            'has_children'                  => true,
-            'number_of_children'            => 2,
+            'has_children' => true,
+            'number_of_children' => 2,
             // Section 9
-            'has_health_disclosure'         => true,
-            'health_disclosure_notes'       => 'controlled asthma diagnosed in 2018',
+            'has_health_disclosure' => true,
+            'health_disclosure_notes' => 'controlled asthma diagnosed in 2018',
         ];
 
         $this->post("/admin/leads/{$lead->id}/personal", $rich)
@@ -528,17 +545,17 @@ class PersonalProfileTest extends TestCase
         $lead = $this->makeLead();
 
         $payload = [
-            'first_name'                   => 'Jane',
+            'first_name' => 'Jane',
             // New AEWV employer-contact columns
-            'employment_type'              => 'Employed',
-            'current_employer_name'        => 'Test Co',
-            'current_employer_phone'       => '+64 9 555 1234',
-            'current_employer_email'       => 'hr@testco.co.nz',
+            'employment_type' => 'Employed',
+            'current_employer_name' => 'Test Co',
+            'current_employer_phone' => '+64 9 555 1234',
+            'current_employer_email' => 'hr@testco.co.nz',
             // New PRV-specific column
             'meets_184_day_rule_two_years' => true,
             // New free-text placeholder for per-child rows
-            'has_children'             => true,
-            'number_of_children'       => 1,
+            'has_children' => true,
+            'number_of_children' => 1,
             'dependent_children_notes' => 'Liam Doe — DOB 2018-03-15, NZ citizen by descent, no passport yet.',
         ];
 
@@ -560,7 +577,7 @@ class PersonalProfileTest extends TestCase
         $lead = $this->makeLead();
 
         $this->post("/admin/leads/{$lead->id}/personal", [
-            'first_name'             => 'Jane',
+            'first_name' => 'Jane',
             'current_employer_email' => 'not-an-email',
         ])->assertSessionHasErrors(['current_employer_email']);
     }

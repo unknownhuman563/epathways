@@ -162,7 +162,7 @@ const PAGE_SIZE = 20;
 // prop is missing.
 const PORTAL_LABEL = { sales: "Sales", education: "Education", immigration: "Immigration", admin: "Admin" };
 
-export default function SalesLeads({ leads = [], statuses = [], programs = [], staffOptions = [], events = [], allTagNames = [], tabCounts = {}, agents = [], portal = "sales", portalBase: portalBaseProp }) {
+export default function SalesLeads({ leads = [], statuses = [], programs = [], staffOptions = [], events = [], allTagNames = [], tabCounts = {}, agents = [], visaOptions = [], portal = "sales", portalBase: portalBaseProp }) {
     // Department portals live at /portal/{role}; the admin screen reuses this
     // exact component but is served from /admin, so it passes its own base.
     const portalBase = portalBaseProp || `/portal/${portal}`;
@@ -313,6 +313,20 @@ export default function SalesLeads({ leads = [], statuses = [], programs = [], s
         setSavingId(lead.id);
         router.post(`${portalBase}/leads/${lead.id}`, { status }, {
             preserveScroll: true,
+            onFinish: () => setSavingId(null),
+        });
+    };
+
+    // Inline "Visa applying for" change from the leads table. Posts only the
+    // visa string (interest/intent — not an immigration case link). No-op when
+    // unchanged.
+    const changeVisa = (lead, visa) => {
+        const next = visa || null;
+        if ((lead.visa || null) === next) return;
+        setSavingId(lead.id);
+        router.post(`${portalBase}/leads/${lead.id}/visa`, { inz_visa_type: next }, {
+            preserveScroll: true,
+            preserveState: true,
             onFinish: () => setSavingId(null),
         });
     };
@@ -543,6 +557,7 @@ export default function SalesLeads({ leads = [], statuses = [], programs = [], s
                                 <th className="px-3 py-3">Location</th>
                                 <th className="px-3 py-3">Agent</th>
                                 <th className="px-3 py-3">Docs</th>
+                                <th className="px-3 py-3 w-[160px]">Visa</th>
                                 <SortableTh label="Updated" sortKey="updated_at" current={sortKey} dir={sortDir} onSort={toggleSort} />
                                 <th className="px-3 py-3 text-right pr-4">Actions</th>
                             </tr>
@@ -550,7 +565,7 @@ export default function SalesLeads({ leads = [], statuses = [], programs = [], s
                         <tbody className="divide-y divide-gray-100">
                             {paged.length === 0 ? (
                                 <tr>
-                                    <td colSpan={10} className="px-6 py-20 text-center">
+                                    <td colSpan={11} className="px-6 py-20 text-center">
                                         <div className="flex flex-col items-center gap-2 text-gray-400">
                                             <Search size={22} />
                                             <p className="text-sm font-medium">No leads match your filters</p>
@@ -726,6 +741,15 @@ export default function SalesLeads({ leads = [], statuses = [], programs = [], s
                                             )}
                                         </td>
 
+                                        {/* VISA — the applicant's selected "Visa applying for"
+                                            (interest/intent). Inline dropdown of the active
+                                            visa catalogue; saving updates leads.inz_visa_type.
+                                            Does NOT drive the tracker's document checklist —
+                                            education/general leads always get the 16-doc set. */}
+                                        <td className="px-3 py-2.5 w-[160px]">
+                                            <VisaCell lead={l} options={visaOptions} onChange={changeVisa} disabled={isSaving} />
+                                        </td>
+
                                         {/* UPDATED — the last staff activity on this lead:
                                             when, who, and what they changed. */}
                                         <td className="px-3 py-2.5 whitespace-nowrap">
@@ -776,7 +800,7 @@ export default function SalesLeads({ leads = [], statuses = [], programs = [], s
                                         live here so the table itself stays compact. */}
                                     {isExpanded && (
                                         <tr className="bg-blue-50/20 border-t border-blue-100/60">
-                                            <td colSpan={10} className="px-6 py-4">
+                                            <td colSpan={11} className="px-6 py-4">
                                                 <LeadDashboardPanel lead={l} goalChipClass={goalChipClass} portalBase={portalBase} staffOptions={staffOptions} />
                                             </td>
                                         </tr>
@@ -2737,6 +2761,35 @@ function PriorityField({ lead }) {
                 </select>
             </div>
         </div>
+    );
+}
+
+// ── Visa cell — inline "Visa applying for" dropdown ────────────────────────
+// A compact native <select> of the active visa catalogue. The lead's current
+// value is always selectable even when it's a free-text "Other" visa not in
+// the catalogue, so saving never silently drops it.
+function VisaCell({ lead, options = [], onChange, disabled = false }) {
+    const current = lead.visa || "";
+    // Fold the current value in if the catalogue doesn't contain it.
+    const opts = current && ! options.includes(current) ? [current, ...options] : options;
+    return (
+        <select
+            value={current}
+            disabled={disabled}
+            onClick={(e) => e.stopPropagation()}
+            onChange={(e) => onChange(lead, e.target.value)}
+            title={current || "No visa selected"}
+            className={`w-[150px] truncate text-[11px] rounded-md border px-2 py-1.5 outline-none transition-colors cursor-pointer disabled:opacity-50 ${
+                current
+                    ? "border-blue-200 bg-blue-50 text-blue-700 font-semibold"
+                    : "border-gray-200 bg-white text-gray-400"
+            }`}
+        >
+            <option value="">—</option>
+            {opts.map((v) => (
+                <option key={v} value={v}>{v}</option>
+            ))}
+        </select>
     );
 }
 

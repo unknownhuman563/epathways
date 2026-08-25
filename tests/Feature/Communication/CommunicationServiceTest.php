@@ -30,8 +30,13 @@ class CommunicationServiceTest extends TestCase
     /** Bind an SMS provider that always succeeds (Twilio-accepted). */
     private function fakeSmsOk(): void
     {
-        $this->app->instance(SmsProvider::class, new class implements SmsProvider {
-            public function isConfigured(): bool { return true; }
+        $this->app->instance(SmsProvider::class, new class implements SmsProvider
+        {
+            public function isConfigured(): bool
+            {
+                return true;
+            }
+
             public function send(string $to, string $body): array
             {
                 return ['ok' => true, 'message_id' => 'SM_FAKE_123', 'status' => 'queued', 'error' => null];
@@ -133,7 +138,7 @@ class CommunicationServiceTest extends TestCase
         $lead = $this->lead(['event_id' => $event->id]);
         $this->template([
             'channels' => ['email'],
-            'email_body' => 'Event: {{event_name}}, Date: {{event_date}}, Location: {{event_location}}'
+            'email_body' => 'Event: {{event_name}}, Date: {{event_date}}, Location: {{event_location}}',
         ]);
 
         $res = $this->service()->sendTemplated('tmpl', $lead);
@@ -149,6 +154,37 @@ class CommunicationServiceTest extends TestCase
         $res = $this->service()->sendTemplated('tmpl', $this->lead());
 
         $this->assertSame('A  B', $res['email']->body); // token removed, no crash
+    }
+
+    public function test_malformed_html_wrapped_token_still_resolves_and_leaves_no_braces(): void
+    {
+        // A rich-text editor injected markup inside the token. It must still
+        // resolve to the first name, and NO {{ }} may survive into the body
+        // (that's what broke Brevo's parser: "Error … near '<'").
+        $this->template([
+            'channels' => ['email'],
+            'email_subject' => '{{first.name}}, welcome',
+            'email_body' => 'Kia Ora, {{<strong>first</strong>.name}}! Also {{a b c}} end.',
+        ]);
+
+        $res = $this->service()->sendTemplated('tmpl', $this->lead(['first_name' => 'Haseeb']));
+
+        $this->assertSame('Haseeb, welcome', $res['email']->subject);
+        $this->assertStringContainsString('Kia Ora, Haseeb!', $res['email']->body);
+        $this->assertStringNotContainsString('{{', $res['email']->body);
+        $this->assertStringNotContainsString('}}', $res['email']->body);
+    }
+
+    public function test_program_options_html_is_not_escaped(): void
+    {
+        // Server-built HTML block must render as markup, not escaped text.
+        $this->template(['channels' => ['email'], 'email_body' => 'Programs: {{program_options}}']);
+        $res = $this->service()->sendTemplated('tmpl', $this->lead(), [
+            'program_options' => '<p><strong>Option 1:</strong> BSc Nursing</p>',
+        ]);
+
+        $this->assertStringContainsString('<p><strong>Option 1:</strong> BSc Nursing</p>', $res['email']->body);
+        $this->assertStringNotContainsString('&lt;p&gt;', $res['email']->body);
     }
 
     public function test_invalid_phone_logs_failed_sms(): void

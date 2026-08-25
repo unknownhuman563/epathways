@@ -61,7 +61,7 @@ class TrackerAccessTest extends TestCase
     {
         $lead = $this->lead([
             'passport_number' => 'P9999999',
-            'email'           => 'secret@example.com',
+            'email' => 'secret@example.com',
         ]);
 
         $this->get("/track/{$lead->tracking_code}")->assertOk();
@@ -71,6 +71,46 @@ class TrackerAccessTest extends TestCase
 
         $this->assertStringNotContainsString('P9999999', $serialized);
         $this->assertStringNotContainsString('secret@example.com', $serialized);
+    }
+
+    public function test_general_lead_with_picked_visa_still_gets_document_checklist(): void
+    {
+        // A registration/education lead is NOT an immigration case. Even when
+        // it carries an inz_visa_type (the "Visa applying for" they picked),
+        // the tracker must show the general Document Checklist (the 4 ordered
+        // sections), NOT the immigration visa's own checklist — while the
+        // header label reflects the picked visa.
+        $lead = $this->lead([
+            'is_immigration_case' => false,
+            'inz_visa_type' => 'Tourist Visa',
+        ]);
+
+        $this->get("/track/{$lead->tracking_code}")
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->component('track/TrackingPage')
+                // Label reflects the selected visa …
+                ->where('visa.name', 'Tourist Visa')
+                // … but the requirement sections are the general 4, in order.
+                ->where('visa.section_order', [
+                    'Personal Documents',
+                    'Information Form',
+                    'Offer and Academic Documents',
+                    'Agreements',
+                ])
+            );
+    }
+
+    public function test_general_lead_without_visa_shows_document_checklist_label(): void
+    {
+        $lead = $this->lead(['is_immigration_case' => false]);
+
+        $this->get("/track/{$lead->tracking_code}")
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->component('track/TrackingPage')
+                ->where('visa.name', 'Document Checklist')
+            );
     }
 
     public function test_repeat_visits_within_window_do_not_spam_the_log(): void

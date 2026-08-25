@@ -248,6 +248,9 @@ class Lead extends Model
         'calendar_date', 'client_info_link', 'call_update_form_link',
         'document_checklist',
         'hidden_track_documents',
+        // Per-lead ad-hoc document rows [{key, name}] added on the Documents
+        // tab — scoped to this one lead, uploaded against by a custom.* key.
+        'custom_documents',
         // Up to 3 program IDs staff have proposed for this lead — drives
         // the "Proposal" tab on the Proposal & Agreements page and the
         // program shortlist rendered on the tracker.
@@ -375,6 +378,7 @@ class Lead extends Model
         'calendar_date' => 'date',
         'document_checklist' => 'array',
         'hidden_track_documents' => 'array',
+        'custom_documents' => 'array',
         'proposed_program_ids' => 'array',
         'preferred_program_chosen_at' => 'datetime',
         'section_verifications' => 'array',
@@ -844,6 +848,19 @@ class Lead extends Model
     public function documents()
     {
         return $this->hasMany(LeadDocument::class);
+    }
+
+    /**
+     * Version history of program proposals. The newest row is the active
+     * shortlist (mirrors proposed_program_ids); older rows are kept so a new
+     * proposal never discards the previous one.
+     */
+    public function proposals()
+    {
+        // Newest first. Order by id (not created_at) so versions saved in the
+        // same second — e.g. a restore that backfills then snapshots — still
+        // order deterministically by insertion.
+        return $this->hasMany(LeadProposal::class)->orderByDesc('id');
     }
 
     /**

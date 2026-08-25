@@ -66,6 +66,7 @@ class LeadController extends Controller
                 'events' => $this->eventsSummary(),
                 'tabCounts' => $this->leadTabCounts(),
                 'agents' => $this->agentsSummary(),
+                'visaOptions' => $this->visaOptions(),
             ]);
         } catch (\Throwable $e) {
             Log::error('Admin leads list failed', ['error' => $e->getMessage()]);
@@ -166,6 +167,33 @@ class LeadController extends Controller
             Log::error('Admin lead status update failed', ['id' => $id, 'error' => $e->getMessage()]);
 
             return back()->with('error', 'Could not update that lead. Please try again.');
+        }
+    }
+
+    /**
+     * Inline "Visa applying for" update from the Leads table dropdown. Sets
+     * leads.inz_visa_type (the applicant's interest/intent — not an immigration
+     * case link). Shared by the admin + sales/education/immigration portals,
+     * which all render the same Leads.jsx.
+     */
+    public function updateLeadVisa(Request $request, $id)
+    {
+        $validated = $request->validate([
+            'inz_visa_type' => 'nullable|string|max:120',
+        ]);
+
+        try {
+            $lead = Lead::findOrFail($id);
+            $lead->inz_visa_type = ($validated['inz_visa_type'] ?? '') !== ''
+                ? $validated['inz_visa_type']
+                : null;
+            $lead->save();
+
+            return back()->with('success', "Lead {$lead->lead_id} visa updated.");
+        } catch (\Throwable $e) {
+            Log::error('Lead visa update failed', ['id' => $id, 'error' => $e->getMessage()]);
+
+            return back()->with('error', 'Could not update the visa. Please try again.');
         }
     }
 
@@ -674,36 +702,12 @@ class LeadController extends Controller
 
             // 3b. Store Education Enrolment document uploads (CV / Passport /
             // Diploma / Transcript). Each lead gets its own folder on the
-            // private disk (client documents — never world-readable); the
-            // stored paths are merged into education_notes so the existing
-            // JSON column carries them — no migration needed.
-            $docMap = [
-                'cv_files' => 'cv',
-                'passport_files' => 'passport',
-                'diploma_files' => 'diploma',
-                'transcript_files' => 'transcript',
-            ];
-            $uploaded = [];
-            foreach ($docMap as $field => $folder) {
-                if (! $request->hasFile($field)) {
-                    continue;
-                }
-                foreach ((array) $request->file($field) as $uploadedFile) {
-                    if (! $uploadedFile) {
-                        continue;
-                    }
-                    $uploaded[$folder][] = $uploadedFile->store(
-                        "enrolment-docs/{$lead->lead_id}/{$folder}",
-                        'local'
-                    );
-                }
-            }
-            if (! empty($uploaded)) {
-                $notes = $lead->education_notes ?? [];
-                $notes['uploaded_files'] = $uploaded;
-                $lead->update(['education_notes' => $notes]);
-                $lead = $lead->fresh();
-            }
+            // private disk (client documents — never world-readable); each file
+            // is also recorded as a checklist-keyed LeadDocument so it appears
+            // in the staff Documents tab + client tracker, not just the
+            // education_notes JSON bucket.
+            $this->persistEnrolmentUploads($lead, $request);
+            $lead = $lead->fresh();
 
             // 4. Relational Data Mapping: Study Plans. updateOrCreate keeps a
             // single canonical plan per lead so re-submissions enrich it
@@ -854,6 +858,59 @@ class LeadController extends Controller
     }
 
     /**
+     * Enrolment-doc uploads (CV / Passport / Diploma / Transcript) shared by
+     * the Free Assessment and Registration intakes. Each file is stored on the
+     * private disk AND recorded as a checklist-keyed LeadDocument so it shows
+     * in the staff Documents tab + client tracker (the tab renders LeadDocument
+     * rows — a path in education_notes alone never surfaces). The
+     * education_notes['uploaded_files'] bucket is kept in sync for
+     * backward-compat with anything still reading it.
+     */
+    private function persistEnrolmentUploads(Lead $lead, \Illuminate\Http\Request $request): void
+    {
+        // field => [private-disk folder, checklist_key it maps to]
+        $docMap = [
+            'cv_files' => ['folder' => 'cv', 'key' => 'acad.cv'],
+            'passport_files' => ['folder' => 'passport', 'key' => 'pers.passport'],
+            'diploma_files' => ['folder' => 'diploma', 'key' => 'acad.degree_diploma'],
+            'transcript_files' => ['folder' => 'transcript', 'key' => 'acad.transcript'],
+        ];
+        $uploaded = [];
+        foreach ($docMap as $field => $meta) {
+            if (! $request->hasFile($field)) {
+                continue;
+            }
+            foreach ((array) $request->file($field) as $uploadedFile) {
+                if (! $uploadedFile) {
+                    continue;
+                }
+                // Capture client metadata before store() moves the temp file.
+                $originalName = $uploadedFile->getClientOriginalName();
+                $mime = $uploadedFile->getClientMimeType();
+                $size = $uploadedFile->getSize();
+                $path = $uploadedFile->store("enrolment-docs/{$lead->lead_id}/{$meta['folder']}", 'local');
+                $uploaded[$meta['folder']][] = $path;
+
+                \App\Models\LeadDocument::create([
+                    'lead_id' => $lead->id,
+                    'checklist_key' => $meta['key'],
+                    'original_name' => $originalName,
+                    'file_path' => $path,
+                    'mime' => $mime,
+                    'size' => $size,
+                    'status' => \App\Models\LeadDocument::STATUS_SUBMITTED,
+                    'source' => \App\Models\LeadDocument::SOURCE_UPLOAD,
+                ]);
+            }
+        }
+        if (! empty($uploaded)) {
+            $notes = $lead->education_notes ?? [];
+            $notes['uploaded_files'] = $uploaded;
+            $lead->update(['education_notes' => $notes]);
+        }
+    }
+
+    /**
      * Store a Quick Registration. Mirrors storeFreeAssessment's lead +
      * study-plan + education creation, but with lenient validation (only the
      * essentials are required) and source='registration'. Still queues the AI
@@ -977,6 +1034,47 @@ class LeadController extends Controller
             // Capture BEFORE the follow-up ->update()/->fresh() calls reset it.
             $isNewRegistration = $existing->wasRecentlyCreated;
 
+            // Partner / spouse + children live in the family_info JSON using the
+            // FLAT keys the lead-details profile reads (partner_name, partner_age,
+            // …). Only populate them when the applicant is Married — a Single
+            // registrant (or one switching back to Single) must not surface a
+            // partner card, so we strip those keys either way and re-add them
+            // only when married. Other family_info data (e.g. imported intent
+            // fields) is preserved by merging onto the existing bag.
+            $isMarried = strcasecmp((string) ($data['marital_status'] ?? ''), 'Married') === 0;
+            $familyInfo = is_array($existing->family_info) ? $existing->family_info : [];
+            unset($familyInfo['partner']); // drop the legacy nested shape
+            foreach ([
+                'partner_name', 'partner_age', 'partner_education', 'partner_education_other',
+                'partner_work_experience', 'partner_years_experience',
+                'number_of_children', 'children_ages', 'will_bring_children', 'will_bring_children_other',
+            ] as $k) {
+                unset($familyInfo[$k]);
+            }
+            if ($isMarried) {
+                $partnerBag = [
+                    'partner_name' => $data['partner_full_name'] ?? null,
+                    'partner_age' => $data['partner_age'] ?? null,
+                    'partner_education' => ($data['partner_education_level'] ?? null) === 'Other'
+                        ? ($data['partner_education_level_other'] ?? 'Other')
+                        : ($data['partner_education_level'] ?? null),
+                    'partner_work_experience' => $data['partner_work_experience'] ?? null,
+                    'partner_years_experience' => $data['partner_years_experience'] ?? null,
+                    // Children — the registration form only collects these when married.
+                    'number_of_children' => $data['number_of_children'] ?? null,
+                    'children_ages' => $data['children_ages'] ?? null,
+                    'will_bring_children' => ($data['bring_children'] ?? null) === 'Other'
+                        ? ($data['bring_children_other'] ?? 'Other')
+                        : ($data['bring_children'] ?? null),
+                ];
+                // Keep only fields the applicant actually filled so the profile's
+                // has()-gated Partner / Children cards don't render half-empty.
+                $familyInfo = array_merge($familyInfo, array_filter(
+                    $partnerBag,
+                    fn ($v) => $v !== null && $v !== ''
+                ));
+            }
+
             $existing->update([
                 'lead_id' => str_starts_with((string) $existing->lead_id, 'REG-')
                     ? $existing->lead_id
@@ -1019,7 +1117,7 @@ class LeadController extends Controller
                 'has_children' => ! empty($data['number_of_children']),
                 'dependent_children_notes' => $data['children_ages'] ?? null,
                 'intends_to_bring_family' => ($data['bring_children'] ?? null) === 'Yes',
-                'has_dependent_partner' => ($data['marital_status'] ?? null) === 'Married',
+                'has_dependent_partner' => $isMarried,
                 'financial_info' => $data['financial_info'] ?? null,
                 'work_info' => $data['work_experience'] ?? null,
                 'gap_explanation' => $data['gap_explanation'] ?? null,
@@ -1028,20 +1126,10 @@ class LeadController extends Controller
                 'highest_qualification' => ! empty($data['highest_attainment'])
                     ? $data['highest_attainment']
                     : ($existing->highest_qualification ?? null),
-                // Partner / spouse — no dedicated columns exist, so the details
-                // live in the existing family_info JSON. (Children reuse the
-                // number_of_children / dependent_children_notes columns above.)
-                'family_info' => [
-                    'partner' => [
-                        'full_name' => $data['partner_full_name'] ?? null,
-                        'age' => $data['partner_age'] ?? null,
-                        'education_level' => ($data['partner_education_level'] ?? null) === 'Other'
-                            ? ($data['partner_education_level_other'] ?? 'Other')
-                            : ($data['partner_education_level'] ?? null),
-                        'work_experience' => $data['partner_work_experience'] ?? null,
-                        'years_experience' => $data['partner_years_experience'] ?? null,
-                    ],
-                ],
+                // Partner / spouse + children — flat family_info keys the
+                // lead-details profile reads, populated only when Married
+                // (built above as $familyInfo).
+                'family_info' => $familyInfo,
                 'education_notes' => [
                     'high_school_completed' => $data['high_school_completed'] ?? 'No',
                     'high_school_level' => $data['high_school_level'] ?? null,
@@ -1072,32 +1160,11 @@ class LeadController extends Controller
             ]);
             $lead = $existing->fresh();
 
-            // CV / Passport / Diploma / Transcript uploads — same per-lead
-            // folder pattern as the assessment, paths merged into education_notes.
-            $docMap = [
-                'cv_files' => 'cv',
-                'passport_files' => 'passport',
-                'diploma_files' => 'diploma',
-                'transcript_files' => 'transcript',
-            ];
-            $uploaded = [];
-            foreach ($docMap as $field => $folder) {
-                if (! $request->hasFile($field)) {
-                    continue;
-                }
-                foreach ((array) $request->file($field) as $uploadedFile) {
-                    if (! $uploadedFile) {
-                        continue;
-                    }
-                    $uploaded[$folder][] = $uploadedFile->store("enrolment-docs/{$lead->lead_id}/{$folder}", 'local');
-                }
-            }
-            if (! empty($uploaded)) {
-                $notes = $lead->education_notes ?? [];
-                $notes['uploaded_files'] = $uploaded;
-                $lead->update(['education_notes' => $notes]);
-                $lead = $lead->fresh();
-            }
+            // CV / Passport / Diploma / Transcript uploads — stored on the
+            // private disk AND recorded as checklist-keyed LeadDocument rows so
+            // they surface in the Documents tab (not just education_notes).
+            $this->persistEnrolmentUploads($lead, $request);
+            $lead = $lead->fresh();
 
             if (! empty($data['study_plans'])) {
                 $plans = $data['study_plans'];
@@ -1849,6 +1916,9 @@ class LeadController extends Controller
             'current_nz_visa_issued_date' => 'nullable|date',
             'current_nz_visa_expiry_date' => 'nullable|date',
             'previous_nz_visa_type' => 'nullable|string|max:120',
+            // Visa the applicant is applying/interested in — captured at
+            // registration ("Visa applying for"), editable here for all leads.
+            'inz_visa_type' => 'nullable|string|max:120',
 
             // ── Section 4 · Study plans ──────────────────────────────
             'preferred_course' => 'nullable|string|max:200',

@@ -66,16 +66,19 @@ class DefaultMessageTemplatesSeeder extends Seeder
             [
                 'key' => 'program_proposal',
                 'name' => 'Study Proposal',
-                'description' => 'Sent from Proposal & Agreements → Notify. Presents the up-to-3 suggested programs and the ePathways study-support pitch.',
+                'description' => 'Sent from Proposal & Agreements → Notify. Presents the selected programs (only the ones chosen — 1 to 5) and the ePathways study-support pitch.',
                 'channels' => ['email'],
                 'email_subject' => 'Proposal for Study Options in New Zealand — ePathways',
                 'from_email' => 'hello@epathways.ph',
                 'from_name' => 'ePathways Philippines',
                 'email_body' => $this->studyProposalBody(),
                 'variables_documented' => array_merge($standardVars, [
-                    ['name' => 'program_1', 'description' => 'First suggested program (title · level · fee)'],
-                    ['name' => 'program_2', 'description' => 'Second suggested program (blank if none)'],
-                    ['name' => 'program_3', 'description' => 'Third suggested program (blank if none)'],
+                    ['name' => 'program_options', 'description' => 'The whole Recommended Programs block — one "Option N" line per SELECTED program only (recommended; use this instead of the numbered ones)'],
+                    ['name' => 'program_1', 'description' => 'First selected program (title · level · fee) — blank if none'],
+                    ['name' => 'program_2', 'description' => 'Second selected program — blank if none'],
+                    ['name' => 'program_3', 'description' => 'Third selected program — blank if none'],
+                    ['name' => 'program_4', 'description' => 'Fourth selected program — blank if none'],
+                    ['name' => 'program_5', 'description' => 'Fifth selected program — blank if none'],
                 ]),
             ],
             [
@@ -133,9 +136,7 @@ class DefaultMessageTemplatesSeeder extends Seeder
 <li><strong>Pathway to Residency</strong> &mdash; Study pathways can support long-term migration goals, including potential eligibility for residency under relevant immigration categories.</li>
 </ul>
 <p style="font-weight:700;color:#2e7d32;font-size:15px;margin-top:22px;">Recommended Programs</p>
-<p style="margin:4px 0;"><strong>Option 1:</strong> {{program_1}}</p>
-<p style="margin:4px 0;"><strong>Option 2:</strong> {{program_2}}</p>
-<p style="margin:4px 0;"><strong>Option 3:</strong> {{program_3}}</p>
+{{program_options}}
 <p style="font-weight:700;color:#2e7d32;font-size:15px;margin-top:22px;">Why Choose ePathways?</p>
 <p>At ePathways, we go beyond just processing applications &mdash; we provide <strong>end-to-end personalised support</strong> to ensure a smooth and successful journey to New Zealand.</p>
 <p style="margin-bottom:4px;"><strong>We offer:</strong></p>

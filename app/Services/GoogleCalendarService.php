@@ -78,7 +78,7 @@ class GoogleCalendarService
 
         // Anchor the event to the timezone the client booked in, so the invite
         // is self-describing (same absolute instant, meaningful wall time).
-        $tz = $booking->client_timezone ?: 'UTC';
+        $tz = $this->canonicalTimezone($booking->client_timezone);
         $start = Carbon::parse($booking->appointment_at)->setTimezone($tz);
         $duration = (int) config('services.google_calendar.default_duration', 30);
         $end = (clone $start)->addMinutes($duration > 0 ? $duration : 30);
@@ -104,22 +104,125 @@ class GoogleCalendarService
         $event->setConferenceData($conference);
 
         try {
+            $calendarId = (string) config('services.google_calendar.calendar_id', 'primary');
             $created = $this->calendar()->events->insert(
-                (string) config('services.google_calendar.calendar_id', 'primary'),
+                $calendarId,
                 $event,
                 ['conferenceDataVersion' => 1, 'sendUpdates' => 'all'],
             );
 
+            // The Meet conference is created ASYNCHRONOUSLY: the insert response
+            // usually comes back with conferenceData.status = 'pending' and NO
+            // link yet. Re-GET the event once to pick up the resolved link, and
+            // read it from conferenceData.entryPoints (not just the legacy
+            // hangoutLink), so the Meet URL isn't lost to a too-early read.
+            $meet = $this->extractMeetLink($created);
+            $status = optional(optional(optional($created->getConferenceData())->getCreateRequest())->getStatus())->getStatusCode();
+            if (blank($meet)) {
+                try {
+                    $refetched = $this->calendar()->events->get($calendarId, $created->getId(), ['conferenceDataVersion' => 1]);
+                    $meet = $this->extractMeetLink($refetched);
+                    $status = optional(optional(optional($refetched->getConferenceData())->getCreateRequest())->getStatus())->getStatusCode() ?: $status;
+                } catch (\Throwable $e) {
+                    Log::warning('Booking Meet re-fetch failed', ['booking_id' => $booking->id, 'error' => $e->getMessage()]);
+                }
+            }
+
             $booking->google_event_id = $created->getId();
-            $booking->meet_link = $created->getHangoutLink();
+            $booking->meet_link = $meet;
             $booking->save();
 
             Log::info('Booking calendar event created', [
-                'booking_id' => $booking->id, 'event_id' => $created->getId(), 'meet' => (bool) $created->getHangoutLink(),
+                'booking_id' => $booking->id, 'event_id' => $created->getId(),
+                'meet' => (bool) $meet, 'conference_status' => $status,
             ]);
         } catch (\Throwable $e) {
             Log::error('Booking calendar event failed', ['booking_id' => $booking->id, 'error' => $e->getMessage()]);
         }
+    }
+
+    /**
+     * Normalise a client-supplied IANA timezone to a name Google Calendar
+     * accepts. Browsers/devices can report DEPRECATED aliases (e.g.
+     * "Asia/Calcutta", "Europe/Kiev") which PHP tolerates but the Calendar API
+     * rejects ("Unknown or bad timezone") — failing the whole event insert.
+     * ICU's canonical id maps them (Asia/Calcutta -> Asia/Kolkata). Empty or
+     * still-invalid values fall back to the booking default.
+     */
+    private function canonicalTimezone(?string $tz): string
+    {
+        $tz = trim((string) $tz);
+        $fallback = (string) config('services.booking.timezone', 'Pacific/Auckland');
+
+        if ($tz === '') {
+            return $fallback;
+        }
+
+        // Explicit map of deprecated IANA aliases PHP accepts but Google
+        // Calendar rejects. This is the reliable path (works without the intl
+        // extension, which prod may not have). Asia/Calcutta -> Asia/Kolkata is
+        // the common one (India). Extend as new ones surface in the logs.
+        static $aliases = [
+            'Asia/Calcutta' => 'Asia/Kolkata',
+            'Asia/Rangoon' => 'Asia/Yangon',
+            'Asia/Saigon' => 'Asia/Ho_Chi_Minh',
+            'Asia/Katmandu' => 'Asia/Kathmandu',
+            'Asia/Dacca' => 'Asia/Dhaka',
+            'Asia/Thimbu' => 'Asia/Thimphu',
+            'Asia/Ashkhabad' => 'Asia/Ashgabat',
+            'Asia/Ujung_Pandang' => 'Asia/Makassar',
+            'Asia/Macao' => 'Asia/Macau',
+            'Asia/Chongqing' => 'Asia/Shanghai',
+            'Asia/Harbin' => 'Asia/Shanghai',
+            'Asia/Kashgar' => 'Asia/Urumqi',
+            'Asia/Istanbul' => 'Europe/Istanbul',
+            'Europe/Kiev' => 'Europe/Kyiv',
+            'Europe/Uzhgorod' => 'Europe/Kyiv',
+            'Europe/Zaporozhye' => 'Europe/Kyiv',
+            'Europe/Nicosia' => 'Asia/Nicosia',
+            'America/Godthab' => 'America/Nuuk',
+            'America/Buenos_Aires' => 'America/Argentina/Buenos_Aires',
+            'Pacific/Enderbury' => 'Pacific/Kanton',
+            'Australia/Currie' => 'Australia/Hobart',
+        ];
+        if (isset($aliases[$tz])) {
+            $tz = $aliases[$tz];
+        } elseif (class_exists(\IntlTimeZone::class)) {
+            // Generic canonicalisation for anything not in the map.
+            $canonical = \IntlTimeZone::getCanonicalID($tz);
+            if (is_string($canonical) && $canonical !== '' && $canonical !== 'Etc/Unknown') {
+                $tz = $canonical;
+            }
+        }
+
+        try {
+            new \DateTimeZone($tz);
+
+            return $tz;
+        } catch (\Throwable $e) {
+            return $fallback;
+        }
+    }
+
+    /**
+     * Pull the Google Meet URL from an event, preferring the newer
+     * conferenceData.entryPoints (video) and falling back to the legacy
+     * hangoutLink. Returns null when the conference isn't ready yet.
+     */
+    private function extractMeetLink(Event $event): ?string
+    {
+        $link = $event->getHangoutLink();
+        if (filled($link)) {
+            return $link;
+        }
+        $conf = $event->getConferenceData();
+        foreach ((array) (optional($conf)->getEntryPoints() ?? []) as $ep) {
+            if ($ep->getEntryPointType() === 'video' && filled($ep->getUri())) {
+                return $ep->getUri();
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -133,7 +236,7 @@ class GoogleCalendarService
             return;
         }
 
-        $tz = $booking->client_timezone ?: 'UTC';
+        $tz = $this->canonicalTimezone($booking->client_timezone);
         $start = Carbon::parse($booking->appointment_at)->setTimezone($tz);
         $duration = (int) config('services.google_calendar.default_duration', 30);
         $end = (clone $start)->addMinutes($duration > 0 ? $duration : 30);
@@ -214,7 +317,16 @@ class GoogleCalendarService
 
     private function description(Booking $booking): string
     {
-        $lines = ['ePathways consultation booking.'];
+        $lines = [];
+
+        // Emma's bookings lead with her personal intro + contact details, then
+        // the booking summary. Other consultants keep the plain summary.
+        if (trim((string) $booking->consultant_name) === 'Emma Ceballo') {
+            $lines[] = self::EMMA_INTRO;
+            $lines[] = '';
+        }
+
+        $lines[] = 'ePathways consultation booking.';
         if ($booking->service_type) {
             $lines[] = 'Service: '.$booking->service_type;
         }
@@ -230,4 +342,7 @@ class GoogleCalendarService
 
         return implode("\n", $lines);
     }
+
+    /** Emma Ceballo's intro + contact block for the calendar event description. */
+    private const EMMA_INTRO = "Hi, I'm Emma Ceballo from ePathways New Zealand. 🇳🇿 Thank you for your interest in ePathways! We're excited to help you achieve your dream of studying, working, and building a new life in New Zealand.\n\nYou can also contact me directly via:\n\n📞 Phone: +64 21 227 8000\n💬 WhatsApp: +64 21 227 8000\n📧 Email: emma@epathways.co.nz\n\nI'm looking forward to helping you explore the right pathway to New Zealand! 🇳🇿✨";
 }
