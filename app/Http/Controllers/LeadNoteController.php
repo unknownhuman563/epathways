@@ -7,6 +7,7 @@ use App\Models\LeadNote;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 
 /**
  * Internal notes on a Lead. Any logged-in staff member can add notes; only
@@ -51,6 +52,11 @@ class LeadNoteController extends Controller
         $validated = $request->validate([
             'body'                => 'required|string|max:2000',
             'pinned'              => 'nullable|boolean',
+            // Reply to another note (threaded internal notes).
+            'parent_id'           => 'nullable|integer|exists:lead_notes,id',
+            // Media attachments — images or PDFs, stored on the private disk.
+            'files'               => 'nullable|array|max:6',
+            'files.*'             => 'file|mimes:pdf,jpg,jpeg,png,webp,gif,heic|max:10240',
             'kind'                => ['nullable', \Illuminate\Validation\Rule::in(['general', 'pre_screen', 'goal_setting', 'risk', 'client_contact'])],
             'pre_screened_by'     => 'nullable|string|max:80',
             'pre_screen_mode'     => ['nullable', \Illuminate\Validation\Rule::in(['gmeet', 'call'])],
@@ -65,12 +71,27 @@ class LeadNoteController extends Controller
             $lead = Lead::findOrFail($leadId);
             $user = Auth::user();
 
+            // Stash any uploaded media on the private disk; keep the metadata
+            // on the note so the Overview can render + stream them back.
+            $attachments = [];
+            foreach ($request->file('files', []) as $file) {
+                $path = $file->store("lead-notes/{$lead->id}", 'local');
+                $attachments[] = [
+                    'path' => $path,
+                    'original_name' => $file->getClientOriginalName(),
+                    'mime' => $file->getClientMimeType(),
+                    'size' => $file->getSize(),
+                ];
+            }
+
             $note = LeadNote::create([
                 'lead_id'             => $lead->id,
+                'parent_id'           => $validated['parent_id'] ?? null,
                 'user_id'             => $user?->id,
                 'author_name'         => $user?->name,
                 'author_role'         => $user?->role,
                 'body'                => $validated['body'],
+                'attachments'         => $attachments ?: null,
                 'pinned'              => (bool) ($validated['pinned'] ?? false),
                 'kind'                => $validated['kind'] ?? 'general',
                 'pre_screened_by'     => $validated['pre_screened_by']     ?? null,
@@ -85,6 +106,26 @@ class LeadNoteController extends Controller
             Log::error('Lead note create failed', ['lead_id' => $leadId, 'error' => $e->getMessage()]);
             return back()->withErrors(['error' => 'Could not save the note.']);
         }
+    }
+
+    /**
+     * Stream a note's media attachment. Staff-only (this route lives in the
+     * staff group); the file sits on the private disk and is never public.
+     */
+    public function attachment(Request $request, $leadId, $noteId, $index)
+    {
+        $note = LeadNote::where('lead_id', $leadId)->findOrFail($noteId);
+        $att = ($note->attachments ?? [])[(int) $index] ?? null;
+        abort_unless($att && ! empty($att['path']) && Storage::disk('local')->exists($att['path']), 404);
+
+        if ($request->boolean('inline')) {
+            return response()->file(Storage::disk('local')->path($att['path']), [
+                'Content-Type' => $att['mime'] ?? 'application/octet-stream',
+                'Content-Disposition' => 'inline; filename="'.($att['original_name'] ?? 'attachment').'"',
+            ]);
+        }
+
+        return Storage::disk('local')->download($att['path'], $att['original_name'] ?? 'attachment');
     }
 
     public function update(Request $request, $leadId, $noteId)

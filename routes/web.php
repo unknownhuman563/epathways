@@ -801,6 +801,8 @@ Route::middleware(['auth'])->group(function () {
             ->name('admin.leads.notes.update');
         Route::delete('/admin/leads/{leadId}/notes/{noteId}', [\App\Http\Controllers\LeadNoteController::class, 'destroy'])
             ->name('admin.leads.notes.destroy');
+        Route::get('/admin/leads/{leadId}/notes/{noteId}/attachments/{index}', [\App\Http\Controllers\LeadNoteController::class, 'attachment'])
+            ->name('admin.leads.notes.attachment');
 
         // Tags — free-form, auto-created on first use. /tags index feeds
         // the client-side autocomplete.
