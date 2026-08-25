@@ -3,7 +3,7 @@ import { Head, useForm, usePage } from '@inertiajs/react';
 import { router } from '@inertiajs/react';
 import {
     GraduationCap, Briefcase, Plane, Heart, Home, HelpCircle, Globe,
-    Pencil, X, History as HistoryIcon, ChevronDown, ChevronUp, AlertTriangle, Save,
+    Pencil, X, History as HistoryIcon, ChevronDown, ChevronUp, ChevronRight, AlertTriangle, Save,
     Plus, Trash2, Copy,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -245,6 +245,7 @@ function CreateModal({ onClose }) {
         icon: 'Globe',
         active: true,
         checklist_items: [],
+        filename_pattern: '{name} - {label} - {date}',
     });
 
     const [tab, setTab] = useState('fees');
@@ -478,6 +479,8 @@ function CreateModal({ onClose }) {
                             <ChecklistEditor
                                 items={data.checklist_items}
                                 onChange={(next) => setData('checklist_items', next)}
+                                pattern={data.filename_pattern}
+                                onPatternChange={(v) => setData('filename_pattern', v)}
                                 errors={errors}
                             />
                         </div>
@@ -557,7 +560,7 @@ function DeleteModal({ visaType, onClose }) {
 }
 
 function EditModal({ visaType, onClose, canViewHistory }) {
-    const { data, setData, post, processing, errors, reset, clearErrors } = useForm({
+    const { data, setData, post, processing, errors, reset, clearErrors, isDirty } = useForm({
         name: visaType.name,
         code: visaType.code || '',
         short_description: visaType.short_description || '',
@@ -580,6 +583,7 @@ function EditModal({ visaType, onClose, canViewHistory }) {
         checklist_items: Array.isArray(visaType.checklist_items)
             ? visaType.checklist_items
             : [],
+        filename_pattern: visaType.filename_pattern ?? '',
         updated_at: visaType.updated_at || '',
     });
 
@@ -607,8 +611,11 @@ function EditModal({ visaType, onClose, canViewHistory }) {
             {/* Near-fullscreen, but still a modal — a thin gutter keeps the
                 backdrop visible on every edge. */}
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[1600px] my-2">
-                <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between flex-shrink-0">
-                    <h2 className="text-lg font-bold text-gray-900">Edit Visa: {visaType.name}</h2>
+                <div className="px-6 py-4 border-b border-gray-100 flex items-start justify-between flex-shrink-0">
+                    <div>
+                        <p className="text-[11px] font-bold uppercase tracking-[0.15em] text-purple-600">Edit visa type</p>
+                        <h2 className="text-xl font-bold text-gray-900">{visaType.name}</h2>
+                    </div>
                     <button type="button" onClick={onClose} className="p-1 text-gray-400 hover:text-gray-700">
                         <X size={18} />
                     </button>
@@ -840,28 +847,35 @@ function EditModal({ visaType, onClose, canViewHistory }) {
                         <ChecklistEditor
                             items={data.checklist_items}
                             onChange={(next) => setData('checklist_items', next)}
+                            pattern={data.filename_pattern}
+                            onPatternChange={(v) => setData('filename_pattern', v)}
                             errors={errors}
                         />
                     </div>
                 </form>
 
-                <div className="px-6 py-3 border-t border-gray-100 flex justify-end gap-2 flex-shrink-0">
-                    <button
-                        type="button"
-                        onClick={onClose}
-                        className="px-4 py-2 text-sm text-gray-500 hover:text-gray-900"
-                    >
-                        Cancel
-                    </button>
-                    <button
-                        type="button"
-                        onClick={submit}
-                        disabled={processing}
-                        className="flex items-center gap-2 px-5 py-2 bg-gray-900 text-white text-sm font-semibold rounded-xl hover:bg-gray-800 disabled:opacity-60"
-                    >
-                        <Save size={14} />
-                        {processing ? 'Saving…' : 'Save changes'}
-                    </button>
+                <div className="px-6 py-3 border-t border-gray-100 flex items-center justify-between gap-2 flex-shrink-0">
+                    <span className={`text-[12px] ${isDirty ? 'text-amber-600 font-medium' : 'text-gray-400'}`}>
+                        {isDirty ? 'Unsaved changes' : 'No unsaved changes'}
+                    </span>
+                    <div className="flex items-center gap-2">
+                        <button
+                            type="button"
+                            onClick={onClose}
+                            className="px-4 py-2 text-sm text-gray-500 hover:text-gray-900"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            type="button"
+                            onClick={submit}
+                            disabled={processing}
+                            className="flex items-center gap-2 px-5 py-2 bg-purple-600 text-white text-sm font-semibold rounded-xl hover:bg-purple-700 disabled:opacity-60"
+                        >
+                            <Save size={14} />
+                            {processing ? 'Saving…' : (tab === 'checklist' ? 'Save checklist' : 'Save changes')}
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -1284,30 +1298,37 @@ function GrowCell({ value, onChange, className = '', breakAll = false, ...rest }
     );
 }
 
-function ChecklistEditor({ items = [], onChange, errors = {} }) {
+// Placeholders offered for the filename pattern / overrides.
+const FILENAME_VARS = [
+    ['{name}', 'Applicant name'],
+    ['{date}', "Today's date"],
+    ['{visa}', 'Visa type'],
+    ['{code}', 'Case reference'],
+    ['{label}', 'This document'],
+];
+const DEFAULT_FILENAME_PATTERN = '{name} - {label} - {date}';
+
+// Sample values used to preview how a pattern resolves for a real upload.
+function previewFilename(template, label) {
+    let dateSample;
+    try { dateSample = new Date().toLocaleDateString('en-NZ', { day: 'numeric', month: 'short', year: 'numeric' }); }
+    catch (e) { dateSample = ''; }
+    const sample = { '{name}': 'Aroha Ngata', '{date}': dateSample, '{visa}': 'Work Visa', '{code}': 'IMM-0001' };
+    const out = String(template || '')
+        .replace(/\{name\}|\{date\}|\{visa\}|\{code\}|\{label\}/gi, (m) => {
+            const key = m.toLowerCase();
+            if (key === '{label}') return label || 'Document';
+            return sample[key] ?? m;
+        })
+        .replace(/[\\/:*?"<>|]+/g, '-')
+        .replace(/\s+/g, ' ')
+        .trim();
+    return out ? `${out}.pdf` : '';
+}
+
+function ChecklistEditor({ items = [], onChange, pattern = '', onPatternChange = () => {}, errors = {} }) {
     const set = (i, patch) =>
         onChange(items.map((it, idx) => (idx === i ? { ...it, ...patch } : it)));
-
-    const add = () =>
-        onChange([
-            ...items,
-            // Inherit the last row's section — items are usually added in
-            // groups, so this saves retyping it every time.
-            { key: '', category: items[items.length - 1]?.category || '', label: '', hint: '', required: true },
-        ]);
-
-    // One-click cleanup for visas saved before Section became its own field:
-    // pulls "Section · Name" apart into the Section column and a plain label.
-    const splitSectionsFromLabels = () => {
-        const next = items.map((it) => {
-            const [sec, ...rest] = String(it.label || '').split(' · ');
-            if (rest.length === 0) return it;
-            return { ...it, category: it.category || sec, label: rest.join(' · ') };
-        });
-        onChange(next);
-    };
-
-    const hasEmbeddedSections = items.some((it) => String(it.label || '').includes(' · '));
 
     const remove = (i) => onChange(items.filter((_, idx) => idx !== i));
 
@@ -1319,13 +1340,45 @@ function ChecklistEditor({ items = [], onChange, errors = {} }) {
         onChange([...items.slice(0, i + 1), copy, ...items.slice(i + 1)]);
     };
 
-    const move = (i, dir) => {
-        const j = i + dir;
-        if (j < 0 || j >= items.length) return;
-        const next = [...items];
-        [next[i], next[j]] = [next[j], next[i]];
-        onChange(next);
+    // Append a new document to a given section (category).
+    const addTo = (category) =>
+        onChange([...items, { key: '', category: category || '', label: '', hint: '', required: true, filename: '' }]);
+
+    const moveToSection = (i, category) => set(i, { category });
+
+    // Group items into sections by category, in first-appearance order.
+    const sections = [];
+    const sectionIndex = new Map();
+    items.forEach((it, idx) => {
+        const cat = (String(it.category || '').trim()) || 'General';
+        if (! sectionIndex.has(cat)) { sectionIndex.set(cat, sections.length); sections.push({ name: cat, indices: [] }); }
+        sections[sectionIndex.get(cat)].indices.push(idx);
+    });
+    // Sequential display numbers (01, 02, …) following the on-screen order.
+    const flatOrder = sections.flatMap((s) => s.indices);
+    const displayNo = (idx) => String(flatOrder.indexOf(idx) + 1).padStart(2, '0');
+
+    const [expanded, setExpanded] = useState(null);
+    const [collapsedSections, setCollapsedSections] = useState({});
+    const toggleSection = (name) => setCollapsedSections((c) => ({ ...c, [name]: ! c[name] }));
+    const collapseAll = () => {
+        const allCollapsed = sections.length > 0 && sections.every((s) => collapsedSections[s.name]);
+        const next = {};
+        if (! allCollapsed) sections.forEach((s) => { next[s.name] = true; });
+        setCollapsedSections(next);
     };
+
+    const newSection = () => {
+        const name = (window.prompt('New section name (e.g. Identity, Employment)') || '').trim();
+        if (! name) return;
+        addTo(name);
+    };
+
+    // Totals for the summary card.
+    const total = items.length;
+    const requiredCount = items.filter((it) => it.required !== false).length;
+    const optionalCount = total - requiredCount;
+    const overrideCount = items.filter((it) => String(it.filename || '').trim() !== '').length;
 
     const errAt = (i, field) => errors[`checklist_items.${i}.${field}`];
 
@@ -1365,6 +1418,7 @@ function ChecklistEditor({ items = [], onChange, errors = {} }) {
                 label:       hasPrefix ? rest.join(' · ') : (it.label || ''),
                 hint:        it.hint || '',
                 required:    it.required !== false,
+                filename:    it.filename || '',
                 file_code:   it.file_code || '',
                 file_suffix: it.file_suffix || '',
             };
@@ -1372,178 +1426,225 @@ function ChecklistEditor({ items = [], onChange, errors = {} }) {
     };
 
     return (
-        <div className="space-y-3">
-            {/* Template picker sits on its own line so it can never clip
-                against the pane edge. */}
-            <div className="space-y-2">
-                <p className="text-[11px] text-gray-500 leading-relaxed">
-                    Documents the lead needs to submit for this visa. Each
-                    row's <span className="font-mono text-[10px]">key</span> is
-                    used to match uploads (lowercase letters, numbers, and
-                    underscores only).
-                </p>
-                <select
-                    value=""
-                    onMouseDown={loadTemplates}
-                    onFocus={loadTemplates}
-                    onChange={(e) => { applyTemplate(e.target.value); e.target.value = ''; }}
-                    className="w-full text-[11px] border border-gray-200 rounded-lg px-2.5 py-2 bg-white text-gray-700 hover:border-gray-300 cursor-pointer"
-                >
-                    <option value="">{loadingTemplates ? 'Loading templates…' : 'Load a checklist template…'}</option>
-                    {templates.map((t) => (
-                        <option key={t.key} value={t.key}>{t.label} ({t.count})</option>
-                    ))}
-                </select>
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-5 items-start">
+            {/* ── Main column: sections + document rows ─────────────────── */}
+            <div className="lg:col-span-3 min-w-0 space-y-4">
+                <div className="flex items-start justify-between gap-3">
+                    <p className="text-[12px] text-gray-500 leading-relaxed">
+                        What the lead must submit for this visa. Click any row to edit its wording, key or filename.
+                    </p>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                        <button type="button" onClick={collapseAll} className="text-[11px] font-medium text-gray-500 hover:text-gray-900 whitespace-nowrap">Collapse all</button>
+                        <select
+                            value=""
+                            onMouseDown={loadTemplates}
+                            onFocus={loadTemplates}
+                            onChange={(e) => { applyTemplate(e.target.value); e.target.value = ''; }}
+                            className="text-[11px] border border-gray-200 rounded-lg px-2.5 py-1.5 bg-white text-gray-700 hover:border-gray-300 cursor-pointer"
+                        >
+                            <option value="">{loadingTemplates ? 'Loading…' : 'Load template…'}</option>
+                            {templates.map((t) => (
+                                <option key={t.key} value={t.key}>{t.label} ({t.count})</option>
+                            ))}
+                        </select>
+                    </div>
+                </div>
 
-                {/* Offered only while some labels still carry the old
-                    "Section · Name" format. */}
-                {hasEmbeddedSections && (
-                    <button
-                        type="button"
-                        onClick={splitSectionsFromLabels}
-                        className="w-full text-[11px] font-semibold text-gray-700 bg-white border border-gray-200 rounded-lg px-2.5 py-2 hover:border-gray-900 hover:text-gray-900 transition-colors"
-                    >
-                        Split “Section · Name” labels into the Section column
-                    </button>
+                {items.length === 0 && (
+                    <div className="border-2 border-dashed border-gray-200 rounded-xl px-4 py-8 text-center bg-white">
+                        <p className="text-xs text-gray-400">No documents yet — add a section, then documents to it.</p>
+                    </div>
                 )}
+
+                {sections.map((section) => {
+                    const isCollapsed = ! ! collapsedSections[section.name];
+                    const secReq = section.indices.filter((idx) => items[idx].required !== false).length;
+                    return (
+                        <div key={section.name} className="space-y-2">
+                            <button type="button" onClick={() => toggleSection(section.name)}
+                                className="flex items-center gap-2 w-full text-left group">
+                                {isCollapsed ? <ChevronRight size={14} className="text-gray-400" /> : <ChevronDown size={14} className="text-gray-400" />}
+                                <span className="text-[12px] font-bold text-gray-800 uppercase tracking-wide">{section.name}</span>
+                                <span className="text-[11px] text-gray-400">{section.indices.length} document{section.indices.length === 1 ? '' : 's'} · {secReq} required</span>
+                            </button>
+
+                            {! isCollapsed && section.indices.map((idx) => {
+                                const it = items[idx];
+                                const isOpen = expanded === idx;
+                                const isOverride = String(it.filename || '').trim() !== '';
+                                return (
+                                    <div key={idx} className="rounded-xl border border-gray-200 bg-white overflow-hidden">
+                                        {/* Collapsed row */}
+                                        <button type="button" onClick={() => setExpanded(isOpen ? null : idx)}
+                                            className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-gray-50/60">
+                                            <span className="font-mono text-[11px] text-gray-300 w-6 flex-shrink-0">{displayNo(idx)}</span>
+                                            <div className="min-w-0 flex-1">
+                                                <p className="text-[13px] font-semibold text-gray-900 truncate">{it.label || <span className="text-gray-400 font-normal">Untitled document</span>}</p>
+                                                {it.hint && <p className="text-[11px] text-gray-400 truncate">{it.hint}</p>}
+                                            </div>
+                                            <span className="hidden sm:inline font-mono text-[10.5px] text-gray-500 bg-gray-100 rounded px-1.5 py-0.5 truncate max-w-[150px] flex-shrink-0">{it.key || '—'}</span>
+                                            <span className="hidden md:inline text-[11px] truncate max-w-[190px] flex-shrink-0">
+                                                {isOverride
+                                                    ? <span className="font-mono text-purple-600">{it.filename}</span>
+                                                    : <span className="text-gray-400">Standard pattern</span>}
+                                            </span>
+                                            <span className={`text-[10.5px] font-semibold px-2 py-0.5 rounded-full flex-shrink-0 ${it.required !== false ? 'bg-blue-50 text-blue-700' : 'bg-gray-100 text-gray-500'}`}>
+                                                {it.required !== false ? 'Required' : 'Optional'}
+                                            </span>
+                                        </button>
+
+                                        {/* Expanded inline editor */}
+                                        {isOpen && (
+                                            <div className="border-t border-gray-100 bg-gray-50 px-4 py-4 space-y-4">
+                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                    <div>
+                                                        <label className="block text-[10px] font-bold uppercase tracking-wider text-gray-500 mb-1">Label the client sees</label>
+                                                        <input value={it.label || ''} onChange={(e) => set(idx, { label: e.target.value })}
+                                                            placeholder="Passport (PDF)" className={inputClass(errAt(idx, 'label'))} />
+                                                        {errAt(idx, 'label') && <p className="text-[10px] text-red-500 mt-0.5">{errAt(idx, 'label')}</p>}
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-[10px] font-bold uppercase tracking-wider text-gray-500 mb-1">Match key <span className="text-gray-400 normal-case font-normal">· auto from label</span></label>
+                                                        <input value={it.key || ''} onChange={(e) => set(idx, { key: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '_') })}
+                                                            placeholder="passport_pdf" className={inputClass(errAt(idx, 'key')) + ' font-mono'} />
+                                                        {errAt(idx, 'key') && <p className="text-[10px] text-red-500 mt-0.5">{errAt(idx, 'key')}</p>}
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-[10px] font-bold uppercase tracking-wider text-gray-500 mb-1">Helper text</label>
+                                                        <textarea value={it.hint || ''} onChange={(e) => set(idx, { hint: e.target.value })} rows={3}
+                                                            placeholder="Clear colour scan of your current, valid passport." className={inputClass(errAt(idx, 'hint')) + ' resize-y'} />
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-[10px] font-bold uppercase tracking-wider text-gray-500 mb-1">Filename</label>
+                                                        <div className="flex gap-1 mb-1.5">
+                                                            <button type="button" onClick={() => set(idx, { filename: '' })}
+                                                                className={`text-[11px] px-2.5 py-1 rounded-lg font-medium ${! isOverride ? 'bg-slate-800 text-white' : 'bg-white text-gray-600 border border-gray-200'}`}>Standard pattern</button>
+                                                            <button type="button" onClick={() => set(idx, { filename: it.filename || pattern || DEFAULT_FILENAME_PATTERN })}
+                                                                className={`text-[11px] px-2.5 py-1 rounded-lg font-medium ${isOverride ? 'bg-purple-600 text-white' : 'bg-white text-gray-600 border border-gray-200'}`}>Override</button>
+                                                        </div>
+                                                        {isOverride ? (
+                                                            <>
+                                                                <input value={it.filename || ''} onChange={(e) => set(idx, { filename: e.target.value })}
+                                                                    placeholder={DEFAULT_FILENAME_PATTERN} className={inputClass(errAt(idx, 'filename')) + ' font-mono text-[12px]'} />
+                                                                <div className="flex flex-wrap gap-1 mt-1.5">
+                                                                    {FILENAME_VARS.map(([token]) => (
+                                                                        <button key={token} type="button"
+                                                                            onClick={() => set(idx, { filename: `${it.filename || ''}${token}` })}
+                                                                            className="font-mono text-[10px] px-1.5 py-0.5 rounded border border-gray-200 bg-white text-gray-600 hover:border-purple-300 hover:text-purple-700">{token}</button>
+                                                                    ))}
+                                                                </div>
+                                                                <p className="font-mono text-[11px] text-gray-500 mt-1.5">→ {previewFilename(it.filename, it.label) || '—'}</p>
+                                                            </>
+                                                        ) : (
+                                                            <p className="text-[11px] text-gray-500">Follows the standard pattern → <span className="font-mono text-gray-700">{previewFilename(pattern || DEFAULT_FILENAME_PATTERN, it.label) || '—'}</span></p>
+                                                        )}
+                                                    </div>
+                                                </div>
+
+                                                <div className="flex flex-wrap items-center gap-3">
+                                                    <button type="button" onClick={() => setExpanded(null)}
+                                                        className="px-4 py-1.5 bg-gray-900 text-white text-[12px] font-semibold rounded-lg hover:bg-gray-800">Done</button>
+                                                    <button type="button" onClick={() => duplicate(idx)}
+                                                        className="text-[12px] text-gray-600 hover:text-gray-900">Duplicate</button>
+                                                    <label className="text-[12px] text-gray-600 inline-flex items-center gap-1.5">
+                                                        Move to section…
+                                                        <select value={it.category || section.name}
+                                                            onChange={(e) => moveToSection(idx, e.target.value)}
+                                                            className="text-[11px] border border-gray-200 rounded-lg px-2 py-1 bg-white">
+                                                            {sections.map((s) => <option key={s.name} value={s.name}>{s.name}</option>)}
+                                                        </select>
+                                                    </label>
+                                                    <button type="button" onClick={() => { remove(idx); setExpanded(null); }}
+                                                        className="ml-auto text-[12px] font-medium text-rose-600 hover:text-rose-800">Remove</button>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })}
+
+                            {! isCollapsed && (
+                                <button type="button" onClick={() => addTo(section.name)}
+                                    className="text-[12px] font-semibold text-purple-600 hover:text-purple-800">+ Add document to {section.name}</button>
+                            )}
+                        </div>
+                    );
+                })}
+
+                <button type="button" onClick={newSection}
+                    className="w-full text-left rounded-xl border border-dashed border-gray-300 bg-white px-4 py-3 hover:border-gray-900 transition-colors">
+                    <span className="text-[13px] font-semibold text-gray-800">+ New section</span>
+                    <span className="text-[11px] text-gray-400"> Sections group the checklist for the client.</span>
+                </button>
             </div>
 
-            {items.length === 0 && (
-                <div className="border-2 border-dashed border-gray-200 rounded-xl px-4 py-8 text-center bg-white">
-                    <p className="text-xs text-gray-400">
-                        No checklist items yet — leads will only see the generic upload options.
-                    </p>
-                </div>
-            )}
-
-            {/* Fixed layout + wrapping cells: every column keeps its share of
-                the width and text flows onto extra lines rather than running
-                off the right edge. */}
-            {items.length > 0 && (
-                <div className="border border-gray-200 rounded-xl bg-white overflow-hidden shadow-sm">
-                    <table className="w-full text-left table-fixed">
-                        <thead>
-                            {/* Dark header — matches the fee schedule's banded
-                                headings and keeps the column labels legible
-                                against the white rows below. */}
-                            <tr className="bg-slate-800 text-[10px] font-bold text-white uppercase tracking-wider">
-                                <th className="px-3 py-2.5 w-[3%]">#</th>
-                                <th className="px-3 py-2.5 w-[16%]">Section</th>
-                                <th className="px-3 py-2.5 w-[12%]">Key</th>
-                                <th className="px-3 py-2.5 w-[18%]">Label</th>
-                                <th className="px-3 py-2.5 w-[26%]">Hint</th>
-                                <th className="px-3 py-2.5 w-[4%] text-center">Req</th>
-                                <th className="px-3 py-2.5 w-[7%]">Code</th>
-                                <th className="px-3 py-2.5 w-[9%]">Suffix</th>
-                                <th className="px-3 py-2.5 w-[5%] text-right">&nbsp;</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-100">
-                            {items.map((it, i) => (
-                                <tr key={i} className="align-top hover:bg-gray-50/60">
-                                    {/* order + reorder */}
-                                    <td className="px-3 py-2.5">
-                                        <div className="flex items-center gap-1">
-                                            <span className="font-mono text-[10px] text-gray-400 w-4">{String(i + 1).padStart(2, '0')}</span>
-                                            <div className="flex flex-col">
-                                                <button type="button" onClick={() => move(i, -1)} disabled={i === 0}
-                                                    title="Move up"
-                                                    className="w-4 h-3 flex items-center justify-center text-gray-400 hover:text-gray-900 disabled:opacity-30">
-                                                    <ChevronUp size={11} />
-                                                </button>
-                                                <button type="button" onClick={() => move(i, 1)} disabled={i === items.length - 1}
-                                                    title="Move down"
-                                                    className="w-4 h-3 flex items-center justify-center text-gray-400 hover:text-gray-900 disabled:opacity-30">
-                                                    <ChevronDown size={11} />
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </td>
-
-                                    {/* Section — the group heading this item
-                                        sits under on the staff Documents tab
-                                        and the applicant's tracker. */}
-                                    <td className="px-3 py-2.5">
-                                        <GrowCell
-                                            value={it.category ?? ''}
-                                            onChange={(e) => set(i, { category: e.target.value })}
-                                            placeholder="Identity & Photo"
-                                            className={inputClass(errAt(i, 'category')) + ' !text-sm !px-2.5 !py-2'} />
-                                        {errAt(i, 'category') && <p className="text-[10px] text-red-500 mt-0.5">{errAt(i, 'category')}</p>}
-                                    </td>
-
-                                    <td className="px-3 py-2.5">
-                                        {/* Keys have no spaces, so they need to
-                                            break mid-word to wrap at all. */}
-                                        <GrowCell breakAll value={it.key || ''}
-                                            onChange={(e) => set(i, { key: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '_') })}
-                                            placeholder="employer_letter"
-                                            className={inputClass(errAt(i, 'key')) + ' font-mono !text-sm !px-2.5 !py-2'} />
-                                        {errAt(i, 'key') && <p className="text-[10px] text-red-500 mt-0.5">{errAt(i, 'key')}</p>}
-                                    </td>
-
-                                    <td className="px-3 py-2.5">
-                                        <GrowCell value={it.label || ''}
-                                            onChange={(e) => set(i, { label: e.target.value })}
-                                            placeholder="Employer reference letter"
-                                            className={inputClass(errAt(i, 'label')) + ' !text-sm !px-2.5 !py-2'} />
-                                        {errAt(i, 'label') && <p className="text-[10px] text-red-500 mt-0.5">{errAt(i, 'label')}</p>}
-                                    </td>
-
-                                    <td className="px-3 py-2.5">
-                                        <GrowCell value={it.hint || ''}
-                                            onChange={(e) => set(i, { hint: e.target.value })}
-                                            placeholder="Optional hint for the applicant"
-                                            className={inputClass(errAt(i, 'hint')) + ' !text-sm !px-2.5 !py-2'} />
-                                    </td>
-
-                                    <td className="px-3 py-2.5 text-center">
-                                        <input type="checkbox" className="mt-1.5"
-                                            checked={it.required !== false}
-                                            onChange={(e) => set(i, { required: e.target.checked })} />
-                                    </td>
-
-                                    <td className="px-3 py-2.5">
-                                        <GrowCell breakAll value={it.file_code || ''}
-                                            onChange={(e) => set(i, { file_code: e.target.value })}
-                                            placeholder="PPT"
-                                            title={'Uploads renamed to ' + String(i + 1).padStart(2, '0') + ' - ' + (it.file_code || 'CODE') + ' - FirstnameLASTNAME' + (it.file_suffix || '')}
-                                            className={inputClass(errAt(i, 'file_code')) + ' font-mono !text-sm !px-2.5 !py-2 uppercase'} />
-                                    </td>
-
-                                    <td className="px-3 py-2.5">
-                                        <GrowCell breakAll value={it.file_suffix || ''}
-                                            onChange={(e) => set(i, { file_suffix: e.target.value })}
-                                            placeholder="(of sponsor)"
-                                            className={inputClass(errAt(i, 'file_suffix')) + ' !text-sm !px-2.5 !py-2'} />
-                                    </td>
-
-                                    <td className="px-3 py-2.5">
-                                        <div className="flex items-center justify-end gap-0.5">
-                                            <button type="button" onClick={() => duplicate(i)} title="Duplicate this requirement"
-                                                className="w-6 h-6 flex items-center justify-center text-gray-400 hover:text-gray-900 hover:bg-gray-100 rounded transition-colors">
-                                                <Copy size={12} />
-                                            </button>
-                                            <button type="button" onClick={() => remove(i)} title="Remove this requirement"
-                                                className="w-6 h-6 flex items-center justify-center text-rose-500 hover:bg-rose-50 rounded transition-colors">
-                                                <Trash2 size={12} />
-                                            </button>
-                                        </div>
-                                    </td>
-                                </tr>
+            {/* ── Sidebar: standard pattern, stats, overrides note ──────── */}
+            <div className="lg:col-span-1 min-w-0 space-y-4">
+                {/* Standard filename pattern */}
+                <div className="rounded-xl border border-gray-200 bg-white overflow-hidden">
+                    <div className="px-3 py-2 border-b border-gray-100 bg-gray-50">
+                        <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-gray-500">Standard filename pattern</p>
+                    </div>
+                    <div className="p-3 space-y-2.5">
+                        <input value={pattern || ''} onChange={(e) => onPatternChange(e.target.value)}
+                            placeholder={DEFAULT_FILENAME_PATTERN} className={inputClass(errors.filename_pattern) + ' font-mono text-[12px]'} />
+                        <div className="flex flex-wrap gap-1">
+                            {FILENAME_VARS.map(([token]) => (
+                                <button key={token} type="button"
+                                    onClick={() => onPatternChange(`${pattern || ''}${token}`)}
+                                    className="font-mono text-[10px] px-1.5 py-0.5 rounded border border-purple-100 bg-purple-50 text-purple-700 hover:bg-purple-100">{token}</button>
                             ))}
-                        </tbody>
-                    </table>
+                        </div>
+                        <div className="pt-1">
+                            <p className="text-[10px] text-gray-400">Every upload lands as</p>
+                            <p className="font-mono text-[11px] text-gray-700 break-all">{previewFilename(pattern || DEFAULT_FILENAME_PATTERN, 'Passport (PDF)') || '—'}</p>
+                        </div>
+                        <ul className="space-y-1 pt-2 border-t border-gray-100">
+                            {FILENAME_VARS.map(([token, desc]) => (
+                                <li key={token} className="flex items-center justify-between gap-2">
+                                    <span className="font-mono text-[10.5px] text-purple-700">{token}</span>
+                                    <span className="text-[10px] text-gray-500">{desc}</span>
+                                </li>
+                            ))}
+                        </ul>
+                    </div>
                 </div>
-            )}
 
-            <button
-                type="button"
-                onClick={add}
-                className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2.5 text-xs font-semibold text-gray-700 bg-white border border-dashed border-gray-300 rounded-xl hover:border-gray-900 hover:text-gray-900 transition-colors"
-            >
-                <Plus size={12} strokeWidth={2.5} /> Add checklist item
-            </button>
+                {/* This checklist — counts + progress + per-section breakdown */}
+                <div className="rounded-xl border border-gray-200 bg-white overflow-hidden">
+                    <div className="px-3 py-2 border-b border-gray-100 bg-gray-50">
+                        <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-gray-500">This checklist</p>
+                    </div>
+                    <div className="p-3 space-y-2.5">
+                        <p className="text-2xl font-bold text-gray-900 leading-none">{total} <span className="text-[12px] font-medium text-gray-400">documents</span></p>
+                        <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden">
+                            <div className="h-full bg-purple-500" style={{ width: total ? `${Math.round((requiredCount / total) * 100)}%` : '0%' }} />
+                        </div>
+                        <p className="text-[11px]">
+                            <span className="text-purple-600 font-medium">● {requiredCount} required</span>
+                            <span className="text-gray-400 ml-2">● {optionalCount} optional</span>
+                        </p>
+                        {sections.length > 0 && (
+                            <ul className="space-y-1 pt-2 border-t border-gray-100">
+                                {sections.map((s) => (
+                                    <li key={s.name} className="flex items-center justify-between gap-2">
+                                        <span className="text-[11.5px] text-gray-700 truncate">{s.name}</span>
+                                        <span className="text-[11px] text-gray-400 flex-shrink-0">{s.indices.length}</span>
+                                    </li>
+                                ))}
+                            </ul>
+                        )}
+                    </div>
+                </div>
+
+                {/* Overrides note */}
+                {overrideCount > 0 && (
+                    <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
+                        <p className="text-[12px] font-semibold text-amber-800">{overrideCount} filename override{overrideCount === 1 ? '' : 's'}</p>
+                        <p className="text-[11px] text-amber-700 mt-0.5 leading-snug">Overrides stop following the standard pattern. Keep them for documents the client is told to name a specific way.</p>
+                    </div>
+                )}
+            </div>
         </div>
     );
 }

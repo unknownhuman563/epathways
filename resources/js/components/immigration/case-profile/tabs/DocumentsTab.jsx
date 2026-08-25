@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { router } from "@inertiajs/react";
+import { router, usePage } from "@inertiajs/react";
 import { toast } from "sonner";
 import {
     FileText, Download, Upload, Eye, Check, Loader2,
@@ -32,6 +32,38 @@ const STATUS_OPTIONS = [
     { value: "Approved",    label: "Approved" },
     { value: "Rejected",    label: "Needs attention" },
 ];
+
+// The verdict a staff member may set depends on their role. The manager triages
+// (Under review → With adviser); the Licensed Immigration Adviser decides
+// (Approved / Needs attention). "Submitted" is the client's own upload state and
+// is never staff-settable — it only appears as the current value. Admins keep
+// the full ladder.
+const MANAGER_STATUS_OPTIONS = [
+    { value: "UnderReview", label: "Under review" },
+    { value: "Checked",     label: "With adviser" },
+];
+const ADVISER_STATUS_OPTIONS = [
+    { value: "Approved",    label: "Approved" },
+    { value: "Rejected",    label: "Needs attention" },
+];
+
+// The settable options depend on WHICH PORTAL is being viewed, not the viewer's
+// role — an admin working the immigration portal triages like the manager; the
+// same admin in the adviser portal decides like the adviser. Always include the
+// document's current status as a fallback entry so the select shows the real
+// value even when it isn't one this portal sets (e.g. a manager looking at an
+// already-Approved doc, or a fresh "Submitted" upload).
+function statusOptionsFor(url, currentStatus) {
+    const base = (url || "").startsWith("/portal/immigration-adviser")
+        ? ADVISER_STATUS_OPTIONS
+        : MANAGER_STATUS_OPTIONS;
+
+    if (currentStatus && ! base.some((o) => o.value === currentStatus)) {
+        const known = STATUS_OPTIONS.find((o) => o.value === currentStatus);
+        return [{ value: currentStatus, label: known ? known.label : currentStatus }, ...base];
+    }
+    return base;
+}
 
 const STATUS_TONE = {
     Submitted:   "bg-yellow-50 text-yellow-700 border-yellow-200",
@@ -72,6 +104,7 @@ export default function DocumentsTab({
     threads = [],
     caseStaff = [],
     vif = null,
+    engagement = {},
 }) {
     // Build 12 phase 6 — document-anchored threads render on their document's
     // row (and nowhere else). Group them by the document they anchor to.
@@ -84,6 +117,12 @@ export default function DocumentsTab({
         }
         return map;
     }, [threads]);
+    // Client-submitted proof-of-payment uploads — surfaced on the invoice row so
+    // staff can verify (approve) them right there.
+    const proofDocs = useMemo(
+        () => documents.filter((d) => d.source_variant === "proof_of_payment"),
+        [documents],
+    );
     // "File history" modal — every file on the case with its status, kept
     // separate from the checklist table below.
     const [filesOpen, setFilesOpen] = useState(false);
@@ -154,7 +193,9 @@ export default function DocumentsTab({
         // lumped in with unmatched uploads.
         const variant = typeof d.source_variant === "string" ? d.source_variant : "";
         const isEngagement = variant.startsWith("engagement:");
-        const isInvoice = variant.startsWith("invoice:");
+        // Both conventions — "invoice" (engagement pack) and "invoice:<no>" (tax
+        // invoice) — belong in one Invoices group.
+        const isInvoice = variant === "invoice" || variant.startsWith("invoice:");
         const isInz = variant.startsWith("inz:");
         const isDecline = variant === "decline";
         const isGenerated = d.source === "generated";
@@ -415,6 +456,13 @@ export default function DocumentsTab({
                                                 threadsByDoc={threadsByDoc}
                                                 caseStaff={caseStaff}
                                                 vif={isVifLabel(row.label) ? vif : null}
+                                                engagementSent={!! engagement.sent}
+                                                engagementSentAt={engagement.sent_at}
+                                                engagementSigned={!! engagement.signed}
+                                                engagementSignedAt={engagement.signed_at}
+                                                invoicePaid={!! engagement.invoice_paid}
+                                                invoicePaidAt={engagement.invoice_paid_at}
+                                                proofs={proofDocs}
                                             />
                                         ))}
                                     </Fragment>
@@ -478,8 +526,24 @@ export default function DocumentsTab({
     );
 }
 
-function Row({ row, leadId, docThreads = [], threadsByDoc = new Map(), caseStaff = [], vif = null }) {
+function Row({ row, leadId, docThreads = [], threadsByDoc = new Map(), caseStaff = [], vif = null, engagementSent = false, engagementSentAt = null, engagementSigned = false, engagementSignedAt = null, invoicePaid = false, invoicePaidAt = null, proofs = [] }) {
     const doc = row.document;
+    const [verifyOpen, setVerifyOpen] = useState(false);
+    const pageUrl = usePage().url || "";
+    const statusOptions = statusOptionsFor(pageUrl, doc?.status);
+    // Engagement + invoice docs show a lifecycle badge (Draft → Sent → Signed/Paid)
+    // rather than the review-status dropdown used for client-uploaded documents.
+    const variant = typeof doc?.source_variant === "string" ? doc.source_variant : "";
+    const isInvoice = variant === "invoice" || variant.startsWith("invoice:");
+    const isEngagementDoc = variant.startsWith("engagement:");
+    const isWrittenAgreement = variant === "engagement:written_agreement";
+    // "Sent" once the pack's emailed, or the tax invoice was shared with the client.
+    // "Paid" is per-invoice: the invoice document is stamped Approved when a
+    // proof of payment opened from this row is verified. A case-level flag would
+    // (wrongly) light up every invoice at once.
+    const invoicePaidNow = isInvoice && doc?.status === "Approved";
+    const invoicePaidDate = doc?.reviewed_at || invoicePaidAt;
+    const invoiceSent = engagementSent || doc?.status === "StaffShared";
     const [status, setStatus] = useState(doc?.status || "");
     const [note, setNote] = useState(doc?.note || "");
     const [savingStatus, setSavingStatus] = useState(false);
@@ -637,7 +701,53 @@ function Row({ row, leadId, docThreads = [], threadsByDoc = new Map(), caseStaff
             {/* Verdict — review status (dropdown) plus who decided it and when.
                 Merges the former Status + Reviewed-by columns per the mockup. */}
             <td className="px-4 py-3">
-                {doc ? (
+                {isEngagementDoc ? (
+                    // Engagement docs: the Written Agreement is Draft → Sent → Signed;
+                    // the standard docs (standards / conduct / complaints) are Draft → Sent.
+                    (isWrittenAgreement && engagementSigned) ? (
+                        <span className="inline-flex flex-col">
+                            <span className="inline-flex items-center gap-2 text-[13px] font-semibold text-teal-600">
+                                <span className="w-2 h-2 rounded-full bg-teal-600 flex-shrink-0" /> Signed
+                            </span>
+                            {engagementSignedAt && <span className="text-[10.5px] text-gray-400 pl-4">{formatDate(engagementSignedAt)}</span>}
+                        </span>
+                    ) : engagementSent ? (
+                        <span className="inline-flex flex-col">
+                            <span className="inline-flex items-center gap-2 text-[13px] font-semibold text-blue-600">
+                                <span className="w-2 h-2 rounded-full bg-blue-500 flex-shrink-0" /> Sent
+                            </span>
+                            {engagementSentAt && <span className="text-[10.5px] text-gray-400 pl-4">{formatDate(engagementSentAt)}</span>}
+                        </span>
+                    ) : (
+                        <span className="inline-flex items-center gap-2 text-[13px] font-semibold text-gray-500">
+                            <span className="w-2 h-2 rounded-full bg-gray-300 flex-shrink-0" /> Draft
+                        </span>
+                    )
+                ) : isInvoice ? (
+                    // The invoice's verdict is its lifecycle: Draft → Sent → Paid.
+                    invoicePaidNow ? (
+                        <span className="inline-flex flex-col">
+                            <span className="inline-flex items-center gap-2 text-[13px] font-semibold text-teal-600">
+                                <span className="w-2 h-2 rounded-full bg-teal-600 flex-shrink-0" /> Paid
+                            </span>
+                            {invoicePaidDate && <span className="text-[10.5px] text-gray-400 pl-4">{formatDate(invoicePaidDate)}</span>}
+                        </span>
+                    ) : invoiceSent ? (
+                        <span className="inline-flex flex-col gap-0.5">
+                            <span className="inline-flex items-center gap-2 text-[13px] font-semibold text-blue-600">
+                                <span className="w-2 h-2 rounded-full bg-blue-500 flex-shrink-0" /> Sent
+                            </span>
+                            {engagementSentAt && <span className="text-[10.5px] text-gray-400 pl-4">{formatDate(engagementSentAt)}</span>}
+                            {proofs.length > 0
+                                ? <button type="button" onClick={() => setVerifyOpen(true)} className="text-[11px] font-semibold text-teal-700 hover:text-teal-900 pl-4 text-left">Verify payment ({proofs.length})</button>
+                                : <span className="text-[10.5px] text-gray-400 pl-4">no proof yet</span>}
+                        </span>
+                    ) : (
+                        <span className="inline-flex items-center gap-2 text-[13px] font-semibold text-gray-500">
+                            <span className="w-2 h-2 rounded-full bg-gray-300 flex-shrink-0" /> Draft
+                        </span>
+                    )
+                ) : doc ? (
                     <div className="space-y-1">
                         <div className="flex items-center gap-2">
                             <span className={`w-2 h-2 rounded-full flex-shrink-0 ${VERDICT_DOT[status] || "bg-gray-300"}`} />
@@ -648,7 +758,7 @@ function Row({ row, leadId, docThreads = [], threadsByDoc = new Map(), caseStaff
                                 title="Change verdict"
                                 className={`text-[13px] font-semibold bg-transparent border-0 p-0 pr-1 -ml-0.5 focus:outline-none focus:ring-0 cursor-pointer disabled:opacity-50 ${VERDICT_TEXT[status] || "text-gray-600"}`}
                             >
-                                {STATUS_OPTIONS.map((o) => (
+                                {statusOptions.map((o) => (
                                     <option key={o.value} value={o.value} className="bg-white text-gray-900">{o.label}</option>
                                 ))}
                             </select>
@@ -787,7 +897,152 @@ function Row({ row, leadId, docThreads = [], threadsByDoc = new Map(), caseStaff
                 onClose={() => setPreviewDoc(null)}
             />
         )}
+        {verifyOpen && (
+            <ProofVerifyModal
+                proofs={proofs}
+                leadId={leadId}
+                invoiceId={doc?.id}
+                onClose={() => setVerifyOpen(false)}
+            />
+        )}
         </Fragment>
+    );
+}
+
+// Proof-of-payment verification — previews the client-uploaded proof inline and,
+// when several are submitted, exposes a tab per proof so staff can flip between
+// them. Verifying posts the same document-status endpoint the review flow uses;
+// an Approved proof advances the case stage to "Invoice Paid" and flips the
+// invoice badge to "Paid".
+function ProofVerifyModal({ proofs = [], leadId, invoiceId = null, onClose }) {
+    const [busyId, setBusyId] = useState(null);
+    const [activeId, setActiveId] = useState(proofs[0]?.id ?? null);
+
+    useEffect(() => {
+        const onKey = (e) => { if (e.key === "Escape") onClose(); };
+        const prev = document.body.style.overflow;
+        document.body.style.overflow = "hidden";
+        window.addEventListener("keydown", onKey);
+        return () => { document.body.style.overflow = prev; window.removeEventListener("keydown", onKey); };
+    }, [onClose]);
+
+    const active = proofs.find((p) => p.id === activeId) || proofs[0] || null;
+
+    const act = (proof, status) => {
+        if (!proof) return;
+        setBusyId(proof.id);
+        router.post(
+            `/admin/leads/${leadId}/documents/${proof.id}/status`,
+            { status, invoice_id: status === "Approved" ? invoiceId : null },
+            {
+                preserveScroll: true,
+                onSuccess: () => {
+                    toast.success(status === "Approved" ? "Payment verified" : "Proof rejected");
+                    onClose();
+                },
+                onError: () => toast.error("Could not update the proof"),
+                onFinish: () => setBusyId(null),
+            },
+        );
+    };
+
+    const inlineUrl = active ? `/admin/documents/${active.id}/download?inline=1` : null;
+    const isPdf = (active?.mime || "").includes("pdf") || /\.pdf$/i.test(active?.original_name || "");
+    const isImage = (active?.mime || "").startsWith("image/") || /\.(png|jpe?g|gif|webp|heic)$/i.test(active?.original_name || "");
+    const approved = active?.status === "Approved";
+    const rejected = active?.status === "Rejected";
+
+    return createPortal(
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+            <div className="flex h-[88vh] w-[94vw] max-w-[1000px] flex-col overflow-hidden rounded-2xl bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
+                {/* Header */}
+                <div className="flex items-center justify-between border-b border-gray-100 px-5 py-3.5">
+                    <div>
+                        <p className="mb-0.5 text-[10px] font-bold uppercase tracking-[0.22em] text-gray-400">Proof of payment</p>
+                        <h3 className="text-sm font-semibold text-gray-900">Verify to mark the invoice paid</h3>
+                    </div>
+                    <button type="button" onClick={onClose} className="flex-shrink-0 text-gray-400 hover:text-gray-700"><XIcon size={18} /></button>
+                </div>
+
+                {/* Tabs — one per submitted proof */}
+                {proofs.length > 1 && (
+                    <div className="flex flex-wrap gap-1.5 border-b border-gray-100 bg-gray-50 px-4 py-2">
+                        {proofs.map((p, i) => {
+                            const isActive = p.id === active?.id;
+                            const dot = p.status === "Approved" ? "bg-teal-500" : p.status === "Rejected" ? "bg-red-400" : "bg-amber-400";
+                            return (
+                                <button
+                                    key={p.id}
+                                    type="button"
+                                    onClick={() => setActiveId(p.id)}
+                                    className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[12px] font-medium ${isActive ? "bg-white text-gray-900 shadow-sm ring-1 ring-gray-200" : "text-gray-500 hover:text-gray-800"}`}
+                                >
+                                    <span className={`h-1.5 w-1.5 rounded-full ${dot}`} />
+                                    Proof {i + 1}
+                                </button>
+                            );
+                        })}
+                    </div>
+                )}
+
+                {/* Preview */}
+                <div className="flex min-h-0 flex-1 flex-col bg-gray-100">
+                    {!active ? (
+                        <div className="flex flex-1 items-center justify-center text-[13px] text-gray-500">No proof of payment uploaded yet.</div>
+                    ) : isImage ? (
+                        <div className="flex flex-1 items-start justify-center overflow-auto p-4">
+                            <img src={inlineUrl} alt={active.original_name} className="h-auto max-w-full rounded-lg shadow-sm" />
+                        </div>
+                    ) : isPdf ? (
+                        <iframe src={inlineUrl} title={active.original_name} className="w-full flex-1 border-0" />
+                    ) : (
+                        <div className="flex flex-1 flex-col items-center justify-center p-8 text-center">
+                            <FileText size={40} className="text-gray-300" />
+                            <p className="mt-3 text-sm text-gray-600">No inline preview for this file type.</p>
+                            <a href={`/admin/documents/${active.id}/download`} className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-[12px] font-semibold text-gray-700 hover:bg-white"><Download size={13} /> Download to view</a>
+                        </div>
+                    )}
+                </div>
+
+                {/* Footer — filename + verify/reject for the active proof */}
+                {active && (
+                    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-gray-100 bg-white px-5 py-3">
+                        <div className="min-w-0">
+                            <p className="truncate text-[13px] font-medium text-gray-800">{active.original_name || "Proof of payment"}</p>
+                            <p className="text-[11px] text-gray-400">
+                                {approved ? "Verified" : rejected ? "Rejected" : "Awaiting verification"}
+                                {active.created_at ? ` · uploaded ${formatDate(active.created_at)}` : ""}
+                            </p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <a href={inlineUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-2.5 py-1.5 text-[12px] font-semibold text-gray-600 hover:bg-gray-50"><Eye size={13} /> Open in tab</a>
+                            {!approved && !rejected && (
+                                <button
+                                    type="button"
+                                    disabled={busyId === active.id}
+                                    onClick={() => act(active, "Rejected")}
+                                    className="rounded-lg border border-red-200 px-3 py-1.5 text-[12px] font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
+                                >
+                                    Reject
+                                </button>
+                            )}
+                            {!rejected && (
+                                <button
+                                    type="button"
+                                    disabled={busyId === active.id}
+                                    onClick={() => act(active, "Approved")}
+                                    className="inline-flex items-center gap-1.5 rounded-lg bg-teal-600 px-3.5 py-1.5 text-[12px] font-semibold text-white hover:bg-teal-700 disabled:opacity-50"
+                                >
+                                    {busyId === active.id ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
+                                    {approved ? "Mark this invoice paid" : "Verify payment"}
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                )}
+            </div>
+        </div>,
+        document.body,
     );
 }
 

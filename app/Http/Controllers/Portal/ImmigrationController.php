@@ -513,7 +513,6 @@ class ImmigrationController extends Controller
             // ordered by category → name to match VisaType admin tooling.
             $visaTypes = \App\Models\VisaType::query()
                 ->where('active', true)
-                ->orderBy('category')
                 ->orderBy('name')
                 ->get(['id', 'code', 'name', 'category']);
 
@@ -1074,6 +1073,10 @@ class ImmigrationController extends Controller
                 ->orderByDesc('created_at')
                 ->limit(300)
                 ->get()
+                // One row per case — the client submits a single proof per
+                // invoice, and a re-upload replaces the prior file, so show the
+                // latest per case rather than every historical upload.
+                ->unique('lead_id')
                 ->map(fn (LeadDocument $d) => [
                     'id' => $d->id,
                     'case_id' => $d->lead_id,
@@ -1254,6 +1257,13 @@ class ImmigrationController extends Controller
             if ($steps->jumpToStage($lead, $newStage, auth()->user())) {
                 if (array_key_exists('immigration_assignee', $data)) {
                     $lead->immigration_assignee = $data['immigration_assignee'] ?: null;
+                }
+                // Visa approved — the case is done, so clear its working priority
+                // to "done" (it no longer needs to compete for attention).
+                if ($newStage === 'Approved Visa' && $lead->immigration_priority !== 'done') {
+                    $lead->immigration_priority = 'done';
+                }
+                if ($lead->isDirty()) {
                     $lead->save();
                 }
                 \App\Jobs\EvaluateCaseFindings::dispatch($lead->id);
@@ -1274,6 +1284,12 @@ class ImmigrationController extends Controller
             $lead->stage_updated_at = now();
             $lead->stage_updated_by = auth()->id();
             $lead->pushStageHistory('immigration', $newStage, $lead->immigration_assignee);
+
+            // Visa approved — the case is done, so clear its working priority to
+            // "done" (it no longer needs to compete for attention).
+            if ($newStage === 'Approved Visa' && $lead->immigration_priority !== 'done') {
+                $lead->immigration_priority = 'done';
+            }
         }
 
         if ($stageMoved || $lead->isDirty('immigration_assignee')) {

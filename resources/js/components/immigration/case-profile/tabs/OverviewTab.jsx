@@ -50,8 +50,8 @@ export default function OverviewTab(props) {
     // Pipeline stepper — each stage's state derived from case milestones.
     const steps = [
         { key: "assessment", label: "Assessment", done: !!lead.immigration_converted_at, sub: lead.immigration_converted_at ? `converted ${fmtShort(lead.immigration_converted_at)}` : "not converted" },
-        { key: "engagement", label: "Engagement", done: !!engagement.sent, sub: engagement.signed ? `signed ${fmtShort(engagement.signed_at)}` : engagement.sent ? "sent" : "not sent" },
-        { key: "invoice", label: "Invoice", done: !!paidAt, sub: paidAt ? `paid ${fmtShort(paidAt)}` : "not paid" },
+        { key: "engagement", label: "Engagement", done: !!engagement.sent, sub: engagement.signed ? `signed ${fmtShort(engagement.signed_at)}` : engagement.sent ? `sent ${fmtShort(engagement.sent_at)}` : "not sent" },
+        { key: "invoice", label: "Invoice", done: !!engagement.invoice_paid, sub: engagement.invoice_paid ? `paid ${fmtShort(engagement.invoice_paid_at)}` : engagement.sent ? "sent · awaiting payment" : "not sent" },
         { key: "documents", label: "Documents", done: reqTotal > 0 && reqApproved >= reqTotal, sub: `${reqApproved} of ${reqTotal} approved` },
         { key: "lodgement", label: "INZ lodgement", done: /lodg|decision|approv|declin/i.test(lead.inz_status || ""), sub: lead.inz_status && /lodg|decision|approv|declin/i.test(lead.inz_status) ? lead.inz_status : "not started" },
         { key: "decision", label: "Decision", done: /approv|declin/i.test(lead.inz_status || ""), sub: /approv|declin/i.test(lead.inz_status || "") ? lead.inz_status : "—" },

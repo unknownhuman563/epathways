@@ -1274,6 +1274,7 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/dashboard', [\App\Http\Controllers\Portal\ImmigrationAdviserController::class, 'dashboard'])->name('dashboard');
             Route::get('/cases', [\App\Http\Controllers\Portal\ImmigrationAdviserController::class, 'cases'])->name('cases');
             Route::get('/my-cases', [\App\Http\Controllers\Portal\ImmigrationAdviserController::class, 'myCases'])->name('my-cases');
+            Route::get('/tasks', [\App\Http\Controllers\Portal\ImmigrationAdviserController::class, 'tasks'])->name('tasks');
             Route::get('/assessments', [\App\Http\Controllers\Portal\ImmigrationAdviserController::class, 'assessments'])->name('assessments');
             Route::get('/cases/{lead}', [\App\Http\Controllers\Portal\ImmigrationAdviserController::class, 'showCase'])->name('cases.show');
             // Document verification queue — manager-checked docs the LIA approves/rejects.

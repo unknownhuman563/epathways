@@ -170,26 +170,42 @@ class EngagementSigningController extends Controller
         $lead = $this->resolveByToken($token);
         abort_unless($lead, 404);
 
+        // One proof of payment per invoice — accept a single PDF or image and
+        // replace any earlier upload that has not yet been confirmed, so the
+        // client and the staff invoice queue keep a single, current file.
         $request->validate([
-            'files' => ['required', 'array', 'min:1', 'max:5'],
+            'files' => ['required', 'array', 'size:1'],
             'files.*' => ['file', 'mimes:pdf,jpg,jpeg,png,webp,gif', 'max:10240'],
         ]);
 
-        foreach ($request->file('files', []) as $file) {
-            $path = $file->store("lead-documents/{$lead->id}", 'local');
-            LeadDocument::create([
-                'lead_id' => $lead->id,
-                'checklist_key' => 'proof_of_payment',
-                'original_name' => $file->getClientOriginalName(),
-                'file_path' => $path,
-                'mime' => $file->getClientMimeType(),
-                'size' => $file->getSize(),
-                'status' => LeadDocument::STATUS_SUBMITTED,
-                'source' => LeadDocument::SOURCE_UPLOAD,
-                'source_variant' => 'proof_of_payment',
-                'uploaded_by' => null,
-            ]);
-        }
+        $file = $request->file('files')[0];
+
+        // Remove prior proofs that were not yet confirmed (Approved). A confirmed
+        // proof is kept as the record of a settled payment.
+        LeadDocument::where('lead_id', $lead->id)
+            ->where('source_variant', 'proof_of_payment')
+            ->where('status', '!=', LeadDocument::STATUS_APPROVED)
+            ->get()
+            ->each(function (LeadDocument $old) {
+                if ($old->file_path && Storage::disk('local')->exists($old->file_path)) {
+                    Storage::disk('local')->delete($old->file_path);
+                }
+                $old->delete();
+            });
+
+        $path = $file->store("lead-documents/{$lead->id}", 'local');
+        LeadDocument::create([
+            'lead_id' => $lead->id,
+            'checklist_key' => 'proof_of_payment',
+            'original_name' => $file->getClientOriginalName(),
+            'file_path' => $path,
+            'mime' => $file->getClientMimeType(),
+            'size' => $file->getSize(),
+            'status' => LeadDocument::STATUS_SUBMITTED,
+            'source' => LeadDocument::SOURCE_UPLOAD,
+            'source_variant' => 'proof_of_payment',
+            'uploaded_by' => null,
+        ]);
 
         return back()->with('success', 'Proof of payment uploaded — thank you. We will confirm receipt shortly.');
     }

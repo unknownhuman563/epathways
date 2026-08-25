@@ -333,6 +333,7 @@ class LeadTrackingController extends Controller
         ])->validate();
         $lastDoc = null;
         $firstPath = null;
+        $checklistSvc = app(\App\Services\Immigration\CaseChecklistService::class);
 
         foreach ($files as $file) {
             // Private disk: client uploads (passports, bank statements, academic
@@ -341,10 +342,17 @@ class LeadTrackingController extends Controller
             $path = $file->store("lead-documents/{$lead->id}", 'local');
             $firstPath ??= $path;
 
+            // Rename to the visa checklist's convention when the matched item
+            // defines a file_code — the display name the client and staff see
+            // (the on-disk path stays random; downloads use original_name).
+            $displayName = ($checklistKey
+                ? $checklistSvc->uploadFileNameFor($lead, $checklistKey, $file->getClientOriginalName())
+                : null) ?: $file->getClientOriginalName();
+
             $lastDoc = LeadDocument::create([
                 'lead_id' => $lead->id,
                 'checklist_key' => $checklistKey,
-                'original_name' => $file->getClientOriginalName(),
+                'original_name' => $displayName,
                 'file_path' => $path,
                 'mime' => $file->getMimeType(),
                 'size' => $file->getSize(),
@@ -424,8 +432,15 @@ class LeadTrackingController extends Controller
             $file = $request->file('file');
             $path = $file->store("lead-documents/{$lead->id}", 'local');
 
+            // Rename to the visa checklist's convention (file_code) for the
+            // matched item; fall back to the client's own filename.
+            $key = $request->input('checklist_key', $doc->checklist_key);
+            $displayName = ($key
+                ? app(\App\Services\Immigration\CaseChecklistService::class)->uploadFileNameFor($lead, $key, $file->getClientOriginalName())
+                : null) ?: $file->getClientOriginalName();
+
             $doc->fill([
-                'original_name' => $file->getClientOriginalName(),
+                'original_name' => $displayName,
                 'file_path' => $path,
                 'mime' => $file->getMimeType(),
                 'size' => $file->getSize(),
