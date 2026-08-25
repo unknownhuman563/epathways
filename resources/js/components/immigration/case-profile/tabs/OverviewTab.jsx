@@ -4,10 +4,10 @@
  * activity. Wired to the real case props; a few derived numbers fall back
  * gracefully when the underlying data isn't present.
  */
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { router } from "@inertiajs/react";
 import { toast } from "sonner";
-import { Pin } from "lucide-react";
+import { Pin, CheckSquare, Square, Paperclip, X, FileText, Plus } from "lucide-react";
 
 const fmtDate = (iso) => (iso ? new Date(iso).toLocaleDateString("en-NZ", { day: "numeric", month: "short", year: "numeric" }) : "—");
 const fmtShort = (iso) => (iso ? new Date(iso).toLocaleDateString("en-NZ", { day: "numeric", month: "short" }) : "—");
@@ -18,6 +18,7 @@ export default function OverviewTab(props) {
     const {
         lead = {}, documents = [], checklistProgress = {}, findings = { items: [] },
         financials = {}, dependents = [], activity = [], notes = [], engagement = {},
+        tasks = { items: [] }, caseStaff = [],
         onNavigate,
     } = props;
 
@@ -99,7 +100,13 @@ export default function OverviewTab(props) {
                     </div>
             </section>
 
-            {/* Two-column body below the full-width pipeline */}
+            {/* Internal notes + Tasks — one row, directly under the pipeline */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
+                <InternalNotes leadId={lead.id} notes={notes} onSeeAll={() => go("notes")} />
+                <CaseTasks tasks={tasks} leadId={lead.id} caseStaff={caseStaff} onOpenBoard={() => go("tasks")} />
+            </div>
+
+            {/* Two-column body below */}
             <div className="flex flex-col lg:flex-row gap-5 items-start">
                 <div className="space-y-5 w-full min-w-0" style={{ flex: "1 1 0%" }}>
                 {/* Needs attention */}
@@ -124,8 +131,7 @@ export default function OverviewTab(props) {
                     </section>
                 )}
 
-                {/* Documents + Internal notes, side by side */}
-                <div className="grid grid-cols-1 xl:grid-cols-2 gap-5 items-start">
+                {/* Documents */}
                 <section className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
                     <div className="flex items-center justify-between gap-3 mb-3">
                         <h2 className="text-[15px] font-bold text-gray-900">Documents <span className="text-[12px] font-normal text-gray-400 ml-1">{reqApproved} of {reqTotal} approved · {documents.length} files on file</span></h2>
@@ -149,10 +155,6 @@ export default function OverviewTab(props) {
                         {depTotal > 0 && <CategoryRow label="Dependant documents" done={depDone} total={depTotal} />}
                     </div>
                 </section>
-
-                {/* Internal notes — the case team's private notebook */}
-                <InternalNotes leadId={lead.id} notes={notes} onSeeAll={() => go("notes")} />
-                </div>
 
                 {/* Family included */}
                 {dependents.length > 0 && (
@@ -245,20 +247,107 @@ const NOTE_KINDS = [
 const kindMeta = (k) =>
     NOTE_KINDS.find((x) => x.key === k) || (k === "engagement" ? { label: "Note", tone: "text-amber-600" } : { label: "Note", tone: "text-gray-500" });
 
+// Selected-file chips shown under a composer before posting.
+function PendingFiles({ files, onRemove }) {
+    if (! files.length) return null;
+    return (
+        <div className="flex flex-wrap gap-1.5 mt-2">
+            {files.map((f, i) => (
+                <span key={i} className="inline-flex items-center gap-1 text-[11px] bg-gray-100 text-gray-600 rounded px-1.5 py-0.5">
+                    <FileText size={11} className="text-gray-400" />
+                    <span className="max-w-[130px] truncate">{f.name}</span>
+                    <button type="button" onClick={() => onRemove(i)} className="text-gray-400 hover:text-gray-700"><X size={11} /></button>
+                </span>
+            ))}
+        </div>
+    );
+}
+
+// Attachments already saved on a note/reply — image thumbnails or file chips,
+// opening the private-disk file in a new tab.
+function NoteAttachments({ attachments = [] }) {
+    if (! attachments.length) return null;
+    return (
+        <div className="flex flex-wrap gap-2 mt-2">
+            {attachments.map((a, i) => (
+                a.is_image ? (
+                    <a key={i} href={a.view_url} target="_blank" rel="noreferrer" className="block">
+                        <img src={a.view_url} alt={a.name} className="h-16 w-16 object-cover rounded-lg border border-gray-200" />
+                    </a>
+                ) : (
+                    <a key={i} href={a.view_url} target="_blank" rel="noreferrer"
+                        className="inline-flex items-center gap-1.5 text-[11px] bg-gray-50 border border-gray-200 rounded-lg px-2 py-1 text-gray-600 hover:bg-white">
+                        <FileText size={12} className="text-gray-400" />
+                        <span className="max-w-[150px] truncate">{a.name}</span>
+                    </a>
+                )
+            ))}
+        </div>
+    );
+}
+
+// A reply/compose box with an attach control. Posts to the notes endpoint;
+// `parentId` set makes it a threaded reply.
+function NoteReplyBox({ leadId, parentId = null, placeholder, onDone, onCancel }) {
+    const [body, setBody] = useState("");
+    const [files, setFiles] = useState([]);
+    const [posting, setPosting] = useState(false);
+    const fileRef = useRef(null);
+
+    const submit = () => {
+        if (! body.trim() && ! files.length) return;
+        setPosting(true);
+        router.post(`/admin/leads/${leadId}/notes`, { body: body || "(attachment)", parent_id: parentId, files }, {
+            forceFormData: true,
+            preserveScroll: true,
+            onSuccess: () => { setBody(""); setFiles([]); onDone && onDone(); },
+            onError: (e) => toast.error(Object.values(e)[0] || "Could not reply"),
+            onFinish: () => setPosting(false),
+        });
+    };
+
+    return (
+        <div className="rounded-xl border border-gray-200 bg-white p-2.5">
+            <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={2} maxLength={2000}
+                placeholder={placeholder} className="w-full text-[13px] outline-none resize-none placeholder-gray-400" />
+            <PendingFiles files={files} onRemove={(i) => setFiles((fs) => fs.filter((_, x) => x !== i))} />
+            <div className="flex items-center justify-between mt-1.5 pt-1.5 border-t border-gray-50">
+                <button type="button" onClick={() => fileRef.current?.click()} title="Attach a file"
+                    className="inline-flex items-center justify-center w-7 h-7 rounded-full text-gray-400 hover:bg-gray-100 hover:text-gray-700">
+                    <Plus size={15} />
+                </button>
+                <input ref={fileRef} type="file" multiple accept="application/pdf,image/*" className="hidden"
+                    onChange={(e) => { setFiles((fs) => [...fs, ...Array.from(e.target.files || [])]); e.target.value = ""; }} />
+                <div className="flex items-center gap-3">
+                    {onCancel && <button type="button" onClick={onCancel} className="text-[12px] text-gray-500 hover:text-gray-800">Cancel</button>}
+                    <button type="button" onClick={submit} disabled={posting || (! body.trim() && ! files.length)}
+                        className="px-3 py-1 rounded-lg bg-gray-900 text-white text-[12px] font-semibold hover:bg-gray-800 disabled:opacity-40">
+                        {parentId ? "Reply" : "Post"}
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
 // The case team's private notebook — categorised notes (Note / Risk / Client
-// contact), pinnable, never shown to the client.
+// contact), pinnable, threaded (staff can reply), with media attachments.
+// Never shown to the client.
 function InternalNotes({ leadId, notes = [], onSeeAll }) {
     const [kind, setKind] = useState("general");
     const [body, setBody] = useState("");
     const [pinned, setPinned] = useState(false);
+    const [files, setFiles] = useState([]);
     const [posting, setPosting] = useState(false);
+    const fileRef = useRef(null);
 
     const submit = () => {
-        if (! body.trim()) return;
+        if (! body.trim() && ! files.length) return;
         setPosting(true);
-        router.post(`/admin/leads/${leadId}/notes`, { body, pinned, kind }, {
+        router.post(`/admin/leads/${leadId}/notes`, { body: body || "(attachment)", pinned, kind, files }, {
+            forceFormData: true,
             preserveScroll: true,
-            onSuccess: () => { setBody(""); setPinned(false); setKind("general"); toast.success("Note added"); },
+            onSuccess: () => { setBody(""); setPinned(false); setKind("general"); setFiles([]); toast.success("Note added"); },
             onError: (e) => toast.error(Object.values(e)[0] || "Could not add note"),
             onFinish: () => setPosting(false),
         });
@@ -270,31 +359,38 @@ function InternalNotes({ leadId, notes = [], onSeeAll }) {
     return (
         <section className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
             <div className="flex items-center justify-between gap-2 mb-3">
-                <h2 className="text-[14px] font-bold text-gray-900">Internal notes <span className="text-[11px] font-normal text-gray-400">never shown to the client</span></h2>
-                <button type="button" onClick={onSeeAll} className="text-[12px] font-semibold text-teal-700 hover:underline flex-shrink-0">All {notes.length}</button>
+                <h2 className="text-[14px] font-bold text-gray-900">Internal notes <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 ml-1">Team only</span></h2>
+                <button type="button" onClick={onSeeAll} className="text-[12px] font-semibold text-teal-700 hover:underline flex-shrink-0">All {notes.length} →</button>
             </div>
 
             {/* Composer */}
-            <div className="rounded-xl border border-gray-200 p-2.5">
+            <div className="rounded-xl border border-gray-200 p-2.5 bg-gray-50/40">
                 <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={2} maxLength={2000}
-                    placeholder="Add a note for the case team…"
-                    className="w-full text-[13px] outline-none resize-none placeholder-gray-400" />
-                <div className="flex items-center justify-between mt-1.5 pt-1.5 border-t border-gray-50 gap-2 flex-wrap">
+                    placeholder="Write something for the team…"
+                    className="w-full text-[13px] bg-transparent outline-none resize-none placeholder-gray-400" />
+                <PendingFiles files={files} onRemove={(i) => setFiles((fs) => fs.filter((_, x) => x !== i))} />
+                <div className="flex items-center justify-between mt-1.5 pt-1.5 border-t border-gray-100 gap-2 flex-wrap">
                     <div className="flex items-center gap-2.5">
                         {NOTE_KINDS.map((k) => (
                             <button key={k.key} type="button" onClick={() => setKind(k.key)}
-                                className={`text-[12px] font-semibold ${kind === k.key ? "text-gray-900 underline underline-offset-4" : "text-gray-400 hover:text-gray-700"}`}>
+                                className={`text-[12px] font-semibold px-2 py-0.5 rounded ${kind === k.key ? "bg-gray-900 text-white" : "text-gray-500 hover:text-gray-800"}`}>
                                 {k.label}
                             </button>
                         ))}
                     </div>
-                    <div className="flex items-center gap-3">
-                        <button type="button" onClick={() => setPinned((p) => ! p)} title="Pin to top"
-                            className={`inline-flex items-center gap-1 text-[12px] font-semibold ${pinned ? "text-amber-600" : "text-gray-400 hover:text-gray-700"}`}>
-                            <Pin size={12} /> Pin
+                    <div className="flex items-center gap-2">
+                        <button type="button" onClick={() => fileRef.current?.click()} title="Attach a file"
+                            className="inline-flex items-center justify-center w-7 h-7 rounded-full text-gray-400 hover:bg-gray-200 hover:text-gray-700">
+                            <Plus size={15} />
                         </button>
-                        <button type="button" onClick={submit} disabled={posting || ! body.trim()}
-                            className="text-[13px] font-bold text-teal-700 hover:text-teal-900 disabled:opacity-40">Post</button>
+                        <input ref={fileRef} type="file" multiple accept="application/pdf,image/*" className="hidden"
+                            onChange={(e) => { setFiles((fs) => [...fs, ...Array.from(e.target.files || [])]); e.target.value = ""; }} />
+                        <button type="button" onClick={() => setPinned((p) => ! p)} title="Pin to top"
+                            className={`inline-flex items-center justify-center w-7 h-7 rounded-full ${pinned ? "text-amber-600 bg-amber-50" : "text-gray-400 hover:bg-gray-200 hover:text-gray-700"}`}>
+                            <Pin size={13} />
+                        </button>
+                        <button type="button" onClick={submit} disabled={posting || (! body.trim() && ! files.length)}
+                            className="px-3.5 py-1.5 rounded-lg bg-gray-900 text-white text-[12px] font-semibold hover:bg-gray-800 disabled:opacity-40">Post</button>
                     </div>
                 </div>
             </div>
@@ -307,26 +403,223 @@ function InternalNotes({ leadId, notes = [], onSeeAll }) {
                     {pinnedNotes.length > 0 && (
                         <div>
                             <p className="text-[10px] font-bold uppercase tracking-wider text-amber-600 mb-2">Pinned</p>
-                            <div className="space-y-3">{pinnedNotes.map((n) => <NoteItem key={n.id} n={n} />)}</div>
+                            <div className="space-y-3">{pinnedNotes.map((n) => <NoteItem key={n.id} n={n} leadId={leadId} />)}</div>
                         </div>
                     )}
-                    <div className="space-y-3">{rest.map((n) => <NoteItem key={n.id} n={n} />)}</div>
+                    <div className="space-y-3">{rest.map((n) => <NoteItem key={n.id} n={n} leadId={leadId} />)}</div>
                 </div>
             )}
         </section>
     );
 }
 
-function NoteItem({ n }) {
-    const meta = kindMeta(n.kind);
+// Task Board tasks tied to this case — a read view on the Overview so board
+// work is visible from the case. "Open board" jumps to the department board.
+function CaseTasks({ tasks = { items: [] }, leadId, caseStaff = [] }) {
+    const items = tasks.items || [];
+    const [adding, setAdding] = useState(false);
+    const [busyId, setBusyId] = useState(null);
+    const openBoard = () => {
+        const p = typeof window !== "undefined" ? window.location.pathname : "";
+        const base = p.startsWith("/portal/immigration-adviser") ? "/portal/immigration-adviser" : "/portal/immigration";
+        router.visit(`${base}/tasks`);
+    };
+    const toggleComplete = (t) => {
+        setBusyId(t.id);
+        router.patch(`/api/tasks/${t.id}`, { status: t.completed ? "not_started" : "completed" }, {
+            preserveScroll: true,
+            onSuccess: () => toast.success(t.completed ? "Task reopened" : "Task completed"),
+            onError: (e) => toast.error(Object.values(e)[0] || "Could not update task"),
+            onFinish: () => setBusyId(null),
+        });
+    };
+    const dotTone = (t) => t.completed ? "bg-teal-500"
+        : t.priority === "urgent" ? "bg-red-500"
+            : t.priority === "high" ? "bg-orange-500"
+                : t.priority === "medium" ? "bg-amber-500"
+                    : "bg-blue-500";
+    const statusPill = (s) => {
+        const label = (s || "").replace(/_/g, " ") || "Not started";
+        const tone = /progress|doing/i.test(s) ? "bg-orange-50 text-orange-700"
+            : /review/i.test(s) ? "bg-pink-50 text-pink-700"
+                : /done|complete/i.test(s) ? "bg-teal-50 text-teal-700"
+                    : "bg-blue-50 text-blue-700";
+        return <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full capitalize ${tone}`}>{label}</span>;
+    };
+    const dueLabel = (t) => {
+        if (! t.due_at) return null;
+        const days = Math.ceil((new Date(t.due_at) - Date.now()) / 86400000);
+        if (days < 0) return <span className="text-[10.5px] font-semibold text-red-600">{Math.abs(days)}d overdue</span>;
+        if (days === 0) return <span className="text-[10.5px] font-semibold text-amber-600">Due today</span>;
+        return <span className="text-[10.5px] text-gray-400">In {days} day{days === 1 ? "" : "s"}</span>;
+    };
+
     return (
-        <div className="border-b border-gray-50 pb-3 last:border-b-0 last:pb-0">
-            <div className="flex items-center justify-between gap-2">
-                <span className={`text-[10px] font-bold uppercase tracking-wider ${meta.tone}`}>{meta.label}</span>
-                <span className="text-[11px] text-gray-400">{fmtShort(n.created_at)}</span>
+        <section className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+            <div className="flex items-center justify-between gap-3 mb-3">
+                <h2 className="text-[14px] font-bold text-gray-900">Tasks on this case <span className="text-[11px] font-normal text-gray-400">{tasks.open ?? items.filter((t) => ! t.completed).length} open · from the task board</span></h2>
+                <button type="button" onClick={openBoard} className="text-[12px] font-semibold text-teal-700 hover:underline flex-shrink-0">Open board</button>
             </div>
-            <p className="text-[12.5px] text-gray-700 leading-relaxed mt-1 whitespace-pre-wrap">{n.body}</p>
-            <p className="text-[11px] text-gray-400 mt-1">{n.author || "Unknown"}{n.author_role ? ` · ${String(n.author_role).replace(/_/g, " ")}` : ""}</p>
+            {items.length === 0 ? (
+                <p className="text-[12px] text-gray-400">No tasks linked to this case yet.</p>
+            ) : (
+                <div className="space-y-3">
+                    {items.map((t) => (
+                        <div key={t.id} className="flex items-start gap-2.5">
+                            <button type="button" onClick={() => toggleComplete(t)} disabled={busyId === t.id}
+                                title={t.completed ? "Reopen task" : "Mark complete"} className="flex-shrink-0 mt-0.5 disabled:opacity-50">
+                                {t.completed
+                                    ? <CheckSquare size={16} className="text-teal-600" />
+                                    : <Square size={16} className="text-gray-300 hover:text-gray-500" />}
+                            </button>
+                            <div className="min-w-0 flex-1">
+                                <div className="flex items-start justify-between gap-2">
+                                    <p className={`text-[12.5px] font-semibold leading-snug ${t.completed ? "text-gray-400 line-through" : "text-gray-800"}`}>{t.title}</p>
+                                    <div className="flex items-center gap-2 flex-shrink-0">
+                                        {statusPill(t.status)}
+                                        {dueLabel(t)}
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-1.5 mt-1">
+                                    {/* Assignee — avatar + name, so it's clear who owns the task. */}
+                                    {t.assignee ? (
+                                        <span className="inline-flex items-center gap-1 bg-gray-100 rounded-full pl-0.5 pr-2 py-0.5">
+                                            <span className="w-4 h-4 rounded-full bg-teal-600 text-white text-[8px] font-bold flex items-center justify-center">
+                                                {(t.assignee.name || "?").split(/\s+/).filter(Boolean).slice(0, 2).map((s) => s[0].toUpperCase()).join("")}
+                                            </span>
+                                            <span className="text-[10.5px] font-medium text-gray-600">{t.assignee.name}</span>
+                                        </span>
+                                    ) : (
+                                        <span className="text-[10.5px] text-gray-400">Unassigned</span>
+                                    )}
+                                    {t.created_at && <span className="text-[10.5px] text-gray-400">· added {fmtShort(t.created_at)}</span>}
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            )}
+            {adding ? (
+                <QuickAddTask leadId={leadId} caseStaff={caseStaff} onClose={() => setAdding(false)} />
+            ) : (
+                <button type="button" onClick={() => setAdding(true)}
+                    className="mt-4 inline-flex items-center gap-1.5 text-[12px] font-semibold text-gray-700 border border-gray-200 rounded-lg px-3 py-1.5 hover:bg-gray-50">
+                    <Plus size={13} /> Add a task
+                </button>
+            )}
+        </section>
+    );
+}
+
+// Inline quick-add for a case task — creates a Task Board task linked to this
+// case (title + due date + priority), then refreshes the Overview's tasks.
+function QuickAddTask({ leadId, caseStaff = [], onClose }) {
+    const today = new Date().toISOString().slice(0, 10);
+    const [title, setTitle] = useState("");
+    const [dueAt, setDueAt] = useState(today);
+    const [priority, setPriority] = useState("normal");
+    const [assigneeId, setAssigneeId] = useState("");
+    const [saving, setSaving] = useState(false);
+
+    const submit = () => {
+        if (! title.trim()) return toast.error("Give the task a title");
+        setSaving(true);
+        router.post("/api/tasks", {
+            task_type: "linked",
+            title: title.trim(),
+            due_at: dueAt,
+            priority,
+            assignee_id: assigneeId || null,
+            lead_id: leadId,
+            department: "immigration",
+        }, {
+            preserveScroll: true,
+            onSuccess: () => { toast.success("Task added"); onClose(); },
+            onError: (e) => toast.error(Object.values(e)[0] || "Could not add task"),
+            onFinish: () => setSaving(false),
+        });
+    };
+
+    return (
+        <div className="mt-4 rounded-xl border border-gray-200 p-2.5 space-y-2">
+            <input value={title} onChange={(e) => setTitle(e.target.value)} autoFocus
+                placeholder="Task title (e.g. Chase police certificate)"
+                className="w-full text-[13px] outline-none placeholder-gray-400"
+                onKeyDown={(e) => { if (e.key === "Enter") submit(); }} />
+            <div className="flex flex-wrap items-center gap-2 pt-1.5 border-t border-gray-50">
+                <input type="date" value={dueAt} min={today} onChange={(e) => setDueAt(e.target.value)}
+                    className="text-[12px] border border-gray-200 rounded-lg px-2 py-1 text-gray-700" />
+                <select value={priority} onChange={(e) => setPriority(e.target.value)}
+                    className="text-[12px] border border-gray-200 rounded-lg px-2 py-1 text-gray-700 capitalize">
+                    {["urgent", "high", "normal", "low"].map((p) => <option key={p} value={p}>{p}</option>)}
+                </select>
+                <select value={assigneeId} onChange={(e) => setAssigneeId(e.target.value)}
+                    className="text-[12px] border border-gray-200 rounded-lg px-2 py-1 text-gray-700 max-w-[130px]" title="Assign to">
+                    <option value="">Assign to…</option>
+                    {caseStaff.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                </select>
+                <div className="flex items-center gap-3 ml-auto">
+                    <button type="button" onClick={onClose} className="text-[12px] text-gray-500 hover:text-gray-800">Cancel</button>
+                    <button type="button" onClick={submit} disabled={saving || ! title.trim()}
+                        className="px-3 py-1 rounded-lg bg-gray-900 text-white text-[12px] font-semibold hover:bg-gray-800 disabled:opacity-40">Add</button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+function NoteItem({ n, leadId }) {
+    const meta = kindMeta(n.kind);
+    const replies = n.replies || [];
+    const [replyOpen, setReplyOpen] = useState(false);
+    const initials = (n.author || "?").split(/\s+/).filter(Boolean).slice(0, 2).map((s) => s[0].toUpperCase()).join("") || "?";
+
+    return (
+        <div className={`rounded-xl border p-3 ${n.kind === "risk" ? "border-red-100 bg-red-50/40" : n.pinned ? "border-teal-100 bg-teal-50/40" : "border-gray-100 bg-white"}`}>
+            <div className="flex items-start gap-2.5">
+                <span className="w-7 h-7 rounded-full bg-teal-600 text-white text-[10px] font-bold flex items-center justify-center flex-shrink-0 mt-0.5">{initials}</span>
+                <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-[12.5px] font-bold text-gray-900">{n.author || "Unknown"}</span>
+                        <span className={`text-[9.5px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded ${meta.tone} bg-gray-50`}>{meta.label}</span>
+                        {n.pinned && <span className="text-[9.5px] font-bold uppercase tracking-wider text-teal-700">Pinned</span>}
+                        <span className="text-[11px] text-gray-400 ml-auto">{fmtShort(n.created_at)}</span>
+                    </div>
+                    <p className="text-[12.5px] text-gray-700 leading-relaxed mt-1 whitespace-pre-wrap">{n.body}</p>
+                    <NoteAttachments attachments={n.attachments} />
+
+                    {/* Replies */}
+                    {replies.length > 0 && (
+                        <div className="mt-3 space-y-2.5 pl-3 border-l-2 border-gray-100">
+                            {replies.map((r) => {
+                                const ri = (r.author || "?").split(/\s+/).filter(Boolean).slice(0, 2).map((s) => s[0].toUpperCase()).join("") || "?";
+                                return (
+                                    <div key={r.id} className="flex items-start gap-2">
+                                        <span className="w-6 h-6 rounded-full bg-gray-200 text-gray-600 text-[9px] font-bold flex items-center justify-center flex-shrink-0 mt-0.5">{ri}</span>
+                                        <div className="min-w-0 flex-1">
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-[12px] font-bold text-gray-800">{r.author || "Unknown"}</span>
+                                                <span className="text-[10.5px] text-gray-400">{fmtDateTime(r.created_at)}</span>
+                                            </div>
+                                            <p className="text-[12px] text-gray-600 leading-relaxed whitespace-pre-wrap">{r.body}</p>
+                                            <NoteAttachments attachments={r.attachments} />
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
+
+                    <div className="mt-2">
+                        {replyOpen ? (
+                            <NoteReplyBox leadId={leadId} parentId={n.id} placeholder="Reply to the team…"
+                                onDone={() => setReplyOpen(false)} onCancel={() => setReplyOpen(false)} />
+                        ) : (
+                            <button type="button" onClick={() => setReplyOpen(true)} className="text-[12px] font-semibold text-teal-700 hover:text-teal-900">Reply</button>
+                        )}
+                    </div>
+                </div>
+            </div>
         </div>
     );
 }

@@ -106,6 +106,9 @@ class CaseProfileController extends Controller
             'agreements' => $this->loadAgreements($lead),
             'notes' => $this->loadNotes($lead),
             'activity' => $this->loadActivity($lead),
+            // Task Board tasks tied to this case — surfaced on the Overview so
+            // work raised on the board is visible from the case itself.
+            'tasks' => $this->loadTasks($lead),
             // Build 12 phase 3 — case-assist findings. The last STORED result
             // (never evaluated on page load), grouped for the AI Health tab.
             'findings' => $this->loadFindings($lead),
@@ -1827,12 +1830,16 @@ class CaseProfileController extends Controller
 
     private function loadNotes(Lead $lead): array
     {
-        return LeadNote::where('lead_id', $lead->id)
-            ->orderByDesc('pinned')
-            ->orderByDesc('created_at')
-            ->limit(50)
-            ->get()
-            ->map(fn (LeadNote $n) => [
+        $map = function (LeadNote $n) use ($lead) {
+            $attachments = collect($n->attachments ?? [])->values()->map(fn ($a, $i) => [
+                'name' => $a['original_name'] ?? 'attachment',
+                'size' => $a['size'] ?? null,
+                'is_image' => str_starts_with((string) ($a['mime'] ?? ''), 'image/'),
+                'view_url' => "/admin/leads/{$lead->id}/notes/{$n->id}/attachments/{$i}?inline=1",
+                'download_url' => "/admin/leads/{$lead->id}/notes/{$n->id}/attachments/{$i}",
+            ])->all();
+
+            return [
                 'id' => $n->id,
                 'body' => $n->body,
                 'kind' => $n->kind ?: 'general',
@@ -1840,8 +1847,68 @@ class CaseProfileController extends Controller
                 'author' => $n->author_name ?? null,
                 'author_role' => $n->author_role ?? null,
                 'created_at' => $n->created_at,
+                'attachments' => $attachments,
+            ];
+        };
+
+        return LeadNote::where('lead_id', $lead->id)
+            ->whereNull('parent_id')
+            ->with(['replies'])
+            ->orderByDesc('pinned')
+            ->orderByDesc('created_at')
+            ->limit(50)
+            ->get()
+            ->map(function (LeadNote $n) use ($map) {
+                $row = $map($n);
+                $row['replies'] = $n->replies->map($map)->all();
+                return $row;
+            })
+            ->all();
+    }
+
+    /**
+     * Task Board tasks tied to this case — either directly (lead_id) or as an
+     * additional linked lead. Open tasks first (by due date), then recently
+     * completed. Feeds the Overview's Tasks card so board work is visible from
+     * the case.
+     *
+     * @return array<string, mixed>
+     */
+    private function loadTasks(Lead $lead): array
+    {
+        $tasks = \App\Models\LeadTask::query()
+            ->with(['assignee:id,name,avatar_path', 'creator:id,name'])
+            ->where(function ($q) use ($lead) {
+                $q->where('lead_id', $lead->id)
+                    ->orWhereJsonContains('additional_lead_ids', $lead->id);
+            })
+            ->orderBy('completed')
+            ->orderByRaw('due_at is null, due_at asc')
+            ->orderByDesc('created_at')
+            ->limit(50)
+            ->get()
+            ->map(fn (\App\Models\LeadTask $t) => [
+                'id' => $t->id,
+                'title' => $t->title,
+                'priority' => $t->priority,
+                'status' => $t->status,
+                'due_at' => optional($t->due_at)?->toIso8601String(),
+                'created_at' => optional($t->created_at)?->toIso8601String(),
+                'completed' => (bool) $t->completed,
+                'overdue' => ! $t->completed && $t->due_at && $t->due_at->isPast(),
+                'department' => $t->department,
+                'assignee' => $t->assignee ? [
+                    'id' => $t->assignee->id,
+                    'name' => $t->assignee->name,
+                    'avatar_url' => $t->assignee->avatar_url,
+                ] : null,
             ])
             ->all();
+
+        return [
+            'items' => $tasks,
+            'open' => count(array_filter($tasks, fn ($t) => ! $t['completed'])),
+        ];
     }
 
     private function loadActivity(Lead $lead): array
