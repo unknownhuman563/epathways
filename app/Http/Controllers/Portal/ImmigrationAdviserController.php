@@ -374,6 +374,28 @@ class ImmigrationAdviserController extends Controller
     }
 
     /**
+     * Leads pipeline — the same shared Leads screen the immigration portal
+     * uses, rendered under the adviser layout (page path drives the layout;
+     * the portal prop drives the in-page action URLs so everything stays on
+     * /portal/immigration-adviser).
+     */
+    public function leads()
+    {
+        return app(ImmigrationController::class)
+            ->leads('portal/immigration-adviser/Leads', 'immigration-adviser');
+    }
+
+    /**
+     * Students dashboard — the shared Education students screen. Its component
+     * + portal are resolved from the request prefix, so hitting it under
+     * /portal/immigration-adviser renders the adviser page/layout.
+     */
+    public function students()
+    {
+        return app(\App\Http\Controllers\Portal\EducationController::class)->students();
+    }
+
+    /**
      * Cross-portal Task Board for the adviser — the same shared board the
      * immigration portal uses, scoped to the adviser's own tasks or the
      * immigration department set.

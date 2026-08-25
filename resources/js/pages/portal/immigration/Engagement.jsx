@@ -17,6 +17,28 @@ const rowInitials = (name = "") =>
 const fmtFee = (n) =>
     Number(n).toLocaleString("en-NZ", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+// Pricing context chips for a generated engagement / invoice row: the
+// applicant's location (onshore/offshore), their country, and whether the fee
+// is quoted GST-inclusive or exclusive.
+function CaseDetails({ row = {} }) {
+    const loc = (row.fee_location || "").toLowerCase();
+    const locLabel = loc === "offshore" ? "Offshore" : loc === "onshore" ? "Onshore" : null;
+    const locTone = loc === "offshore"
+        ? "bg-blue-50 text-blue-700 border-blue-200"
+        : "bg-teal-50 text-teal-700 border-teal-200";
+    return (
+        <div className="flex flex-col items-start gap-1">
+            {locLabel
+                ? <span className={`inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded border ${locTone}`}>{locLabel}</span>
+                : <span className="text-[10px] text-gray-300">—</span>}
+            {row.country && <span className="text-[10.5px] text-gray-500 truncate max-w-[150px]">{row.country}</span>}
+            <span className={`inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded border ${row.include_gst ? "bg-purple-50 text-purple-700 border-purple-200" : "bg-gray-50 text-gray-500 border-gray-200"}`}>
+                {row.include_gst ? "Incl. GST" : "Excl. GST"}
+            </span>
+        </div>
+    );
+}
+
 // NZ GST. Mirrors VisaType::GST_RATE — fees are stored exclusive of GST.
 const GST_RATE = 0.15;
 const GST_PCT = Math.round(GST_RATE * 100);
@@ -242,6 +264,7 @@ export default function Engagement({ cases = [], documents = [], generated = [],
                                 <col />
                                 <col className="w-[120px]" />
                                 <col className="w-[120px]" />
+                                <col className="w-[160px]" />
                                 <col className="w-[130px]" />
                                 <col className="w-[150px]" />
                                 <col className="w-[90px]" />
@@ -253,6 +276,7 @@ export default function Engagement({ cases = [], documents = [], generated = [],
                                     <th className="px-3 py-2.5">Documents &amp; link</th>
                                     <th className="px-3 py-2.5">Consulting fee</th>
                                     <th className="px-3 py-2.5">Total amount</th>
+                                    <th className="px-3 py-2.5">Details</th>
                                     <th className="px-3 py-2.5">Status</th>
                                     <th className="px-3 py-2.5">Created</th>
                                     <th className="px-3 py-2.5 text-right pr-4">Actions</th>
@@ -335,6 +359,11 @@ export default function Engagement({ cases = [], documents = [], generated = [],
                                             ) : (
                                                 <span className="text-[11px] text-gray-300">—</span>
                                             )}
+                                        </td>
+                                        {/* Details — pricing context: onshore/offshore,
+                                            country, and whether GST is included. */}
+                                        <td className="px-3 py-3">
+                                            <CaseDetails row={c} />
                                         </td>
                                         {/* Signed / draft status */}
                                         <td className="px-3 py-3">

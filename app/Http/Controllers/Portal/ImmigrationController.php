@@ -176,11 +176,11 @@ class ImmigrationController extends Controller
      * Leads queue — Immigration's pre-engagement-fee leads. Same shape as
      * Sales / Education so the shared Leads.jsx renders identically.
      */
-    public function leads()
+    public function leads(string $page = 'portal/immigration/Leads', string $portal = 'immigration')
     {
         try {
-            return inertia('portal/immigration/Leads', [
-                'portal' => 'immigration',
+            return inertia($page, [
+                'portal' => $portal,
                 'statuses' => self::LEAD_STATUSES,
                 // Pipeline only — converted leads (cases) move to the Cases page.
                 'leads' => Lead::inLeadPipeline()
@@ -203,8 +203,8 @@ class ImmigrationController extends Controller
         } catch (\Throwable $e) {
             Log::error('Immigration leads list failed', ['error' => $e->getMessage()]);
 
-            return inertia('portal/immigration/Leads', [
-                'portal' => 'immigration', 'statuses' => self::LEAD_STATUSES, 'leads' => collect(),
+            return inertia($page, [
+                'portal' => $portal, 'statuses' => self::LEAD_STATUSES, 'leads' => collect(),
             ]);
         }
     }
@@ -741,7 +741,7 @@ class ImmigrationController extends Controller
             $invoicedIds = LeadDocument::where('source_variant', 'invoice')->distinct()->pluck('lead_id');
 
             $generated = LeadDocument::with([
-                'lead:id,first_name,last_name,lead_id,tracking_code,email,phone,engagement_signing_token,engagement_sent_at,engagement_fee_total,engagement_total_amount,engagement_fee_location,engagement_fee_tier,engagement_include_gst,engagement_assist_signer_id',
+                'lead:id,first_name,last_name,lead_id,tracking_code,email,phone,residence_country,engagement_signing_token,engagement_sent_at,engagement_fee_total,engagement_total_amount,engagement_fee_location,engagement_fee_tier,engagement_include_gst,engagement_assist_signer_id',
                 'lead.faceImage',
                 'uploader:id,name,email',
             ])
@@ -811,6 +811,7 @@ class ImmigrationController extends Controller
                         'fee_location' => $lead?->engagement_fee_location,
                         'fee_tier' => $lead?->engagement_fee_tier,
                         'include_gst' => (bool) $lead?->engagement_include_gst,
+                        'country' => $lead?->residence_country,
                         'sent_at' => optional($lead?->engagement_sent_at)?->toIso8601String(),
                         'signed' => (bool) $signedAt,
                         'signed_at' => optional($signedAt)?->toIso8601String(),
@@ -989,7 +990,7 @@ class ImmigrationController extends Controller
 
             // Generated invoices — one row per case, invoices nested.
             $generated = LeadDocument::with([
-                'lead:id,first_name,last_name,lead_id,tracking_code,email,phone',
+                'lead:id,first_name,last_name,lead_id,tracking_code,email,phone,residence_country,engagement_fee_location,engagement_fee_tier,engagement_include_gst',
                 'lead.faceImage',
                 'uploader:id,name',
             ])
@@ -1014,6 +1015,11 @@ class ImmigrationController extends Controller
                         'phone' => $lead?->phone,
                         'latest_created_at' => optional($first->created_at)?->toIso8601String(),
                         'latest_by' => $first->uploader?->name,
+                        // Pricing context this invoice was generated under.
+                        'fee_location' => $lead?->engagement_fee_location,
+                        'fee_tier' => $lead?->engagement_fee_tier,
+                        'include_gst' => (bool) $lead?->engagement_include_gst,
+                        'country' => $lead?->residence_country,
                         // Total invoiced for this case (sum of its invoice totals);
                         // null when none were stored (pre-column invoices).
                         'total_amount' => $docs->whereNotNull('invoice_total')->isNotEmpty()

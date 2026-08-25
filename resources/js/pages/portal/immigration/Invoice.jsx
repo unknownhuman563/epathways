@@ -40,6 +40,27 @@ const fmtDate = (iso) => {
 
 const money = (n) => (n === null || n === undefined || n === "" ? "—" : `$${Number(n).toFixed(2)}`);
 
+// Pricing context chips for a generated invoice row: the applicant's location
+// (onshore/offshore), their country, and whether the fee is GST-inclusive.
+function CaseDetails({ row = {} }) {
+    const loc = (row.fee_location || "").toLowerCase();
+    const locLabel = loc === "offshore" ? "Offshore" : loc === "onshore" ? "Onshore" : null;
+    const locTone = loc === "offshore"
+        ? "bg-blue-50 text-blue-700 border-blue-200"
+        : "bg-teal-50 text-teal-700 border-teal-200";
+    return (
+        <div className="flex flex-col items-start gap-1">
+            {locLabel
+                ? <span className={`inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded border ${locTone}`}>{locLabel}</span>
+                : <span className="text-[10px] text-gray-300">—</span>}
+            {row.country && <span className="text-[10.5px] text-gray-500 truncate max-w-[150px]">{row.country}</span>}
+            <span className={`inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded border ${row.include_gst ? "bg-purple-50 text-purple-700 border-purple-200" : "bg-gray-50 text-gray-500 border-gray-200"}`}>
+                {row.include_gst ? "Incl. GST" : "Excl. GST"}
+            </span>
+        </div>
+    );
+}
+
 /**
  * Invoice workspace. "New" opens a modal with the invoice settings on the
  * left (case, number, dates, fee lines) and a live preview of the tax
@@ -131,6 +152,7 @@ export default function Invoice({ cases = [], generated = [], suggestions = [], 
                                     <th className="px-3 py-3">Contacts</th>
                                     <th className="px-3 py-3">Invoices</th>
                                     <th className="px-3 py-3">Total amount</th>
+                                    <th className="px-3 py-3">Details</th>
                                     <th className="px-3 py-3">Created</th>
                                     <th className="px-3 py-3 text-right pr-4">Actions</th>
                                 </tr>
@@ -184,6 +206,10 @@ export default function Invoice({ cases = [], generated = [], suggestions = [], 
                                             ) : (
                                                 <span className="text-[11px] text-gray-300">—</span>
                                             )}
+                                        </td>
+                                        {/* Details — onshore/offshore, country, GST. */}
+                                        <td className="px-3 py-3">
+                                            <CaseDetails row={c} />
                                         </td>
                                         <td className="px-3 py-3 whitespace-nowrap">
                                             <div className="text-[12px] text-gray-700 font-medium">{fmtDate(c.latest_created_at)}</div>
