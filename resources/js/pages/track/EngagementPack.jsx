@@ -266,10 +266,11 @@ function ProofUpload({ uploadUrl }) {
     const fileRef = useRef(null);
     const [uploading, setUploading] = useState(false);
     const onChange = (e) => {
-        const files = Array.from(e.target.files || []);
-        if (! files.length) return;
+        const file = (e.target.files || [])[0];
+        if (! file) return;
         setUploading(true);
-        router.post(uploadUrl, { files }, {
+        // One proof per invoice — a re-upload replaces the previous file.
+        router.post(uploadUrl, { files: [file] }, {
             forceFormData: true, preserveScroll: true,
             onFinish: () => { setUploading(false); if (fileRef.current) fileRef.current.value = ""; },
         });
@@ -281,7 +282,7 @@ function ProofUpload({ uploadUrl }) {
                 {uploading ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
                 {uploading ? "Uploading…" : "Upload proof of payment"}
             </button>
-            <input ref={fileRef} type="file" multiple accept="application/pdf,image/*" className="hidden" onChange={onChange} />
+            <input ref={fileRef} type="file" accept="application/pdf,image/*" className="hidden" onChange={onChange} />
         </>
     );
 }

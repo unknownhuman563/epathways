@@ -59,6 +59,9 @@ class UpdateVisaTypeRequest extends FormRequest
             'inz_form_refs' => 'nullable|string|max:120',
             'icon' => 'required|string|max:60',
             'active' => 'required|boolean',
+            // Standard filename pattern applied to every checklist upload unless
+            // the item overrides it. Null keeps the client's original filename.
+            'filename_pattern' => 'nullable|string|max:160',
             // Per-visa document checklist. Each item must carry a stable
             // `key` (snake_case identifier used to match LeadDocument
             // uploads) and a human label.
@@ -75,6 +78,9 @@ class UpdateVisaTypeRequest extends FormRequest
             // "NN - CODE - FirstnameLASTNAME<suffix>".
             'checklist_items.*.file_code' => 'nullable|string|max:20',
             'checklist_items.*.file_suffix' => 'nullable|string|max:40',
+            // Upload filename format — staff type the name a client's upload is
+            // renamed to, optionally with a {name} placeholder for the applicant.
+            'checklist_items.*.filename' => 'nullable|string|max:120',
         ];
     }
 

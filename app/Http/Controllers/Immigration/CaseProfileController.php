@@ -1695,9 +1695,27 @@ class CaseProfileController extends Controller
         $default = $signers->first(fn ($s) => strtolower($s['name']) === $defaultName)['id']
             ?? ($signers[0]['id'] ?? null);
 
+        // Milestone dates for the Overview: when the pack was emailed, when the
+        // Written Agreement was signed, and when the invoice was settled (the
+        // first approved proof of payment).
+        $signedAt = LeadDocument::where('lead_id', $lead->id)
+            ->where('source_variant', 'engagement:written_agreement')
+            ->whereNotNull('client_signed_at')
+            ->max('client_signed_at');
+
+        $paidProof = LeadDocument::where('lead_id', $lead->id)
+            ->where('source_variant', 'proof_of_payment')
+            ->where('status', LeadDocument::STATUS_APPROVED)
+            ->orderByDesc('reviewed_at')
+            ->first();
+
         return [
             'sent' => (bool) $lead->engagement_sent_at,
             'sent_at' => optional($lead->engagement_sent_at)?->toIso8601String(),
+            'signed' => (bool) $signedAt,
+            'signed_at' => $signedAt ? \Illuminate\Support\Carbon::parse($signedAt)->toIso8601String() : null,
+            'invoice_paid' => (bool) $paidProof,
+            'invoice_paid_at' => optional($paidProof?->reviewed_at)?->toIso8601String(),
             'has_email' => ! empty($lead->email),
             'documents' => \App\Services\Immigration\EngagementDocumentGenerator::catalogue(),
             'signers' => $signers,

@@ -19,7 +19,7 @@ class VisaType extends Model
         'consultation_duration_minutes',
         'estimated_minutes', 'icon',
         'expected_processing_days',
-        'inz_form_refs', 'checklist_items', 'notes', 'active',
+        'inz_form_refs', 'checklist_items', 'filename_pattern', 'notes', 'active',
     ];
 
     protected $casts = [

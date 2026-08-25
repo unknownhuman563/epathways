@@ -253,9 +253,13 @@ class EngagementDocumentGenerator
         // location, so read the schedule matching the chosen location.
         $inzGroups = [];
         foreach ($applicants as $a) {
-            $key = $a['visa'] ?: '[Visa type]';
+            $visa = $a['visa'] ?: '[Visa type]';
+            $fee = $this->applicantDisbursement($a, $location);
+            // Group by visa AND effective fee, so applicants who share a visa but
+            // carry a different (overridden) disbursement each get their own line.
+            $key = $visa.'|'.($fee === null ? '' : number_format($fee, 2, '.', ''));
             if (! isset($inzGroups[$key])) {
-                $inzGroups[$key] = ['visa' => $key, 'fee' => $a['visa_model']?->inzFeeFor($location), 'count' => 0];
+                $inzGroups[$key] = ['visa' => $visa, 'fee' => $fee, 'count' => 0];
             }
             $inzGroups[$key]['count']++;
         }
@@ -316,7 +320,7 @@ class EngagementDocumentGenerator
             'professional_fee_total' => $this->money($profTotal),
             'professional_lines' => $professionalLines,
             'gst_inclusive' => $gstInclusive,
-            'inz_fee' => $this->money($applicants[0]['visa_model']?->inzFeeFor($location)),
+            'inz_fee' => $this->money($this->applicantDisbursement($applicants[0], $location)),
             'adviser' => $this->adviser($overrides['signer_id'] ?? null),
             // Responsible-advisers table (clause 2.1) + supervision (clause 3),
             // built from the chosen signing adviser (Main) and assisting adviser.
@@ -346,6 +350,7 @@ class EngagementDocumentGenerator
             'visa' => $lead->inz_visa_type,
             'visa_model' => $visa,
             'fee_override' => $lead->principal_fee_override !== null ? (float) $lead->principal_fee_override : null,
+            'disbursement_override' => $lead->principal_disbursement_override !== null ? (float) $lead->principal_disbursement_override : null,
         ]];
 
         $deps = [];
@@ -373,6 +378,7 @@ class EngagementDocumentGenerator
                 'visa_model' => $visaModel,
                 'rel' => $dep->relationship,
                 'fee_override' => $dep->fee_override !== null ? (float) $dep->fee_override : null,
+                'disbursement_override' => $dep->disbursement_override !== null ? (float) $dep->disbursement_override : null,
             ];
         }
 
@@ -394,6 +400,20 @@ class EngagementDocumentGenerator
         }
 
         return $a['visa_model']?->professionalFeeFor($tier, $location);
+    }
+
+    /**
+     * The INZ disbursement for one applicant at the chosen location — the
+     * per-applicant override when set, else the visa's INZ fee. Public so the
+     * invoice generator can apply the same rule.
+     */
+    public function applicantDisbursement(array $a, string $location): ?float
+    {
+        if (isset($a['disbursement_override']) && $a['disbursement_override'] !== null) {
+            return (float) $a['disbursement_override'];
+        }
+
+        return $a['visa_model']?->inzFeeFor($location);
     }
 
     /**
@@ -429,7 +449,7 @@ class EngagementDocumentGenerator
             if ($f !== null) {
                 $sumProfExcl = ($sumProfExcl ?? 0) + (float) $f;
             }
-            $inz = $a['visa_model']?->inzFeeFor($location);
+            $inz = $this->applicantDisbursement($a, $location);
             if ($inz !== null) {
                 $inzTotal += (float) $inz;
             }
@@ -554,12 +574,12 @@ class EngagementDocumentGenerator
         return $parts ? implode(', ', $parts) : null;
     }
 
-    /** Format a NZD amount, or null/empty for a zero/blank so the
-     *  template renders its "[Amount]" placeholder. */
+    /** Format a NZD amount. A zero/blank fee renders as "$0.00" rather than a
+     *  blank "[Amount]" placeholder — a case with no fee shows 0, not a gap. */
     private function money($value): ?string
     {
         if ($value === null || $value === '' || (float) $value <= 0) {
-            return null;
+            return '0.00';
         }
 
         return '$'.number_format((float) $value, 2);

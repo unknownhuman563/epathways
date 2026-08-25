@@ -613,11 +613,18 @@ class LeadPortalController extends Controller
         $targetLeadId = $child?->id ?? $lead->id;
         $path = $file->store($child ? "lead-documents/{$child->id}" : "lead-documents/{$lead->id}/dependents/{$dep->id}", 'local');
 
+        // Rename to the visa checklist's convention for a linked member (their
+        // own case + checklist); a plain dependant sub-record has no case to
+        // name against, so it keeps the client's own filename.
+        $displayName = ($child && ! empty($data['checklist_key'])
+            ? app(\App\Services\Immigration\CaseChecklistService::class)->uploadFileNameFor($child, $data['checklist_key'], $file->getClientOriginalName())
+            : null) ?: $file->getClientOriginalName();
+
         \App\Models\LeadDocument::create([
             'lead_id' => $targetLeadId,
             'dependent_id' => $child ? null : $dep->id,
             'checklist_key' => $data['checklist_key'] ?? null,
-            'original_name' => $file->getClientOriginalName(),
+            'original_name' => $displayName,
             'file_path' => $path,
             'mime' => $file->getClientMimeType(),
             'size' => $file->getSize(),

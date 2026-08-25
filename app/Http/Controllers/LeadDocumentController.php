@@ -246,6 +246,9 @@ class LeadDocumentController extends Controller
                 LeadDocument::STATUS_REJECTED,
             ])],
             'note' => 'nullable|string|max:500',
+            // When verifying a proof of payment from a specific invoice row, the
+            // id of that invoice document — so only that invoice is marked paid.
+            'invoice_id' => 'nullable|integer',
         ]);
 
         $doc->update([
@@ -260,6 +263,32 @@ class LeadDocumentController extends Controller
         if ($validated['status'] === LeadDocument::STATUS_APPROVED
             && \App\Services\GoogleDriveService::isConfigured()) {
             \App\Jobs\PushApprovedDocumentToDrive::dispatch($doc->id);
+        }
+
+        // Confirming a proof of payment settles the invoice — move the case to
+        // "Invoice Paid" (only from a pre-payment stage, so it never downgrades).
+        if ($doc->source_variant === 'proof_of_payment'
+            && $validated['status'] === LeadDocument::STATUS_APPROVED
+            && $doc->lead) {
+            $doc->lead->advanceImmigrationStage(
+                'Invoice Paid',
+                ['For Assessment', 'Endorsed', 'Agreement Sent', 'Agreement Signed', 'For Agreement & Invoice', 'Request for Information'],
+                Auth::id(),
+            );
+
+            // Mark the specific invoice this proof settles as paid, so only that
+            // invoice row flips to "Paid" (not every invoice on the case). The
+            // invoice's reviewed_at doubles as the paid date shown on the badge.
+            if (! empty($validated['invoice_id'])) {
+                LeadDocument::where('lead_id', $leadId)
+                    ->where('id', $validated['invoice_id'])
+                    ->whereIn('status', [LeadDocument::STATUS_STAFF_SHARED, LeadDocument::STATUS_SUBMITTED, LeadDocument::STATUS_UNDER_REVIEW])
+                    ->update([
+                        'status' => LeadDocument::STATUS_APPROVED,
+                        'reviewed_by' => Auth::id(),
+                        'reviewed_at' => now(),
+                    ]);
+            }
         }
 
         // Tell the lead their document was approved / rejected. Prefer the
@@ -727,6 +756,8 @@ class LeadDocumentController extends Controller
                     'in_agreement' => (bool) $d->in_agreement,
                     'fee_override' => $d->fee_override !== null ? (float) $d->fee_override : null,
                     'default_fee' => $vm?->professionalFeeFor($tier, $location),
+                    'disbursement_override' => $d->disbursement_override !== null ? (float) $d->disbursement_override : null,
+                    'default_disbursement' => $vm?->inzFeeFor($location),
                 ];
             })
             ->values();
@@ -738,6 +769,8 @@ class LeadDocumentController extends Controller
                 'visa' => $lead->inz_visa_type,
                 'fee_override' => $lead->principal_fee_override !== null ? (float) $lead->principal_fee_override : null,
                 'default_fee' => $principalVisa?->professionalFeeFor($tier, $location),
+                'disbursement_override' => $lead->principal_disbursement_override !== null ? (float) $lead->principal_disbursement_override : null,
+                'default_disbursement' => $principalVisa?->inzFeeFor($location),
             ],
             'family' => $family,
         ]);
@@ -766,30 +799,39 @@ class LeadDocumentController extends Controller
         $data = $request->validate([
             'type' => ['required', \Illuminate\Validation\Rule::in(['principal', 'dependent'])],
             'dependent_id' => ['nullable', 'integer'],
+            // Which per-applicant amount is being set: the professional fee, or
+            // the INZ disbursement. Defaults to the professional fee.
+            'column' => ['nullable', \Illuminate\Validation\Rule::in(['fee', 'disbursement'])],
             'fee' => ['nullable', 'numeric', 'min:0', 'max:9999999'],
         ]);
+
+        $isDisb = ($data['column'] ?? 'fee') === 'disbursement';
+        $leadCol = $isDisb ? 'principal_disbursement_override' : 'principal_fee_override';
+        $depCol = $isDisb ? 'disbursement_override' : 'fee_override';
+        $label = $isDisb ? 'INZ disbursement' : 'professional fee';
 
         $newFee = ($data['fee'] === null || $data['fee'] === '') ? null : (float) $data['fee'];
 
         if ($data['type'] === 'principal') {
             $who = trim("{$lead->first_name} {$lead->last_name}") ?: ('Lead #'.$lead->id);
-            $old = $lead->principal_fee_override !== null ? (float) $lead->principal_fee_override : null;
-            $lead->forceFill(['principal_fee_override' => $newFee])->save();
+            $old = $lead->{$leadCol} !== null ? (float) $lead->{$leadCol} : null;
+            $lead->forceFill([$leadCol => $newFee])->save();
         } else {
             $dependent = \App\Models\CaseDependent::where('id', $data['dependent_id'])->where('lead_id', $lead->id)->first();
             abort_unless($dependent, 422, 'That family member is not on this case.');
             $who = trim("{$dependent->first_name} {$dependent->last_name}") ?: $dependent->fullName();
-            $old = $dependent->fee_override !== null ? (float) $dependent->fee_override : null;
-            $dependent->update(['fee_override' => $newFee]);
+            $old = $dependent->{$depCol} !== null ? (float) $dependent->{$depCol} : null;
+            $dependent->update([$depCol => $newFee]);
         }
 
         // Audit: one clear line per change ("set / cleared X's fee to $Y").
         \App\Models\ActivityLog::record('engagement.applicant_fee_set', [
             'description' => sprintf(
-                '%s %s %s\'s professional fee%s',
+                '%s %s %s\'s %s%s',
                 auth()->user()?->name ?? 'Staff',
                 $newFee === null ? 'cleared' : 'set',
                 $who,
+                $label,
                 $newFee === null
                     ? ($old !== null ? sprintf(' (was $%s) back to the visa fee', number_format($old, 2)) : ' to the visa fee')
                     : sprintf(' to $%s%s', number_format($newFee, 2), $old !== null ? sprintf(' (was $%s)', number_format($old, 2)) : ''),
@@ -798,12 +840,13 @@ class LeadDocumentController extends Controller
                 'subject_type' => 'Lead',
                 'subject_id' => $lead->id,
                 'applicant' => $who,
+                'column' => $isDisb ? 'disbursement' : 'fee',
                 'old_fee' => $old,
                 'new_fee' => $newFee,
             ],
         ]);
 
-        return response()->json(['ok' => true, 'fee_override' => $newFee]);
+        return response()->json(['ok' => true, 'column' => $isDisb ? 'disbursement' : 'fee', 'value' => $newFee]);
     }
 
     /**
@@ -1039,8 +1082,15 @@ class LeadDocumentController extends Controller
         $lead = Lead::findOrFail($leadId);
 
         try {
+            // Delete the whole engagement pack: the 4 pack documents
+            // (engagement:*) AND the invoice generated with them (source_variant
+            // "invoice"), which is the pack's 5th document. Client-uploaded
+            // proofs of payment and older standalone tax invoices are left alone.
             $docs = LeadDocument::where('lead_id', $lead->id)
-                ->where('source_variant', 'like', 'engagement:%')
+                ->where(function ($q) {
+                    $q->where('source_variant', 'like', 'engagement:%')
+                        ->orWhere('source_variant', 'invoice');
+                })
                 ->get();
 
             foreach ($docs as $doc) {
