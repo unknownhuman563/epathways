@@ -855,6 +855,11 @@ class DtrController extends Controller
             'tasks.*.pending' => 'nullable|string|max:1000',
             'tasks.*.status' => 'nullable|in:todo,done,carry',
             'tasks.*.pending_done' => 'nullable|boolean',
+            // Side-task support: kind + a stable id (tid) that a side task's
+            // parent points at.
+            'tasks.*.kind' => 'nullable|in:main,side',
+            'tasks.*.parent' => 'nullable|string|max:32',
+            'tasks.*.tid' => 'nullable|string|max:32',
             'close_carried' => 'nullable|array|max:200',
             'close_carried.*.entry_id' => 'required|integer',
             'close_carried.*.index' => 'required|integer|min:0',
@@ -877,6 +882,9 @@ class DtrController extends Controller
                 ? $t['status']
                 : (trim((string) ($t['pending'] ?? '')) !== '' ? 'carry' : 'done'),
             'pending_done' => (bool) ($t['pending_done'] ?? false),
+            'kind' => ($t['kind'] ?? 'main') === 'side' ? 'side' : 'main',
+            'parent' => $t['parent'] ?? null,
+            'tid' => $t['tid'] ?? null,
         ], $data['tasks'] ?? []));
 
         DtrEntry::updateOrCreate(
