@@ -7,11 +7,14 @@
 // replaced with the lead's first name, surname, and last-name (legacy)
 // at render time so staff have a copy-paste-ready filename hint.
 
+// Review statuses staff set per document. The blank/default option already
+// reads "Submitted" (when a file exists) or "Pending" (when none) — so the
+// full set surfaced to staff is: Submitted · Under Review · Accepted ·
+// Required Attention.
 export const STATUSES = [
-    { key: "not_applicable", label: "Not Applicable", chip: "bg-gray-100 text-gray-600 border-gray-200" },
-    { key: "available",      label: "Available",      chip: "bg-amber-100 text-amber-800 border-amber-200" },
-    { key: "in_progress",    label: "In Progress",    chip: "bg-purple-100 text-purple-800 border-purple-200" },
-    { key: "uploaded",       label: "Uploaded",       chip: "bg-emerald-100 text-emerald-800 border-emerald-200" },
+    { key: "under_review",   label: "Under Review",       chip: "bg-amber-100 text-amber-800 border-amber-200" },
+    { key: "accepted",       label: "Accepted",           chip: "bg-emerald-100 text-emerald-800 border-emerald-200" },
+    { key: "needs_attention",label: "Required Attention", chip: "bg-rose-100 text-rose-700 border-rose-200" },
 ];
 export const STATUS_LABEL = Object.fromEntries(STATUSES.map((s) => [s.key, s.label]));
 export const STATUS_CHIP  = Object.fromEntries(STATUSES.map((s) => [s.key, s.chip]));

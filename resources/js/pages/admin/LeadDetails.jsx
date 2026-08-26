@@ -3816,12 +3816,11 @@ function DocumentsPanel({ lead, checklistFiles = {}, orphans = [], currentUser =
         return acc;
     }, {});
     const withFiles = allItems.filter((it) => (checklistFiles[it.id]?.length || 0) > 0).length;
-    const uploaded = counts.uploaded || 0;
-    const inProgress = counts.in_progress || 0;
-    const available = counts.available || 0;
-    const notApplicable = counts.not_applicable || 0;
-    const remaining = total - uploaded - notApplicable;
-    const pct = total > 0 ? Math.round((uploaded / (total - notApplicable || 1)) * 100) : 0;
+    const accepted = counts.accepted || 0;
+    const underReview = counts.under_review || 0;
+    const needsAttention = counts.needs_attention || 0;
+    const remaining = total - accepted;
+    const pct = total > 0 ? Math.round((accepted / total) * 100) : 0;
 
     return (
         <div className="space-y-4">
@@ -3840,11 +3839,11 @@ function DocumentsPanel({ lead, checklistFiles = {}, orphans = [], currentUser =
                     <div className="flex items-center gap-3 text-[11px] font-bold uppercase tracking-widest tabular-nums">
                         <span className="text-[#436235]">{withFiles} with files</span>
                         <span className="text-gray-300">·</span>
-                        <span className="text-emerald-700">{uploaded} uploaded</span>
+                        <span className="text-emerald-700">{accepted} accepted</span>
                         <span className="text-gray-300">·</span>
-                        <span className="text-purple-700">{inProgress} in progress</span>
+                        <span className="text-amber-700">{underReview} under review</span>
                         <span className="text-gray-300">·</span>
-                        <span className="text-amber-700">{available} available</span>
+                        <span className="text-rose-700">{needsAttention} attention</span>
                         <span className="text-gray-300">·</span>
                         <span className="text-gray-500">{remaining} remaining</span>
                     </div>
@@ -4256,23 +4255,21 @@ const fmtTotalSize = (b) => {
 // on an otherwise clean white card. Reverts to the original design used
 // before the folder redesign, since inner cards are not folders themselves.
 const CARD_TONE = {
-    uploaded:       { border: "border-emerald-200", bar: "bg-emerald-400", glyph: "bg-emerald-100 text-emerald-700", cap: "bg-emerald-50/40" },
-    in_progress:    { border: "border-purple-200",  bar: "bg-purple-400",  glyph: "bg-purple-100 text-purple-700",   cap: "bg-purple-50/40"  },
-    available:      { border: "border-amber-200",   bar: "bg-amber-400",   glyph: "bg-amber-100 text-amber-700",     cap: "bg-amber-50/40"   },
-    not_applicable: { border: "border-gray-200",    bar: "bg-gray-300",    glyph: "bg-gray-100 text-gray-400",       cap: "bg-gray-50/60", muted: true },
-    unset:          { border: "border-gray-100",    bar: "bg-gray-200",    glyph: "bg-gray-50 text-gray-500",        cap: "bg-white" },
+    accepted:        { border: "border-emerald-200", bar: "bg-emerald-400", glyph: "bg-emerald-100 text-emerald-700", cap: "bg-emerald-50/40" },
+    under_review:    { border: "border-amber-200",   bar: "bg-amber-400",   glyph: "bg-amber-100 text-amber-700",     cap: "bg-amber-50/40"   },
+    needs_attention: { border: "border-rose-200",    bar: "bg-rose-400",    glyph: "bg-rose-100 text-rose-700",       cap: "bg-rose-50/40"    },
+    unset:           { border: "border-gray-100",    bar: "bg-gray-200",    glyph: "bg-gray-50 text-gray-500",        cap: "bg-white" },
 };
 const cardTone = (status) => CARD_TONE[status] || CARD_TONE.unset;
 
-// Sort priority — has-files first, then uploaded > in_progress > available
-// > unset > not_applicable. Cards with actual work done float to the top
+// Sort priority — has-files first, then accepted > under_review >
+// needs_attention > unset. Cards with actual work done float to the top
 // of each section so you can see progress at a glance.
 const SORT_PRIORITY = {
-    uploaded:       1,
-    in_progress:    2,
-    available:      3,
-    unset:          4,
-    not_applicable: 5,
+    accepted:        1,
+    under_review:    2,
+    needs_attention: 3,
+    unset:           4,
 };
 
 function ChecklistSection({ section, lead, state, onSave, checklistFiles = {}, currentUser = null }) {

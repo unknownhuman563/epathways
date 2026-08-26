@@ -2827,6 +2827,9 @@ class LeadController extends Controller
         $validated = $request->validate([
             'key' => 'required|string|max:120',
             'status' => ['nullable', \Illuminate\Validation\Rule::in([
+                'under_review', 'accepted', 'needs_attention',
+                // legacy planning statuses — still accepted so existing
+                // checklist entries can be re-saved without a 422.
                 'not_applicable', 'available', 'in_progress', 'uploaded',
             ])],
             'date' => 'nullable|date',
