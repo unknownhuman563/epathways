@@ -1274,6 +1274,12 @@ class ImmigrationController extends Controller
                 }
                 \App\Jobs\EvaluateCaseFindings::dispatch($lead->id);
 
+                // Email automation — the chain path sets the stage without going
+                // through advanceImmigrationStage, so fire the per-stage event here.
+                app(\App\Services\EmailAutomationService::class)->fire(
+                    'immigration.stage.'.\Illuminate\Support\Str::slug($newStage, '_'), $lead, ['stage' => $newStage]
+                );
+
                 return back();
             }
         }

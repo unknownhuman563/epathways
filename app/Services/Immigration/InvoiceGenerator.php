@@ -288,7 +288,7 @@ class InvoiceGenerator
 
         Storage::disk(self::DISK)->put($path, $binary);
 
-        return LeadDocument::create([
+        $doc = LeadDocument::create([
             'lead_id' => $lead->id,
             'request_id' => null,
             'checklist_key' => 'invoice',
@@ -303,6 +303,14 @@ class InvoiceGenerator
             'invoice_total' => $payload['total'] ?? null,
             'uploaded_by' => Auth::id(),
         ]);
+
+        // Email automation — invoice sent.
+        app(\App\Services\EmailAutomationService::class)->fire('immigration.invoice.sent', $lead, [
+            'invoice_number' => $number,
+            'invoice_total' => $payload['total'] ?? null,
+        ]);
+
+        return $doc;
     }
 
     /** "30 Jun 2026" — matches the invoice format. */

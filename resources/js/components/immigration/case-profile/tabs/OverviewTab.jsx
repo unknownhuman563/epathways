@@ -347,7 +347,7 @@ function InternalNotes({ leadId, notes = [], onSeeAll }) {
         router.post(`/admin/leads/${leadId}/notes`, { body: body || "(attachment)", pinned, kind, files }, {
             forceFormData: true,
             preserveScroll: true,
-            onSuccess: () => { setBody(""); setPinned(false); setKind("general"); setFiles([]); toast.success("Note added"); },
+            onSuccess: () => { setBody(""); setPinned(false); setKind("general"); setFiles([]); },
             onError: (e) => toast.error(Object.values(e)[0] || "Could not add note"),
             onFinish: () => setPosting(false),
         });
@@ -428,7 +428,7 @@ function CaseTasks({ tasks = { items: [] }, leadId, caseStaff = [] }) {
         setBusyId(t.id);
         router.patch(`/api/tasks/${t.id}`, { status: t.completed ? "not_started" : "completed" }, {
             preserveScroll: true,
-            onSuccess: () => toast.success(t.completed ? "Task reopened" : "Task completed"),
+            onSuccess: () => {},   // flash message handles the toast
             onError: (e) => toast.error(Object.values(e)[0] || "Could not update task"),
             onFinish: () => setBusyId(null),
         });
@@ -534,7 +534,7 @@ function QuickAddTask({ leadId, caseStaff = [], onClose }) {
             department: "immigration",
         }, {
             preserveScroll: true,
-            onSuccess: () => { toast.success("Task added"); onClose(); },
+            onSuccess: () => { onClose(); },   // flash message handles the toast
             onError: (e) => toast.error(Object.values(e)[0] || "Could not add task"),
             onFinish: () => setSaving(false),
         });

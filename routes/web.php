@@ -528,6 +528,12 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/admin/settings', [SettingController::class, 'index'])->name('admin.settings');
         Route::post('/admin/settings', [SettingController::class, 'update']);
 
+        // Email automation — admin + super-admin choose which events send a
+        // message, to whom, and with which template.
+        Route::get('/admin/email-automation', [\App\Http\Controllers\Admin\EmailAutomationController::class, 'index'])->name('admin.email-automation');
+        Route::post('/admin/email-automation', [\App\Http\Controllers\Admin\EmailAutomationController::class, 'save'])->name('admin.email-automation.save');
+        Route::post('/admin/email-automation/test', [\App\Http\Controllers\Admin\EmailAutomationController::class, 'test'])->name('admin.email-automation.test');
+
         Route::get('/admin/availability', [AvailabilityController::class, 'index'])->name('admin.availability');
         Route::post('/admin/availability', [AvailabilityController::class, 'store']);
         Route::post('/admin/availability/{id}', [AvailabilityController::class, 'update']);

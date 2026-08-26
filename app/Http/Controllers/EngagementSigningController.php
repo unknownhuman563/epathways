@@ -300,6 +300,7 @@ class EngagementSigningController extends Controller
         // never blocks the signature from being saved.
         if ($firstSigning) {
             \App\Jobs\SendLeadFollowupEmail::sendKey('agreement_signed', $lead);
+            app(\App\Services\EmailAutomationService::class)->fire('immigration.engagement.signed', $lead, []);
         }
 
         return back()->with('success', 'Thank you — your agreement has been signed.');

@@ -166,6 +166,9 @@ class LeadDocumentController extends Controller
                 }
             }
 
+            // Email automation — document requested.
+            app(\App\Services\EmailAutomationService::class)->fire('immigration.document.requested', $lead, []);
+
             return back()->with('success', count($data['items']).' document request(s) added.');
         } catch (\Throwable $e) {
             Log::error('Document request create failed', ['lead_id' => $leadId, 'error' => $e->getMessage()]);
@@ -276,6 +279,9 @@ class LeadDocumentController extends Controller
                 Auth::id(),
             );
 
+            // Email automation — payment verified (no-op unless configured).
+            app(\App\Services\EmailAutomationService::class)->fire('immigration.invoice.paid', $doc->lead, []);
+
             // Mark the specific invoice this proof settles as paid, so only that
             // invoice row flips to "Paid" (not every invoice on the case). The
             // invoice's reviewed_at doubles as the paid date shown on the badge.
@@ -300,6 +306,16 @@ class LeadDocumentController extends Controller
         $lead?->recordStaffActivity(
             $validated['status'].' '.($doc->original_name ?: 'file')
         );
+
+        // Email automation — document approved / needs attention (a proof of
+        // payment is handled by immigration.invoice.paid above, so exclude it).
+        if ($lead && $doc->source_variant !== 'proof_of_payment') {
+            if ($validated['status'] === LeadDocument::STATUS_APPROVED) {
+                app(\App\Services\EmailAutomationService::class)->fire('immigration.document.approved', $lead, ['document_name' => $doc->original_name]);
+            } elseif ($validated['status'] === LeadDocument::STATUS_REJECTED) {
+                app(\App\Services\EmailAutomationService::class)->fire('immigration.document.rejected', $lead, ['document_name' => $doc->original_name, 'reason' => $validated['note'] ?? '']);
+            }
+        }
         if (in_array($validated['status'], [LeadDocument::STATUS_APPROVED, LeadDocument::STATUS_REJECTED], true)
             && $lead && ! empty($lead->email)) {
             try {
@@ -737,6 +753,7 @@ class LeadDocumentController extends Controller
                     $token = $lead->ensureEngagementSigningToken();
                     $this->notifyEngagement($lead, $token, $typesToGenerate, $generatedDocIds);
                     $lead->forceFill(['engagement_sent_at' => now()])->save();
+                    app(\App\Services\EmailAutomationService::class)->fire('immigration.engagement.sent', $lead, []);
                     $message .= " Client notified at {$lead->email}.";
                 }
             } elseif (empty($alreadySigned)) {
@@ -930,6 +947,7 @@ class LeadDocumentController extends Controller
         $token = $lead->ensureEngagementSigningToken();
         $this->notifyEngagement($lead, $token, array_keys($typeMap), $typeMap);
         $lead->forceFill(['engagement_sent_at' => now()])->save();
+        app(\App\Services\EmailAutomationService::class)->fire('immigration.engagement.sent', $lead, []);
 
         return back()->with('success', "Engagement sent to {$lead->email}.");
     }

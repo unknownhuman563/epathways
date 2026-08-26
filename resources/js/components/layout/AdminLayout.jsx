@@ -69,6 +69,7 @@ const ADMIN_NAV = [
         icon: <Mail size={20} />,
         children: [
             { name: "Templates", href: "/admin/message-templates", icon: <PenLine size={16} /> },
+            { name: "Automation", href: "/admin/email-automation", icon: <Send size={16} /> },
             { name: "Compose", href: "/admin/email/compose", icon: <Send size={16} /> },
             { name: "Bulk Mail", href: "/admin/email/bulk", icon: <Megaphone size={16} /> },
             { name: "SMS", href: "/admin/email/sms", icon: <Smartphone size={16} /> },
