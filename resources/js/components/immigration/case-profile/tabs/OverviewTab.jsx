@@ -7,7 +7,7 @@
 import { useState, useRef } from "react";
 import { router } from "@inertiajs/react";
 import { toast } from "sonner";
-import { Pin, CheckSquare, Square, Paperclip, X, FileText, Plus } from "lucide-react";
+import { Pin, CheckSquare, Square, Paperclip, X, FileText, Plus, Pencil } from "lucide-react";
 
 const fmtDate = (iso) => (iso ? new Date(iso).toLocaleDateString("en-NZ", { day: "numeric", month: "short", year: "numeric" }) : "—");
 const fmtShort = (iso) => (iso ? new Date(iso).toLocaleDateString("en-NZ", { day: "numeric", month: "short" }) : "—");
@@ -418,6 +418,7 @@ function InternalNotes({ leadId, notes = [], onSeeAll }) {
 function CaseTasks({ tasks = { items: [] }, leadId, caseStaff = [] }) {
     const items = tasks.items || [];
     const [adding, setAdding] = useState(false);
+    const [editingId, setEditingId] = useState(null);
     const [busyId, setBusyId] = useState(null);
     const openBoard = () => {
         const p = typeof window !== "undefined" ? window.location.pathname : "";
@@ -465,7 +466,10 @@ function CaseTasks({ tasks = { items: [] }, leadId, caseStaff = [] }) {
             ) : (
                 <div className="space-y-3">
                     {items.map((t) => (
-                        <div key={t.id} className="flex items-start gap-2.5">
+                        editingId === t.id ? (
+                            <EditTask key={t.id} task={t} caseStaff={caseStaff} onClose={() => setEditingId(null)} />
+                        ) : (
+                        <div key={t.id} className="group flex items-start gap-2.5">
                             <button type="button" onClick={() => toggleComplete(t)} disabled={busyId === t.id}
                                 title={t.completed ? "Reopen task" : "Mark complete"} className="flex-shrink-0 mt-0.5 disabled:opacity-50">
                                 {t.completed
@@ -478,6 +482,8 @@ function CaseTasks({ tasks = { items: [] }, leadId, caseStaff = [] }) {
                                     <div className="flex items-center gap-2 flex-shrink-0">
                                         {statusPill(t.status)}
                                         {dueLabel(t)}
+                                        <button type="button" onClick={() => setEditingId(t.id)} title="Edit task"
+                                            className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-gray-700 transition-opacity"><Pencil size={13} /></button>
                                     </div>
                                 </div>
                                 <div className="flex items-center gap-1.5 mt-1">
@@ -496,6 +502,7 @@ function CaseTasks({ tasks = { items: [] }, leadId, caseStaff = [] }) {
                                 </div>
                             </div>
                         </div>
+                        )
                     ))}
                 </div>
             )}
@@ -562,6 +569,64 @@ function QuickAddTask({ leadId, caseStaff = [], onClose }) {
                     <button type="button" onClick={onClose} className="text-[12px] text-gray-500 hover:text-gray-800">Cancel</button>
                     <button type="button" onClick={submit} disabled={saving || ! title.trim()}
                         className="px-3 py-1 rounded-lg bg-gray-900 text-white text-[12px] font-semibold hover:bg-gray-800 disabled:opacity-40">Add</button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+// Inline edit for an existing case task — updates title / due date / priority /
+// assignee / status via the task API, then refreshes the Overview's tasks.
+function EditTask({ task, caseStaff = [], onClose }) {
+    const [title, setTitle] = useState(task.title || "");
+    const [dueAt, setDueAt] = useState(task.due_at ? String(task.due_at).slice(0, 10) : "");
+    const [priority, setPriority] = useState(task.priority || "normal");
+    const [status, setStatus] = useState(task.status || "not_started");
+    const [assigneeId, setAssigneeId] = useState(task.assignee?.id ? String(task.assignee.id) : "");
+    const [saving, setSaving] = useState(false);
+
+    const submit = () => {
+        if (! title.trim()) return toast.error("Give the task a title");
+        setSaving(true);
+        router.patch(`/api/tasks/${task.id}`, {
+            title: title.trim(),
+            due_at: dueAt || null,
+            priority,
+            status,
+            assignee_id: assigneeId || null,
+        }, {
+            preserveScroll: true,
+            onSuccess: () => onClose(),
+            onError: (e) => toast.error(Object.values(e)[0] || "Could not save task"),
+            onFinish: () => setSaving(false),
+        });
+    };
+
+    return (
+        <div className="rounded-xl border border-gray-300 p-2.5 space-y-2 bg-gray-50/60">
+            <input value={title} onChange={(e) => setTitle(e.target.value)} autoFocus
+                placeholder="Task title" className="w-full text-[13px] bg-transparent outline-none placeholder-gray-400 font-semibold"
+                onKeyDown={(e) => { if (e.key === "Enter") submit(); }} />
+            <div className="flex flex-wrap items-center gap-2 pt-1.5 border-t border-gray-100">
+                <input type="date" value={dueAt} onChange={(e) => setDueAt(e.target.value)}
+                    className="text-[12px] border border-gray-200 rounded-lg px-2 py-1 text-gray-700" />
+                <select value={priority} onChange={(e) => setPriority(e.target.value)}
+                    className="text-[12px] border border-gray-200 rounded-lg px-2 py-1 text-gray-700 capitalize">
+                    {["urgent", "high", "normal", "low"].map((p) => <option key={p} value={p}>{p}</option>)}
+                </select>
+                <select value={status} onChange={(e) => setStatus(e.target.value)}
+                    className="text-[12px] border border-gray-200 rounded-lg px-2 py-1 text-gray-700">
+                    {[["not_started", "Not started"], ["in_progress", "In progress"], ["in_review", "In review"], ["completed", "Completed"]].map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                </select>
+                <select value={assigneeId} onChange={(e) => setAssigneeId(e.target.value)}
+                    className="text-[12px] border border-gray-200 rounded-lg px-2 py-1 text-gray-700 max-w-[130px]" title="Assign to">
+                    <option value="">Unassigned</option>
+                    {caseStaff.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                </select>
+                <div className="flex items-center gap-3 ml-auto">
+                    <button type="button" onClick={onClose} className="text-[12px] text-gray-500 hover:text-gray-800">Cancel</button>
+                    <button type="button" onClick={submit} disabled={saving || ! title.trim()}
+                        className="px-3 py-1 rounded-lg bg-gray-900 text-white text-[12px] font-semibold hover:bg-gray-800 disabled:opacity-40">Save</button>
                 </div>
             </div>
         </div>
