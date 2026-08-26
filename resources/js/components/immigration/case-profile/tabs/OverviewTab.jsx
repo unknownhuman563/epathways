@@ -486,6 +486,7 @@ function CaseTasks({ tasks = { items: [] }, leadId, caseStaff = [] }) {
                                             className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-gray-700 transition-opacity"><Pencil size={13} /></button>
                                     </div>
                                 </div>
+                                {t.description && <p className="text-[11.5px] text-gray-500 leading-snug mt-0.5 whitespace-pre-wrap">{t.description}</p>}
                                 <div className="flex items-center gap-1.5 mt-1">
                                     {/* Assignee — avatar + name, so it's clear who owns the task. */}
                                     {t.assignee ? (
@@ -579,6 +580,7 @@ function QuickAddTask({ leadId, caseStaff = [], onClose }) {
 // assignee / status via the task API, then refreshes the Overview's tasks.
 function EditTask({ task, caseStaff = [], onClose }) {
     const [title, setTitle] = useState(task.title || "");
+    const [description, setDescription] = useState(task.description || "");
     const [dueAt, setDueAt] = useState(task.due_at ? String(task.due_at).slice(0, 10) : "");
     const [priority, setPriority] = useState(task.priority || "normal");
     const [status, setStatus] = useState(task.status || "not_started");
@@ -590,12 +592,14 @@ function EditTask({ task, caseStaff = [], onClose }) {
         setSaving(true);
         router.patch(`/api/tasks/${task.id}`, {
             title: title.trim(),
+            description: description || null,
             due_at: dueAt || null,
             priority,
             status,
             assignee_id: assigneeId || null,
         }, {
             preserveScroll: true,
+            preserveState: true,
             onSuccess: () => onClose(),
             onError: (e) => toast.error(Object.values(e)[0] || "Could not save task"),
             onFinish: () => setSaving(false),
@@ -607,6 +611,8 @@ function EditTask({ task, caseStaff = [], onClose }) {
             <input value={title} onChange={(e) => setTitle(e.target.value)} autoFocus
                 placeholder="Task title" className="w-full text-[13px] bg-transparent outline-none placeholder-gray-400 font-semibold"
                 onKeyDown={(e) => { if (e.key === "Enter") submit(); }} />
+            <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2}
+                placeholder="Description (optional)" className="w-full text-[12px] bg-transparent outline-none placeholder-gray-400 resize-none" />
             <div className="flex flex-wrap items-center gap-2 pt-1.5 border-t border-gray-100">
                 <input type="date" value={dueAt} onChange={(e) => setDueAt(e.target.value)}
                     className="text-[12px] border border-gray-200 rounded-lg px-2 py-1 text-gray-700" />

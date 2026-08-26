@@ -35,9 +35,11 @@ const STAGE_COLORS = {
     'Agreement Signed':        'bg-teal-500',
     'For Agreement & Invoice':             'bg-orange-500',
     'Invoice Paid':            'bg-lime-500',
+    'Request to Lodged':       'bg-cyan-500',
     'Visa Lodged':             'bg-indigo-500',
     'Interim Visa Issued':     'bg-blue-500',
     'Request for Information': 'bg-amber-500',
+    'RFI Responded':           'bg-amber-700',
     'Approved in Principle':   'bg-violet-500',
     'Approved Visa':           'bg-emerald-500',
     'Decline Visa':            'bg-rose-500',
@@ -53,12 +55,15 @@ const STAGE_HEX = {
     'Agreement Signed':        '#14b8a6',
     'For Agreement & Invoice':             '#f97316',
     'Invoice Paid':            '#84cc16',
+    'Request to Lodged':       '#06b6d4',
     'Visa Lodged':             '#6366f1',
     'Interim Visa Issued':     '#3b82f6',
     'Request for Information': '#f59e0b',
+    'RFI Responded':           '#b45309',
     'Approved in Principle':   '#8b5cf6',
     'Approved Visa':           '#22c55e',
     'Decline Visa':            '#ef4444',
+    'Withdrawn':               '#78716c',
     'Unassigned':              '#9ca3af',
 };
 const stageHex = (s) => STAGE_HEX[s] || '#9ca3af';
@@ -69,12 +74,15 @@ const STAGE_CHIP = {
     'Agreement Signed':        'bg-teal-50 text-teal-700 border-teal-200',
     'For Agreement & Invoice':             'bg-orange-50 text-orange-700 border-orange-200',
     'Invoice Paid':            'bg-lime-50 text-lime-700 border-lime-200',
+    'Request to Lodged':       'bg-cyan-50 text-cyan-700 border-cyan-200',
     'Visa Lodged':             'bg-indigo-50 text-indigo-700 border-indigo-200',
     'Interim Visa Issued':     'bg-blue-50 text-blue-700 border-blue-200',
     'Request for Information': 'bg-amber-50 text-amber-700 border-amber-200',
+    'RFI Responded':           'bg-amber-100 text-amber-800 border-amber-300',
     'Approved in Principle':   'bg-violet-50 text-violet-700 border-violet-200',
     'Approved Visa':           'bg-emerald-50 text-emerald-700 border-emerald-200',
     'Decline Visa':            'bg-rose-50 text-rose-700 border-rose-200',
+    'Withdrawn':               'bg-stone-100 text-stone-600 border-stone-200',
 };
 
 const stageChipClass = (stage) =>
@@ -87,10 +95,11 @@ const stageChipClass = (stage) =>
  */
 const CASE_TABS = [
     { key: 'applications', label: 'Assessment',   hint: 'For Assessment',     stages: ['For Assessment'] },
-    { key: 'advisers',     label: 'Advisers',     hint: 'Endorsed → RFI',     stages: ['Endorsed', 'Agreement Sent', 'Agreement Signed', 'For Agreement & Invoice', 'Request for Information'] },
+    { key: 'advisers',     label: 'Advisers',     hint: 'Endorsed → RFI',     stages: ['Endorsed', 'Agreement Sent', 'Agreement Signed', 'For Agreement & Invoice', 'Request to Lodged', 'Request for Information', 'RFI Responded'] },
     { key: 'invoice',      label: 'Invoice',      hint: 'Invoice paid',       stages: ['Invoice Paid'] },
     { key: 'lodged',       label: 'Lodged',       hint: 'Submitted to INZ',   stages: ['Visa Lodged', 'Interim Visa Issued'] },
     { key: 'visa',         label: 'Visa',         hint: 'Outcome',            stages: ['Approved in Principle', 'Approved Visa', 'Decline Visa'] },
+    { key: 'withdrawn',    label: 'Withdrawn',    hint: 'Applicant withdrew', stages: ['Withdrawn'] },
 ];
 
 // Leftmost "All" tab — shows every case regardless of stage. Kept out of
@@ -186,6 +195,14 @@ export default function ImmigrationCases({ cases = [], distribution = [], priori
     const sorted = useMemo(() => {
         const arr = [...filtered];
         arr.sort((a, b) => {
+            // In the Advisers tab, "Request to Lodged" cases are pinned to the
+            // very top — that's the queue the adviser acts on next.
+            if (tab === 'advisers') {
+                const ra = a.immigration_stage === 'Request to Lodged' ? 0 : 1;
+                const rb = b.immigration_stage === 'Request to Lodged' ? 0 : 1;
+                if (ra !== rb) return ra - rb;
+            }
+
             // Priority always leads: urgent → medium → low → no-priority,
             // regardless of the active column sort.
             const pr = priorityRank(a.immigration_priority) - priorityRank(b.immigration_priority);
@@ -205,7 +222,7 @@ export default function ImmigrationCases({ cases = [], distribution = [], priori
             return 0;
         });
         return arr;
-    }, [filtered, sortKey, sortDir]);
+    }, [filtered, sortKey, sortDir, tab]);
 
     const toggleSort = (key) => {
         if (sortKey === key) {
@@ -1470,6 +1487,8 @@ function DetailField({ label, value }) {
 function StagePicker({ caseId, stages, value, fallback, open, onToggle, onClose }) {
     const [saving, setSaving] = useState(false);
     const [declineOpen, setDeclineOpen] = useState(false);
+    // Stages that capture an optional note when the case is moved into them.
+    const [noteStage, setNoteStage] = useState(null);
     const [coords, setCoords] = useState({ top: 0, left: 0, openUp: false });
     const triggerRef = useRef(null);
     const menuRef = useRef(null);
@@ -1522,6 +1541,12 @@ function StagePicker({ caseId, stages, value, fallback, open, onToggle, onClose 
         if (stage === "Decline Visa") {
             onClose();
             setDeclineOpen(true);
+            return;
+        }
+        // "Request to Lodged" / "Withdrawn" — offer an optional note before moving.
+        if (stage === "Request to Lodged" || stage === "Withdrawn") {
+            onClose();
+            setNoteStage(stage);
             return;
         }
         setSaving(true);
@@ -1599,7 +1624,85 @@ function StagePicker({ caseId, stages, value, fallback, open, onToggle, onClose 
             {declineOpen && (
                 <DeclineVisaModal caseId={caseId} onClose={() => setDeclineOpen(false)} />
             )}
+
+            {noteStage && (
+                <StageNoteModal caseId={caseId} stage={noteStage} onClose={() => setNoteStage(null)} />
+            )}
         </>
+    );
+}
+
+// ─── Stage note modal ───────────────────────────────────────────────────
+// Opens when a case is moved to a stage that captures an optional note
+// ("Request to Lodged", "Withdrawn"). The note is stored as an internal case
+// note; leaving it blank simply moves the stage.
+function StageNoteModal({ caseId, stage, onClose }) {
+    const [note, setNote] = useState("");
+    const [saving, setSaving] = useState(false);
+
+    useEffect(() => {
+        const onKey = (e) => { if (e.key === "Escape") onClose(); };
+        window.addEventListener("keydown", onKey);
+        return () => window.removeEventListener("keydown", onKey);
+    }, [onClose]);
+
+    const submit = () => {
+        if (saving) return;
+        setSaving(true);
+        router.post(
+            `/portal/immigration/cases/${caseId}/stage`,
+            { immigration_stage: stage, stage_note: note },
+            {
+                preserveScroll: true,
+                preserveState: true,
+                onSuccess: () => { toast.success(`Case moved to ${stage}`); onClose(); },
+                onError: (e) => toast.error(Object.values(e)[0] || "Could not save"),
+                onFinish: () => setSaving(false),
+            }
+        );
+    };
+
+    return createPortal(
+        <div className="fixed inset-0 z-[70] bg-black/40 flex items-center justify-center p-4" role="dialog" aria-modal="true" onClick={onClose}>
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg" onClick={(e) => e.stopPropagation()}>
+                <header className="px-5 py-4 border-b border-gray-100 flex items-start justify-between gap-3">
+                    <div>
+                        <h2 className="text-sm font-bold text-gray-900 inline-flex items-center gap-2">
+                            <span className={`w-2 h-2 rounded-full ${STAGE_COLORS[stage] || 'bg-gray-400'}`} /> Move to {stage}
+                        </h2>
+                        <p className="text-[11px] text-gray-500 mt-0.5">Add an optional note for the record. You can leave it blank.</p>
+                    </div>
+                    <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-700"><X size={16} /></button>
+                </header>
+
+                <div className="px-5 py-4">
+                    <label className="block text-[11px] font-semibold text-gray-700 uppercase tracking-wider mb-1.5">Note (optional)</label>
+                    <textarea
+                        autoFocus
+                        value={note}
+                        onChange={(e) => setNote(e.target.value)}
+                        rows={4}
+                        maxLength={2000}
+                        placeholder={stage === "Withdrawn" ? "Reason for withdrawal…" : "Anything worth recording about the lodgement…"}
+                        className="w-full text-sm px-3 py-2 border border-gray-200 rounded-md focus:outline-none focus:border-gray-900 resize-none"
+                    />
+                </div>
+
+                <footer className="px-5 py-3 border-t border-gray-100 flex items-center justify-end gap-2">
+                    <button type="button" onClick={onClose} className="px-3 py-1.5 text-xs font-semibold text-gray-600 hover:text-gray-900">Cancel</button>
+                    <button
+                        type="button"
+                        onClick={submit}
+                        disabled={saving}
+                        className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-md text-xs font-semibold bg-gray-900 text-white hover:bg-black disabled:opacity-50"
+                    >
+                        {saving ? <Loader2 size={12} className="animate-spin" /> : null}
+                        Move to {stage}
+                    </button>
+                </footer>
+            </div>
+        </div>,
+        document.body
     );
 }
 
