@@ -36,6 +36,66 @@ function LinksForm({ basePath, dept, bookingUrl, callNumber, effectiveBooking, e
     );
 }
 
+// Editable text footer (copyright/company, website, e-mail, WhatsApp,
+// location), per department. Blank fields fall back to the global default
+// (shown as the placeholder).
+function FooterForm({ basePath, dept, item }) {
+    const init = {
+        footer_company: item.footer_company || "",
+        footer_website_label: item.footer_website_label || "",
+        footer_website_url: item.footer_website_url || "",
+        footer_email: item.footer_email || "",
+        footer_whatsapp: item.footer_whatsapp || "",
+        footer_location: item.footer_location || "",
+    };
+    const [f, setF] = useState(init);
+    const [saving, setSaving] = useState(false);
+    const eff = item.effective_footer || {};
+    const dirty = Object.keys(init).some((k) => f[k] !== init[k]);
+    const set = (k) => (e) => setF((p) => ({ ...p, [k]: e.target.value }));
+
+    const save = () => {
+        setSaving(true);
+        router.post(`${basePath}/${dept}`, f, { preserveScroll: true, onFinish: () => setSaving(false) });
+    };
+
+    return (
+        <div className="space-y-2 pt-3 border-t border-gray-100">
+            <p className="text-[11px] font-semibold text-gray-500 flex items-center gap-1.5"><Mail size={12} /> Footer text</p>
+            <label className="block">
+                <span className="block text-[10px] text-gray-400 mb-0.5">Company (in the copyright line)</span>
+                <input className={input} value={f.footer_company} onChange={set("footer_company")} placeholder={eff.company || "ePathways"} />
+            </label>
+            <div className="grid grid-cols-2 gap-2">
+                <label className="block">
+                    <span className="block text-[10px] text-gray-400 mb-0.5">Website label</span>
+                    <input className={input} value={f.footer_website_label} onChange={set("footer_website_label")} placeholder={eff.website_label || "epathways.co.nz"} />
+                </label>
+                <label className="block">
+                    <span className="block text-[10px] text-gray-400 mb-0.5">Website link</span>
+                    <input className={input} value={f.footer_website_url} onChange={set("footer_website_url")} placeholder={eff.website_url || "https://…"} />
+                </label>
+            </div>
+            <label className="block">
+                <span className="block text-[10px] text-gray-400 mb-0.5">E-mail</span>
+                <input className={input} value={f.footer_email} onChange={set("footer_email")} placeholder={eff.email || "info@epathways.co.nz"} />
+            </label>
+            <label className="block">
+                <span className="block text-[10px] text-gray-400 mb-0.5">WhatsApp (one per line)</span>
+                <textarea rows={2} className={`${input} resize-y`} value={f.footer_whatsapp} onChange={set("footer_whatsapp")} placeholder={eff.whatsapp || "+64 21 …"} />
+            </label>
+            <label className="block">
+                <span className="block text-[10px] text-gray-400 mb-0.5">Location</span>
+                <textarea rows={2} className={`${input} resize-y`} value={f.footer_location} onChange={set("footer_location")} placeholder={eff.location || "Street, City, Country"} />
+            </label>
+            <p className="text-[10px] text-gray-400">Blank = the global default (shown as the greyed placeholder).</p>
+            <button onClick={save} disabled={!dirty || saving} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gray-900 text-white text-[11px] font-bold rounded-lg hover:bg-black disabled:opacity-40">
+                <Save size={12} /> {saving ? "Saving…" : "Save footer"}
+            </button>
+        </div>
+    );
+}
+
 // One banner/CTA slot for a department. Uploading, removing, or hiding posts
 // straight to the branding endpoint and Inertia refreshes the previews.
 function Slot({ basePath, dept, field, label, hint, url, isCustom, hidden }) {
@@ -129,6 +189,7 @@ export default function EmailBrandingView({ items = [], basePath = "/admin/email
                         <Slot basePath={basePath} dept={d.key} field="banner" label="Banner (top)" hint="Wide header, ~600px" url={d.banner_url} isCustom={d.has_custom_banner} hidden={d.hide_banner} />
                         <Slot basePath={basePath} dept={d.key} field="footer" label="CTA image" hint="Above the contact block" url={d.footer_url} isCustom={d.has_custom_footer} hidden={d.hide_footer} />
                         <LinksForm basePath={basePath} dept={d.key} bookingUrl={d.booking_url} callNumber={d.call_number} effectiveBooking={d.effective_booking_url} effectiveCall={d.effective_call_number} />
+                        <FooterForm basePath={basePath} dept={d.key} item={d} />
                     </div>
                 ))}
             </div>

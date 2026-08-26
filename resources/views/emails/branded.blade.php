@@ -24,6 +24,9 @@
         // file asset → default artwork. A per-template uploaded banner/footer
         // still wins over all of it.
         $brandAssets = \App\Models\EmailBranding::resolveAssets($branding ?? 'default');
+        // Per-department editable footer text (company / website / email /
+        // whatsapp / location) — falls back to the global default per field.
+        $footerText = \App\Models\EmailBranding::resolveFooter($branding ?? 'default');
 
         $footerPath = $footerRel ? Storage::disk('public')->path($footerRel) : $brandAssets['footerPath'];
 
@@ -110,7 +113,7 @@
                     <tr>
                         <td style="padding:10px 40px 4px 40px;" align="center">
                             <p style="margin:0; font-size:11px; color:#aaaaaa;">
-                                Copyright &copy; {{ date('Y') }} ePathways. All rights reserved.
+                                Copyright &copy; {{ date('Y') }} {{ $footerText['company'] }}. All rights reserved.
                             </p>
                         </td>
                     </tr>
@@ -119,33 +122,38 @@
                     <tr>
                         <td style="padding:14px 40px 30px 40px;" align="center">
                             <table role="presentation" cellpadding="0" cellspacing="0" width="100%">
-                                @if ($contactEmail)
+                                @if ($footerText['email'])
                                 <tr>
                                     <td align="center" style="padding:8px 0 0 0;">
                                         <p style="margin:0; font-size:12px; font-weight:700; color:#444444;">E-mail:</p>
-                                        <a href="mailto:{{ $contactEmail }}" style="font-size:12px; color:#2e7d32; text-decoration:underline;">{{ $contactEmail }}</a>
+                                        <a href="mailto:{{ $footerText['email'] }}" style="font-size:12px; color:#2e7d32; text-decoration:underline;">{{ $footerText['email'] }}</a>
                                     </td>
                                 </tr>
                                 @endif
+                                @if ($footerText['whatsapp'])
                                 <tr>
                                     <td align="center" style="padding:8px 0 0 0;">
                                         <p style="margin:0; font-size:12px; font-weight:700; color:#444444;">Whatsapp:</p>
-                                        <p style="margin:0; font-size:12px; color:#555555;">+64 21 227 8000 Emma</p>
-                                        <p style="margin:0; font-size:12px; color:#555555;">+63939 5863 654 Bryll</p>
+                                        <p style="margin:0; font-size:12px; color:#555555;">{!! nl2br(e($footerText['whatsapp'])) !!}</p>
                                     </td>
                                 </tr>
+                                @endif
+                                @if ($footerText['website_label'])
                                 <tr>
                                     <td align="center" style="padding:8px 0 0 0;">
                                         <p style="margin:0; font-size:12px; font-weight:700; color:#444444;">Website:</p>
-                                        <a href="{{ $siteUrl }}" style="font-size:12px; color:#2e7d32; text-decoration:underline;">{{ $siteHost }}</a>
+                                        <a href="{{ $footerText['website_url'] ?: $siteUrl }}" style="font-size:12px; color:#2e7d32; text-decoration:underline;">{{ $footerText['website_label'] }}</a>
                                     </td>
                                 </tr>
+                                @endif
+                                @if ($footerText['location'])
                                 <tr>
                                     <td align="center" style="padding:8px 0 0 0;">
                                         <p style="margin:0; font-size:12px; font-weight:700; color:#444444;">Location:</p>
-                                        <p style="margin:0; font-size:12px; color:#2e7d32;">21 Vazey Way, Hobsonville, Auckland, 0618, New Zealand</p>
+                                        <p style="margin:0; font-size:12px; color:#2e7d32;">{{ $footerText['location'] }}</p>
                                     </td>
                                 </tr>
+                                @endif
                             </table>
                         </td>
                     </tr>

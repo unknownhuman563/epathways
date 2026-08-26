@@ -13,7 +13,12 @@ use Illuminate\Support\Str;
  */
 class EmailBranding extends Model
 {
-    protected $fillable = ['department', 'banner_path', 'footer_path', 'booking_url', 'call_number', 'hide_banner', 'hide_footer'];
+    protected $fillable = [
+        'department', 'banner_path', 'footer_path', 'booking_url', 'call_number', 'hide_banner', 'hide_footer',
+        // Editable footer text (per department).
+        'footer_company', 'footer_website_label', 'footer_website_url',
+        'footer_email', 'footer_whatsapp', 'footer_location',
+    ];
 
     protected $casts = [
         'hide_banner' => 'boolean',
@@ -98,5 +103,43 @@ class EmailBranding extends Model
         $callNumber = ($row?->call_number) ?: config('services.contact.phone');
 
         return compact('bannerUrl', 'footerUrl', 'footerPath', 'bookingUrl', 'callNumber');
+    }
+
+    /** Global fallback footer text — used when a department leaves a field blank. */
+    private static function footerDefaults(): array
+    {
+        $siteUrl = rtrim((string) config('app.url'), '/');
+
+        return [
+            'company' => 'ePathways',
+            'website_label' => preg_replace('#^https?://#', '', $siteUrl),
+            'website_url' => $siteUrl,
+            'email' => (string) config('services.contact.email'),
+            'whatsapp' => "+64 21 227 8000 Emma\n+63939 5863 654 Bryll",
+            'location' => '21 Vazey Way, Hobsonville, Auckland, 0618, New Zealand',
+        ];
+    }
+
+    /**
+     * Resolve the editable footer text for a branding key: a department's own
+     * value wins, otherwise the global default. Every field is always present.
+     *
+     * @return array{company:string, website_label:string, website_url:string, email:string, whatsapp:string, location:string}
+     */
+    public static function resolveFooter(?string $key): array
+    {
+        $defaults = self::footerDefaults();
+        $row = static::where('department', $key ?: 'default')->first();
+
+        $pick = fn (string $col, string $default) => filled($row?->{$col}) ? (string) $row->{$col} : $default;
+
+        return [
+            'company' => $pick('footer_company', $defaults['company']),
+            'website_label' => $pick('footer_website_label', $defaults['website_label']),
+            'website_url' => $pick('footer_website_url', $defaults['website_url']),
+            'email' => $pick('footer_email', $defaults['email']),
+            'whatsapp' => $pick('footer_whatsapp', $defaults['whatsapp']),
+            'location' => $pick('footer_location', $defaults['location']),
+        ];
     }
 }
