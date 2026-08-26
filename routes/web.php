@@ -746,6 +746,13 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/admin/leads/{id}/registration', [SalesController::class, 'showLeadRegistration'])
             ->name('admin.leads.registration');
 
+        // Bulk actions from the Leads-table toolbar (Set/edit agent, Delete).
+        // The admin Leads page reuses the sales component with portalBase=/admin,
+        // so it posts here. Declared BEFORE /admin/leads/{id} so the literal
+        // "bulk-*" segments aren't captured as an {id}.
+        Route::post('/admin/leads/bulk-agent', [SalesController::class, 'bulkAssignAgent'])->name('admin.leads.bulk-agent');
+        Route::post('/admin/leads/bulk-delete', [SalesController::class, 'bulkDelete'])->name('admin.leads.bulk-delete');
+
         Route::get('/admin/leads/{id}', [LeadController::class, 'show'])->name('admin.leads.show');
         Route::post('/admin/leads/{id}/stage', [LeadController::class, 'updateStage'])->name('admin.leads.stage');
         // Archive (soft-delete) a lead / case — used by the Cases + Leads row menus.
