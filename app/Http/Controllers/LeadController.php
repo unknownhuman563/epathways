@@ -1566,6 +1566,19 @@ class LeadController extends Controller
             ];
         }
 
+        // Full program catalogue for the "Programs offered" card's inline
+        // add-a-program picker (searchable by title or school).
+        $programOptions = \App\Models\Program::with('school:id,name')
+            ->orderBy('title')
+            ->get(['id', 'title', 'level', 'institution', 'school_id'])
+            ->map(fn ($p) => [
+                'id' => $p->id,
+                'title' => $p->title,
+                'level' => $p->level,
+                'school' => $p->institution ?: optional($p->school)->name,
+            ])
+            ->all();
+
         // Per-document discussion threads (shared CaseThread model — the same
         // one immigration cases use, keyed by lead_id so it works for any lead).
         // Education/general leads anchor a note to a checklist item by
@@ -1606,6 +1619,7 @@ class LeadController extends Controller
             'stageTimeline' => $stageTimeline,
             'checklistFiles' => $checklistFiles,
             'documentThreads' => $documentThreads,
+            'programOptions' => $programOptions,
             'documentOrphans' => $documentOrphans,
             'notes' => $notes,
             'tags' => $leadTags,
@@ -1617,6 +1631,13 @@ class LeadController extends Controller
                 ? ['id' => auth()->id(), 'name' => auth()->user()->name, 'role' => auth()->user()->role, 'is_admin' => auth()->user()->isAdmin()]
                 : null,
             'statuses' => \App\Models\Lead::STAGES,
+            // Department stage lists so the header can show the right dropdown
+            // for a lead moved to Study / English / Immigration.
+            'stageLists' => [
+                'education' => \App\Models\Lead::EDUCATION_STAGES,
+                'english' => \App\Models\Lead::ENGLISH_STAGES,
+                'immigration' => \App\Models\Lead::IMMIGRATION_STAGES,
+            ],
         ]);
     }
 
@@ -1871,16 +1892,61 @@ class LeadController extends Controller
      */
     public function updateStage(\Illuminate\Http\Request $request, $id)
     {
+        // The lead-profile header is department-aware: a lead moved to Study /
+        // English / Immigration edits that department's stage column (not the
+        // sales `status`). `field` names the column; the value is whitelisted
+        // to that column's canonical list so it can't drift to free-form text.
+        $lists = [
+            'status' => \App\Models\Lead::STAGES,
+            'education_stage' => \App\Models\Lead::EDUCATION_STAGES,
+            'english_stage' => \App\Models\Lead::ENGLISH_STAGES,
+            'immigration_stage' => \App\Models\Lead::IMMIGRATION_STAGES,
+        ];
+        $field = $request->input('field', 'status');
+        if (! array_key_exists($field, $lists)) {
+            $field = 'status';
+        }
+
         $validated = $request->validate([
-            'status' => ['required', \Illuminate\Validation\Rule::in(\App\Models\Lead::STAGES)],
+            'status' => ['required', \Illuminate\Validation\Rule::in($lists[$field])],
         ]);
 
         try {
             $lead = Lead::findOrFail($id);
-            $lead->status = $validated['status'];
+            $newValue = $validated['status'];
+            $changed = ($lead->{$field} ?? null) !== $newValue;
+            $lead->{$field} = $newValue;
+
+            // Department stage moves push a dated history entry + timestamp and
+            // may auto-promote to an Immigration case — mirroring the Students
+            // page's dashboard-field flow so the two surfaces stay consistent.
+            $deptMap = ['education_stage' => 'education', 'english_stage' => 'english', 'immigration_stage' => 'immigration'];
+            if ($field !== 'status' && $changed && isset($deptMap[$field])) {
+                $dept = $deptMap[$field];
+                $assignee = $dept === 'english'
+                    ? $lead->english_assignee
+                    : ($dept === 'immigration' ? $lead->immigration_assignee : null);
+                $lead->stage_updated_at = now();
+                $lead->stage_updated_by = auth()->id();
+                $lead->pushStageHistory($dept, $newValue, $assignee);
+
+                // Education handoff → auto-promote to an immigration case and
+                // retire from the Education queue (matches updateStudentField).
+                if ($field === 'education_stage' && in_array($newValue, \App\Models\Lead::EDUCATION_STAGES_IMMIGRATION, true)) {
+                    if (! $lead->is_immigration_case) {
+                        $lead->is_immigration_case = true;
+                        $lead->immigration_converted_at = now();
+                        $lead->immigration_converted_by = auth()->id();
+                    }
+                    if ($lead->is_student) {
+                        $lead->is_student = false;
+                    }
+                }
+            }
+
             $lead->save();
 
-            return back()->with('success', "Stage updated to {$validated['status']}.");
+            return back()->with('success', "Stage updated to {$newValue}.");
         } catch (\Throwable $e) {
             \Illuminate\Support\Facades\Log::error('Lead stage update failed', ['id' => $id, 'error' => $e->getMessage()]);
 
@@ -2978,6 +3044,38 @@ class LeadController extends Controller
         $thread->update(['body' => $validated['body']]);
 
         return back()->with('success', 'Comment updated.');
+    }
+
+    /**
+     * Lightweight inline edit of a lead's proposed-program shortlist from the
+     * Lead Stats "Programs offered" card. Sets leads.proposed_program_ids
+     * directly WITHOUT creating a proposal version (versioning is reserved for
+     * the Proposal & Agreements "create proposal" flow). Clears the client's
+     * chosen program if it's no longer on the shortlist.
+     */
+    public function updateProposedShortlist(\Illuminate\Http\Request $request, $id)
+    {
+        $validated = $request->validate([
+            'program_ids' => 'nullable|array|max:5',
+            'program_ids.*' => 'integer|exists:programs,id',
+        ]);
+
+        try {
+            $lead = Lead::findOrFail($id);
+            $ids = array_values(array_unique(array_map('intval', $validated['program_ids'] ?? [])));
+            $lead->proposed_program_ids = $ids ?: null;
+            if ($lead->preferred_program_id && ! in_array((int) $lead->preferred_program_id, $ids, true)) {
+                $lead->preferred_program_id = null;
+                $lead->preferred_program_chosen_at = null;
+            }
+            $lead->save();
+
+            return back()->with('success', 'Programs updated.');
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('Shortlist update failed', ['lead' => $id, 'error' => $e->getMessage()]);
+
+            return back()->with('error', 'Could not update the programs.');
+        }
     }
 
     /**

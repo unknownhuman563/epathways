@@ -11,7 +11,7 @@ import {
     User as UserIcon, ArrowRight, Sparkles, FolderOpen, Copy, Info, Undo2, Send,
     Globe, Home, Wand2, Users as UsersIcon, Eye,
     Paperclip, FileImage, Film, Music,
-    Briefcase, Trash2, RefreshCw, MoreVertical, Plus, X, MessageSquare,
+    Briefcase, Trash2, RefreshCw, MoreVertical, Plus, X, MessageSquare, Search,
 } from 'lucide-react';
 import { CHECKLIST, STATUSES, STATUS_CHIP, STATUS_LABEL, SECTION_STATUSES, IMPORTANT_NOTES, renderFilename, currentSectionIndex } from '@/data/leadDocumentChecklist';
 import { ThreadItem, ThreadComposer } from '@/components/immigration/case-profile/threads';
@@ -45,16 +45,138 @@ const STAGE_STYLES = {
     "Visa Process":                   "bg-lime-100 text-lime-800 border-lime-200",
     "Not Qualified":                  "bg-red-100 text-red-700 border-red-200",
     "Work Pathway / Other":           "bg-blue-100 text-blue-800 border-blue-200",
+    // Department (Education / English / Immigration) stage colours, so the
+    // header badge/dropdown look right for a lead moved off the sales pipeline.
+    "Endorsed to School":             "bg-sky-100 text-sky-800 border-sky-200",
+    "Conditional Offer":              "bg-amber-100 text-amber-800 border-amber-200",
+    "Unconditional Offer":            "bg-emerald-100 text-emerald-800 border-emerald-200",
+    "Endorsed to Immigration":        "bg-indigo-100 text-indigo-800 border-indigo-200",
+    "Visa Lodged":                    "bg-violet-100 text-violet-800 border-violet-200",
+    "Approved in Principle":          "bg-cyan-100 text-cyan-800 border-cyan-200",
+    "Request for Information":        "bg-orange-100 text-orange-800 border-orange-200",
+    "Approved Visa":                  "bg-green-100 text-green-800 border-green-200",
+    "Started Course":                 "bg-teal-100 text-teal-800 border-teal-200",
+    "PTE Review":                     "bg-purple-100 text-purple-800 border-purple-200",
+    "DIY Review":                     "bg-violet-100 text-violet-800 border-violet-200",
+    "For PTE Mocktest":               "bg-fuchsia-100 text-fuchsia-800 border-fuchsia-200",
+    "For PTE Exam":                   "bg-pink-100 text-pink-800 border-pink-200",
+    "For Assessment":                 "bg-amber-100 text-amber-800 border-amber-200",
+    "Endorsed":                       "bg-indigo-100 text-indigo-800 border-indigo-200",
+    "Agreement Sent":                 "bg-indigo-100 text-indigo-800 border-indigo-200",
+    "Agreement Signed":               "bg-emerald-100 text-emerald-800 border-emerald-200",
+    "For Agreement & Invoice":        "bg-amber-100 text-amber-800 border-amber-200",
+    "Invoice Paid":                   "bg-emerald-100 text-emerald-800 border-emerald-200",
+    "Request to Lodged":              "bg-sky-100 text-sky-800 border-sky-200",
+    "Interim Visa Issued":            "bg-cyan-100 text-cyan-800 border-cyan-200",
+    "RFI Responded":                  "bg-lime-100 text-lime-800 border-lime-200",
+    "Decline Visa":                   "bg-red-100 text-red-700 border-red-200",
+    "Withdrawn":                      "bg-gray-100 text-gray-600 border-gray-200",
 };
 const stageClass = (s) => STAGE_STYLES[s] || "bg-gray-100 text-gray-700 border-gray-200";
+
+// Searchable "add a program" picker for the Programs Offered card. Type to
+// filter the catalogue by program title or school, click to shortlist. Clears
+// itself after each pick so several can be added in a row.
+function ProgramAddPicker({ options = [], excludeIds = [], disabled = false, onPick }) {
+    const [open, setOpen] = useState(false);
+    const [query, setQuery] = useState('');
+    const [rect, setRect] = useState(null);
+    const boxRef = useRef(null);
+    const menuRef = useRef(null);
+
+    // The card is overflow-hidden (for its rounded header), so the dropdown is
+    // rendered in a portal positioned under the input to avoid being clipped.
+    const reposition = () => {
+        const el = boxRef.current;
+        if (el) { const r = el.getBoundingClientRect(); setRect({ top: r.bottom, left: r.left, width: r.width }); }
+    };
+    useEffect(() => {
+        if (! open) return;
+        reposition();
+        const onDoc = (e) => {
+            if (boxRef.current?.contains(e.target) || menuRef.current?.contains(e.target)) return;
+            setOpen(false);
+        };
+        window.addEventListener('scroll', reposition, true);
+        window.addEventListener('resize', reposition);
+        document.addEventListener('mousedown', onDoc);
+        return () => {
+            window.removeEventListener('scroll', reposition, true);
+            window.removeEventListener('resize', reposition);
+            document.removeEventListener('mousedown', onDoc);
+        };
+    }, [open]);
+
+    const q = query.trim().toLowerCase();
+    const available = options.filter((p) => ! excludeIds.includes(p.id));
+    const filtered = q
+        ? available.filter((p) => `${p.title} ${p.school || ''}`.toLowerCase().includes(q))
+        : available;
+
+    return (
+        <div ref={boxRef} className="relative">
+            <div className="relative">
+                <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                <input
+                    type="text"
+                    value={query}
+                    disabled={disabled}
+                    onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
+                    onFocus={() => setOpen(true)}
+                    placeholder={disabled ? 'Maximum reached' : 'Add a program…'}
+                    className="w-full pl-8 pr-3 py-2 rounded-lg border border-gray-200 text-sm bg-white focus:border-gray-400 outline-none disabled:bg-gray-50 disabled:text-gray-400"
+                />
+            </div>
+            {open && ! disabled && rect && createPortal(
+                <div
+                    ref={menuRef}
+                    style={{ position: 'fixed', top: rect.top + 4, left: rect.left, width: rect.width, zIndex: 60 }}
+                    className="max-h-60 overflow-auto bg-white border border-gray-200 rounded-lg shadow-xl py-1"
+                >
+                    {filtered.length === 0 ? (
+                        <p className="px-3 py-2 text-[12px] text-gray-400">No matching programs.</p>
+                    ) : filtered.slice(0, 60).map((p) => (
+                        <button
+                            key={p.id}
+                            type="button"
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => { onPick?.(p.id); setQuery(''); setOpen(false); }}
+                            className="w-full text-left px-3 py-2 hover:bg-gray-50"
+                        >
+                            <span className="block text-sm text-gray-800 truncate">{p.title}</span>
+                            <span className="block text-[11px] text-gray-400 truncate">
+                                {[p.school, p.level != null ? `Level ${p.level}` : null].filter(Boolean).join(' · ') || '—'}
+                            </span>
+                        </button>
+                    ))}
+                </div>,
+                document.body,
+            )}
+        </div>
+    );
+}
 
 // Read-only mirror of the tracker's program shortlist for staff: lists the
 // programs offered to this lead and highlights (green) the one the client
 // chose from their tracker. Rendered on the Lead Stats tab under the AI card.
-function ProposedProgramsCard({ proposal }) {
+function ProposedProgramsCard({ proposal, leadId, programOptions = [] }) {
     const programs = proposal?.programs || [];
     const chosenId = proposal?.preferred_program_id ?? null;
     const chosen = programs.find((p) => p.id === chosenId) || null;
+    const currentIds = programs.map((p) => p.id);
+    const MAX = 5;
+
+    // Inline shortlist edit — persists to leads.proposed_program_ids without
+    // spawning a proposal version (that's the Proposal & Agreements flow).
+    const saveShortlist = (ids) => {
+        router.post(`/admin/leads/${leadId}/shortlist`, { program_ids: ids }, {
+            preserveScroll: true,
+            preserveState: false,
+            onError: (e) => toast.error(Object.values(e)[0] || 'Could not update programs'),
+        });
+    };
+    const addProgram = (pid) => { if (currentIds.length < MAX && ! currentIds.includes(pid)) saveShortlist([...currentIds, pid]); };
+    const removeProgram = (pid) => saveShortlist(currentIds.filter((x) => x !== pid));
 
     return (
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
@@ -70,7 +192,7 @@ function ProposedProgramsCard({ proposal }) {
                         </h2>
                         <p className="text-[12px] text-gray-500 mt-0.5 leading-relaxed">
                             {programs.length === 0
-                                ? 'No programs proposed yet — shortlist some from Proposal & Agreements.'
+                                ? 'No programs proposed yet — search and add programs below.'
                                 : chosen
                                     ? <>Client selected <span className="font-semibold text-gray-700">{chosen.title}</span> from their tracker.</>
                                     : "These are the programs staff shortlisted. The client picks one on their tracker."}
@@ -84,6 +206,25 @@ function ProposedProgramsCard({ proposal }) {
                 )}
             </div>
 
+            {/* Inline add — search the catalogue and shortlist a program (up to 5). */}
+            {leadId && (
+                <div className="px-6 py-3 border-b border-gray-100 bg-gray-50/40">
+                    <div className="max-w-md">
+                        <ProgramAddPicker
+                            options={programOptions}
+                            excludeIds={currentIds}
+                            disabled={currentIds.length >= MAX}
+                            onPick={addProgram}
+                        />
+                        <p className="text-[10.5px] text-gray-400 mt-1">
+                            {currentIds.length >= MAX
+                                ? `Maximum ${MAX} programs — remove one to add another.`
+                                : `Search by program or school · ${currentIds.length}/${MAX} added`}
+                        </p>
+                    </div>
+                </div>
+            )}
+
             {programs.length > 0 && (
                 <div className="p-4 sm:p-5 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {programs.map((p) => {
@@ -95,6 +236,15 @@ function ProposedProgramsCard({ proposal }) {
                                     isChosen ? 'border-emerald-500 ring-2 ring-emerald-500/25 bg-emerald-50' : 'border-gray-100 bg-white'
                                 }`}
                             >
+                                {/* Remove from shortlist */}
+                                <button
+                                    type="button"
+                                    onClick={() => removeProgram(p.id)}
+                                    title="Remove from shortlist"
+                                    className="absolute top-2 left-2 z-10 w-6 h-6 rounded-full bg-white/90 border border-gray-200 text-gray-400 hover:text-red-600 hover:border-red-200 flex items-center justify-center shadow-sm"
+                                >
+                                    <X size={12} />
+                                </button>
                                 {isChosen && (
                                     <span className="absolute top-3 right-3 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-600 text-white text-[9px] font-bold uppercase tracking-[0.14em] shadow-sm">
                                         <Check size={10} strokeWidth={3} /> Chosen
@@ -151,7 +301,7 @@ function ProposedProgramsCard({ proposal }) {
     );
 }
 
-export default function LeadDetails({ lead: backendLead, proposal = null, activity = [], stageTimeline = [], checklistFiles = {}, documentThreads = [], documentOrphans = [], statuses = [], notes = [], tags = [], allTags = [], tasks = [], staffOptions = [], eventRegistration = null, currentUser = null }) {
+export default function LeadDetails({ lead: backendLead, proposal = null, activity = [], stageTimeline = [], checklistFiles = {}, documentThreads = [], programOptions = [], documentOrphans = [], statuses = [], stageLists = {}, notes = [], tags = [], allTags = [], tasks = [], staffOptions = [], eventRegistration = null, currentUser = null }) {
     // Derive the "Back to Leads" URL from the current path so sales users
     // return to /portal/sales/leads, education users to /portal/education/leads,
     // and admins to /admin/leads — never a 403.
@@ -215,11 +365,28 @@ export default function LeadDetails({ lead: backendLead, proposal = null, activi
         };
     }, [stageOpen]);
 
-    const changeStage = (status) => {
+    // Department-aware stage. A lead moved to Study / English / Immigration is
+    // tracked by its own stage column, so the header must show THAT stage and
+    // its dropdown — not the sales pipeline — to match the Students list.
+    const leadDept = (() => {
+        const l = backendLead || {};
+        if (l.is_immigration_case || l.immigration_stage) return 'immigration';
+        if (l.is_student || l.education_stage) return 'education';
+        if (l.is_english_student || l.english_stage) return 'english';
+        return 'sales';
+    })();
+    const DEPT_FIELD = { sales: 'status', education: 'education_stage', english: 'english_stage', immigration: 'immigration_stage' };
+    const stageField = DEPT_FIELD[leadDept];
+    const stageValue = leadDept === 'sales'
+        ? (backendLead?.status || 'New Leads')
+        : (backendLead?.[stageField] || null);
+    const deptStages = leadDept === 'sales' ? statuses : (stageLists[leadDept] || []);
+
+    const changeStage = (value) => {
         setStageOpen(false);
-        if (!backendLead || status === backendLead.status) return;
+        if (!backendLead || value === stageValue) return;
         setSavingStage(true);
-        router.post(`/admin/leads/${backendLead.id}/stage`, { status }, {
+        router.post(`/admin/leads/${backendLead.id}/stage`, { status: value, field: stageField }, {
             preserveScroll: true,
             preserveState: true,
             onFinish: () => setSavingStage(false),
@@ -474,17 +641,19 @@ export default function LeadDetails({ lead: backendLead, proposal = null, activi
                                 type="button"
                                 disabled={savingStage}
                                 onClick={() => setStageOpen(!stageOpen)}
-                                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold border uppercase hover:shadow-sm transition-all disabled:opacity-50 ${stageClass(backendLead.status || lead.status)}`}
+                                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold border uppercase hover:shadow-sm transition-all disabled:opacity-50 ${stageClass(stageValue)}`}
                                 title="Click to change stage"
                             >
-                                {backendLead.status || lead.status || 'New Leads'}
+                                {stageValue || 'Set stage'}
                                 <ChevronDown size={11} strokeWidth={2.5} className="opacity-60" />
                             </button>
                             {stageOpen && (
                                 <div role="listbox" className="absolute z-30 top-full left-0 mt-1 bg-white rounded-xl shadow-2xl border border-gray-100 py-1.5 w-[280px] max-h-[420px] overflow-y-auto">
-                                    <p className="px-3 pt-2 pb-1.5 text-[9px] font-bold text-gray-400 uppercase tracking-[0.2em]">Move to stage</p>
-                                    {statuses.map((s) => {
-                                        const active = s === (backendLead.status || lead.status);
+                                    <p className="px-3 pt-2 pb-1.5 text-[9px] font-bold text-gray-400 uppercase tracking-[0.2em]">
+                                        Move to stage{leadDept !== 'sales' ? ` · ${leadDept}` : ''}
+                                    </p>
+                                    {deptStages.map((s) => {
+                                        const active = s === stageValue;
                                         return (
                                             <button
                                                 key={s}
@@ -682,7 +851,7 @@ export default function LeadDetails({ lead: backendLead, proposal = null, activi
             <div className={activeTab === 'stats' ? 'space-y-6' : 'hidden'}>
                 <StatsQuickRow lead={backendLead} tasks={tasks} tags={tags} notes={notes} />
                 <AICapabilityHero lead={backendLead} />
-                <ProposedProgramsCard proposal={proposal} />
+                <ProposedProgramsCard proposal={proposal} leadId={backendLead.id} programOptions={programOptions} />
 
                 {/* Tasks + Tags side-by-side — paired workspace row. */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

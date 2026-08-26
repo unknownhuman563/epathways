@@ -805,6 +805,10 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/admin/leads/{id}/threads/{thread}/resolve', [LeadController::class, 'resolveDocThread'])->name('admin.leads.threads.resolve');
         Route::patch('/admin/leads/{id}/threads/{thread}', [LeadController::class, 'updateDocThread'])->name('admin.leads.threads.update');
 
+        // Inline edit of the proposed-program shortlist from the Lead Stats
+        // "Programs offered" card (no proposal-version churn).
+        Route::post('/admin/leads/{id}/shortlist', [LeadController::class, 'updateProposedShortlist'])->name('admin.leads.shortlist');
+
         // Internal notes — any staff role can add, only author or admin can edit/delete.
         Route::get('/admin/leads/{id}/notes', [\App\Http\Controllers\LeadNoteController::class, 'index'])
             ->name('admin.leads.notes.index');

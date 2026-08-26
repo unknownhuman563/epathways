@@ -49,6 +49,10 @@ const COOP_OOP_PRESETS = ["Yes", "No"];
 
 const SUFFIX_OPTIONS = ["", "Jr.", "Sr.", "II", "III", "IV", "V"];
 
+// Multiple selected programs are stored joined by this delimiter in the single
+// program_text / preferred_course string field.
+const PROGRAM_DELIM = " · ";
+
 // localStorage key for the new-student draft so a user who cancels
 // accidentally (or refreshes) can resume from where they left off.
 const DRAFT_KEY = "education.newStudent.draft";
@@ -163,25 +167,26 @@ export default function AddEditStudentModal({
     const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
     const setVal = (k, v) => setForm((f) => ({ ...f, [k]: v }));
 
-    // Program picker. `program` carries { title, school_id?, institution? }.
-    // On an actual pick (not free-typing) auto-fill the School field from the
-    // program's linked school — by school_id, or by matching its institution
-    // name against the school list as a fallback.
-    const pickProgram = (program, isSelection) => {
+    // Programs are multi-select — stored as a PROGRAM_DELIM-joined string in
+    // program_text so the backend keeps working with one column.
+    const setProgramTitles = (titles) => setForm((f) => ({ ...f, program_text: titles.join(PROGRAM_DELIM) }));
+
+    // When a catalog program is picked, auto-fill the School to match — by
+    // school_id, or by matching its institution against the school list —
+    // but only when the School is still empty, so it doesn't fight later picks.
+    const autofillSchool = (program) => {
+        if (! program) return;
         setForm((f) => {
-            const next = { ...f, program_text: program.title || "" };
-            if (isSelection) {
-                let sid = program.school_id != null && program.school_id !== "" ? String(program.school_id) : "";
-                if (! sid && program.institution) {
-                    const inst = String(program.institution).toLowerCase();
-                    const match = schoolOptions.find(
-                        (s) => s.name?.toLowerCase() === inst || s.name?.toLowerCase().includes(inst),
-                    );
-                    if (match) sid = String(match.id);
-                }
-                if (sid) next.school_id = sid;
+            if (f.school_id) return f;
+            let sid = program.school_id != null && program.school_id !== "" ? String(program.school_id) : "";
+            if (! sid && program.institution) {
+                const inst = String(program.institution).toLowerCase();
+                const match = schoolOptions.find(
+                    (s) => s.name?.toLowerCase() === inst || s.name?.toLowerCase().includes(inst),
+                );
+                if (match) sid = String(match.id);
             }
-            return next;
+            return sid ? { ...f, school_id: sid } : f;
         });
     };
 
@@ -370,11 +375,13 @@ export default function AddEditStudentModal({
                             <Field label="Date engaged" hint="When they became engaged · optional">
                                 <input type="date" value={form.date_of_engagement} onChange={set("date_of_engagement")} className={ICls} />
                             </Field>
-                            <Field label="Program offered" hint="Search or select — the School auto-fills to match">
-                                <ProgramSelect
+                            <Field label="Program offered" hint="Search or select one or more — the School auto-fills to match">
+                                <ProgramMultiSelect
                                     value={form.program_text}
+                                    delim={PROGRAM_DELIM}
                                     options={programOptions}
-                                    onPick={pickProgram}
+                                    onChange={setProgramTitles}
+                                    onAutofillSchool={autofillSchool}
                                 />
                             </Field>
                             <Field label="School" hint="Optional">
@@ -459,12 +466,13 @@ function Field({ label, required, hint, children }) {
     );
 }
 
-// Searchable program picker. Type to filter the catalog, click to select
-// (which auto-fills the School), or just leave free-typed text — a custom
-// title that isn't in the catalog is still kept. Dedupes duplicate-title
-// rows the catalog occasionally carries.
-function ProgramSelect({ value, options, onPick }) {
+// Multi-select program picker. Selected programs show as removable chips;
+// type to filter the catalog and click to add, or press Enter to keep a
+// free-typed custom title. Picking a catalog program auto-fills the School.
+// Selections are held in the parent as a `delim`-joined string.
+function ProgramMultiSelect({ value = "", delim = " · ", options = [], onChange, onAutofillSchool }) {
     const [open, setOpen] = useState(false);
+    const [query, setQuery] = useState("");
     const boxRef = useRef(null);
 
     useEffect(() => {
@@ -473,25 +481,59 @@ function ProgramSelect({ value, options, onPick }) {
         return () => document.removeEventListener("mousedown", onDoc);
     }, []);
 
+    const selected = value ? value.split(delim).map((s) => s.trim()).filter(Boolean) : [];
     const deduped = useMemo(
         () => Array.from(new Map((options || []).map((p) => [p.title, p])).values()),
         [options],
     );
-    const q = (value || "").trim().toLowerCase();
-    const exact = deduped.some((p) => p.title?.toLowerCase() === q);
-    const filtered = (! q || exact) ? deduped : deduped.filter((p) => p.title?.toLowerCase().includes(q));
+    const q = query.trim().toLowerCase();
+    const available = deduped.filter((p) => ! selected.includes(p.title));
+    const filtered = q ? available.filter((p) => p.title?.toLowerCase().includes(q)) : available;
+
+    const add = (title, program) => {
+        if (! title || selected.includes(title)) return;
+        onChange?.([...selected, title]);
+        if (program) onAutofillSchool?.(program);
+        setQuery("");
+    };
+    const remove = (title) => onChange?.(selected.filter((t) => t !== title));
+
+    const onKeyDown = (e) => {
+        if (e.key === "Enter") {
+            e.preventDefault();
+            const typed = query.trim();
+            if (! typed) return;
+            const match = deduped.find((p) => p.title?.toLowerCase() === typed.toLowerCase());
+            add(match ? match.title : typed, match || null);
+        } else if (e.key === "Backspace" && ! query && selected.length) {
+            remove(selected[selected.length - 1]);
+        }
+    };
 
     return (
         <div ref={boxRef} className="relative">
+            {selected.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mb-1.5">
+                    {selected.map((t) => (
+                        <span key={t} className="inline-flex items-center gap-1 pl-2.5 pr-1 py-1 rounded-full bg-gray-100 text-gray-800 text-[12px] font-medium border border-gray-200">
+                            <span className="truncate max-w-[220px]">{t}</span>
+                            <button type="button" onClick={() => remove(t)} className="w-4 h-4 rounded-full text-gray-400 hover:text-red-600 hover:bg-white flex items-center justify-center">
+                                <X size={11} />
+                            </button>
+                        </span>
+                    ))}
+                </div>
+            )}
             <div className="relative">
                 <input
                     type="text"
-                    value={value}
-                    onChange={(e) => { onPick({ title: e.target.value }, false); setOpen(true); }}
+                    value={query}
+                    onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
                     onFocus={() => setOpen(true)}
+                    onKeyDown={onKeyDown}
                     className={`${ICls} pr-8`}
                     maxLength={191}
-                    placeholder="Search or type a program…"
+                    placeholder={selected.length ? "Add another program…" : "Search or type a program…"}
                 />
                 <ChevronDown
                     size={15}
@@ -502,17 +544,15 @@ function ProgramSelect({ value, options, onPick }) {
                 <div className="absolute z-30 mt-1 left-0 right-0 max-h-60 overflow-auto bg-white border border-gray-200 rounded-lg shadow-lg py-1">
                     {filtered.length === 0 ? (
                         <p className="px-3 py-2 text-[12px] text-gray-400 flex items-center gap-1.5">
-                            <Search size={12} /> No match — “{value}” will be kept as a custom title.
+                            <Search size={12} /> {query ? `Press Enter to add “${query}”` : "All programs added."}
                         </p>
                     ) : filtered.slice(0, 60).map((p) => (
                         <button
                             key={p.id}
                             type="button"
                             onMouseDown={(e) => e.preventDefault()}
-                            onClick={() => { onPick(p, true); setOpen(false); }}
-                            className={`w-full text-left px-3 py-2 hover:bg-gray-50 flex items-center justify-between gap-2 ${
-                                p.title?.toLowerCase() === q ? "bg-gray-50" : ""
-                            }`}
+                            onClick={() => add(p.title, p)}
+                            className="w-full text-left px-3 py-2 hover:bg-gray-50 flex items-center justify-between gap-2"
                         >
                             <span className="text-sm text-gray-800 truncate">{p.title}</span>
                             {p.level ? <span className="text-[10px] text-gray-400 flex-shrink-0 tabular-nums">Lvl {p.level}</span> : null}

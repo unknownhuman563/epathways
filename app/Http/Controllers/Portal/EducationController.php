@@ -604,12 +604,14 @@ class EducationController extends Controller
             $lead->save();
 
             if (! empty($data['program_text']) || ! empty($data['intake']) || ! empty($data['english_test'])) {
-                // The Program field is a typeable combobox — the user can
-                // pick from the catalog OR enter a free-form title. We
-                // resolve the typed string to a Program by exact-title
-                // match so the qualification_level can be auto-filled.
-                $program = ! empty($data['program_text'])
-                    ? \App\Models\Program::where('title', $data['program_text'])->first()
+                // The Program field is a multi-select combobox — one or more
+                // titles joined by " · ", or free-form text. Resolve the FIRST
+                // title to a Program so qualification_level can be auto-filled.
+                $firstTitle = ! empty($data['program_text'])
+                    ? trim(explode(' · ', $data['program_text'])[0])
+                    : null;
+                $program = $firstTitle
+                    ? \App\Models\Program::where('title', $firstTitle)->first()
                     : null;
                 $programTitle = $data['program_text'] ?? null;
                 $programLevel = $program?->level ?? '';
@@ -694,7 +696,8 @@ class EducationController extends Controller
             if (array_key_exists('program_text', $data)) {
                 $plan->preferred_course = $data['program_text'] ?: null;
                 if (! empty($data['program_text'])) {
-                    $match = \App\Models\Program::where('title', $data['program_text'])->first();
+                    $firstTitle = trim(explode(' · ', $data['program_text'])[0]);
+                    $match = $firstTitle ? \App\Models\Program::where('title', $firstTitle)->first() : null;
                     if ($match && empty($plan->qualification_level)) {
                         $plan->qualification_level = $match->level ?? '';
                     }
@@ -763,7 +766,7 @@ class EducationController extends Controller
             'english_assignee' => ['nullable', \Illuminate\Validation\Rule::in(Lead::ENGLISH_STAGE_ASSIGNEES)],
             'immigration_assignee' => ['nullable', \Illuminate\Validation\Rule::in(Lead::IMMIGRATION_STAGE_ASSIGNEES)],
             'date_of_engagement' => 'nullable|date',
-            'program_text' => 'nullable|string|max:191',
+            'program_text' => 'nullable|string|max:1000',
             'school_id' => 'nullable|integer|exists:schools,id',
             'internal_note' => 'nullable|string|max:5000',
             'payment' => 'nullable|string|max:191',
