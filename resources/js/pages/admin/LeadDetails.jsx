@@ -3728,14 +3728,13 @@ function DocumentsPanel({ lead, checklistFiles = {}, orphans = [], currentUser =
     };
 
     // General / education leads (the "Document Checklist" type) only work
-    // through four requirement sections, in a fixed order — mirroring the
+    // through three requirement sections, in a fixed order — mirroring the
     // public tracker. Immigration cases keep the full checklist (they manage
-    // every section). Ordering: Personal → Information Form → Offer & Academic
-    // → Agreements.
+    // every section). Ordering: Personal → Offer & Academic → Agreements.
     const sections = React.useMemo(() => {
         const base = lead?.is_immigration_case
             ? CHECKLIST
-            : ['personal', 'information_form', 'academic', 'agreements']
+            : ['personal', 'academic', 'agreements']
                 .map((k) => CHECKLIST.find((s) => s.key === k))
                 .filter(Boolean);
 
@@ -3772,7 +3771,7 @@ function DocumentsPanel({ lead, checklistFiles = {}, orphans = [], currentUser =
     const folderOptions = React.useMemo(() => {
         const base = lead?.is_immigration_case
             ? CHECKLIST.map((s) => s.section)
-            : ['Personal Documents', 'Information Form', 'Offer and Academic Documents', 'Agreements'];
+            : ['Personal Documents', 'Offer and Academic Documents', 'Agreements'];
         return [...base, 'Additional Documents'];
     }, [lead?.is_immigration_case]);
 

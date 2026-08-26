@@ -30,7 +30,7 @@ return [
                 ['id' => 'acad.degree_diploma', 'name' => 'Degree Certificate or Diploma'],
                 ['id' => 'acad.transcript', 'name' => 'Official Transcript of Records (TOR)', 'hint' => 'From previous school(s) showing subjects, grades, and degree awarded.'],
                 ['id' => 'acad.english_test', 'name' => 'PTE / IELTS Academic Test Result'],
-                ['id' => 'acad.sop', 'name' => 'Statement of Purpose', 'hint' => 'Explaining reason for studying in NZ, course relevance, and career goals.'],
+                ['id' => 'acad.letter_of_intent', 'name' => 'Letter of Intent', 'hint' => "Applicant's stated reasons for studying in NZ and study goals."],
                 ['id' => 'acad.tuition_proof', 'name' => 'Proof of Tuition Fee Payment', 'hint' => 'For applications already in NZ.'],
             ],
         ],
@@ -44,20 +44,12 @@ return [
             ],
         ],
         [
-            'key' => 'information_form',
-            'section' => 'Information Form',
-            'items' => [
-                ['id' => 'info.svf', 'name' => 'SVF — Student Visa Form'],
-            ],
-        ],
-        [
             'key' => 'personal',
             'section' => 'Personal Documents',
             'items' => [
                 ['id' => 'pers.passport', 'name' => 'Valid Passport (Original & Copy)', 'hint' => 'Must be valid for the duration of study plus return date. Include clear copies of all identity pages and current visas/stamps.'],
                 ['id' => 'pers.passport_photos', 'name' => 'Passport Photos (2 digital images)', 'hint' => '900×1200 px and 2250×3000 px, 500 KB – 3 MB each, JPG, portrait, plain background.'],
-                ['id' => 'pers.medical', 'name' => 'Medical Certificate (Full Medical)', 'hint' => 'From an INZ-approved panel physician.'],
-                ['id' => 'pers.police_clearance', 'name' => 'Police Clearance Certificate (NBI / PNP)', 'hint' => 'Valid, issued within 12 months.'],
+                ['id' => 'pers.certificate_employment', 'name' => 'Certificate of Employment', 'hint' => 'From current or last employer — position, dates, and duties.'],
             ],
         ],
         [
