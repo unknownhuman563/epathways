@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { router } from "@inertiajs/react";
-import { X, Save, AlertTriangle, GraduationCap } from "lucide-react";
+import { X, Save, AlertTriangle, GraduationCap, ChevronDown, Search } from "lucide-react";
 
 // Add / edit student modal — used from the Students page.
 // • Add mode: posts to /portal/education/students
@@ -162,6 +162,28 @@ export default function AddEditStudentModal({
 
     const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
     const setVal = (k, v) => setForm((f) => ({ ...f, [k]: v }));
+
+    // Program picker. `program` carries { title, school_id?, institution? }.
+    // On an actual pick (not free-typing) auto-fill the School field from the
+    // program's linked school — by school_id, or by matching its institution
+    // name against the school list as a fallback.
+    const pickProgram = (program, isSelection) => {
+        setForm((f) => {
+            const next = { ...f, program_text: program.title || "" };
+            if (isSelection) {
+                let sid = program.school_id != null && program.school_id !== "" ? String(program.school_id) : "";
+                if (! sid && program.institution) {
+                    const inst = String(program.institution).toLowerCase();
+                    const match = schoolOptions.find(
+                        (s) => s.name?.toLowerCase() === inst || s.name?.toLowerCase().includes(inst),
+                    );
+                    if (match) sid = String(match.id);
+                }
+                if (sid) next.school_id = sid;
+            }
+            return next;
+        });
+    };
 
     const submit = (e) => {
         e?.preventDefault?.();
@@ -348,24 +370,12 @@ export default function AddEditStudentModal({
                             <Field label="Date engaged" hint="When they became engaged · optional">
                                 <input type="date" value={form.date_of_engagement} onChange={set("date_of_engagement")} className={ICls} />
                             </Field>
-                            <Field label="Program offered" hint="Pick from list or type a custom title">
-                                <input
-                                    type="text"
-                                    list="program-suggestions"
+                            <Field label="Program offered" hint="Search or select — the School auto-fills to match">
+                                <ProgramSelect
                                     value={form.program_text}
-                                    onChange={set("program_text")}
-                                    className={ICls}
-                                    maxLength={191}
-                                    placeholder="Start typing…"
+                                    options={programOptions}
+                                    onPick={pickProgram}
                                 />
-                                <datalist id="program-suggestions">
-                                    {/* Dedupe by title — the catalog has a few
-                                        duplicate-title rows that would
-                                        otherwise repeat in the dropdown. */}
-                                    {Array.from(new Map(programOptions.map((p) => [p.title, p])).values()).map((p) => (
-                                        <option key={p.id} value={p.title} />
-                                    ))}
-                                </datalist>
                             </Field>
                             <Field label="School" hint="Optional">
                                 <select value={form.school_id} onChange={set("school_id")} className={ICls}>
@@ -377,8 +387,8 @@ export default function AddEditStudentModal({
                                     ))}
                                 </select>
                             </Field>
-                            <Field label="Intake" hint="Optional">
-                                <input type="text" value={form.intake} onChange={set("intake")} className={ICls} placeholder="e.g. February 2027" maxLength={120} />
+                            <Field label="Intake" hint="Intake start date · optional">
+                                <input type="date" value={form.intake} onChange={set("intake")} className={ICls} />
                             </Field>
                         </div>
                     </Section>
@@ -445,6 +455,71 @@ function Field({ label, required, hint, children }) {
             </label>
             {children}
             {hint && <p className="mt-1 text-[10px] text-gray-400">{hint}</p>}
+        </div>
+    );
+}
+
+// Searchable program picker. Type to filter the catalog, click to select
+// (which auto-fills the School), or just leave free-typed text — a custom
+// title that isn't in the catalog is still kept. Dedupes duplicate-title
+// rows the catalog occasionally carries.
+function ProgramSelect({ value, options, onPick }) {
+    const [open, setOpen] = useState(false);
+    const boxRef = useRef(null);
+
+    useEffect(() => {
+        const onDoc = (e) => { if (boxRef.current && ! boxRef.current.contains(e.target)) setOpen(false); };
+        document.addEventListener("mousedown", onDoc);
+        return () => document.removeEventListener("mousedown", onDoc);
+    }, []);
+
+    const deduped = useMemo(
+        () => Array.from(new Map((options || []).map((p) => [p.title, p])).values()),
+        [options],
+    );
+    const q = (value || "").trim().toLowerCase();
+    const exact = deduped.some((p) => p.title?.toLowerCase() === q);
+    const filtered = (! q || exact) ? deduped : deduped.filter((p) => p.title?.toLowerCase().includes(q));
+
+    return (
+        <div ref={boxRef} className="relative">
+            <div className="relative">
+                <input
+                    type="text"
+                    value={value}
+                    onChange={(e) => { onPick({ title: e.target.value }, false); setOpen(true); }}
+                    onFocus={() => setOpen(true)}
+                    className={`${ICls} pr-8`}
+                    maxLength={191}
+                    placeholder="Search or type a program…"
+                />
+                <ChevronDown
+                    size={15}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
+                />
+            </div>
+            {open && (
+                <div className="absolute z-30 mt-1 left-0 right-0 max-h-60 overflow-auto bg-white border border-gray-200 rounded-lg shadow-lg py-1">
+                    {filtered.length === 0 ? (
+                        <p className="px-3 py-2 text-[12px] text-gray-400 flex items-center gap-1.5">
+                            <Search size={12} /> No match — “{value}” will be kept as a custom title.
+                        </p>
+                    ) : filtered.slice(0, 60).map((p) => (
+                        <button
+                            key={p.id}
+                            type="button"
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => { onPick(p, true); setOpen(false); }}
+                            className={`w-full text-left px-3 py-2 hover:bg-gray-50 flex items-center justify-between gap-2 ${
+                                p.title?.toLowerCase() === q ? "bg-gray-50" : ""
+                            }`}
+                        >
+                            <span className="text-sm text-gray-800 truncate">{p.title}</span>
+                            {p.level ? <span className="text-[10px] text-gray-400 flex-shrink-0 tabular-nums">Lvl {p.level}</span> : null}
+                        </button>
+                    ))}
+                </div>
+            )}
         </div>
     );
 }

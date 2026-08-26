@@ -390,8 +390,10 @@ class EducationController extends Controller
             $schoolOptions = \App\Models\School::where('status', 'active')
                 ->orderBy('name')
                 ->get(['id', 'name', 'country', 'city']);
+            // school_id + institution let the add/edit modal auto-fill the
+            // School field when a program is picked.
             $programOptions = \App\Models\Program::orderBy('title')
-                ->get(['id', 'title', 'level']);
+                ->get(['id', 'title', 'level', 'school_id', 'institution']);
             // Recruiting agents for the "Referring agent" dropdown in the
             // add/edit student modal.
             $agentOptions = \App\Models\User::where('role', 'agent')
