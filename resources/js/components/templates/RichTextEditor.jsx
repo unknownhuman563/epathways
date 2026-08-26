@@ -69,7 +69,7 @@ const Divider = () => <span className="w-px h-5 bg-gray-200 mx-1" />;
  * images built in the "Customize email body" builder) render as a live preview
  * instead — the plain editor can't hold them, and would flatten them.
  */
-export default function RichTextEditor({ value = "", onChange }) {
+export default function RichTextEditor({ value = "", onChange, onReady }) {
     const lastValue = useRef(value);
 
     const editor = useEditor({
@@ -107,6 +107,12 @@ export default function RichTextEditor({ value = "", onChange }) {
             editor.commands.setContent(value || "", { emitUpdate: false });
         }
     }, [value, editor]);
+
+    // Hand the editor instance to the parent (used to insert merge variables at
+    // the cursor). Optional — existing callers pass no onReady and are unaffected.
+    useEffect(() => {
+        if (editor && onReady) onReady(editor);
+    }, [editor, onReady]);
 
     if (!editor) {
         return <div className="min-h-[280px] rounded-lg border border-gray-200 bg-gray-50 animate-pulse" />;

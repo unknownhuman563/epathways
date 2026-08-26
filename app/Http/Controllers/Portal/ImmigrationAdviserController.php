@@ -396,6 +396,16 @@ class ImmigrationAdviserController extends Controller
     }
 
     /**
+     * Client Documents — the same scaffold module as the immigration portal,
+     * rendered under the adviser layout.
+     */
+    public function clientDocuments()
+    {
+        return app(ImmigrationController::class)
+            ->clientDocuments('portal/immigration-adviser/ClientDocuments', 'immigration-adviser');
+    }
+
+    /**
      * Cross-portal Task Board for the adviser — the same shared board the
      * immigration portal uses, scoped to the adviser's own tasks or the
      * immigration department set.

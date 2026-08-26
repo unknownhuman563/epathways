@@ -1100,6 +1100,7 @@ function FileMenu({ doc, leadId, checklistKey = null }) {
     const [confirming, setConfirming] = useState(false);
     const [busy, setBusy] = useState(false);
     const [uploading, setUploading] = useState(false);
+    const [sharing, setSharing] = useState(false);
     const [coords, setCoords] = useState({ top: 0, left: 0 });
     const btnRef = useRef(null);
     const fileRef = useRef(null);
@@ -1128,6 +1129,19 @@ function FileMenu({ doc, leadId, checklistKey = null }) {
             onSuccess: () => toast.success("Document deleted"),
             onError: (e) => toast.error(Object.values(e)[0] || "Could not delete"),
             onFinish: () => { setBusy(false); close(); },
+        });
+    };
+
+    // Send to client = surface this document on the client's portal + /track.
+    const sendToClient = () => {
+        setSharing(true);
+        router.post(`/admin/leads/${leadId}/documents/${doc.id}/send-to-client`, {}, {
+            preserveScroll: true,
+            preserveState: true,
+            only: ["documents"],
+            onSuccess: () => toast.success("Sent to client"),
+            onError: (e) => toast.error(Object.values(e)[0] || "Could not send"),
+            onFinish: () => { setSharing(false); close(); },
         });
     };
 
@@ -1190,6 +1204,19 @@ function FileMenu({ doc, leadId, checklistKey = null }) {
                         >
                             <Download size={13} className="text-gray-400" /> Download
                         </a>
+                        {doc?.status === "StaffShared" ? (
+                            <div className="flex items-center gap-2 px-3 py-1.5 text-[12px] text-teal-700"><Check size={13} /> Shared with client</div>
+                        ) : (
+                            <button
+                                type="button"
+                                onClick={sendToClient}
+                                disabled={sharing}
+                                className="w-full text-left flex items-center gap-2 px-3 py-1.5 text-[12px] text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                            >
+                                {sharing ? <Loader2 size={13} className="animate-spin text-gray-400" /> : <Send size={13} className="text-gray-400" />}
+                                {sharing ? "Sending…" : "Send to client"}
+                            </button>
+                        )}
                         {checklistKey && (
                             <button
                                 type="button"

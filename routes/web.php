@@ -848,6 +848,15 @@ Route::middleware(['auth'])->group(function () {
             ->name('admin.leads.documents.status');
         Route::post('/admin/leads/{id}/documents/share', [LeadDocumentController::class, 'shareWithLead'])
             ->name('admin.leads.documents.share');
+        Route::post('/admin/leads/{leadId}/documents/{docId}/send-to-client', [LeadDocumentController::class, 'sendToClient'])
+            ->name('admin.leads.documents.send-to-client');
+
+        // Document formats — staff-built Word-style documents + their per-case use.
+        Route::post('/admin/document-formats', [\App\Http\Controllers\Portal\DocumentFormatController::class, 'store'])->name('admin.document-formats.store');
+        Route::post('/admin/document-formats/{format}', [\App\Http\Controllers\Portal\DocumentFormatController::class, 'update'])->name('admin.document-formats.update');
+        Route::delete('/admin/document-formats/{format}', [\App\Http\Controllers\Portal\DocumentFormatController::class, 'destroy'])->name('admin.document-formats.destroy');
+        Route::post('/admin/document-formats/{format}/apply', [\App\Http\Controllers\Portal\DocumentFormatController::class, 'apply'])->name('admin.document-formats.apply');
+        Route::delete('/admin/document-format-uses/{use}', [\App\Http\Controllers\Portal\DocumentFormatController::class, 'removeUse'])->name('admin.document-format-uses.destroy');
     });
 
     // Documents-tab checklist uploads + per-file delete + downloads — wider
@@ -1283,6 +1292,7 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/cases', [\App\Http\Controllers\Portal\ImmigrationAdviserController::class, 'cases'])->name('cases');
             Route::get('/my-cases', [\App\Http\Controllers\Portal\ImmigrationAdviserController::class, 'myCases'])->name('my-cases');
             Route::get('/tasks', [\App\Http\Controllers\Portal\ImmigrationAdviserController::class, 'tasks'])->name('tasks');
+            Route::get('/client-documents', [\App\Http\Controllers\Portal\ImmigrationAdviserController::class, 'clientDocuments'])->name('client-documents');
 
             // Leads pipeline + Students dashboard — the same shared screens the
             // immigration portal uses, served under the adviser layout. The
@@ -1589,6 +1599,7 @@ Route::middleware(['auth'])->group(function () {
             // Task Board — shared TaskBoardPage component (see resources/js/
             // components/task-board/TaskBoardPage.jsx).
             Route::get('/tasks', [ImmigrationController::class, 'tasks'])->name('tasks');
+            Route::get('/client-documents', [ImmigrationController::class, 'clientDocuments'])->name('client-documents');
 
             // REPORTS
             Route::get('/reports', [ImmigrationController::class, 'reports'])->name('reports');

@@ -582,6 +582,48 @@ class ImmigrationController extends Controller
     }
 
     /**
+     * Client Documents — staff attach an extra document to a case so it's
+     * included in the client's engagement pack. Scaffold module for now; the
+     * upload/send actions are wired in a follow-up. Rendered under either
+     * immigration portal via the page/portal params.
+     */
+    public function clientDocuments(string $page = 'portal/immigration/ClientDocuments', string $portal = 'immigration')
+    {
+        $formats = \App\Models\DocumentFormat::withCount('uses')->orderByDesc('updated_at')->get()
+            ->map(fn ($f) => [
+                'id' => $f->id,
+                'name' => $f->name,
+                'category' => $f->category ?: 'client_facing',
+                'content' => $f->content,
+                'visa_types' => is_array($f->visa_types) ? $f->visa_types : [],
+                'status' => $f->status ?: 'draft',
+                'uses_count' => $f->uses_count,
+                'updated_at' => optional($f->updated_at)->toIso8601String(),
+            ]);
+
+        $usages = \App\Models\DocumentFormatCase::with(['format:id,name', 'lead:id,lead_id,first_name,last_name'])
+            ->orderByDesc('updated_at')->limit(300)->get()
+            ->map(fn ($u) => [
+                'id' => $u->id,
+                'format_id' => $u->document_format_id,
+                'format_name' => $u->format?->name,
+                'case_id' => $u->lead_id,
+                'case_name' => $u->lead ? (trim("{$u->lead->first_name} {$u->lead->last_name}") ?: $u->lead->lead_id) : '—',
+                'case_ref' => $u->lead?->lead_id,
+                'state' => $u->state ?: 'edited',
+                'updated_at' => optional($u->updated_at)->toIso8601String(),
+            ]);
+
+        return inertia($page, [
+            'portal' => $portal,
+            'cases' => $this->caseListForGeneration(),
+            'formats' => $formats,
+            'usages' => $usages,
+            'visaOptions' => $this->visaOptions(),
+        ]);
+    }
+
+    /**
      * INZ Forms console under Case — every immigration case with the INZ forms
      * its visa category offers, and the state of each (ready to fill, sent to
      * the client, submitted). Staff generate the official draft or send a form

@@ -364,6 +364,27 @@ class LeadDocumentController extends Controller
     }
 
     /**
+     * Send an existing case document to the client — flips it to StaffShared so
+     * it surfaces on the client's portal + /track. Used from the Documents tab's
+     * "Send to client" action for staff-created / generated documents.
+     */
+    public function sendToClient(Request $request, $leadId, $docId)
+    {
+        $doc = LeadDocument::where('lead_id', $leadId)->findOrFail($docId);
+        abort_unless($doc->file_path, 422, 'This document has no file to send.');
+
+        $doc->update([
+            'status' => LeadDocument::STATUS_STAFF_SHARED,
+            'reviewed_by' => Auth::id(),
+            'reviewed_at' => now(),
+        ]);
+
+        $doc->lead?->recordStaffActivity('Sent to client: '.($doc->original_name ?: 'document'));
+
+        return back()->with('success', 'Document sent to the client.');
+    }
+
+    /**
      * Staff uploads a file (or files) for the lead against a specific
      * checklist item — used by the agreements panel, or when staff helps
      * the lead by uploading on their behalf.

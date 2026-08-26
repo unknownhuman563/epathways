@@ -29,6 +29,7 @@ export default function ImmigrationAdviserLayout({ children }) {
         { name: "Visas", href: "/portal/immigration-adviser/visas", icon: <FileBadge size={20} /> },
 
         { name: "Documents", section: true },
+        { name: "Client Documents", href: "/portal/immigration-adviser/client-documents", icon: <FileText size={20} /> },
         { name: "Engagement", href: "/portal/immigration-adviser/engagement", icon: <FileSignature size={20} /> },
         { name: "Invoice", href: "/portal/immigration-adviser/invoice", icon: <ReceiptText size={20} /> },
         { name: "INZ Forms", href: "/portal/immigration-adviser/inz-forms", icon: <FileText size={20} /> },
