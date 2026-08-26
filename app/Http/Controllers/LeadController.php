@@ -1566,12 +1566,46 @@ class LeadController extends Controller
             ];
         }
 
+        // Per-document discussion threads (shared CaseThread model — the same
+        // one immigration cases use, keyed by lead_id so it works for any lead).
+        // Education/general leads anchor a note to a checklist item by
+        // anchor_key = checklist_key. Open threads float to the top, newest
+        // first; the frontend re-buckets them by anchor_key per document row.
+        $threadUserId = auth()->id();
+        $threadIsAdmin = auth()->user() && auth()->user()->isAdmin();
+        $documentThreads = \App\Models\CaseThread::where('lead_id', $lead->id)
+            ->where('anchor_type', \App\Models\CaseThread::ANCHOR_DOCUMENT)
+            ->with(['author:id,name,role', 'addressedTo:id,name', 'resolver:id,name'])
+            ->orderByRaw('resolved_at IS NULL DESC')
+            ->orderByDesc('created_at')
+            ->get()
+            ->map(fn ($t) => [
+                'id' => $t->id,
+                'parent_id' => $t->parent_id,
+                'anchor_type' => $t->anchor_type,
+                'anchor_id' => $t->anchor_id,
+                'anchor_key' => $t->anchor_key,
+                'anchor_attempt' => $t->anchor_attempt,
+                'body' => $t->body,
+                'requires_answer' => (bool) $t->requires_answer,
+                'client_visible' => (bool) $t->client_visible,
+                'author' => $t->author?->name,
+                'author_role' => $t->author?->role,
+                'addressed_to' => $t->addressedTo ? ['id' => $t->addressedTo->id, 'name' => $t->addressedTo->name] : null,
+                'resolved_at' => $t->resolved_at?->toIso8601String(),
+                'resolved_by' => $t->resolver?->name,
+                'created_at' => $t->created_at?->toIso8601String(),
+                'can_edit' => ($t->author_id === $threadUserId) || $threadIsAdmin,
+            ])
+            ->all();
+
         return inertia($page, [
             'lead' => $lead,
             'proposal' => $proposal,
             'activity' => $activity,
             'stageTimeline' => $stageTimeline,
             'checklistFiles' => $checklistFiles,
+            'documentThreads' => $documentThreads,
             'documentOrphans' => $documentOrphans,
             'notes' => $notes,
             'tags' => $leadTags,
@@ -2860,6 +2894,90 @@ class LeadController extends Controller
 
             return back()->with('error', 'Could not save the checklist change.');
         }
+    }
+
+    /**
+     * Post a per-document discussion note (or a reply) on a lead's checklist
+     * item. Mirrors the immigration Case Profile threads but for general /
+     * education leads: the note is anchored to a checklist item by anchor_key
+     * (the checklist_key), and stored in the shared CaseThread table. A note
+     * flagged "needs an answer" notifies its addressee.
+     */
+    public function storeDocThread(\Illuminate\Http\Request $request, $id)
+    {
+        $lead = Lead::findOrFail($id);
+
+        $validated = $request->validate([
+            'parent_id' => 'nullable|integer|exists:case_threads,id',
+            'anchor_type' => ['required', \Illuminate\Validation\Rule::in([\App\Models\CaseThread::ANCHOR_DOCUMENT])],
+            'anchor_key' => 'required|string|max:120',
+            'body' => 'required|string|max:2000',
+            'addressed_to_id' => 'nullable|integer|exists:users,id',
+            'requires_answer' => 'boolean',
+            'client_visible' => 'boolean',
+        ]);
+
+        // A reply inherits its parent's anchor and must belong to this lead.
+        $parent = null;
+        if (! empty($validated['parent_id'])) {
+            $parent = \App\Models\CaseThread::where('id', $validated['parent_id'])
+                ->where('lead_id', $lead->id)
+                ->firstOrFail();
+        }
+
+        try {
+            $thread = \App\Models\CaseThread::create([
+                'lead_id' => $lead->id,
+                'parent_id' => $parent?->id,
+                'anchor_type' => \App\Models\CaseThread::ANCHOR_DOCUMENT,
+                'anchor_key' => $parent ? $parent->anchor_key : $validated['anchor_key'],
+                'anchor_id' => null,
+                'author_id' => auth()->id(),
+                'addressed_to_id' => $validated['addressed_to_id'] ?? null,
+                'body' => $validated['body'],
+                'requires_answer' => $request->boolean('requires_answer'),
+                'client_visible' => $request->boolean('client_visible'),
+            ]);
+
+            // Ping the addressee when the note asks them for an answer.
+            if ($thread->requires_answer && $thread->addressed_to_id && $thread->addressed_to_id !== auth()->id()) {
+                try {
+                    $addressee = \App\Models\User::find($thread->addressed_to_id);
+                    $addressee?->notify(new \App\Notifications\CaseThreadAddressed($thread, auth()->user()?->name ?: 'A staff member'));
+                } catch (\Throwable $e) {
+                    \Illuminate\Support\Facades\Log::warning('Doc thread notify failed', ['thread' => $thread->id, 'error' => $e->getMessage()]);
+                }
+            }
+
+            return back()->with('success', $thread->client_visible ? 'Shared with the client.' : 'Note added.');
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('Doc thread store failed', ['lead' => $id, 'error' => $e->getMessage()]);
+
+            return back()->with('error', 'Could not post the note.');
+        }
+    }
+
+    /** Mark a per-document thread answered/resolved. */
+    public function resolveDocThread(\Illuminate\Http\Request $request, $id, $threadId)
+    {
+        $lead = Lead::findOrFail($id);
+        $thread = \App\Models\CaseThread::where('id', $threadId)->where('lead_id', $lead->id)->firstOrFail();
+        $thread->update(['resolved_at' => now(), 'resolved_by' => auth()->id()]);
+
+        return back()->with('success', 'Thread resolved.');
+    }
+
+    /** Edit a per-document thread body — author or admin only. */
+    public function updateDocThread(\Illuminate\Http\Request $request, $id, $threadId)
+    {
+        $lead = Lead::findOrFail($id);
+        $thread = \App\Models\CaseThread::where('id', $threadId)->where('lead_id', $lead->id)->firstOrFail();
+        abort_unless($thread->author_id === auth()->id() || (auth()->user() && auth()->user()->isAdmin()), 403);
+
+        $validated = $request->validate(['body' => 'required|string|max:2000']);
+        $thread->update(['body' => $validated['body']]);
+
+        return back()->with('success', 'Comment updated.');
     }
 
     /**

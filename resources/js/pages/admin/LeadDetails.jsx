@@ -11,9 +11,10 @@ import {
     User as UserIcon, ArrowRight, Sparkles, FolderOpen, Copy, Info, Undo2, Send,
     Globe, Home, Wand2, Users as UsersIcon, Eye,
     Paperclip, FileImage, Film, Music,
-    Briefcase, Trash2, RefreshCw, MoreVertical, Plus, X,
+    Briefcase, Trash2, RefreshCw, MoreVertical, Plus, X, MessageSquare,
 } from 'lucide-react';
 import { CHECKLIST, STATUSES, STATUS_CHIP, STATUS_LABEL, SECTION_STATUSES, IMPORTANT_NOTES, renderFilename, currentSectionIndex } from '@/data/leadDocumentChecklist';
+import { ThreadItem, ThreadComposer } from '@/components/immigration/case-profile/threads';
 import SendUpdateModal from '@/components/leads/SendUpdateModal';
 import LeadHealthBadge from '@/components/ai/LeadHealthBadge';
 import CaseHealthBadge from '@/components/ai/CaseHealthBadge';
@@ -150,7 +151,7 @@ function ProposedProgramsCard({ proposal }) {
     );
 }
 
-export default function LeadDetails({ lead: backendLead, proposal = null, activity = [], stageTimeline = [], checklistFiles = {}, documentOrphans = [], statuses = [], notes = [], tags = [], allTags = [], tasks = [], staffOptions = [], eventRegistration = null, currentUser = null }) {
+export default function LeadDetails({ lead: backendLead, proposal = null, activity = [], stageTimeline = [], checklistFiles = {}, documentThreads = [], documentOrphans = [], statuses = [], notes = [], tags = [], allTags = [], tasks = [], staffOptions = [], eventRegistration = null, currentUser = null }) {
     // Derive the "Back to Leads" URL from the current path so sales users
     // return to /portal/sales/leads, education users to /portal/education/leads,
     // and admins to /admin/leads — never a 403.
@@ -657,7 +658,7 @@ export default function LeadDetails({ lead: backendLead, proposal = null, activi
 
             {/* ── Documents tab ── */}
             {activeTab === 'documents' && (
-                <DocumentsPanel lead={backendLead} checklistFiles={checklistFiles} orphans={documentOrphans} currentUser={currentUser} />
+                <DocumentsPanel lead={backendLead} checklistFiles={checklistFiles} orphans={documentOrphans} currentUser={currentUser} threads={documentThreads} staffOptions={staffOptions} />
             )}
 
             {/* ── Communications tab — message history sent to this lead ── */}
@@ -3327,7 +3328,7 @@ function TagsPanel({ leadId, tags, allTags }) {
 // system agreements, set status / notes — no drill-in page. Each section
 // header row carries the per-section verify / request-revisions controls that
 // gate the lead-portal flow.
-function ChecklistTable({ sections = CHECKLIST, state = {}, checklistFiles = {}, lead, onSave, verifications = {}, onVerifySection, hiddenKeys = new Set(), onToggleTrack, onRemoveCustom, onDuplicateCustom }) {
+function ChecklistTable({ sections = CHECKLIST, state = {}, checklistFiles = {}, lead, onSave, verifications = {}, onVerifySection, hiddenKeys = new Set(), onToggleTrack, onRemoveCustom, onDuplicateCustom, threadsByKey = {}, currentUser = null, staffOptions = [] }) {
     // Collapsible sections — collapsed by DEFAULT, mirroring the immigration
     // Case Profile Documents tab. `expanded` holds the sections the user opened.
     const [expanded, setExpanded] = useState(() => new Set());
@@ -3433,6 +3434,9 @@ function ChecklistTable({ sections = CHECKLIST, state = {}, checklistFiles = {},
                                         onToggleTrack={onToggleTrack}
                                         onRemoveCustom={it.custom ? onRemoveCustom : undefined}
                                         onDuplicateCustom={it.custom ? onDuplicateCustom : undefined}
+                                        threads={threadsByKey[it.id] || []}
+                                        currentUser={currentUser}
+                                        staffOptions={staffOptions}
                                     />
                                 ))}
                             </React.Fragment>
@@ -3447,13 +3451,22 @@ function ChecklistTable({ sections = CHECKLIST, state = {}, checklistFiles = {},
 // One checklist row — owns its own upload / generate state so the File,
 // Attachment, Status and Notes columns all work inline without leaving the
 // table.
-function ChecklistRow({ item, lead, entry, files = [], onSave, hidden = false, onToggleTrack, onRemoveCustom, onDuplicateCustom }) {
+function ChecklistRow({ item, lead, entry, files = [], onSave, hidden = false, onToggleTrack, onRemoveCustom, onDuplicateCustom, threads = [], currentUser = null, staffOptions = [] }) {
     const [uploading, setUploading] = useState(false);
     const [generating, setGenerating] = useState(false);
     const [variantOpen, setVariantOpen] = useState(false);
+    const [notesOpen, setNotesOpen] = useState(false);
     const fileInputRef = useRef(null);
     const replaceInputRef = useRef(null);
     const [replacingId, setReplacingId] = useState(null);
+
+    // Per-document discussion (shared thread system with immigration). A note
+    // is anchored to this checklist item by anchor_key = item.id. Root notes
+    // render with nested replies; the composer posts to /admin/leads/{id}/threads.
+    const rootThreads = threads.filter((t) => ! t.parent_id);
+    const childrenOf = (pid) => threads.filter((t) => t.parent_id === pid);
+    const docAnchor = { anchor_type: 'document', anchor_key: item.id };
+    const openCount = rootThreads.filter((t) => ! t.resolved_at).length;
 
     // System agreements that can be auto-generated from a Blade template.
     const canGenerate = item.id === 'agree.consultancy' || item.id === 'agree.engagement_english';
@@ -3516,6 +3529,7 @@ function ChecklistRow({ item, lead, entry, files = [], onSave, hidden = false, o
     };
 
     return (
+        <>
         <tr className="border-b border-gray-50 hover:bg-emerald-50/20 transition-colors align-top">
             {/* Tracker checkbox — leftmost column. When unchecked, this row's
                 checklist_key is pushed onto the lead's hidden_track_documents
@@ -3657,11 +3671,64 @@ function ChecklistRow({ item, lead, entry, files = [], onSave, hidden = false, o
                 })()}
             </td>
 
-            {/* Notes — inline, saved on blur */}
+            {/* Notes — toggles a threaded discussion (same system the
+                immigration Case Profile uses). Shows note count / open flag. */}
             <td className="px-6 py-3">
-                <ChecklistNotesCell value={entry.notes || ''} onSave={(notes) => onSave(item.id, { notes })} />
+                <button
+                    type="button"
+                    onClick={() => setNotesOpen((o) => ! o)}
+                    className={`inline-flex items-center gap-1.5 text-[11px] font-semibold rounded-lg px-2 py-1.5 border transition-colors ${
+                        notesOpen
+                            ? 'text-gray-900 bg-gray-100 border-gray-300'
+                            : threads.length > 0
+                                ? 'text-gray-700 bg-white border-gray-200 hover:border-gray-300'
+                                : 'text-gray-400 bg-white border-gray-200 hover:text-gray-600 hover:border-gray-300'
+                    }`}
+                >
+                    <MessageSquare size={12} />
+                    {threads.length > 0 ? `${threads.length} note${threads.length > 1 ? 's' : ''}` : 'Add a note'}
+                    {openCount > 0 && (
+                        <span className="inline-flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full bg-amber-100 text-amber-700 text-[9px] font-bold">
+                            {openCount}
+                        </span>
+                    )}
+                </button>
             </td>
         </tr>
+        {notesOpen && (
+            <tr className="bg-gray-50/50 border-b border-gray-100">
+                <td className="w-10" />
+                <td colSpan={5} className="px-6 pb-5 pt-1">
+                    <div className="max-w-3xl">
+                        <p className="text-[10.5px] font-bold uppercase tracking-widest text-gray-400 mb-1">Reviewer notes · {item.name}</p>
+                        {rootThreads.length > 0 && (
+                            <div className="mb-1">
+                                {rootThreads.map((t) => (
+                                    <ThreadItem
+                                        key={t.id}
+                                        thread={t}
+                                        leadId={lead.id}
+                                        anchor={docAnchor}
+                                        childrenOf={childrenOf}
+                                        caseStaff={staffOptions}
+                                        basePath="/admin/leads"
+                                    />
+                                ))}
+                            </div>
+                        )}
+                        <ThreadComposer
+                            leadId={lead.id}
+                            fixedAnchor={docAnchor}
+                            plain
+                            caseStaff={staffOptions}
+                            placeholder="Write a note about this document…"
+                            basePath="/admin/leads"
+                        />
+                    </div>
+                </td>
+            </tr>
+        )}
+        </>
     );
 }
 
@@ -3682,7 +3749,17 @@ function ChecklistNotesCell({ value, onSave }) {
     );
 }
 
-function DocumentsPanel({ lead, checklistFiles = {}, orphans = [], currentUser = null }) {
+function DocumentsPanel({ lead, checklistFiles = {}, orphans = [], currentUser = null, threads = [], staffOptions = [] }) {
+    // Bucket document threads by the checklist item they're anchored to
+    // (anchor_key = checklist_key), so each row can render its own discussion.
+    const threadsByKey = React.useMemo(() => {
+        const map = {};
+        (threads || []).forEach((t) => {
+            if (t.anchor_type !== 'document' || ! t.anchor_key) return;
+            (map[t.anchor_key] ||= []).push(t);
+        });
+        return map;
+    }, [threads]);
     // The lead's saved checklist state lives on the backend in a JSON column
     // keyed by item id. We keep a local copy here so edits feel instant and
     // we can debounce notes typing if needed.
@@ -3967,6 +4044,9 @@ function DocumentsPanel({ lead, checklistFiles = {}, orphans = [], currentUser =
                 onToggleTrack={toggleTrack}
                 onRemoveCustom={removeCustomDocument}
                 onDuplicateCustom={duplicateCustomDocument}
+                threadsByKey={threadsByKey}
+                currentUser={currentUser}
+                staffOptions={staffOptions}
             />
 
             {/* Legacy uploads — files with no checklist_key. These were

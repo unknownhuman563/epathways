@@ -799,6 +799,12 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/admin/leads/{id}/documents/checklist', [LeadController::class, 'updateDocumentChecklist'])->name('admin.leads.documents.checklist');
         Route::post('/admin/leads/{id}/documents/section-verification', [LeadController::class, 'updateSectionVerification'])->name('admin.leads.documents.section-verification');
 
+        // Per-document discussion threads on the lead-profile Documents tab —
+        // mirrors the immigration Case Profile threads (shared CaseThread model).
+        Route::post('/admin/leads/{id}/threads', [LeadController::class, 'storeDocThread'])->name('admin.leads.threads.store');
+        Route::post('/admin/leads/{id}/threads/{thread}/resolve', [LeadController::class, 'resolveDocThread'])->name('admin.leads.threads.resolve');
+        Route::patch('/admin/leads/{id}/threads/{thread}', [LeadController::class, 'updateDocThread'])->name('admin.leads.threads.update');
+
         // Internal notes — any staff role can add, only author or admin can edit/delete.
         Route::get('/admin/leads/{id}/notes', [\App\Http\Controllers\LeadNoteController::class, 'index'])
             ->name('admin.leads.notes.index');
