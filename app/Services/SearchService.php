@@ -206,7 +206,8 @@ class SearchService
 
     private function searchLeads(string $q, User $user): array
     {
-        $cols = ['first_name', 'last_name', 'email', 'phone', 'lead_id', 'tracking_code'];
+        $cols = ['first_name', 'last_name', 'email', 'phone', 'lead_id', 'tracking_code',
+            'passport_number', 'inz_client_number', 'inz_application_number', 'inz_medical_ref'];
         $pairs = [['first_name', 'last_name']];
         $count = $this->applyLike(Lead::query(), $cols, $q, $pairs);
         $cand = $this->applyLike(Lead::query(), $cols, $q, $pairs)->orderByDesc('updated_at');
@@ -224,7 +225,7 @@ class SearchService
         }, function (Lead $l) use ($q) {
             $name = trim("{$l->first_name} {$l->last_name}");
 
-            return $this->scoreFields([$name, $l->first_name, $l->last_name, $l->email, $l->phone, $l->lead_id, $l->tracking_code], $q);
+            return $this->scoreFields([$name, $l->first_name, $l->last_name, $l->email, $l->phone, $l->lead_id, $l->tracking_code, $l->passport_number, $l->inz_client_number, $l->inz_application_number, $l->inz_medical_ref], $q);
         });
     }
 

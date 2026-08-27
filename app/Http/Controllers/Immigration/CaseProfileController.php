@@ -1399,6 +1399,9 @@ class CaseProfileController extends Controller
             'residence_country' => 'nullable|string|max:120',
             'passport_number' => 'nullable|string|max:60',
             'passport_expiry' => 'nullable|date',
+            'inz_client_number' => 'nullable|string|max:60',
+            'inz_application_number' => 'nullable|string|max:60',
+            'inz_medical_ref' => 'nullable|string|max:60',
         ]);
 
         $lead->update($validated);
@@ -1624,6 +1627,9 @@ class CaseProfileController extends Controller
             'immigration_stage' => $lead->immigration_stage,
             'inz_visa_type' => $lead->inz_visa_type,
             'inz_reference' => $lead->inz_reference,
+            'inz_client_number' => $lead->inz_client_number,
+            'inz_application_number' => $lead->inz_application_number,
+            'inz_medical_ref' => $lead->inz_medical_ref,
             'inz_status' => $lead->inz_status,
             'inz_lodged_at' => $lead->inz_lodged_at,
             'inz_decision_at' => $lead->inz_decision_at,

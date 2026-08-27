@@ -56,6 +56,11 @@ export default function OverviewTab(props) {
     const DECISION_STAGES = new Set(["Approved Visa", "Decline Visa", "Withdrawn"]);
     const lodged = LODGED_STAGES.has(stage) || /lodg|decision|approv|declin/i.test(lead.inz_status || "");
     const decided = DECISION_STAGES.has(stage) || /approv|declin/i.test(lead.inz_status || "");
+    // Negative outcomes recolour the outcome bars: declined = red, withdrawn =
+    // orange (an approval stays teal).
+    const declined = stage === "Decline Visa" || /declin/i.test(lead.inz_status || "");
+    const withdrawn = stage === "Withdrawn" || /withdraw/i.test(lead.inz_status || "");
+    const outcomeTone = declined ? "danger" : withdrawn ? "warn" : null;
 
     // Pipeline stepper — each stage's state derived from case milestones.
     const steps = [
@@ -63,8 +68,8 @@ export default function OverviewTab(props) {
         { key: "engagement", label: "Engagement", done: !!engagement.sent, sub: engagement.signed ? `signed ${fmtShort(engagement.signed_at)}` : engagement.sent ? `sent ${fmtShort(engagement.sent_at)}` : "not sent" },
         { key: "invoice", label: "Invoice", done: !!engagement.invoice_paid, sub: engagement.invoice_paid ? `paid ${fmtShort(engagement.invoice_paid_at)}` : engagement.sent ? "sent · awaiting payment" : "not sent" },
         { key: "documents", label: "Documents", done: reqTotal > 0 && reqApproved >= reqTotal, sub: `${reqApproved} of ${reqTotal} approved` },
-        { key: "lodgement", label: "INZ lodgement", done: lodged, sub: lodged ? (lead.inz_status || stage || "lodged") : "not started" },
-        { key: "decision", label: "Decision", done: decided, sub: decided ? (lead.inz_status || stage) : "—" },
+        { key: "lodgement", label: "INZ lodgement", done: lodged, tone: outcomeTone, sub: lodged ? (lead.inz_status || stage || "lodged") : "not started" },
+        { key: "decision", label: "Decision", done: decided, tone: outcomeTone, sub: decided ? (lead.inz_status || stage) : "—" },
     ];
     // Colour rule: completed stages are teal; every incomplete stage up to and
     // including the one just past the furthest completed milestone (the current
@@ -98,11 +103,21 @@ export default function OverviewTab(props) {
                 <div className="grid gap-2.5" style={{ gridTemplateColumns: "repeat(6, minmax(0, 1fr))" }}>
                         {steps.map((s, i) => {
                             const state = s.done ? "done" : i <= stepFrontier ? "current" : "todo";
+                            // A completed outcome bar recolours by result: declined = red,
+                            // withdrawn = orange, otherwise the usual teal.
+                            const barClass = state === "done"
+                                ? (s.tone === "danger" ? "bg-red-600" : s.tone === "warn" ? "bg-orange-500" : "bg-teal-600")
+                                : state === "current" ? "bg-amber-500" : "bg-gray-200";
+                            const subClass = state === "done" && s.tone === "danger"
+                                ? "text-red-600"
+                                : state === "done" && s.tone === "warn"
+                                    ? "text-orange-600"
+                                    : state === "current" ? "text-amber-600" : "text-gray-400";
                             return (
                                 <div key={s.key}>
-                                    <div className={`h-1.5 rounded-full ${state === "done" ? "bg-teal-600" : state === "current" ? "bg-amber-500" : "bg-gray-200"}`} />
+                                    <div className={`h-1.5 rounded-full ${barClass}`} />
                                     <p className="text-[12.5px] font-semibold text-gray-900 mt-2">{s.label}</p>
-                                    <p className={`text-[11px] mt-0.5 ${state === "current" ? "text-amber-600" : "text-gray-400"}`}>{s.sub}</p>
+                                    <p className={`text-[11px] mt-0.5 ${subClass}`}>{s.sub}</p>
                                 </div>
                             );
                         })}
