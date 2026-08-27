@@ -319,7 +319,10 @@ class LeadDocumentController extends Controller
         if (in_array($validated['status'], [LeadDocument::STATUS_APPROVED, LeadDocument::STATUS_REJECTED], true)
             && $lead && ! empty($lead->email)) {
             try {
-                $key = $validated['status'] === LeadDocument::STATUS_APPROVED ? 'doc_approved' : 'doc_rejected';
+                // Needs-attention → the "please re-upload" template (asks the
+                // client to log in to their portal and submit again); approval
+                // keeps the doc_approved template.
+                $key = $validated['status'] === LeadDocument::STATUS_APPROVED ? 'doc_approved' : 'document_reupload';
                 $res = app(\App\Services\CommunicationService::class)->sendTemplated($key, $lead, [
                     'document_name' => $doc->original_name,
                     'reason' => $validated['note'] ?? '',

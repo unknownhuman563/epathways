@@ -589,15 +589,13 @@ function Row({ row, leadId, docThreads = [], threadsByDoc = new Map(), caseStaff
         );
     };
 
-    const onStatusChange = (e) => {
-        const next = e.target.value;
+    const pickStatus = (next) => {
+        if (! next || next === status) return;
         // Rejection must carry an explanation — divert through a modal that
         // requires the note before posting. A silent rejection is worse than
         // none. (Phase 4 spec: "Reject requires reviewer notes".)
         if (next === "Rejected") {
             setRejectOpen(true);
-            // Don't optimistically update the select — modal will dispatch.
-            e.target.value = status || doc.status || "";
             return;
         }
         setStatus(next);
@@ -750,18 +748,7 @@ function Row({ row, leadId, docThreads = [], threadsByDoc = new Map(), caseStaff
                 ) : doc ? (
                     <div className="space-y-1">
                         <div className="flex items-center gap-2">
-                            <span className={`w-2 h-2 rounded-full flex-shrink-0 ${VERDICT_DOT[status] || "bg-gray-300"}`} />
-                            <select
-                                value={status || ""}
-                                onChange={onStatusChange}
-                                disabled={savingStatus}
-                                title="Change verdict"
-                                className={`text-[13px] font-semibold bg-transparent border-0 p-0 pr-1 -ml-0.5 focus:outline-none focus:ring-0 cursor-pointer disabled:opacity-50 ${VERDICT_TEXT[status] || "text-gray-600"}`}
-                            >
-                                {statusOptions.map((o) => (
-                                    <option key={o.value} value={o.value} className="bg-white text-gray-900">{o.label}</option>
-                                ))}
-                            </select>
+                            <VerdictSelect value={status} options={statusOptions} onPick={pickStatus} saving={savingStatus} />
                             {savingStatus && <span className="text-[10px] text-gray-400">Saving…</span>}
                         </div>
                         {row.document?.reviewed_by ? (
@@ -1095,6 +1082,75 @@ function DownloadAllMenu({ leadId }) {
 // Per-file actions menu (⋮) — Download + Delete, tucked away to keep the
 // attachment cell tidy. Portal-rendered so the dropdown escapes the scrollable
 // table. Delete asks for a second click to confirm (destructive, irreversible).
+// Custom verdict dropdown — a colored trigger + an on-brand popover menu
+// (the native <select> can't be styled and looked out of place).
+function VerdictSelect({ value, options, onPick, saving }) {
+    const [open, setOpen] = useState(false);
+    const [coords, setCoords] = useState({ top: 0, left: 0 });
+    const btnRef = useRef(null);
+    const MENU_W = 200;
+    // Role/portal-aware options are passed in (manager vs adviser see different
+    // verdicts); fall back to the full set. The current label is resolved
+    // against the full set so a value outside the caller's list still renders.
+    const menuOptions = options && options.length ? options : STATUS_OPTIONS;
+    const current = menuOptions.find((o) => o.value === value) || STATUS_OPTIONS.find((o) => o.value === value);
+
+    useEffect(() => {
+        if (! open) return;
+        const place = () => {
+            const r = btnRef.current?.getBoundingClientRect();
+            if (r) setCoords({ top: r.bottom + 4, left: Math.max(8, Math.min(r.left, window.innerWidth - MENU_W - 8)) });
+        };
+        place();
+        window.addEventListener("scroll", place, true);
+        window.addEventListener("resize", place);
+        return () => { window.removeEventListener("scroll", place, true); window.removeEventListener("resize", place); };
+    }, [open]);
+
+    return (
+        <>
+            <button
+                ref={btnRef}
+                type="button"
+                disabled={saving}
+                onClick={() => setOpen((o) => ! o)}
+                title="Change verdict"
+                className={`inline-flex items-center gap-1.5 text-[13px] font-semibold rounded-md px-1.5 py-0.5 -ml-1.5 hover:bg-gray-50 focus:outline-none disabled:opacity-50 ${VERDICT_TEXT[value] || "text-gray-600"}`}
+            >
+                <span className={`w-2 h-2 rounded-full flex-shrink-0 ${VERDICT_DOT[value] || "bg-gray-300"}`} />
+                {current?.label || "Set verdict"}
+                <ChevronDown size={13} className="text-gray-400" />
+            </button>
+            {open && createPortal(
+                <>
+                    <div className="fixed inset-0 z-[59]" onClick={() => setOpen(false)} />
+                    <div
+                        style={{ position: "fixed", top: coords.top, left: coords.left, width: MENU_W }}
+                        className="z-[60] bg-white rounded-lg shadow-xl border border-gray-100 py-1"
+                    >
+                        {menuOptions.map((o) => {
+                            const active = o.value === value;
+                            return (
+                                <button
+                                    key={o.value}
+                                    type="button"
+                                    onClick={() => { setOpen(false); onPick(o.value); }}
+                                    className={`w-full text-left flex items-center gap-2 px-3 py-1.5 text-[12.5px] hover:bg-gray-50 ${active ? "bg-gray-50 font-semibold" : ""}`}
+                                >
+                                    <span className={`w-2 h-2 rounded-full flex-shrink-0 ${VERDICT_DOT[o.value] || "bg-gray-300"}`} />
+                                    <span className={VERDICT_TEXT[o.value] || "text-gray-700"}>{o.label}</span>
+                                    {active && <Check size={13} className="ml-auto text-gray-400" />}
+                                </button>
+                            );
+                        })}
+                    </div>
+                </>,
+                document.body,
+            )}
+        </>
+    );
+}
+
 function FileMenu({ doc, leadId, checklistKey = null }) {
     const [open, setOpen] = useState(false);
     const [confirming, setConfirming] = useState(false);
