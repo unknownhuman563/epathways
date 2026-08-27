@@ -413,9 +413,13 @@ class ImmigrationController extends Controller
                         'inz_visa_type' => $l->inz_visa_type,
                         'inz_reference' => $l->inz_reference,
                         'inz_lodged_at' => $l->inz_lodged_at,
-                        // Searchable identity fields (passport number/expiry).
+                        // Searchable identity fields (passport + the two INZ
+                        // numbers and the medical reference).
                         'passport_number' => $l->passport_number,
                         'passport_expiry' => optional($l->passport_expiry)->toDateString(),
+                        'inz_client_number' => $l->inz_client_number,
+                        'inz_application_number' => $l->inz_application_number,
+                        'inz_medical_ref' => $l->inz_medical_ref,
                         // Immigration-team sub-stage. Drives both the inline
                         // status picker on each row and the distribution graph
                         // up top. Pre-existing leads still on `inz_status`

@@ -207,6 +207,10 @@ class EngagementSigningController extends Controller
             'uploaded_by' => null,
         ]);
 
+        // Email automation — notify staff that a proof of payment is waiting to be
+        // verified (no-op unless a message is configured for this event).
+        app(\App\Services\EmailAutomationService::class)->fire('immigration.proof.uploaded', $lead, []);
+
         return back()->with('success', 'Proof of payment uploaded — thank you. We will confirm receipt shortly.');
     }
 

@@ -756,10 +756,11 @@ class LeadDocumentController extends Controller
             }
 
             // Generating the written agreement moves the case forward to
-            // "For Agreement & Invoice" — but only from an early stage, so it
-            // never downgrades an advanced or already-signed case.
+            // "Agreement Sent" — but only from an early stage, so it never
+            // downgrades an advanced or already-signed case. Signing then moves
+            // it on to "Agreement Signed".
             if (in_array('written_agreement', $typesToGenerate, true)) {
-                if ($lead->advanceImmigrationStage('For Agreement & Invoice', ['For Assessment', 'Endorsed', 'Agreement Sent'], auth()->id())) {
+                if ($lead->advanceImmigrationStage('Agreement Sent', ['For Assessment', 'Endorsed'], auth()->id())) {
                     \App\Jobs\EvaluateCaseFindings::dispatch($lead->id);
                 }
             }
@@ -781,9 +782,20 @@ class LeadDocumentController extends Controller
                     $message .= ' Email not sent — no email on file.';
                 } else {
                     $token = $lead->ensureEngagementSigningToken();
-                    $this->notifyEngagement($lead, $token, $typesToGenerate, $generatedDocIds);
+                    $signUrl = rtrim((string) config('app.url'), '/').'/engagement/'.$token;
+
+                    // The "Engagement sent" automation message is the single source
+                    // for this email — fire it with the signing link so the template
+                    // can include {{engagement_url}}. Only when no client automation
+                    // message is configured do we send the built-in email instead
+                    // (so the client never gets two).
+                    $firedClient = app(\App\Services\EmailAutomationService::class)
+                        ->fire('immigration.engagement.sent', $lead, ['engagement_url' => $signUrl]);
+                    if (! $firedClient) {
+                        $this->notifyEngagement($lead, $token, $typesToGenerate, $generatedDocIds);
+                    }
+
                     $lead->forceFill(['engagement_sent_at' => now()])->save();
-                    app(\App\Services\EmailAutomationService::class)->fire('immigration.engagement.sent', $lead, []);
                     $message .= " Client notified at {$lead->email}.";
                 }
             } elseif (empty($alreadySigned)) {

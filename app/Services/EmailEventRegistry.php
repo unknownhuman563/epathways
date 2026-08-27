@@ -100,6 +100,7 @@ class EmailEventRegistry
             ]],
             ['group' => 'Money', 'events' => [
                 ['key' => 'immigration.invoice.sent', 'label' => 'Invoice sent', 'when' => 'When an invoice is generated & sent', 'vars' => ['first_name', 'invoice_number', 'invoice_total', 'due_date']],
+                ['key' => 'immigration.proof.uploaded', 'label' => 'Proof of payment uploaded', 'when' => 'When the client uploads a proof of payment (notify staff)', 'vars' => ['first_name', 'adviser_name']],
                 ['key' => 'immigration.invoice.paid', 'label' => 'Payment verified', 'when' => 'When a proof of payment is confirmed', 'vars' => ['first_name', 'invoice_total', 'adviser_name']],
                 ['key' => 'immigration.invoice.overdue', 'label' => 'Payment overdue', 'when' => '7 days after the invoice due date', 'vars' => ['first_name', 'invoice_total'], 'scheduled' => true],
             ]],
