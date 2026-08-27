@@ -176,11 +176,11 @@ class ImmigrationController extends Controller
      * Leads queue — Immigration's pre-engagement-fee leads. Same shape as
      * Sales / Education so the shared Leads.jsx renders identically.
      */
-    public function leads()
+    public function leads(string $page = 'portal/immigration/Leads', string $portal = 'immigration')
     {
         try {
-            return inertia('portal/immigration/Leads', [
-                'portal' => 'immigration',
+            return inertia($page, [
+                'portal' => $portal,
                 'statuses' => self::LEAD_STATUSES,
                 // Pipeline only — converted leads (cases) move to the Cases page.
                 'leads' => Lead::inLeadPipeline()
@@ -198,12 +198,13 @@ class ImmigrationController extends Controller
                 'allTagNames' => \App\Models\LeadTag::orderBy('name')->pluck('name'),
                 'events' => $this->eventsSummary(),
                 'tabCounts' => $this->leadTabCounts(),
+                'visaOptions' => $this->visaOptions(),
             ]);
         } catch (\Throwable $e) {
             Log::error('Immigration leads list failed', ['error' => $e->getMessage()]);
 
-            return inertia('portal/immigration/Leads', [
-                'portal' => 'immigration', 'statuses' => self::LEAD_STATUSES, 'leads' => collect(),
+            return inertia($page, [
+                'portal' => $portal, 'statuses' => self::LEAD_STATUSES, 'leads' => collect(),
             ]);
         }
     }
@@ -298,8 +299,6 @@ class ImmigrationController extends Controller
      * Extracted so other portals (e.g. the adviser portal) can render the exact
      * same List of Cases UI. An optional $scope closure narrows the case query
      * (and its total) — e.g. to a single owner for "My Cases".
-     *
-     * @param  \Closure|null  $scope
      */
     public function casesPayload(?\Closure $scope = null): array
     {
@@ -514,7 +513,6 @@ class ImmigrationController extends Controller
             // ordered by category → name to match VisaType admin tooling.
             $visaTypes = \App\Models\VisaType::query()
                 ->where('active', true)
-                ->orderBy('category')
                 ->orderBy('name')
                 ->get(['id', 'code', 'name', 'category']);
 
@@ -581,6 +579,48 @@ class ImmigrationController extends Controller
                 'immigration_stage' => $l->immigration_stage,
             ])
             ->values();
+    }
+
+    /**
+     * Client Documents — staff attach an extra document to a case so it's
+     * included in the client's engagement pack. Scaffold module for now; the
+     * upload/send actions are wired in a follow-up. Rendered under either
+     * immigration portal via the page/portal params.
+     */
+    public function clientDocuments(string $page = 'portal/immigration/ClientDocuments', string $portal = 'immigration')
+    {
+        $formats = \App\Models\DocumentFormat::withCount('uses')->orderByDesc('updated_at')->get()
+            ->map(fn ($f) => [
+                'id' => $f->id,
+                'name' => $f->name,
+                'category' => $f->category ?: 'client_facing',
+                'content' => $f->content,
+                'visa_types' => is_array($f->visa_types) ? $f->visa_types : [],
+                'status' => $f->status ?: 'draft',
+                'uses_count' => $f->uses_count,
+                'updated_at' => optional($f->updated_at)->toIso8601String(),
+            ]);
+
+        $usages = \App\Models\DocumentFormatCase::with(['format:id,name', 'lead:id,lead_id,first_name,last_name'])
+            ->orderByDesc('updated_at')->limit(300)->get()
+            ->map(fn ($u) => [
+                'id' => $u->id,
+                'format_id' => $u->document_format_id,
+                'format_name' => $u->format?->name,
+                'case_id' => $u->lead_id,
+                'case_name' => $u->lead ? (trim("{$u->lead->first_name} {$u->lead->last_name}") ?: $u->lead->lead_id) : '—',
+                'case_ref' => $u->lead?->lead_id,
+                'state' => $u->state ?: 'edited',
+                'updated_at' => optional($u->updated_at)->toIso8601String(),
+            ]);
+
+        return inertia($page, [
+            'portal' => $portal,
+            'cases' => $this->caseListForGeneration(),
+            'formats' => $formats,
+            'usages' => $usages,
+            'visaOptions' => $this->visaOptions(),
+        ]);
     }
 
     /**
@@ -743,7 +783,7 @@ class ImmigrationController extends Controller
             $invoicedIds = LeadDocument::where('source_variant', 'invoice')->distinct()->pluck('lead_id');
 
             $generated = LeadDocument::with([
-                'lead:id,first_name,last_name,lead_id,tracking_code,email,phone,engagement_signing_token,engagement_sent_at,engagement_fee_total,engagement_total_amount,engagement_fee_location,engagement_fee_tier,engagement_include_gst,engagement_assist_signer_id',
+                'lead:id,first_name,last_name,lead_id,tracking_code,email,phone,residence_country,engagement_signing_token,engagement_sent_at,engagement_fee_total,engagement_total_amount,engagement_fee_location,engagement_fee_tier,engagement_include_gst,engagement_assist_signer_id',
                 'lead.faceImage',
                 'uploader:id,name,email',
             ])
@@ -813,6 +853,7 @@ class ImmigrationController extends Controller
                         'fee_location' => $lead?->engagement_fee_location,
                         'fee_tier' => $lead?->engagement_fee_tier,
                         'include_gst' => (bool) $lead?->engagement_include_gst,
+                        'country' => $lead?->residence_country,
                         'sent_at' => optional($lead?->engagement_sent_at)?->toIso8601String(),
                         'signed' => (bool) $signedAt,
                         'signed_at' => optional($signedAt)?->toIso8601String(),
@@ -991,7 +1032,7 @@ class ImmigrationController extends Controller
 
             // Generated invoices — one row per case, invoices nested.
             $generated = LeadDocument::with([
-                'lead:id,first_name,last_name,lead_id,tracking_code,email,phone',
+                'lead:id,first_name,last_name,lead_id,tracking_code,email,phone,residence_country,engagement_fee_location,engagement_fee_tier,engagement_include_gst',
                 'lead.faceImage',
                 'uploader:id,name',
             ])
@@ -1016,6 +1057,11 @@ class ImmigrationController extends Controller
                         'phone' => $lead?->phone,
                         'latest_created_at' => optional($first->created_at)?->toIso8601String(),
                         'latest_by' => $first->uploader?->name,
+                        // Pricing context this invoice was generated under.
+                        'fee_location' => $lead?->engagement_fee_location,
+                        'fee_tier' => $lead?->engagement_fee_tier,
+                        'include_gst' => (bool) $lead?->engagement_include_gst,
+                        'country' => $lead?->residence_country,
                         // Total invoiced for this case (sum of its invoice totals);
                         // null when none were stored (pre-column invoices).
                         'total_amount' => $docs->whereNotNull('invoice_total')->isNotEmpty()
@@ -1075,6 +1121,10 @@ class ImmigrationController extends Controller
                 ->orderByDesc('created_at')
                 ->limit(300)
                 ->get()
+                // One row per case — the client submits a single proof per
+                // invoice, and a re-upload replaces the prior file, so show the
+                // latest per case rather than every historical upload.
+                ->unique('lead_id')
                 ->map(fn (LeadDocument $d) => [
                     'id' => $d->id,
                     'case_id' => $d->lead_id,
@@ -1240,10 +1290,31 @@ class ImmigrationController extends Controller
         $data = $request->validate([
             'immigration_stage' => ['nullable', \Illuminate\Validation\Rule::in(Lead::IMMIGRATION_STAGES)],
             'immigration_assignee' => ['nullable', \Illuminate\Validation\Rule::in(Lead::IMMIGRATION_STAGE_ASSIGNEES)],
+            // Optional note captured when moving to stages like "Request to
+            // Lodged" or "Withdrawn". Recorded as an internal case note.
+            'stage_note' => ['nullable', 'string', 'max:2000'],
         ]);
 
         $newStage = $data['immigration_stage'] ?? null;
         $stageMoved = ($lead->immigration_stage ?? null) !== $newStage;
+        $stageNote = trim((string) ($data['stage_note'] ?? ''));
+
+        // Records the optional note as an internal case note so it surfaces in
+        // the Overview timeline, attributed to the mover and the target stage.
+        $recordStageNote = function () use ($lead, $stageNote, $newStage) {
+            if ($stageNote === '') {
+                return;
+            }
+            $user = auth()->user();
+            \App\Models\LeadNote::create([
+                'lead_id'     => $lead->id,
+                'user_id'     => $user?->id,
+                'author_name' => $user?->name,
+                'author_role' => $user?->role,
+                'kind'        => 'note',
+                'body'        => "Stage → {$newStage}: {$stageNote}",
+            ]);
+        };
 
         // Build 12 phase 4.5 (§15.1): the process chain is the single
         // authoritative writer of immigration_stage. When the case is on the
@@ -1255,9 +1326,23 @@ class ImmigrationController extends Controller
             if ($steps->jumpToStage($lead, $newStage, auth()->user())) {
                 if (array_key_exists('immigration_assignee', $data)) {
                     $lead->immigration_assignee = $data['immigration_assignee'] ?: null;
+                }
+                // Visa approved — the case is done, so clear its working priority
+                // to "done" (it no longer needs to compete for attention).
+                if ($newStage === 'Approved Visa' && $lead->immigration_priority !== 'done') {
+                    $lead->immigration_priority = 'done';
+                }
+                if ($lead->isDirty()) {
                     $lead->save();
                 }
+                $recordStageNote();
                 \App\Jobs\EvaluateCaseFindings::dispatch($lead->id);
+
+                // Email automation — the chain path sets the stage without going
+                // through advanceImmigrationStage, so fire the per-stage event here.
+                app(\App\Services\EmailAutomationService::class)->fire(
+                    'immigration.stage.'.\Illuminate\Support\Str::slug($newStage, '_'), $lead, ['stage' => $newStage]
+                );
 
                 return back();
             }
@@ -1275,10 +1360,20 @@ class ImmigrationController extends Controller
             $lead->stage_updated_at = now();
             $lead->stage_updated_by = auth()->id();
             $lead->pushStageHistory('immigration', $newStage, $lead->immigration_assignee);
+
+            // Visa approved — the case is done, so clear its working priority to
+            // "done" (it no longer needs to compete for attention).
+            if ($newStage === 'Approved Visa' && $lead->immigration_priority !== 'done') {
+                $lead->immigration_priority = 'done';
+            }
         }
 
         if ($stageMoved || $lead->isDirty('immigration_assignee')) {
             $lead->save();
+        }
+
+        if ($stageMoved) {
+            $recordStageNote();
         }
 
         // Re-evaluate findings off the request path when the stage moves (§8d).
@@ -2759,7 +2854,7 @@ class ImmigrationController extends Controller
             'institution_name' => 'Institution Name',
             'country_of_study' => 'Country of Study',
             'other_notes' => 'Other Notes for Adviser',
-            'current_country' => "Country When Application is Submitted",
+            'current_country' => 'Country When Application is Submitted',
             'partnership_status' => 'Partnership Status',
             'other_names' => 'Other Names Used',
             'country_of_birth' => 'Country of Birth',

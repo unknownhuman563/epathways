@@ -3556,6 +3556,55 @@ function ProposalShortlist({ proposal, code }) {
                     );
                 })}
             </div>
+
+            {/* Previously suggested — earlier proposals kept for reference,
+                read-only. The program the client had chosen at the time (if
+                any) stays highlighted. */}
+            {Array.isArray(proposal.previous) && proposal.previous.length > 0 && (
+                <div className="border-t border-gray-100 px-4 sm:px-5 py-4">
+                    <details className="group/prev">
+                        <summary className="cursor-pointer list-none inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.14em] text-gray-400 hover:text-gray-600 select-none">
+                            <ChevronDown size={13} className="-rotate-90 transition-transform group-open/prev:rotate-0" />
+                            Previously suggested ({proposal.previous.length})
+                        </summary>
+                        <div className="mt-3 space-y-4">
+                            {proposal.previous.map((v) => (
+                                <div key={v.id} className="rounded-xl border border-gray-100 bg-gray-50/40 p-3">
+                                    {v.created_at && (
+                                        <div className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-2">
+                                            {new Date(v.created_at).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}
+                                        </div>
+                                    )}
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                        {v.programs.map((p) => {
+                                            const wasChosen = v.selected_program_id === p.id;
+                                            return (
+                                                <div
+                                                    key={p.id}
+                                                    className={`flex items-center gap-2 rounded-lg border px-2.5 py-2 ${wasChosen ? 'border-emerald-300 bg-emerald-50' : 'border-gray-100 bg-white'}`}
+                                                >
+                                                    {p.level != null && (
+                                                        <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider shrink-0 ${wasChosen ? 'bg-emerald-600 text-white' : 'bg-gray-100 text-gray-600 border border-gray-200'}`}>
+                                                            Level {p.level}
+                                                        </span>
+                                                    )}
+                                                    <span className={`text-[12px] truncate ${wasChosen ? 'font-bold text-emerald-900' : 'text-gray-700'}`} title={p.title}>{p.title}</span>
+                                                    {p.location && <span className="text-[10px] text-gray-400 whitespace-nowrap ml-auto">{p.location}</span>}
+                                                    {wasChosen && (
+                                                        <span className="inline-flex items-center gap-0.5 text-emerald-600 shrink-0" title="Previously chosen">
+                                                            <Check size={11} strokeWidth={3} />
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </details>
+                </div>
+            )}
         </section>
     );
 }

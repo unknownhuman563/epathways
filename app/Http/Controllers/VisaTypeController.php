@@ -37,7 +37,6 @@ class VisaTypeController extends Controller
 
         $rows = VisaType::query()
             ->with(['priceHistory.changedBy:id,name'])
-            ->orderBy('category')
             ->orderBy('name')
             ->get()
             ->map(fn (VisaType $v) => $this->serialize($v));
@@ -104,6 +103,9 @@ class VisaTypeController extends Controller
             'inz_form_refs' => 'nullable|string|max:120',
             'icon' => 'required|string|max:60',
             'active' => 'required|boolean',
+            // Standard filename pattern applied to every checklist upload unless
+            // the item overrides it. Null keeps the client's original filename.
+            'filename_pattern' => 'nullable|string|max:160',
             // Per-visa checklist — same shape as the update endpoint so
             // the React form can post identical payloads.
             'checklist_items' => 'nullable|array|max:50',
@@ -117,6 +119,9 @@ class VisaTypeController extends Controller
             'checklist_items.*.required' => 'sometimes|boolean',
             'checklist_items.*.file_code' => 'nullable|string|max:20',
             'checklist_items.*.file_suffix' => 'nullable|string|max:40',
+            // Upload filename format — staff type the name a client's upload is
+            // renamed to, optionally with a {name} placeholder for the applicant.
+            'checklist_items.*.filename' => 'nullable|string|max:120',
         ], [
             'code.regex' => 'Code must be uppercase letters, numbers, dashes, or underscores only.',
             'code.unique' => 'A visa type with that code already exists.',
@@ -222,6 +227,7 @@ class VisaTypeController extends Controller
                 'icon' => $payload['icon'],
                 'inz_form_refs' => $payload['inz_form_refs'] ?? null,
                 'checklist_items' => $payload['checklist_items'] ?? null,
+                'filename_pattern' => $payload['filename_pattern'] ?? null,
                 'active' => $payload['active'],
             ]);
 
@@ -353,6 +359,7 @@ class VisaTypeController extends Controller
             'icon' => $v->icon ?? 'Globe',
             'inz_form_refs' => $v->inz_form_refs,
             'checklist_items' => is_array($v->checklist_items) ? $v->checklist_items : [],
+            'filename_pattern' => $v->filename_pattern,
             'active' => (bool) $v->active,
             'updated_at' => $v->updated_at?->toIso8601String(),
             'price_history' => $v->priceHistory->take(10)->map(fn (VisaTypePriceHistory $h) => [

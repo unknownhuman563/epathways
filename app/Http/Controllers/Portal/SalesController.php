@@ -150,6 +150,7 @@ class SalesController extends Controller
                 // Recruiting agents roster for the Leads "Agents" tab — each
                 // with a count of leads they've added (incl. converted ones).
                 'agents' => $this->agentsSummary(),
+                'visaOptions' => $this->visaOptions(),
             ]);
         } catch (\Throwable $e) {
             Log::error('Sales leads list failed', ['error' => $e->getMessage()]);
@@ -262,6 +263,7 @@ class SalesController extends Controller
         [$component, $portalBase] = match (true) {
             request()->is('admin/*') => ['admin/AgentLeads', '/admin'],
             request()->is('portal/education/*') => ['portal/education/AgentLeads', '/portal/education'],
+            request()->is('portal/immigration-adviser/*') => ['portal/immigration-adviser/AgentLeads', '/portal/immigration-adviser'],
             request()->is('portal/sub-agent/*') => ['portal/sub-agent/AgentLeads', '/portal/sub-agent'],
             default => ['portal/sales/AgentLeads', '/portal/sales'],
         };
@@ -317,8 +319,11 @@ class SalesController extends Controller
         // render under admin/ (AdminLayout) and point row actions back at the
         // /admin routes; department portals keep their /portal/{role} base.
         $isAdmin = request()->is('admin/*');
+        $registrantsPage = request()->is('portal/immigration-adviser/*')
+            ? 'portal/immigration-adviser/EventRegistrants'
+            : ($isAdmin ? 'admin/EventRegistrants' : 'portal/sales/EventRegistrants');
 
-        return inertia($isAdmin ? 'admin/EventRegistrants' : 'portal/sales/EventRegistrants', [
+        return inertia($registrantsPage, [
             'event' => [
                 'id' => $event->id,
                 'name' => $event->name,
@@ -381,9 +386,13 @@ class SalesController extends Controller
         })->values()->all();
 
         $isAdmin = request()->is('admin/*');
+        $isAdviser = request()->is('portal/immigration-adviser/*');
+        $regPage = $isAdviser ? 'portal/immigration-adviser/LeadRegistration'
+            : ($isAdmin ? 'admin/LeadRegistration' : 'portal/sales/LeadRegistration');
+        $regBase = $isAdviser ? '/portal/immigration-adviser' : ($isAdmin ? '/admin' : '/portal/sales');
 
-        return inertia($isAdmin ? 'admin/LeadRegistration' : 'portal/sales/LeadRegistration', [
-            'portalBase' => $isAdmin ? '/admin' : '/portal/sales',
+        return inertia($regPage, [
+            'portalBase' => $regBase,
             'lead' => [
                 'id' => $lead->id,
                 'lead_id' => $lead->lead_id,
@@ -653,31 +662,51 @@ class SalesController extends Controller
                 ->get(['id', 'title', 'level', 'category', 'price_text', 'location', 'industry']);
             $programMap = $programCatalog->keyBy('id');
 
+            // Reusable: turn a list of program ids into badge payloads,
+            // preserving order and dropping any that no longer exist.
+            $mapPrograms = fn ($ids) => collect(is_array($ids) ? $ids : [])
+                ->map(fn ($pid) => $programMap->get((int) $pid))
+                ->filter()
+                ->map(fn ($p) => [
+                    'id' => $p->id,
+                    'title' => $p->title,
+                    'level' => $p->level,
+                    'category' => $p->category,
+                    'price_text' => $p->price_text,
+                    'location' => $p->location,
+                ])
+                ->values();
+
             $proposalLeads = Lead::whereNotNull('proposed_program_ids')
                 ->where(function ($q) {
                     // JSON_LENGTH not portable across SQLite (tests) and
                     // MySQL, so filter empty arrays in PHP instead.
                     $q->whereRaw("proposed_program_ids != '[]'");
                 })
-                ->with('faceImage')
+                // Full proposal version history, newest first, with who saved
+                // each one.
+                ->with(['faceImage', 'proposals.creator:id,name'])
                 ->orderByDesc('updated_at')
                 ->get();
 
             $proposals = $proposalLeads
                 ->filter(fn (Lead $l) => is_array($l->proposed_program_ids) && count($l->proposed_program_ids) > 0)
-                ->map(function (Lead $l) use ($programMap) {
-                    $picks = collect($l->proposed_program_ids)
-                        ->map(fn ($pid) => $programMap->get($pid))
-                        ->filter()
-                        ->map(fn ($p) => [
-                            'id' => $p->id,
-                            'title' => $p->title,
-                            'level' => $p->level,
-                            'category' => $p->category,
-                            'price_text' => $p->price_text,
-                            'location' => $p->location,
-                        ])
-                        ->values();
+                ->map(function (Lead $l) use ($mapPrograms) {
+                    // Active shortlist = the lead's current proposed_program_ids;
+                    // its selection is the live preferred_program_id.
+                    $picks = $mapPrograms($l->proposed_program_ids);
+
+                    // Previous versions = every saved proposal EXCEPT the newest
+                    // (which is the active one shown above). Each keeps the
+                    // program it had selected at the time.
+                    $previous = $l->proposals->slice(1)->map(fn ($p) => [
+                        'id' => $p->id,
+                        'programs' => $mapPrograms($p->program_ids),
+                        'programs_count' => count($p->program_ids ?? []),
+                        'selected_program_id' => $p->selected_program_id,
+                        'created_by' => optional($p->creator)->name,
+                        'created_at' => optional($p->created_at)->toIso8601String(),
+                    ])->values();
 
                     return [
                         'id' => $l->id,
@@ -690,9 +719,11 @@ class SalesController extends Controller
                         'status' => $l->status,
                         'programs' => $picks,
                         'programs_count' => $picks->count(),
-                        // Which shortlisted program the lead settled on (set
-                        // from the tracker's "Choose this one" or by staff in
-                        // the Notify modal). Drives the highlight in the list.
+                        // Previous proposals kept for reference (newest first).
+                        'previous' => $previous,
+                        'previous_count' => $previous->count(),
+                        // The active proposal's chosen program (null when a new
+                        // proposal was just created — nothing selected yet).
                         'preferred_program_id' => $l->preferred_program_id,
                         'preferred_program_chosen_at' => optional($l->preferred_program_chosen_at)->toIso8601String(),
                         'updated_at' => optional($l->updated_at)->toIso8601String(),

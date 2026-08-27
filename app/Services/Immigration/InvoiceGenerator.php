@@ -158,6 +158,19 @@ class InvoiceGenerator
             }
         }
         $inzFee = (float) ($o['inz_fee'] ?? $defaults['inz_fee'] ?? 0);
+        // Engagement path (no explicit inz_fee): honour the principal's
+        // per-applicant disbursement override on a single-applicant invoice, so
+        // the invoice total matches the agreement's.
+        if (! array_key_exists('inz_fee', $o)) {
+            $eng = app(EngagementDocumentGenerator::class);
+            $apps = $eng->familyApplicants($lead);
+            if (count($apps) === 1) {
+                $d = $eng->applicantDisbursement($apps[0], $o['fee_location'] ?? 'onshore');
+                if ($d !== null) {
+                    $inzFee = (float) $d;
+                }
+            }
+        }
         $includeDisbursement = array_key_exists('include_disbursement', $o)
             ? (bool) $o['include_disbursement']
             : $defaults['include_disbursement'];
@@ -207,7 +220,9 @@ class InvoiceGenerator
                     if ($incGst && $sf !== null) {
                         $sf = round($sf * (1 + VisaType::GST_RATE), 2);
                     }
-                    $inz = $includeDisbursement ? $vm?->inzFeeFor($location) : null;
+                    // Per-applicant disbursement override (else the visa's INZ
+                    // fee) — matches the written agreement's disbursement lines.
+                    $inz = $includeDisbursement ? $eng->applicantDisbursement($a, $location) : null;
                     $gItems = $this->defaultItems($a['visa'] ?: 'Visa', (float) ($sf ?? 0), (float) ($inz ?? 0));
                     $groups[] = [
                         'name' => $a['name'],
@@ -273,7 +288,7 @@ class InvoiceGenerator
 
         Storage::disk(self::DISK)->put($path, $binary);
 
-        return LeadDocument::create([
+        $doc = LeadDocument::create([
             'lead_id' => $lead->id,
             'request_id' => null,
             'checklist_key' => 'invoice',
@@ -288,6 +303,14 @@ class InvoiceGenerator
             'invoice_total' => $payload['total'] ?? null,
             'uploaded_by' => Auth::id(),
         ]);
+
+        // Email automation — invoice sent.
+        app(\App\Services\EmailAutomationService::class)->fire('immigration.invoice.sent', $lead, [
+            'invoice_number' => $number,
+            'invoice_total' => $payload['total'] ?? null,
+        ]);
+
+        return $doc;
     }
 
     /** "30 Jun 2026" — matches the invoice format. */

@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { Head, router, Link } from "@inertiajs/react";
 import { toast } from "sonner";
@@ -16,6 +16,28 @@ const rowInitials = (name = "") =>
 
 const fmtFee = (n) =>
     Number(n).toLocaleString("en-NZ", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+// Pricing context chips for a generated engagement / invoice row: the
+// applicant's location (onshore/offshore), their country, and whether the fee
+// is quoted GST-inclusive or exclusive.
+function CaseDetails({ row = {} }) {
+    const loc = (row.fee_location || "").toLowerCase();
+    const locLabel = loc === "offshore" ? "Offshore" : loc === "onshore" ? "Onshore" : null;
+    const locTone = loc === "offshore"
+        ? "bg-blue-50 text-blue-700 border-blue-200"
+        : "bg-teal-50 text-teal-700 border-teal-200";
+    return (
+        <div className="flex flex-col items-start gap-1">
+            {locLabel
+                ? <span className={`inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded border ${locTone}`}>{locLabel}</span>
+                : <span className="text-[10px] text-gray-300">—</span>}
+            {row.country && <span className="text-[10.5px] text-gray-500 truncate max-w-[150px]">{row.country}</span>}
+            <span className={`inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded border ${row.include_gst ? "bg-purple-50 text-purple-700 border-purple-200" : "bg-gray-50 text-gray-500 border-gray-200"}`}>
+                {row.include_gst ? "Incl. GST" : "Excl. GST"}
+            </span>
+        </div>
+    );
+}
 
 // NZ GST. Mirrors VisaType::GST_RATE — fees are stored exclusive of GST.
 const GST_RATE = 0.15;
@@ -242,6 +264,7 @@ export default function Engagement({ cases = [], documents = [], generated = [],
                                 <col />
                                 <col className="w-[120px]" />
                                 <col className="w-[120px]" />
+                                <col className="w-[160px]" />
                                 <col className="w-[130px]" />
                                 <col className="w-[150px]" />
                                 <col className="w-[90px]" />
@@ -253,6 +276,7 @@ export default function Engagement({ cases = [], documents = [], generated = [],
                                     <th className="px-3 py-2.5">Documents &amp; link</th>
                                     <th className="px-3 py-2.5">Consulting fee</th>
                                     <th className="px-3 py-2.5">Total amount</th>
+                                    <th className="px-3 py-2.5">Details</th>
                                     <th className="px-3 py-2.5">Status</th>
                                     <th className="px-3 py-2.5">Created</th>
                                     <th className="px-3 py-2.5 text-right pr-4">Actions</th>
@@ -335,6 +359,11 @@ export default function Engagement({ cases = [], documents = [], generated = [],
                                             ) : (
                                                 <span className="text-[11px] text-gray-300">—</span>
                                             )}
+                                        </td>
+                                        {/* Details — pricing context: onshore/offshore,
+                                            country, and whether GST is included. */}
+                                        <td className="px-3 py-3">
+                                            <CaseDetails row={c} />
                                         </td>
                                         {/* Signed / draft status */}
                                         <td className="px-3 py-3">
@@ -797,6 +826,20 @@ function NewEngagementModal({ cases, documents, signers = [], defaultSignerId = 
     const [submitAction, setSubmitAction] = useState(null); // 'draft' | 'send' | null
     const submitting = submitAction !== null;
     const [previewLoading, setPreviewLoading] = useState(false);
+    // Keep the preview scrolled where the user left it across the silent reloads
+    // that follow a per-applicant amount/disbursement edit (which only bumps
+    // familyRefresh). Reset to top only when the document itself changes.
+    const previewIframeRef = useRef(null);
+    const previewScrollRef = useRef(0);
+    const handlePreviewLoad = () => {
+        setPreviewLoading(false);
+        const win = previewIframeRef.current?.contentWindow;
+        if (!win) return;
+        try {
+            win.scrollTo(0, previewScrollRef.current || 0);
+            win.onscroll = () => { previewScrollRef.current = win.scrollY; };
+        } catch (e) { /* same-origin only; ignore if unavailable */ }
+    };
     const [notify, setNotify] = useState(true);
     // Which price the client is engaged at — "normal" (payment plan) or
     // "discounted" (pay now). Drives the professional fee on the agreement.
@@ -853,6 +896,9 @@ function NewEngagementModal({ cases, documents, signers = [], defaultSignerId = 
     // pricing tier changes — each re-renders the document.
     useEffect(() => {
         if (selectedCase && previewType) setPreviewLoading(true);
+        // A genuine document change starts at the top; amount edits (familyRefresh)
+        // deliberately keep the saved position.
+        previewScrollRef.current = 0;
     }, [selectedCase, previewType, signerId, feeTier, feeLocation, includeGst]);
 
     // Which fee columns the chosen location reads from. Mirrors
@@ -911,15 +957,15 @@ function NewEngagementModal({ cases, documents, signers = [], defaultSignerId = 
     };
 
     // Persist one applicant's fee override (principal or dependant). value "" clears it.
-    const setApplicantFee = (type, dependentId, value) => {
+    const setApplicantFee = (type, dependentId, value, column = "fee") => {
         if (!selectedCase) return;
         fetch(`/admin/leads/${selectedCase.id}/engagement/applicant-fee`, {
             method: "PATCH",
             headers: { "Content-Type": "application/json", Accept: "application/json", "X-XSRF-TOKEN": xsrfToken() },
-            body: JSON.stringify({ type, dependent_id: dependentId ?? null, fee: value === "" ? null : Number(value) }),
+            body: JSON.stringify({ type, dependent_id: dependentId ?? null, column, fee: value === "" ? null : Number(value) }),
         })
             .then((r) => { if (!r.ok) throw new Error(); })
-            .then(() => { toast.success("Amount updated"); setFamilyRefresh((v) => v + 1); })
+            .then(() => { toast.success(column === "disbursement" ? "Disbursement updated" : "Amount updated"); setFamilyRefresh((v) => v + 1); })
             .catch(() => { toast.error("Could not update the amount"); setFamilyRefresh((v) => v + 1); });
     };
 
@@ -1024,7 +1070,7 @@ function NewEngagementModal({ cases, documents, signers = [], defaultSignerId = 
                     {/* Left: controls. Case + settings are fixed at the top;
                         only the document list scrolls, so picking documents
                         never squeezes the settings and vice versa. */}
-                    <div className="w-[440px] border-r border-gray-100 flex flex-col min-h-0 flex-shrink-0 overflow-y-auto">
+                    <div className="w-[520px] border-r border-gray-100 flex flex-col min-h-0 flex-shrink-0 overflow-y-auto">
                         {/* Case picker */}
                         <div className="px-4 pt-3 pb-3 border-b border-gray-100">
                             <FieldLabel>Case</FieldLabel>
@@ -1162,11 +1208,12 @@ function NewEngagementModal({ cases, documents, signers = [], defaultSignerId = 
                                 member to leave them off the agreement + invoice. */}
                             {selectedCase && (
                                 <div className="rounded-lg border border-gray-200 bg-gray-50/60 p-2.5">
-                                    <div className="flex items-center justify-between mb-1.5">
-                                        <p className="text-[10px] font-bold uppercase tracking-wider text-gray-500">In this agreement</p>
-                                        <p className="text-[10px] text-gray-400">Amount (ex GST)</p>
+                                    <div className="flex items-center gap-2 mb-1.5 -mx-2.5 -mt-2.5 px-2.5 py-2 rounded-t-lg bg-gray-700">
+                                        <p className="text-[10px] font-bold uppercase tracking-wider text-white flex-1">Applicant/s</p>
+                                        <p className="text-[10px] text-gray-300 w-[92px] text-right">Amount (ex GST)</p>
+                                        <p className="text-[10px] text-gray-300 w-[92px] text-right">Disbursement</p>
                                     </div>
-                                    {/* Principal — always included; amount editable. */}
+                                    {/* Principal — always included; amount + disbursement editable. */}
                                     <div className="flex items-center gap-2 py-1">
                                         <input type="checkbox" checked disabled className="rounded border-gray-300 w-3.5 h-3.5 flex-shrink-0" />
                                         <div className="min-w-0 flex-1">
@@ -1176,7 +1223,12 @@ function NewEngagementModal({ cases, documents, signers = [], defaultSignerId = 
                                         <ApplicantFeeInput
                                             value={principal?.fee_override}
                                             placeholder={principal?.default_fee}
-                                            onCommit={(v) => setApplicantFee("principal", null, v)}
+                                            onCommit={(v) => setApplicantFee("principal", null, v, "fee")}
+                                        />
+                                        <ApplicantFeeInput
+                                            value={principal?.disbursement_override}
+                                            placeholder={principal?.default_disbursement}
+                                            onCommit={(v) => setApplicantFee("principal", null, v, "disbursement")}
                                         />
                                     </div>
                                     {family.map((m) => (
@@ -1195,11 +1247,17 @@ function NewEngagementModal({ cases, documents, signers = [], defaultSignerId = 
                                                 value={m.fee_override}
                                                 placeholder={m.default_fee}
                                                 disabled={m.in_agreement === false}
-                                                onCommit={(v) => setApplicantFee("dependent", m.id, v)}
+                                                onCommit={(v) => setApplicantFee("dependent", m.id, v, "fee")}
+                                            />
+                                            <ApplicantFeeInput
+                                                value={m.disbursement_override}
+                                                placeholder={m.default_disbursement}
+                                                disabled={m.in_agreement === false}
+                                                onCommit={(v) => setApplicantFee("dependent", m.id, v, "disbursement")}
                                             />
                                         </div>
                                     ))}
-                                    <p className="text-[10px] text-gray-400 mt-1.5">Edit an amount to set that applicant's fee. Leave blank to use the visa fee.</p>
+                                    <p className="text-[10px] text-gray-400 mt-1.5">Edit an amount to set that applicant's fee or INZ disbursement. Leave blank to use the visa fee.</p>
                                 </div>
                             )}
 
@@ -1311,11 +1369,11 @@ function NewEngagementModal({ cases, documents, signers = [], defaultSignerId = 
                                         </div>
                                     )}
                                     <iframe
-                                        key={previewUrl}
+                                        ref={previewIframeRef}
                                         src={previewUrl}
                                         title="Document preview"
                                         className="absolute inset-0 w-full h-full bg-white"
-                                        onLoad={() => setPreviewLoading(false)}
+                                        onLoad={handlePreviewLoad}
                                     />
                                 </>
                             ) : (

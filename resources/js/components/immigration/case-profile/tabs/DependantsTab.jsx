@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { router } from "@inertiajs/react";
 import { toast } from "sonner";
+import { caseNav } from "@/lib/caseNav";
 import {
     Users, Plus, X, Pencil, Trash2, Upload, FileText, Eye, Download, IdCard, FolderOpen, Link as LinkIcon,
     CheckCircle2, Clock, AlertTriangle, XCircle, Circle,
@@ -37,10 +38,10 @@ export default function DependantsTab({ lead, dependents = [], caseOptions = [],
     // server creates it (every family member is a case) and redirects there.
     const openCase = (d) => {
         if (d.linked_lead_id) {
-            router.visit(`/portal/immigration/cases/${d.linked_lead_id}/profile`);
+            router.visit(caseNav().profile(d.linked_lead_id));
             return;
         }
-        router.post(`${base}/${d.id}/open-case`, {}, {
+        router.post(`${base}/${d.id}/open-case`, { portal: caseNav().adviser ? "immigration-adviser" : "immigration" }, {
             onError: () => toast.error("Could not open the case"),
         });
     };

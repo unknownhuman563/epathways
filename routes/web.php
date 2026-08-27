@@ -528,6 +528,12 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/admin/settings', [SettingController::class, 'index'])->name('admin.settings');
         Route::post('/admin/settings', [SettingController::class, 'update']);
 
+        // Email automation — admin + super-admin choose which events send a
+        // message, to whom, and with which template.
+        Route::get('/admin/email-automation', [\App\Http\Controllers\Admin\EmailAutomationController::class, 'index'])->name('admin.email-automation');
+        Route::post('/admin/email-automation', [\App\Http\Controllers\Admin\EmailAutomationController::class, 'save'])->name('admin.email-automation.save');
+        Route::post('/admin/email-automation/test', [\App\Http\Controllers\Admin\EmailAutomationController::class, 'test'])->name('admin.email-automation.test');
+
         Route::get('/admin/availability', [AvailabilityController::class, 'index'])->name('admin.availability');
         Route::post('/admin/availability', [AvailabilityController::class, 'store']);
         Route::post('/admin/availability/{id}', [AvailabilityController::class, 'update']);
@@ -746,6 +752,13 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/admin/leads/{id}/registration', [SalesController::class, 'showLeadRegistration'])
             ->name('admin.leads.registration');
 
+        // Bulk actions from the Leads-table toolbar (Set/edit agent, Delete).
+        // The admin Leads page reuses the sales component with portalBase=/admin,
+        // so it posts here. Declared BEFORE /admin/leads/{id} so the literal
+        // "bulk-*" segments aren't captured as an {id}.
+        Route::post('/admin/leads/bulk-agent', [SalesController::class, 'bulkAssignAgent'])->name('admin.leads.bulk-agent');
+        Route::post('/admin/leads/bulk-delete', [SalesController::class, 'bulkDelete'])->name('admin.leads.bulk-delete');
+
         Route::get('/admin/leads/{id}', [LeadController::class, 'show'])->name('admin.leads.show');
         Route::post('/admin/leads/{id}/stage', [LeadController::class, 'updateStage'])->name('admin.leads.stage');
         // Archive (soft-delete) a lead / case — used by the Cases + Leads row menus.
@@ -787,8 +800,20 @@ Route::middleware(['auth'])->group(function () {
         // Inline pipeline-stage change from the leads table / kanban. Declared
         // AFTER /admin/leads/import so the literal segment isn't caught as {id}.
         Route::post('/admin/leads/{id}', [LeadController::class, 'updateLeadStatus'])->name('admin.leads.status');
+        // Inline "Visa applying for" change from the leads table dropdown.
+        Route::post('/admin/leads/{id}/visa', [LeadController::class, 'updateLeadVisa'])->name('admin.leads.visa');
         Route::post('/admin/leads/{id}/documents/checklist', [LeadController::class, 'updateDocumentChecklist'])->name('admin.leads.documents.checklist');
         Route::post('/admin/leads/{id}/documents/section-verification', [LeadController::class, 'updateSectionVerification'])->name('admin.leads.documents.section-verification');
+
+        // Per-document discussion threads on the lead-profile Documents tab —
+        // mirrors the immigration Case Profile threads (shared CaseThread model).
+        Route::post('/admin/leads/{id}/threads', [LeadController::class, 'storeDocThread'])->name('admin.leads.threads.store');
+        Route::post('/admin/leads/{id}/threads/{thread}/resolve', [LeadController::class, 'resolveDocThread'])->name('admin.leads.threads.resolve');
+        Route::patch('/admin/leads/{id}/threads/{thread}', [LeadController::class, 'updateDocThread'])->name('admin.leads.threads.update');
+
+        // Inline edit of the proposed-program shortlist from the Lead Stats
+        // "Programs offered" card (no proposal-version churn).
+        Route::post('/admin/leads/{id}/shortlist', [LeadController::class, 'updateProposedShortlist'])->name('admin.leads.shortlist');
 
         // Internal notes — any staff role can add, only author or admin can edit/delete.
         Route::get('/admin/leads/{id}/notes', [\App\Http\Controllers\LeadNoteController::class, 'index'])
@@ -799,6 +824,8 @@ Route::middleware(['auth'])->group(function () {
             ->name('admin.leads.notes.update');
         Route::delete('/admin/leads/{leadId}/notes/{noteId}', [\App\Http\Controllers\LeadNoteController::class, 'destroy'])
             ->name('admin.leads.notes.destroy');
+        Route::get('/admin/leads/{leadId}/notes/{noteId}/attachments/{index}', [\App\Http\Controllers\LeadNoteController::class, 'attachment'])
+            ->name('admin.leads.notes.attachment');
 
         // Tags — free-form, auto-created on first use. /tags index feeds
         // the client-side autocomplete.
@@ -827,7 +854,7 @@ Route::middleware(['auth'])->group(function () {
     // updateStatus is per-document so a sales lead's documents can't be
     // touched from this widened gate (no Lead Profile route routes them
     // here).
-    Route::middleware('portal:admin,sales,immigration,immigration_manager,immigration_adviser')->group(function () {
+    Route::middleware('portal:admin,sales,immigration,immigration_manager,immigration_adviser,finance')->group(function () {
         Route::get('/admin/leads/{id}/documents', [LeadDocumentController::class, 'staffIndex'])
             ->name('admin.leads.documents');
         Route::post('/admin/leads/{id}/documents/requests', [LeadDocumentController::class, 'requestStore'])
@@ -838,6 +865,15 @@ Route::middleware(['auth'])->group(function () {
             ->name('admin.leads.documents.status');
         Route::post('/admin/leads/{id}/documents/share', [LeadDocumentController::class, 'shareWithLead'])
             ->name('admin.leads.documents.share');
+        Route::post('/admin/leads/{leadId}/documents/{docId}/send-to-client', [LeadDocumentController::class, 'sendToClient'])
+            ->name('admin.leads.documents.send-to-client');
+
+        // Document formats — staff-built Word-style documents + their per-case use.
+        Route::post('/admin/document-formats', [\App\Http\Controllers\Portal\DocumentFormatController::class, 'store'])->name('admin.document-formats.store');
+        Route::post('/admin/document-formats/{format}', [\App\Http\Controllers\Portal\DocumentFormatController::class, 'update'])->name('admin.document-formats.update');
+        Route::delete('/admin/document-formats/{format}', [\App\Http\Controllers\Portal\DocumentFormatController::class, 'destroy'])->name('admin.document-formats.destroy');
+        Route::post('/admin/document-formats/{format}/apply', [\App\Http\Controllers\Portal\DocumentFormatController::class, 'apply'])->name('admin.document-formats.apply');
+        Route::delete('/admin/document-format-uses/{use}', [\App\Http\Controllers\Portal\DocumentFormatController::class, 'removeUse'])->name('admin.document-format-uses.destroy');
     });
 
     // Documents-tab checklist uploads + per-file delete + downloads — wider
@@ -850,6 +886,12 @@ Route::middleware(['auth'])->group(function () {
     Route::middleware('portal:admin,sales,education,english,immigration,immigration_manager,immigration_adviser,accommodation,finance')->group(function () {
         Route::post('/admin/leads/{id}/documents/checklist/{key}/upload', [LeadDocumentController::class, 'staffChecklistUpload'])
             ->name('admin.leads.documents.checklist.upload');
+        // Per-lead ad-hoc document rows on the Documents tab — scoped to this
+        // one lead (leads.custom_documents), uploaded against by a custom.* key.
+        Route::post('/admin/leads/{id}/documents/custom', [LeadDocumentController::class, 'addCustomDocument'])
+            ->name('admin.leads.documents.custom.add');
+        Route::delete('/admin/leads/{id}/documents/custom/{key}', [LeadDocumentController::class, 'removeCustomDocument'])
+            ->name('admin.leads.documents.custom.remove');
         // Templated agreement generator — Blade -> PDF -> attached as a
         // LeadDocument with source='generated'. Only agree.consultancy
         // (single|partner variant) is wired up right now.
@@ -1070,6 +1112,7 @@ Route::middleware(['auth'])->group(function () {
             Route::post('/leads/{id}/notes', [\App\Http\Controllers\LeadNoteController::class, 'store'])->name('leads.notes.store');
             Route::post('/leads/{id}/agent', [SalesController::class, 'updateLeadAgent'])->name('leads.agent');
             Route::post('/leads/{id}', [SalesController::class, 'updateLead'])->name('leads.update');
+            Route::post('/leads/{id}/visa', [LeadController::class, 'updateLeadVisa'])->name('leads.visa');
             Route::get('/bookings', [SalesController::class, 'bookings'])->name('bookings');
             Route::post('/bookings/{id}', [SalesController::class, 'updateBooking'])->name('bookings.update');
 
@@ -1187,6 +1230,7 @@ Route::middleware(['auth'])->group(function () {
             Route::post('/leads/bulk-delete', [SalesController::class, 'bulkDelete'])->name('leads.bulk-delete');
             Route::post('/leads/{id}/notes', [\App\Http\Controllers\LeadNoteController::class, 'store'])->name('leads.notes.store');
             Route::post('/leads/{id}', [EducationController::class, 'updateLead'])->name('leads.update');
+            Route::post('/leads/{id}/visa', [LeadController::class, 'updateLeadVisa'])->name('leads.visa');
             Route::post('/leads/{id}/portal-invitation/request', [LeadPortalInvitationController::class, 'request'])
                 ->name('leads.portal-invitation.request');
             // Read-only registration snapshot — mirrors the sales route so the
@@ -1264,6 +1308,30 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/dashboard', [\App\Http\Controllers\Portal\ImmigrationAdviserController::class, 'dashboard'])->name('dashboard');
             Route::get('/cases', [\App\Http\Controllers\Portal\ImmigrationAdviserController::class, 'cases'])->name('cases');
             Route::get('/my-cases', [\App\Http\Controllers\Portal\ImmigrationAdviserController::class, 'myCases'])->name('my-cases');
+            Route::get('/tasks', [\App\Http\Controllers\Portal\ImmigrationAdviserController::class, 'tasks'])->name('tasks');
+            Route::get('/client-documents', [\App\Http\Controllers\Portal\ImmigrationAdviserController::class, 'clientDocuments'])->name('client-documents');
+
+            // Leads pipeline + Students dashboard — the same shared screens the
+            // immigration portal uses, served under the adviser layout. The
+            // action/nav routes below mirror the immigration ones so the shared
+            // Leads/Students components' links resolve on this prefix (no 404)
+            // and the adviser stays in their own portal chrome.
+            Route::get('/leads', [\App\Http\Controllers\Portal\ImmigrationAdviserController::class, 'leads'])->name('leads');
+            Route::post('/leads/bulk-agent', [SalesController::class, 'bulkAssignAgent'])->name('leads.bulk-agent');
+            Route::post('/leads/bulk-delete', [SalesController::class, 'bulkDelete'])->name('leads.bulk-delete');
+            Route::post('/leads/{id}', [ImmigrationController::class, 'updateLead'])->name('leads.update');
+            Route::post('/leads/{id}/visa', [LeadController::class, 'updateLeadVisa'])->name('leads.visa');
+            Route::post('/leads/{id}/portal-invitation/request', [LeadPortalInvitationController::class, 'request'])->name('leads.portal-invitation.request');
+            Route::get('/leads/{id}/registration', [SalesController::class, 'showLeadRegistration'])->name('leads.registration');
+            Route::get('/leads/{id}', [LeadController::class, 'show'])->name('leads.show');
+            Route::get('/agents/{id}/leads', [SalesController::class, 'agentLeads'])->name('agents.leads');
+            Route::get('/events/{id}/registrants', [SalesController::class, 'eventRegistrantsPage'])->name('events.registrants');
+
+            Route::get('/students', [\App\Http\Controllers\Portal\ImmigrationAdviserController::class, 'students'])->name('students');
+            Route::post('/students/{id}/dashboard-field', [\App\Http\Controllers\Portal\EducationController::class, 'updateStudentField'])->name('students.dashboard-field');
+            Route::post('/students', [\App\Http\Controllers\Portal\EducationController::class, 'storeStudent'])->name('students.store');
+            Route::post('/students/{id}/update', [\App\Http\Controllers\Portal\EducationController::class, 'updateStudent'])->name('students.update');
+            Route::post('/students/{id}/destroy', [\App\Http\Controllers\Portal\EducationController::class, 'destroyStudent'])->name('students.destroy');
             Route::get('/assessments', [\App\Http\Controllers\Portal\ImmigrationAdviserController::class, 'assessments'])->name('assessments');
             Route::get('/cases/{lead}', [\App\Http\Controllers\Portal\ImmigrationAdviserController::class, 'showCase'])->name('cases.show');
             // Document verification queue — manager-checked docs the LIA approves/rejects.
@@ -1313,6 +1381,7 @@ Route::middleware(['auth'])->group(function () {
             Route::post('/leads/bulk-agent', [SalesController::class, 'bulkAssignAgent'])->name('leads.bulk-agent');
             Route::post('/leads/bulk-delete', [SalesController::class, 'bulkDelete'])->name('leads.bulk-delete');
             Route::post('/leads/{id}', [ImmigrationController::class, 'updateLead'])->name('leads.update');
+            Route::post('/leads/{id}/visa', [LeadController::class, 'updateLeadVisa'])->name('leads.visa');
             Route::post('/leads/{id}/portal-invitation/request', [LeadPortalInvitationController::class, 'request'])
                 ->name('leads.portal-invitation.request');
             // Read-only registration snapshot — mirrors the sales route so the
@@ -1547,6 +1616,7 @@ Route::middleware(['auth'])->group(function () {
             // Task Board — shared TaskBoardPage component (see resources/js/
             // components/task-board/TaskBoardPage.jsx).
             Route::get('/tasks', [ImmigrationController::class, 'tasks'])->name('tasks');
+            Route::get('/client-documents', [ImmigrationController::class, 'clientDocuments'])->name('client-documents');
 
             // REPORTS
             Route::get('/reports', [ImmigrationController::class, 'reports'])->name('reports');

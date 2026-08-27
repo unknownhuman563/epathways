@@ -106,6 +106,9 @@ class CaseProfileController extends Controller
             'agreements' => $this->loadAgreements($lead),
             'notes' => $this->loadNotes($lead),
             'activity' => $this->loadActivity($lead),
+            // Task Board tasks tied to this case — surfaced on the Overview so
+            // work raised on the board is visible from the case itself.
+            'tasks' => $this->loadTasks($lead),
             // Build 12 phase 3 — case-assist findings. The last STORED result
             // (never evaluated on page load), grouped for the AI Health tab.
             'findings' => $this->loadFindings($lead),
@@ -525,9 +528,17 @@ class CaseProfileController extends Controller
         $this->guardCase($lead);
         abort_unless($dependent->lead_id === $lead->id, 404);
 
+        // The case profile renders in both the immigration manager portal and the
+        // adviser portal. This endpoint is always the manager route, so the caller
+        // tells us which portal it is in — otherwise an adviser opening a case would
+        // be redirected into the manager portal and their sidebar would flip.
+        $profileUrl = fn ($id) => request('portal') === 'immigration-adviser'
+            ? "/portal/immigration-adviser/cases/{$id}"
+            : "/portal/immigration/cases/{$id}/profile";
+
         // Already tied to a case — just go there.
         if ($dependent->linked_lead_id) {
-            return redirect("/portal/immigration/cases/{$dependent->linked_lead_id}/profile");
+            return redirect($profileUrl($dependent->linked_lead_id));
         }
 
         $case = Lead::create([
@@ -559,7 +570,7 @@ class CaseProfileController extends Controller
         // Tie the dependant to its new case so the link is permanent.
         $dependent->update(['linked_lead_id' => $case->id]);
 
-        return redirect("/portal/immigration/cases/{$case->id}/profile")
+        return redirect($profileUrl($case->id))
             ->with('success', "Case opened for {$dependent->fullName()}.");
     }
 
@@ -1119,9 +1130,9 @@ class CaseProfileController extends Controller
         $data = $request->validate([
             'parent_id' => ['nullable', 'integer'],
             'anchor_type' => ['required', \Illuminate\Validation\Rule::in(\App\Models\CaseThread::ANCHOR_TYPES)],
-            // document → an id on this case; step/gate/stage → a key.
-            'anchor_id' => ['nullable', 'integer', 'required_if:anchor_type,document'],
-            'anchor_key' => ['nullable', 'string', 'max:60', 'required_if:anchor_type,step', 'required_if:anchor_type,gate', 'required_if:anchor_type,stage'],
+            // document / reviewer_note → an id on this case; step/gate/stage/checklist → a key.
+            'anchor_id' => ['nullable', 'integer', 'required_if:anchor_type,document', 'required_if:anchor_type,reviewer_note'],
+            'anchor_key' => ['nullable', 'string', 'max:60', 'required_if:anchor_type,step', 'required_if:anchor_type,gate', 'required_if:anchor_type,stage', 'required_if:anchor_type,checklist'],
             'anchor_attempt' => ['nullable', 'integer', 'min:1'],
             'body' => ['required', 'string', 'max:2000'],
             'addressed_to_id' => ['nullable', 'integer', 'exists:users,id'],
@@ -1140,9 +1151,9 @@ class CaseProfileController extends Controller
             $data['anchor_attempt'] = $parent->anchor_attempt;
         }
 
-        // A document anchor must reference a document that belongs to this case —
-        // row-level, not just "some document id" (§13).
-        if ($data['anchor_type'] === \App\Models\CaseThread::ANCHOR_DOCUMENT) {
+        // A document (or reviewer-note) anchor must reference a document that
+        // belongs to this case — row-level, not just "some document id" (§13).
+        if (in_array($data['anchor_type'], [\App\Models\CaseThread::ANCHOR_DOCUMENT, \App\Models\CaseThread::ANCHOR_REVIEWER_NOTE], true)) {
             abort_unless(
                 LeadDocument::where('id', $data['anchor_id'])->where('lead_id', $lead->id)->exists(),
                 422,
@@ -1154,8 +1165,8 @@ class CaseProfileController extends Controller
             'lead_id' => $lead->id,
             'parent_id' => $parent?->id,
             'anchor_type' => $data['anchor_type'],
-            'anchor_id' => $data['anchor_type'] === \App\Models\CaseThread::ANCHOR_DOCUMENT ? $data['anchor_id'] : null,
-            'anchor_key' => in_array($data['anchor_type'], ['step', 'gate', 'stage'], true) ? ($data['anchor_key'] ?? null) : null,
+            'anchor_id' => in_array($data['anchor_type'], [\App\Models\CaseThread::ANCHOR_DOCUMENT, \App\Models\CaseThread::ANCHOR_REVIEWER_NOTE], true) ? $data['anchor_id'] : null,
+            'anchor_key' => in_array($data['anchor_type'], ['step', 'gate', 'stage', 'checklist'], true) ? ($data['anchor_key'] ?? null) : null,
             'anchor_attempt' => $data['anchor_type'] === \App\Models\CaseThread::ANCHOR_STEP ? ($data['anchor_attempt'] ?? null) : null,
             'author_id' => $user->id,
             'addressed_to_id' => $data['addressed_to_id'] ?? null,
@@ -1695,9 +1706,27 @@ class CaseProfileController extends Controller
         $default = $signers->first(fn ($s) => strtolower($s['name']) === $defaultName)['id']
             ?? ($signers[0]['id'] ?? null);
 
+        // Milestone dates for the Overview: when the pack was emailed, when the
+        // Written Agreement was signed, and when the invoice was settled (the
+        // first approved proof of payment).
+        $signedAt = LeadDocument::where('lead_id', $lead->id)
+            ->where('source_variant', 'engagement:written_agreement')
+            ->whereNotNull('client_signed_at')
+            ->max('client_signed_at');
+
+        $paidProof = LeadDocument::where('lead_id', $lead->id)
+            ->where('source_variant', 'proof_of_payment')
+            ->where('status', LeadDocument::STATUS_APPROVED)
+            ->orderByDesc('reviewed_at')
+            ->first();
+
         return [
             'sent' => (bool) $lead->engagement_sent_at,
             'sent_at' => optional($lead->engagement_sent_at)?->toIso8601String(),
+            'signed' => (bool) $signedAt,
+            'signed_at' => $signedAt ? \Illuminate\Support\Carbon::parse($signedAt)->toIso8601String() : null,
+            'invoice_paid' => (bool) $paidProof,
+            'invoice_paid_at' => optional($paidProof?->reviewed_at)?->toIso8601String(),
             'has_email' => ! empty($lead->email),
             'documents' => \App\Services\Immigration\EngagementDocumentGenerator::catalogue(),
             'signers' => $signers,
@@ -1708,7 +1737,9 @@ class CaseProfileController extends Controller
     private function loadDocumentRequests(Lead $lead): array
     {
         return $lead->documentRequests()
-            ->with(['requester:id,name', 'latestDocument:id,request_id,status,original_name'])
+            // latestDocument is a latestOfMany (self-join), so its constrained
+            // columns must be table-qualified or `request_id` is ambiguous.
+            ->with(['requester:id,name', 'latestDocument:lead_documents.id,lead_documents.request_id,lead_documents.status,lead_documents.original_name'])
             ->orderByDesc('created_at')
             ->get()
             ->map(fn (\App\Models\LeadDocumentRequest $r) => [
@@ -1807,12 +1838,16 @@ class CaseProfileController extends Controller
 
     private function loadNotes(Lead $lead): array
     {
-        return LeadNote::where('lead_id', $lead->id)
-            ->orderByDesc('pinned')
-            ->orderByDesc('created_at')
-            ->limit(50)
-            ->get()
-            ->map(fn (LeadNote $n) => [
+        $map = function (LeadNote $n) use ($lead) {
+            $attachments = collect($n->attachments ?? [])->values()->map(fn ($a, $i) => [
+                'name' => $a['original_name'] ?? 'attachment',
+                'size' => $a['size'] ?? null,
+                'is_image' => str_starts_with((string) ($a['mime'] ?? ''), 'image/'),
+                'view_url' => "/admin/leads/{$lead->id}/notes/{$n->id}/attachments/{$i}?inline=1",
+                'download_url' => "/admin/leads/{$lead->id}/notes/{$n->id}/attachments/{$i}",
+            ])->all();
+
+            return [
                 'id' => $n->id,
                 'body' => $n->body,
                 'kind' => $n->kind ?: 'general',
@@ -1820,8 +1855,69 @@ class CaseProfileController extends Controller
                 'author' => $n->author_name ?? null,
                 'author_role' => $n->author_role ?? null,
                 'created_at' => $n->created_at,
+                'attachments' => $attachments,
+            ];
+        };
+
+        return LeadNote::where('lead_id', $lead->id)
+            ->whereNull('parent_id')
+            ->with(['replies'])
+            ->orderByDesc('pinned')
+            ->orderByDesc('created_at')
+            ->limit(50)
+            ->get()
+            ->map(function (LeadNote $n) use ($map) {
+                $row = $map($n);
+                $row['replies'] = $n->replies->map($map)->all();
+                return $row;
+            })
+            ->all();
+    }
+
+    /**
+     * Task Board tasks tied to this case — either directly (lead_id) or as an
+     * additional linked lead. Open tasks first (by due date), then recently
+     * completed. Feeds the Overview's Tasks card so board work is visible from
+     * the case.
+     *
+     * @return array<string, mixed>
+     */
+    private function loadTasks(Lead $lead): array
+    {
+        $tasks = \App\Models\LeadTask::query()
+            ->with(['assignee:id,name,avatar_path', 'creator:id,name'])
+            ->where(function ($q) use ($lead) {
+                $q->where('lead_id', $lead->id)
+                    ->orWhereJsonContains('additional_lead_ids', $lead->id);
+            })
+            ->orderBy('completed')
+            ->orderByRaw('due_at is null, due_at asc')
+            ->orderByDesc('created_at')
+            ->limit(50)
+            ->get()
+            ->map(fn (\App\Models\LeadTask $t) => [
+                'id' => $t->id,
+                'title' => $t->title,
+                'description' => $t->description,
+                'priority' => $t->priority,
+                'status' => $t->status,
+                'due_at' => optional($t->due_at)?->toIso8601String(),
+                'created_at' => optional($t->created_at)?->toIso8601String(),
+                'completed' => (bool) $t->completed,
+                'overdue' => ! $t->completed && $t->due_at && $t->due_at->isPast(),
+                'department' => $t->department,
+                'assignee' => $t->assignee ? [
+                    'id' => $t->assignee->id,
+                    'name' => $t->assignee->name,
+                    'avatar_url' => $t->assignee->avatar_url,
+                ] : null,
             ])
             ->all();
+
+        return [
+            'items' => $tasks,
+            'open' => count(array_filter($tasks, fn ($t) => ! $t['completed'])),
+        ];
     }
 
     private function loadActivity(Lead $lead): array

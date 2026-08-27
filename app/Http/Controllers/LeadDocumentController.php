@@ -151,9 +151,18 @@ class LeadDocumentController extends Controller
                     'requested_at' => now(),
                 ]);
 
-                // Email/SMS the lead a link to upload it. Prefer the
-                // 'doc_request' template; fall back to the legacy Mailable.
-                if (! empty($lead->email)) {
+                // The email-automation "Document requested" message is the single
+                // editable template for this — fire it per document so it can name
+                // the specific one ({{document_name}}). Returns true when it sent
+                // to the client, in which case we DON'T also send the built-in
+                // email below (no double-send).
+                $firedClient = app(\App\Services\EmailAutomationService::class)
+                    ->fire('immigration.document.requested', $lead, ['document_name' => $docRequest->label]);
+
+                // Fallback: no client automation message is configured, so send
+                // the built-in request email. Prefer the 'doc_request' template;
+                // fall back to the legacy Mailable.
+                if (! $firedClient && ! empty($lead->email)) {
                     try {
                         $res = app(\App\Services\CommunicationService::class)
                             ->sendTemplated('doc_request', $lead, ['document_name' => $docRequest->label]);
@@ -246,6 +255,9 @@ class LeadDocumentController extends Controller
                 LeadDocument::STATUS_REJECTED,
             ])],
             'note' => 'nullable|string|max:500',
+            // When verifying a proof of payment from a specific invoice row, the
+            // id of that invoice document — so only that invoice is marked paid.
+            'invoice_id' => 'nullable|integer',
         ]);
 
         $doc->update([
@@ -262,6 +274,35 @@ class LeadDocumentController extends Controller
             \App\Jobs\PushApprovedDocumentToDrive::dispatch($doc->id);
         }
 
+        // Confirming a proof of payment settles the invoice — move the case to
+        // "Invoice Paid" (only from a pre-payment stage, so it never downgrades).
+        if ($doc->source_variant === 'proof_of_payment'
+            && $validated['status'] === LeadDocument::STATUS_APPROVED
+            && $doc->lead) {
+            $doc->lead->advanceImmigrationStage(
+                'Invoice Paid',
+                ['For Assessment', 'Endorsed', 'Agreement Sent', 'Agreement Signed', 'For Agreement & Invoice', 'Request for Information'],
+                Auth::id(),
+            );
+
+            // Email automation — payment verified (no-op unless configured).
+            app(\App\Services\EmailAutomationService::class)->fire('immigration.invoice.paid', $doc->lead, []);
+
+            // Mark the specific invoice this proof settles as paid, so only that
+            // invoice row flips to "Paid" (not every invoice on the case). The
+            // invoice's reviewed_at doubles as the paid date shown on the badge.
+            if (! empty($validated['invoice_id'])) {
+                LeadDocument::where('lead_id', $leadId)
+                    ->where('id', $validated['invoice_id'])
+                    ->whereIn('status', [LeadDocument::STATUS_STAFF_SHARED, LeadDocument::STATUS_SUBMITTED, LeadDocument::STATUS_UNDER_REVIEW])
+                    ->update([
+                        'status' => LeadDocument::STATUS_APPROVED,
+                        'reviewed_by' => Auth::id(),
+                        'reviewed_at' => now(),
+                    ]);
+            }
+        }
+
         // Tell the lead their document was approved / rejected. Prefer the
         // doc_approved / doc_rejected templates; fall back to the Mailable.
         $lead = $doc->lead;
@@ -271,6 +312,16 @@ class LeadDocumentController extends Controller
         $lead?->recordStaffActivity(
             $validated['status'].' '.($doc->original_name ?: 'file')
         );
+
+        // Email automation — document approved / needs attention (a proof of
+        // payment is handled by immigration.invoice.paid above, so exclude it).
+        if ($lead && $doc->source_variant !== 'proof_of_payment') {
+            if ($validated['status'] === LeadDocument::STATUS_APPROVED) {
+                app(\App\Services\EmailAutomationService::class)->fire('immigration.document.approved', $lead, ['document_name' => $doc->original_name]);
+            } elseif ($validated['status'] === LeadDocument::STATUS_REJECTED) {
+                app(\App\Services\EmailAutomationService::class)->fire('immigration.document.rejected', $lead, ['document_name' => $doc->original_name, 'reason' => $validated['note'] ?? '']);
+            }
+        }
         if (in_array($validated['status'], [LeadDocument::STATUS_APPROVED, LeadDocument::STATUS_REJECTED], true)
             && $lead && ! empty($lead->email)) {
             try {
@@ -322,10 +373,86 @@ class LeadDocumentController extends Controller
     }
 
     /**
+     * Send an existing case document to the client — flips it to StaffShared so
+     * it surfaces on the client's portal + /track. Used from the Documents tab's
+     * "Send to client" action for staff-created / generated documents.
+     */
+    public function sendToClient(Request $request, $leadId, $docId)
+    {
+        $doc = LeadDocument::where('lead_id', $leadId)->findOrFail($docId);
+        abort_unless($doc->file_path, 422, 'This document has no file to send.');
+
+        $doc->update([
+            'status' => LeadDocument::STATUS_STAFF_SHARED,
+            'reviewed_by' => Auth::id(),
+            'reviewed_at' => now(),
+        ]);
+
+        $doc->lead?->recordStaffActivity('Sent to client: '.($doc->original_name ?: 'document'));
+
+        return back()->with('success', 'Document sent to the client.');
+    }
+
+    /**
      * Staff uploads a file (or files) for the lead against a specific
      * checklist item — used by the agreements panel, or when staff helps
      * the lead by uploading on their behalf.
      */
+    /**
+     * Add a per-lead ad-hoc document row to this lead's Documents tab. Scoped
+     * to the one lead (stored in leads.custom_documents) — no other lead sees
+     * it. Uploads attach to it via its generated `custom.*` checklist_key,
+     * reusing the normal upload/status/tracker flow.
+     */
+    public function addCustomDocument(Request $request, $leadId)
+    {
+        $lead = Lead::findOrFail($leadId);
+
+        $data = $request->validate([
+            'name' => 'required|string|max:120',
+            // Which checklist folder/section the document drops into. Free-form
+            // (the frontend offers the standard folders) — defaults to the
+            // per-lead "Additional Documents" bucket when omitted.
+            'section' => 'nullable|string|max:120',
+        ]);
+
+        $items = is_array($lead->custom_documents) ? $lead->custom_documents : [];
+        $items[] = [
+            'key' => 'custom.'.\Illuminate\Support\Str::random(12),
+            'name' => trim($data['name']),
+            'section' => trim((string) ($data['section'] ?? '')) ?: 'Additional Documents',
+            'created_at' => now()->toIso8601String(),
+            'created_by' => Auth::id(),
+        ];
+        $lead->custom_documents = $items;
+        $lead->save();
+
+        return back()->with('success', 'Document added to this lead.');
+    }
+
+    /**
+     * Remove a per-lead custom document row. Any files already uploaded against
+     * it are kept — their checklist_key is nulled so they surface as orphans
+     * rather than vanishing with the item definition.
+     */
+    public function removeCustomDocument(Request $request, $leadId, $key)
+    {
+        $lead = Lead::findOrFail($leadId);
+
+        $items = is_array($lead->custom_documents) ? $lead->custom_documents : [];
+        $lead->custom_documents = array_values(array_filter(
+            $items,
+            fn ($i) => ($i['key'] ?? null) !== $key
+        )) ?: null;
+        $lead->save();
+
+        LeadDocument::where('lead_id', $lead->id)
+            ->where('checklist_key', $key)
+            ->update(['checklist_key' => null]);
+
+        return back()->with('success', 'Document removed.');
+    }
+
     public function staffChecklistUpload(Request $request, $leadId, $key)
     {
         $lead = Lead::findOrFail($leadId);
@@ -656,6 +783,7 @@ class LeadDocumentController extends Controller
                     $token = $lead->ensureEngagementSigningToken();
                     $this->notifyEngagement($lead, $token, $typesToGenerate, $generatedDocIds);
                     $lead->forceFill(['engagement_sent_at' => now()])->save();
+                    app(\App\Services\EmailAutomationService::class)->fire('immigration.engagement.sent', $lead, []);
                     $message .= " Client notified at {$lead->email}.";
                 }
             } elseif (empty($alreadySigned)) {
@@ -730,6 +858,8 @@ class LeadDocumentController extends Controller
                     'in_agreement' => (bool) $d->in_agreement,
                     'fee_override' => $d->fee_override !== null ? (float) $d->fee_override : null,
                     'default_fee' => $vm?->professionalFeeFor($tier, $location),
+                    'disbursement_override' => $d->disbursement_override !== null ? (float) $d->disbursement_override : null,
+                    'default_disbursement' => $vm?->inzFeeFor($location),
                 ];
             })
             ->values();
@@ -741,6 +871,8 @@ class LeadDocumentController extends Controller
                 'visa' => $lead->inz_visa_type,
                 'fee_override' => $lead->principal_fee_override !== null ? (float) $lead->principal_fee_override : null,
                 'default_fee' => $principalVisa?->professionalFeeFor($tier, $location),
+                'disbursement_override' => $lead->principal_disbursement_override !== null ? (float) $lead->principal_disbursement_override : null,
+                'default_disbursement' => $principalVisa?->inzFeeFor($location),
             ],
             'family' => $family,
         ]);
@@ -769,30 +901,39 @@ class LeadDocumentController extends Controller
         $data = $request->validate([
             'type' => ['required', \Illuminate\Validation\Rule::in(['principal', 'dependent'])],
             'dependent_id' => ['nullable', 'integer'],
+            // Which per-applicant amount is being set: the professional fee, or
+            // the INZ disbursement. Defaults to the professional fee.
+            'column' => ['nullable', \Illuminate\Validation\Rule::in(['fee', 'disbursement'])],
             'fee' => ['nullable', 'numeric', 'min:0', 'max:9999999'],
         ]);
+
+        $isDisb = ($data['column'] ?? 'fee') === 'disbursement';
+        $leadCol = $isDisb ? 'principal_disbursement_override' : 'principal_fee_override';
+        $depCol = $isDisb ? 'disbursement_override' : 'fee_override';
+        $label = $isDisb ? 'INZ disbursement' : 'professional fee';
 
         $newFee = ($data['fee'] === null || $data['fee'] === '') ? null : (float) $data['fee'];
 
         if ($data['type'] === 'principal') {
             $who = trim("{$lead->first_name} {$lead->last_name}") ?: ('Lead #'.$lead->id);
-            $old = $lead->principal_fee_override !== null ? (float) $lead->principal_fee_override : null;
-            $lead->forceFill(['principal_fee_override' => $newFee])->save();
+            $old = $lead->{$leadCol} !== null ? (float) $lead->{$leadCol} : null;
+            $lead->forceFill([$leadCol => $newFee])->save();
         } else {
             $dependent = \App\Models\CaseDependent::where('id', $data['dependent_id'])->where('lead_id', $lead->id)->first();
             abort_unless($dependent, 422, 'That family member is not on this case.');
             $who = trim("{$dependent->first_name} {$dependent->last_name}") ?: $dependent->fullName();
-            $old = $dependent->fee_override !== null ? (float) $dependent->fee_override : null;
-            $dependent->update(['fee_override' => $newFee]);
+            $old = $dependent->{$depCol} !== null ? (float) $dependent->{$depCol} : null;
+            $dependent->update([$depCol => $newFee]);
         }
 
         // Audit: one clear line per change ("set / cleared X's fee to $Y").
         \App\Models\ActivityLog::record('engagement.applicant_fee_set', [
             'description' => sprintf(
-                '%s %s %s\'s professional fee%s',
+                '%s %s %s\'s %s%s',
                 auth()->user()?->name ?? 'Staff',
                 $newFee === null ? 'cleared' : 'set',
                 $who,
+                $label,
                 $newFee === null
                     ? ($old !== null ? sprintf(' (was $%s) back to the visa fee', number_format($old, 2)) : ' to the visa fee')
                     : sprintf(' to $%s%s', number_format($newFee, 2), $old !== null ? sprintf(' (was $%s)', number_format($old, 2)) : ''),
@@ -801,12 +942,13 @@ class LeadDocumentController extends Controller
                 'subject_type' => 'Lead',
                 'subject_id' => $lead->id,
                 'applicant' => $who,
+                'column' => $isDisb ? 'disbursement' : 'fee',
                 'old_fee' => $old,
                 'new_fee' => $newFee,
             ],
         ]);
 
-        return response()->json(['ok' => true, 'fee_override' => $newFee]);
+        return response()->json(['ok' => true, 'column' => $isDisb ? 'disbursement' : 'fee', 'value' => $newFee]);
     }
 
     /**
@@ -835,6 +977,7 @@ class LeadDocumentController extends Controller
         $token = $lead->ensureEngagementSigningToken();
         $this->notifyEngagement($lead, $token, array_keys($typeMap), $typeMap);
         $lead->forceFill(['engagement_sent_at' => now()])->save();
+        app(\App\Services\EmailAutomationService::class)->fire('immigration.engagement.sent', $lead, []);
 
         return back()->with('success', "Engagement sent to {$lead->email}.");
     }
@@ -1042,8 +1185,15 @@ class LeadDocumentController extends Controller
         $lead = Lead::findOrFail($leadId);
 
         try {
+            // Delete the whole engagement pack: the 4 pack documents
+            // (engagement:*) AND the invoice generated with them (source_variant
+            // "invoice"), which is the pack's 5th document. Client-uploaded
+            // proofs of payment and older standalone tax invoices are left alone.
             $docs = LeadDocument::where('lead_id', $lead->id)
-                ->where('source_variant', 'like', 'engagement:%')
+                ->where(function ($q) {
+                    $q->where('source_variant', 'like', 'engagement:%')
+                        ->orWhere('source_variant', 'invoice');
+                })
                 ->get();
 
             foreach ($docs as $doc) {
@@ -1243,8 +1393,50 @@ class LeadDocumentController extends Controller
             // Uniquify + reindex so the JSON stays clean regardless of
             // client-side ordering / duplicates.
             $ids = array_values(array_unique(array_map('intval', $validated['program_ids'] ?? [])));
+
+            // Legacy safety: a lead whose active proposal predates versioning
+            // has no history row yet. Snapshot that existing shortlist BEFORE
+            // overwriting so it isn't lost the first time it's touched.
+            $existing = is_array($lead->proposed_program_ids)
+                ? array_values(array_map('intval', $lead->proposed_program_ids))
+                : [];
+            if (! empty($existing) && ! $lead->proposals()->exists()) {
+                \App\Models\LeadProposal::create([
+                    'lead_id' => $lead->id,
+                    'program_ids' => $existing,
+                    'created_by' => null,
+                ]);
+            }
+
+            // A genuinely new/different proposal (not a no-op re-save of the
+            // same set) supersedes the current one.
+            $latest = $lead->proposals()->first();
+            $latestIds = $latest ? array_values(array_map('intval', $latest->program_ids ?? [])) : null;
+            $isNewVersion = ! empty($ids) && $latestIds !== $ids;
+
+            if ($isNewVersion) {
+                // Freeze the current selection onto the version being
+                // superseded, so history keeps "what they'd chosen", then
+                // start the new proposal with NOTHING selected by default.
+                if ($latest && $lead->preferred_program_id) {
+                    $latest->update(['selected_program_id' => (int) $lead->preferred_program_id]);
+                }
+                $lead->preferred_program_id = null;
+                $lead->preferred_program_chosen_at = null;
+            }
+
             $lead->proposed_program_ids = $ids ?: null;
             $lead->save();
+
+            // Snapshot the new version. Clearing (empty list) only resets the
+            // active shortlist — it never adds a history row.
+            if ($isNewVersion) {
+                \App\Models\LeadProposal::create([
+                    'lead_id' => $lead->id,
+                    'program_ids' => $ids,
+                    'created_by' => optional($request->user())->id,
+                ]);
+            }
 
             $count = count($ids);
             $msg = $count === 0
@@ -1340,10 +1532,14 @@ class LeadDocumentController extends Controller
     }
 
     /**
-     * Build the {{program_1}}..{{program_3}} context for the Study Proposal
-     * template from the lead's proposed_program_ids. Each is a plain-text
-     * "Title — Level · Fee" line; missing slots are empty strings so the
-     * template's fixed three Option lines still render cleanly.
+     * Build the Study Proposal template context from the lead's
+     * proposed_program_ids.
+     *
+     *  - {{program_options}} : the whole "Recommended Programs" block as HTML —
+     *    ONLY the selected programs, one "Option N:" line each (1..5). This is
+     *    the flexible token: 1 program → 1 line, 3 → 3 lines, no blank slots.
+     *  - {{program_1}}..{{program_5}} : the same values as individual plain-text
+     *    lines, kept for older templates. Unselected slots are empty strings.
      */
     private function proposalProgramVars(Lead $lead): array
     {
@@ -1353,11 +1549,15 @@ class LeadDocumentController extends Controller
             ->get(['id', 'title', 'level', 'price_text'])
             ->keyBy('id');
 
-        $vars = ['program_1' => '', 'program_2' => '', 'program_3' => ''];
+        $vars = [
+            'program_1' => '', 'program_2' => '', 'program_3' => '',
+            'program_4' => '', 'program_5' => '',
+        ];
+        $optionsHtml = '';
 
         $slot = 1;
         foreach ($ids as $pid) {
-            if ($slot > 3) {
+            if ($slot > 5) {
                 break;
             }
             $p = $lines->get($pid);
@@ -1370,9 +1570,14 @@ class LeadDocumentController extends Controller
                 $p->level ? "Level {$p->level}" : null,
                 $p->price_text ?: null,
             ]);
-            $vars['program_'.$slot] = implode(' · ', $parts);
+            $text = implode(' · ', $parts);
+            $vars['program_'.$slot] = $text;
+            // Escape the dynamic text; the surrounding markup is ours.
+            $optionsHtml .= '<p style="margin:4px 0;"><strong>Option '.$slot.':</strong> '.e($text).'</p>';
             $slot++;
         }
+
+        $vars['program_options'] = $optionsHtml;
 
         return $vars;
     }

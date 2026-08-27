@@ -118,10 +118,14 @@ class LeadTrackingController extends Controller
                 ? $this->buildImmigrationJourney($lead)
                 : $this->buildTimeline($lead),
             // Immigration cases get the visa-type-specific checklist.
-            // General leads / students fall back to the shared documents
-            // checklist so their tracker actually shows "What we still need"
-            // instead of an empty state.
-            'visa' => $this->resolveVisa($lead) ?? $this->resolveGeneralChecklist($lead),
+            // General leads / students ALWAYS get the general Document Checklist
+            // (the 16 required docs), regardless of any inz_visa_type they may
+            // carry — the registration form's "Visa applying for" is just an
+            // interest field for staff and must not connect the tracker to an
+            // immigration visa's checklist. Only a real immigration case
+            // (is_immigration_case) resolves to the visa-specific list.
+            'visa' => ($lead->is_immigration_case ? $this->resolveVisa($lead) : null)
+                ?? $this->resolveGeneralChecklist($lead),
             // Staff-suggested program shortlist (from the Proposals tab on
             // the internal Proposal & Agreements page).
             'proposal' => $this->publicProposal($lead),
@@ -135,40 +139,59 @@ class LeadTrackingController extends Controller
      */
     private function publicProposal(Lead $lead): ?array
     {
-        $ids = is_array($lead->proposed_program_ids) ? array_values($lead->proposed_program_ids) : [];
+        $ids = is_array($lead->proposed_program_ids) ? array_values(array_map('intval', $lead->proposed_program_ids)) : [];
         if (empty($ids)) {
             return null;
         }
 
-        $programs = \App\Models\Program::whereIn('id', $ids)
+        // Previous proposal versions (all but the newest, which is the active
+        // one shown above). Shown read-only on the tracker as earlier options.
+        $previousVersions = $lead->proposals->slice(1)->values();
+
+        // Fetch every program referenced across the active + previous versions
+        // in one query.
+        $allIds = collect($ids);
+        foreach ($previousVersions as $v) {
+            $allIds = $allIds->merge(is_array($v->program_ids) ? $v->program_ids : []);
+        }
+        $allIds = $allIds->map(fn ($x) => (int) $x)->unique()->values();
+
+        $programs = \App\Models\Program::whereIn('id', $allIds)
             ->get(['id', 'title', 'slug', 'level', 'category', 'industry', 'location', 'price_text', 'duration_months', 'intake_months', 'image'])
             ->keyBy('id');
 
-        // Preserve staff-picked ordering exactly (their order = their
-        // recommendation). Drop any IDs whose Program row has vanished.
-        $ordered = collect($ids)
-            ->map(fn ($id) => $programs->get($id))
+        $mapOne = fn ($p) => [
+            'id' => $p->id,
+            'title' => $p->title,
+            'slug' => $p->slug,
+            'level' => $p->level,
+            'category' => $p->category,
+            'industry' => $p->industry,
+            'location' => $p->location,
+            'price_text' => $p->price_text,
+            'duration_months' => $p->duration_months,
+            'intake_months' => $p->intake_months,
+            'image_url' => $p->image ? \Illuminate\Support\Facades\Storage::disk('public')->url($p->image) : null,
+            'public_url' => '/program-details/'.($p->slug ?: $p->id),
+        ];
+        // Preserve staff-picked ordering exactly. Drop ids whose Program vanished.
+        $mapIds = fn ($idList) => collect($idList)
+            ->map(fn ($id) => $programs->get((int) $id))
             ->filter()
-            ->map(fn ($p) => [
-                'id' => $p->id,
-                'title' => $p->title,
-                'slug' => $p->slug,
-                'level' => $p->level,
-                'category' => $p->category,
-                'industry' => $p->industry,
-                'location' => $p->location,
-                'price_text' => $p->price_text,
-                'duration_months' => $p->duration_months,
-                'intake_months' => $p->intake_months,
-                'image_url' => $p->image ? \Illuminate\Support\Facades\Storage::disk('public')->url($p->image) : null,
-                'public_url' => '/program-details/'.($p->slug ?: $p->id),
-            ])
+            ->map($mapOne)
             ->values();
 
         return [
-            'programs' => $ordered,
+            'programs' => $mapIds($ids),
             'preferred_program_id' => $lead->preferred_program_id,
             'chosen_at' => optional($lead->preferred_program_chosen_at)->toIso8601String(),
+            // Earlier proposals, newest first — read-only history for the client.
+            'previous' => $previousVersions->map(fn ($v) => [
+                'id' => $v->id,
+                'programs' => $mapIds($v->program_ids ?? []),
+                'selected_program_id' => $v->selected_program_id,
+                'created_at' => optional($v->created_at)->toIso8601String(),
+            ])->values(),
         ];
     }
 
@@ -310,6 +333,7 @@ class LeadTrackingController extends Controller
         ])->validate();
         $lastDoc = null;
         $firstPath = null;
+        $checklistSvc = app(\App\Services\Immigration\CaseChecklistService::class);
 
         foreach ($files as $file) {
             // Private disk: client uploads (passports, bank statements, academic
@@ -318,10 +342,17 @@ class LeadTrackingController extends Controller
             $path = $file->store("lead-documents/{$lead->id}", 'local');
             $firstPath ??= $path;
 
+            // Rename to the visa checklist's convention when the matched item
+            // defines a file_code — the display name the client and staff see
+            // (the on-disk path stays random; downloads use original_name).
+            $displayName = ($checklistKey
+                ? $checklistSvc->uploadFileNameFor($lead, $checklistKey, $file->getClientOriginalName())
+                : null) ?: $file->getClientOriginalName();
+
             $lastDoc = LeadDocument::create([
                 'lead_id' => $lead->id,
                 'checklist_key' => $checklistKey,
-                'original_name' => $file->getClientOriginalName(),
+                'original_name' => $displayName,
                 'file_path' => $path,
                 'mime' => $file->getMimeType(),
                 'size' => $file->getSize(),
@@ -401,8 +432,15 @@ class LeadTrackingController extends Controller
             $file = $request->file('file');
             $path = $file->store("lead-documents/{$lead->id}", 'local');
 
+            // Rename to the visa checklist's convention (file_code) for the
+            // matched item; fall back to the client's own filename.
+            $key = $request->input('checklist_key', $doc->checklist_key);
+            $displayName = ($key
+                ? app(\App\Services\Immigration\CaseChecklistService::class)->uploadFileNameFor($lead, $key, $file->getClientOriginalName())
+                : null) ?: $file->getClientOriginalName();
+
             $doc->fill([
-                'original_name' => $file->getClientOriginalName(),
+                'original_name' => $displayName,
                 'file_path' => $path,
                 'mime' => $file->getMimeType(),
                 'size' => $file->getSize(),
@@ -1347,7 +1385,6 @@ class LeadTrackingController extends Controller
      */
     private const TRACKER_SECTIONS = [
         'Personal Documents',
-        'Information Form',
         'Offer and Academic Documents',
         'Agreements',
     ];
@@ -1398,6 +1435,40 @@ class LeadTrackingController extends Controller
             }
         }
 
+        // Per-lead ad-hoc documents (leads.custom_documents) — this lead only.
+        // Rendered as their own "Additional Documents" section so the client
+        // can upload them from the tracker like any other requirement.
+        $custom = is_array($lead->custom_documents) ? $lead->custom_documents : [];
+        $customSections = [];
+        foreach ($custom as $c) {
+            $key = $c['key'] ?? null;
+            if (! $key || in_array($key, $hidden, true)) {
+                continue;
+            }
+            $docs = $docsByKey->get($key) ?? collect();
+            $status = 'missing';
+            if ($docs->contains(fn ($d) => $d->status === LeadDocument::STATUS_APPROVED)) {
+                $status = 'approved';
+            } elseif ($docs->contains(fn ($d) => in_array($d->status, [LeadDocument::STATUS_SUBMITTED, LeadDocument::STATUS_UNDER_REVIEW]))) {
+                $status = 'submitted';
+            } elseif ($docs->contains(fn ($d) => $d->status === LeadDocument::STATUS_REJECTED)) {
+                $status = 'rejected';
+            }
+            $sec = trim((string) ($c['section'] ?? '')) ?: 'Additional Documents';
+            $customSections[$sec] = true;
+            $decorated[] = [
+                'key' => $key,
+                'label' => $sec.' · '.($c['name'] ?? $key),
+                'hint' => null,
+                'required' => true,
+                'status' => $status,
+                'count' => $docs->count(),
+            ];
+        }
+        // Any custom folder that isn't one of the standard four gets appended
+        // to the section order so it renders after them, in order.
+        $extraSections = array_values(array_diff(array_keys($customSections), self::TRACKER_SECTIONS));
+
         $requiredCount = collect($decorated)->where('required', true)->count();
         $submittedCount = collect($decorated)
             ->where('required', true)
@@ -1409,14 +1480,29 @@ class LeadTrackingController extends Controller
             ->count();
 
         return [
-            'name' => 'Document Checklist',
+            // Label the tracker with the visa the applicant selected (if any),
+            // e.g. "Tourist Visa" — shown in the header pill, subtitle and
+            // "Type of Visa" card. The requirements below stay the general
+            // Document Checklist either way; this is a display label only, not
+            // a link to the immigration visa's own checklist. Falls back to
+            // "Document Checklist" when they never picked one.
+            'name' => $lead->inz_visa_type ?: 'Document Checklist',
             'code' => null,
             'short_description' => null,
-            'checklist' => array_merge($this->universalTopItems($lead, $docsByKey), $decorated),
+            // Exactly the config checklist — no universal SV-form injection here.
+            // The general tracker must show the SAME items as the staff lead-
+            // profile Documents tab (which is config-only). The universal item
+            // duplicated the config's "SVF — Student Visa Form" (info.svf) with
+            // a second "Visa Information Form" (svf) row, so the two surfaces
+            // diverged. Immigration cases keep their universal items (resolveVisa).
+            'checklist' => $decorated,
             // The order the client should work through the requirement sections
             // on their tracker. Tracker-only — the staff Documents tab is
-            // unaffected. Same list that scopes which sections show above.
-            'section_order' => self::TRACKER_SECTIONS,
+            // unaffected. Same list that scopes which sections show above; the
+            // per-lead "Additional Documents" section is appended when present.
+            'section_order' => empty($extraSections)
+                ? self::TRACKER_SECTIONS
+                : array_merge(self::TRACKER_SECTIONS, $extraSections),
             'totals' => [
                 'required' => $requiredCount,
                 'submitted' => $submittedCount,

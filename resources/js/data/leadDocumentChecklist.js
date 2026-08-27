@@ -7,11 +7,14 @@
 // replaced with the lead's first name, surname, and last-name (legacy)
 // at render time so staff have a copy-paste-ready filename hint.
 
+// Review statuses staff set per document. The blank/default option already
+// reads "Submitted" (when a file exists) or "Pending" (when none) — so the
+// full set surfaced to staff is: Submitted · Under Review · Accepted ·
+// Required Attention.
 export const STATUSES = [
-    { key: "not_applicable", label: "Not Applicable", chip: "bg-gray-100 text-gray-600 border-gray-200" },
-    { key: "available",      label: "Available",      chip: "bg-amber-100 text-amber-800 border-amber-200" },
-    { key: "in_progress",    label: "In Progress",    chip: "bg-purple-100 text-purple-800 border-purple-200" },
-    { key: "uploaded",       label: "Uploaded",       chip: "bg-emerald-100 text-emerald-800 border-emerald-200" },
+    { key: "under_review",   label: "Under Review",       chip: "bg-amber-100 text-amber-800 border-amber-200" },
+    { key: "accepted",       label: "Accepted",           chip: "bg-emerald-100 text-emerald-800 border-emerald-200" },
+    { key: "needs_attention",label: "Required Attention", chip: "bg-rose-100 text-rose-700 border-rose-200" },
 ];
 export const STATUS_LABEL = Object.fromEntries(STATUSES.map((s) => [s.key, s.label]));
 export const STATUS_CHIP  = Object.fromEntries(STATUSES.map((s) => [s.key, s.chip]));
@@ -53,7 +56,7 @@ export const CHECKLIST = [
             { id: "acad.degree_diploma", name: "Degree Certificate or Diploma", filename: "CDPMA-{FN}{SN}" },
             { id: "acad.transcript", name: "Official Transcript of Records (TOR)", description: "From previous school(s) showing subjects, grades, and degree awarded.", filename: "TOR-{FN}{SN}" },
             { id: "acad.english_test", name: "PTE / IELTS Academic Test Result", filename: "PTE-{FN}{SN}" },
-            { id: "acad.sop", name: "Statement of Purpose", description: "Explaining reason for studying in NZ, course relevance, and career goals.", filename: "SoP-{FN}{SN}" },
+            { id: "acad.letter_of_intent", name: "Letter of Intent", description: "Applicant's stated reasons for studying in NZ and study goals.", filename: "LoI-{FN}{SN}" },
             { id: "acad.tuition_proof", name: "Proof of Tuition Fee Payment", description: "For applications already in NZ.", filename: "EOP-{FN}{SN}" },
         ],
     },
@@ -65,14 +68,6 @@ export const CHECKLIST = [
             { id: "agree.proposal", name: "Study Proposal", filename: "Proposal-{FN}{LN}", system: true },
             { id: "agree.consultancy", name: "Consultancy Agreement", filename: "CA-{FN}{LN}", system: true },
             { id: "agree.engagement_english", name: "Engagement Agreement for English Review", filename: "Eng-{FN}{LN}", system: true },
-        ],
-    },
-    {
-        key: "information_form",
-        scope: "sales",
-        section: "Information Form",
-        items: [
-            { id: "info.svf", name: "SVF — Student Visa Form", filename: "SVF-{FN}{LN}" },
         ],
     },
     {
@@ -93,16 +88,10 @@ export const CHECKLIST = [
                 filename: "FI-{FN}{SN}",
             },
             {
-                id: "pers.medical",
-                name: "Medical Certificate (Full Medical)",
-                description: "From an INZ-approved panel physician.",
-                filename: "MEDL-{FN}{SN}-ISSUEDddmmyyyy",
-            },
-            {
-                id: "pers.police_clearance",
-                name: "Police Clearance Certificate (NBI / PNP)",
-                description: "Valid, issued within 12 months.",
-                filename: "PCC-{FN}{SN}",
+                id: "pers.certificate_employment",
+                name: "Certificate of Employment",
+                description: "From current or last employer — position, dates, and duties.",
+                filename: "CoE-{FN}{SN}",
             },
         ],
     },

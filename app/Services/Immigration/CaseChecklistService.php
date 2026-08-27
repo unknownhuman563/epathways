@@ -278,21 +278,56 @@ class CaseChecklistService
             }
         }
 
-        if ($match === null || empty($match['file_code'])) {
+        if ($match === null) {
             return null;
         }
 
-        $position = str_pad((string) ($index + 1), 2, '0', STR_PAD_LEFT);
-        $code = $match['file_code'];
-        $suffix = $match['file_suffix'] ?? '';
-        $name = $this->applicantFileName($lead);
+        $base = null;
 
-        $base = "{$position} - {$code} - {$name}{$suffix}";
+        // Filename format precedence:
+        //   1. the item's own override (filename), else
+        //   2. the visa's standard pattern (filename_pattern), else
+        //   3. the legacy file_code/file_suffix scheme, else keep original.
+        // Placeholders are substituted case-insensitively; surrounding text is
+        // kept verbatim so staff have full control over the format.
+        $template = trim((string) ($match['filename'] ?? ''));
+        if ($template === '') {
+            $visa = $lead->inz_visa_type
+                ? \App\Models\VisaType::where('name', $lead->inz_visa_type)->first()
+                : null;
+            $template = trim((string) ($visa?->filename_pattern ?? ''));
+        }
+
+        if ($template !== '') {
+            $replacements = [
+                '{name}' => trim("{$lead->first_name} {$lead->last_name}"),
+                '{date}' => now()->format('j M Y'),
+                '{visa}' => (string) ($lead->inz_visa_type ?? ''),
+                '{code}' => (string) ($lead->lead_id ?? ''),
+                '{label}' => (string) ($match['label'] ?? ''),
+            ];
+            $base = str_ireplace(array_keys($replacements), array_values($replacements), $template);
+        } elseif (! empty($match['file_code'])) {
+            // Legacy scheme: "NN - CODE - FirstnameLASTNAME<suffix>".
+            $position = str_pad((string) ($index + 1), 2, '0', STR_PAD_LEFT);
+            $code = $match['file_code'];
+            $suffix = $match['file_suffix'] ?? '';
+            $name = $this->applicantFileName($lead);
+            $base = "{$position} - {$code} - {$name}{$suffix}";
+        }
+
+        if ($base === null) {
+            return null;
+        }
 
         // Strip characters that are illegal in filenames (e.g. a "/" in a
         // suffix like "_Name of Family Member/Friend") so storeAs() can't be
-        // tricked into a nested path.
-        $base = trim(preg_replace('#[\\\\/:*?"<>|]+#', '-', $base));
+        // tricked into a nested path, and collapse whitespace.
+        $base = trim(preg_replace('#\s+#', ' ', preg_replace('#[\\\\/:*?"<>|]+#', '-', $base)));
+
+        if ($base === '') {
+            return null;
+        }
 
         $ext = pathinfo($originalName, PATHINFO_EXTENSION);
 

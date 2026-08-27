@@ -74,6 +74,10 @@ class Lead extends Model
         'Agreement Signed',
         'For Agreement & Invoice',
         'Invoice Paid',
+        // The application is prepared and cleared to file — the applicant has
+        // been asked to confirm before it goes to INZ. Sits just before
+        // lodgement. Staff may attach an optional note when moving here.
+        'Request to Lodge',
         'Visa Lodged',
         // Onshore applicants are granted an interim visa that keeps them
         // lawful while INZ decides. It sits after lodgement and before any
@@ -81,9 +85,15 @@ class Lead extends Model
         // rank by CaseStepService::deriveStage().
         'Interim Visa Issued',
         'Request for Information',
+        // The adviser has responded to INZ's RFI — case is back with INZ
+        // awaiting a decision.
+        'RFI Responded',
         'Approved in Principle',
         'Approved Visa',
         'Decline Visa',
+        // Terminal — the applicant withdrew (or the case was withdrawn). Staff
+        // may attach an optional note explaining why when moving here.
+        'Withdrawn',
     ];
 
     /**
@@ -190,6 +200,14 @@ class Lead extends Model
         $this->pushStageHistory('immigration', $to, $this->immigration_assignee);
         $this->save();
 
+        // Email automation — fire the per-stage event so any configured
+        // messages go out (no-op unless an admin enabled one).
+        app(\App\Services\EmailAutomationService::class)->fire(
+            'immigration.stage.'.\Illuminate\Support\Str::slug($to, '_'),
+            $this,
+            ['stage' => $to],
+        );
+
         return true;
     }
 
@@ -248,6 +266,9 @@ class Lead extends Model
         'calendar_date', 'client_info_link', 'call_update_form_link',
         'document_checklist',
         'hidden_track_documents',
+        // Per-lead ad-hoc document rows [{key, name}] added on the Documents
+        // tab — scoped to this one lead, uploaded against by a custom.* key.
+        'custom_documents',
         // Up to 3 program IDs staff have proposed for this lead — drives
         // the "Proposal" tab on the Proposal & Agreements page and the
         // program shortlist rendered on the tracker.
@@ -375,6 +396,7 @@ class Lead extends Model
         'calendar_date' => 'date',
         'document_checklist' => 'array',
         'hidden_track_documents' => 'array',
+        'custom_documents' => 'array',
         'proposed_program_ids' => 'array',
         'preferred_program_chosen_at' => 'datetime',
         'section_verifications' => 'array',
@@ -844,6 +866,19 @@ class Lead extends Model
     public function documents()
     {
         return $this->hasMany(LeadDocument::class);
+    }
+
+    /**
+     * Version history of program proposals. The newest row is the active
+     * shortlist (mirrors proposed_program_ids); older rows are kept so a new
+     * proposal never discards the previous one.
+     */
+    public function proposals()
+    {
+        // Newest first. Order by id (not created_at) so versions saved in the
+        // same second — e.g. a restore that backfills then snapshots — still
+        // order deterministically by insertion.
+        return $this->hasMany(LeadProposal::class)->orderByDesc('id');
     }
 
     /**

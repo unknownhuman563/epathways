@@ -12,6 +12,21 @@ use App\Models\Lead;
  */
 trait BuildsLeadRow
 {
+    /**
+     * Visa-type names for the Leads table's inline "Visa" dropdown — the same
+     * active catalogue the registration form offers. Alphabetical; the row's
+     * own value ("Other" free-text visas) is preserved even when absent here.
+     */
+    protected function visaOptions(): array
+    {
+        return \App\Models\VisaType::where('active', true)
+            ->orderBy('name')
+            ->pluck('name')
+            ->filter()
+            ->values()
+            ->all();
+    }
+
     protected function leadRow(Lead $l): array
     {
         $ai = is_array($l->ai_analysis) ? $l->ai_analysis : [];

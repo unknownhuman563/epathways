@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { router } from "@inertiajs/react";
 import { toast } from "sonner";
-import { MessageSquare, CheckCircle2, Send, HelpCircle, CornerDownRight, Pencil, X } from "lucide-react";
+import { MessageSquare, CheckCircle2, CornerDownRight } from "lucide-react";
 
 // Build 12 phase 6 — shared UI for anchored threads (§7). Reused by the Notes,
 // Documents and Process tabs so a thread looks and behaves the same wherever its
@@ -9,45 +9,74 @@ import { MessageSquare, CheckCircle2, Send, HelpCircle, CornerDownRight, Pencil,
 // file only renders and writes.
 
 const fmt = (iso) =>
-    iso ? new Date(iso).toLocaleString("en-NZ", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }) : "";
+    iso ? new Date(iso).toLocaleString("en-NZ", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit", hour12: true }) : "";
 
-export function resolveThread(leadId, threadId) {
-    router.post(`/portal/immigration/cases/${leadId}/threads/${threadId}/resolve`, {}, {
+// ── Avatar helpers ──────────────────────────────────────────────────────
+// A deterministic colour per author so the same person keeps the same tile.
+const AVATAR_COLORS = [
+    "bg-violet-500", "bg-emerald-500", "bg-blue-500", "bg-amber-500",
+    "bg-rose-500", "bg-teal-500", "bg-indigo-500", "bg-fuchsia-500",
+];
+const avatarColor = (name = "") => {
+    let h = 0;
+    for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
+    return AVATAR_COLORS[h % AVATAR_COLORS.length];
+};
+const initials = (name = "") =>
+    name.trim().split(/\s+/).slice(0, 2).map((w) => w[0] || "").join("").toUpperCase() || "?";
+
+function Avatar({ name, size = 28 }) {
+    return (
+        <span
+            className={`inline-flex items-center justify-center rounded-full text-white font-bold flex-shrink-0 ${avatarColor(name)}`}
+            style={{ width: size, height: size, fontSize: size * 0.36 }}
+        >
+            {initials(name)}
+        </span>
+    );
+}
+
+// `basePath` lets non-immigration surfaces reuse these threads: the immigration
+// Case Profile posts to /portal/immigration/cases/{lead}/threads (the default),
+// while the general lead-profile Documents tab passes /admin/leads.
+export function resolveThread(leadId, threadId, basePath = "/portal/immigration/cases") {
+    router.post(`${basePath}/${leadId}/threads/${threadId}/resolve`, {}, {
         preserveScroll: true,
         onSuccess: () => toast.success("Thread resolved"),
         onError: (e) => toast.error(Object.values(e)[0] || "Could not resolve"),
     });
 }
 
-// Prettify a staff role for the byline (e.g. immigration_manager → "Case
-// manager"). Falls back to a title-cased version of the raw role.
-const ROLE_LABEL = {
-    super_admin: "Super admin",
-    admin: "Admin",
-    immigration_manager: "Case manager",
-    immigration_adviser: "Licensed adviser",
-    sales: "Sales",
-    education: "Education",
-    english: "English",
-    accommodation: "Accommodation",
-    finance: "Finance",
-    agent: "Agent",
-    lead: "Client",
-};
-const roleLabel = (r) =>
-    r ? (ROLE_LABEL[r] || String(r).replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())) : null;
-
 // The composer's textarea id for a given anchor, so a thread's "Reply" can focus
 // the composer that posts to the same place.
 const composerIdFor = (anchor) =>
-    anchor && anchor.anchor_type === "document" && anchor.anchor_id
-        ? `thread-composer-document-${anchor.anchor_id}`
+    anchor && anchor.anchor_type === "document" && (anchor.anchor_id || anchor.anchor_key)
+        ? `thread-composer-document-${anchor.anchor_id || anchor.anchor_key}`
         : null;
+
+// The card + badge tone for a thread: amber when it's an open question awaiting
+// an answer, green when it's shared with (or came from) the client, lavender for
+// an internal note. Replies always render as plain white sub-cards.
+function toneFor(thread) {
+    const fromClient = thread.author_role === "lead";
+    const awaiting = ! thread.resolved_at && thread.requires_answer;
+    if (awaiting) {
+        return { card: "bg-amber-50/70 border-amber-200", badge: "bg-amber-100 text-amber-700", label: "Awaiting answer" };
+    }
+    if (fromClient) {
+        return { card: "bg-emerald-50/70 border-emerald-200", badge: "bg-emerald-100 text-emerald-700", label: "From client" };
+    }
+    if (thread.client_visible) {
+        return { card: "bg-emerald-50/70 border-emerald-200", badge: "bg-emerald-100 text-emerald-700", label: "Client sees this" };
+    }
+    return { card: "bg-violet-50/60 border-violet-100", badge: "bg-violet-100 text-violet-700", label: "Internal" };
+}
 
 /** One thread: body, who wrote it, its audience, and an explicit resolve.
  * When `childrenOf`/`anchor` are supplied it renders nested replies and an
- * inline reply box (used for document comments). */
-export function ThreadItem({ thread, leadId, anchorLabel = null, childrenOf = null, anchor = null, caseStaff = [] }) {
+ * inline reply box (used for document comments). `isReply` renders it as a
+ * plain white sub-card (no tone, no badge). */
+export function ThreadItem({ thread, leadId, anchorLabel = null, childrenOf = null, anchor = null, caseStaff = [], basePath = "/portal/immigration/cases", isReply = false }) {
     const open = ! thread.resolved_at;
     const [editing, setEditing] = useState(false);
     const [draft, setDraft] = useState(thread.body || "");
@@ -55,11 +84,12 @@ export function ThreadItem({ thread, leadId, anchorLabel = null, childrenOf = nu
     const [replyOpen, setReplyOpen] = useState(false);
     const replies = childrenOf ? childrenOf(thread.id) : [];
     const canReplyInline = !! anchor;
+    const tone = toneFor(thread);
 
     const saveEdit = () => {
         if (! draft.trim()) return toast.error("Comment can't be empty");
         setSaving(true);
-        router.patch(`/portal/immigration/cases/${leadId}/threads/${thread.id}`, { body: draft }, {
+        router.patch(`${basePath}/${leadId}/threads/${thread.id}`, { body: draft }, {
             preserveScroll: true,
             onSuccess: () => { toast.success("Comment updated"); setEditing(false); },
             onError: (e) => toast.error(Object.values(e)[0] || "Could not update"),
@@ -72,99 +102,103 @@ export function ThreadItem({ thread, leadId, anchorLabel = null, childrenOf = nu
         if (el) { el.focus(); el.scrollIntoView({ block: "nearest", behavior: "smooth" }); }
     };
 
-    // A comment authored by the client reads FROM CLIENT (amber); a staff
-    // comment shared with the client reads TO CLIENT (teal); everything else is
-    // INTERNAL (gray).
-    const fromClient = thread.author_role === "lead";
+    const cardClass = isReply
+        ? "rounded-xl border border-gray-200 bg-white px-3.5 py-3"
+        : `rounded-xl border px-3.5 py-3 ${tone.card}`;
 
     return (
-        <div className="py-4 border-b border-gray-100 last:border-b-0">
-            <div className="flex items-start justify-between gap-3">
-                <div className="flex items-center gap-2 flex-wrap min-w-0">
-                    <span className="text-[13px] font-bold text-gray-900">{thread.author || "Unknown"}</span>
-                    {roleLabel(thread.author_role) && (
-                        <span className="text-[12px] text-gray-400">{roleLabel(thread.author_role)}</span>
+        <div>
+            <div className={cardClass}>
+                {/* Header — avatar, name, time, and the audience badge */}
+                <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center gap-2 min-w-0">
+                        <Avatar name={thread.author || "?"} size={isReply ? 24 : 28} />
+                        <span className="text-[13px] font-bold text-gray-900 truncate">{thread.author || "Unknown"}</span>
+                        <span className="text-[11.5px] text-gray-400 flex-shrink-0">{fmt(thread.created_at)}</span>
+                    </div>
+                    {! isReply && (
+                        open ? (
+                            <span className={`text-[9.5px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full flex-shrink-0 ${tone.badge}`}>
+                                {tone.label}
+                            </span>
+                        ) : (
+                            <span className="text-[9.5px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 flex-shrink-0">
+                                Answered
+                            </span>
+                        )
                     )}
-                    <span className="text-[12px] text-gray-400">{fmt(thread.created_at)}</span>
                 </div>
-                {fromClient ? (
-                    <span className="text-[10.5px] font-bold uppercase tracking-wider text-amber-600 flex-shrink-0">From client</span>
-                ) : thread.client_visible ? (
-                    <span className="text-[10.5px] font-bold uppercase tracking-wider text-teal-600 flex-shrink-0">To client</span>
-                ) : anchorLabel ? (
-                    <span className="text-[10.5px] font-semibold text-gray-400 flex-shrink-0">{anchorLabel}</span>
+
+                {/* Body / edit */}
+                {editing ? (
+                    <div className="mt-2 space-y-2">
+                        <textarea
+                            value={draft}
+                            onChange={(e) => setDraft(e.target.value)}
+                            rows={3}
+                            maxLength={2000}
+                            autoFocus
+                            className="w-full text-[13px] px-2.5 py-1.5 bg-white border border-gray-300 rounded-lg focus:outline-none focus:border-gray-500 resize-none"
+                        />
+                        <div className="flex items-center gap-1.5">
+                            <button type="button" onClick={saveEdit} disabled={saving}
+                                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-gray-900 text-white text-[10.5px] font-semibold hover:bg-black disabled:opacity-50">
+                                <CheckCircle2 size={11} /> Save
+                            </button>
+                            <button type="button" onClick={() => { setEditing(false); setDraft(thread.body || ""); }}
+                                className="text-[10.5px] font-semibold text-gray-400 hover:text-gray-700">Cancel</button>
+                        </div>
+                    </div>
                 ) : (
-                    <span className="text-[10.5px] font-bold uppercase tracking-wider text-gray-300 flex-shrink-0">Internal</span>
+                    <p className="mt-1.5 text-[13px] leading-relaxed whitespace-pre-wrap text-slate-700">{thread.body}</p>
+                )}
+
+                {/* Footer — reply/edit, mark-answered, reply count */}
+                {! editing && (
+                    <div className="mt-2.5 flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-3 text-[12px] font-semibold text-gray-500">
+                            <button
+                                type="button"
+                                onClick={() => (canReplyInline ? setReplyOpen((v) => ! v) : focusReply())}
+                                className={replyOpen ? "text-gray-900" : "hover:text-gray-900"}
+                            >
+                                Reply
+                            </button>
+                            {thread.can_edit && (
+                                <button type="button" onClick={() => { setDraft(thread.body || ""); setEditing(true); }} className="text-gray-400 hover:text-gray-900">Edit</button>
+                            )}
+                            {open && thread.requires_answer && (
+                                <button type="button" onClick={() => resolveThread(leadId, thread.id, basePath)} className="text-gray-400 hover:text-emerald-600">
+                                    Mark answered
+                                </button>
+                            )}
+                        </div>
+                        <span className="text-[11px] text-gray-400 flex-shrink-0">
+                            {! open
+                                ? `Answered${thread.resolved_by ? ` by ${thread.resolved_by}` : ""} · ${fmt(thread.resolved_at)}`
+                                : (replies.length > 0
+                                    ? `${replies.length} repl${replies.length === 1 ? "y" : "ies"}`
+                                    : (thread.addressed_to ? `For ${thread.addressed_to.name}` : ""))}
+                        </span>
+                    </div>
                 )}
             </div>
 
-            {editing ? (
-                <div className="mt-2 space-y-2">
-                    <textarea
-                        value={draft}
-                        onChange={(e) => setDraft(e.target.value)}
-                        rows={3}
-                        maxLength={2000}
-                        autoFocus
-                        className="w-full text-[13px] px-2.5 py-1.5 bg-white border border-gray-300 rounded-lg focus:outline-none focus:border-gray-500 resize-none"
-                    />
-                    <div className="flex items-center gap-1.5">
-                        <button type="button" onClick={saveEdit} disabled={saving}
-                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-gray-900 text-white text-[10.5px] font-semibold hover:bg-black disabled:opacity-50">
-                            <CheckCircle2 size={11} /> Save
-                        </button>
-                        <button type="button" onClick={() => { setEditing(false); setDraft(thread.body || ""); }}
-                            className="text-[10.5px] font-semibold text-gray-400 hover:text-gray-700">Cancel</button>
-                    </div>
-                </div>
-            ) : (
-                <p className={`mt-1.5 text-[13px] leading-relaxed whitespace-pre-wrap ${fromClient ? "text-amber-700" : "text-slate-700"}`}>{thread.body}</p>
-            )}
-
-            {! editing && (
-                <div className="mt-3 flex items-center justify-between gap-2">
-                    <span className="text-[11px] text-gray-400">
-                        {open
-                            ? (thread.requires_answer ? (
-                                <>
-                                    {thread.client_visible
-                                        ? "Awaiting client answer"
-                                        : `Awaiting answer${thread.addressed_to ? ` from ${thread.addressed_to.name}` : ""}`}
-                                    {" · "}
-                                    <button type="button" onClick={() => resolveThread(leadId, thread.id)} className="text-gray-400 hover:text-emerald-600 underline underline-offset-2">
-                                        mark answered
-                                    </button>
-                                </>
-                            ) : (thread.addressed_to ? `For ${thread.addressed_to.name}` : ""))
-                            : `Answered${thread.resolved_by ? ` by ${thread.resolved_by}` : ""} · ${fmt(thread.resolved_at)}`}
-                    </span>
-                    <div className="flex items-center gap-4 text-[12px] font-semibold text-gray-400">
-                        {thread.can_edit && (
-                            <button type="button" onClick={() => { setDraft(thread.body || ""); setEditing(true); }} className="hover:text-gray-900">Edit</button>
-                        )}
-                        <button
-                            type="button"
-                            onClick={() => (canReplyInline ? setReplyOpen((v) => ! v) : focusReply())}
-                            className={replyOpen ? "text-gray-900" : "hover:text-gray-900"}
-                        >
-                            Reply
-                        </button>
-                    </div>
-                </div>
-            )}
-
             {replyOpen && canReplyInline && (
-                <ReplyComposer
-                    leadId={leadId}
-                    anchor={anchor}
-                    parentId={thread.id}
-                    clientVisible={thread.client_visible}
-                    onDone={() => setReplyOpen(false)}
-                />
+                <div className="mt-2 ml-6">
+                    <ReplyComposer
+                        leadId={leadId}
+                        anchor={anchor}
+                        parentId={thread.id}
+                        clientVisible={thread.client_visible}
+                        basePath={basePath}
+                        onDone={() => setReplyOpen(false)}
+                    />
+                </div>
             )}
 
             {replies.length > 0 && (
-                <div className="mt-2 pl-5 border-l border-gray-200 space-y-0">
+                <div className="mt-2 ml-6 space-y-2">
                     {replies.map((c) => (
                         <ThreadItem
                             key={c.id}
@@ -173,6 +207,8 @@ export function ThreadItem({ thread, leadId, anchorLabel = null, childrenOf = nu
                             anchor={anchor}
                             caseStaff={caseStaff}
                             childrenOf={childrenOf}
+                            basePath={basePath}
+                            isReply
                         />
                     ))}
                 </div>
@@ -182,14 +218,14 @@ export function ThreadItem({ thread, leadId, anchorLabel = null, childrenOf = nu
 }
 
 /** A compact inline reply box, posting a child comment on the same anchor. */
-function ReplyComposer({ leadId, anchor, parentId, clientVisible, onDone }) {
+function ReplyComposer({ leadId, anchor, parentId, clientVisible, onDone, basePath = "/portal/immigration/cases" }) {
     const [body, setBody] = useState("");
     const [posting, setPosting] = useState(false);
 
     const submit = () => {
         if (! body.trim()) return toast.error("Write a reply first");
         setPosting(true);
-        router.post(`/portal/immigration/cases/${leadId}/threads`, {
+        router.post(`${basePath}/${leadId}/threads`, {
             ...anchor,
             parent_id: parentId,
             body,
@@ -203,7 +239,10 @@ function ReplyComposer({ leadId, anchor, parentId, clientVisible, onDone }) {
     };
 
     return (
-        <div className="mt-2 space-y-2">
+        <div className="rounded-xl border border-gray-200 bg-white p-2.5 space-y-2">
+            <div className="flex items-center gap-1.5 text-[11px] font-semibold text-gray-400">
+                <CornerDownRight size={12} /> Reply
+            </div>
             <textarea
                 autoFocus
                 value={body}
@@ -213,11 +252,11 @@ function ReplyComposer({ leadId, anchor, parentId, clientVisible, onDone }) {
                 placeholder="Write a reply…"
                 className="w-full text-[13px] px-2.5 py-1.5 bg-white border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400 resize-none"
             />
-            <div className="flex items-center gap-3">
-                <button type="button" onClick={submit} disabled={posting}
-                    className="text-[13px] font-bold text-teal-700 hover:text-teal-900 disabled:opacity-50">Post reply</button>
+            <div className="flex items-center justify-end gap-2">
                 <button type="button" onClick={onDone}
                     className="text-[12px] font-semibold text-gray-400 hover:text-gray-700">Cancel</button>
+                <button type="button" onClick={submit} disabled={posting}
+                    className="inline-flex items-center px-3 py-1.5 rounded-lg bg-violet-600 text-white text-[12px] font-semibold hover:bg-violet-700 disabled:opacity-50">Post reply</button>
             </div>
         </div>
     );
@@ -229,7 +268,7 @@ function ReplyComposer({ leadId, anchor, parentId, clientVisible, onDone }) {
  * general anchor picker (Case / Gate / Stage) for the Notes tab. `stages` is an
  * optional list for the Stage picker.
  */
-export function ThreadComposer({ leadId, caseStaff = [], fixedAnchor = null, stages = [], compact = false, plain = false, placeholder = "Ask a question…" }) {
+export function ThreadComposer({ leadId, caseStaff = [], fixedAnchor = null, stages = [], compact = false, plain = false, placeholder = "Write a note for the team…", basePath = "/portal/immigration/cases" }) {
     const [open, setOpen] = useState(! compact);
     const [body, setBody] = useState("");
     const [addressedTo, setAddressedTo] = useState("");
@@ -249,7 +288,7 @@ export function ThreadComposer({ leadId, caseStaff = [], fixedAnchor = null, sta
             return toast.error(anchorType === "gate" ? "Name the gate (e.g. 06)" : "Name the stage");
         }
         setPosting(true);
-        router.post(`/portal/immigration/cases/${leadId}/threads`, {
+        router.post(`${basePath}/${leadId}/threads`, {
             ...anchor,
             body,
             addressed_to_id: addressedTo || null,
@@ -272,38 +311,40 @@ export function ThreadComposer({ leadId, caseStaff = [], fixedAnchor = null, sta
             <button
                 type="button"
                 onClick={() => setOpen(true)}
-                className="inline-flex items-center gap-1 text-[10.5px] font-semibold text-gray-400 hover:text-gray-900"
+                className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-violet-600 hover:text-violet-800"
             >
-                <MessageSquare size={11} /> {plain ? "Add a note" : "Ask a question"}
+                <MessageSquare size={13} /> {plain ? "Add a note" : "Ask a question"}
             </button>
         );
     }
 
-    // Two audience "tabs" — Internal only (default) then Client sees this.
-    const audienceTabs = (
-        <div className="flex items-center gap-3 text-[12px] font-semibold">
-            <button
-                type="button"
-                onClick={() => setClientVisible(false)}
-                className={! clientVisible ? "text-gray-900 border-b-2 border-teal-600 pb-0.5" : "text-gray-400 hover:text-gray-700"}
-            >
-                Internal only
-            </button>
-            <button
-                type="button"
-                onClick={() => setClientVisible(true)}
-                className={clientVisible ? "text-gray-900 border-b-2 border-teal-600 pb-0.5" : "text-gray-400 hover:text-gray-700"}
-            >
-                Client sees this
-            </button>
-            <span className="text-[11px] font-normal text-gray-400">
-                {clientVisible ? "Appears in the client portal and the reminder email" : "Staff only. Never shown to the client."}
+    // Audience toggle — two pills. Active pill is a white chip with a coloured
+    // dot; the subtitle spells out who can see it.
+    const Pill = ({ active, dot, onClick, children }) => (
+        <button
+            type="button"
+            onClick={onClick}
+            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11.5px] font-semibold transition-colors ${
+                active ? "bg-white border border-violet-200 text-violet-800 shadow-sm" : "text-gray-400 hover:text-gray-600"
+            }`}
+        >
+            <span className={`w-1.5 h-1.5 rounded-full ${active ? dot : "bg-gray-300"}`} />
+            {children}
+        </button>
+    );
+
+    const audienceRow = (
+        <div className="flex items-center gap-1.5 flex-wrap">
+            <Pill active={! clientVisible} dot="bg-violet-500" onClick={() => setClientVisible(false)}>Internal only</Pill>
+            <Pill active={clientVisible} dot="bg-emerald-500" onClick={() => setClientVisible(true)}>Client sees this</Pill>
+            <span className="text-[11px] text-gray-400 ml-0.5">
+                {clientVisible ? "Appears in the client portal and the reminder email." : "Staff only — never shown to the client."}
             </span>
         </div>
     );
 
     return (
-        <div className={plain ? "pt-2 space-y-2" : (compact ? "rounded-xl border border-gray-200 bg-white p-3 space-y-2" : "rounded-xl border border-gray-200 bg-white p-3 space-y-2")}>
+        <div className="rounded-2xl border border-violet-100 bg-violet-50/50 p-3 space-y-2.5">
             {! fixedAnchor && (
                 <div className="flex items-center gap-2">
                     <select
@@ -344,6 +385,9 @@ export function ThreadComposer({ leadId, caseStaff = [], fixedAnchor = null, sta
                     )}
                 </div>
             )}
+
+            {audienceRow}
+
             <textarea
                 id={composerId || undefined}
                 value={body}
@@ -351,13 +395,16 @@ export function ThreadComposer({ leadId, caseStaff = [], fixedAnchor = null, sta
                 rows={compact ? 2 : 3}
                 maxLength={2000}
                 placeholder={placeholder}
-                className={plain
-                    ? "w-full text-[13px] px-0 py-1.5 bg-transparent border-0 border-b border-gray-200 focus:outline-none focus:border-gray-400 resize-none placeholder-gray-400"
-                    : "w-full text-[13px] px-2.5 py-1.5 bg-white border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400 resize-none"}
+                className="w-full text-[13px] px-3 py-2 bg-white border border-gray-200 rounded-xl focus:outline-none focus:border-violet-300 resize-none placeholder-gray-400"
             />
+
             <div className="flex items-center justify-between gap-3 flex-wrap">
-                {audienceTabs}
                 <div className="flex items-center gap-3">
+                    <label className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-gray-500 cursor-pointer">
+                        <input type="checkbox" checked={requires} onChange={(e) => setRequires(e.target.checked)}
+                            className="rounded border-gray-300 text-amber-600 focus:ring-0 w-3.5 h-3.5" />
+                        Needs an answer
+                    </label>
                     {! plain && (
                         <select
                             value={addressedTo}
@@ -368,17 +415,14 @@ export function ThreadComposer({ leadId, caseStaff = [], fixedAnchor = null, sta
                             {caseStaff.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
                         </select>
                     )}
-                    <label className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-gray-500 cursor-pointer">
-                        <input type="checkbox" checked={requires} onChange={(e) => setRequires(e.target.checked)}
-                            className="rounded border-gray-300 text-amber-600 focus:ring-0 w-3.5 h-3.5" />
-                        Needs an answer
-                    </label>
+                </div>
+                <div className="flex items-center gap-3">
                     {compact && (
                         <button type="button" onClick={() => setOpen(false)} className="text-[12px] font-semibold text-gray-400 hover:text-gray-700">Cancel</button>
                     )}
                     <button type="button" onClick={submit} disabled={posting}
-                        className="text-[13px] font-bold text-teal-700 hover:text-teal-900 disabled:opacity-50">
-                        Post
+                        className="inline-flex items-center px-4 py-1.5 rounded-lg bg-violet-600 text-white text-[12px] font-semibold hover:bg-violet-700 disabled:opacity-50">
+                        {plain ? "Post note" : "Post"}
                     </button>
                 </div>
             </div>

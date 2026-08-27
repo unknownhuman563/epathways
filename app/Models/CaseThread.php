@@ -28,12 +28,24 @@ class CaseThread extends Model
 
     public const ANCHOR_STEP = 'step';
 
+    // A note on a checklist item, keyed by the checklist key. Unlike a document
+    // anchor it needs no uploaded file — staff can leave a note on a slot before
+    // the client provides anything. Renders on that checklist row only.
+    public const ANCHOR_CHECKLIST = 'checklist';
+
+    // A reply to a document's reviewer note. The reviewer note itself is a value
+    // on the document (not a thread), so its replies anchor here — keyed by the
+    // document id — and render nested under the reviewer note.
+    public const ANCHOR_REVIEWER_NOTE = 'reviewer_note';
+
     public const ANCHOR_TYPES = [
         self::ANCHOR_CASE,
         self::ANCHOR_DOCUMENT,
         self::ANCHOR_GATE,
         self::ANCHOR_STAGE,
         self::ANCHOR_STEP,
+        self::ANCHOR_CHECKLIST,
+        self::ANCHOR_REVIEWER_NOTE,
     ];
 
     protected $fillable = [

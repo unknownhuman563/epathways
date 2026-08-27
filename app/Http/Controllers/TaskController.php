@@ -172,7 +172,9 @@ class TaskController extends Controller
         $task = LeadTask::findOrFail($id);
 
         $canEdit = $user->isAdmin()
+            || $task->created_by === $user->id
             || $task->assignee_id === $user->id
+            || in_array($user->id, $task->additional_assignee_ids ?? [], true)
             || ($task->department && $task->department === $user->role);
 
         abort_unless($canEdit, 403, 'You do not have permission to update this task.');
