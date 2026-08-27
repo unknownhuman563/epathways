@@ -315,14 +315,19 @@ class LeadDocumentController extends Controller
 
         // Email automation — document approved / needs attention (a proof of
         // payment is handled by immigration.invoice.paid above, so exclude it).
+        // The configured automation message is the single source: it returns
+        // whether it emailed the client, so the built-in email below only sends
+        // as a fallback when no client automation message is set (no double-send).
+        $firedClient = false;
         if ($lead && $doc->source_variant !== 'proof_of_payment') {
             if ($validated['status'] === LeadDocument::STATUS_APPROVED) {
-                app(\App\Services\EmailAutomationService::class)->fire('immigration.document.approved', $lead, ['document_name' => $doc->original_name]);
+                $firedClient = app(\App\Services\EmailAutomationService::class)->fire('immigration.document.approved', $lead, ['document_name' => $doc->original_name]);
             } elseif ($validated['status'] === LeadDocument::STATUS_REJECTED) {
-                app(\App\Services\EmailAutomationService::class)->fire('immigration.document.rejected', $lead, ['document_name' => $doc->original_name, 'reason' => $validated['note'] ?? '']);
+                $firedClient = app(\App\Services\EmailAutomationService::class)->fire('immigration.document.rejected', $lead, ['document_name' => $doc->original_name, 'reason' => $validated['note'] ?? '']);
             }
         }
-        if (in_array($validated['status'], [LeadDocument::STATUS_APPROVED, LeadDocument::STATUS_REJECTED], true)
+        if (! $firedClient
+            && in_array($validated['status'], [LeadDocument::STATUS_APPROVED, LeadDocument::STATUS_REJECTED], true)
             && $lead && ! empty($lead->email)) {
             try {
                 // Needs-attention → the "please re-upload" template (asks the
