@@ -1378,6 +1378,16 @@ class ImmigrationController extends Controller
 
         if ($stageMoved) {
             $recordStageNote();
+
+            // Email automation — the legacy path sets the stage directly (it does
+            // not go through advanceImmigrationStage, and reaches here when the case
+            // is off the chain or the chain can't jump to this stage), so fire the
+            // per-stage event here too. Guarded on a non-null stage.
+            if ($newStage !== null) {
+                app(\App\Services\EmailAutomationService::class)->fire(
+                    'immigration.stage.'.\Illuminate\Support\Str::slug($newStage, '_'), $lead, ['stage' => $newStage]
+                );
+            }
         }
 
         // Re-evaluate findings off the request path when the stage moves (§8d).
