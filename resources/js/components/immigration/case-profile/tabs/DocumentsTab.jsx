@@ -28,19 +28,19 @@ import { ThreadItem, ThreadComposer } from "@/components/immigration/case-profil
 const STATUS_OPTIONS = [
     { value: "Submitted",   label: "Submitted" },
     { value: "UnderReview", label: "Under review" },
-    { value: "Checked",     label: "With adviser" },
+    { value: "Checked",     label: "For Adviser Review" },
     { value: "Approved",    label: "Approved" },
     { value: "Rejected",    label: "Needs attention" },
 ];
 
 // The verdict a staff member may set depends on their role. The manager triages
-// (Under review → With adviser); the Licensed Immigration Adviser decides
+// (Under review → For Adviser Review); the Licensed Immigration Adviser decides
 // (Approved / Needs attention). "Submitted" is the client's own upload state and
 // is never staff-settable — it only appears as the current value. Admins keep
 // the full ladder.
 const MANAGER_STATUS_OPTIONS = [
     { value: "UnderReview", label: "Under review" },
-    { value: "Checked",     label: "With adviser" },
+    { value: "Checked",     label: "For Adviser Review" },
 ];
 const ADVISER_STATUS_OPTIONS = [
     { value: "Approved",    label: "Approved" },
@@ -138,7 +138,7 @@ export default function DocumentsTab({
     // checklist slot.
     const [requestOpen, setRequestOpen] = useState(false);
     // Status filter for the checklist (All / Needs client action / Submitted /
-    // With adviser / Approved).
+    // For Adviser Review / Approved).
     const [filter, setFilter] = useState("all");
 
     // Build a checklist-keyed map of uploaded documents (latest wins per key).
@@ -258,7 +258,7 @@ export default function DocumentsTab({
         { key: "all",       label: "All",                count: allRows.length },
         { key: "needs",     label: "Needs client action", count: counts.needs },
         { key: "submitted", label: "Submitted",          count: counts.submitted },
-        { key: "adviser",   label: "With adviser",       count: counts.adviser },
+        { key: "adviser",   label: "For Adviser Review",  count: counts.adviser },
         { key: "approved",  label: "Approved",           count: counts.approved },
     ];
     // Apply the active filter to the grouped rows, dropping now-empty sections.
@@ -356,7 +356,7 @@ export default function DocumentsTab({
             )}
 
             {/* Status filter tabs — All / Needs client action / Submitted /
-                With adviser / Approved. */}
+                For Adviser Review / Approved. */}
             <div className="flex items-center justify-between gap-3 flex-wrap">
                 <div className="flex items-center gap-2 flex-wrap">
                     {FILTERS.map((f) => {
