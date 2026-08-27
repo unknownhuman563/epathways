@@ -861,6 +861,8 @@ Route::middleware(['auth'])->group(function () {
             ->name('admin.leads.documents.request');
         Route::delete('/admin/leads/{leadId}/documents/requests/{requestId}', [LeadDocumentController::class, 'destroyRequest'])
             ->name('admin.leads.documents.request.destroy');
+        Route::post('/admin/leads/{leadId}/documents/requests/{requestId}/resend', [LeadDocumentController::class, 'resendRequest'])
+            ->name('admin.leads.documents.request.resend');
         Route::post('/admin/leads/{leadId}/documents/{docId}/status', [LeadDocumentController::class, 'updateStatus'])
             ->name('admin.leads.documents.status');
         Route::post('/admin/leads/{id}/documents/share', [LeadDocumentController::class, 'shareWithLead'])
@@ -1459,6 +1461,10 @@ Route::middleware(['auth'])->group(function () {
             // Decline outcome — moves to "Decline Visa" with an optional shared
             // decline letter, note, and client email.
             Route::post('/cases/{id}/decline', [ImmigrationController::class, 'declineVisa'])->name('cases.decline');
+            // Positive/interim outcomes (Approved Visa / Interim Visa Issued /
+            // Approved in Principle) — same modal as decline: shared document +
+            // optional note; the client email is the configured stage automation.
+            Route::post('/cases/{id}/outcome', [ImmigrationController::class, 'recordOutcome'])->name('cases.outcome');
             // Inline visa-type update from the Cases table.
             Route::post('/cases/{id}/visa', [ImmigrationController::class, 'updateCaseVisa'])->name('cases.visa');
             // Inline priority update from the Cases table's expanded row.

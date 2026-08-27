@@ -397,6 +397,7 @@ class CommunicationService
             'email' => $lead->email ?? '',
             'phone' => $lead->phone ?? '',
             'stage' => $lead->stage ?? ($lead->status ?? ''),
+            'visa_type' => $lead->inz_visa_type ?? '',
             'tracker_url' => rtrim((string) config('app.url'), '/').'/track/'.$lead->tracking_code,
             'client_portal_url' => $this->clientPortalUrl($lead),
             // Portal sign-in link + username (their email) — for templates that

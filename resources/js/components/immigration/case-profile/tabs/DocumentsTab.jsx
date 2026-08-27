@@ -1903,6 +1903,7 @@ function RequestFromClient({ leadId, rowLabel, rowRequired }) {
 // and a control to withdraw it.
 function RequestRow({ req, leadId }) {
     const [busy, setBusy] = useState(false);
+    const [sending, setSending] = useState(false);
     const cancel = () => {
         if (busy) return;
         setBusy(true);
@@ -1912,6 +1913,17 @@ function RequestRow({ req, leadId }) {
             onSuccess: () => toast.success("Request removed"),
             onError: (e) => toast.error(Object.values(e)[0] || "Could not remove"),
             onFinish: () => setBusy(false),
+        });
+    };
+    // Re-send the request email — uses the "Document requested" automation template.
+    const resend = () => {
+        if (sending) return;
+        setSending(true);
+        router.post(`/admin/leads/${leadId}/documents/requests/${req.id}/resend`, {}, {
+            preserveScroll: true,
+            preserveState: true,
+            onError: (e) => toast.error(Object.values(e)[0] || "Could not send"),
+            onFinish: () => setSending(false),
         });
     };
     const fmt = (iso) => (iso ? new Date(iso).toLocaleDateString("en-NZ", { day: "numeric", month: "short" }) : "");
@@ -1937,6 +1949,15 @@ function RequestRow({ req, leadId }) {
                     Waiting
                 </span>
             )}
+            <button
+                type="button"
+                onClick={resend}
+                disabled={sending}
+                title="Re-send the request email to the client"
+                className="p-1 rounded-md text-gray-300 hover:text-violet-600 disabled:opacity-50"
+            >
+                {sending ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}
+            </button>
             <button
                 type="button"
                 onClick={cancel}

@@ -30,6 +30,7 @@ class MessageTemplateController extends Controller
         ['name' => 'full_name', 'description' => "Lead's full name"],
         ['name' => 'email', 'description' => "Lead's email"],
         ['name' => 'phone', 'description' => "Lead's phone"],
+        ['name' => 'visa_type', 'description' => "The case's visa type (INZ visa)"],
         ['name' => 'tracker_url', 'description' => 'Link to the lead /track/{code} page'],
         ['name' => 'engagement_url', 'description' => 'Scoped engagement signing link (only filled when sent from the engagement generator)'],
         ['name' => 'assigned_staff_name', 'description' => 'Assigned staff member, or "the ePathways team"'],

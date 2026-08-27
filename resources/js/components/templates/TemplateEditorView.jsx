@@ -142,6 +142,7 @@ export default function TemplateEditorView({
             first_name: "Angi", last_name: "Libanan", full_name: "Angi Libanan",
             email: "client@example.com", phone: "+64 21 000 0000",
             tracker_url: "#", engagement_url: "#", client_portal_url: "#",
+            visa_type: "Skilled Migrant Category Resident Visa",
             assigned_staff_name: "the ePathways team", status: "In progress", status_detail: "a quick update",
             event_name: "Sample Event", event_date: "1 Jan 2026", event_time: "10:00 AM", event_location: "Auckland",
             document_name: "Sample Document.pdf", reason: "sample reason",
