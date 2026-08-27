@@ -77,7 +77,7 @@ class Lead extends Model
         // The application is prepared and cleared to file — the applicant has
         // been asked to confirm before it goes to INZ. Sits just before
         // lodgement. Staff may attach an optional note when moving here.
-        'Request to Lodged',
+        'Request to Lodge',
         'Visa Lodged',
         // Onshore applicants are granted an interim visa that keeps them
         // lawful while INZ decides. It sits after lodgement and before any

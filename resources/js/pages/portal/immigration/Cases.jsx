@@ -35,11 +35,11 @@ const STAGE_COLORS = {
     'Agreement Signed':        'bg-teal-500',
     'For Agreement & Invoice':             'bg-orange-500',
     'Invoice Paid':            'bg-lime-500',
-    'Request to Lodged':       'bg-cyan-500',
+    'Request to Lodge':       'bg-cyan-500',
     'Visa Lodged':             'bg-indigo-500',
     'Interim Visa Issued':     'bg-blue-500',
     'Request for Information': 'bg-amber-500',
-    'RFI Responded':           'bg-amber-700',
+    'RFI Responded':           'bg-indigo-500',
     'Approved in Principle':   'bg-violet-500',
     'Approved Visa':           'bg-emerald-500',
     'Decline Visa':            'bg-rose-500',
@@ -55,11 +55,11 @@ const STAGE_HEX = {
     'Agreement Signed':        '#14b8a6',
     'For Agreement & Invoice':             '#f97316',
     'Invoice Paid':            '#84cc16',
-    'Request to Lodged':       '#06b6d4',
+    'Request to Lodge':       '#06b6d4',
     'Visa Lodged':             '#6366f1',
     'Interim Visa Issued':     '#3b82f6',
     'Request for Information': '#f59e0b',
-    'RFI Responded':           '#b45309',
+    'RFI Responded':           '#6366f1',
     'Approved in Principle':   '#8b5cf6',
     'Approved Visa':           '#22c55e',
     'Decline Visa':            '#ef4444',
@@ -74,11 +74,11 @@ const STAGE_CHIP = {
     'Agreement Signed':        'bg-teal-50 text-teal-700 border-teal-200',
     'For Agreement & Invoice':             'bg-orange-50 text-orange-700 border-orange-200',
     'Invoice Paid':            'bg-lime-50 text-lime-700 border-lime-200',
-    'Request to Lodged':       'bg-cyan-50 text-cyan-700 border-cyan-200',
+    'Request to Lodge':       'bg-cyan-50 text-cyan-700 border-cyan-200',
     'Visa Lodged':             'bg-indigo-50 text-indigo-700 border-indigo-200',
     'Interim Visa Issued':     'bg-blue-50 text-blue-700 border-blue-200',
     'Request for Information': 'bg-amber-50 text-amber-700 border-amber-200',
-    'RFI Responded':           'bg-amber-100 text-amber-800 border-amber-300',
+    'RFI Responded':           'bg-indigo-50 text-indigo-700 border-indigo-200',
     'Approved in Principle':   'bg-violet-50 text-violet-700 border-violet-200',
     'Approved Visa':           'bg-emerald-50 text-emerald-700 border-emerald-200',
     'Decline Visa':            'bg-rose-50 text-rose-700 border-rose-200',
@@ -95,9 +95,9 @@ const stageChipClass = (stage) =>
  */
 const CASE_TABS = [
     { key: 'applications', label: 'Assessment',   hint: 'For Assessment',     stages: ['For Assessment'] },
-    { key: 'advisers',     label: 'Advisers',     hint: 'Endorsed → RFI',     stages: ['Endorsed', 'Agreement Sent', 'Agreement Signed', 'For Agreement & Invoice', 'Request to Lodged', 'Request for Information', 'RFI Responded'] },
+    { key: 'advisers',     label: 'Advisers',     hint: 'Endorsed → RFI',     stages: ['Endorsed', 'Agreement Sent', 'Agreement Signed', 'For Agreement & Invoice', 'Request to Lodge', 'Request for Information'] },
     { key: 'invoice',      label: 'Invoice',      hint: 'Invoice paid',       stages: ['Invoice Paid'] },
-    { key: 'lodged',       label: 'Lodged',       hint: 'Submitted to INZ',   stages: ['Visa Lodged', 'Interim Visa Issued'] },
+    { key: 'lodged',       label: 'Lodged',       hint: 'Submitted to INZ',   stages: ['Visa Lodged', 'Interim Visa Issued', 'RFI Responded'] },
     { key: 'visa',         label: 'Visa',         hint: 'Outcome',            stages: ['Approved in Principle', 'Approved Visa', 'Decline Visa'] },
     { key: 'withdrawn',    label: 'Withdrawn',    hint: 'Applicant withdrew', stages: ['Withdrawn'] },
 ];
@@ -195,11 +195,11 @@ export default function ImmigrationCases({ cases = [], distribution = [], priori
     const sorted = useMemo(() => {
         const arr = [...filtered];
         arr.sort((a, b) => {
-            // In the Advisers tab, "Request to Lodged" cases are pinned to the
+            // In the Advisers tab, "Request to Lodge" cases are pinned to the
             // very top — that's the queue the adviser acts on next.
             if (tab === 'advisers') {
-                const ra = a.immigration_stage === 'Request to Lodged' ? 0 : 1;
-                const rb = b.immigration_stage === 'Request to Lodged' ? 0 : 1;
+                const ra = a.immigration_stage === 'Request to Lodge' ? 0 : 1;
+                const rb = b.immigration_stage === 'Request to Lodge' ? 0 : 1;
                 if (ra !== rb) return ra - rb;
             }
 
@@ -1543,8 +1543,8 @@ function StagePicker({ caseId, stages, value, fallback, open, onToggle, onClose 
             setDeclineOpen(true);
             return;
         }
-        // "Request to Lodged" / "Withdrawn" — offer an optional note before moving.
-        if (stage === "Request to Lodged" || stage === "Withdrawn") {
+        // "Request to Lodge" / "Withdrawn" — offer an optional note before moving.
+        if (stage === "Request to Lodge" || stage === "Withdrawn") {
             onClose();
             setNoteStage(stage);
             return;
@@ -1634,7 +1634,7 @@ function StagePicker({ caseId, stages, value, fallback, open, onToggle, onClose 
 
 // ─── Stage note modal ───────────────────────────────────────────────────
 // Opens when a case is moved to a stage that captures an optional note
-// ("Request to Lodged", "Withdrawn"). The note is stored as an internal case
+// ("Request to Lodge", "Withdrawn"). The note is stored as an internal case
 // note; leaving it blank simply moves the stage.
 function StageNoteModal({ caseId, stage, onClose }) {
     const [note, setNote] = useState("");
