@@ -12,6 +12,11 @@ const STATUS = {
 const fmt = (iso) =>
     iso ? new Date(iso).toLocaleString("en-NZ", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "—";
 
+// Inbound email replies quote the original message with leading "> " markers on
+// every line. Strip them (including nested ">>") so the conversation reads
+// cleanly without the ">" clutter.
+const stripQuoteMarkers = (t) => (t || "").replace(/^[ \t]*>+[ \t]?/gm, "");
+
 // Laravel expects the (decoded) XSRF-TOKEN cookie echoed back as a header.
 const xsrf = () => decodeURIComponent((document.cookie.match(/XSRF-TOKEN=([^;]+)/) || [])[1] || "");
 
@@ -277,7 +282,7 @@ export default function CommunicationsPanel({ leadId, leadEmail = "" }) {
                                                     {inbound ? "Reply" : m.status}
                                                 </span>
                                             </div>
-                                            {!open && <p className="text-xs text-gray-500 mt-0.5 truncate">{(m.body || "").replace(/<[^>]*>/g, " ").slice(0, 100)}</p>}
+                                            {!open && <p className="text-xs text-gray-500 mt-0.5 truncate">{stripQuoteMarkers((m.body || "").replace(/<[^>]*>/g, " ")).slice(0, 100)}</p>}
                                             <p className="text-[11px] text-gray-400 mt-1">
                                                 {fmt(m.created_at)}
                                                 {inbound ? (m.from ? ` · from ${m.from}` : " · from the lead") : (m.sender ? ` · by ${m.sender}` : "")}
@@ -290,7 +295,7 @@ export default function CommunicationsPanel({ leadId, leadEmail = "" }) {
                                         <div className="mt-3 ml-11 rounded-xl bg-gray-50 border border-gray-100 p-3.5">
                                             {/^\s*<(!doctype|html|p|div|table|h[1-6]|span|br)\b/i.test(m.body || "")
                                                 ? <div className="text-sm text-gray-700 break-words [&_a]:text-blue-600 [&_p]:my-2" dangerouslySetInnerHTML={{ __html: m.body }} />
-                                                : <p className="text-sm text-gray-700 whitespace-pre-wrap break-words">{m.body}</p>}
+                                                : <p className="text-sm text-gray-700 whitespace-pre-wrap break-words">{stripQuoteMarkers(m.body)}</p>}
                                             {m.error && (
                                                 <p className="mt-2 text-xs text-rose-600 flex items-center gap-1.5">
                                                     <AlertTriangle size={12} /> {m.error}

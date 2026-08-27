@@ -1385,7 +1385,6 @@ class LeadTrackingController extends Controller
      */
     private const TRACKER_SECTIONS = [
         'Personal Documents',
-        'Information Form',
         'Offer and Academic Documents',
         'Agreements',
     ];

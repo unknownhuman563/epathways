@@ -60,6 +60,7 @@ class EmailBrandingController extends Controller
 
         $items = collect($this->departments())->map(function ($d) use ($rows) {
             $assets = EmailBranding::resolveAssets($d['key']);
+            $footer = EmailBranding::resolveFooter($d['key']);
             $row = $rows->get($d['key']);
 
             return [
@@ -75,6 +76,16 @@ class EmailBrandingController extends Controller
                 'call_number' => $row?->call_number ?? '',
                 'effective_booking_url' => $assets['bookingUrl'],
                 'effective_call_number' => $assets['callNumber'],
+                // Editable footer text — the department's saved values (blank
+                // where not set) plus the effective (resolved) values so the UI
+                // can show the placeholder/default it would fall back to.
+                'footer_company' => $row?->footer_company ?? '',
+                'footer_website_label' => $row?->footer_website_label ?? '',
+                'footer_website_url' => $row?->footer_website_url ?? '',
+                'footer_email' => $row?->footer_email ?? '',
+                'footer_whatsapp' => $row?->footer_whatsapp ?? '',
+                'footer_location' => $row?->footer_location ?? '',
+                'effective_footer' => $footer,
             ];
         })->values();
 
@@ -98,9 +109,25 @@ class EmailBrandingController extends Controller
             'call_number' => ['nullable', 'string', 'max:40'],
             'hide_banner' => ['nullable', 'boolean'],
             'hide_footer' => ['nullable', 'boolean'],
+            // Editable footer text.
+            'footer_company' => ['nullable', 'string', 'max:160'],
+            'footer_website_label' => ['nullable', 'string', 'max:160'],
+            'footer_website_url' => ['nullable', 'string', 'max:500'],
+            'footer_email' => ['nullable', 'string', 'max:191'],
+            'footer_whatsapp' => ['nullable', 'string', 'max:1000'],
+            'footer_location' => ['nullable', 'string', 'max:1000'],
         ]);
 
         $row = EmailBranding::firstOrNew(['department' => $department]);
+
+        // Footer text — only touch a field that was actually submitted, so a
+        // partial save (e.g. an image upload) never wipes the text, and blank
+        // clears the override (falls back to the default).
+        foreach (['footer_company', 'footer_website_label', 'footer_website_url', 'footer_email', 'footer_whatsapp', 'footer_location'] as $f) {
+            if ($request->has($f)) {
+                $row->{$f} = $request->input($f) ?: null;
+            }
+        }
 
         // CTA button links — only touch a field that was actually submitted, so
         // an image upload doesn't wipe the links and vice-versa.

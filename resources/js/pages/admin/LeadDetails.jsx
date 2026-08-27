@@ -11,9 +11,10 @@ import {
     User as UserIcon, ArrowRight, Sparkles, FolderOpen, Copy, Info, Undo2, Send,
     Globe, Home, Wand2, Users as UsersIcon, Eye,
     Paperclip, FileImage, Film, Music,
-    Briefcase, Trash2, RefreshCw, MoreVertical, Plus, X,
+    Briefcase, Trash2, RefreshCw, MoreVertical, Plus, X, MessageSquare, Search,
 } from 'lucide-react';
 import { CHECKLIST, STATUSES, STATUS_CHIP, STATUS_LABEL, SECTION_STATUSES, IMPORTANT_NOTES, renderFilename, currentSectionIndex } from '@/data/leadDocumentChecklist';
+import { ThreadItem, ThreadComposer } from '@/components/immigration/case-profile/threads';
 import SendUpdateModal from '@/components/leads/SendUpdateModal';
 import LeadHealthBadge from '@/components/ai/LeadHealthBadge';
 import CaseHealthBadge from '@/components/ai/CaseHealthBadge';
@@ -44,16 +45,138 @@ const STAGE_STYLES = {
     "Visa Process":                   "bg-lime-100 text-lime-800 border-lime-200",
     "Not Qualified":                  "bg-red-100 text-red-700 border-red-200",
     "Work Pathway / Other":           "bg-blue-100 text-blue-800 border-blue-200",
+    // Department (Education / English / Immigration) stage colours, so the
+    // header badge/dropdown look right for a lead moved off the sales pipeline.
+    "Endorsed to School":             "bg-sky-100 text-sky-800 border-sky-200",
+    "Conditional Offer":              "bg-amber-100 text-amber-800 border-amber-200",
+    "Unconditional Offer":            "bg-emerald-100 text-emerald-800 border-emerald-200",
+    "Endorsed to Immigration":        "bg-indigo-100 text-indigo-800 border-indigo-200",
+    "Visa Lodged":                    "bg-violet-100 text-violet-800 border-violet-200",
+    "Approved in Principle":          "bg-cyan-100 text-cyan-800 border-cyan-200",
+    "Request for Information":        "bg-orange-100 text-orange-800 border-orange-200",
+    "Approved Visa":                  "bg-green-100 text-green-800 border-green-200",
+    "Started Course":                 "bg-teal-100 text-teal-800 border-teal-200",
+    "PTE Review":                     "bg-purple-100 text-purple-800 border-purple-200",
+    "DIY Review":                     "bg-violet-100 text-violet-800 border-violet-200",
+    "For PTE Mocktest":               "bg-fuchsia-100 text-fuchsia-800 border-fuchsia-200",
+    "For PTE Exam":                   "bg-pink-100 text-pink-800 border-pink-200",
+    "For Assessment":                 "bg-amber-100 text-amber-800 border-amber-200",
+    "Endorsed":                       "bg-indigo-100 text-indigo-800 border-indigo-200",
+    "Agreement Sent":                 "bg-indigo-100 text-indigo-800 border-indigo-200",
+    "Agreement Signed":               "bg-emerald-100 text-emerald-800 border-emerald-200",
+    "For Agreement & Invoice":        "bg-amber-100 text-amber-800 border-amber-200",
+    "Invoice Paid":                   "bg-emerald-100 text-emerald-800 border-emerald-200",
+    "Request to Lodged":              "bg-sky-100 text-sky-800 border-sky-200",
+    "Interim Visa Issued":            "bg-cyan-100 text-cyan-800 border-cyan-200",
+    "RFI Responded":                  "bg-lime-100 text-lime-800 border-lime-200",
+    "Decline Visa":                   "bg-red-100 text-red-700 border-red-200",
+    "Withdrawn":                      "bg-gray-100 text-gray-600 border-gray-200",
 };
 const stageClass = (s) => STAGE_STYLES[s] || "bg-gray-100 text-gray-700 border-gray-200";
+
+// Searchable "add a program" picker for the Programs Offered card. Type to
+// filter the catalogue by program title or school, click to shortlist. Clears
+// itself after each pick so several can be added in a row.
+function ProgramAddPicker({ options = [], excludeIds = [], disabled = false, onPick }) {
+    const [open, setOpen] = useState(false);
+    const [query, setQuery] = useState('');
+    const [rect, setRect] = useState(null);
+    const boxRef = useRef(null);
+    const menuRef = useRef(null);
+
+    // The card is overflow-hidden (for its rounded header), so the dropdown is
+    // rendered in a portal positioned under the input to avoid being clipped.
+    const reposition = () => {
+        const el = boxRef.current;
+        if (el) { const r = el.getBoundingClientRect(); setRect({ top: r.bottom, left: r.left, width: r.width }); }
+    };
+    useEffect(() => {
+        if (! open) return;
+        reposition();
+        const onDoc = (e) => {
+            if (boxRef.current?.contains(e.target) || menuRef.current?.contains(e.target)) return;
+            setOpen(false);
+        };
+        window.addEventListener('scroll', reposition, true);
+        window.addEventListener('resize', reposition);
+        document.addEventListener('mousedown', onDoc);
+        return () => {
+            window.removeEventListener('scroll', reposition, true);
+            window.removeEventListener('resize', reposition);
+            document.removeEventListener('mousedown', onDoc);
+        };
+    }, [open]);
+
+    const q = query.trim().toLowerCase();
+    const available = options.filter((p) => ! excludeIds.includes(p.id));
+    const filtered = q
+        ? available.filter((p) => `${p.title} ${p.school || ''}`.toLowerCase().includes(q))
+        : available;
+
+    return (
+        <div ref={boxRef} className="relative">
+            <div className="relative">
+                <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                <input
+                    type="text"
+                    value={query}
+                    disabled={disabled}
+                    onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
+                    onFocus={() => setOpen(true)}
+                    placeholder={disabled ? 'Maximum reached' : 'Add a program…'}
+                    className="w-full pl-8 pr-3 py-2 rounded-lg border border-gray-200 text-sm bg-white focus:border-gray-400 outline-none disabled:bg-gray-50 disabled:text-gray-400"
+                />
+            </div>
+            {open && ! disabled && rect && createPortal(
+                <div
+                    ref={menuRef}
+                    style={{ position: 'fixed', top: rect.top + 4, left: rect.left, width: rect.width, zIndex: 60 }}
+                    className="max-h-60 overflow-auto bg-white border border-gray-200 rounded-lg shadow-xl py-1"
+                >
+                    {filtered.length === 0 ? (
+                        <p className="px-3 py-2 text-[12px] text-gray-400">No matching programs.</p>
+                    ) : filtered.slice(0, 60).map((p) => (
+                        <button
+                            key={p.id}
+                            type="button"
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => { onPick?.(p.id); setQuery(''); setOpen(false); }}
+                            className="w-full text-left px-3 py-2 hover:bg-gray-50"
+                        >
+                            <span className="block text-sm text-gray-800 truncate">{p.title}</span>
+                            <span className="block text-[11px] text-gray-400 truncate">
+                                {[p.school, p.level != null ? `Level ${p.level}` : null].filter(Boolean).join(' · ') || '—'}
+                            </span>
+                        </button>
+                    ))}
+                </div>,
+                document.body,
+            )}
+        </div>
+    );
+}
 
 // Read-only mirror of the tracker's program shortlist for staff: lists the
 // programs offered to this lead and highlights (green) the one the client
 // chose from their tracker. Rendered on the Lead Stats tab under the AI card.
-function ProposedProgramsCard({ proposal }) {
+function ProposedProgramsCard({ proposal, leadId, programOptions = [] }) {
     const programs = proposal?.programs || [];
     const chosenId = proposal?.preferred_program_id ?? null;
     const chosen = programs.find((p) => p.id === chosenId) || null;
+    const currentIds = programs.map((p) => p.id);
+    const MAX = 5;
+
+    // Inline shortlist edit — persists to leads.proposed_program_ids without
+    // spawning a proposal version (that's the Proposal & Agreements flow).
+    const saveShortlist = (ids) => {
+        router.post(`/admin/leads/${leadId}/shortlist`, { program_ids: ids }, {
+            preserveScroll: true,
+            preserveState: false,
+            onError: (e) => toast.error(Object.values(e)[0] || 'Could not update programs'),
+        });
+    };
+    const addProgram = (pid) => { if (currentIds.length < MAX && ! currentIds.includes(pid)) saveShortlist([...currentIds, pid]); };
+    const removeProgram = (pid) => saveShortlist(currentIds.filter((x) => x !== pid));
 
     return (
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
@@ -69,7 +192,7 @@ function ProposedProgramsCard({ proposal }) {
                         </h2>
                         <p className="text-[12px] text-gray-500 mt-0.5 leading-relaxed">
                             {programs.length === 0
-                                ? 'No programs proposed yet — shortlist some from Proposal & Agreements.'
+                                ? 'No programs proposed yet — search and add programs below.'
                                 : chosen
                                     ? <>Client selected <span className="font-semibold text-gray-700">{chosen.title}</span> from their tracker.</>
                                     : "These are the programs staff shortlisted. The client picks one on their tracker."}
@@ -83,6 +206,25 @@ function ProposedProgramsCard({ proposal }) {
                 )}
             </div>
 
+            {/* Inline add — search the catalogue and shortlist a program (up to 5). */}
+            {leadId && (
+                <div className="px-6 py-3 border-b border-gray-100 bg-gray-50/40">
+                    <div className="max-w-md">
+                        <ProgramAddPicker
+                            options={programOptions}
+                            excludeIds={currentIds}
+                            disabled={currentIds.length >= MAX}
+                            onPick={addProgram}
+                        />
+                        <p className="text-[10.5px] text-gray-400 mt-1">
+                            {currentIds.length >= MAX
+                                ? `Maximum ${MAX} programs — remove one to add another.`
+                                : `Search by program or school · ${currentIds.length}/${MAX} added`}
+                        </p>
+                    </div>
+                </div>
+            )}
+
             {programs.length > 0 && (
                 <div className="p-4 sm:p-5 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {programs.map((p) => {
@@ -94,6 +236,15 @@ function ProposedProgramsCard({ proposal }) {
                                     isChosen ? 'border-emerald-500 ring-2 ring-emerald-500/25 bg-emerald-50' : 'border-gray-100 bg-white'
                                 }`}
                             >
+                                {/* Remove from shortlist */}
+                                <button
+                                    type="button"
+                                    onClick={() => removeProgram(p.id)}
+                                    title="Remove from shortlist"
+                                    className="absolute top-2 left-2 z-10 w-6 h-6 rounded-full bg-white/90 border border-gray-200 text-gray-400 hover:text-red-600 hover:border-red-200 flex items-center justify-center shadow-sm"
+                                >
+                                    <X size={12} />
+                                </button>
                                 {isChosen && (
                                     <span className="absolute top-3 right-3 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-600 text-white text-[9px] font-bold uppercase tracking-[0.14em] shadow-sm">
                                         <Check size={10} strokeWidth={3} /> Chosen
@@ -150,7 +301,7 @@ function ProposedProgramsCard({ proposal }) {
     );
 }
 
-export default function LeadDetails({ lead: backendLead, proposal = null, activity = [], stageTimeline = [], checklistFiles = {}, documentOrphans = [], statuses = [], notes = [], tags = [], allTags = [], tasks = [], staffOptions = [], eventRegistration = null, currentUser = null }) {
+export default function LeadDetails({ lead: backendLead, proposal = null, activity = [], stageTimeline = [], checklistFiles = {}, documentThreads = [], programOptions = [], documentOrphans = [], statuses = [], stageLists = {}, notes = [], tags = [], allTags = [], tasks = [], staffOptions = [], eventRegistration = null, currentUser = null }) {
     // Derive the "Back to Leads" URL from the current path so sales users
     // return to /portal/sales/leads, education users to /portal/education/leads,
     // and admins to /admin/leads — never a 403.
@@ -214,11 +365,28 @@ export default function LeadDetails({ lead: backendLead, proposal = null, activi
         };
     }, [stageOpen]);
 
-    const changeStage = (status) => {
+    // Department-aware stage. A lead moved to Study / English / Immigration is
+    // tracked by its own stage column, so the header must show THAT stage and
+    // its dropdown — not the sales pipeline — to match the Students list.
+    const leadDept = (() => {
+        const l = backendLead || {};
+        if (l.is_immigration_case || l.immigration_stage) return 'immigration';
+        if (l.is_student || l.education_stage) return 'education';
+        if (l.is_english_student || l.english_stage) return 'english';
+        return 'sales';
+    })();
+    const DEPT_FIELD = { sales: 'status', education: 'education_stage', english: 'english_stage', immigration: 'immigration_stage' };
+    const stageField = DEPT_FIELD[leadDept];
+    const stageValue = leadDept === 'sales'
+        ? (backendLead?.status || 'New Leads')
+        : (backendLead?.[stageField] || null);
+    const deptStages = leadDept === 'sales' ? statuses : (stageLists[leadDept] || []);
+
+    const changeStage = (value) => {
         setStageOpen(false);
-        if (!backendLead || status === backendLead.status) return;
+        if (!backendLead || value === stageValue) return;
         setSavingStage(true);
-        router.post(`/admin/leads/${backendLead.id}/stage`, { status }, {
+        router.post(`/admin/leads/${backendLead.id}/stage`, { status: value, field: stageField }, {
             preserveScroll: true,
             preserveState: true,
             onFinish: () => setSavingStage(false),
@@ -473,17 +641,19 @@ export default function LeadDetails({ lead: backendLead, proposal = null, activi
                                 type="button"
                                 disabled={savingStage}
                                 onClick={() => setStageOpen(!stageOpen)}
-                                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold border uppercase hover:shadow-sm transition-all disabled:opacity-50 ${stageClass(backendLead.status || lead.status)}`}
+                                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold border uppercase hover:shadow-sm transition-all disabled:opacity-50 ${stageClass(stageValue)}`}
                                 title="Click to change stage"
                             >
-                                {backendLead.status || lead.status || 'New Leads'}
+                                {stageValue || 'Set stage'}
                                 <ChevronDown size={11} strokeWidth={2.5} className="opacity-60" />
                             </button>
                             {stageOpen && (
                                 <div role="listbox" className="absolute z-30 top-full left-0 mt-1 bg-white rounded-xl shadow-2xl border border-gray-100 py-1.5 w-[280px] max-h-[420px] overflow-y-auto">
-                                    <p className="px-3 pt-2 pb-1.5 text-[9px] font-bold text-gray-400 uppercase tracking-[0.2em]">Move to stage</p>
-                                    {statuses.map((s) => {
-                                        const active = s === (backendLead.status || lead.status);
+                                    <p className="px-3 pt-2 pb-1.5 text-[9px] font-bold text-gray-400 uppercase tracking-[0.2em]">
+                                        Move to stage{leadDept !== 'sales' ? ` · ${leadDept}` : ''}
+                                    </p>
+                                    {deptStages.map((s) => {
+                                        const active = s === stageValue;
                                         return (
                                             <button
                                                 key={s}
@@ -657,7 +827,7 @@ export default function LeadDetails({ lead: backendLead, proposal = null, activi
 
             {/* ── Documents tab ── */}
             {activeTab === 'documents' && (
-                <DocumentsPanel lead={backendLead} checklistFiles={checklistFiles} orphans={documentOrphans} currentUser={currentUser} />
+                <DocumentsPanel lead={backendLead} checklistFiles={checklistFiles} orphans={documentOrphans} currentUser={currentUser} threads={documentThreads} staffOptions={staffOptions} />
             )}
 
             {/* ── Communications tab — message history sent to this lead ── */}
@@ -681,7 +851,7 @@ export default function LeadDetails({ lead: backendLead, proposal = null, activi
             <div className={activeTab === 'stats' ? 'space-y-6' : 'hidden'}>
                 <StatsQuickRow lead={backendLead} tasks={tasks} tags={tags} notes={notes} />
                 <AICapabilityHero lead={backendLead} />
-                <ProposedProgramsCard proposal={proposal} />
+                <ProposedProgramsCard proposal={proposal} leadId={backendLead.id} programOptions={programOptions} />
 
                 {/* Tasks + Tags side-by-side — paired workspace row. */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -3327,7 +3497,7 @@ function TagsPanel({ leadId, tags, allTags }) {
 // system agreements, set status / notes — no drill-in page. Each section
 // header row carries the per-section verify / request-revisions controls that
 // gate the lead-portal flow.
-function ChecklistTable({ sections = CHECKLIST, state = {}, checklistFiles = {}, lead, onSave, verifications = {}, onVerifySection, hiddenKeys = new Set(), onToggleTrack, onRemoveCustom, onDuplicateCustom }) {
+function ChecklistTable({ sections = CHECKLIST, state = {}, checklistFiles = {}, lead, onSave, verifications = {}, onVerifySection, hiddenKeys = new Set(), onToggleTrack, onRemoveCustom, onDuplicateCustom, threadsByKey = {}, currentUser = null, staffOptions = [] }) {
     // Collapsible sections — collapsed by DEFAULT, mirroring the immigration
     // Case Profile Documents tab. `expanded` holds the sections the user opened.
     const [expanded, setExpanded] = useState(() => new Set());
@@ -3433,6 +3603,9 @@ function ChecklistTable({ sections = CHECKLIST, state = {}, checklistFiles = {},
                                         onToggleTrack={onToggleTrack}
                                         onRemoveCustom={it.custom ? onRemoveCustom : undefined}
                                         onDuplicateCustom={it.custom ? onDuplicateCustom : undefined}
+                                        threads={threadsByKey[it.id] || []}
+                                        currentUser={currentUser}
+                                        staffOptions={staffOptions}
                                     />
                                 ))}
                             </React.Fragment>
@@ -3447,13 +3620,22 @@ function ChecklistTable({ sections = CHECKLIST, state = {}, checklistFiles = {},
 // One checklist row — owns its own upload / generate state so the File,
 // Attachment, Status and Notes columns all work inline without leaving the
 // table.
-function ChecklistRow({ item, lead, entry, files = [], onSave, hidden = false, onToggleTrack, onRemoveCustom, onDuplicateCustom }) {
+function ChecklistRow({ item, lead, entry, files = [], onSave, hidden = false, onToggleTrack, onRemoveCustom, onDuplicateCustom, threads = [], currentUser = null, staffOptions = [] }) {
     const [uploading, setUploading] = useState(false);
     const [generating, setGenerating] = useState(false);
     const [variantOpen, setVariantOpen] = useState(false);
+    const [notesOpen, setNotesOpen] = useState(false);
     const fileInputRef = useRef(null);
     const replaceInputRef = useRef(null);
     const [replacingId, setReplacingId] = useState(null);
+
+    // Per-document discussion (shared thread system with immigration). A note
+    // is anchored to this checklist item by anchor_key = item.id. Root notes
+    // render with nested replies; the composer posts to /admin/leads/{id}/threads.
+    const rootThreads = threads.filter((t) => ! t.parent_id);
+    const childrenOf = (pid) => threads.filter((t) => t.parent_id === pid);
+    const docAnchor = { anchor_type: 'document', anchor_key: item.id };
+    const openCount = rootThreads.filter((t) => ! t.resolved_at).length;
 
     // System agreements that can be auto-generated from a Blade template.
     const canGenerate = item.id === 'agree.consultancy' || item.id === 'agree.engagement_english';
@@ -3516,6 +3698,7 @@ function ChecklistRow({ item, lead, entry, files = [], onSave, hidden = false, o
     };
 
     return (
+        <>
         <tr className="border-b border-gray-50 hover:bg-emerald-50/20 transition-colors align-top">
             {/* Tracker checkbox — leftmost column. When unchecked, this row's
                 checklist_key is pushed onto the lead's hidden_track_documents
@@ -3657,11 +3840,64 @@ function ChecklistRow({ item, lead, entry, files = [], onSave, hidden = false, o
                 })()}
             </td>
 
-            {/* Notes — inline, saved on blur */}
+            {/* Notes — toggles a threaded discussion (same system the
+                immigration Case Profile uses). Shows note count / open flag. */}
             <td className="px-6 py-3">
-                <ChecklistNotesCell value={entry.notes || ''} onSave={(notes) => onSave(item.id, { notes })} />
+                <button
+                    type="button"
+                    onClick={() => setNotesOpen((o) => ! o)}
+                    className={`inline-flex items-center gap-1.5 text-[11px] font-semibold rounded-lg px-2 py-1.5 border transition-colors ${
+                        notesOpen
+                            ? 'text-gray-900 bg-gray-100 border-gray-300'
+                            : threads.length > 0
+                                ? 'text-gray-700 bg-white border-gray-200 hover:border-gray-300'
+                                : 'text-gray-400 bg-white border-gray-200 hover:text-gray-600 hover:border-gray-300'
+                    }`}
+                >
+                    <MessageSquare size={12} />
+                    {threads.length > 0 ? `${threads.length} note${threads.length > 1 ? 's' : ''}` : 'Add a note'}
+                    {openCount > 0 && (
+                        <span className="inline-flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full bg-amber-100 text-amber-700 text-[9px] font-bold">
+                            {openCount}
+                        </span>
+                    )}
+                </button>
             </td>
         </tr>
+        {notesOpen && (
+            <tr className="bg-gray-50/50 border-b border-gray-100">
+                <td className="w-10" />
+                <td colSpan={5} className="px-6 pb-5 pt-1">
+                    <div className="max-w-3xl">
+                        <p className="text-[10.5px] font-bold uppercase tracking-widest text-gray-400 mb-1">Reviewer notes · {item.name}</p>
+                        {rootThreads.length > 0 && (
+                            <div className="mb-1">
+                                {rootThreads.map((t) => (
+                                    <ThreadItem
+                                        key={t.id}
+                                        thread={t}
+                                        leadId={lead.id}
+                                        anchor={docAnchor}
+                                        childrenOf={childrenOf}
+                                        caseStaff={staffOptions}
+                                        basePath="/admin/leads"
+                                    />
+                                ))}
+                            </div>
+                        )}
+                        <ThreadComposer
+                            leadId={lead.id}
+                            fixedAnchor={docAnchor}
+                            plain
+                            caseStaff={staffOptions}
+                            placeholder="Write a note about this document…"
+                            basePath="/admin/leads"
+                        />
+                    </div>
+                </td>
+            </tr>
+        )}
+        </>
     );
 }
 
@@ -3682,7 +3918,17 @@ function ChecklistNotesCell({ value, onSave }) {
     );
 }
 
-function DocumentsPanel({ lead, checklistFiles = {}, orphans = [], currentUser = null }) {
+function DocumentsPanel({ lead, checklistFiles = {}, orphans = [], currentUser = null, threads = [], staffOptions = [] }) {
+    // Bucket document threads by the checklist item they're anchored to
+    // (anchor_key = checklist_key), so each row can render its own discussion.
+    const threadsByKey = React.useMemo(() => {
+        const map = {};
+        (threads || []).forEach((t) => {
+            if (t.anchor_type !== 'document' || ! t.anchor_key) return;
+            (map[t.anchor_key] ||= []).push(t);
+        });
+        return map;
+    }, [threads]);
     // The lead's saved checklist state lives on the backend in a JSON column
     // keyed by item id. We keep a local copy here so edits feel instant and
     // we can debounce notes typing if needed.
@@ -3728,14 +3974,13 @@ function DocumentsPanel({ lead, checklistFiles = {}, orphans = [], currentUser =
     };
 
     // General / education leads (the "Document Checklist" type) only work
-    // through four requirement sections, in a fixed order — mirroring the
+    // through three requirement sections, in a fixed order — mirroring the
     // public tracker. Immigration cases keep the full checklist (they manage
-    // every section). Ordering: Personal → Information Form → Offer & Academic
-    // → Agreements.
+    // every section). Ordering: Personal → Offer & Academic → Agreements.
     const sections = React.useMemo(() => {
         const base = lead?.is_immigration_case
             ? CHECKLIST
-            : ['personal', 'information_form', 'academic', 'agreements']
+            : ['personal', 'academic', 'agreements']
                 .map((k) => CHECKLIST.find((s) => s.key === k))
                 .filter(Boolean);
 
@@ -3772,7 +4017,7 @@ function DocumentsPanel({ lead, checklistFiles = {}, orphans = [], currentUser =
     const folderOptions = React.useMemo(() => {
         const base = lead?.is_immigration_case
             ? CHECKLIST.map((s) => s.section)
-            : ['Personal Documents', 'Information Form', 'Offer and Academic Documents', 'Agreements'];
+            : ['Personal Documents', 'Offer and Academic Documents', 'Agreements'];
         return [...base, 'Additional Documents'];
     }, [lead?.is_immigration_case]);
 
@@ -3816,12 +4061,11 @@ function DocumentsPanel({ lead, checklistFiles = {}, orphans = [], currentUser =
         return acc;
     }, {});
     const withFiles = allItems.filter((it) => (checklistFiles[it.id]?.length || 0) > 0).length;
-    const uploaded = counts.uploaded || 0;
-    const inProgress = counts.in_progress || 0;
-    const available = counts.available || 0;
-    const notApplicable = counts.not_applicable || 0;
-    const remaining = total - uploaded - notApplicable;
-    const pct = total > 0 ? Math.round((uploaded / (total - notApplicable || 1)) * 100) : 0;
+    const accepted = counts.accepted || 0;
+    const underReview = counts.under_review || 0;
+    const needsAttention = counts.needs_attention || 0;
+    const remaining = total - accepted;
+    const pct = total > 0 ? Math.round((accepted / total) * 100) : 0;
 
     return (
         <div className="space-y-4">
@@ -3840,11 +4084,11 @@ function DocumentsPanel({ lead, checklistFiles = {}, orphans = [], currentUser =
                     <div className="flex items-center gap-3 text-[11px] font-bold uppercase tracking-widest tabular-nums">
                         <span className="text-[#436235]">{withFiles} with files</span>
                         <span className="text-gray-300">·</span>
-                        <span className="text-emerald-700">{uploaded} uploaded</span>
+                        <span className="text-emerald-700">{accepted} accepted</span>
                         <span className="text-gray-300">·</span>
-                        <span className="text-purple-700">{inProgress} in progress</span>
+                        <span className="text-amber-700">{underReview} under review</span>
                         <span className="text-gray-300">·</span>
-                        <span className="text-amber-700">{available} available</span>
+                        <span className="text-rose-700">{needsAttention} attention</span>
                         <span className="text-gray-300">·</span>
                         <span className="text-gray-500">{remaining} remaining</span>
                     </div>
@@ -3969,6 +4213,9 @@ function DocumentsPanel({ lead, checklistFiles = {}, orphans = [], currentUser =
                 onToggleTrack={toggleTrack}
                 onRemoveCustom={removeCustomDocument}
                 onDuplicateCustom={duplicateCustomDocument}
+                threadsByKey={threadsByKey}
+                currentUser={currentUser}
+                staffOptions={staffOptions}
             />
 
             {/* Legacy uploads — files with no checklist_key. These were
@@ -4256,23 +4503,21 @@ const fmtTotalSize = (b) => {
 // on an otherwise clean white card. Reverts to the original design used
 // before the folder redesign, since inner cards are not folders themselves.
 const CARD_TONE = {
-    uploaded:       { border: "border-emerald-200", bar: "bg-emerald-400", glyph: "bg-emerald-100 text-emerald-700", cap: "bg-emerald-50/40" },
-    in_progress:    { border: "border-purple-200",  bar: "bg-purple-400",  glyph: "bg-purple-100 text-purple-700",   cap: "bg-purple-50/40"  },
-    available:      { border: "border-amber-200",   bar: "bg-amber-400",   glyph: "bg-amber-100 text-amber-700",     cap: "bg-amber-50/40"   },
-    not_applicable: { border: "border-gray-200",    bar: "bg-gray-300",    glyph: "bg-gray-100 text-gray-400",       cap: "bg-gray-50/60", muted: true },
-    unset:          { border: "border-gray-100",    bar: "bg-gray-200",    glyph: "bg-gray-50 text-gray-500",        cap: "bg-white" },
+    accepted:        { border: "border-emerald-200", bar: "bg-emerald-400", glyph: "bg-emerald-100 text-emerald-700", cap: "bg-emerald-50/40" },
+    under_review:    { border: "border-amber-200",   bar: "bg-amber-400",   glyph: "bg-amber-100 text-amber-700",     cap: "bg-amber-50/40"   },
+    needs_attention: { border: "border-rose-200",    bar: "bg-rose-400",    glyph: "bg-rose-100 text-rose-700",       cap: "bg-rose-50/40"    },
+    unset:           { border: "border-gray-100",    bar: "bg-gray-200",    glyph: "bg-gray-50 text-gray-500",        cap: "bg-white" },
 };
 const cardTone = (status) => CARD_TONE[status] || CARD_TONE.unset;
 
-// Sort priority — has-files first, then uploaded > in_progress > available
-// > unset > not_applicable. Cards with actual work done float to the top
+// Sort priority — has-files first, then accepted > under_review >
+// needs_attention > unset. Cards with actual work done float to the top
 // of each section so you can see progress at a glance.
 const SORT_PRIORITY = {
-    uploaded:       1,
-    in_progress:    2,
-    available:      3,
-    unset:          4,
-    not_applicable: 5,
+    accepted:        1,
+    under_review:    2,
+    needs_attention: 3,
+    unset:           4,
 };
 
 function ChecklistSection({ section, lead, state, onSave, checklistFiles = {}, currentUser = null }) {

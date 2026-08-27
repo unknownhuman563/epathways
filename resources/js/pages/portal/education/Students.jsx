@@ -394,6 +394,22 @@ const fmtDate = (iso) => {
     } catch { return ""; }
 };
 
+// Intake may be a proper date (from the date picker → "11 May 2026") or a
+// legacy free-text value ("31 October", "February 2027"). Reformat only real
+// ISO dates; keep everything else verbatim. Parse the date parts by hand so a
+// date-only string isn't shifted a day by the local timezone.
+const fmtIntake = (val) => {
+    if (!val) return "";
+    const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(val));
+    if (m) {
+        try {
+            return new Date(+m[1], +m[2] - 1, +m[3])
+                .toLocaleDateString("en-NZ", { day: "numeric", month: "short", year: "numeric" });
+        } catch { /* fall through to raw */ }
+    }
+    return val;
+};
+
 export default function EducationStudents({ students = [], schoolOptions = [], programOptions = [], agentOptions = [] }) {
     // Add / edit student modal — null = closed, {} = new, object = edit.
     const [editingStudent, setEditingStudent] = useState(null);
@@ -483,7 +499,10 @@ export default function EducationStudents({ students = [], schoolOptions = [], p
                 if (stage !== stageFilter) return false;
             }
             if (!q) return true;
-            const hay = `${s.name || ""} ${s.email || ""} ${s.lead_id || ""} ${s.phone || ""} ${s.program || ""} ${s.school || ""} ${s.location || ""} ${s.status || ""} ${s.education_stage || ""} ${s.english_stage || ""} ${s.immigration_stage || ""}`.toLowerCase();
+            // Intake is matched both raw ("2026-05-11") and formatted
+            // ("11 May 2026") so either spelling finds it; school covers the
+            // FK name too.
+            const hay = `${s.name || ""} ${s.email || ""} ${s.lead_id || ""} ${s.phone || ""} ${s.program || ""} ${s.school || ""} ${s.school_name || ""} ${s.intake || ""} ${fmtIntake(s.intake)} ${s.location || ""} ${s.status || ""} ${s.education_stage || ""} ${s.english_stage || ""} ${s.immigration_stage || ""}`.toLowerCase();
             return hay.includes(q);
         });
 
@@ -646,7 +665,7 @@ export default function EducationStudents({ students = [], schoolOptions = [], p
                                 type="text"
                                 value={search}
                                 onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-                                placeholder="Search students"
+                                placeholder="Search name, school, intake…"
                                 className="w-full pl-9 pr-3 py-2 rounded-lg border border-gray-200 bg-white text-xs placeholder-gray-400 focus:outline-none focus:border-gray-400 transition-all"
                             />
                         </div>
@@ -822,7 +841,7 @@ export default function EducationStudents({ students = [], schoolOptions = [], p
 
                                             {/* Intake */}
                                             <td className="px-3 py-2.5 whitespace-nowrap">
-                                                {s.intake ? <span className="text-gray-700">{s.intake}</span> : <span className="text-gray-300">—</span>}
+                                                {s.intake ? <span className="text-gray-700">{fmtIntake(s.intake)}</span> : <span className="text-gray-300">—</span>}
                                             </td>
 
                                             {/* Engaged */}
@@ -1062,7 +1081,7 @@ function StudentDashboardPanel({ student: s }) {
                     {/* Row 1 — academic */}
                     <ReadOnlyField icon={BookOpen}  label="Program"     value={s.program ? `${s.program}${s.level ? ` · ${s.level}` : ""}` : null} />
                     <ReadOnlyField icon={School}    label="School"      value={schoolDisplay} />
-                    <ReadOnlyField icon={Calendar}  label="Intake"      value={s.intake} />
+                    <ReadOnlyField icon={Calendar}  label="Intake"      value={fmtIntake(s.intake)} />
                     <ReadOnlyField icon={Languages} label="PTE / IELTS" value={englishTest} />
 
                     {/* Row 2 — operations */}
